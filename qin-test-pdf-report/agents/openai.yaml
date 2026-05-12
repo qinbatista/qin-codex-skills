@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin Test PDF Report"
+  short_description: "Create visual PDF result reports and prune stale cache"
+  default_prompt: "Use $qin-test-pdf-report to turn this testing, validation, review, or requested PDF report work into a visual PDF artifact with screenshots, tables, a short chat summary, and stale cached report cleanup. For comparison reports, always include before and after data and images when available; never return only the final result."

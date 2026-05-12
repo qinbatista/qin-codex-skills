@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin UI Review"
+  short_description: "Searchable UI problem index and consistency rules"
+  default_prompt: "Use $qin-ui-review to search prior UI problems, apply matching solutions, and tighten this UI."

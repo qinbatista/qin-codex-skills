@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin Python Code Checker"
+  short_description: "Qin Python write and format rules"
+  default_prompt: "Use $qin-python-code-checker to write, format, or clean up this Python code with the minimal Python rules and behavior-preserving defaults."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin Codex Auth Swithc"
+  short_description: "Switch Qin Codex auth profiles safely"
+  default_prompt: "Use $qin-codex-auth-swithc to inspect saved Codex auth profiles, show their latest local usage snapshot, and switch auth.json only after I confirm."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin Codex Skills GitHub Sync"
+  short_description: "Sync global Codex skills to GitHub"
+  default_prompt: "Use $qin-codex-skills-github-sync before editing my global Codex skills and push the update to GitHub."

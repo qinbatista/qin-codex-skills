@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin Karpathy Guidelines"
+  short_description: "Qin coding guardrails"
+  default_prompt: "Use $qin-karpathy-guidelines before non-trivial coding work to surface assumptions, keep changes surgical, and define verification criteria."

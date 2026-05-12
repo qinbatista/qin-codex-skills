@@ -1,0 +1,72 @@
+---
+name: qin-done-means-tested
+description: Mandatory final verification skill. Use for any coding, website, UI, script, automation, refactor, bug fix, content update, or file-edit task before claiming the work is done. Always run the most relevant test, preview, build, lint, screenshot, or validation step available, and clearly report what was tested or what could not be tested.
+---
+
+# Qin Done Means Tested
+
+Do not finish a task just because the edits are written.
+
+Before the final response, run the strongest practical verification that fits the task.
+
+## Trigger
+
+Use this skill whenever work changed code, content, UI, configuration, scripts, automation, or generated output and you are about to say the task is done.
+
+## Workflow
+
+1. Identify the most relevant validation step for the work.
+2. Run it before claiming completion.
+3. If the first check fails, fix the issue and test again when practical.
+4. If testing is blocked, say exactly why it was blocked and what remains unverified.
+5. If real or repeated testing shows unstable output, failures, or partially correct behavior, say it is not fully fixed yet and include the concrete pass/fail evidence instead of claiming completion.
+6. After Chrome-backed testing, close or finalize Chrome tabs/windows opened or claimed only for that test. If no other browser task, user handoff, login, approval, download, or requested open page still needs Chrome, close the Chrome app too; otherwise leave Chrome running and state what kept it open.
+
+## Validation rules
+
+- For website or UI work:
+  Run a local preview when possible.
+  Capture at least one desktop check.
+  Capture at least one mobile or narrow-screen check when the layout is responsive.
+  Treat desktop and narrow-screen checks as both required when responsive behavior changed.
+  Look for alignment, overflow, unreadable text, missing images, broken spacing, and wrapped labels inside mobile nav, CTA, pill, chip, or other compact controls.
+  If mobile control text wraps, the verification has not passed yet. Shorten the label or switch to a folded menu/control pattern and test again.
+  In the final response, include at least one representative screenshot image when practical so the user can see the result immediately.
+
+- For frontend or app code:
+  Prefer targeted build, lint, test, or browser verification over no-op checks.
+
+- For backend, scripts, or CLI changes:
+  Run the narrowest relevant test command, sample execution, or syntax check that proves the change works.
+
+- For skill updates:
+  After editing a `SKILL.md`, skill script, prompt, or instruction workflow, run the narrowest small working test that exercises the updated behavior. If it fails, keep updating and rerunning the test until it passes or a concrete blocker remains.
+
+- For content-only edits:
+  Verify the rendered output or resulting file where possible instead of only reading the source.
+
+- For Chrome-backed tests:
+  Treat cleanup as part of being done. Use the available Chrome/browser cleanup path to release or close test-only tabs, then close Chrome itself when it is safe because no other task is still running in Chrome. Do not close user-owned tabs, active handoff pages, login/approval pages, or requested deliverables.
+
+## Final response rules
+
+- State what you tested.
+- State the result.
+- When the user asks whether the issue is fixed, answer directly from the test evidence.
+- If something was not tested, say that plainly.
+- Do not imply full verification when only partial checks were run.
+- For website or UI tasks, show the rendered page with a screenshot in the final response when practical.
+- If the user explicitly asked for testing, QA, validation, a smoke test, a regression pass, a test report, a PDF report, a visual report, a review report, an audit report, evidence output, or a result artifact, pair this skill with `/Users/qin/.codex/skills/qin-test-pdf-report/SKILL.md` and deliver the result as a PDF report rather than a text-only recap.
+
+## Guardrails
+
+- Do not skip verification just because the change looks small.
+- Do not claim full success from lint-only or syntax-only checks when runtime behavior changed materially.
+- Do not hide blocked or partial verification behind vague wording.
+- Do not replace a requested PDF report with a plain chat recap.
+
+## Examples
+
+- "I fixed the Python script." -> run the narrowest useful script or test before finishing.
+- "Check this UI change." -> verify visually and include a screenshot when practical.
+- "Give me a PDF report for this QA pass." -> pair with `qin-test-pdf-report` and return the PDF path.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Easy Code Spark"
+  short_description: "Prefer GPT-5.3-Codex-Spark for simple code edits."
+  default_prompt: "Use this skill to classify a straightforward code change and prefer GPT-5.3-Codex-Spark when a model-selection surface is available."

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Qin Prompt Creating"
+  short_description: "Write Python f-string AI prompts."
+  default_prompt: "Use $qin-prompt-creating to create a Python f-string prompt for my task."
+policy:
+  allow_implicit_invocation: true

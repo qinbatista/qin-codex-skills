@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin Unity C# Minimal Style"
+  short_description: "Qin Unity C# script style"
+  default_prompt: "Use $qin-unity-csharp-minimal-style for this Unity C# task and follow repo-local rules only when they are tighter."

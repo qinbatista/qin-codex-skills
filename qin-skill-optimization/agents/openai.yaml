@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qin Skill Optimization"
+  short_description: "Qin skill and prompt optimizer"
+  default_prompt: "Use $qin-skill-optimization to trace the strongest failure evidence to its real source, tighten the smallest relevant skill or prompt layer, and verify the behavior after the change."
