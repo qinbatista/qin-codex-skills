@@ -7,12 +7,6 @@ from pathlib import Path
 
 
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
-README_TEXT = """# qin-codex-skills
-
-Mirror of Qin's user global Codex skills from `~/.codex/skills`.
-
-This repository stores skill source files only. Do not copy the repository `.git` directory into `~/.codex/skills`.
-"""
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
 *.pyc
@@ -44,6 +38,52 @@ def ignored_names(directory, names):
 
 def skill_directories(skills_dir):
     return sorted([path for path in skills_dir.iterdir() if path.is_dir() and not path.name.startswith(".") and (path / "SKILL.md").exists()], key=lambda path: path.name)
+
+
+def read_skill_metadata(skill_dir):
+    frontmatter_lines = []
+    in_frontmatter = False
+    for line in (skill_dir / "SKILL.md").read_text().splitlines():
+        if line == "---":
+            if in_frontmatter:
+                break
+            in_frontmatter = True
+            continue
+        if in_frontmatter:
+            frontmatter_lines.append(line)
+    metadata = {}
+    current_key = ""
+    for line in frontmatter_lines:
+        if line.startswith("  ") and current_key:
+            metadata[current_key] = f"{metadata[current_key]} {line.strip()}".strip()
+            continue
+        if ": " in line:
+            current_key, current_value = line.split(": ", 1)
+            metadata[current_key] = current_value.strip().strip('"')
+    return metadata
+
+
+def build_readme(skill_paths):
+    readme_lines = [
+        "# qin-codex-skills",
+        "",
+        "Public mirror of Qin's user global Codex skills from `~/.codex/skills`.",
+        "",
+        "This repository stores global skill source files only. Do not copy the repository `.git` directory into `~/.codex/skills`.",
+        "",
+        "## Skills",
+        ""
+    ]
+    for skill_path in skill_paths:
+        metadata = read_skill_metadata(skill_path)
+        skill_name = metadata.get("name", skill_path.name)
+        readme_lines.extend([
+            f"### [`{skill_name}`](./{skill_path.name}/)",
+            "",
+            metadata.get("description", "No description provided."),
+            ""
+        ])
+    return "\n".join(readme_lines)
 
 
 def copy_skill_directory(source_dir, target_dir):
@@ -103,10 +143,11 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
             shutil.rmtree(path)
         else:
             path.unlink()
-    (repository_dir / "README.md").write_text(README_TEXT)
     (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT)
     copied_names = []
-    for path in skill_directories(skills_dir):
+    skill_paths = skill_directories(skills_dir)
+    (repository_dir / "README.md").write_text(build_readme(skill_paths))
+    for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)
     return copied_names
