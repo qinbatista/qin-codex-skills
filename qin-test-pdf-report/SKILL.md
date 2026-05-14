@@ -28,6 +28,7 @@ Use this skill whenever:
 - For comparison reports, always show the before and after states with the real data and images that were compared. Never show only the final result.
 - Reuse successful case-specific formats for similar future requests instead of falling back to the generic compact table format.
 - Never report synthetic, assumed, or inferred test outcomes. Only include test cases that were actually executed in the collected run logs.
+- When the user asks for a report, treat it as a request for real-time workflow evidence. The primary report content must be the actual live result of the requested workflow, API call, agent call, UI action, generated artifact, comparison, or data extraction, not only a code-verification command.
 - Summarize the user's real request near the top of the report when the user asked for an edit, fix, validation target, or specific expected outcome.
 - Categorize the report purpose so code-heavy, image-heavy, UI-heavy, and mixed reports do not all look the same.
 - Keep the report cache from growing forever by pruning stale cached PDFs once their file age passes 7 days unless the user asks for a different retention rule.
@@ -37,10 +38,11 @@ Use this skill whenever:
 
 ## Workflow
 
-1. Run or collect the relevant tests first.
+1. Run the requested workflow in real time first and capture its actual input, output, returned JSON, generated files, screenshots, or comparison data. Use pytest, unit tests, lint, smoke tests, or compile checks only as supporting code verification when code was edited; they are not a substitute for the report's main result evidence.
 2. Gather evidence:
    - screenshots
    - image comparisons
+   - the real visible result requested by the user, such as returned JSON, extracted names, generated assets, API responses, rendered UI state, or comparison tables
    - raw run logs, command output, agent logs, warning/error logs, and saved request/result summaries when available
    - before data, after data, before image, and after image for comparison reports
    - key command outputs
@@ -102,7 +104,7 @@ Use this skill whenever:
 - For product, garment, generated asset, document-page, or before/after evidence where the full object must be inspected, preserve the complete image on one page. Use manifest artifact fields such as `fit_mode: "contain"` or `preserve_full_image: true`; do not slice or crop these images. Reserve tall-image slicing for long screenshots, chat logs, terminal output, or other scroll-like evidence where continuation pages are expected.
 - For MuseAI default BOM names image reports, use the user's generated-asset evidence report style: A3 landscape, image-first, with an overview page and `Generated BOM Assets` pages where each BOM row card shows the cropped source/reference image beside the final generated BOM asset image. Each card should include BOM name, type, pass/warning status, source side, coordinates, cropped reference label, generated asset label, and generated asset path or URL when useful. Store the manifest, raw logs, agent logs, cropped source/reference images, generated final images, rendered preview pages, stdout, stderr, and result JSON beside the PDF in the report cache. Circled BOMNameAgent images may be supporting evidence, but they are not the main default report layout for this request.
 - For code/API reports, prefer compact summary tables and command/request/response evidence before screenshots or long logs.
-- For MuseAI overall API test reports, use the stable local API template from `/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/overall-api-8443-20260511-123918/museai_overall_api_test_report.pdf`: A4 landscape, first-page `Overall Result` and `Run Artifacts`, green/red `Local API Route Status`, `Local APIs Not Working`, then per-route input/output visual evidence pages with real request and response images when available. In the MuseAI repo this template is implemented by `plugins/muse-ai-plugin/skills/test-api-route-skill/scripts/generate_api_route_report_pdf.py`.
+- For MuseAI overall API test reports, use the stable local API template from `/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/overall-api-8443-20260511-123918/museai_overall_api_test_report.pdf`: A4 landscape, first-page `Overall Result` and `Run Artifacts`, green/red `Local API Route Status`, `Local APIs Not Working`, then per-route input/output visual evidence pages with real request and response images when available. In the MuseAI repo this template is implemented by `/Users/qin/QinProject/Muse/MuseAI/plugins/muse-ai-plugin/skills/test-api-route-skill/scripts/generate_api_route_report_pdf.py`.
 - For document/spreadsheet comparison reports, embed rendered preview images of the generated PDFs, spreadsheets, documents, or slides when practical. Do not replace visual evidence with file paths alone; paths should be supporting metadata under the rendered evidence.
 - Add summary pages only when aggregate metrics, failures, warnings, or repeated-case variation need their own page. Do not add summary pages just to preserve a template.
 - Keep page orientation flexible. Use landscape pages for side-by-side comparisons, wide tables, and screenshot grids. Use portrait pages for text-heavy steps, document reviews, and long vertical screenshots.
@@ -121,6 +123,7 @@ Use this skill whenever:
 ## Report Rules
 
 - Prefer visual evidence over paragraph summaries.
+- Make the requested real-time result visible in the report body. If the workflow returns JSON, tables, names, IDs, URLs, measurements, images, or generated files, show those concrete values directly in a readable table or panel before any pytest, smoke-test, lint, or compile output.
 - For API tests that return media/resource URLs in request or response payloads, include those URLs as concrete values in the case `request`/`response` fields (or `input`/`output`) so the PDF carries retrievable evidence links.
 - Prefer concrete examples over abstract summary text. Show the real given text, real returned text, and real evidence images whenever they are available.
 - For comparison cases, render explicit `Before` and `After` rows before any final result row. Include `before_image_path` and `after_image_path` when images exist, and mark missing before/after evidence instead of silently dropping it.
@@ -201,6 +204,7 @@ Use this skill whenever:
 ## Guardrails
 
 - Do not replace the PDF with a long text-only recap.
+- Do not use pytest, unit-test, lint, compile, or smoke-test output as the main report when the user asked to see a workflow result. Those checks can prove code health, but the report must still show the real requested result.
 - Do not let comparison, regression, baseline, before/after, or visual-diff reports collapse to only a final output row.
 - Do not omit known failed or skipped cases just to make the report look cleaner.
 - Do not silently drop missing screenshot paths; mark them as missing in the report.

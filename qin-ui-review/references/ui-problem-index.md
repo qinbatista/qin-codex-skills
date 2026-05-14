@@ -35,6 +35,7 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-022`: read-only path looks editable, file name editable, auto-read assets, inline row actions
 - `UI-023`: split label value rows, two-line controls, dense inspector, vertical space waste
 - `UI-024`: misplaced delete button, destructive action ownership, add child beside remove, child selector
+- `UI-025`: placement simulator, drag preview, missing reference image, parent reference hidden
 
 ## Problems
 
@@ -205,3 +206,24 @@ Terms: misplaced delete button, destructive action ownership, add child beside r
 Problem: A remove/delete button sits next to an unrelated add/select action, making users think it removes the wrong object. Child rows also fail when they can be created without choosing their actual image.
 Solution: Place destructive actions inside the object they delete, away from unrelated creation controls. Put parent removal at the parent item's bottom or clear item action area; put child removal inside each child row/panel. Make child creation/select controls choose real assets, and support multi-add through selected assets when the workflow naturally allows it.
 Validation: A user can identify whether an action affects the parent or child before clicking, no empty unusable child item is created, and multi-selected child assets can be added without repeated single-image steps.
+
+### UI-025 Placement Tools Need A Visible Reference Image
+
+Terms: placement simulator, drag preview, image reference, missing reference, parent reference hidden, child position editor, visual placement, duplicate preview.
+Problem: A drag-based placement tool hides the fixed reference, duplicates preview images outside the actual workspace, or writes serialized/config data continuously while dragging.
+Solution: Use one main placement canvas with the fixed parent/reference image centered and labeled, then draw the draggable child/object on top with a clear outline. Map screen dragging from the fixed parent pivot/origin to the serialized local position instead of auto-fitting the child as part of the view bounds. Avoid duplicate preview panels unless they solve a real ambiguity, and persist config changes on release/commit instead of every drag frame.
+Validation: A user can identify the parent reference, draggable child/object, fixed pivot/origin, and current position in one canvas, and dragging remains responsive without continuous asset/config writes.
+
+### UI-026 Canceling Pickers Must Be A No-Op
+
+Terms: picker cancel, file dialog cancel, select cancel, unwanted window opens, canceled selection still applies, accidental modal.
+Problem: A select/import button opens a picker, but canceling the picker still triggers follow-up work such as opening another window, applying old values, or running an action.
+Solution: Treat cancel as a hard no-op. Gate all follow-up UI, data mutation, imports, and secondary windows on a newly selected valid result. Keep separate actions separate, such as `Select` only selecting and `Place` only opening placement.
+Validation: Canceling a picker leaves fields, windows, generated files, and selection state unchanged.
+
+### UI-027 Peer Text Fields Need Equal Input Width
+
+Terms: same size text boxes, uneven input widths, peer text fields, label steals field width, dense inspector fields, same row numeric inputs.
+Problem: Peer inputs in the same logical group share the same row or grid, but longer labels reduce only their own input width, making the fields look mismatched and harder to scan.
+Solution: Reserve one shared label width for that peer group, then compute every input field from the same remaining width. If labels are too long for the compact grid, use a wider shared label reserve or move the group to fewer columns rather than letting individual fields drift.
+Validation: Same-level text boxes line up visually and have matching width across the group, while labels remain readable.
