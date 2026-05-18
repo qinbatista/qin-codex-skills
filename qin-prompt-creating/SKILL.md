@@ -35,7 +35,7 @@ prompt = f"""
 5. Keep the prompt concise. Merge overlapping rules instead of appending repeated warnings.
 6. Treat user examples, bad outputs, and edge cases as test evidence first. Do not copy them into the prompt as literal case rules unless the example itself is the reusable requirement.
 7. For function prompts, always use an explicit `Purpose:` block followed by a `Rules:` block. Do not start with a persona or role sentence such as `You are...`.
-8. Prefer `Output format must be:` plus the schema over separate output warnings like `Return strict JSON`, `top-level key`, or `Do not add fields` when the schema already communicates that contract. If the caller uses OpenAI JSON mode, write `Output JSON format must be:` so the prompt satisfies the API without adding verbose JSON warnings.
+8. Make the output schema the contract. When the schema already shows the object, list, keys, and field names, avoid extra format warnings such as `do not return a list`, `top-level key`, or `do not add fields`. If the caller uses OpenAI JSON mode, write `Output JSON format must be:` so the prompt satisfies the API without verbose JSON warnings.
 9. Include only rules that materially shape the output direction or prevent a plausible wrong interpretation.
 
 ## Existing Prompt Optimization
@@ -84,7 +84,7 @@ Guidelines:
 - Do not start with role/persona setup such as `You are a...`; write the purpose and expected result directly.
 - Use command wording: Get, Extract, Change, Check, Fix, Convert, Compare, Return.
 - Put constraints under `Rules`.
-- Put only the required schema under `Output format must be:` when that is enough; use `Output JSON format must be:` for OpenAI JSON-mode calls. Do not duplicate the schema with extra prose warnings.
+- Put only the required schema under `Output format must be:` when that is enough; use `Output JSON format must be:` for OpenAI JSON-mode calls. Let the schema define the container shape and fields instead of repeating them in prose.
 - For coordinates, use a `Coordinates rule:` block when source selection and circle coverage are important. Include source image meaning, coordinate units/order, and what the circle must cover.
 - Merge short source/context guidance into the task line when it fits; avoid a separate source section for one sentence of context.
 - Do not add audience-purpose prose unless the result is meant for human reading.
@@ -153,7 +153,7 @@ Do not add obvious rules that merely restate the base task or normal quality exp
 - Do not paste test cases into prompts. Reproduce or inspect the result, identify the general prompt gap, and leave the prompt unchanged when the existing prompt already covers the case.
 - Do not add persona openings like `You are...` to function prompts when a direct task sentence is enough.
 - Do not write prompts as loose paragraphs. Use `Purpose:` then `Rules:`.
-- Do not add separate `Return strict JSON`, `top-level key`, or `Do not add fields` rules when one output-format schema communicates the contract clearly.
+- Avoid separate `Return strict JSON`, `top-level key`, `do not return a list`, or `do not add fields` rules when the schema already communicates the contract.
 - Do not use vague filler such as "be accurate" when a concrete rule can say what accuracy requires.
 - Do not add obvious filler rules such as "match the user request" or "avoid blank output"; use rules only when they constrain the direction, audience, evidence source, format, or allowed content.
 - Do not leave literal JSON braces unescaped inside `prompt = f"""..."""`.
