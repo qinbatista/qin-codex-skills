@@ -22,6 +22,10 @@ Mandatory final verification skill. Use for any coding, website, UI, script, aut
 
 Prefer GPT-5.3-Codex-Spark for obvious, bounded, low-risk coding work when Codex has a model-selection or allowed delegation surface available. Use when the expected implementation, review, cleanup, or verification path is clear from the request or nearby code, even if the task is more than a tiny edit; avoid using it for unclear debugging, architecture, multi-system changes, high-risk migrations, or tasks that require deeper reasoning.
 
+### [`qin-image-editing-workflow`](./qin-image-editing-workflow/)
+
+Global image-editing workflow rule. Use whenever a task needs to edit, composite, regenerate, replace content inside, or otherwise modify an existing image.
+
 ### [`qin-karpathy-guidelines`](./qin-karpathy-guidelines/)
 
 Behavioral coding guardrails to reduce wrong assumptions, overcomplication, and unrelated edits. Use for non-trivial coding, debugging, refactoring, implementation, and review work across languages before making changes so Codex surfaces assumptions, prefers the simplest viable solution, keeps edits surgical, and defines verifiable success criteria.

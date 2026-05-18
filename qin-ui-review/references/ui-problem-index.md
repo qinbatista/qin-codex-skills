@@ -23,7 +23,7 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-010`: type scale, heading size, font size jumps, random typography
 - `UI-011`: font family, mixed fonts, unrelated letterforms
 - `UI-012`: split layout, left/right columns, unmatched panel stacks
-- `UI-013`: peer buttons, button height, density, visual weight
+- `UI-013`: peer buttons, button height, density, visual weight, dropdown refresh icon
 - `UI-014`: focal point, competing hero, too many dominant elements
 - `UI-015`: decorative contrast, palette jump, unrelated color block
 - `UI-016`: filler image, empty visual, irrelevant media
@@ -33,9 +33,11 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-020`: duplicate action buttons, add beside dropdown, refresh always visible, contextual toolbar
 - `UI-021`: slow inspector, slider lag, expensive repaint, refresh during edit, asset scan while dragging
 - `UI-022`: read-only path looks editable, file name editable, auto-read assets, inline row actions
-- `UI-023`: split label value rows, two-line controls, dense inspector, vertical space waste
+- `UI-023`: split label value rows, two-line controls, dense inspector, vertical space waste, layer count grid
 - `UI-024`: misplaced delete button, destructive action ownership, add child beside remove, child selector
 - `UI-025`: placement simulator, drag preview, missing reference image, parent reference hidden
+- `UI-026`: picker cancel, select cancel, unwanted window opens, canceled selection applies
+- `UI-027`: same size text boxes, uneven input widths, same row numeric inputs, small count inputs
 
 ## Problems
 
@@ -125,10 +127,10 @@ Validation: The split layout has a matched footprint unless asymmetry communicat
 
 ### UI-013 Peer Button Mismatch
 
-Terms: peer buttons, button height, button density, visual weight, action row, primary secondary, field action height, inline action buttons.
+Terms: peer buttons, button height, button density, visual weight, action row, primary secondary, field action height, inline action buttons, dropdown refresh icon.
 Problem: Buttons in the same action group, or inline buttons beside a field, have inconsistent height, padding, density, icon scale, or baseline without intentional hierarchy.
-Solution: Normalize height, padding, icon size, and baseline; make primary vs secondary differences deliberate and restrained. For field plus inline action rows, draw or constrain the field and buttons to the same row rect height.
-Validation: Peer buttons align cleanly, inline field actions share the same height as their field, and only the intended primary action has extra emphasis.
+Solution: Normalize height, padding, icon size, and baseline; make primary vs secondary differences deliberate and restrained. For field plus inline action rows, draw or constrain the field and buttons to the same row rect height. When inline actions belong to a row that also has a right-side preview/image column, reserve the same right column width for the main action group so buttons, inputs, and preview edges align; keep compact delete/remove controls beside the item identity instead of stealing width from paired actions. For selector rows with contextual refresh/sync icons, do not rely on Unity default popup/button visual heights; set explicit popup and button styles so both draw from the same row height.
+Validation: Peer buttons align cleanly, inline field actions share the same height as their field, selector plus refresh rows have matching visual height, row action groups align to the preview/image column, compact delete/remove controls do not squeeze paired actions, and only the intended primary action has extra emphasis.
 
 ### UI-014 Too Many Dominant Focal Points
 
@@ -176,8 +178,8 @@ Validation: In the rendered UI, a user can identify each logical item from one o
 
 Terms: duplicate action buttons, create refresh buttons, add button beside dropdown, plus beside selector, refresh always visible, dirty refresh, contextual toolbar.
 Problem: A toolbar shows multiple overlapping actions, separate add/delete buttons beside a selector, or refresh controls even when there is nothing to refresh.
-Solution: Keep one primary action for the main workflow. Put add/new as an explicit option inside the selector when the selector owns the chosen item. Show refresh/sync as a compact icon next to the selected name only when a real dirty/out-of-sync state exists. Remove destructive delete buttons from the header unless deletion is the primary expected workflow.
-Validation: The rendered toolbar has one main action, add is discoverable from the selector, refresh is hidden when clean and visible when dirty, and destructive controls do not compete with normal creation flow.
+Solution: Keep one primary action for the main workflow. Put add/new as an explicit option inside the selector when the selector owns the chosen item. Do not repeat a section label beside a self-explanatory selector when the selected value already names the context. Show refresh/sync as a compact icon next to the selected name only when a real dirty/out-of-sync state exists. Remove destructive delete buttons from the header unless deletion is the primary expected workflow.
+Validation: The rendered toolbar has one main action, add is discoverable from the selector, the selector row does not waste space on redundant labels, refresh is hidden when clean and visible when dirty, and destructive controls do not compete with normal creation flow.
 
 ### UI-021 Expensive Work During Value Editing
 
@@ -195,10 +197,10 @@ Validation: Users can tell the path/name is not editable, and each row uses one 
 
 ### UI-023 Split Label/Value Rows Waste Space
 
-Terms: split label value rows, labels above values, two-line controls, dense inspector, compact editor, vertical space waste, same line labels.
+Terms: split label value rows, labels above values, two-line controls, dense inspector, compact editor, vertical space waste, same line labels, layer count grid, count fields.
 Problem: Dense editor or tool UI shows simple labels on one row and their adjacent values on a second row even though each label only identifies one nearby input.
-Solution: Put each short label and its value/input in the same row when the pair is compact and directly related. Keep separate rows only for complex controls, long labels, or layouts where one-line pairing would harm readability.
-Validation: Compact value groups use one row per logical group, labels stay readable, and vertical scrolling is reduced without hiding the relationship between label and input.
+Solution: Put each short label and its value/input in the same row when the pair is compact and directly related. Put compact coordinates or per-item metadata directly after the item name/path when it edits that same item, instead of creating a separate full-width row. For small numeric counts, keep each label beside a short equal-width field in one row instead of stretching the inputs into oversized columns or wrapping into two rows. Keep separate rows only for complex controls, long labels, or layouts where one-line pairing would harm readability.
+Validation: Compact value groups use one row per logical group, item-level coordinates/metadata sit beside the item identity when space allows, labels stay readable, and vertical scrolling is reduced without hiding the relationship between label and input.
 
 ### UI-024 Destructive Action Ownership Is Unclear
 
@@ -223,7 +225,14 @@ Validation: Canceling a picker leaves fields, windows, generated files, and sele
 
 ### UI-027 Peer Text Fields Need Equal Input Width
 
-Terms: same size text boxes, uneven input widths, peer text fields, label steals field width, dense inspector fields, same row numeric inputs.
-Problem: Peer inputs in the same logical group share the same row or grid, but longer labels reduce only their own input width, making the fields look mismatched and harder to scan.
-Solution: Reserve one shared label width for that peer group, then compute every input field from the same remaining width. If labels are too long for the compact grid, use a wider shared label reserve or move the group to fewer columns rather than letting individual fields drift.
-Validation: Same-level text boxes line up visually and have matching width across the group, while labels remain readable.
+Terms: same size text boxes, uneven input widths, peer text fields, label steals field width, dense inspector fields, same row numeric inputs, small count inputs, right edge gap, unused row width.
+Problem: Peer inputs in the same logical group share the same row or grid, but longer labels reduce only their own input width, or fixed tiny fields leave a large dead gap at the right edge.
+Solution: Reserve label widths consistently for the peer group, then compute equal input widths from the remaining row space. For small numeric count fields, keep them compact only when the row still reaches the intended edge; if a visible dead gap remains, distribute the surplus into equal wider fields instead of leaving unused space.
+Validation: Same-level text boxes line up visually, have matching width across the group, fill the intended row width without overflow, and keep labels readable.
+
+### UI-028 UI Updates Need A Visual Target First
+
+Terms: UI update, make UI better, ugly UI, Unity inspector, editor UI, visual reference, image reference, repeated retries, ChatGPT image review.
+Problem: UI changes are implemented directly from code guesses, causing repeated mismatched layouts, clipped text, and user-visible trial and error.
+Solution: Capture the current rendered UI first, use ChatGPT/OpenAI image understanding or the available image UI optimization workflow to define a visual target, then implement against that reference. For dense Unity inspector tools, separate overloaded concerns into matching rows or groups instead of forcing every control into one line.
+Validation: Before coding, there is a screenshot or clear visual target; after coding, the rendered UI is checked against it for alignment, matching control sizes, readable labels, and no clipping.
