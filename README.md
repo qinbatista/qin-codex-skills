@@ -24,7 +24,7 @@ Prefer GPT-5.3-Codex-Spark for obvious, bounded, low-risk coding work when Codex
 
 ### [`qin-image-editing-workflow`](./qin-image-editing-workflow/)
 
-Global image-editing workflow rule. Use whenever a task needs to edit, composite, regenerate, replace content inside, or otherwise modify an existing image.
+Global image workflow rule. Use whenever a task needs to edit, generate, composite, regenerate, replace content inside, or otherwise modify an image, and whenever a repo or user rule says image-related work must route through the image editor workflow.
 
 ### [`qin-karpathy-guidelines`](./qin-karpathy-guidelines/)
 
