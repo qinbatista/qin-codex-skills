@@ -26,6 +26,7 @@ Use this skill whenever:
 - Choose the report format from the actual cases and evidence. Do not force every report into one fixed PDF layout when a comparison, gallery, prompt audit, or code/API check needs a different shape.
 - Keep mixed text-and-image reports visually aligned. When a case includes both explanation and evidence, prefer a stable text block next to a stable evidence block instead of letting paragraphs and images drift into a random flow.
 - For comparison reports, always show the before and after states with the real data and images that were compared. Never show only the final result.
+- For AI agent or prompt-workflow tests where expected or correct values exist or can be derived from the input, show a direct `correct/agent` or `agent/correct` comparison table in the PDF. Do not show only the agent output; make pass/fail cells visible beside the expected values.
 - Reuse successful case-specific formats for similar future requests instead of falling back to the generic compact table format.
 - Never report synthetic, assumed, or inferred test outcomes. Only include test cases that were actually executed in the collected run logs.
 - When the user asks for a report, treat it as a request for real-time workflow evidence. The primary report content must be the actual live result of the requested workflow, API call, agent call, UI action, generated artifact, comparison, or data extraction, not only a code-verification command.
