@@ -27,6 +27,7 @@ Write the minimum code that solves the actual request.
 - Do not add configurability that was not requested.
 - Do not add error handling for impossible scenarios.
 - Do not add fallback/default/compatibility paths unless the user explicitly asks for them or an existing external contract requires them.
+- When the user asks to handle case A, implement case A only; do not add code, prompt rules, comments, or warnings about unrelated cases B/C/D unless the user mentioned them or they are required by an existing contract.
 - Trust the provided inputs, outputs, formats, and values when the current caller or contract already defines them; fix the producer or contract instead of adding consumer-side repair logic.
 - Prefer fixing the real source-code problem directly instead of layering wrappers, fallback branches, adapters, or sidecar logic on top of bad code.
 - For most bug fixes and update requests, change the existing logic at the real source rather than preserving it and adding another layer around it.
