@@ -26,6 +26,8 @@ Write the minimum code that solves the actual request.
 - Do not create a new script, file, module, or utility only to simplify very small or easy structure; keep the logic in the existing file unless the extraction removes real complexity or is reused.
 - Do not add configurability that was not requested.
 - Do not add error handling for impossible scenarios.
+- Do not add fallback/default/compatibility paths unless the user explicitly asks for them or an existing external contract requires them.
+- Trust the provided inputs, outputs, formats, and values when the current caller or contract already defines them; fix the producer or contract instead of adding consumer-side repair logic.
 - Prefer fixing the real source-code problem directly instead of layering wrappers, fallback branches, adapters, or sidecar logic on top of bad code.
 - For most bug fixes and update requests, change the existing logic at the real source rather than preserving it and adding another layer around it.
 - For branching, use a plain `if`/`else` for exactly two mutually exclusive outcomes, and use the language's switch-style construct (`switch`/`case`, Python `match`/`case`, guarded switch cases, or equivalent) for three or more outcomes.

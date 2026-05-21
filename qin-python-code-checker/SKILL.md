@@ -47,6 +47,7 @@ Use this skill whenever the user wants Python code written or cleaned up in this
 - Keep `try`/`except` scopes narrow. Leave straight-line merge, transform, and return code outside the `try` when only one call actually needs protection.
 - One-line policy: when an `except` branch only logs and returns or raises, keep the log call on one physical line and inline any single-use error formatting instead of creating a temporary variable.
 - Trust declared function inputs and return shapes instead of repeatedly rechecking `dict`, `list`, `int`, or similar types across call sites.
+- Do not add fallback/default/compatibility branches, alternate input aliases, empty-value substitutes, or caller-side repair logic unless the user explicitly asks for them or a real external API contract requires them.
 - Do not validate, repair, or branch on a called function's return format at the caller. If the returned shape is wrong, fix the producing function, helper contract, or prompt instead of adding caller-side format checks.
 - If an AI helper is already asked to return structured JSON through its own contract such as `json_root="object"` or `json_root="array"`, trust that parsed result and do not add `json.loads`, `ast.literal_eval`, string fallbacks, or repeated `isinstance` parsing at the call site.
 - For AI-driven extraction, naming, or review flows, do not add local keyword filters, special-case semantic validators, or format-based decision logic for the AI content; put those rules in the prompt and keep local code limited to minimal schema normalization.
