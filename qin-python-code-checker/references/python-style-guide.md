@@ -80,6 +80,7 @@ Generate clear, minimal, production-ready Python code for fast debugging, testin
 ### 10. Deterministic behavior
 
 - Prefer returning values over hidden side effects.
+- For string comparisons, normalize with `str(...).strip().lower()` before comparing; do not enumerate casing variants.
 - Follow PEP 8 where it does not conflict with this guide.
 
 ### 11. Imports

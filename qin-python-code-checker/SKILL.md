@@ -55,6 +55,7 @@ Use this skill whenever the user wants Python code written or cleaned up in this
 - Preserve the existing manual formatting style of the file, and do not run auto-formatters unless the user explicitly asks.
 - Use a plain `if`/`else` for exactly two mutually exclusive outcomes, and use Python `match`/`case` for three or more outcomes.
 - Do not write or keep `if`/`elif` chains for three or more outcomes; for complex predicates that are not one selector, use `match True` with guarded `case _ if ...` branches.
+- Normalize string comparisons with `str(...).strip().lower()` before comparing; do not enumerate casing variants.
 - Do not add guards, demos, TODOs, unused imports, or placeholder logic unless requested.
 - Use the exact logging call required by the reference whenever logging is part of the code.
 
