@@ -27,12 +27,15 @@ Use this skill whenever work changed code, content, UI, configuration, scripts, 
 
 - For website or UI work:
   Run a local preview when possible.
+  Hard rule: after the work is done, capture a full-page rendered image review and show that full-page preview in the final response whenever the surface can be rendered as a page or screen.
+  A component crop, viewport crop, or PDF preview may be included as extra evidence, but it does not replace the full-page image preview for page-like UI work.
+  If a full-page image is not practical, state the concrete blocker and show the widest useful rendered screenshot instead.
   Capture at least one desktop check.
   Capture at least one mobile or narrow-screen check when the layout is responsive.
   Treat desktop and narrow-screen checks as both required when responsive behavior changed.
   Look for alignment, overflow, unreadable text, missing images, broken spacing, and wrapped labels inside mobile nav, CTA, pill, chip, or other compact controls.
   If mobile control text wraps, the verification has not passed yet. Shorten the label or switch to a folded menu/control pattern and test again.
-  In the final response, include at least one representative screenshot image when practical so the user can see the result immediately.
+  In the final response, include the full-page rendered image preview when practical so the user can review the whole result immediately.
 
 - For frontend or app code:
   Prefer targeted build, lint, test, or browser verification over no-op checks.
@@ -56,7 +59,7 @@ Use this skill whenever work changed code, content, UI, configuration, scripts, 
 - When the user asks whether the issue is fixed, answer directly from the test evidence.
 - If something was not tested, say that plainly.
 - Do not imply full verification when only partial checks were run.
-- For website or UI tasks, show the rendered page with a screenshot in the final response when practical.
+- For website or UI tasks, show the full-page rendered image preview in the final response when practical; if only a crop is shown, explain why the full page could not be captured.
 - If the user explicitly asked for testing, QA, validation, a smoke test, a regression pass, a test report, a PDF report, a visual report, a review report, an audit report, evidence output, or a result artifact, pair this skill with `/Users/qin/.codex/skills/qin-test-pdf-report/SKILL.md` and deliver the result as a PDF report rather than a text-only recap.
 
 ## Guardrails
