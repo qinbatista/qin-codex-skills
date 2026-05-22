@@ -38,6 +38,7 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-025`: placement simulator, drag preview, missing reference image, parent reference hidden
 - `UI-026`: picker cancel, select cancel, unwanted window opens, canceled selection applies
 - `UI-027`: same size text boxes, uneven input widths, same row numeric inputs, small count inputs
+- `UI-028`: UI update, make UI better, optimize UI, opitmize UI, current page image, ChatGPT image review, same theme
 
 ## Problems
 
@@ -230,9 +231,9 @@ Problem: Peer inputs in the same logical group share the same row or grid, but l
 Solution: Reserve label widths consistently for the peer group, then compute equal input widths from the remaining row space. For small numeric count fields, keep them compact only when the row still reaches the intended edge; if a visible dead gap remains, distribute the surplus into equal wider fields instead of leaving unused space.
 Validation: Same-level text boxes line up visually, have matching width across the group, fill the intended row width without overflow, and keep labels readable.
 
-### UI-028 UI Updates Need A Visual Target First
+### UI-028 UI Optimization Needs Current-Image ChatGPT Direction
 
-Terms: UI update, make UI better, ugly UI, Unity inspector, editor UI, visual reference, image reference, repeated retries, ChatGPT image review.
-Problem: UI changes are implemented directly from code guesses, causing repeated mismatched layouts, clipped text, and user-visible trial and error.
-Solution: Capture the current rendered UI first, use ChatGPT/OpenAI image understanding or the available image UI optimization workflow to define a visual target, then implement against that reference. For dense Unity inspector tools, separate overloaded concerns into matching rows or groups instead of forcing every control into one line.
-Validation: Before coding, there is a screenshot or clear visual target; after coding, the rendered UI is checked against it for alignment, matching control sizes, readable labels, and no clipping.
+Terms: UI update, make UI better, optimize UI, opitmize UI, ugly UI, Unity inspector, editor UI, visual reference, current page image, image reference, repeated retries, ChatGPT image review, same theme, color theme.
+Problem: UI optimization is implemented directly from code guesses or stale references instead of using the current rendered page/screen as visual input, causing mismatched layouts, clipped text, wrong hierarchy, or theme drift.
+Solution: For page-level `optimize UI`, `opitmize UI`, redesign, polish, or refinement requests, capture the current rendered page/screen image first and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow. Ask it to improve text, layout, hierarchy, spacing, responsive behavior, interaction clarity, and obvious UI problems while preserving the existing color theme, brand tokens, visual mood, and product style. Implement against the returned direction or mockup unless accessibility, feasibility, performance, or repo constraints require an explicit deviation.
+Validation: Before coding, there is a saved current-page image and saved ChatGPT/OpenAI direction or a concrete blocker explaining why the required step could not run; after coding, the rendered UI is checked against that direction with a final full-page preview, readable labels, matching theme, and no clipping.
