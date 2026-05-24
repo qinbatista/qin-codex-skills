@@ -56,6 +56,7 @@ Use this skill whenever work changed code, content, UI, configuration, scripts, 
 
 - State what you tested.
 - State the result.
+- For website, UI, image, visual, document-preview, or generated-output tasks, include the three-part handoff whenever the artifacts exist: rendered image evidence, a concise report of what changed and what passed, and the live preview URL or local file/path to open. If one of the three is unavailable, say exactly which artifact is missing and why instead of omitting it silently.
 - When the user asks whether the issue is fixed, answer directly from the test evidence.
 - If something was not tested, say that plainly.
 - Do not imply full verification when only partial checks were run.
