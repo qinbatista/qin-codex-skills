@@ -261,3 +261,10 @@ Terms: footer, site footer, low-information footer, tall footer, compact footer,
 Problem: A footer with only a few navigation/contact links is laid out as tall columns, consuming a large amount of page height for low-density content.
 Solution: On desktop, use a compact footer band with brand, nav links, contact links, and copyright aligned in one horizontal system. Use separators and concise group labels instead of tall stacked lists. Let mobile wrap into short rows.
 Validation: Desktop footer height stays proportional to its content, links remain readable and single-line, and mobile wraps without creating oversized empty space.
+
+### UI-032 Contact Forms Ask Too Much Up Front
+
+Terms: contact form, inquiry form, quote form, too many questions, required fields, hard to contact, project brief, optional details.
+Problem: A public contact or inquiry form asks for product type, quantity, destination, deadline, attachments, or other project details as required fields before the user can make basic contact.
+Solution: Keep the first path to contact to the minimum viable fields, usually name, reply contact, and one short message. Put product details, quantity, timing, shipping destination, budget, and file uploads in a clearly optional section, and keep direct email/social contact visible beside the form.
+Validation: A user can submit or start contact after answering only the essential questions; optional fields are labeled optional, and direct contact routes remain visible without scrolling through a long form.
