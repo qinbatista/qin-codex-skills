@@ -39,6 +39,9 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-026`: picker cancel, select cancel, unwanted window opens, canceled selection applies
 - `UI-027`: same size text boxes, uneven input widths, same row numeric inputs, small count inputs
 - `UI-028`: UI update, make UI better, optimize UI, opitmize UI, current page image, ChatGPT image review, same theme
+- `UI-029`: empty icon button, blank circle, icon-only action, iconify missing, async icon dependency
+- `UI-030`: compact header, low-information hero, one-line header, sparse intro, status chips
+- `UI-031`: footer, site footer, low-information footer, tall footer, compact footer
 
 ## Problems
 
@@ -237,3 +240,24 @@ Terms: UI update, make UI better, optimize UI, opitmize UI, ugly UI, Unity inspe
 Problem: UI optimization is implemented directly from code guesses or stale references instead of using the current rendered page/screen as visual input, causing mismatched layouts, clipped text, wrong hierarchy, or theme drift.
 Solution: For page-level `optimize UI`, `opitmize UI`, redesign, polish, or refinement requests, capture the current rendered page/screen image first and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow. Ask it to improve text, layout, hierarchy, spacing, responsive behavior, interaction clarity, and obvious UI problems while preserving the existing color theme, brand tokens, visual mood, and product style. Implement against the returned direction or mockup unless accessibility, feasibility, performance, or repo constraints require an explicit deviation.
 Validation: Before coding, there is a saved current-page image and saved ChatGPT/OpenAI direction or a concrete blocker explaining why the required step could not run; after coding, the rendered UI is checked against that direction with a final full-page preview, readable labels, matching theme, and no clipping.
+
+### UI-029 Icon-Only Action Button Renders Blank
+
+Terms: empty icon button, blank circle, icon-only action, empty CTA, cart icon missing, iconify missing, async icon dependency, external icon.
+Problem: An icon-only action depends entirely on an async custom icon library or remote icon asset, so the button can render as an empty circle or blank square when the icon fails, delays, or is blocked.
+Solution: Give icon-only actions a local visible fallback, such as a CSS pseudo-element symbol or inline text/icon that does not depend on the remote icon runtime; hide the async icon if it would duplicate the fallback.
+Validation: Disable or delay the icon library in a rendered check and confirm the action still has a visible symbol, clear hit area, hover/focus state, and accessible label.
+
+### UI-030 Low-Information Hero Uses Too Many Rows
+
+Terms: compact header, low-information hero, one-line header, sparse intro, status chips, service chips, too many lines.
+Problem: A small amount of status or intro content is presented as a tall hero stack with separate rows for badge, title, description, and chips, making the section feel inflated.
+Solution: When desktop width allows, collapse the content into one aligned header row: badge/title, short description, and compact chips/actions. Let only narrow breakpoints stack the row.
+Validation: At desktop width the header reads in one row without squeezed chips, and at narrow width the same content stacks cleanly with no compact-label wrapping.
+
+### UI-031 Low-Information Footer Wastes Page Height
+
+Terms: footer, site footer, low-information footer, tall footer, compact footer, footer columns, wasted page height.
+Problem: A footer with only a few navigation/contact links is laid out as tall columns, consuming a large amount of page height for low-density content.
+Solution: On desktop, use a compact footer band with brand, nav links, contact links, and copyright aligned in one horizontal system. Use separators and concise group labels instead of tall stacked lists. Let mobile wrap into short rows.
+Validation: Desktop footer height stays proportional to its content, links remain readable and single-line, and mobile wraps without creating oversized empty space.

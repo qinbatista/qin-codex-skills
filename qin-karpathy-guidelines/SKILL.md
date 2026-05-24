@@ -66,3 +66,4 @@ Turn vague requests into verifiable outcomes.
 - When performing a merge, check explicitly for git conflicts and resolve each conflicted file deliberately instead of blindly taking one side.
 - When the user already wants rule compliance or cleanup, fix clear violations directly instead of pausing to ask whether to make the obvious update.
 - Do not stop at implementation when the task can be verified in the current environment.
+- For git-managed work, always state in the final response whether changes were pushed or not pushed.

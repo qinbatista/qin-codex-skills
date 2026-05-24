@@ -21,7 +21,7 @@ Use this skill whenever work changed code, content, UI, configuration, scripts, 
 4. If testing is blocked, say exactly why it was blocked and what remains unverified.
 5. If real or repeated testing shows unstable output, failures, or partially correct behavior, say it is not fully fixed yet and include the concrete pass/fail evidence instead of claiming completion.
 6. After Chrome-backed testing, close or finalize Chrome tabs/windows opened or claimed only for that test. If no other browser task, user handoff, login, approval, download, or requested open page still needs Chrome, close the Chrome app too; otherwise leave Chrome running and state what kept it open.
-7. The user's standing preference is to always push completed code after clean testing. After tests pass with no remaining problem, push the completed code by default when the work is in a git repo with a configured remote, unless the user explicitly says not to push or a closer repo-specific workflow gives a different target/sequence. Commit only the relevant task changes, preserve unrelated dirty work, and report if pushing is blocked.
+7. The user's standing preference is to always push completed code after clean testing. After tests pass with no remaining problem, commit and push the completed task-related code to `main` by default when the work is in a git repo with a configured remote, unless the user explicitly says not to push or a closer repo-specific workflow gives a different target/sequence. Unrelated dirty files are not a reason to skip pushing: stage only the files for the completed task, preserve unrelated dirty work, and report if committing or pushing is blocked.
 
 ## Validation rules
 
