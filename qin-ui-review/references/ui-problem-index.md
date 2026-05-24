@@ -40,8 +40,12 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-027`: same size text boxes, uneven input widths, same row numeric inputs, small count inputs
 - `UI-028`: UI update, make UI better, optimize UI, opitmize UI, current page image, ChatGPT image review, same theme
 - `UI-029`: empty icon button, blank circle, icon-only action, iconify missing, async icon dependency
-- `UI-030`: compact header, low-information hero, one-line header, sparse intro, status chips
-- `UI-031`: footer, site footer, low-information footer, tall footer, compact footer
+- `UI-030`: image preview, texture preview, sprite preview, square preview, stretched image
+- `UI-031`: compact header, low-information hero, one-line header, sparse intro, status chips
+- `UI-032`: footer, site footer, low-information footer, tall footer, compact footer
+- `UI-033`: contact form, inquiry form, quote form, too many questions, required fields
+- `UI-034`: image selector rail, thumbnail list, filename clutter, selected card, map cards
+- `UI-035`: necessary UI only, unrelated content, extra description, clutter, nonessential copy
 
 ## Problems
 
@@ -248,23 +252,44 @@ Problem: An icon-only action depends entirely on an async custom icon library or
 Solution: Give icon-only actions a local visible fallback, such as a CSS pseudo-element symbol or inline text/icon that does not depend on the remote icon runtime; hide the async icon if it would duplicate the fallback.
 Validation: Disable or delay the icon library in a rendered check and confirm the action still has a visible symbol, clear hit area, hover/focus state, and accessible label.
 
-### UI-030 Low-Information Hero Uses Too Many Rows
+### UI-030 Image Preview Boxes Drift From Square
+
+Terms: image preview, texture preview, sprite preview, map preview, square preview, stretched image, resize, UI scale, thumbnail.
+Problem: Image or texture preview surfaces stretch into wide rectangles or tall panels as the window resizes, making asset comparison harder and creating dead empty space.
+Solution: Calculate preview boxes from the smaller available dimension and draw the image inside that square. Keep labels and actions outside the square, and use scrolling or compact cards for repeated thumbnails instead of stretching the preview box.
+Validation: Desktop and resized/narrow checks show every image preview viewport as a square, with no label or action text beside the image and no distorted texture display.
+
+### UI-031 Low-Information Hero Uses Too Many Rows
 
 Terms: compact header, low-information hero, one-line header, sparse intro, status chips, service chips, too many lines.
 Problem: A small amount of status or intro content is presented as a tall hero stack with separate rows for badge, title, description, and chips, making the section feel inflated.
 Solution: When desktop width allows, collapse the content into one aligned header row: badge/title, short description, and compact chips/actions. Let only narrow breakpoints stack the row.
 Validation: At desktop width the header reads in one row without squeezed chips, and at narrow width the same content stacks cleanly with no compact-label wrapping.
 
-### UI-031 Low-Information Footer Wastes Page Height
+### UI-032 Low-Information Footer Wastes Page Height
 
 Terms: footer, site footer, low-information footer, tall footer, compact footer, footer columns, wasted page height.
 Problem: A footer with only a few navigation/contact links is laid out as tall columns, consuming a large amount of page height for low-density content.
 Solution: On desktop, use a compact footer band with brand, nav links, contact links, and copyright aligned in one horizontal system. Use separators and concise group labels instead of tall stacked lists. Let mobile wrap into short rows.
 Validation: Desktop footer height stays proportional to its content, links remain readable and single-line, and mobile wraps without creating oversized empty space.
 
-### UI-032 Contact Forms Ask Too Much Up Front
+### UI-033 Contact Forms Ask Too Much Up Front
 
 Terms: contact form, inquiry form, quote form, too many questions, required fields, hard to contact, project brief, optional details.
 Problem: A public contact or inquiry form asks for product type, quantity, destination, deadline, attachments, or other project details as required fields before the user can make basic contact.
 Solution: Keep the first path to contact to the minimum viable fields. For low-friction public inquiry forms, this can be only reply contact/email plus one short message; do not require name/team unless the business workflow truly needs it before first reply. Put product details, quantity, timing, shipping destination, budget, and file uploads in a clearly optional section, and keep direct email/social follow/contact routes visible beside the form with real icons or local icon fallbacks.
 Validation: A user can submit or start contact after answering only the essential questions; optional fields are labeled optional, direct email/social contact routes remain visible without scrolling through a long form, and social actions clearly say whether they are for direct contact, following, or DM.
+
+### UI-034 Image Selector Rails Should Stay Visual
+
+Terms: image selector rail, texture map list, thumbnail list, filename clutter, map cards, selected card, left preview panel.
+Problem: A selector for image/map variants behaves like a text list, with long filenames, bulky selected fills, small previews, or scroll-heavy cards that make the visual choice harder to scan.
+Solution: Make the selector primarily visual: short labels above square thumbnails, no filename text inside repeated cards, restrained selected borders instead of large bright blocks, and contextual actions below the image they affect.
+Validation: The selector shows all expected image variants as clean square previews, the selected state is clear without dominating the rail, actions sit under the relevant image, and no long path/name text competes with the previews.
+
+### UI-035 Necessary UI Only
+
+Terms: necessary UI only, only necessary text, unrelated content, extra description, too much explanation, clutter, nonessential copy, irrelevant UI.
+Problem: A screen includes copy, controls, media, badges, or sections that do not help the user complete the current task, make a decision, or understand state.
+Solution: Remove unrelated content and extra descriptions. Keep one clear user-facing action, state, or short supporting line only when it directly improves the workflow.
+Validation: Every visible element can answer "what user decision, action, or state does this support?" without relying on decoration, explanation, or available empty space as the reason.

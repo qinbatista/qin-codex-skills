@@ -56,6 +56,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - On narrow screens, nav labels, CTA labels, pill labels, and other compact controls should stay single-line. If they do not fit, shorten the label or switch to a folded menu/control pattern before accepting the layout.
 - User-facing website copy should describe the user action, choice, or outcome in plain language, not the technical mechanism behind it.
 - If a detail is only useful for debugging, implementation, or internal operations, keep it in logs or internal documentation instead of the public UI.
+- Show only UI, copy, and media that directly help the current user task, decision, or outcome; remove unrelated content and extra explanation instead of shrinking it into secondary text.
 - Do not introduce stray micro-text near major content blocks. Small labels such as eyebrow text, badges, or status words should still feel proportional to the surrounding title and body sizes.
 - Use a deliberate type ladder. Titles, headings, eyebrow labels, body text, and captions should come from a small consistent set of size bands instead of random jumps.
 - Keep the font-family system tight. One page should not mix three unrelated text fonts or letterform styles without a strong brand reason.
@@ -84,9 +85,10 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 7. Run at least one desktop and one narrow-screen visual pass. Treat wrapped mobile nav, CTA, or pill text as a defect to fix, not a note to leave behind.
 8. Scan for type-scale outliers. If one small label feels much smaller or one heading feels much larger than its peers without a clear hierarchy reason, normalize it.
 9. Scan descriptions, helper text, and supporting copy for technical or internal wording. Rewrite into user language or remove it if the detail is not needed by the user.
-10. Scan the page for font-family drift. Headlines, subheads, labels, and body copy should come from one tight family set instead of multiple unrelated fonts.
-11. Compare left/right panel rhythm in split layouts. Avoid a dangling extra panel or a visibly shorter stack on one side unless the asymmetry has a clear product reason.
-12. Re-check typography and button parity so consistency is not limited to color.
+10. Scan visible sections, controls, media, helper text, and badges for relevance to the user's current task. Remove anything that does not help the user decide, act, or understand state.
+11. Scan the page for font-family drift. Headlines, subheads, labels, and body copy should come from one tight family set instead of multiple unrelated fonts.
+12. Compare left/right panel rhythm in split layouts. Avoid a dangling extra panel or a visibly shorter stack on one side unless the asymmetry has a clear product reason.
+13. Re-check typography and button parity so consistency is not limited to color.
 
 ## Guardrails
 
@@ -101,6 +103,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - Do not accept wrapped mobile nav items, CTA labels, or pill text when a shorter label or folded menu would solve it cleanly.
 - Do not expose technical descriptions, implementation details, or internal workflow wording in public website copy.
 - Do not use the UI as a place for developer notes, debugging hints, or system-process explanations.
+- Do not keep unrelated content, decorative controls, or explanatory text in the UI just because there is space for it.
 - Do not add tiny decorative text that creates a separate mini-scale for no product reason.
 - Do not let headings, labels, and helper text jump between unrelated font sizes inside the same section.
 - Do not mix multiple unrelated text fonts on the same page just to create variety.
@@ -120,6 +123,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - Call out when a small label feels undersized next to a headline and suggest a size normalization instead of adding another special-case style.
 - Call out when split columns have unmatched panel counts or total heights and suggest one concrete resolution: mirror the stack, merge into one panel, or rebalance the heights.
 - Call out when copy sounds technical or internal and suggest a user-facing rewrite; if the detail is only useful operationally, move it to logs or internal notes.
+- Call out unrelated UI, extra descriptions, and nonessential media, then remove them or replace them with one necessary user-facing action or state.
 - Call out when a page mixes too many text families and suggest collapsing back to one primary family plus, at most, one clearly justified accent family.
 - For page-level UI optimization, report the current-page image submitted to ChatGPT/OpenAI, the optimized direction or mockup evidence received, and the final full-page rendered preview.
 - Prefer concise wording such as: "These panels serve the same job, so bring them into the same brightness band."
