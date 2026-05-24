@@ -22,6 +22,10 @@ Mandatory final verification skill. Use for any coding, website, UI, script, aut
 
 Prefer GPT-5.3-Codex-Spark for obvious, bounded, low-risk coding work when Codex has a model-selection or allowed delegation surface available. Use when the expected implementation, review, cleanup, or verification path is clear from the request or nearby code, even if the task is more than a tiny edit; avoid using it for unclear debugging, architecture, multi-system changes, high-risk migrations, or tasks that require deeper reasoning.
 
+### [`qin-git-push-safety`](./qin-git-push-safety/)
+
+Use before any Git push, release publish, PR branch publish, or user request to push changes. Enforce Qin's push workflow by checking status, fetching remote code, pulling before push, integrating remote changes without overwriting unrelated work, resolving merge conflicts deliberately, verifying the result, and only then pushing.
+
 ### [`qin-image-editing-workflow`](./qin-image-editing-workflow/)
 
 Global image workflow rule. Use whenever a task needs to edit, generate, composite, regenerate, replace content inside, or otherwise modify an image, and whenever a repo or user rule says image-related work must route through the image editor workflow.
