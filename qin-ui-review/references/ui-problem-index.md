@@ -47,6 +47,7 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-034`: image selector rail, thumbnail list, filename clutter, selected card, map cards
 - `UI-035`: necessary UI only, unrelated content, extra description, clutter, nonessential copy
 - `UI-036`: public website, immersive UI, product imagery, simpler copy, beautiful website
+- `UI-037`: immersive panel, image and panel together, form over background, integrated scene, detached card
 
 ## Problems
 
@@ -301,3 +302,10 @@ Terms: public website, ecommerce UI, immersive UI, product imagery, beautiful we
 Problem: A public website screen tries to feel polished by adding more words, generic decorations, or unrelated media, which makes the page less direct and less trustworthy.
 Solution: Keep only the copy needed for the current user action, state, or buying decision. Use relevant product, service, location, or workflow imagery as part of the layout or scene so the page feels richer without extra explanation.
 Validation: The first viewport shows the main task, one clear next action, concise copy, and imagery that directly supports the product or workflow instead of filling space.
+
+### UI-037 Immersive Panels Must Belong To The Image Scene
+
+Terms: immersive panel, image and panel together, form over background, integrated scene, detached card, boxed hero image.
+Problem: A screen is called immersive, but the image, form, summary, or status panel are separated into independent cards or columns, so the page feels like a dashboard instead of one visual scene.
+Solution: Use a full-bleed or section-level background image/scene and place the functional panel inside that same composition with soft overlays, fades, or translucent surfaces. Avoid hard bordered photo cards beside unrelated white panels unless the product intentionally needs a comparison grid.
+Validation: The main panel visually sits in or on top of the image scene, the background continues behind the workflow, and the first viewport reads as one connected composition.
