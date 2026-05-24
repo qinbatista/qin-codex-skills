@@ -29,7 +29,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 1. Classify the UI request as existing-problem lookup, new UI generation, UI update, visual review, or new reusable rule capture.
 2. Search `references/ui-problem-index.md` with likely terms before changing UI.
 3. For explicit page or screen UI optimization, capture the current rendered page/screen image before implementation and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow.
-4. Ask ChatGPT/OpenAI to optimize text, layout, hierarchy, spacing, responsive behavior, interaction clarity, and obvious UI problems while preserving the existing color theme, brand tokens, visual mood, and product style.
+4. Ask ChatGPT/OpenAI to optimize text, layout, hierarchy, spacing, responsive behavior, interaction clarity, obvious UI problems, text font color, theme consistency, and layout consistency while preserving the existing brand tokens and product style.
 5. Use the returned ChatGPT/OpenAI optimized direction as the primary visual target, then apply the matching indexed solution and the core rules below.
 6. Capture before/after rendered evidence for page-level optimization when practical, especially full-page desktop evidence plus narrow-width evidence.
 7. If the work exposes a reusable new global UI problem, update the index before finishing.
@@ -38,10 +38,11 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 ## Core Rules
 
 - Hard rule for `optimize UI`, `opitmize UI`, page redesign, page polish, and page-level UI refinement requests: capture the current rendered page/screen image first and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow before implementation.
-- The ChatGPT/OpenAI UI prompt must ask for text, layout, visual hierarchy, spacing, responsive behavior, interaction clarity, and obvious UI problem improvements while keeping the same color theme, brand tokens, visual mood, and product style. Do not ask for a new palette unless the user explicitly requests a theme change.
+- The ChatGPT/OpenAI UI prompt must ask for text, layout, visual hierarchy, spacing, responsive behavior, interaction clarity, obvious UI problem improvements, text font color, theme consistency, and layout consistency while keeping the same color theme, brand tokens, visual mood, and product style. Do not ask for a new palette unless the user explicitly requests a theme change.
 - Use the returned ChatGPT/OpenAI optimized direction as the primary implementation target. Adapt only for accessibility, feasibility, performance, or repo constraints, and keep meaningful deviations explicit.
 - Do not skip the ChatGPT/OpenAI current-page-image step for page-level UI optimization. If the image cannot be captured or no image-capable ChatGPT/OpenAI workflow is available, state the concrete blocker before implementation; do not present an ad hoc UI pass as satisfying this rule.
 - Do not claim ChatGPT/OpenAI generated UI direction unless saved mockup images, result manifests, screenshots, response text, or equivalent captured evidence exists.
+- For public website UI optimization, ask for simpler user-facing copy, fewer visible explanations, and a more beautiful immersive layout using relevant product or task images. Remove unrelated content instead of styling it.
 - Same page plus similar function means similar visual treatment.
 - Side-by-side panels with similar roles should stay in the same color family and brightness band.
 - Do not make one sibling panel much brighter or darker than another unless the contrast signals a real difference in function, priority, or state.
@@ -57,6 +58,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - User-facing website copy should describe the user action, choice, or outcome in plain language, not the technical mechanism behind it.
 - If a detail is only useful for debugging, implementation, or internal operations, keep it in logs or internal documentation instead of the public UI.
 - Show only UI, copy, and media that directly help the current user task, decision, or outcome; remove unrelated content and extra explanation instead of shrinking it into secondary text.
+- When a website screen needs emotion or immersion, use meaningful product/task imagery as part of the layout or scene. Do not add random decorative images; every image must make the product, state, or next action clearer.
 - Do not introduce stray micro-text near major content blocks. Small labels such as eyebrow text, badges, or status words should still feel proportional to the surrounding title and body sizes.
 - Use a deliberate type ladder. Titles, headings, eyebrow labels, body text, and captions should come from a small consistent set of size bands instead of random jumps.
 - Keep the font-family system tight. One page should not mix three unrelated text fonts or letterform styles without a strong brand reason.
@@ -96,6 +98,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - Do not solve weak hierarchy by making one panel very dark and the other washed out.
 - Do not leave a large card or panel mostly blank with text stranded in one corner or along one edge.
 - Do not add filler images just to occupy space; use relevant product visuals or rebalance the layout.
+- Do not make public website copy longer to sound premium. Simplify the words first, then make the layout feel richer with hierarchy, spacing, and relevant imagery.
 - Do not let short pill or chip labels wrap to two lines.
 - Do not preserve long wording in compact UI just because the original copy was verbose.
 - Do not hide details inside parentheses in primary labels.
@@ -126,6 +129,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - Call out unrelated UI, extra descriptions, and nonessential media, then remove them or replace them with one necessary user-facing action or state.
 - Call out when a page mixes too many text families and suggest collapsing back to one primary family plus, at most, one clearly justified accent family.
 - For page-level UI optimization, report the current-page image submitted to ChatGPT/OpenAI, the optimized direction or mockup evidence received, and the final full-page rendered preview.
+- For public website UI optimization, call out copy/content that was removed because it did not support the user's action, state, or buying decision.
 - Prefer concise wording such as: "These panels serve the same job, so bring them into the same brightness band."
 - When contrast is justified, state the product reason instead of describing it as personal taste.
 

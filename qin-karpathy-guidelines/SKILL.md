@@ -63,6 +63,8 @@ Turn vague requests into verifiable outcomes.
 - Define what success looks like before implementing.
 - Prefer a reproduction, test, build, lint, or other concrete check when available.
 - For multi-step work, keep a short plan tied to verification.
+- At the start of git-managed coding work, fetch the upstream remote and pull or fast-forward to the newest code when it is safe for the current checkout.
+- If local dirty work, divergence, conflicts, or repo-specific workflow rules make pulling unsafe, preserve the local work and report the concrete blocker instead of stashing, resetting, or overwriting files.
 - When performing a merge, check explicitly for git conflicts and resolve each conflicted file deliberately instead of blindly taking one side.
 - When the user already wants rule compliance or cleanup, fix clear violations directly instead of pausing to ask whether to make the obvious update.
 - Do not stop at implementation when the task can be verified in the current environment.

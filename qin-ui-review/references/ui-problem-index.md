@@ -46,6 +46,7 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-033`: contact form, inquiry form, quote form, too many questions, required fields
 - `UI-034`: image selector rail, thumbnail list, filename clutter, selected card, map cards
 - `UI-035`: necessary UI only, unrelated content, extra description, clutter, nonessential copy
+- `UI-036`: public website, immersive UI, product imagery, simpler copy, beautiful website
 
 ## Problems
 
@@ -240,9 +241,9 @@ Validation: Same-level text boxes line up visually, have matching width across t
 
 ### UI-028 UI Optimization Needs Current-Image ChatGPT Direction
 
-Terms: UI update, make UI better, optimize UI, opitmize UI, ugly UI, Unity inspector, editor UI, visual reference, current page image, image reference, repeated retries, ChatGPT image review, same theme, color theme.
+Terms: UI update, make UI better, optimize UI, opitmize UI, ugly UI, Unity inspector, editor UI, visual reference, current page image, image reference, repeated retries, ChatGPT image review, same theme, color theme, font color, theme consistency, layout consistency.
 Problem: UI optimization is implemented directly from code guesses or stale references instead of using the current rendered page/screen as visual input, causing mismatched layouts, clipped text, wrong hierarchy, or theme drift.
-Solution: For page-level `optimize UI`, `opitmize UI`, redesign, polish, or refinement requests, capture the current rendered page/screen image first and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow. Ask it to improve text, layout, hierarchy, spacing, responsive behavior, interaction clarity, and obvious UI problems while preserving the existing color theme, brand tokens, visual mood, and product style. Implement against the returned direction or mockup unless accessibility, feasibility, performance, or repo constraints require an explicit deviation.
+Solution: For page-level `optimize UI`, `opitmize UI`, redesign, polish, or refinement requests, capture the current rendered page/screen image first and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow. Ask it to improve text, layout, hierarchy, spacing, responsive behavior, interaction clarity, obvious UI problems, text font color, theme consistency, and layout consistency while preserving the existing color theme, brand tokens, visual mood, and product style. Implement against the returned direction or mockup unless accessibility, feasibility, performance, or repo constraints require an explicit deviation.
 Validation: Before coding, there is a saved current-page image and saved ChatGPT/OpenAI direction or a concrete blocker explaining why the required step could not run; after coding, the rendered UI is checked against that direction with a final full-page preview, readable labels, matching theme, and no clipping.
 
 ### UI-029 Icon-Only Action Button Renders Blank
@@ -293,3 +294,10 @@ Terms: necessary UI only, only necessary text, unrelated content, extra descript
 Problem: A screen includes copy, controls, media, badges, or sections that do not help the user complete the current task, make a decision, or understand state.
 Solution: Remove unrelated content and extra descriptions. Keep one clear user-facing action, state, or short supporting line only when it directly improves the workflow.
 Validation: Every visible element can answer "what user decision, action, or state does this support?" without relying on decoration, explanation, or available empty space as the reason.
+
+### UI-036 Public Website Optimization Needs Simple Copy And Relevant Immersive Media
+
+Terms: public website, ecommerce UI, immersive UI, product imagery, beautiful website, simpler copy, visual scene, image-led layout, buying decision.
+Problem: A public website screen tries to feel polished by adding more words, generic decorations, or unrelated media, which makes the page less direct and less trustworthy.
+Solution: Keep only the copy needed for the current user action, state, or buying decision. Use relevant product, service, location, or workflow imagery as part of the layout or scene so the page feels richer without extra explanation.
+Validation: The first viewport shows the main task, one clear next action, concise copy, and imagery that directly supports the product or workflow instead of filling space.
