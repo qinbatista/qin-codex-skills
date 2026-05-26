@@ -48,6 +48,8 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-035`: necessary UI only, unrelated content, extra description, clutter, nonessential copy
 - `UI-036`: public website, immersive UI, product imagery, simpler copy, beautiful website
 - `UI-037`: immersive panel, image and panel together, form over background, integrated scene, detached card
+- `UI-038`: mobile table, min-width table, clipped cards, grid overflow, hidden horizontal overflow
+- `UI-039`: mobile UI fix, local image edit, screenshot edit, layout defect, replace image, ChatGPT image
 
 ## Problems
 
@@ -309,3 +311,17 @@ Terms: immersive panel, image and panel together, form over background, integrat
 Problem: A screen is called immersive, but the image, form, summary, or status panel are separated into independent cards or columns, so the page feels like a dashboard instead of one visual scene.
 Solution: Use a full-bleed or section-level background image/scene and place the functional panel inside that same composition with soft overlays, fades, or translucent surfaces. Avoid hard bordered photo cards beside unrelated white panels unless the product intentionally needs a comparison grid.
 Validation: The main panel visually sits in or on top of the image scene, the background continues behind the workflow, and the first viewport reads as one connected composition.
+
+### UI-038 Wide Tables Must Not Stretch Mobile Parent Cards
+
+Terms: mobile table, min-width table, clipped cards, grid overflow, hidden horizontal overflow, parent card wider than viewport, order table, dashboard table.
+Problem: A table with a large `min-width` can force its parent grid track, summary cards, or sibling panels wider than the phone viewport. The page may report no document-level horizontal overflow because an ancestor hides overflow, but visible cards and text still clip off-screen.
+Solution: On narrow screens, set `min-width: 0`, `width: 100%`, and `max-width: 100%` on the grid stack, cards, and panel wrappers. Keep the wide table inside a dedicated `overflow-x: auto` table container, and reduce the mobile table min-width to the smallest readable value.
+Validation: In a mobile rendered check, parent cards stay within the viewport, the document scroll width equals the client width, and only the table container scrolls horizontally if the table still needs more width.
+
+### UI-039 Mobile Layout Fixes Are Code Or Real Assets, Not Local Screenshot Edits
+
+Terms: mobile UI fix, local image edit, screenshot edit, layout defect, responsive layout, replace image, ChatGPT image, generated image.
+Problem: A mobile UI defect is treated like an image-editing task, so the visible screenshot or page bitmap is locally altered instead of fixing the responsive layout or replacing the real asset.
+Solution: Fix mobile UI problems in HTML/CSS/component layout first. If the actual asset blocks a good responsive result, replace the asset or generate a new one through the approved ChatGPT/OpenAI image workflow; do not locally retouch screenshots or page images to hide layout problems.
+Validation: The live rendered mobile page, not an edited screenshot, has no clipping, overflow, wrapped compact controls, or broken spacing; any replacement image has a saved provider workflow artifact.

@@ -49,6 +49,9 @@ Use this skill whenever work changed code, content, UI, configuration, scripts, 
 - For content-only edits:
   Verify the rendered output or resulting file where possible instead of only reading the source.
 
+- For Unity Editor, Unity UI, or Unity asset-generation work:
+  Verify in the live Unity Editor when the behavior depends on editor rendering, inspector controls, custom editor windows, generated previews, or asset import results. Always include the Unity test evidence in the final response, preferably a screenshot or comparison image from the actual Unity window plus the relevant compile/log check. If Unity is stuck, missing, unresponsive, or the window cannot be inspected, reopen or restart Unity and rerun the verification before claiming the work is done. If Unity still cannot be recovered, report the concrete blocker and do not claim the Unity behavior is fixed.
+
 - For Chrome-backed tests:
   Treat cleanup as part of being done. Use the available Chrome/browser cleanup path to release or close test-only tabs, then close Chrome itself when it is safe because no other task is still running in Chrome. Do not close user-owned tabs, active handoff pages, login/approval pages, or requested deliverables.
 
@@ -56,6 +59,7 @@ Use this skill whenever work changed code, content, UI, configuration, scripts, 
 
 - State what you tested.
 - State the result.
+- For Unity work, show the Unity test evidence every time when it exists, including the screenshot/comparison path or rendered image and the compile/log status.
 - For website, UI, image, visual, document-preview, or generated-output tasks, include the three-part handoff whenever the artifacts exist: rendered image evidence, a concise report of what changed and what passed, and the live preview URL or local file/path to open. If one of the three is unavailable, say exactly which artifact is missing and why instead of omitting it silently.
 - When the user asks whether the issue is fixed, answer directly from the test evidence.
 - If something was not tested, say that plainly.
