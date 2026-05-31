@@ -1,0 +1,4 @@
+interface:
+  display_name: "MokoZoo Project Workflow"
+  short_description: "Shared workflow rules for MokoZoo and MokoWorld repositories."
+  default_prompt: "Use the MokoZoo project workflow for this repository update."

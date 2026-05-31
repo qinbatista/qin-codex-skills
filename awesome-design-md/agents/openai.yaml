@@ -1,0 +1,8 @@
+interface:
+  display_name: "Awesome DESIGN.md"
+  short_description: "Bundled DESIGN.md brand style references"
+  brand_color: "#10B981"
+  default_prompt: "Use $awesome-design-md to find a matching DESIGN.md style reference for this UI."
+
+policy:
+  allow_implicit_invocation: true

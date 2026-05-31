@@ -6,6 +6,14 @@ This repository stores global skill source files only. Do not copy the repositor
 
 ## Skills
 
+### [`awesome-design-md`](./awesome-design-md/)
+
+Use when the user asks for DESIGN.md files, design-md references, brand/UI style documents, Google Stitch-style design system markdown, or wants UI generated in the style of a known product from VoltAgent/awesome-design-md. Provides bundled DESIGN.md references for many brands and developer/product websites.
+
+### [`qin-bom-names-samples-data`](./qin-bom-names-samples-data/)
+
+Use when the user says "BOM names samples data" or asks for reusable MuseAI BOM-name sample circled images, default BOM-name testing samples, or Fabric/Trims/Labels/Artwork circle-image assets with BOM result JSON for agent testing.
+
 ### [`qin-codex-auth-swithc`](./qin-codex-auth-swithc/)
 
 Inspect and switch saved Codex ChatGPT auth profiles under `~/.codex`. Use when the user wants to find `auth*.json` files, identify which account each file belongs to, review the latest locally observed Codex usage or rate-limit snapshot for each account, and switch the active profile by copying one saved auth file onto `auth.json` without deleting anything.
@@ -22,10 +30,6 @@ Mandatory final verification skill. Use for any coding, website, UI, script, aut
 
 Prefer GPT-5.3-Codex-Spark for obvious, bounded, low-risk coding work when Codex has a model-selection or allowed delegation surface available. Use when the expected implementation, review, cleanup, or verification path is clear from the request or nearby code, even if the task is more than a tiny edit; avoid using it for unclear debugging, architecture, multi-system changes, high-risk migrations, or tasks that require deeper reasoning.
 
-### [`qin-git-push-safety`](./qin-git-push-safety/)
-
-Use before any Git push, release publish, PR branch publish, or user request to push changes. Enforce Qin's push workflow by checking status, fetching remote code, pulling before push, integrating remote changes without overwriting unrelated work, resolving merge conflicts deliberately, verifying the result, and only then pushing.
-
 ### [`qin-image-editing-workflow`](./qin-image-editing-workflow/)
 
 Global image workflow rule. Use whenever a task needs to edit, generate, composite, regenerate, replace content inside, or otherwise modify an image, and whenever a repo or user rule says image-related work must route through the image editor workflow.
@@ -33,6 +37,10 @@ Global image workflow rule. Use whenever a task needs to edit, generate, composi
 ### [`qin-karpathy-guidelines`](./qin-karpathy-guidelines/)
 
 Behavioral coding guardrails to reduce wrong assumptions, overcomplication, and unrelated edits. Use for non-trivial coding, debugging, refactoring, implementation, and review work across languages before making changes so Codex surfaces assumptions, prefers the simplest viable solution, keeps edits surgical, and defines verifiable success criteria.
+
+### [`qin-mokozoo-project-workflow`](./qin-mokozoo-project-workflow/)
+
+Shared workflow rules for MokoZoo and MokoWorld repositories. Use for any task in repos, paths, branches, deployments, assets, websites, apps, or files whose names include MokoZoo, MOKOZOO, Mokozoo, MokoWorld, or MokoWorld.AI, including `Docker-Mokozoo` and `MokoWorld.AI`; before updates, check applicable global skills and any MokoZoo-related global skills such as the image workflow, then apply the relevant ones.
 
 ### [`qin-prompt-creating`](./qin-prompt-creating/)
 

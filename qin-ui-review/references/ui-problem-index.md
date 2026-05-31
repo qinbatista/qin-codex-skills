@@ -38,18 +38,8 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-025`: placement simulator, drag preview, missing reference image, parent reference hidden
 - `UI-026`: picker cancel, select cancel, unwanted window opens, canceled selection applies
 - `UI-027`: same size text boxes, uneven input widths, same row numeric inputs, small count inputs
-- `UI-028`: UI update, make UI better, optimize UI, opitmize UI, current page image, ChatGPT image review, same theme
-- `UI-029`: empty icon button, blank circle, icon-only action, iconify missing, async icon dependency
-- `UI-030`: image preview, texture preview, sprite preview, square preview, stretched image
-- `UI-031`: compact header, low-information hero, one-line header, sparse intro, status chips
-- `UI-032`: footer, site footer, low-information footer, tall footer, compact footer
-- `UI-033`: contact form, inquiry form, quote form, too many questions, required fields
-- `UI-034`: image selector rail, thumbnail list, filename clutter, selected card, map cards
-- `UI-035`: necessary UI only, unrelated content, extra description, clutter, nonessential copy
-- `UI-036`: public website, immersive UI, product imagery, simpler copy, beautiful website
-- `UI-037`: immersive panel, image and panel together, form over background, integrated scene, detached card
-- `UI-038`: mobile table, min-width table, clipped cards, grid overflow, hidden horizontal overflow
-- `UI-039`: mobile UI fix, local image edit, screenshot edit, layout defect, replace image, ChatGPT image
+- `UI-028`: UI update, ugly UI, visual reference, image reference, repeated retries
+- `UI-029`: ultrawide hero, wide desktop, background gutter, cover image, height-fitted media
 
 ## Problems
 
@@ -242,86 +232,30 @@ Problem: Peer inputs in the same logical group share the same row or grid, but l
 Solution: Reserve label widths consistently for the peer group, then compute equal input widths from the remaining row space. For small numeric count fields, keep them compact only when the row still reaches the intended edge; if a visible dead gap remains, distribute the surplus into equal wider fields instead of leaving unused space.
 Validation: Same-level text boxes line up visually, have matching width across the group, fill the intended row width without overflow, and keep labels readable.
 
-### UI-028 UI Optimization Needs Current-Image ChatGPT Direction
+### UI-028 UI Updates Need A Visual Target First
 
-Terms: UI update, make UI better, optimize UI, opitmize UI, ugly UI, Unity inspector, editor UI, visual reference, current page image, image reference, repeated retries, ChatGPT image review, same theme, color theme, font color, theme consistency, layout consistency.
-Problem: UI optimization is implemented directly from code guesses or stale references instead of using the current rendered page/screen as visual input, causing mismatched layouts, clipped text, wrong hierarchy, or theme drift.
-Solution: For page-level `optimize UI`, `opitmize UI`, redesign, polish, or refinement requests, capture the current rendered page/screen image first and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow. Ask it to improve text, layout, hierarchy, spacing, responsive behavior, interaction clarity, obvious UI problems, text font color, theme consistency, and layout consistency while preserving the existing color theme, brand tokens, visual mood, and product style. Implement against the returned direction or mockup unless accessibility, feasibility, performance, or repo constraints require an explicit deviation.
-Validation: Before coding, there is a saved current-page image and saved ChatGPT/OpenAI direction or a concrete blocker explaining why the required step could not run; after coding, the rendered UI is checked against that direction with a final full-page preview, readable labels, matching theme, and no clipping.
+Terms: UI update, make UI better, ugly UI, Unity inspector, editor UI, visual reference, image reference, repeated retries, ChatGPT image review.
+Problem: UI changes are implemented directly from code guesses, causing repeated mismatched layouts, clipped text, and user-visible trial and error.
+Solution: Capture the current rendered UI first, use ChatGPT/OpenAI image understanding or the available image UI optimization workflow to define a visual target, then implement against that reference. For dense Unity inspector tools, separate overloaded concerns into matching rows or groups instead of forcing every control into one line.
+Validation: Before coding, there is a screenshot or clear visual target; after coding, the rendered UI is checked against it for alignment, matching control sizes, readable labels, and no clipping.
 
-### UI-029 Icon-Only Action Button Renders Blank
+### UI-029 Ultrawide Hero Background Gutter
 
-Terms: empty icon button, blank circle, icon-only action, empty CTA, cart icon missing, iconify missing, async icon dependency, external icon.
-Problem: An icon-only action depends entirely on an async custom icon library or remote icon asset, so the button can render as an empty circle or blank square when the icon fails, delays, or is blocked.
-Solution: Give icon-only actions a local visible fallback, such as a CSS pseudo-element symbol or inline text/icon that does not depend on the remote icon runtime; hide the async icon if it would duplicate the fallback.
-Validation: Disable or delay the icon library in a rendered check and confirm the action still has a visible symbol, clear hit area, hover/focus state, and accessible label.
+Terms: ultrawide hero, wide desktop, large screen, background gutter, side gutter, cover image, height-fitted media.
+Problem: A hero image is sized by height to preserve the full subject, but on wide desktop aspect ratios the media becomes narrower than the viewport and exposes plain page background at one or both sides.
+Solution: Add an ultrawide or `min-aspect-ratio` override that switches the hero media/background to cover the viewport width while preserving the intended focal point with explicit positioning.
+Validation: Capture a wide desktop screenshot at or above 16:9 and confirm the hero media fills both left and right viewport edges without horizontal overflow.
 
-### UI-030 Image Preview Boxes Drift From Square
+### UI-030 Inspector Task Progress Must Not Resize The UI
 
-Terms: image preview, texture preview, sprite preview, map preview, square preview, stretched image, resize, UI scale, thumbnail.
-Problem: Image or texture preview surfaces stretch into wide rectangles or tall panels as the window resizes, making asset comparison harder and creating dead empty space.
-Solution: Calculate preview boxes from the smaller available dimension and draw the image inside that square. Keep labels and actions outside the square, and use scrolling or compact cards for repeated thumbnails instead of stretching the preview box.
-Validation: Desktop and resized/narrow checks show every image preview viewport as a square, with no label or action text beside the image and no distorted texture display.
+Terms: Unity inspector progress, task queue, background task status, popping UI, changing message size, progress on top, status panel too large.
+Problem: A long-running inspector task shows progress with variable-height messages, top-mounted banners, or modal progress bars, causing layout jumps and interrupting the user's current editing surface.
+Solution: Show task progress only while a task is active, queued, or has a fresh result message. Place it at the bottom of the inspector/tool surface, use a small fixed-height panel, clip long task text, and keep duplicate-click handling in the queue instead of changing the visible layout.
+Validation: Clicking the same action repeatedly keeps one running task and one stable status panel; clicking different actions adds them to the queue stack; the inspector layout height does not change as progress text changes.
 
-### UI-031 Low-Information Hero Uses Too Many Rows
+### UI-031 Live Rows Must Not Contain Deferred-Only Controls
 
-Terms: compact header, low-information hero, one-line header, sparse intro, status chips, service chips, too many lines.
-Problem: A small amount of status or intro content is presented as a tall hero stack with separate rows for badge, title, description, and chips, making the section feel inflated.
-Solution: When desktop width allows, collapse the content into one aligned header row: badge/title, short description, and compact chips/actions. Let only narrow breakpoints stack the row.
-Validation: At desktop width the header reads in one row without squeezed chips, and at narrow width the same content stacks cleanly with no compact-label wrapping.
-
-### UI-032 Low-Information Footer Wastes Page Height
-
-Terms: footer, site footer, low-information footer, tall footer, compact footer, footer columns, wasted page height.
-Problem: A footer with only a few navigation/contact links is laid out as tall columns, consuming a large amount of page height for low-density content.
-Solution: On desktop, use a compact footer band with brand, nav links, contact links, and copyright aligned in one horizontal system. Use separators and concise group labels instead of tall stacked lists. Let mobile wrap into short rows.
-Validation: Desktop footer height stays proportional to its content, links remain readable and single-line, and mobile wraps without creating oversized empty space.
-
-### UI-033 Contact Forms Ask Too Much Up Front
-
-Terms: contact form, inquiry form, quote form, too many questions, required fields, hard to contact, project brief, optional details.
-Problem: A public contact or inquiry form asks for product type, quantity, destination, deadline, attachments, or other project details as required fields before the user can make basic contact.
-Solution: Keep the first path to contact to the minimum viable fields. For low-friction public inquiry forms, this can be only reply contact/email plus one short message; do not require name/team unless the business workflow truly needs it before first reply. Put product details, quantity, timing, shipping destination, budget, and file uploads in a clearly optional section, and keep direct email/social follow/contact routes visible beside the form with real icons or local icon fallbacks.
-Validation: A user can submit or start contact after answering only the essential questions; optional fields are labeled optional, direct email/social contact routes remain visible without scrolling through a long form, and social actions clearly say whether they are for direct contact, following, or DM.
-
-### UI-034 Image Selector Rails Should Stay Visual
-
-Terms: image selector rail, texture map list, thumbnail list, filename clutter, map cards, selected card, left preview panel.
-Problem: A selector for image/map variants behaves like a text list, with long filenames, bulky selected fills, small previews, or scroll-heavy cards that make the visual choice harder to scan.
-Solution: Make the selector primarily visual: short labels above square thumbnails, no filename text inside repeated cards, restrained selected borders instead of large bright blocks, and contextual actions below the image they affect.
-Validation: The selector shows all expected image variants as clean square previews, the selected state is clear without dominating the rail, actions sit under the relevant image, and no long path/name text competes with the previews.
-
-### UI-035 Necessary UI Only
-
-Terms: necessary UI only, only necessary text, unrelated content, extra description, too much explanation, clutter, nonessential copy, irrelevant UI.
-Problem: A screen includes copy, controls, media, badges, or sections that do not help the user complete the current task, make a decision, or understand state.
-Solution: Remove unrelated content and extra descriptions. Keep one clear user-facing action, state, or short supporting line only when it directly improves the workflow.
-Validation: Every visible element can answer "what user decision, action, or state does this support?" without relying on decoration, explanation, or available empty space as the reason.
-
-### UI-036 Public Website Optimization Needs Simple Copy And Relevant Immersive Media
-
-Terms: public website, ecommerce UI, immersive UI, product imagery, beautiful website, simpler copy, visual scene, image-led layout, buying decision.
-Problem: A public website screen tries to feel polished by adding more words, generic decorations, or unrelated media, which makes the page less direct and less trustworthy.
-Solution: Keep only the copy needed for the current user action, state, or buying decision. Use relevant product, service, location, or workflow imagery as part of the layout or scene so the page feels richer without extra explanation.
-Validation: The first viewport shows the main task, one clear next action, concise copy, and imagery that directly supports the product or workflow instead of filling space.
-
-### UI-037 Immersive Panels Must Belong To The Image Scene
-
-Terms: immersive panel, image and panel together, form over background, integrated scene, detached card, boxed hero image.
-Problem: A screen is called immersive, but the image, form, summary, or status panel are separated into independent cards or columns, so the page feels like a dashboard instead of one visual scene.
-Solution: Use a full-bleed or section-level background image/scene and place the functional panel inside that same composition with soft overlays, fades, or translucent surfaces. Avoid hard bordered photo cards beside unrelated white panels unless the product intentionally needs a comparison grid.
-Validation: The main panel visually sits in or on top of the image scene, the background continues behind the workflow, and the first viewport reads as one connected composition.
-
-### UI-038 Wide Tables Must Not Stretch Mobile Parent Cards
-
-Terms: mobile table, min-width table, clipped cards, grid overflow, hidden horizontal overflow, parent card wider than viewport, order table, dashboard table.
-Problem: A table with a large `min-width` can force its parent grid track, summary cards, or sibling panels wider than the phone viewport. The page may report no document-level horizontal overflow because an ancestor hides overflow, but visible cards and text still clip off-screen.
-Solution: On narrow screens, set `min-width: 0`, `width: 100%`, and `max-width: 100%` on the grid stack, cards, and panel wrappers. Keep the wide table inside a dedicated `overflow-x: auto` table container, and reduce the mobile table min-width to the smallest readable value.
-Validation: In a mobile rendered check, parent cards stay within the viewport, the document scroll width equals the client width, and only the table container scrolls horizontally if the table still needs more width.
-
-### UI-039 Mobile Layout Fixes Are Code Or Real Assets, Not Local Screenshot Edits
-
-Terms: mobile UI fix, local image edit, screenshot edit, layout defect, responsive layout, replace image, ChatGPT image, generated image.
-Problem: A mobile UI defect is treated like an image-editing task, so the visible screenshot or page bitmap is locally altered instead of fixing the responsive layout or replacing the real asset.
-Solution: Fix mobile UI problems in HTML/CSS/component layout first. If the actual asset blocks a good responsive result, replace the asset or generate a new one through the approved ChatGPT/OpenAI image workflow; do not locally retouch screenshots or page images to hide layout problems.
-Validation: The live rendered mobile page, not an edited screenshot, has no clipping, overflow, wrapped compact controls, or broken spacing; any replacement image has a saved provider workflow artifact.
+Terms: no reaction, dead slider, inactive control, live scene values, misleading inspector control, deferred generation setting.
+Problem: A control sits inside a live-edit row beside values that immediately affect the current view, but that control only changes later generation data or hidden config, so dragging it appears broken.
+Solution: Keep live-edit rows limited to controls that visibly update the current view. Move deferred generation settings into the generation/preview tool where they can show feedback, or add an explicit apply/regenerate action in that same workflow.
+Validation: Every control in a live row visibly changes the current view when edited; deferred settings only appear where the user can preview, apply, or regenerate their effect.

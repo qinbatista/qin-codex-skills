@@ -1,0 +1,260 @@
+{
+  "BOM": {
+    "Front Right Shoulder Bird Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        241,
+        155,
+        56
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Shoulder Bird Patch"
+    },
+    "Front Right Chest Yin Yang Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        359,
+        192,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Chest Yin Yang Patch"
+    },
+    "Front Right Chest Sloked Wordmark Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        263,
+        281,
+        87
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Chest Sloked Wordmark Patch"
+    },
+    "Front Left Chest Blue Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        541,
+        223,
+        55
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Chest Blue Text Patch"
+    },
+    "Front Left Shoulder California Shield Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        663,
+        156,
+        64
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Shoulder California Shield Patch"
+    },
+    "Front Left Chest Live Free Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        670,
+        278,
+        59
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Chest Live Free Text Patch"
+    },
+    "Front Right Sleeve Smiley Face Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        123,
+        306,
+        34
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Sleeve Smiley Face Patch"
+    },
+    "Front Right Sleeve Blue Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        141,
+        430,
+        39
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Sleeve Blue Text Patch"
+    },
+    "Front Right Sleeve Rock and Roll Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        122,
+        531,
+        61
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Sleeve Rock and Roll Text Patch"
+    },
+    "Front Right Sleeve Mountain Stripe Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        805,
+        568,
+        51
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Sleeve Mountain Stripe Patch"
+    },
+    "Front Right Body Shark Motif Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        397,
+        453,
+        55
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Body Shark Motif Patch"
+    },
+    "Front Right Body Hawaii Figure Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        361,
+        433,
+        50
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Body Hawaii Figure Patch"
+    },
+    "Front Right Body Surf Country Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        306,
+        598,
+        68
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Right Body Surf Country Text Patch"
+    },
+    "Front Center Body California Lover Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        532,
+        458,
+        58
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Center Body California Lover Patch"
+    },
+    "Front Left Body Blue Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        667,
+        421,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Body Blue Text Patch"
+    },
+    "Front Center Body Tiger Head Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        538,
+        591,
+        66
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Center Body Tiger Head Patch"
+    },
+    "Front Left Body Aviator Nation Triangle Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        659,
+        548,
+        70
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Body Aviator Nation Triangle Patch"
+    },
+    "Front Left Body The Need for Speed Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        652,
+        635,
+        36
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Body The Need for Speed Text Patch"
+    },
+    "Front Center Hem Smiley Face Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        468,
+        680,
+        39
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Center Hem Smiley Face Patch"
+    },
+    "Front Left Sleeve Black White Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        731,
+        349,
+        45
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Sleeve Black White Text Patch"
+    },
+    "Front Left Sleeve Peace Flag Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        765,
+        427,
+        49
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Sleeve Peace Flag Patch"
+    },
+    "Front Left Sleeve Sunset Stripe Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        766,
+        565,
+        55
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Sleeve Sunset Stripe Patch"
+    },
+    "Front Left Sleeve Enjoy the Ride Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        793,
+        681,
+        50
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Front Left Sleeve Enjoy the Ride Patch"
+    }
+  },
+  "BOMNameSeedCheckPassed": true,
+  "BOMNameSeedFallbackUsed": false,
+  "BOMNameSeedImageURL": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/artwork/artwork_circles.png"
+}

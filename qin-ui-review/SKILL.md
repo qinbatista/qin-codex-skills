@@ -9,7 +9,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 
 ## Trigger
 
-- Use for any user-requested UI work: new UI generation, UI updates, UI optimization, `optimize UI`, the common typo `opitmize UI`, redesign, polish, visual review, responsive fixes, and UI bug reports.
+- Use for any user-requested UI work: new UI generation, UI updates, UI optimization, redesign, polish, visual review, responsive fixes, and UI bug reports.
 - Use for Unity Editor UI too, including custom inspectors, editor windows, ScriptableObject inspectors, dense tool panels, inline buttons, labels, path rows, sliders, and scene/config tooling.
 - Use when the request mentions a UI symptom already seen before, such as uneven panels, wrapped labels, weak hierarchy, odd spacing, mismatched typography, unclear copy, or mobile layout issues.
 - Use when the user gives a new reusable UI rule. Classify it as global or local first; add only cross-project rules to this skill.
@@ -28,21 +28,16 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 
 1. Classify the UI request as existing-problem lookup, new UI generation, UI update, visual review, or new reusable rule capture.
 2. Search `references/ui-problem-index.md` with likely terms before changing UI.
-3. For explicit page or screen UI optimization, capture the current rendered page/screen image before implementation and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow.
-4. Ask ChatGPT/OpenAI to optimize text, layout, hierarchy, spacing, responsive behavior, interaction clarity, obvious UI problems, text font color, theme consistency, and layout consistency while preserving the existing brand tokens and product style.
-5. Use the returned ChatGPT/OpenAI optimized direction as the primary visual target, then apply the matching indexed solution and the core rules below.
-6. Capture before/after rendered evidence for page-level optimization when practical, especially full-page desktop evidence plus narrow-width evidence.
-7. If the work exposes a reusable new global UI problem, update the index before finishing.
-8. Verify the changed UI visually at the relevant breakpoints and report any remaining risk.
+3. Capture rendered evidence for page-level optimization when practical, especially before/after screenshots at desktop and narrow widths.
+4. Apply the matching indexed solution and the core rules below.
+5. If the work exposes a reusable new global UI problem, update the index before finishing.
+6. Verify the changed UI visually at the relevant breakpoints and report any remaining risk.
 
 ## Core Rules
 
-- Hard rule for `optimize UI`, `opitmize UI`, page redesign, page polish, and page-level UI refinement requests: capture the current rendered page/screen image first and submit that current image to the available ChatGPT/OpenAI image-capable UI optimization workflow before implementation.
-- The ChatGPT/OpenAI UI prompt must ask for text, layout, visual hierarchy, spacing, responsive behavior, interaction clarity, obvious UI problem improvements, text font color, theme consistency, and layout consistency while keeping the same color theme, brand tokens, visual mood, and product style. Do not ask for a new palette unless the user explicitly requests a theme change.
-- Use the returned ChatGPT/OpenAI optimized direction as the primary implementation target. Adapt only for accessibility, feasibility, performance, or repo constraints, and keep meaningful deviations explicit.
-- Do not skip the ChatGPT/OpenAI current-page-image step for page-level UI optimization. If the image cannot be captured or no image-capable ChatGPT/OpenAI workflow is available, state the concrete blocker before implementation; do not present an ad hoc UI pass as satisfying this rule.
-- Do not claim ChatGPT/OpenAI generated UI direction unless saved mockup images, result manifests, screenshots, response text, or equivalent captured evidence exists.
-- For public website UI optimization, ask for simpler user-facing copy, fewer visible explanations, and a more beautiful immersive layout using relevant product or task images. Remove unrelated content instead of styling it.
+- When the user asks to optimize, refine, redesign, or make one page UI nicer, first capture the current page as rendered evidence, submit that screenshot to the available ChatGPT/OpenAI image UI optimization workflow, and use the returned optimized image as the primary implementation target.
+- Do not skip the ChatGPT/OpenAI screenshot step for page-level UI optimization unless the provider is unavailable or blocked; if blocked, record the concrete reason and continue with the best available visual evidence.
+- Do not claim ChatGPT/OpenAI generated UI direction unless saved mockup images, result manifests, screenshots, or equivalent captured evidence exist.
 - Same page plus similar function means similar visual treatment.
 - Side-by-side panels with similar roles should stay in the same color family and brightness band.
 - Do not make one sibling panel much brighter or darker than another unless the contrast signals a real difference in function, priority, or state.
@@ -57,8 +52,6 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - On narrow screens, nav labels, CTA labels, pill labels, and other compact controls should stay single-line. If they do not fit, shorten the label or switch to a folded menu/control pattern before accepting the layout.
 - User-facing website copy should describe the user action, choice, or outcome in plain language, not the technical mechanism behind it.
 - If a detail is only useful for debugging, implementation, or internal operations, keep it in logs or internal documentation instead of the public UI.
-- Show only UI, copy, and media that directly help the current user task, decision, or outcome; remove unrelated content and extra explanation instead of shrinking it into secondary text.
-- When a website screen needs emotion or immersion, use meaningful product/task imagery as part of the layout or scene. Do not add random decorative images; every image must make the product, state, or next action clearer.
 - Do not introduce stray micro-text near major content blocks. Small labels such as eyebrow text, badges, or status words should still feel proportional to the surrounding title and body sizes.
 - Use a deliberate type ladder. Titles, headings, eyebrow labels, body text, and captions should come from a small consistent set of size bands instead of random jumps.
 - Keep the font-family system tight. One page should not mix three unrelated text fonts or letterform styles without a strong brand reason.
@@ -87,10 +80,9 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 7. Run at least one desktop and one narrow-screen visual pass. Treat wrapped mobile nav, CTA, or pill text as a defect to fix, not a note to leave behind.
 8. Scan for type-scale outliers. If one small label feels much smaller or one heading feels much larger than its peers without a clear hierarchy reason, normalize it.
 9. Scan descriptions, helper text, and supporting copy for technical or internal wording. Rewrite into user language or remove it if the detail is not needed by the user.
-10. Scan visible sections, controls, media, helper text, and badges for relevance to the user's current task. Remove anything that does not help the user decide, act, or understand state.
-11. Scan the page for font-family drift. Headlines, subheads, labels, and body copy should come from one tight family set instead of multiple unrelated fonts.
-12. Compare left/right panel rhythm in split layouts. Avoid a dangling extra panel or a visibly shorter stack on one side unless the asymmetry has a clear product reason.
-13. Re-check typography and button parity so consistency is not limited to color.
+10. Scan the page for font-family drift. Headlines, subheads, labels, and body copy should come from one tight family set instead of multiple unrelated fonts.
+11. Compare left/right panel rhythm in split layouts. Avoid a dangling extra panel or a visibly shorter stack on one side unless the asymmetry has a clear product reason.
+12. Re-check typography and button parity so consistency is not limited to color.
 
 ## Guardrails
 
@@ -98,7 +90,6 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - Do not solve weak hierarchy by making one panel very dark and the other washed out.
 - Do not leave a large card or panel mostly blank with text stranded in one corner or along one edge.
 - Do not add filler images just to occupy space; use relevant product visuals or rebalance the layout.
-- Do not make public website copy longer to sound premium. Simplify the words first, then make the layout feel richer with hierarchy, spacing, and relevant imagery.
 - Do not let short pill or chip labels wrap to two lines.
 - Do not preserve long wording in compact UI just because the original copy was verbose.
 - Do not hide details inside parentheses in primary labels.
@@ -106,7 +97,6 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - Do not accept wrapped mobile nav items, CTA labels, or pill text when a shorter label or folded menu would solve it cleanly.
 - Do not expose technical descriptions, implementation details, or internal workflow wording in public website copy.
 - Do not use the UI as a place for developer notes, debugging hints, or system-process explanations.
-- Do not keep unrelated content, decorative controls, or explanatory text in the UI just because there is space for it.
 - Do not add tiny decorative text that creates a separate mini-scale for no product reason.
 - Do not let headings, labels, and helper text jump between unrelated font sizes inside the same section.
 - Do not mix multiple unrelated text fonts on the same page just to create variety.
@@ -126,10 +116,7 @@ Use this as the shared baseline for UI work across projects. If a repo already h
 - Call out when a small label feels undersized next to a headline and suggest a size normalization instead of adding another special-case style.
 - Call out when split columns have unmatched panel counts or total heights and suggest one concrete resolution: mirror the stack, merge into one panel, or rebalance the heights.
 - Call out when copy sounds technical or internal and suggest a user-facing rewrite; if the detail is only useful operationally, move it to logs or internal notes.
-- Call out unrelated UI, extra descriptions, and nonessential media, then remove them or replace them with one necessary user-facing action or state.
 - Call out when a page mixes too many text families and suggest collapsing back to one primary family plus, at most, one clearly justified accent family.
-- For page-level UI optimization, report the current-page image submitted to ChatGPT/OpenAI, the optimized direction or mockup evidence received, and the final full-page rendered preview.
-- For public website UI optimization, call out copy/content that was removed because it did not support the user's action, state, or buying decision.
 - Prefer concise wording such as: "These panels serve the same job, so bring them into the same brightness band."
 - When contrast is justified, state the product reason instead of describing it as personal taste.
 

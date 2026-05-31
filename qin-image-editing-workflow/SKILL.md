@@ -13,27 +13,29 @@ Also use this skill when a project-local `AGENTS.md` or user instruction says im
 
 ## Required Editor
 
-When this skill applies, do not hand-roll the visual edit with ad hoc Python/PIL/canvas/compositing scripts as the primary workflow.
+When this skill applies, do not hand-roll the visual edit with ad hoc Python/PIL/canvas/compositing scripts.
+
+Every actual image edit, no matter how small or complex, must go through the selected ChatGPT/OpenAI image-edit provider. Never create a final or candidate edited image by local compositing, retouching, inpainting, pixel moving, PIL/OpenCV/canvas work, or other deterministic local image manipulation.
 
 Use this image-editing project skill first:
 
 `/Users/qin/QinProject/PythonProject/Agent-ImageEdtior/skills/image-edit/SKILL.md`
 
-For `/Users/qin/QinProject/DockerProject/Docker-Mokozoo`, this workflow is mandatory for any image-related task unless the user explicitly asks for a deterministic non-AI file operation.
+For MokoZoo and MokoWorld website repositories, including `/Users/qin/QinProject/DockerProject/Docker-Mokozoo` and `C:\Users\qinba\Documents\MokoWorld\MokoWorld.AI`, this workflow is mandatory for any image-related task unless the user explicitly asks for a deterministic non-AI file operation.
 
 ## Workflow
 
 1. Read the Agent-ImageEdtior skill before editing the image.
 2. Put task sources, references, guide images, attempts, reviews, and accepted finals under:
    `/Users/qin/QinProject/PythonProject/Agent-ImageEdtior/assets/<timestamp-task>/`
-3. Use the skill's API-backed workflow when `OPENAI_API_KEY` is available.
-4. If the API path is blocked and the task still needs ChatGPT/OpenAI image editing, use the skill's local Chrome/OpenAI workflow path.
+3. Follow the Agent-ImageEdtior skill's provider rule. For this user's normal user-facing image edits, use the Chrome/ChatGPT provider path by OS; use API-backed generation only for dry-runs, diagnostics, or when the user explicitly asks for API/non-Chrome output.
+4. If the selected Chrome/ChatGPT path is blocked, report the exact blocker instead of silently switching providers or submitting a description-only prompt.
 5. Promote only a reviewed/accepted final image from that workflow back into the destination project.
-6. Use local scripts only for supporting actions such as copying inputs, preparing masks/guides, checking dimensions, comparing screenshots, or installing the accepted final into the target repo.
+6. Use local scripts only for non-editing support actions such as copying inputs, preparing masks/guides for ChatGPT, checking dimensions, comparing screenshots, writing manifests/review JSON, or installing the accepted ChatGPT final into the target repo.
 
 ## Guardrails
 
-Do not create the final edited image by manually compositing or retouching source images yourself unless the user explicitly asks for a manual/local deterministic image operation.
+Do not create any final or candidate edited image by manually compositing, retouching, inpainting, moving pixels, or otherwise changing image content locally. If ChatGPT/Chrome is blocked, report the blocker and stop instead of making a local fallback.
 
 Do not bypass Agent-ImageEdtior for Mokozoo website image assets by directly generating, editing, or compositing final images in the destination repo.
 

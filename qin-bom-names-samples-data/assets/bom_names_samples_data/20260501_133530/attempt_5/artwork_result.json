@@ -1,0 +1,260 @@
+{
+  "BOM": {
+    "Right Shoulder Bird Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        234,
+        150,
+        57
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Shoulder Bird Patch"
+    },
+    "Right Chest Yin Yang Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        361,
+        206,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Chest Yin Yang Patch"
+    },
+    "Right Chest Stoked Wordmark Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        278,
+        253,
+        73
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Chest Stoked Wordmark Patch"
+    },
+    "Left Chest You Deserve My Best Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        556,
+        231,
+        47
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Chest You Deserve My Best Text Patch"
+    },
+    "Left Shoulder California Crest Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        683,
+        158,
+        75
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Shoulder California Crest Patch"
+    },
+    "Left Chest Live Free Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        640,
+        268,
+        36
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Chest Live Free Text Patch"
+    },
+    "Right Sleeve Smiley Face Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        134,
+        320,
+        32
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Smiley Face Patch"
+    },
+    "Right Sleeve Life for the Adventure Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        148,
+        411,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Life for the Adventure Text Patch"
+    },
+    "Right Front Shark Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        276,
+        463,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Front Shark Patch"
+    },
+    "Right Front Hawaii Figure Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        361,
+        494,
+        59
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Front Hawaii Figure Patch"
+    },
+    "Left Front California Lover Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        522,
+        466,
+        68
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Front California Lover Patch"
+    },
+    "Left Front I'd Rather Be Surfing Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        683,
+        429,
+        58
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Front I'd Rather Be Surfing Text Patch"
+    },
+    "Right Sleeve Rock and Roll Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        126,
+        505,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Rock and Roll Text Patch"
+    },
+    "Right Front Surf Country Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        304,
+        583,
+        59
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Front Surf Country Text Patch"
+    },
+    "Left Front Tiger Head Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        521,
+        594,
+        51
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Front Tiger Head Patch"
+    },
+    "Left Front Aviator Nation Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        649,
+        565,
+        76
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Front Aviator Nation Patch"
+    },
+    "Right Sleeve Mountain Stripe Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        114,
+        659,
+        40
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Mountain Stripe Patch"
+    },
+    "Center Front Smiley Face Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        466,
+        655,
+        44
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Center Front Smiley Face Patch"
+    },
+    "Left Front The Need for Speed Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        637,
+        637,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Left Front The Need for Speed Text Patch"
+    },
+    "Right Sleeve Fast Track Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        757,
+        402,
+        42
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Fast Track Patch"
+    },
+    "Right Sleeve Peace Flag Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        775,
+        436,
+        38
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Peace Flag Patch"
+    },
+    "Right Sleeve Sunset Stripe Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        767,
+        558,
+        40
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Sunset Stripe Patch"
+    },
+    "Right Sleeve Enjoy the Ride Text Patch": {
+      "Source": "Front",
+      "Coordinates": [
+        791,
+        665,
+        48
+      ],
+      "Artwork": "Yes",
+      "Type": "Artwork",
+      "Name": "Right Sleeve Enjoy the Ride Text Patch"
+    }
+  },
+  "BOMNameSeedCheckPassed": true,
+  "BOMNameSeedFallbackUsed": false,
+  "BOMNameSeedImageURL": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/artwork/artwork_circles.png"
+}

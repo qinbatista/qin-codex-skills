@@ -1,0 +1,577 @@
+{
+  "status": "warning",
+  "run_dir": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530",
+  "input_image_path": "/Users/qin/QinProject/Muse/MuseAI/data/bom_testing/default_bom_name_front_garment.png",
+  "attempt_count": 5,
+  "bom_types": [
+    "Fabric",
+    "Trims",
+    "Labels",
+    "Artwork"
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "warning",
+      "types": {
+        "Fabric": {
+          "status": "pass",
+          "duration_seconds": 25.08,
+          "bom_names": [
+            "Main Fabric",
+            "Sherpa Fleece Fabric"
+          ],
+          "bom_count": 2,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/fabric/fabric_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/fabric/fabric_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Trims": {
+          "status": "pass",
+          "duration_seconds": 15.81,
+          "bom_names": [
+            "Gold Snap Buttons"
+          ],
+          "bom_count": 1,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/trims/trims_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/trims/trims_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Labels": {
+          "status": "warning",
+          "duration_seconds": 6.47,
+          "bom_names": [],
+          "bom_count": 0,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/labels/labels_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/labels/labels_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Artwork": {
+          "status": "pass",
+          "duration_seconds": 115.57,
+          "bom_names": [
+            "Front Right Shoulder Bird Patch",
+            "Front Right Chest Yin Yang Patch",
+            "Front Right Chest Stoked Wordmark Patch",
+            "Front Left Chest Blue Text Patch",
+            "Front Left Shoulder California Crest Patch",
+            "Front Left Chest Live Free Text Patch",
+            "Right Sleeve Upper Smiley Patch",
+            "Right Sleeve Upper Blue Text Patch",
+            "Right Sleeve Mid Rock and Roll Text Patch",
+            "Right Front Shark Motif Patch",
+            "Right Front Hawaii Graphic Patch",
+            "Center Front California Lover Patch",
+            "Left Front Blue Text Patch",
+            "Right Front Surf Country Text Patch",
+            "Center Front Tiger Head Patch",
+            "Left Front Aviator Nation Patch",
+            "Left Front The Need for Speed Text Patch",
+            "Center Front Lower Smiley Patch",
+            "Right Sleeve Lower Mountain Stripe Patch",
+            "Left Sleeve Upper Abstract Logo Patch",
+            "Left Sleeve Mid Peace Flag Patch",
+            "Left Sleeve Lower Sunset Stripe Patch",
+            "Left Sleeve Lower Enjoy the Ride Patch"
+          ],
+          "bom_count": 23,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/artwork/artwork_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/artwork/artwork_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        }
+      },
+      "started_at": "2026-05-01T13:35:30-0700",
+      "finished_at": "2026-05-01T13:38:13-0700"
+    },
+    {
+      "attempt": 2,
+      "status": "warning",
+      "types": {
+        "Fabric": {
+          "status": "pass",
+          "duration_seconds": 18.26,
+          "bom_names": [
+            "Main Fabric",
+            "Sherpa Fleece Fabric"
+          ],
+          "bom_count": 2,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/fabric/fabric_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/fabric/fabric_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Trims": {
+          "status": "pass",
+          "duration_seconds": 18.32,
+          "bom_names": [
+            "Gold Shank Buttons"
+          ],
+          "bom_count": 1,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/trims/trims_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/trims/trims_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Labels": {
+          "status": "warning",
+          "duration_seconds": 7.28,
+          "bom_names": [],
+          "bom_count": 0,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/labels/labels_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/labels/labels_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Artwork": {
+          "status": "pass",
+          "duration_seconds": 109.09,
+          "bom_names": [
+            "Front Right Shoulder Bird Patch",
+            "Front Right Chest Yin Yang Patch",
+            "Front Right Chest Stoked Wordmark Patch",
+            "Front Left Chest California Shield Patch",
+            "Front Left Chest Blue Text Patch",
+            "Front Left Chest Live Free Text Patch",
+            "Front Right Sleeve Smiley Face Patch",
+            "Front Right Sleeve Adventure Text Patch",
+            "Front Right Sleeve Rock and Roll Text Patch",
+            "Front Right Sleeve Mountain Stripe Patch",
+            "Front Right Body Shark Patch",
+            "Front Right Body Hawaii Surfer Patch",
+            "Front Right Body Surf Country Text Patch",
+            "Front Left Body California Lover Patch",
+            "Front Left Body Blue Text Patch",
+            "Front Left Body Aviator Nation Triangle Patch",
+            "Front Left Body Tiger Head Patch",
+            "Front Left Body The Need for Speed Text Patch",
+            "Front Center Bottom Smiley Face Patch",
+            "Front Left Sleeve Monochrome Graphic Patch",
+            "Front Left Sleeve Flag Peace Patch",
+            "Front Left Sleeve Sunset Stripe Patch",
+            "Front Left Sleeve Enjoy the Ride Patch"
+          ],
+          "bom_count": 23,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/artwork/artwork_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/artwork/artwork_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        }
+      },
+      "started_at": "2026-05-01T13:35:30-0700",
+      "finished_at": "2026-05-01T13:38:03-0700"
+    },
+    {
+      "attempt": 3,
+      "status": "warning",
+      "types": {
+        "Fabric": {
+          "status": "pass",
+          "duration_seconds": 32.85,
+          "bom_names": [
+            "Main Fabric",
+            "Sherpa Fleece Fabric"
+          ],
+          "bom_count": 2,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/fabric/fabric_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/fabric/fabric_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Trims": {
+          "status": "pass",
+          "duration_seconds": 18.1,
+          "bom_names": [
+            "Gold Shank Buttons"
+          ],
+          "bom_count": 1,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/trims/trims_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/trims/trims_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Labels": {
+          "status": "warning",
+          "duration_seconds": 5.4,
+          "bom_names": [],
+          "bom_count": 0,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/labels/labels_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/labels/labels_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Artwork": {
+          "status": "pass",
+          "duration_seconds": 104.52,
+          "bom_names": [
+            "Front Right Shoulder Bird Patch",
+            "Front Right Chest Yin Yang Patch",
+            "Front Right Chest Sloked Wordmark Patch",
+            "Front Left Chest Blue Text Patch",
+            "Front Left Shoulder California Shield Patch",
+            "Front Left Chest Live Free Text Patch",
+            "Front Right Sleeve Smiley Face Patch",
+            "Front Right Sleeve Blue Text Patch",
+            "Front Right Sleeve Rock and Roll Text Patch",
+            "Front Right Sleeve Mountain Stripe Patch",
+            "Front Right Body Shark Motif Patch",
+            "Front Right Body Hawaii Figure Patch",
+            "Front Right Body Surf Country Text Patch",
+            "Front Center Body California Lover Patch",
+            "Front Left Body Blue Text Patch",
+            "Front Center Body Tiger Head Patch",
+            "Front Left Body Aviator Nation Triangle Patch",
+            "Front Left Body The Need for Speed Text Patch",
+            "Front Center Hem Smiley Face Patch",
+            "Front Left Sleeve Black White Text Patch",
+            "Front Left Sleeve Peace Flag Patch",
+            "Front Left Sleeve Sunset Stripe Patch",
+            "Front Left Sleeve Enjoy the Ride Patch"
+          ],
+          "bom_count": 23,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/artwork/artwork_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/artwork/artwork_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        }
+      },
+      "started_at": "2026-05-01T13:35:30-0700",
+      "finished_at": "2026-05-01T13:38:11-0700"
+    },
+    {
+      "attempt": 4,
+      "status": "warning",
+      "types": {
+        "Fabric": {
+          "status": "pass",
+          "duration_seconds": 25.27,
+          "bom_names": [
+            "Main Fabric",
+            "Sherpa Fleece Fabric"
+          ],
+          "bom_count": 2,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/fabric/fabric_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/fabric/fabric_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Trims": {
+          "status": "pass",
+          "duration_seconds": 13.05,
+          "bom_names": [
+            "Gold Snap Buttons"
+          ],
+          "bom_count": 1,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/trims/trims_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/trims/trims_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Labels": {
+          "status": "warning",
+          "duration_seconds": 6.15,
+          "bom_names": [],
+          "bom_count": 0,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/labels/labels_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/labels/labels_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Artwork": {
+          "status": "pass",
+          "duration_seconds": 102.97,
+          "bom_names": [
+            "Front Right Shoulder Bird Patch",
+            "Front Right Chest Yin Yang Patch",
+            "Front Right Chest Stoked Wordmark Patch",
+            "Front Left Chest You Deserve My Best Text Patch",
+            "Front Left Shoulder California Crest Patch",
+            "Front Left Chest Live Free Text Patch",
+            "Front Right Sleeve Smiley Face Patch",
+            "Front Right Sleeve Life for the Adventure Text Patch",
+            "Front Right Sleeve Rock and Roll Text Patch",
+            "Front Right Body Shark Patch",
+            "Front Right Body Hawaii Figure Patch",
+            "Front Right Body Surf Country Text Patch",
+            "Front Left Body California Lover Patch",
+            "Front Left Chest I'd Rather Be Surfing Text Patch",
+            "Front Left Body Aviator Nation Triangle Patch",
+            "Front Left Body Tiger Head Patch",
+            "Front Left Body The Need for Speed Text Patch",
+            "Front Center Hem Smiley Face Patch",
+            "Front Right Sleeve Mountain Stripe Patch",
+            "Front Left Sleeve Abstract Logo Text Patch",
+            "Front Left Sleeve Peace Flag Patch",
+            "Front Left Sleeve Sunset Stripe Patch",
+            "Front Left Sleeve Enjoy the Ride Text Patch"
+          ],
+          "bom_count": 23,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/artwork/artwork_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/artwork/artwork_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        }
+      },
+      "started_at": "2026-05-01T13:35:30-0700",
+      "finished_at": "2026-05-01T13:37:58-0700"
+    },
+    {
+      "attempt": 5,
+      "status": "warning",
+      "types": {
+        "Fabric": {
+          "status": "pass",
+          "duration_seconds": 26.48,
+          "bom_names": [
+            "Main Fabric",
+            "Sherpa Fleece Fabric"
+          ],
+          "bom_count": 2,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/fabric/fabric_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/fabric/fabric_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Trims": {
+          "status": "pass",
+          "duration_seconds": 18.35,
+          "bom_names": [
+            "Gold Shank Buttons"
+          ],
+          "bom_count": 1,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/trims/trims_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/trims/trims_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Labels": {
+          "status": "warning",
+          "duration_seconds": 8.12,
+          "bom_names": [],
+          "bom_count": 0,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/labels/labels_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/labels/labels_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        },
+        "Artwork": {
+          "status": "pass",
+          "duration_seconds": 110.75,
+          "bom_names": [
+            "Right Shoulder Bird Patch",
+            "Right Chest Yin Yang Patch",
+            "Right Chest Stoked Wordmark Patch",
+            "Left Chest You Deserve My Best Text Patch",
+            "Left Shoulder California Crest Patch",
+            "Left Chest Live Free Text Patch",
+            "Right Sleeve Smiley Face Patch",
+            "Right Sleeve Life for the Adventure Text Patch",
+            "Right Front Shark Patch",
+            "Right Front Hawaii Figure Patch",
+            "Left Front California Lover Patch",
+            "Left Front I'd Rather Be Surfing Text Patch",
+            "Right Sleeve Rock and Roll Text Patch",
+            "Right Front Surf Country Text Patch",
+            "Left Front Tiger Head Patch",
+            "Left Front Aviator Nation Patch",
+            "Right Sleeve Mountain Stripe Patch",
+            "Center Front Smiley Face Patch",
+            "Left Front The Need for Speed Text Patch",
+            "Right Sleeve Fast Track Patch",
+            "Right Sleeve Peace Flag Patch",
+            "Right Sleeve Sunset Stripe Patch",
+            "Right Sleeve Enjoy the Ride Text Patch"
+          ],
+          "bom_count": 23,
+          "image_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/artwork/artwork_circles.png",
+          "result_path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/artwork/artwork_result.json",
+          "BOMNameSeedCheckPassed": true,
+          "BOMNameSeedFallbackUsed": false
+        }
+      },
+      "started_at": "2026-05-01T13:35:30-0700",
+      "finished_at": "2026-05-01T13:38:14-0700"
+    }
+  ],
+  "type_names_by_attempt": {
+    "1": {
+      "Fabric": [
+        "Main Fabric",
+        "Sherpa Fleece Fabric"
+      ],
+      "Trims": [
+        "Gold Snap Buttons"
+      ],
+      "Labels": [],
+      "Artwork": [
+        "Front Right Shoulder Bird Patch",
+        "Front Right Chest Yin Yang Patch",
+        "Front Right Chest Stoked Wordmark Patch",
+        "Front Left Chest Blue Text Patch",
+        "Front Left Shoulder California Crest Patch",
+        "Front Left Chest Live Free Text Patch",
+        "Right Sleeve Upper Smiley Patch",
+        "Right Sleeve Upper Blue Text Patch",
+        "Right Sleeve Mid Rock and Roll Text Patch",
+        "Right Front Shark Motif Patch",
+        "Right Front Hawaii Graphic Patch",
+        "Center Front California Lover Patch",
+        "Left Front Blue Text Patch",
+        "Right Front Surf Country Text Patch",
+        "Center Front Tiger Head Patch",
+        "Left Front Aviator Nation Patch",
+        "Left Front The Need for Speed Text Patch",
+        "Center Front Lower Smiley Patch",
+        "Right Sleeve Lower Mountain Stripe Patch",
+        "Left Sleeve Upper Abstract Logo Patch",
+        "Left Sleeve Mid Peace Flag Patch",
+        "Left Sleeve Lower Sunset Stripe Patch",
+        "Left Sleeve Lower Enjoy the Ride Patch"
+      ]
+    },
+    "2": {
+      "Fabric": [
+        "Main Fabric",
+        "Sherpa Fleece Fabric"
+      ],
+      "Trims": [
+        "Gold Shank Buttons"
+      ],
+      "Labels": [],
+      "Artwork": [
+        "Front Right Shoulder Bird Patch",
+        "Front Right Chest Yin Yang Patch",
+        "Front Right Chest Stoked Wordmark Patch",
+        "Front Left Chest California Shield Patch",
+        "Front Left Chest Blue Text Patch",
+        "Front Left Chest Live Free Text Patch",
+        "Front Right Sleeve Smiley Face Patch",
+        "Front Right Sleeve Adventure Text Patch",
+        "Front Right Sleeve Rock and Roll Text Patch",
+        "Front Right Sleeve Mountain Stripe Patch",
+        "Front Right Body Shark Patch",
+        "Front Right Body Hawaii Surfer Patch",
+        "Front Right Body Surf Country Text Patch",
+        "Front Left Body California Lover Patch",
+        "Front Left Body Blue Text Patch",
+        "Front Left Body Aviator Nation Triangle Patch",
+        "Front Left Body Tiger Head Patch",
+        "Front Left Body The Need for Speed Text Patch",
+        "Front Center Bottom Smiley Face Patch",
+        "Front Left Sleeve Monochrome Graphic Patch",
+        "Front Left Sleeve Flag Peace Patch",
+        "Front Left Sleeve Sunset Stripe Patch",
+        "Front Left Sleeve Enjoy the Ride Patch"
+      ]
+    },
+    "3": {
+      "Fabric": [
+        "Main Fabric",
+        "Sherpa Fleece Fabric"
+      ],
+      "Trims": [
+        "Gold Shank Buttons"
+      ],
+      "Labels": [],
+      "Artwork": [
+        "Front Right Shoulder Bird Patch",
+        "Front Right Chest Yin Yang Patch",
+        "Front Right Chest Sloked Wordmark Patch",
+        "Front Left Chest Blue Text Patch",
+        "Front Left Shoulder California Shield Patch",
+        "Front Left Chest Live Free Text Patch",
+        "Front Right Sleeve Smiley Face Patch",
+        "Front Right Sleeve Blue Text Patch",
+        "Front Right Sleeve Rock and Roll Text Patch",
+        "Front Right Sleeve Mountain Stripe Patch",
+        "Front Right Body Shark Motif Patch",
+        "Front Right Body Hawaii Figure Patch",
+        "Front Right Body Surf Country Text Patch",
+        "Front Center Body California Lover Patch",
+        "Front Left Body Blue Text Patch",
+        "Front Center Body Tiger Head Patch",
+        "Front Left Body Aviator Nation Triangle Patch",
+        "Front Left Body The Need for Speed Text Patch",
+        "Front Center Hem Smiley Face Patch",
+        "Front Left Sleeve Black White Text Patch",
+        "Front Left Sleeve Peace Flag Patch",
+        "Front Left Sleeve Sunset Stripe Patch",
+        "Front Left Sleeve Enjoy the Ride Patch"
+      ]
+    },
+    "4": {
+      "Fabric": [
+        "Main Fabric",
+        "Sherpa Fleece Fabric"
+      ],
+      "Trims": [
+        "Gold Snap Buttons"
+      ],
+      "Labels": [],
+      "Artwork": [
+        "Front Right Shoulder Bird Patch",
+        "Front Right Chest Yin Yang Patch",
+        "Front Right Chest Stoked Wordmark Patch",
+        "Front Left Chest You Deserve My Best Text Patch",
+        "Front Left Shoulder California Crest Patch",
+        "Front Left Chest Live Free Text Patch",
+        "Front Right Sleeve Smiley Face Patch",
+        "Front Right Sleeve Life for the Adventure Text Patch",
+        "Front Right Sleeve Rock and Roll Text Patch",
+        "Front Right Body Shark Patch",
+        "Front Right Body Hawaii Figure Patch",
+        "Front Right Body Surf Country Text Patch",
+        "Front Left Body California Lover Patch",
+        "Front Left Chest I'd Rather Be Surfing Text Patch",
+        "Front Left Body Aviator Nation Triangle Patch",
+        "Front Left Body Tiger Head Patch",
+        "Front Left Body The Need for Speed Text Patch",
+        "Front Center Hem Smiley Face Patch",
+        "Front Right Sleeve Mountain Stripe Patch",
+        "Front Left Sleeve Abstract Logo Text Patch",
+        "Front Left Sleeve Peace Flag Patch",
+        "Front Left Sleeve Sunset Stripe Patch",
+        "Front Left Sleeve Enjoy the Ride Text Patch"
+      ]
+    },
+    "5": {
+      "Fabric": [
+        "Main Fabric",
+        "Sherpa Fleece Fabric"
+      ],
+      "Trims": [
+        "Gold Shank Buttons"
+      ],
+      "Labels": [],
+      "Artwork": [
+        "Right Shoulder Bird Patch",
+        "Right Chest Yin Yang Patch",
+        "Right Chest Stoked Wordmark Patch",
+        "Left Chest You Deserve My Best Text Patch",
+        "Left Shoulder California Crest Patch",
+        "Left Chest Live Free Text Patch",
+        "Right Sleeve Smiley Face Patch",
+        "Right Sleeve Life for the Adventure Text Patch",
+        "Right Front Shark Patch",
+        "Right Front Hawaii Figure Patch",
+        "Left Front California Lover Patch",
+        "Left Front I'd Rather Be Surfing Text Patch",
+        "Right Sleeve Rock and Roll Text Patch",
+        "Right Front Surf Country Text Patch",
+        "Left Front Tiger Head Patch",
+        "Left Front Aviator Nation Patch",
+        "Right Sleeve Mountain Stripe Patch",
+        "Center Front Smiley Face Patch",
+        "Left Front The Need for Speed Text Patch",
+        "Right Sleeve Fast Track Patch",
+        "Right Sleeve Peace Flag Patch",
+        "Right Sleeve Sunset Stripe Patch",
+        "Right Sleeve Enjoy the Ride Text Patch"
+      ]
+    }
+  },
+  "warning_summary": "All attempts completed, but Labels returned zero BOM rows in every attempt."
+}

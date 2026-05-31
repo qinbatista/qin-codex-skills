@@ -1,0 +1,18 @@
+{
+  "BOM": {
+    "Gold Shank Buttons": {
+      "Source": "Front",
+      "Coordinates": [
+        443,
+        343,
+        20
+      ],
+      "Artwork": "Yes",
+      "Type": "Trims",
+      "Name": "Gold Shank Buttons"
+    }
+  },
+  "BOMNameSeedCheckPassed": true,
+  "BOMNameSeedFallbackUsed": false,
+  "BOMNameSeedImageURL": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/trims/trims_circles.png"
+}

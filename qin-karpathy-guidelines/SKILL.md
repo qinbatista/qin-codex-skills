@@ -26,9 +26,6 @@ Write the minimum code that solves the actual request.
 - Do not create a new script, file, module, or utility only to simplify very small or easy structure; keep the logic in the existing file unless the extraction removes real complexity or is reused.
 - Do not add configurability that was not requested.
 - Do not add error handling for impossible scenarios.
-- Do not add fallback/default/compatibility paths unless the user explicitly asks for them or an existing external contract requires them.
-- When the user asks to handle case A, implement case A only; do not add code, prompt rules, comments, or warnings about unrelated cases B/C/D unless the user mentioned them or they are required by an existing contract.
-- Trust the provided inputs, outputs, formats, and values when the current caller or contract already defines them; fix the producer or contract instead of adding consumer-side repair logic.
 - Prefer fixing the real source-code problem directly instead of layering wrappers, fallback branches, adapters, or sidecar logic on top of bad code.
 - For most bug fixes and update requests, change the existing logic at the real source rather than preserving it and adding another layer around it.
 - For branching, use a plain `if`/`else` for exactly two mutually exclusive outcomes, and use the language's switch-style construct (`switch`/`case`, Python `match`/`case`, guarded switch cases, or equivalent) for three or more outcomes.
@@ -63,9 +60,6 @@ Turn vague requests into verifiable outcomes.
 - Define what success looks like before implementing.
 - Prefer a reproduction, test, build, lint, or other concrete check when available.
 - For multi-step work, keep a short plan tied to verification.
-- At the start of git-managed coding work, fetch the upstream remote and pull or fast-forward to the newest code when it is safe for the current checkout.
-- If local dirty work, divergence, conflicts, or repo-specific workflow rules make pulling unsafe, preserve the local work and report the concrete blocker instead of stashing, resetting, or overwriting files.
 - When performing a merge, check explicitly for git conflicts and resolve each conflicted file deliberately instead of blindly taking one side.
 - When the user already wants rule compliance or cleanup, fix clear violations directly instead of pausing to ask whether to make the obvious update.
 - Do not stop at implementation when the task can be verified in the current environment.
-- For git-managed work, always state in the final response whether changes were pushed or not pushed.

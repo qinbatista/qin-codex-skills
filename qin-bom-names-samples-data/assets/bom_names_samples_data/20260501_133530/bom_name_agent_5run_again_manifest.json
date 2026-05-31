@@ -1,0 +1,187 @@
+{
+  "title": "BOMNameAgent 5-Run Test",
+  "subtitle": "Default front garment image; four BOM type panels per attempt",
+  "generated_at": "2026-05-01T13:39:58.100533-07:00",
+  "purpose": {
+    "category": "mixed",
+    "label": "BOM Name Seed Validation",
+    "focus": [
+      "agent_BOM_name.py",
+      "5 parallel attempts",
+      "Fabric/Trims/Labels/Artwork panels",
+      "circle coordinate evidence"
+    ]
+  },
+  "request_summary": {
+    "requested_change": "User asked to run agent_BOM_name.py testing and show the 5 times testing again.",
+    "expected_outcome": "Run five attempts and show visual evidence for Fabric, Trims, Labels, and Artwork on each attempt page."
+  },
+  "summary": "All attempts completed, but Labels returned zero BOM rows in every attempt.",
+  "overview": {
+    "status": "warning",
+    "attempts": 5,
+    "passed_processes": 5,
+    "warnings": 5,
+    "failed": 0
+  },
+  "environment": {
+    "workspace": "/Users/qin/QinProject/Muse/MuseAI",
+    "agent_file": "core/script/agent/agent_BOM_name.py",
+    "input_image": "/Users/qin/QinProject/Muse/MuseAI/data/bom_testing/default_bom_name_front_garment.png",
+    "run_dir": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530"
+  },
+  "layout_style": "custom",
+  "log_artifacts": [
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/run.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/summary.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/stdout.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/stderr.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/status.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/result.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/stdout.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/stderr.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/status.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/result.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/stdout.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/stderr.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/status.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/result.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/stdout.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/stderr.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/status.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/result.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/stdout.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/stderr.log",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/status.json",
+    "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/result.json"
+  ],
+  "artifacts": [
+    {
+      "label": "Default front garment image",
+      "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/input_default_bom_name_front_garment.png",
+      "caption": "Input image used for all five attempts."
+    }
+  ],
+  "test_cases": [
+    {
+      "name": "Attempt 1",
+      "status": "warning",
+      "input": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/input_default_bom_name_front_garment.png",
+      "output": "Fabric: 2 rows; Trims: 1 rows; Labels: 0 rows; Artwork: 23 rows",
+      "artifacts": [
+        {
+          "label": "Fabric",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/fabric/fabric_circles.png"
+        },
+        {
+          "label": "Trims",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/trims/trims_circles.png"
+        },
+        {
+          "label": "Labels",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/labels/labels_circles.png"
+        },
+        {
+          "label": "Artwork",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_1/artwork/artwork_circles.png"
+        }
+      ]
+    },
+    {
+      "name": "Attempt 2",
+      "status": "warning",
+      "input": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/input_default_bom_name_front_garment.png",
+      "output": "Fabric: 2 rows; Trims: 1 rows; Labels: 0 rows; Artwork: 23 rows",
+      "artifacts": [
+        {
+          "label": "Fabric",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/fabric/fabric_circles.png"
+        },
+        {
+          "label": "Trims",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/trims/trims_circles.png"
+        },
+        {
+          "label": "Labels",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/labels/labels_circles.png"
+        },
+        {
+          "label": "Artwork",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/artwork/artwork_circles.png"
+        }
+      ]
+    },
+    {
+      "name": "Attempt 3",
+      "status": "warning",
+      "input": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/input_default_bom_name_front_garment.png",
+      "output": "Fabric: 2 rows; Trims: 1 rows; Labels: 0 rows; Artwork: 23 rows",
+      "artifacts": [
+        {
+          "label": "Fabric",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/fabric/fabric_circles.png"
+        },
+        {
+          "label": "Trims",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/trims/trims_circles.png"
+        },
+        {
+          "label": "Labels",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/labels/labels_circles.png"
+        },
+        {
+          "label": "Artwork",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_3/artwork/artwork_circles.png"
+        }
+      ]
+    },
+    {
+      "name": "Attempt 4",
+      "status": "warning",
+      "input": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/input_default_bom_name_front_garment.png",
+      "output": "Fabric: 2 rows; Trims: 1 rows; Labels: 0 rows; Artwork: 23 rows",
+      "artifacts": [
+        {
+          "label": "Fabric",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/fabric/fabric_circles.png"
+        },
+        {
+          "label": "Trims",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/trims/trims_circles.png"
+        },
+        {
+          "label": "Labels",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/labels/labels_circles.png"
+        },
+        {
+          "label": "Artwork",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_4/artwork/artwork_circles.png"
+        }
+      ]
+    },
+    {
+      "name": "Attempt 5",
+      "status": "warning",
+      "input": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/input_default_bom_name_front_garment.png",
+      "output": "Fabric: 2 rows; Trims: 1 rows; Labels: 0 rows; Artwork: 23 rows",
+      "artifacts": [
+        {
+          "label": "Fabric",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/fabric/fabric_circles.png"
+        },
+        {
+          "label": "Trims",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/trims/trims_circles.png"
+        },
+        {
+          "label": "Labels",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/labels/labels_circles.png"
+        },
+        {
+          "label": "Artwork",
+          "path": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_5/artwork/artwork_circles.png"
+        }
+      ]
+    }
+  ]
+}

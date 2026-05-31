@@ -72,6 +72,7 @@ Exclude `.system`, `.git`, `.github`, `.DS_Store`, `__pycache__`, compiled Pytho
 - Never copy a `.git` directory into `~/.codex/skills`.
 - Clone or download the GitHub repository only inside a temporary sandbox, then copy skill folders into the global skills folder.
 - Store sync state under `~/.codex/state`, not inside a skill folder or repository checkout.
+- Never create backup directories or copied snapshots for global-skill sync work. Use GitHub as the recovery source or report the blocker; do not leave backups in `~/.codex/state`, the workspace, or `~/.codex/skills`.
 - If `gh auth status` fails or the repository is unavailable, report the blocker instead of guessing.
 - If the remote repository does not exist and the user has asked to publish these skills, create `qin-codex-skills` as a public GitHub repository before pushing.
 - Keep the remote mirror public-safe: do not push auth files, secrets, local logs, cache folders, or binary generated artifacts unless the user explicitly asks and the files are safe.

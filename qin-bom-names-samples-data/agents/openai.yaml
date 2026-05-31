@@ -1,0 +1,4 @@
+interface:
+  display_name: "BOM Names Samples Data"
+  short_description: "Reusable MuseAI BOM-name circle samples."
+  default_prompt: "Use $qin-bom-names-samples-data to load the BOM names samples data assets for MuseAI BOM-name testing."

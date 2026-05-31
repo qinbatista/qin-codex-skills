@@ -1,0 +1,70 @@
+{
+  "name": "BOM names samples data",
+  "saved_at": "2026-05-01",
+  "source_run": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530",
+  "description": "Reusable MuseAI BOMNameAgent circled image sample set from the default BOM-name test run.",
+  "default_attempt": "attempt_5",
+  "source_image": "input_default_bom_name_front_garment.png",
+  "report_pdf": "bom_name_agent_5run_again_report.pdf",
+  "rendered_report_pages": [
+    "report_page_1.png",
+    "report_page_2.png"
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "folder": "attempt_1",
+      "circled_images": {
+        "fabric": "attempt_1/fabric_circles.png",
+        "trims": "attempt_1/trims_circles.png",
+        "labels": "attempt_1/labels_circles.png",
+        "artwork": "attempt_1/artwork_circles.png"
+      },
+      "result_json": "attempt_1/result.json"
+    },
+    {
+      "attempt": 2,
+      "folder": "attempt_2",
+      "circled_images": {
+        "fabric": "attempt_2/fabric_circles.png",
+        "trims": "attempt_2/trims_circles.png",
+        "labels": "attempt_2/labels_circles.png",
+        "artwork": "attempt_2/artwork_circles.png"
+      },
+      "result_json": "attempt_2/result.json"
+    },
+    {
+      "attempt": 3,
+      "folder": "attempt_3",
+      "circled_images": {
+        "fabric": "attempt_3/fabric_circles.png",
+        "trims": "attempt_3/trims_circles.png",
+        "labels": "attempt_3/labels_circles.png",
+        "artwork": "attempt_3/artwork_circles.png"
+      },
+      "result_json": "attempt_3/result.json"
+    },
+    {
+      "attempt": 4,
+      "folder": "attempt_4",
+      "circled_images": {
+        "fabric": "attempt_4/fabric_circles.png",
+        "trims": "attempt_4/trims_circles.png",
+        "labels": "attempt_4/labels_circles.png",
+        "artwork": "attempt_4/artwork_circles.png"
+      },
+      "result_json": "attempt_4/result.json"
+    },
+    {
+      "attempt": 5,
+      "folder": "attempt_5",
+      "circled_images": {
+        "fabric": "attempt_5/fabric_circles.png",
+        "trims": "attempt_5/trims_circles.png",
+        "labels": "attempt_5/labels_circles.png",
+        "artwork": "attempt_5/artwork_circles.png"
+      },
+      "result_json": "attempt_5/result.json"
+    }
+  ]
+}

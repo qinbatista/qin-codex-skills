@@ -1,0 +1,29 @@
+{
+  "BOM": {
+    "Main Fabric": {
+      "Source": "Front",
+      "Coordinates": [
+        245,
+        777,
+        102
+      ],
+      "Artwork": "Yes",
+      "Type": "Fabric",
+      "Name": "Main Fabric"
+    },
+    "Sherpa Fleece Fabric": {
+      "Source": "Front",
+      "Coordinates": [
+        420,
+        460,
+        75
+      ],
+      "Artwork": "Yes",
+      "Type": "Fabric",
+      "Name": "Sherpa Fleece Fabric"
+    }
+  },
+  "BOMNameSeedCheckPassed": true,
+  "BOMNameSeedFallbackUsed": false,
+  "BOMNameSeedImageURL": "/Users/qin/QinProject/Muse/MuseAI/data/cache/qin-test-pdf-report/bom_name_agent_5run_again_20260501_133530/attempt_2/fabric/fabric_circles.png"
+}

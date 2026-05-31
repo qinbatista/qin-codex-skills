@@ -1,4 +1,0 @@
-interface:
-  display_name: "Qin Git Push Safety"
-  short_description: "Pull and inspect before pushing Git changes."
-  default_prompt: "Use Qin Git Push Safety before pushing the current branch."
