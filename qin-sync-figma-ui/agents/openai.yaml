@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync Figma UI"
+  short_description: "Publish Mokozoo UI boards to Figma with versioned naming."
+  default_prompt: "sync figma"

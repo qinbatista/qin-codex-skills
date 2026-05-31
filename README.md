@@ -54,6 +54,10 @@ Use for Python writing and formatting tasks across projects when Codex generates
 
 Optimize an existing Codex skill or prompt-driven instruction layer from concrete failure evidence, pre-use review, or finalization checks. Use when a skill, retry/check prompt, agent instruction block, or other instruction-driven workflow mostly works but should be tightened without changing the underlying job. Scan peer skills first when relevant, merge duplicate requirements into one clear rule, prefer the smallest prompt-first fix when the issue lives in the instruction layer, and verify behavior after the change.
 
+### [`qin-sync-figma-ui`](./qin-sync-figma-ui/)
+
+Use when Qin says "sync figma", "sync UI to Figma", "update Figma from current website", "publish the Figma UI baseline", or asks to refresh Mokozoo Figma boards from the current Docker-Mokozoo code. Runs the local fast screenshot-to-Figma workflow, preserves version history, publishes from the generated queue instead of reading Figma for structure, and verifies professional layer names, IDs, versions, and selectable image layers.
+
 ### [`qin-test-pdf-report`](./qin-test-pdf-report/)
 
 Generate a visual PDF report for testing, QA, validation, verification, checks, regressions, audits, review evidence, and reviewable result reporting. Use when the user asks for testing, asks to see a PDF report, wants a visual report, wants a report artifact, wants QA or validation evidence, wants proof with screenshots or tables, or when a project requires result reporting in a clearer form than plain text. Prefer screenshots, images, tables, metrics, and concise status blocks over text-heavy summaries, and return the PDF path instead of a long text report.
