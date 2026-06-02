@@ -48,6 +48,18 @@ PowerToys key codes for the current preference:
 - Word jump shortcuts: `91;37 -> 162;37`, `91;39 -> 162;39`, `92;37 -> 162;37`, `92;39 -> 162;39`.
 - Line jump shortcuts: `164;37 -> 36`, `164;39 -> 35`, `165;37 -> 36`, `165;39 -> 35`, plus `162;37 -> 36`, `162;39 -> 35`, `163;37 -> 36`, `163;39 -> 35`.
 
+## Portable Setup
+
+To apply Qin's current preference on another Windows PC, run the bundled script from this skill:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\apply_qin_windows_keyboard_preference.ps1
+```
+
+The script backs up existing PowerToys Keyboard Manager config, writes the exact current mapping, enables Keyboard Manager when `settings.json` exists, sets the Windows user language list to `zh-Hans-CN` only by default, and restarts the Keyboard Manager engine when it can find PowerToys.
+
+Use `-CheckOnly` to inspect without changing files. Use `-SkipLanguageList` if the PC should keep its existing Windows input languages.
+
 ## Examples
 
 - "I want Alt+C/V to copy/paste": keep the global `Alt`/`Ctrl` key swap, not shortcut-only copy/paste, unless Qin explicitly says shortcut-only.
