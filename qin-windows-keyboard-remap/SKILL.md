@@ -1,6 +1,6 @@
 ---
 name: qin-windows-keyboard-remap
-description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Alt/Ctrl/Start/Fn/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
+description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Alt/Ctrl/Start/Fn/CapsLock/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
 ---
 
 # Qin Windows Keyboard Remap
@@ -9,7 +9,7 @@ Use this as the Windows keyboard-remap baseline. Keyboard labels are not enough;
 
 ## Trigger
 
-Use this skill before Windows keyboard or hotkey changes involving physical keys, modifier keys, arrow keys, `Fn`, Start/Windows key, Alt, Ctrl, PowerToys Keyboard Manager, AutoHotkey, registry scancode maps, vendor remappers, or keyboard firmware tools.
+Use this skill before Windows keyboard or hotkey changes involving physical keys, modifier keys, arrow keys, `Fn`, Caps Lock, Start/Windows key, Alt, Ctrl, PowerToys Keyboard Manager, AutoHotkey, registry scancode maps, vendor remappers, or keyboard firmware tools.
 
 ## Workflow
 
@@ -36,18 +36,20 @@ For Qin's current Windows keyboard preference, use this interpretation unless Qi
 - Global key swap: physical `Alt` and physical `Ctrl` should be switched on both left and right sides, so physical `Alt+C` and `Alt+V` behave as copy/paste.
 - Word-by-word movement: physical Start/Windows key plus left/right arrow should act like `Ctrl+Left` and `Ctrl+Right`.
 - Line jump: the Alt-function arrow behavior should go to line start/end, meaning `Alt+Left`/`Alt+Right` should become `Home`/`End`. Because Qin also wants global `Alt`/`Ctrl` swapped, include both `Alt+Arrow` and `Ctrl+Arrow` line-jump shortcut mappings when using PowerToys so the behavior survives remap order.
+- Caps Lock preference: physical Caps Lock should act as momentary Left Shift (`Caps Lock -> Left Shift`) so tapping Caps Lock can toggle Chinese/English when the active Chinese IME uses tapped Shift for that toggle, while held physical Shift still behaves as uppercase.
 - Do not try to switch Start with physical `Fn` unless Qin explicitly asks again and a key-event probe proves `Fn` is visible to Windows. If `Fn` is not visible, route to keyboard firmware, BIOS setting, vendor keyboard software, VIA/QMK, or manual-confirmed hardware setting.
 - Do not replace the global `Alt`/`Ctrl` key swap with shortcut-only copy/paste mappings unless Qin explicitly asks to remove the key swap.
 
 PowerToys key codes for the current preference:
 
-- Key swaps: `164 -> 162`, `162 -> 164`, `165 -> 163`, `163 -> 165`.
+- Key swaps: `164 -> 162`, `162 -> 164`, `165 -> 163`, `163 -> 165`, `20 -> 160`.
 - Word jump shortcuts: `91;37 -> 162;37`, `91;39 -> 162;39`, `92;37 -> 162;37`, `92;39 -> 162;39`.
 - Line jump shortcuts: `164;37 -> 36`, `164;39 -> 35`, `165;37 -> 36`, `165;39 -> 35`, plus `162;37 -> 36`, `162;39 -> 35`, `163;37 -> 36`, `163;39 -> 35`.
 
 ## Examples
 
 - "I want Alt+C/V to copy/paste": keep the global `Alt`/`Ctrl` key swap, not shortcut-only copy/paste, unless Qin explicitly says shortcut-only.
+- "Caps Lock should switch Chinese/English": map Caps Lock to Left Shift (`20 -> 160`) and keep physical Shift normal for uppercase.
 - "Make Start+Arrow move word by word": preserve existing mappings, then map `Win+Left/Right` to `Ctrl+Left/Right` in the active remapper.
 - "Alt should move most left and right": map Alt-arrow line jump and also cover Ctrl-arrow line jump when the global Alt/Ctrl swap is active.
 - "Switch my Start and Fn keys": do not fake this in PowerToys unless a probe proves `Fn` is visible to Windows.
