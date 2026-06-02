@@ -1,6 +1,6 @@
 ---
 name: qin-windows-keyboard-remap
-description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Fn/Ctrl/Start/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
+description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Ctrl/Cmd/Fn/Start/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
 ---
 
 # Qin Windows Keyboard Remap
@@ -9,7 +9,7 @@ Use this as the Windows keyboard-remap baseline. Keyboard labels are not enough;
 
 ## Trigger
 
-Use this skill before Windows keyboard or hotkey changes involving physical keys, modifier keys, arrow keys, `Fn`, Start/Windows key, Alt, Ctrl, PowerToys Keyboard Manager, AutoHotkey, registry scancode maps, vendor remappers, or keyboard firmware tools.
+Use this skill before Windows keyboard or hotkey changes involving physical keys, modifier keys, arrow keys, `Fn`, `Cmd`/Command, Start/Windows key, Alt, Ctrl, PowerToys Keyboard Manager, AutoHotkey, registry scancode maps, vendor remappers, or keyboard firmware tools.
 
 ## Workflow
 
@@ -23,7 +23,7 @@ Use this skill before Windows keyboard or hotkey changes involving physical keys
 ## Guardrails
 
 - `Fn` is often firmware-only and may not be visible to Windows. Do not promise Windows can swap or target physical `Fn` unless a probe, vendor tool, BIOS setting, VIA/QMK, or the keyboard manual proves it emits a visible event.
-- Do not infer key identity from labels such as Start, Fn, Alt, or arrow icons. On Windows, "Start" usually means the Windows key (`LWin`/`RWin`), but keyboard firmware or vendor software can change that.
+- Do not infer key identity from labels such as Cmd, Command, Start, Fn, Alt, or arrow icons. On Windows, `Cmd`/Command or "Start" usually means the Windows key (`LWin`/`RWin`), but keyboard firmware or vendor software can change that.
 - Avoid registry scancode maps or custom AutoHotkey/PowerShell hooks for shortcut-level behavior unless simpler remapper tools cannot do it. Scancode maps are for base key swaps, not reliable modifier+arrow behavior.
 - Do not break common Windows shortcuts such as `Win+Arrow` window snapping unless the user explicitly asks for that behavior to change.
 - If the user says "switch", "swap", or "vice versa", write the mapping pair explicitly before applying it. Ambiguous modifier swaps are high-risk.
@@ -33,14 +33,16 @@ Use this skill before Windows keyboard or hotkey changes involving physical keys
 
 For Qin's current keyboard request, use this interpretation unless Qin corrects it:
 
-- The primary desired swap is physical `Fn` with `Ctrl`.
-- Do not treat Start/Windows key as the same thing as `Fn`. Start/Windows key remaps are only relevant if Qin explicitly asks for Start/Windows behavior.
-- If physical `Fn` is not visible to Windows, do not fake an `Fn`/`Ctrl` swap with `Win`/Start mappings. Route to the keyboard firmware, BIOS setting, vendor keyboard software, VIA/QMK, or manual-confirmed hardware setting.
+- The primary desired swap is physical `Ctrl` with physical `Cmd`/Command.
+- On Windows, physical `Cmd`/Command usually appears as Start/Windows key (`LWin`/`RWin`), but verify with a key-event probe before editing config.
+- Do not treat `Fn` as part of the current request unless Qin explicitly says `Fn`. If `Fn` is mentioned later and is not visible to Windows, route to keyboard firmware, BIOS setting, vendor keyboard software, VIA/QMK, or manual-confirmed hardware setting.
+- If `Cmd`/Command appears as `LWin`/`RWin`, prefer a reversible remapper such as PowerToys Keyboard Manager to swap `Ctrl` with `Win`/Start while preserving unrelated remaps.
 - Word-by-word movement is `Ctrl+Left` and `Ctrl+Right`; only map another shortcut to that after confirming the actual visible source keys.
 - Move to line edges is usually `Home` and `End`; only map `Alt+Left/Right` to that if Qin confirms Alt should move most-left/most-right.
 
 ## Examples
 
+- "Switch my Ctrl and Cmd keys on Windows": inspect whether physical `Cmd` appears as `LWin`/`RWin`; if yes, swap `Ctrl` with that visible Windows key in the active remapper.
 - "Switch my Fn and Ctrl keys on Windows": inspect whether `Fn` is visible first; if not visible, route to firmware/vendor settings instead of a Windows-only remap.
 - "Make Start+Arrow move word by word": preserve existing mappings, then map `Win+Left/Right` to `Ctrl+Left/Right` in the active remapper only if Qin explicitly asks for Start/Windows key behavior.
 - "Alt should move most left and right": clarify whether this means line start/end, then map `Alt+Left/Right` to `Home/End` if confirmed.
