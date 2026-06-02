@@ -40,6 +40,9 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-027`: same size text boxes, uneven input widths, same row numeric inputs, small count inputs
 - `UI-028`: UI update, ugly UI, visual reference, image reference, repeated retries
 - `UI-029`: ultrawide hero, wide desktop, background gutter, cover image, height-fitted media
+- `UI-030`: Unity inspector progress, task queue, background task status, popping UI, changing message size
+- `UI-031`: no reaction, dead slider, inactive control, live scene values, misleading inspector control
+- `UI-032`: stale generated previews, cached results shown as new, loading slots, generated image cache, context remove
 
 ## Problems
 
@@ -259,3 +262,10 @@ Terms: no reaction, dead slider, inactive control, live scene values, misleading
 Problem: A control sits inside a live-edit row beside values that immediately affect the current view, but that control only changes later generation data or hidden config, so dragging it appears broken.
 Solution: Keep live-edit rows limited to controls that visibly update the current view. Move deferred generation settings into the generation/preview tool where they can show feedback, or add an explicit apply/regenerate action in that same workflow.
 Validation: Every control in a live row visibly changes the current view when edited; deferred settings only appear where the user can preview, apply, or regenerate their effect.
+
+### UI-032 Generated Preview Grids Must Not Reuse Stale Cache As New Results
+
+Terms: stale generated previews, cached results shown as new, loading slots, generated image cache, context remove, right-click remove.
+Problem: A generation action immediately shows old cached/database images, so users cannot tell whether the current request is still running or if those images came from the new provider run.
+Solution: Clear visible candidates when generation starts, show fixed loading slots for the expected result count, load new candidate tiles only after the provider output/cache manifest exists, and keep cache deletion inside the generated item context menu.
+Validation: Starting generation shows only loading placeholders, successful completion replaces them with newly loaded cache files, and each generated tile supports right-click open/remove without a persistent visible delete button.
