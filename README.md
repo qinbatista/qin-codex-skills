@@ -72,4 +72,4 @@ Primary global Unity C# skill for this user's projects. Use for Unity C# tasks a
 
 ### [`qin-windows-keyboard-remap`](./qin-windows-keyboard-remap/)
 
-Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Start/Fn/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
+Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Fn/Ctrl/Start/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.

@@ -1,6 +1,6 @@
 ---
 name: qin-windows-keyboard-remap
-description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Start/Fn/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
+description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Fn/Ctrl/Start/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
 ---
 
 # Qin Windows Keyboard Remap
@@ -31,14 +31,16 @@ Use this skill before Windows keyboard or hotkey changes involving physical keys
 
 ## Known Qin Case
 
-For the Start/Fn/Alt/Arrow request, use this interpretation unless Qin corrects it:
+For Qin's current keyboard request, use this interpretation unless Qin corrects it:
 
-- Word-by-word movement: map `Win+Left` and `Win+Right` to `Ctrl+Left` and `Ctrl+Right`.
-- Move to line edges: map `Alt+Left` and `Alt+Right` to `Home` and `End` when Qin says Alt should move most-left/most-right.
-- Moving Windows window-snapping behavior onto physical `Fn+Arrow` is only possible if `Fn+Arrow` produces a visible shortcut or the keyboard firmware/vendor tool supports that remap. If it is firmware-only, explain that Windows cannot directly assign `Win+Arrow` to physical `Fn+Arrow`.
+- The primary desired swap is physical `Fn` with `Ctrl`.
+- Do not treat Start/Windows key as the same thing as `Fn`. Start/Windows key remaps are only relevant if Qin explicitly asks for Start/Windows behavior.
+- If physical `Fn` is not visible to Windows, do not fake an `Fn`/`Ctrl` swap with `Win`/Start mappings. Route to the keyboard firmware, BIOS setting, vendor keyboard software, VIA/QMK, or manual-confirmed hardware setting.
+- Word-by-word movement is `Ctrl+Left` and `Ctrl+Right`; only map another shortcut to that after confirming the actual visible source keys.
+- Move to line edges is usually `Home` and `End`; only map `Alt+Left/Right` to that if Qin confirms Alt should move most-left/most-right.
 
 ## Examples
 
-- "Switch my Start and Fn keys on Windows": inspect whether `Fn` is visible first; if not visible, route to firmware/vendor settings instead of a Windows-only remap.
-- "Make Start+Arrow move word by word": preserve existing mappings, then map `Win+Left/Right` to `Ctrl+Left/Right` in the active remapper.
+- "Switch my Fn and Ctrl keys on Windows": inspect whether `Fn` is visible first; if not visible, route to firmware/vendor settings instead of a Windows-only remap.
+- "Make Start+Arrow move word by word": preserve existing mappings, then map `Win+Left/Right` to `Ctrl+Left/Right` in the active remapper only if Qin explicitly asks for Start/Windows key behavior.
 - "Alt should move most left and right": clarify whether this means line start/end, then map `Alt+Left/Right` to `Home/End` if confirmed.
