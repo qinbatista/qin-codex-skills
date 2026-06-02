@@ -1,3 +1,3 @@
 interface:
   display_name: "Qin Windows Keyboard Remap"
-  short_description: "Guardrails for Qin's Windows Alt/Ctrl, Caps Lock, Start arrow, Fn, and line-jump remaps"
+  short_description: "Guardrails for Qin's Windows Alt/Ctrl, Caps Lock, Chinese IME, Start arrow, Fn, and line-jump remaps"
