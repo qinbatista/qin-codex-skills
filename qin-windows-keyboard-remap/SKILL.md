@@ -1,6 +1,6 @@
 ---
 name: qin-windows-keyboard-remap
-description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Ctrl/Cmd/Fn/Start/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
+description: Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Alt/Ctrl/Start/Fn/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.
 ---
 
 # Qin Windows Keyboard Remap
@@ -9,7 +9,7 @@ Use this as the Windows keyboard-remap baseline. Keyboard labels are not enough;
 
 ## Trigger
 
-Use this skill before Windows keyboard or hotkey changes involving physical keys, modifier keys, arrow keys, `Fn`, `Cmd`/Command, Start/Windows key, Alt, Ctrl, PowerToys Keyboard Manager, AutoHotkey, registry scancode maps, vendor remappers, or keyboard firmware tools.
+Use this skill before Windows keyboard or hotkey changes involving physical keys, modifier keys, arrow keys, `Fn`, Start/Windows key, Alt, Ctrl, PowerToys Keyboard Manager, AutoHotkey, registry scancode maps, vendor remappers, or keyboard firmware tools.
 
 ## Workflow
 
@@ -31,18 +31,23 @@ Use this skill before Windows keyboard or hotkey changes involving physical keys
 
 ## Known Qin Case
 
-For Qin's current keyboard request, use this interpretation unless Qin corrects it:
+For Qin's current Windows keyboard preference, use this interpretation unless Qin corrects it:
 
-- The primary desired swap is physical `Ctrl` with physical `Cmd`/Command.
-- On Windows, physical `Cmd`/Command usually appears as Start/Windows key (`LWin`/`RWin`), but verify with a key-event probe before editing config.
-- Do not treat `Fn` as part of the current request unless Qin explicitly says `Fn`. If `Fn` is mentioned later and is not visible to Windows, route to keyboard firmware, BIOS setting, vendor keyboard software, VIA/QMK, or manual-confirmed hardware setting.
-- If `Cmd`/Command appears as `LWin`/`RWin`, prefer a reversible remapper such as PowerToys Keyboard Manager to swap `Ctrl` with `Win`/Start while preserving unrelated remaps.
-- Word-by-word movement is `Ctrl+Left` and `Ctrl+Right`; only map another shortcut to that after confirming the actual visible source keys.
-- Move to line edges is usually `Home` and `End`; only map `Alt+Left/Right` to that if Qin confirms Alt should move most-left/most-right.
+- Global key swap: physical `Alt` and physical `Ctrl` should be switched on both left and right sides, so physical `Alt+C` and `Alt+V` behave as copy/paste.
+- Word-by-word movement: physical Start/Windows key plus left/right arrow should act like `Ctrl+Left` and `Ctrl+Right`.
+- Line jump: the Alt-function arrow behavior should go to line start/end, meaning `Alt+Left`/`Alt+Right` should become `Home`/`End`. Because Qin also wants global `Alt`/`Ctrl` swapped, include both `Alt+Arrow` and `Ctrl+Arrow` line-jump shortcut mappings when using PowerToys so the behavior survives remap order.
+- Do not try to switch Start with physical `Fn` unless Qin explicitly asks again and a key-event probe proves `Fn` is visible to Windows. If `Fn` is not visible, route to keyboard firmware, BIOS setting, vendor keyboard software, VIA/QMK, or manual-confirmed hardware setting.
+- Do not replace the global `Alt`/`Ctrl` key swap with shortcut-only copy/paste mappings unless Qin explicitly asks to remove the key swap.
+
+PowerToys key codes for the current preference:
+
+- Key swaps: `164 -> 162`, `162 -> 164`, `165 -> 163`, `163 -> 165`.
+- Word jump shortcuts: `91;37 -> 162;37`, `91;39 -> 162;39`, `92;37 -> 162;37`, `92;39 -> 162;39`.
+- Line jump shortcuts: `164;37 -> 36`, `164;39 -> 35`, `165;37 -> 36`, `165;39 -> 35`, plus `162;37 -> 36`, `162;39 -> 35`, `163;37 -> 36`, `163;39 -> 35`.
 
 ## Examples
 
-- "Switch my Ctrl and Cmd keys on Windows": inspect whether physical `Cmd` appears as `LWin`/`RWin`; if yes, swap `Ctrl` with that visible Windows key in the active remapper.
-- "Switch my Fn and Ctrl keys on Windows": inspect whether `Fn` is visible first; if not visible, route to firmware/vendor settings instead of a Windows-only remap.
-- "Make Start+Arrow move word by word": preserve existing mappings, then map `Win+Left/Right` to `Ctrl+Left/Right` in the active remapper only if Qin explicitly asks for Start/Windows key behavior.
-- "Alt should move most left and right": clarify whether this means line start/end, then map `Alt+Left/Right` to `Home/End` if confirmed.
+- "I want Alt+C/V to copy/paste": keep the global `Alt`/`Ctrl` key swap, not shortcut-only copy/paste, unless Qin explicitly says shortcut-only.
+- "Make Start+Arrow move word by word": preserve existing mappings, then map `Win+Left/Right` to `Ctrl+Left/Right` in the active remapper.
+- "Alt should move most left and right": map Alt-arrow line jump and also cover Ctrl-arrow line jump when the global Alt/Ctrl swap is active.
+- "Switch my Start and Fn keys": do not fake this in PowerToys unless a probe proves `Fn` is visible to Windows.
