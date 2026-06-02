@@ -69,3 +69,7 @@ Cross-project UI review and optimization baseline for browser, app, Unity Editor
 ### [`qin-unity-csharp-minimal-style`](./qin-unity-csharp-minimal-style/)
 
 Primary global Unity C# skill for this user's projects. Use for Unity C# tasks across projects whenever Codex creates, edits, refactors, formats, reviews, debugs, explains, or optimizes MonoBehaviours, ScriptableObjects, managers, gameplay systems, or other runtime C# code. This is the shared default Unity C# style unless a tighter repo or user instruction overrides it.
+
+### [`qin-windows-keyboard-remap`](./qin-windows-keyboard-remap/)
+
+Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Start/Fn/Alt/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.

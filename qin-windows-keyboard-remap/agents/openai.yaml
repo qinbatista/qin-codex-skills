@@ -1,0 +1,3 @@
+interface:
+  display_name: "Qin Windows Keyboard Remap"
+  short_description: "Guardrails for Windows keyboard remaps, PowerToys, Fn, Start, Alt, and arrow keys"
