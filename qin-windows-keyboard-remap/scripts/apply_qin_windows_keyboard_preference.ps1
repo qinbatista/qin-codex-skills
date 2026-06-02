@@ -76,6 +76,13 @@ function Backup-File {
     $backupPath
 }
 
+function Get-WinUserLanguageEntries {
+    $languageList = Get-WinUserLanguageList
+    for ($i = 0; $i -lt $languageList.Count; $i++) {
+        $languageList[$i]
+    }
+}
+
 function Enable-KeyboardManager {
     param([Parameter(Mandatory)][string]$SettingsPath, [Parameter(Mandatory)][string]$Stamp)
     if (-not (Test-Path -LiteralPath $SettingsPath)) {
@@ -115,20 +122,27 @@ function Enable-KeyboardManager {
     Write-Output "Settings backup: $backupPath"
 }
 
-function Set-ChineseOnlyLanguageList {
-    $current = Get-WinUserLanguageList
+function Set-EnglishDefaultChineseLanguageList {
+    $current = @(Get-WinUserLanguageEntries)
     $chinese = $current | Where-Object { $_.LanguageTag -eq 'zh-Hans-CN' } | Select-Object -First 1
 
+    $newList = New-WinUserLanguageList -Language 'en-US'
     if ($null -eq $chinese) {
-        $newList = New-WinUserLanguageList -Language 'zh-Hans-CN'
+        [void]$newList.Add((New-WinUserLanguageList -Language 'zh-Hans-CN')[0])
     }
     else {
-        $newList = New-Object 'System.Collections.Generic.List[Microsoft.InternationalSettings.Commands.WinUserLanguage]'
         [void]$newList.Add($chinese)
     }
 
     Set-WinUserLanguageList -LanguageList $newList -Force
-    Write-Output "Set Windows user language list to zh-Hans-CN only"
+    Set-WinDefaultInputMethodOverride -InputTip '0409:00000409'
+
+    $languageBar = Get-WinLanguageBarOption
+    Set-WinLanguageBarOption -UseLegacyLanguageBar:$languageBar.IsLegacyLanguageBar
+
+    Write-Output 'Set Windows user language list to en-US first and zh-Hans-CN second'
+    Write-Output 'Set default input method override to English (United States) - US'
+    Write-Output 'Disabled per-app input method memory while preserving current language bar visibility'
 }
 
 function Find-KeyboardManagerEngine {
@@ -184,7 +198,7 @@ if ($CheckOnly) {
     Write-Output "Desired Keyboard Manager config:"
     Write-Output $desiredJson
     if (-not $SkipLanguageList) {
-        Get-WinUserLanguageList | ForEach-Object {
+        Get-WinUserLanguageEntries | ForEach-Object {
             Write-Output "Current language: $($_.LanguageTag) tips=$($_.InputMethodTips -join ',')"
         }
     }
@@ -203,7 +217,7 @@ if ($configBackup) {
 Enable-KeyboardManager -SettingsPath $settingsPath -Stamp $stamp
 
 if (-not $SkipLanguageList) {
-    Set-ChineseOnlyLanguageList
+    Set-EnglishDefaultChineseLanguageList
 }
 
 if (-not $NoRestart) {
