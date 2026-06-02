@@ -122,26 +122,34 @@ function Enable-KeyboardManager {
     Write-Output "Settings backup: $backupPath"
 }
 
-function Set-EnglishDefaultChineseLanguageList {
+function Set-ChineseImeEnglishDefaultInput {
     $current = @(Get-WinUserLanguageEntries)
     $chinese = $current | Where-Object { $_.LanguageTag -eq 'zh-Hans-CN' } | Select-Object -First 1
 
-    $newList = New-WinUserLanguageList -Language 'en-US'
     if ($null -eq $chinese) {
-        [void]$newList.Add((New-WinUserLanguageList -Language 'zh-Hans-CN')[0])
+        $newList = New-WinUserLanguageList -Language 'zh-Hans-CN'
     }
     else {
+        $newList = New-Object 'System.Collections.Generic.List[Microsoft.InternationalSettings.Commands.WinUserLanguage]'
         [void]$newList.Add($chinese)
     }
 
+    $pinyinTip = '0804:{81D4E9C9-1D3B-41BC-9E6C-4B40BF79E35E}{FA550B04-5AD7-411F-A5AC-CA038EC515D7}'
     Set-WinUserLanguageList -LanguageList $newList -Force
-    Set-WinDefaultInputMethodOverride -InputTip '0409:00000409'
+    Set-WinDefaultInputMethodOverride -InputTip $pinyinTip
+
+    New-Item -ItemType Directory -Force -Path 'HKCU:\Software\Microsoft\InputMethod\Settings\CHS' | Out-Null
+    New-ItemProperty -Path 'HKCU:\Software\Microsoft\InputMethod\Settings\CHS' -Name 'Default Mode' -PropertyType DWord -Value 1 -Force | Out-Null
+
+    New-Item -ItemType Directory -Force -Path 'HKCU:\Software\Microsoft\IME\15.0\IMETC' | Out-Null
+    New-ItemProperty -Path 'HKCU:\Software\Microsoft\IME\15.0\IMETC' -Name 'Default Input Mode' -PropertyType DWord -Value 1 -Force | Out-Null
 
     $languageBar = Get-WinLanguageBarOption
     Set-WinLanguageBarOption -UseLegacyLanguageBar:$languageBar.IsLegacyLanguageBar
 
-    Write-Output 'Set Windows user language list to en-US first and zh-Hans-CN second'
-    Write-Output 'Set default input method override to English (United States) - US'
+    Write-Output 'Set Windows user language list to zh-Hans-CN only'
+    Write-Output 'Set default input method override to Microsoft Pinyin'
+    Write-Output 'Set Microsoft Pinyin internal default mode to English/alphanumeric'
     Write-Output 'Disabled per-app input method memory while preserving current language bar visibility'
 }
 
@@ -217,7 +225,7 @@ if ($configBackup) {
 Enable-KeyboardManager -SettingsPath $settingsPath -Stamp $stamp
 
 if (-not $SkipLanguageList) {
-    Set-EnglishDefaultChineseLanguageList
+    Set-ChineseImeEnglishDefaultInput
 }
 
 if (-not $NoRestart) {
