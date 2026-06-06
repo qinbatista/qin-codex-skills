@@ -1,6 +1,7 @@
 param(
     [switch]$CheckOnly,
     [switch]$SkipLanguageList,
+    [switch]$SkipStartupEntry,
     [switch]$NoRestart
 )
 
@@ -103,23 +104,50 @@ function Enable-KeyboardManager {
         $settings | Add-Member -NotePropertyName enabled -NotePropertyValue ([pscustomobject]@{})
     }
 
+    $changed = $false
+    $startupProperty = $settings.PSObject.Properties['startup']
+    if ($null -eq $startupProperty) {
+        $settings | Add-Member -NotePropertyName startup -NotePropertyValue $true
+        $changed = $true
+    }
+    elseif ($startupProperty.Value -ne $true) {
+        $settings.startup = $true
+        $changed = $true
+    }
+
     $keyboardManagerProperty = $settings.enabled.PSObject.Properties['Keyboard Manager']
     if ($null -ne $keyboardManagerProperty) {
-        if ($keyboardManagerProperty.Value -eq $true) {
-            Write-Output 'Keyboard Manager is already enabled in settings.json'
-            return
+        if ($keyboardManagerProperty.Value -ne $true) {
+            $settings.enabled.'Keyboard Manager' = $true
+            $changed = $true
         }
-
-        $settings.enabled.'Keyboard Manager' = $true
     }
     else {
         $settings.enabled | Add-Member -NotePropertyName 'Keyboard Manager' -NotePropertyValue $true
+        $changed = $true
+    }
+
+    if (-not $changed) {
+        Write-Output 'PowerToys startup and Keyboard Manager are already enabled in settings.json'
+            return
     }
 
     $backupPath = Backup-File -Path $SettingsPath -Stamp $Stamp
     Write-TextFileSafely -Path $SettingsPath -Content (ConvertTo-CompactJson -Value $settings)
-    Write-Output "Enabled Keyboard Manager in settings.json"
+    Write-Output 'Enabled PowerToys startup and Keyboard Manager in settings.json'
     Write-Output "Settings backup: $backupPath"
+}
+
+function Install-StartupRunEntry {
+    param([Parameter(Mandatory)][string]$ScriptPath)
+
+    $runPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $name = 'QinWindowsKeyboardPreferenceOnLogon'
+    $value = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ScriptPath`""
+
+    New-Item -Path $runPath -Force | Out-Null
+    New-ItemProperty -Path $runPath -Name $name -PropertyType String -Value $value -Force | Out-Null
+    Write-Output "Installed startup Run entry: $name"
 }
 
 function Set-ChineseImeEnglishDefaultInput {
@@ -210,6 +238,11 @@ if ($CheckOnly) {
             Write-Output "Current language: $($_.LanguageTag) tips=$($_.InputMethodTips -join ',')"
         }
     }
+
+    $runEntry = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'QinWindowsKeyboardPreferenceOnLogon' -ErrorAction SilentlyContinue
+    if ($runEntry) {
+        Write-Output "Current startup Run entry: $($runEntry.QinWindowsKeyboardPreferenceOnLogon)"
+    }
     return
 }
 
@@ -223,6 +256,10 @@ if ($configBackup) {
 }
 
 Enable-KeyboardManager -SettingsPath $settingsPath -Stamp $stamp
+
+if (-not $SkipStartupEntry) {
+    Install-StartupRunEntry -ScriptPath $PSCommandPath
+}
 
 if (-not $SkipLanguageList) {
     Set-ChineseImeEnglishDefaultInput

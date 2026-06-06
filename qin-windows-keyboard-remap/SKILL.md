@@ -38,6 +38,7 @@ For Qin's current Windows keyboard preference, use this interpretation unless Qi
 - Line jump: the Alt-function arrow behavior should go to line start/end, meaning `Alt+Left`/`Alt+Right` should become `Home`/`End`. Because Qin also wants global `Alt`/`Ctrl` swapped, include both `Alt+Arrow` and `Ctrl+Arrow` line-jump shortcut mappings when using PowerToys so the behavior survives remap order.
 - Windows input language preference: keep only the Chinese Windows input language (`zh-Hans-CN`) with Microsoft Pinyin as the default input method, but make the Chinese IME start internally in English/alphanumeric mode. Qin means "English default inside Chinese input", not a separate `en-US` Windows input entry.
 - Caps Lock preference: physical Caps Lock should act as momentary Left Shift (`Caps Lock -> Left Shift`) so tapping Caps Lock can toggle Chinese/English inside the active Chinese IME when that IME uses tapped Shift for the toggle, while held physical Shift still behaves as uppercase.
+- Persistence preference: keep PowerToys startup enabled and install a per-user startup Run entry named `QinWindowsKeyboardPreferenceOnLogon` that reruns the portable setup script at sign-in. This prevents Keyboard Manager being left off after restart or after PowerToys rewrites settings.
 - Do not try to switch Start with physical `Fn` unless Qin explicitly asks again and a key-event probe proves `Fn` is visible to Windows. If `Fn` is not visible, route to keyboard firmware, BIOS setting, vendor keyboard software, VIA/QMK, or manual-confirmed hardware setting.
 - Do not replace the global `Alt`/`Ctrl` key swap with shortcut-only copy/paste mappings unless Qin explicitly asks to remove the key swap.
 
@@ -56,9 +57,9 @@ To apply Qin's current preference on another Windows PC, run the bundled script 
 powershell -ExecutionPolicy Bypass -File scripts\apply_qin_windows_keyboard_preference.ps1
 ```
 
-The script backs up existing PowerToys Keyboard Manager config, writes the exact current mapping, enables Keyboard Manager when `settings.json` exists, keeps only the Chinese Windows input language, sets Microsoft Pinyin to English/alphanumeric mode by default internally, disables per-app input memory, and restarts the Keyboard Manager engine when it can find PowerToys.
+The script backs up existing PowerToys Keyboard Manager config, writes the exact current mapping, enables PowerToys startup and Keyboard Manager when `settings.json` exists, installs the `QinWindowsKeyboardPreferenceOnLogon` per-user startup Run entry, keeps only the Chinese Windows input language, sets Microsoft Pinyin to English/alphanumeric mode by default internally, disables per-app input memory, and restarts the Keyboard Manager engine when it can find PowerToys.
 
-Use `-CheckOnly` to inspect without changing files. Use `-SkipLanguageList` if the PC should keep its existing Windows input languages.
+Use `-CheckOnly` to inspect without changing files. Use `-SkipLanguageList` if the PC should keep its existing Windows input languages. Use `-SkipStartupEntry` if the PC should not install the sign-in repair entry.
 
 ## Examples
 
@@ -66,5 +67,6 @@ Use `-CheckOnly` to inspect without changing files. Use `-SkipLanguageList` if t
 - "English default inside Chinese input": keep only `zh-Hans-CN`, set Microsoft Pinyin as the default input method, set `Default Mode=1` and `Default Input Mode=1`, and turn off per-app input memory.
 - "Caps Lock should switch Chinese/English": map Caps Lock to Left Shift (`20 -> 160`) and keep physical Shift normal for uppercase; Chinese/English toggling should happen inside the Chinese IME.
 - "Make Start+Arrow move word by word": preserve existing mappings, then map `Win+Left/Right` to `Ctrl+Left/Right` in the active remapper.
+- "Keep it working after restart": enable PowerToys startup, enable Keyboard Manager, and install/update the `QinWindowsKeyboardPreferenceOnLogon` Run entry.
 - "Alt should move most left and right": map Alt-arrow line jump and also cover Ctrl-arrow line jump when the global Alt/Ctrl swap is active.
 - "Switch my Start and Fn keys": do not fake this in PowerToys unless a probe proves `Fn` is visible to Windows.
