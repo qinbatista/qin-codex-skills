@@ -6,14 +6,6 @@ This repository stores global skill source files only. Do not copy the repositor
 
 ## Skills
 
-### [`awesome-design-md`](./awesome-design-md/)
-
-Use when the user asks for DESIGN.md files, design-md references, brand/UI style documents, Google Stitch-style design system markdown, or wants UI generated in the style of a known product from VoltAgent/awesome-design-md. Provides bundled DESIGN.md references for many brands and developer/product websites.
-
-### [`qin-bom-names-samples-data`](./qin-bom-names-samples-data/)
-
-Use when the user says "BOM names samples data" or asks for reusable MuseAI BOM-name sample circled images, default BOM-name testing samples, or Fabric/Trims/Labels/Artwork circle-image assets with BOM result JSON for agent testing.
-
 ### [`qin-codex-auth-swithc`](./qin-codex-auth-swithc/)
 
 Inspect and switch saved Codex ChatGPT auth profiles under `~/.codex`. Use when the user wants to find `auth*.json` files, identify which account each file belongs to, review the latest locally observed Codex usage or rate-limit snapshot for each account, and switch the active profile by copying one saved auth file onto `auth.json` without deleting anything.
@@ -22,13 +14,21 @@ Inspect and switch saved Codex ChatGPT auth profiles under `~/.codex`. Use when 
 
 Sync Qin's user global Codex skills with the GitHub repository qin-codex-skills. Use before reading, using, creating, editing, or updating global skills under ~/.codex/skills, and after any global-skill edit so the saved skill code is pushed to GitHub without placing .git metadata inside ~/.codex/skills.
 
+### [`qin-destiny`](./qin-destiny/)
+
+Use when the user asks for Zi Wei Dou Shu / 紫微斗数 birth-chart work, including 排盘, 命盘, 十二宫, 命宫, 身宫, 四化, 大限, 流年, or requests that Zi Wei Dou Shu calculations be cross-validated.
+
 ### [`qin-done-means-tested`](./qin-done-means-tested/)
 
-Mandatory final verification skill. Use for any coding, website, UI, script, automation, refactor, bug fix, content update, or file-edit task before claiming the work is done. Always run the most relevant test, preview, build, lint, screenshot, or validation step available, and clearly report what was tested or what could not be tested.
+Mandatory final verification and reporting skill. Use for any coding, website, UI, script, automation, refactor, bug fix, content update, or file-edit task before claiming the work is done. Always run the most relevant test, preview, build, lint, screenshot, or validation step available, and clearly report what changed, what was tested, what passed or failed, and any remaining state.
 
 ### [`qin-easy-code-spark`](./qin-easy-code-spark/)
 
 Prefer GPT-5.3-Codex-Spark for obvious, bounded, low-risk coding work when Codex has a model-selection or allowed delegation surface available. Use when the expected implementation, review, cleanup, or verification path is clear from the request or nearby code, even if the task is more than a tiny edit; avoid using it for unclear debugging, architecture, multi-system changes, high-risk migrations, or tasks that require deeper reasoning.
+
+### [`qin-git-push-safety`](./qin-git-push-safety/)
+
+Use before any Git push, release publish, PR branch publish, or user request to push changes. Enforce Qin's push workflow by checking status, fetching remote code, pulling before push, integrating remote changes without overwriting unrelated work, resolving merge conflicts deliberately, verifying the result, and only then pushing.
 
 ### [`qin-image-editing-workflow`](./qin-image-editing-workflow/)
 
@@ -37,10 +37,6 @@ Global image workflow rule. Use whenever a task needs to edit, generate, composi
 ### [`qin-karpathy-guidelines`](./qin-karpathy-guidelines/)
 
 Behavioral coding guardrails to reduce wrong assumptions, overcomplication, and unrelated edits. Use for non-trivial coding, debugging, refactoring, implementation, and review work across languages before making changes so Codex surfaces assumptions, prefers the simplest viable solution, keeps edits surgical, and defines verifiable success criteria.
-
-### [`qin-mokozoo-project-workflow`](./qin-mokozoo-project-workflow/)
-
-Shared workflow rules for MokoZoo and MokoWorld repositories. Use for any task in repos, paths, branches, deployments, assets, websites, apps, or files whose names include MokoZoo, MOKOZOO, Mokozoo, MokoWorld, or MokoWorld.AI, including `Docker-Mokozoo` and `MokoWorld.AI`; before updates, check applicable global skills and any MokoZoo-related global skills such as the image workflow, then apply the relevant ones.
 
 ### [`qin-prompt-creating`](./qin-prompt-creating/)
 
@@ -54,10 +50,6 @@ Use for Python writing and formatting tasks across projects when Codex generates
 
 Optimize an existing Codex skill or prompt-driven instruction layer from concrete failure evidence, pre-use review, or finalization checks. Use when a skill, retry/check prompt, agent instruction block, or other instruction-driven workflow mostly works but should be tightened without changing the underlying job. Scan peer skills first when relevant, merge duplicate requirements into one clear rule, prefer the smallest prompt-first fix when the issue lives in the instruction layer, and verify behavior after the change.
 
-### [`qin-sync-figma-ui`](./qin-sync-figma-ui/)
-
-Use when Qin says "sync figma", "sync UI to Figma", "update Figma from current website", "publish the Figma UI baseline", or asks to refresh Mokozoo Figma boards from the current Docker-Mokozoo code. Runs the local fast screenshot-to-Figma workflow, preserves version history, publishes from the generated queue instead of reading Figma for structure, and verifies professional layer names, IDs, versions, and selectable image layers.
-
 ### [`qin-test-pdf-report`](./qin-test-pdf-report/)
 
 Generate a visual PDF report for testing, QA, validation, verification, checks, regressions, audits, review evidence, and reviewable result reporting. Use when the user asks for testing, asks to see a PDF report, wants a visual report, wants a report artifact, wants QA or validation evidence, wants proof with screenshots or tables, or when a project requires result reporting in a clearer form than plain text. Prefer screenshots, images, tables, metrics, and concise status blocks over text-heavy summaries, and return the PDF path instead of a long text report.
@@ -69,7 +61,3 @@ Cross-project UI review and optimization baseline for browser, app, Unity Editor
 ### [`qin-unity-csharp-minimal-style`](./qin-unity-csharp-minimal-style/)
 
 Primary global Unity C# skill for this user's projects. Use for Unity C# tasks across projects whenever Codex creates, edits, refactors, formats, reviews, debugs, explains, or optimizes MonoBehaviours, ScriptableObjects, managers, gameplay systems, or other runtime C# code. This is the shared default Unity C# style unless a tighter repo or user instruction overrides it.
-
-### [`qin-windows-keyboard-remap`](./qin-windows-keyboard-remap/)
-
-Use when Qin asks Codex to inspect, change, troubleshoot, or document Windows keyboard behavior, key swaps, hotkeys, input languages, Chinese IME switching, PowerToys Keyboard Manager settings, AutoHotkey hooks, registry scancode maps, vendor keyboard tools, or Alt/Ctrl/Start/Fn/CapsLock/Arrow remaps. Apply before editing Windows keyboard config or writing helper scripts so Codex verifies what keys are actually visible to Windows, preserves existing remaps, cleans up failed attempts, and states when physical testing is required.

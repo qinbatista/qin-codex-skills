@@ -36,7 +36,8 @@ prompt = f"""
 6. Treat user examples, bad outputs, and edge cases as test evidence first. Do not copy them into the prompt as literal case rules unless the example itself is the reusable requirement.
 7. For function prompts, always use an explicit `Purpose:` block followed by a `Rules:` block. Do not start with a persona or role sentence such as `You are...`.
 8. Make the output schema the contract. When the schema already shows the object, list, keys, and field names, avoid extra format warnings such as `do not return a list`, `top-level key`, or `do not add fields`. If the caller uses OpenAI JSON mode, write `Output JSON format must be:` so the prompt satisfies the API without verbose JSON warnings.
-9. Include only rules that materially shape the output direction or prevent a plausible wrong interpretation.
+9. Include only rules that materially shape the requested output direction or prevent a plausible wrong interpretation.
+10. When the user asks to handle case A, write prompt guidance for case A only; do not add negative rules about unrelated cases B/C/D unless the user mentioned them or the output contract requires them.
 
 ## Existing Prompt Optimization
 
@@ -50,6 +51,7 @@ Then rewrite it into the matching pattern and keep the top-level structure as `P
 Optimization rules:
 
 - Remove duplicate, vague, obvious, or tiny rules.
+- Remove unrequested sibling-case warnings such as `do not handle B/C/D` when the user only asked for case A.
 - Keep only constraints that change the model's direction, evidence source, audience, format, or allowed content.
 - Keep the final prompt shorter than the original unless the original is missing a necessary purpose, schema, or hard constraint.
 - Preserve valid JSON schemas and fix f-string JSON escaping.
@@ -133,6 +135,7 @@ Good rules change what the model should choose, include, exclude, or prioritize:
 
 Do not add obvious rules that merely restate the base task or normal quality expectations:
 
+- Do not add negative rules for sibling cases the user did not mention.
 - Do not say an image must match the user's description.
 - Do not say to create the requested image.
 - Do not add generic failure-prevention rules such as no pure black image, no pure white image, or no blank image unless the user explicitly asked for that constraint.
