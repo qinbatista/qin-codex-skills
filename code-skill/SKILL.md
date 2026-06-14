@@ -11,6 +11,10 @@ Use this as the single merged code skill. It contains the former code-related ru
 
 Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
 
+## Internal Route Selection
+
+This skill contains multiple code routes. Do not apply every route to every task. Choose only the route required by the current request and artifact: prompt generation, general coding approach, Python, Unity C#, Spark-eligible small code, or a combination. Always keep the shared coding approach, then load or apply only the relevant language/task section. State skipped routes only when the choice affects the result.
+
 ## Merged From
 
 This one skill replaces the former code-related global skills:

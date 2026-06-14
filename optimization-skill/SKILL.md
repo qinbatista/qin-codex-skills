@@ -17,6 +17,10 @@ Reusable resources that are meant to become part of a skill belong inside that t
 - `references/` for reusable instructions, API notes, schemas, checklists, or long workflow details
 - `assets/` for templates, sample files, fixtures, or reusable media
 
+## Internal Route Selection
+
+This skill supports several optimization routes. Do not optimize every listed workflow type. Choose the route that matches the repeated behavior: tighten instructions, move long stable details into `references/`, convert deterministic steps into `scripts/`, add reusable `assets/`, or leave the skill unchanged when optimization is not justified. If code is needed, use `code-skill`; if only wording or references are needed, do not invent a script.
+
 ## Trigger
 
 - The user explicitly asks to optimize a skill, fixed process, prompt workflow, or repeated Codex behavior into local files or scripts.

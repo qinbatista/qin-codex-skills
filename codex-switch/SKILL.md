@@ -9,6 +9,10 @@ description: Inspect, manage, and switch local Codex auth profiles under `~/.cod
 
 Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
 
+## Internal Route Selection
+
+This skill covers several local auth-profile routes. Do not run every route automatically. Choose the narrowest route that matches the user request: list profiles, show live usage, switch an existing profile, refresh/login and back up a profile, save the current `auth.json`, or import an auth file. Use live probes only when current usage matters, and ask for confirmation before any route that copies a profile onto `auth.json`.
+
 ## Trigger
 
 Use this skill when the user wants to inspect, switch, refresh, re-login, back up, or restore local Codex ChatGPT auth profiles under `~/.codex`, especially files like `auth.json` and `auth_work.json`.

@@ -11,6 +11,10 @@ Use this as the single testing and reporting skill. It merges completion verific
 
 Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
 
+## Internal Route Selection
+
+This skill covers many evidence types and report layouts. Do not run every test type or force every report shape. Choose the smallest real test and report layout that proves the user's requested behavior: code/API/CLI, UI/browser, image, document/PDF, comparison, or mixed. Every passing case still needs real `Input`, `Used`, `Output`, and `Why Pass` evidence.
+
 ## Core Rule
 
 Do not finish because the edit is written. Prove the work with a real executable test and package the evidence in a report when the work is code-related, user-facing, visual, or explicitly requested as testing/QA.

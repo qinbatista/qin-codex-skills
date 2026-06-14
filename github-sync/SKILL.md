@@ -9,6 +9,10 @@ description: Sync, commit, and push Qin's user global Codex skills with the GitH
 
 Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
 
+## Internal Route Selection
+
+This skill includes multiple sync routes. Do not run every command in the helper list. Choose the route required by the current state: `sync` for normal before/after global-skill work, `status` for a dry-run preview, `preuse` for read-only inspection, `pull` only when accepting remote changes, and `push` only when local changes should be published. Always keep the public-safety checks relevant to the route.
+
 ## Trigger
 
 Use this skill for global Codex skill synchronization and GitHub publishing:

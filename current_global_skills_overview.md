@@ -38,6 +38,7 @@ mindmap
 - Verification work enters through `verify-skill`.
 - Real tests and report artifacts sit under `test-skill`.
 - Auth and GitHub mirror maintenance sit under Management.
+- Each skill may contain multiple internal routes; choose only the route needed for the current request instead of running every listed case.
 
 ## Current Notes
 

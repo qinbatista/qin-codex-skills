@@ -11,6 +11,10 @@ Use this as the verification router. It decides what must be checked, what evide
 
 Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
 
+## Internal Route Selection
+
+This skill is a verification router with multiple routes. Do not run every route for every task. Select only the route that matches the artifact and requested outcome: UI verification, local script/process verification, code behavior, skill/instruction verification, generated artifact review, or a mixed route. Load only the relevant reference files and specialized checks for that route.
+
 ## Core Rule
 
 Verify the user's actual outcome, not just the method. A check is only useful when it answers: "Does the thing now work, look, read, or behave the way the user asked?"
