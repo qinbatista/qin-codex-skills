@@ -262,7 +262,7 @@ def skill_category(skill_name, description):
     text = f"{skill_name} {description}".lower()
     if skill_name == "code-skill":
         return "Code"
-    if skill_name in {"github-sync", "qin-codex-auth-swithc"} or "github" in text or "auth" in text:
+    if skill_name in {"github-sync", "codex-switch"} or "github" in text or "auth" in text:
         return "Management"
     if skill_name == "qin-skill-optimization":
         return "Generation"

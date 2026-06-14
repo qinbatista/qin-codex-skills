@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Switch"
+  short_description: "Switch local Codex auth profiles safely"
+  default_prompt: "Use $codex-switch to inspect saved local Codex auth profiles, show their latest local usage snapshot, and switch auth.json only after I confirm."

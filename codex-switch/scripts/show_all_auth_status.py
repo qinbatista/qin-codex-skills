@@ -22,7 +22,7 @@ def build_parser():
     parser.add_argument(
         "selector",
         nargs="?",
-        help="Optional auth selector to switch to before showing status, for example auth_qin.json",
+        help="Optional auth selector to switch to before showing status, for example auth_work.json",
     )
     return parser
 
