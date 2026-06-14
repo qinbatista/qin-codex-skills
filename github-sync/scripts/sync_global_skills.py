@@ -422,11 +422,11 @@ def build_readme(skill_paths):
         "",
         "Codex skill source and routing overview.",
         "",
+        *build_skill_summary_table(primary_rows, language="en"),
+        "",
         "### Skill Map",
         "",
         *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
-        "",
-        *build_skill_details(primary_rows, language="en"),
         "",
         *build_support_skill_details(rows, language="en"),
         "",
@@ -436,13 +436,13 @@ def build_readme(skill_paths):
         "",
         "语言: [English](#english) | [中文](#zh)",
         "",
-        "这是 Qin 的全局 Codex skills 公开镜像和路由说明。下面先展示主 skill 图，再逐个说明每个 skill 具体包含哪些能力。",
+        "这是全局 Codex skills 的公开镜像和路由说明。下面先列出每个 skill 的具体能力，再展示主 skill 图。",
+        "",
+        *build_skill_summary_table(primary_rows, language="zh"),
         "",
         "### 技能图",
         "",
         *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
-        "",
-        *build_skill_details(primary_rows, language="zh"),
         "",
         *build_support_skill_details(rows, language="zh"),
     ]
@@ -508,6 +508,29 @@ def short_description(description):
         return first_use_split if first_use_split.endswith(".") else f"{first_use_split}."
     first_sentence = description.split(".", 1)[0].strip()
     return f"{first_sentence}." if first_sentence else "No description provided."
+
+
+def inline_contents(skill_name, language="en"):
+    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
+    return "<br>".join(f"**{content_name}**: {content_description}" for content_name, content_description in contents_map.get(skill_name, []))
+
+
+def build_skill_summary_table(rows, language="en"):
+    category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
+    title = "### Skill Contents At A Glance" if language == "en" else "### Skill 内容一览"
+    lines = [
+        title,
+        "",
+    ]
+    for row in rows:
+        category, skill_name = row[:2]
+        folder_name = row[3] if len(row) > 3 else skill_name
+        skill_link = f"[`{skill_name}`](./{folder_name}/)"
+        lines.extend([f"#### {skill_link} · {category_labels.get(category, category)}", ""])
+        for content_name, content_description in (CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS).get(skill_name, []):
+            lines.append(f"- **{content_name}**: {content_description}")
+        lines.append("")
+    return lines
 
 
 def build_skill_graph(rows, language="en"):
@@ -623,6 +646,8 @@ def build_overview(skill_paths):
         "",
         "## English",
         "",
+        *build_skill_summary_table(primary_rows, language="en"),
+        "",
         *build_skill_graph(primary_rows, language="en"),
         "",
         f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
@@ -636,6 +661,8 @@ def build_overview(skill_paths):
         "## 中文",
         "",
         "语言: [English](#english) | [中文](#zh)",
+        "",
+        *build_skill_summary_table(primary_rows, language="zh"),
         "",
         *build_skill_graph(primary_rows, language="zh"),
         "",
