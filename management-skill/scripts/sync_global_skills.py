@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
-DEFAULT_STATE_FILE = Path.home() / ".codex" / "state" / "github-sync.json"
+DEFAULT_STATE_FILE = Path.home() / ".codex" / "state" / "management-skill-sync.json"
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
 *.pyc
@@ -85,7 +85,7 @@ SECRET_VALUE_PATTERNS = (
 )
 CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
 PRIMARY_SKILL_ORDER = ["code-skill", "test-skill", "verify-skill", "optimization-skill", "workflow-skill", "management-skill"]
-SUPPORT_SKILL_NAMES = {"codex-switch", "github-sync"}
+SUPPORT_SKILL_NAMES = set()
 CATEGORY_LABEL_WIDTH = 28
 SKILL_LABEL_WIDTH = 24
 CATEGORY_LABELS = {
@@ -114,9 +114,7 @@ SKILL_SUMMARIES = {
     "optimization-skill": "Turns stable repeated workflows into reusable local scripts, references, or assets when that saves tokens.",
     "verify-skill": "Checks UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
     "test-skill": "Runs real executable checks and produces evidence-rich PDF reports.",
-    "management-skill": "Routes Codex profile management and global skill GitHub sync through the right support skill.",
-    "codex-switch": "Manages local Codex auth profiles and account switching without exposing private auth data.",
-    "github-sync": "Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.",
+    "management-skill": "Routes Codex profile management and global skill GitHub sync through its internal management routes.",
 }
 CHINESE_SKILL_SUMMARIES = {
     "workflow-skill": "统一控制 Codex 任务拆分、目标检查、skill 路由、循环验证和最终证据。",
@@ -125,8 +123,6 @@ CHINESE_SKILL_SUMMARIES = {
     "verify-skill": "检查 UI、脚本、生成物、skill 和工作流是否真的满足用户要求。",
     "test-skill": "执行真实测试，并生成带输入、方法、输出和通过原因的 PDF 报告。",
     "management-skill": "统一管理 Codex 本地账号/Profile 操作，以及全局 skill 的 GitHub 同步。",
-    "codex-switch": "管理本地 Codex auth profile 和账号切换，同时避免暴露私密 auth 数据。",
-    "github-sync": "把全局 Codex skill 安全同步、提交并推送到公开 GitHub 镜像。",
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
@@ -171,23 +167,6 @@ SKILL_CONTENTS = {
         ("GitHub Sync", "Global skill mirror status, preuse checks, public-safety scan, sync, pull, push, commit, and remote hash verification."),
         ("Privacy-Safe Management", "Auth files, tokens, cookies, profile IDs, raw logs, cache files, and secrets stay local and are never published."),
     ],
-    "codex-switch": [
-        ("List profiles", "Inspect saved local auth profile files."),
-        ("Live usage probes", "Run isolated live checks only when current usage matters."),
-        ("Switch profile", "Copy a confirmed saved profile onto auth.json after explicit confirmation."),
-        ("Refresh/login backup", "Run browser login and save a refreshed profile backup."),
-        ("Save current auth", "Back up the current auth.json under a requested local profile name."),
-        ("Import auth file", "Import a user-supplied auth file into a named local profile."),
-        ("Privacy guardrails", "Never expose or publish tokens, auth files, account IDs, or raw logs."),
-    ],
-    "github-sync": [
-        ("sync", "Normal before/after route for skill work."),
-        ("status", "Dry-run preview of local-to-remote changes."),
-        ("preuse", "Read-only inspection before using or editing skills."),
-        ("pull", "Accept remote changes into local skills."),
-        ("push", "Publish local skill changes to GitHub."),
-        ("public safety scan", "Block auth files, secrets, cache, logs, and generated private artifacts."),
-    ],
 }
 CHINESE_SKILL_CONTENTS = {
     "workflow-skill": [
@@ -231,23 +210,6 @@ CHINESE_SKILL_CONTENTS = {
         ("Codex Switch", "本地 Codex auth profile、已保存 profile 列表、使用快照、登录刷新、profile 备份/导入和确认后的账号切换。"),
         ("GitHub Sync", "全局 skill 镜像状态、preuse 检查、公开安全扫描、sync、pull、push、commit 和远端 hash 验证。"),
         ("隐私安全管理", "auth 文件、token、cookie、profile ID、原始日志、cache 文件和 secret 保持本地，不发布出去。"),
-    ],
-    "codex-switch": [
-        ("列出 profiles", "检查已保存的本地 auth profile 文件。"),
-        ("实时用量探测", "只有当当前用量重要时，才运行隔离的实时检查。"),
-        ("切换 profile", "用户明确确认后，把指定已保存 profile 复制到 auth.json。"),
-        ("刷新/登录备份", "通过浏览器登录刷新，并保存新的 profile 备份。"),
-        ("保存当前 auth", "按用户指定的本地 profile 名备份当前 auth.json。"),
-        ("导入 auth 文件", "把用户提供的 auth 文件导入成命名 profile。"),
-        ("隐私保护", "不暴露或发布 token、auth 文件、account ID 或原始日志。"),
-    ],
-    "github-sync": [
-        ("sync", "全局 skill 工作前后的普通同步路线。"),
-        ("status", "预览本地到远端会发生的变化。"),
-        ("preuse", "使用或编辑 skill 前的只读检查。"),
-        ("pull", "把远端 skill 变化接受到本地。"),
-        ("push", "把本地 skill 变化发布到 GitHub。"),
-        ("公开安全扫描", "阻止 auth 文件、secret、cache、日志和生成的私有 artifact 被发布。"),
     ],
 }
 
@@ -455,7 +417,7 @@ def skill_category(skill_name, description):
         return "Optimization"
     if skill_name == "management-skill":
         return "Management"
-    if skill_name in {"github-sync", "codex-switch"} or "github" in text or "auth" in text:
+    if "github" in text or "auth" in text:
         return "Management"
     if skill_name == "test-skill":
         return "Testing"
@@ -689,7 +651,7 @@ def build_overview(skill_paths):
         "- Repeated fixed workflow optimization enters through `optimization-skill`.",
         "- Verification work enters through `verify-skill`.",
         "- Real tests and report artifacts sit under `test-skill`.",
-        "- Auth and GitHub mirror maintenance enter through `management-skill`, which selects `codex-switch` or `github-sync` internally.",
+        "- Auth and GitHub mirror maintenance enter through `management-skill` internal routes.",
         "- Each skill may contain multiple internal routes; choose only the route needed for the current request instead of running every listed case.",
         "",
         "## Current Notes",

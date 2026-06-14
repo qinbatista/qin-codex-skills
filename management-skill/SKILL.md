@@ -1,11 +1,11 @@
 ---
 name: management-skill
-description: Unified management skill for local Codex account/profile operations and global skill GitHub synchronization. Use when the user asks to manage Codex auth profiles, switch local accounts, inspect profile state, sync global skills, commit or push skill changes, compare local and remote skill state, or run management workflows that should route through codex-switch or github-sync without exposing private data.
+description: Unified management skill for local Codex account/profile operations and global skill GitHub synchronization. Use when the user asks to manage Codex auth profiles, switch local accounts, inspect profile state, sync global skills, commit or push skill changes, compare local and remote skill state, or run management workflows without exposing private data.
 ---
 
 # Management Skill
 
-Use this as the single management entry point. It keeps management tasks aligned with the rest of the skill map and routes to the correct existing management support skill.
+Use this as the single management entry point. It contains the local Codex profile route and the global skill GitHub sync route inside this skill, so those routes are not separate top-level skills.
 
 ## Generated File Placement
 
@@ -13,10 +13,10 @@ Put intermediate files, temporary inputs, cache clones, generated scratch data, 
 
 ## What This Skill Contains
 
-`management-skill` contains two management routes. Choose only the route required by the current request.
+`management-skill` contains two internal management routes. Choose only the route required by the current request.
 
-- **Codex profile route**: use `codex-switch` for local Codex auth profile inspection, saved profile listing, usage snapshot review, refresh/login backup, importing auth files, saving the current auth profile, or switching `auth.json` after explicit confirmation.
-- **Skill GitHub route**: use `github-sync` for global skill preuse checks, status previews, public-safety scans, local/remote comparison, pulling remote skill changes, committing, pushing, and publishing public-safe skill updates to `qinbatista/qin-codex-skills`.
+- **Codex profile route**: inspect local Codex auth profiles, list saved profiles, review usage snapshots, refresh/login backups, import auth files, save the current auth profile, or switch `auth.json` after explicit confirmation. Use `scripts/manage_auth_profiles.py` and `scripts/show_all_auth_status.py`.
+- **Skill GitHub route**: run global skill preuse checks, status previews, public-safety scans, local/remote comparison, pulls, commits, pushes, and public-safe publishing to `qinbatista/qin-codex-skills`. Use `scripts/sync_global_skills.py`.
 
 ## Trigger
 
@@ -32,13 +32,11 @@ Do not use this skill for ordinary coding, UI verification, testing, optimizatio
 
 ## Workflow
 
-1. Classify the request as `codex-switch`, `github-sync`, or mixed management.
-2. Read and follow only the selected support skill:
-   - `codex-switch/SKILL.md` for profile/auth tasks.
-   - `github-sync/SKILL.md` for global skill GitHub mirror tasks.
+1. Classify the request as profile management, GitHub skill sync, or mixed management.
+2. Use only the selected internal route and its script.
 3. For mixed management, run the profile route first only when account/profile state affects the sync operation; otherwise keep the routes separate.
 4. Record concrete evidence: local command input, command/tool used, output state, remote hash or profile result, and privacy constraints.
-5. For skill edits that should be pushed, let `github-sync` run before editing when state is unclear and after verification when the user asked to publish.
+5. For skill edits that should be pushed, run `scripts/sync_global_skills.py` before editing when state is unclear and after verification when the user asked to publish.
 6. Route reports or proof through `test-skill` and `verify-skill` when the workflow changed files, pushed to GitHub, or the user asked for validation.
 
 ## Guardrails
@@ -51,6 +49,17 @@ Do not use this skill for ordinary coding, UI verification, testing, optimizatio
 
 ## Examples
 
-- "切换 Codex 账号" -> use `management-skill`, then `codex-switch`, confirm the target profile, switch only after confirmation, and verify without exposing tokens.
-- "提交我的 skill 到 GitHub" -> use `management-skill`, then `github-sync`, run public-safety checks, push, and verify the remote commit.
-- "看看本地 skill 和 GitHub 是否一致" -> use `management-skill`, then `github-sync status` or `sync` depending on whether updates are allowed.
+- "切换 Codex 账号" -> use the profile route, confirm the target profile, switch only after confirmation, and verify without exposing tokens.
+- "提交我的 skill 到 GitHub" -> use the GitHub sync route, run public-safety checks, push, and verify the remote commit.
+- "看看本地 skill 和 GitHub 是否一致" -> run `scripts/sync_global_skills.py status` or `sync` depending on whether updates are allowed.
+
+## Helper Commands
+
+```bash
+python3 scripts/manage_auth_profiles.py list
+python3 scripts/manage_auth_profiles.py list --live
+python3 scripts/show_all_auth_status.py
+python3 scripts/manage_auth_profiles.py switch <profile> --dry-run
+python3 scripts/sync_global_skills.py status
+python3 scripts/sync_global_skills.py sync --message "Sync global Codex skills"
+```

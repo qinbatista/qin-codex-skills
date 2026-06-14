@@ -54,23 +54,9 @@ Codex skill source and routing overview.
 
 #### [`management-skill`](./management-skill/) · Management / 管理类
 
-- **Big function:** Routes Codex profile management and global skill GitHub sync through the right support skill.
+- **Big function:** Routes Codex profile management and global skill GitHub sync through its internal management routes.
 - **Internal flow:** Codex Switch -> GitHub Sync -> Privacy-Safe Management
 
-
-### Management Support Skill Contents
-
-These are real mirrored skills used by `management-skill`, but they are not shown as separate primary map rows.
-
-#### [`codex-switch`](./codex-switch/)
-
-- **Big function:** Manages local Codex auth profiles and account switching without exposing private auth data.
-- **Internal flow:** List profiles -> Live usage probes -> Switch profile -> Refresh/login backup -> Save current auth -> Import auth file -> Privacy guardrails
-
-#### [`github-sync`](./github-sync/)
-
-- **Big function:** Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.
-- **Internal flow:** sync -> status -> preuse -> pull -> push -> public safety scan
 
 
 <a id="zh"></a>
@@ -113,17 +99,3 @@ These are real mirrored skills used by `management-skill`, but they are not show
 - **大功能：** 统一管理 Codex 本地账号/Profile 操作，以及全局 skill 的 GitHub 同步。
 - **内部流程：** Codex Switch -> GitHub Sync -> 隐私安全管理
 
-
-### 管理支持 Skill 内容
-
-这些也是真实同步到仓库的 skill，由 `management-skill` 调用，但不作为主图里的单独主入口展示。
-
-#### [`codex-switch`](./codex-switch/)
-
-- **大功能：** 管理本地 Codex auth profile 和账号切换，同时避免暴露私密 auth 数据。
-- **内部流程：** 列出 profiles -> 实时用量探测 -> 切换 profile -> 刷新/登录备份 -> 保存当前 auth -> 导入 auth 文件 -> 隐私保护
-
-#### [`github-sync`](./github-sync/)
-
-- **大功能：** 把全局 Codex skill 安全同步、提交并推送到公开 GitHub 镜像。
-- **内部流程：** sync -> status -> preuse -> pull -> push -> 公开安全扫描

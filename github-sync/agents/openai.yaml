@@ -1,4 +1,0 @@
-interface:
-  display_name: "GitHub Sync"
-  short_description: "Safely sync and push global Codex skills"
-  default_prompt: "Use $github-sync to sync my global Codex skills and push public-safe updates to GitHub."

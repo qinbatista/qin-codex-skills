@@ -57,12 +57,12 @@ SCENARIOS = {
         "target_terms": ["reusable", "script"],
         "requires_code_order": True,
     },
-    "github-sync": {
+    "management-github": {
         "expected_route": ["workflow-skill", "management-skill", "verify-skill"],
         "target_terms": ["public-safety", "hash"],
         "requires_code_order": False,
     },
-    "codex-switch": {
+    "management-profile": {
         "expected_route": ["workflow-skill", "management-skill", "verify-skill"],
         "target_terms": ["privacy", "profile"],
         "requires_code_order": False,
