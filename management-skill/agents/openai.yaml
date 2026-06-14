@@ -1,0 +1,4 @@
+interface:
+  display_name: "Management Skill"
+  short_description: "Codex profile and skill sync management"
+  default_prompt: "Use $management-skill to route Codex profile operations or global skill GitHub sync through the right management support skill."

@@ -48,7 +48,7 @@ SCENARIOS = {
         "requires_code_order": False,
     },
     "skill-edit": {
-        "expected_route": ["workflow-skill", "github-sync", "code-skill", "test-skill", "verify-skill", "github-sync"],
+        "expected_route": ["workflow-skill", "management-skill", "code-skill", "test-skill", "verify-skill", "management-skill"],
         "target_terms": ["frontmatter", "sync"],
         "requires_code_order": True,
     },
@@ -58,12 +58,12 @@ SCENARIOS = {
         "requires_code_order": True,
     },
     "github-sync": {
-        "expected_route": ["workflow-skill", "github-sync", "verify-skill"],
+        "expected_route": ["workflow-skill", "management-skill", "verify-skill"],
         "target_terms": ["public-safety", "hash"],
         "requires_code_order": False,
     },
     "codex-switch": {
-        "expected_route": ["workflow-skill", "codex-switch", "verify-skill"],
+        "expected_route": ["workflow-skill", "management-skill", "verify-skill"],
         "target_terms": ["privacy", "profile"],
         "requires_code_order": False,
     },

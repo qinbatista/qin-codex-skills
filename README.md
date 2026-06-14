@@ -5,24 +5,24 @@ Codex skill source and routing overview.
 ## Skill Map
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88}}}%%
 flowchart LR
-  category_Workflow["Workflow / 工作流类"]
-  category_Workflow --> skill_workflow_skill["workflow-skill"]
-  category_Code["Code / 代码类"]
-  category_Code --> skill_code_skill["code-skill"]
-  category_Optimization["Optimization / 优化类"]
-  category_Optimization --> skill_optimization_skill["optimization-skill"]
-  category_Verification["Verification / 验证类"]
-  category_Verification --> skill_verify_skill["verify-skill"]
-  category_Testing["Testing / 测试类"]
-  category_Testing --> skill_test_skill["test-skill"]
-  category_Management["Management / 管理类"]
-  category_Management --> skill_codex_switch["codex-switch"]
-  category_Management --> skill_github_sync["github-sync"]
+  category_Workflow["&emsp;&emsp;&emsp;Workflow / 工作流类&emsp;&emsp;&emsp;"]
+  category_Workflow --> skill_workflow_skill["&emsp;&emsp;&emsp;workflow-skill&emsp;&emsp;&emsp;"]
+  category_Code["&emsp;&emsp;&emsp;&emsp;Code / 代码类&emsp;&emsp;&emsp;&emsp;"]
+  category_Code --> skill_code_skill["&emsp;&emsp;&emsp;&emsp;code-skill&emsp;&emsp;&emsp;&emsp;"]
+  category_Optimization["&emsp;&emsp;Optimization / 优化类&emsp;&emsp;"]
+  category_Optimization --> skill_optimization_skill["&emsp;&emsp;optimization-skill&emsp;&emsp;"]
+  category_Verification["&emsp;&emsp;Verification / 验证类&emsp;&emsp;"]
+  category_Verification --> skill_verify_skill["&emsp;&emsp;&emsp;verify-skill&emsp;&emsp;&emsp;"]
+  category_Testing["&emsp;&emsp;&emsp;Testing / 测试类&emsp;&emsp;&emsp;"]
+  category_Testing --> skill_test_skill["&emsp;&emsp;&emsp;&emsp;test-skill&emsp;&emsp;&emsp;&emsp;"]
+  category_Management["&emsp;&emsp;&emsp;Management / 管理类&emsp;&emsp;&emsp;"]
+  category_Management --> skill_management_skill["&emsp;&emsp;management-skill&emsp;&emsp;"]
   classDef category fill:#2f2f2f,color:#fff,stroke:#555;
   classDef skill fill:#111,color:#fff,stroke:#eee;
   class category_Workflow,category_Code,category_Optimization,category_Verification,category_Testing,category_Management category;
-  class skill_workflow_skill,skill_code_skill,skill_optimization_skill,skill_verify_skill,skill_test_skill,skill_codex_switch,skill_github_sync skill;
+  class skill_workflow_skill,skill_code_skill,skill_optimization_skill,skill_verify_skill,skill_test_skill,skill_management_skill skill;
 ```
 
 ## Skill Details
@@ -95,25 +95,20 @@ Runs real executable checks and produces evidence-rich PDF reports.
 
 ### Management / 管理类
 
-#### [`codex-switch`](./codex-switch/)
+#### [`management-skill`](./management-skill/)
 
-Manages local Codex auth profiles and account switching without exposing private auth data.
+Routes Codex profile management and global skill GitHub sync through the right support skill.
 
-- **List profiles**: Inspect saved local auth profile files.
-- **Live usage probes**: Run isolated live checks only when current usage matters.
-- **Switch profile**: Copy a confirmed saved profile onto auth.json after explicit confirmation.
-- **Refresh/login backup**: Run browser login and save a refreshed profile backup.
-- **Save current auth**: Back up the current auth.json under a requested local profile name.
-- **Import auth file**: Import a user-supplied auth file into a named local profile.
-- **Privacy guardrails**: Never expose or publish tokens, auth files, account IDs, or raw logs.
+- **codex-switch route**: Use the existing codex-switch skill for local Codex auth profiles, profile inspection, backups, imports, and confirmed account switching.
+- **github-sync route**: Use the existing github-sync skill for global skill status, public-safety scan, sync, pull, push, and remote commit verification.
+- **Privacy guardrails**: Never expose auth files, tokens, cookies, profile IDs, raw logs, cache files, or secrets.
+- **Route selection**: Run only the management route needed by the request; do not run account switching and GitHub sync just because both exist.
+- **Evidence**: Record the real local command or tool used, output state, remote hash or profile result, and why it satisfies the request.
 
-#### [`github-sync`](./github-sync/)
 
-Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.
+## Management Support Skills
 
-- **sync**: Normal before/after route for skill work.
-- **status**: Dry-run preview of local-to-remote changes.
-- **preuse**: Read-only inspection before using or editing skills.
-- **pull**: Accept remote changes into local skills.
-- **push**: Publish local skill changes to GitHub.
-- **public safety scan**: Block auth files, secrets, cache, logs, and generated private artifacts.
+These are real mirrored skills used by `management-skill`, but they are not shown as separate primary map rows.
+
+- [`codex-switch`](./codex-switch/): Manages local Codex auth profiles and account switching without exposing private auth data.
+- [`github-sync`](./github-sync/): Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.

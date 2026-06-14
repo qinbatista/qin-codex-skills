@@ -13,7 +13,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-This skill controls a workflow with many possible branches. Do not run every branch. Choose the branch that matches the requested artifact and task type: text, code, Python, Unity C#, UI, image, document/PDF, global skill edit, optimization, GitHub sync, auth/profile switching, or mixed work.
+This skill controls a workflow with many possible branches. Do not run every branch. Choose the branch that matches the requested artifact and task type: text, code, Python, Unity C#, UI, image, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
 
 Read `references/routing-matrix.md` when a task spans multiple artifact types, touches global skills, or the correct route is not obvious from the request.
 
@@ -64,7 +64,7 @@ workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check
 
 For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `test-skill` and `verify-skill` when objective evidence or a report is required.
 
-For global skill creation, deletion, rename, or editing, include `github-sync` before reading/editing and after verification when the user wants the saved skill pushed.
+For global skill creation, deletion, rename, or editing, include `management-skill` before reading/editing and after verification when the user wants the saved skill pushed. The management route then selects `github-sync` for the actual mirror operation.
 
 When a report is generated, every passing row must include `Input`, `Used`, `Output`, and `Why Pass` with real evidence.
 
@@ -89,7 +89,7 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 
 ## Examples
 
-- "Create a new skill and push it" -> decompose, use github-sync, code-skill for scripts, test-skill, verify-skill, then sync.
+- "Create a new skill and push it" -> decompose, use management-skill with the github-sync route, code-skill for scripts, test-skill, verify-skill, then sync.
 - "Fix this Python script" -> decompose, use code-skill, run a real Python input through test-skill, then verify behavior.
 - "Review this UI" -> decompose visual targets, use verify-skill UI route, capture real evidence, and report blockers.
 

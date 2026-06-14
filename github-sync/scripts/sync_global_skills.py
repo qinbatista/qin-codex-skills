@@ -84,6 +84,10 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
 )
 CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
+PRIMARY_SKILL_ORDER = ["workflow-skill", "code-skill", "optimization-skill", "verify-skill", "test-skill", "management-skill"]
+SUPPORT_SKILL_NAMES = {"codex-switch", "github-sync"}
+CATEGORY_LABEL_WIDTH = 28
+SKILL_LABEL_WIDTH = 24
 CATEGORY_LABELS = {
     "Workflow": "Workflow / 工作流类",
     "Code": "Code / 代码类",
@@ -100,6 +104,7 @@ SKILL_SUMMARIES = {
     "optimization-skill": "Turns stable repeated workflows into reusable local scripts, references, or assets when that saves tokens.",
     "verify-skill": "Checks UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
     "test-skill": "Runs real executable checks and produces evidence-rich PDF reports.",
+    "management-skill": "Routes Codex profile management and global skill GitHub sync through the right support skill.",
     "codex-switch": "Manages local Codex auth profiles and account switching without exposing private auth data.",
     "github-sync": "Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.",
 }
@@ -144,6 +149,13 @@ SKILL_BRANCHES = {
         ("Document/PDF evidence", "Render, parse, or inspect documents and PDFs with local tools."),
         ("Comparison/audit reports", "Show before/after, expected/actual, or audit findings with concrete evidence."),
         ("Evidence contract", "Every passing case needs Input, Used, Output, and Why Pass."),
+    ],
+    "management-skill": [
+        ("codex-switch route", "Use the existing codex-switch skill for local Codex auth profiles, profile inspection, backups, imports, and confirmed account switching."),
+        ("github-sync route", "Use the existing github-sync skill for global skill status, public-safety scan, sync, pull, push, and remote commit verification."),
+        ("Privacy guardrails", "Never expose auth files, tokens, cookies, profile IDs, raw logs, cache files, or secrets."),
+        ("Route selection", "Run only the management route needed by the request; do not run account switching and GitHub sync just because both exist."),
+        ("Evidence", "Record the real local command or tool used, output state, remote hash or profile result, and why it satisfies the request."),
     ],
     "codex-switch": [
         ("List profiles", "Inspect saved local auth profile files."),
@@ -322,6 +334,7 @@ def build_readme(skill_paths):
         skill_name = metadata.get("name", skill_path.name)
         description = metadata.get("description", "No description provided.")
         rows.append((skill_category(skill_name, description), skill_name, description, skill_path.name))
+    primary_rows = ordered_primary_rows(rows)
 
     readme_lines = [
         "# qin-codex-skills",
@@ -330,9 +343,11 @@ def build_readme(skill_paths):
         "",
         "## Skill Map",
         "",
-        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in rows]),
+        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows]),
         "",
-        *build_skill_details(rows),
+        *build_skill_details(primary_rows),
+        "",
+        *build_support_skill_details(rows),
     ]
     return "\n".join(readme_lines)
 
@@ -345,6 +360,8 @@ def skill_category(skill_name, description):
         return "Code"
     if skill_name == "optimization-skill":
         return "Optimization"
+    if skill_name == "management-skill":
+        return "Management"
     if skill_name in {"github-sync", "codex-switch"} or "github" in text or "auth" in text:
         return "Management"
     if skill_name == "test-skill":
@@ -372,6 +389,22 @@ def mermaid_label(value):
     return str(value).replace('"', "'")
 
 
+def display_width(value):
+    return sum(2 if ord(character) > 127 else 1 for character in str(value))
+
+
+def padded_label(value, target_width):
+    label = mermaid_label(value)
+    missing_width = max(0, target_width - display_width(label))
+    side_padding = "&emsp;" * max(1, (missing_width + 3) // 4)
+    return f"{side_padding}{label}{side_padding}"
+
+
+def ordered_primary_rows(rows):
+    rows_by_skill = {row[1]: row for row in rows}
+    return [rows_by_skill[skill_name] for skill_name in PRIMARY_SKILL_ORDER if skill_name in rows_by_skill]
+
+
 def short_description(description):
     first_use_split = description.split(". Use ", 1)[0].strip()
     if first_use_split:
@@ -383,6 +416,7 @@ def short_description(description):
 def build_skill_graph(rows):
     lines = [
         "```mermaid",
+        '%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88}}}%%',
         "flowchart LR",
     ]
     category_ids = []
@@ -393,11 +427,11 @@ def build_skill_graph(rows):
             continue
         category_id = f"category_{mermaid_id(category)}"
         category_ids.append(category_id)
-        lines.append(f'  {category_id}["{mermaid_label(CATEGORY_LABELS.get(category, category))}"]')
+        lines.append(f'  {category_id}["{padded_label(CATEGORY_LABELS.get(category, category), CATEGORY_LABEL_WIDTH)}"]')
         for _, skill_name, _ in category_rows:
             skill_id = f"skill_{mermaid_id(skill_name)}"
             skill_ids.append(skill_id)
-            lines.append(f'  {category_id} --> {skill_id}["{mermaid_label(skill_name)}"]')
+            lines.append(f'  {category_id} --> {skill_id}["{padded_label(skill_name, SKILL_LABEL_WIDTH)}"]')
     lines.extend([
         "  classDef category fill:#2f2f2f,color:#fff,stroke:#555;",
         "  classDef skill fill:#111,color:#fff,stroke:#eee;",
@@ -407,6 +441,22 @@ def build_skill_graph(rows):
     if skill_ids:
         lines.append(f"  class {','.join(skill_ids)} skill;")
     lines.append("```")
+    return lines
+
+
+def build_support_skill_details(rows):
+    support_rows = [row for row in rows if row[1] in SUPPORT_SKILL_NAMES]
+    if not support_rows:
+        return []
+    lines = [
+        "## Management Support Skills",
+        "",
+        "These are real mirrored skills used by `management-skill`, but they are not shown as separate primary map rows.",
+        "",
+    ]
+    for _, skill_name, description, folder_name in support_rows:
+        skill_title = f"[`{skill_name}`](./{folder_name}/)"
+        lines.extend([f"- {skill_title}: {SKILL_SUMMARIES.get(skill_name, short_description(description))}"])
     return lines
 
 
@@ -445,15 +495,18 @@ def build_overview(skill_paths):
         category = skill_category(skill_name, description)
         rows.append((category, skill_name, description))
         groups.setdefault(category, []).append(skill_name)
+    primary_rows = ordered_primary_rows(rows)
 
     lines = [
         "# Current Codex Skills",
         "",
-        *build_skill_graph(rows),
+        *build_skill_graph(primary_rows),
         "",
         f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
         "",
-        *build_skill_details(rows),
+        *build_skill_details(primary_rows),
+        "",
+        *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows]),
         "",
         "## Skill List",
         "",
@@ -471,7 +524,7 @@ def build_overview(skill_paths):
         "- Repeated fixed workflow optimization enters through `optimization-skill`.",
         "- Verification work enters through `verify-skill`.",
         "- Real tests and report artifacts sit under `test-skill`.",
-        "- Auth and GitHub mirror maintenance sit under Management.",
+        "- Auth and GitHub mirror maintenance enter through `management-skill`, which selects `codex-switch` or `github-sync` internally.",
         "- Each skill may contain multiple internal routes; choose only the route needed for the current request instead of running every listed case.",
         "",
         "## Current Notes",
