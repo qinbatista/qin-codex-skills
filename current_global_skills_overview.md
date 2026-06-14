@@ -1,7 +1,7 @@
 # Current Codex Skills
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88, "wrappingWidth": 340}}}%%
 flowchart LR
   category_Workflow["&emsp;&emsp;&emsp;Workflow / 工作流类&emsp;&emsp;&emsp;"]
   category_Workflow --> skill_workflow_skill["&emsp;&emsp;&emsp;workflow-skill&emsp;&emsp;&emsp;"]

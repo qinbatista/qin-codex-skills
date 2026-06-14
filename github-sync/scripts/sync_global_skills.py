@@ -416,7 +416,7 @@ def short_description(description):
 def build_skill_graph(rows):
     lines = [
         "```mermaid",
-        '%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88}}}%%',
+        '%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88, "wrappingWidth": 340}}}%%',
         "flowchart LR",
     ]
     category_ids = []
