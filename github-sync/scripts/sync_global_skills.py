@@ -98,6 +98,16 @@ CATEGORY_LABELS = {
     "Management": "Management / 管理类",
     "General": "General / 通用类",
 }
+CHINESE_CATEGORY_LABELS = {
+    "Workflow": "工作流类 / Workflow",
+    "Code": "代码类 / Code",
+    "Optimization": "优化类 / Optimization",
+    "Generation": "生成类 / Generation",
+    "Verification": "验证类 / Verification",
+    "Testing": "测试类 / Testing",
+    "Management": "管理类 / Management",
+    "General": "通用类 / General",
+}
 SKILL_SUMMARIES = {
     "workflow-skill": "Controls task decomposition, goal checks, routing, iteration, and final evidence for Codex requests.",
     "code-skill": "Combines prompt, coding approach, Python, Unity C#, and small-code content.",
@@ -107,6 +117,16 @@ SKILL_SUMMARIES = {
     "management-skill": "Routes Codex profile management and global skill GitHub sync through the right support skill.",
     "codex-switch": "Manages local Codex auth profiles and account switching without exposing private auth data.",
     "github-sync": "Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.",
+}
+CHINESE_SKILL_SUMMARIES = {
+    "workflow-skill": "统一控制 Codex 任务拆分、目标检查、skill 路由、循环验证和最终证据。",
+    "code-skill": "合并 prompt、代码思路、Python、Unity C# 和小代码任务相关内容。",
+    "optimization-skill": "把稳定重复的流程优化成本地脚本、引用资料、资产或模板，用来节省 token 和执行时间。",
+    "verify-skill": "检查 UI、脚本、生成物、skill 和工作流是否真的满足用户要求。",
+    "test-skill": "执行真实测试，并生成带输入、方法、输出和通过原因的 PDF 报告。",
+    "management-skill": "统一管理 Codex 本地账号/Profile 操作，以及全局 skill 的 GitHub 同步。",
+    "codex-switch": "管理本地 Codex auth profile 和账号切换，同时避免暴露私密 auth 数据。",
+    "github-sync": "把全局 Codex skill 安全同步、提交并推送到公开 GitHub 镜像。",
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
@@ -167,6 +187,67 @@ SKILL_CONTENTS = {
         ("pull", "Accept remote changes into local skills."),
         ("push", "Publish local skill changes to GitHub."),
         ("public safety scan", "Block auth files, secrets, cache, logs, and generated private artifacts."),
+    ],
+}
+CHINESE_SKILL_CONTENTS = {
+    "workflow-skill": [
+        ("文本和 Markdown 任务", "文本、Markdown、解释、分类、改写，以及有明确格式要求的内容任务。"),
+        ("代码任务", "代码、Python、Unity C#、prompt-in-code、前端/UI、脚本和可执行行为任务。"),
+        ("视觉和生成物", "图片、UI、浏览器截图、文档、PDF、报告和生成文件任务。"),
+        ("全局 skill 编辑", "创建、合并、重命名、删除、重组或更新全局 Codex skills。"),
+        ("管理任务", "通过 management-skill 处理账号/Profile 切换和全局 skill 的 GitHub 同步。"),
+        ("最终证据报告", "任务需要证明时生成证据 PDF 和完成报告。"),
+    ],
+    "code-skill": [
+        ("Prompt Creating", "只负责 prompt 生成：创建、重写，或把 prompt 嵌入对应文本或代码。"),
+        ("Karpathy Coding Guidelines", "代码思考和实现方式：假设、简单设计、命名、分支和精确修改。"),
+        ("Python Code Checker", "Python 模块、脚本、测试、片段、prompt 变量、格式、契约、错误处理和日志规则。"),
+        ("Unity C# Minimal Style", "Unity MonoBehaviour、ScriptableObject、manager、玩法系统、编辑器脚本、生命周期方法和 Unity C# 风格。"),
+        ("Easy Code Spark", "明显、低风险、小范围的代码任务，可以走 Spark 小任务路线。"),
+    ],
+    "optimization-skill": [
+        ("Skill Optimization", "把固定或重复的 skill 流程优化成本地脚本、引用资料、资产或模板。"),
+        ("官方 skill 合规检查", "检查 skill 结构、frontmatter、触发描述、references、scripts、assets 和 token 使用方式。"),
+        ("本地脚本转换", "把稳定重复的测试、图片、浏览器、电脑控制、报告或生成步骤转成本地可复用代码。"),
+        ("引用资料抽取", "把较长且稳定的说明移到 references/，只在任务需要时加载。"),
+        ("资产和模板", "当可复用 fixture、模板或媒体属于 skill 的一部分时，放进 assets/。"),
+    ],
+    "verify-skill": [
+        ("UI Review", "UI/UX、布局、响应式检查、截图、前端 polish、浏览器状态和 Taste Skill 视觉 QA。"),
+        ("本地脚本验证", "验证优化后的本地脚本和流程，检查 cache 输入、真实输出、重复运行和输出路径。"),
+        ("Skill 验证", "检查 SKILL.md frontmatter、触发说明、引用文件、旧名称清理、路由行为和 skill 结构。"),
+        ("生成物验证", "通过打开、渲染、解析或检查来验证 Markdown、图片、PDF、文档、报告、数据文件和导出物。"),
+        ("PDF 证据检查", "检查生成的 PDF 报告是否包含真实 Input、Used、Output 和 Why Pass。"),
+    ],
+    "test-skill": [
+        ("Done Means Tested", "代码或工作流改完后，必须用具体输入和真实输出跑一个小的真实使用测试。"),
+        ("Test PDF Report", "生成 PDF 报告，写清楚给了什么输入、用了什么命令/工具、得到了什么输出，以及为什么通过。"),
+        ("Code/API/CLI Tests", "真实脚本、命令、CLI 调用、API 调用、本地 handler、stdout、文件、JSON 和返回值。"),
+        ("UI/Browser Tests", "真实页面状态、截图、viewport 尺寸、console/runtime 证据和交互结果。"),
+        ("Image/Document/PDF Tests", "真实输入/输出图片、生成文件、渲染文档、解析 PDF 和 artifact 路径。"),
+        ("Comparison/Audit Reports", "before/after、expected/actual、审计发现，以及带具体 artifact 的 pass/fail 证据。"),
+    ],
+    "management-skill": [
+        ("Codex Switch", "本地 Codex auth profile、已保存 profile 列表、使用快照、登录刷新、profile 备份/导入和确认后的账号切换。"),
+        ("GitHub Sync", "全局 skill 镜像状态、preuse 检查、公开安全扫描、sync、pull、push、commit 和远端 hash 验证。"),
+        ("隐私安全管理", "auth 文件、token、cookie、profile ID、原始日志、cache 文件和 secret 保持本地，不发布出去。"),
+    ],
+    "codex-switch": [
+        ("列出 profiles", "检查已保存的本地 auth profile 文件。"),
+        ("实时用量探测", "只有当当前用量重要时，才运行隔离的实时检查。"),
+        ("切换 profile", "用户明确确认后，把指定已保存 profile 复制到 auth.json。"),
+        ("刷新/登录备份", "通过浏览器登录刷新，并保存新的 profile 备份。"),
+        ("保存当前 auth", "按用户指定的本地 profile 名备份当前 auth.json。"),
+        ("导入 auth 文件", "把用户提供的 auth 文件导入成命名 profile。"),
+        ("隐私保护", "不暴露或发布 token、auth 文件、account ID 或原始日志。"),
+    ],
+    "github-sync": [
+        ("sync", "全局 skill 工作前后的普通同步路线。"),
+        ("status", "预览本地到远端会发生的变化。"),
+        ("preuse", "使用或编辑 skill 前的只读检查。"),
+        ("pull", "把远端 skill 变化接受到本地。"),
+        ("push", "把本地 skill 变化发布到 GitHub。"),
+        ("公开安全扫描", "阻止 auth 文件、secret、cache、日志和生成的私有 artifact 被发布。"),
     ],
 }
 
@@ -333,15 +414,37 @@ def build_readme(skill_paths):
     readme_lines = [
         "# qin-codex-skills",
         "",
+        "Language: [English](#english) | [中文](#zh)",
+        "",
+        '<a id="english"></a>',
+        "",
+        "## English",
+        "",
         "Codex skill source and routing overview.",
         "",
-        "## Skill Map",
+        "### Skill Map",
         "",
-        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows]),
+        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
         "",
-        *build_skill_details(primary_rows),
+        *build_skill_details(primary_rows, language="en"),
         "",
-        *build_support_skill_details(rows),
+        *build_support_skill_details(rows, language="en"),
+        "",
+        '<a id="zh"></a>',
+        "",
+        "## 中文",
+        "",
+        "语言: [English](#english) | [中文](#zh)",
+        "",
+        "这是 Qin 的全局 Codex skills 公开镜像和路由说明。下面先展示主 skill 图，再逐个说明每个 skill 具体包含哪些能力。",
+        "",
+        "### 技能图",
+        "",
+        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
+        "",
+        *build_skill_details(primary_rows, language="zh"),
+        "",
+        *build_support_skill_details(rows, language="zh"),
     ]
     return "\n".join(readme_lines)
 
@@ -407,7 +510,8 @@ def short_description(description):
     return f"{first_sentence}." if first_sentence else "No description provided."
 
 
-def build_skill_graph(rows):
+def build_skill_graph(rows, language="en"):
+    category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
     lines = [
         "```mermaid",
         '%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88, "wrappingWidth": 340}}}%%',
@@ -421,7 +525,7 @@ def build_skill_graph(rows):
             continue
         category_id = f"category_{mermaid_id(category)}"
         category_ids.append(category_id)
-        lines.append(f'  {category_id}["{padded_label(CATEGORY_LABELS.get(category, category), CATEGORY_LABEL_WIDTH)}"]')
+        lines.append(f'  {category_id}["{padded_label(category_labels.get(category, category), CATEGORY_LABEL_WIDTH)}"]')
         for _, skill_name, _ in category_rows:
             skill_id = f"skill_{mermaid_id(skill_name)}"
             skill_ids.append(skill_id)
@@ -438,43 +542,59 @@ def build_skill_graph(rows):
     return lines
 
 
-def build_support_skill_details(rows):
+def build_support_skill_details(rows, language="en"):
     support_rows = [row for row in rows if row[1] in SUPPORT_SKILL_NAMES]
     if not support_rows:
         return []
-    lines = [
-        "## Management Support Skill Contents",
-        "",
-        "These are real mirrored skills used by `management-skill`, but they are not shown as separate primary map rows.",
-        "",
-    ]
+    if language == "zh":
+        summaries = CHINESE_SKILL_SUMMARIES
+        contents_map = CHINESE_SKILL_CONTENTS
+        lines = [
+            "### 管理支持 Skill 内容",
+            "",
+            "这些也是真实同步到仓库的 skill，由 `management-skill` 调用，但不作为主图里的单独主入口展示。",
+            "",
+        ]
+    else:
+        summaries = SKILL_SUMMARIES
+        contents_map = SKILL_CONTENTS
+        lines = [
+            "### Management Support Skill Contents",
+            "",
+            "These are real mirrored skills used by `management-skill`, but they are not shown as separate primary map rows.",
+            "",
+        ]
     for _, skill_name, description, folder_name in support_rows:
         skill_title = f"[`{skill_name}`](./{folder_name}/)"
-        lines.extend([f"### {skill_title}", "", SKILL_SUMMARIES.get(skill_name, short_description(description)), ""])
-        for content_name, content_description in SKILL_CONTENTS.get(skill_name, []):
+        lines.extend([f"#### {skill_title}", "", summaries.get(skill_name, short_description(description)), ""])
+        for content_name, content_description in contents_map.get(skill_name, []):
             lines.append(f"- **{content_name}**: {content_description}")
         lines.append("")
     return lines
 
 
-def build_skill_details(rows):
+def build_skill_details(rows, language="en"):
+    category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
+    summaries = CHINESE_SKILL_SUMMARIES if language == "zh" else SKILL_SUMMARIES
+    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
     lines = [
-        "## Skill Contents",
+        "### 技能内容" if language == "zh" else "### Skill Contents",
         "",
     ]
     for category in CATEGORY_ORDER:
         category_rows = [row for row in rows if row[0] == category]
         if not category_rows:
             continue
-        lines.extend([f"### {CATEGORY_LABELS.get(category, category)}", ""])
+        lines.extend([f"#### {category_labels.get(category, category)}", ""])
         for row in category_rows:
             _, skill_name, description = row[:3]
             folder_name = row[3] if len(row) > 3 else ""
             skill_title = f"[`{skill_name}`](./{folder_name}/)" if folder_name else f"`{skill_name}`"
-            lines.extend([f"#### {skill_title}", "", SKILL_SUMMARIES.get(skill_name, short_description(description)), ""])
-            contents = SKILL_CONTENTS.get(skill_name, [])
+            lines.extend([f"##### {skill_title}", "", summaries.get(skill_name, short_description(description)), ""])
+            contents = contents_map.get(skill_name, [])
             if not contents:
-                lines.extend(["- No fixed content list is defined yet; read the skill body for the concrete capability list.", ""])
+                fallback = "尚未定义固定内容清单；请阅读 skill 正文查看具体能力。" if language == "zh" else "No fixed content list is defined yet; read the skill body for the concrete capability list."
+                lines.extend([f"- {fallback}", ""])
                 continue
             for content_name, content_description in contents:
                 lines.append(f"- **{content_name}**: {content_description}")
@@ -497,13 +617,33 @@ def build_overview(skill_paths):
     lines = [
         "# Current Codex Skills",
         "",
-        *build_skill_graph(primary_rows),
+        "Language: [English](#english) | [中文](#zh)",
+        "",
+        '<a id="english"></a>',
+        "",
+        "## English",
+        "",
+        *build_skill_graph(primary_rows, language="en"),
         "",
         f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
         "",
-        *build_skill_details(primary_rows),
+        *build_skill_details(primary_rows, language="en"),
         "",
-        *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows]),
+        *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="en"),
+        "",
+        '<a id="zh"></a>',
+        "",
+        "## 中文",
+        "",
+        "语言: [English](#english) | [中文](#zh)",
+        "",
+        *build_skill_graph(primary_rows, language="zh"),
+        "",
+        f"生成日期: {time.strftime('%Y-%m-%d', time.localtime())}",
+        "",
+        *build_skill_details(primary_rows, language="zh"),
+        "",
+        *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"),
         "",
         "## Skill List",
         "",
