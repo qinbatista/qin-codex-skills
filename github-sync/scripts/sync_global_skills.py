@@ -83,8 +83,9 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r'"(?:access_token|refresh_token|id_token|session_token|api_key|secret|password)"\s*:\s*"[^"\n]{12,}"', re.IGNORECASE),
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
 )
-CATEGORY_ORDER = ["Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
+CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
 CATEGORY_LABELS = {
+    "Workflow": "Workflow / 工作流类",
     "Code": "Code / 代码类",
     "Optimization": "Optimization / 优化类",
     "Generation": "Generation / 生成类",
@@ -94,6 +95,14 @@ CATEGORY_LABELS = {
     "General": "General / 通用类",
 }
 SKILL_BRANCHES = {
+    "workflow-skill": [
+        ("Task decomposition", "Break the request into ordered task slices before execution."),
+        ("Artifact target map", "Define text, image, code, UI, PDF, skill, GitHub, or management pass targets."),
+        ("Skill routing", "Choose only the relevant production, test, verify, sync, or management route."),
+        ("Code-test-verify spine", "For executable behavior, enforce code-skill -> test-skill -> verify-skill."),
+        ("Completion loop", "Compare evidence against the target map and continue until goals pass or a real blocker appears."),
+        ("Final evidence report", "Keep process detail in the report and keep the final chat concise."),
+    ],
     "code-skill": [
         ("Prompt generation", "Only for creating, rewriting, or embedding prompts."),
         ("Coding approach", "Use for assumptions, smallest viable implementation, and surgical edits."),
@@ -321,6 +330,8 @@ def build_readme(skill_paths):
 
 def skill_category(skill_name, description):
     text = f"{skill_name} {description}".lower()
+    if skill_name == "workflow-skill":
+        return "Workflow"
     if skill_name == "code-skill":
         return "Code"
     if skill_name == "optimization-skill":
