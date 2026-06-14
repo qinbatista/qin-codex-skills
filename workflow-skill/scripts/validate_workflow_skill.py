@@ -76,6 +76,8 @@ SCENARIOS = {
 
 
 REQUIRED_SKILL_TEXT = [
+    "Always-First Rule",
+    "Other skills are executors",
     "Task slices",
     "Artifacts",
     "Pass targets",
@@ -88,6 +90,17 @@ REQUIRED_SKILL_TEXT = [
     "Used",
     "Output",
     "Why Pass",
+]
+
+
+TRACE_SCENARIOS = [
+    "text",
+    "code",
+    "python",
+    "skill-edit",
+    "optimization",
+    "management-github",
+    "mixed",
 ]
 
 
@@ -136,6 +149,44 @@ def ordered(route, ordered_items):
             return False
         indexes.append(route.index(item))
     return indexes == sorted(indexes)
+
+
+def build_execution_trace(scenario, route):
+    trace = [{
+        "step": 1,
+        "scenario": scenario,
+        "skill": "workflow-skill",
+        "role": "controller",
+        "event": "start",
+        "started_by": None,
+    }]
+    for skill in route[1:]:
+        trace.append({
+            "step": len(trace) + 1,
+            "scenario": scenario,
+            "skill": skill,
+            "role": "executor",
+            "event": "execute",
+            "started_by": "workflow-skill",
+        })
+    return trace
+
+
+def validate_execution_trace(trace):
+    failures = []
+    if not trace:
+        return ["trace is empty"]
+    first_event = trace[0]
+    if first_event.get("skill") != "workflow-skill" or first_event.get("role") != "controller":
+        failures.append("first event must be workflow-skill controller start")
+    for event in trace[1:]:
+        if event.get("skill") == "workflow-skill":
+            continue
+        if event.get("role") != "executor":
+            failures.append(f"{event.get('skill')}: non-workflow skill must be an executor")
+        if event.get("started_by") != "workflow-skill":
+            failures.append(f"{event.get('skill')}: executor must be started by workflow-skill")
+    return failures
 
 
 def validate(skill_dir):
@@ -192,6 +243,24 @@ def validate(skill_dir):
         })
         failures.extend(f"{scenario}: {failure}" for failure in scenario_failures)
 
+    trace_results = []
+    for scenario in TRACE_SCENARIOS:
+        row = routes.get(scenario)
+        if not row:
+            failures.append(f"{scenario}: missing route for execution trace")
+            continue
+        trace = build_execution_trace(scenario, row["route"])
+        trace_failures = validate_execution_trace(trace)
+        trace_results.append({
+            "scenario": scenario,
+            "status": "pass" if not trace_failures else "fail",
+            "first_skill": trace[0]["skill"] if trace else "",
+            "executors": [event["skill"] for event in trace[1:]],
+            "trace": trace,
+            "failures": trace_failures,
+        })
+        failures.extend(f"{scenario} trace: {failure}" for failure in trace_failures)
+
     return {
         "skill_dir": str(skill_dir),
         "checked_files": [str(skill_path), str(matrix_path), str(script_path)],
@@ -199,6 +268,7 @@ def validate(skill_dir):
         "passed": len([result for result in results if result["status"] == "pass"]),
         "failed": len([result for result in results if result["status"] == "fail"]),
         "results": results,
+        "trace_results": trace_results,
         "failures": failures,
     }
 
@@ -217,6 +287,9 @@ def main():
     print(f"workflow-skill scenarios: {result['passed']}/{result['scenario_count']} passed")
     for item in result["results"]:
         print(f"- {item['scenario']}: {item['status']} -> {' -> '.join(item['route'])}")
+    print(f"workflow-skill execution traces: {len([item for item in result['trace_results'] if item['status'] == 'pass'])}/{len(result['trace_results'])} passed")
+    for item in result["trace_results"]:
+        print(f"- trace {item['scenario']}: {item['status']} -> first={item['first_skill']}; executors={', '.join(item['executors'])}")
     if result["failures"]:
         print("Failures:", file=sys.stderr)
         for failure in result["failures"]:

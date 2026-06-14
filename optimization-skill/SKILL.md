@@ -1,11 +1,11 @@
 ---
 name: optimization-skill
-description: "Optimize repetitive Codex skills and fixed workflows into reusable local files, scripts, references, or assets that save tokens and execution time. Use when the user explicitly asks to optimize a skill or repeated process into local code/files; when a skill workflow is stable but too verbose; when repeated test, image, browser, computer-control, report, or generation steps can become deterministic Python scripts; or when Codex notices a highly repeated fixed flow that should be made reusable. Must prepare references first, follow code-skill for all code/script work, and verify the optimized workflow with real execution before finishing. Its optimization routes are multi-select: combine every route needed by the repeated workflow."
+description: "Executor skill under workflow-skill for optimization. Use after workflow-skill routes a task into optimizing repetitive Codex skills and fixed workflows into reusable local files, scripts, references, or assets that save tokens and execution time. Use when the user explicitly asks to optimize a skill or repeated process into local code/files; when a skill workflow is stable but too verbose; when repeated test, image, browser, computer-control, report, or generation steps can become deterministic Python scripts; or when Codex notices a highly repeated fixed flow that should be made reusable. Must prepare references first, follow code-skill for all code/script work, and verify the optimized workflow with real execution before finishing. Its optimization routes are multi-select: combine every route needed by the repeated workflow."
 ---
 
 # Optimization Skill
 
-Use this as the optimization skill for turning fixed, repeated Codex workflows into reusable local resources. The main job is to reduce future token use and make repeated work faster without changing the user's intended behavior.
+Use this as the optimization executor selected by `workflow-skill` for turning fixed, repeated Codex workflows into reusable local resources. The main job is to reduce future token use and make repeated work faster without changing the user's intended behavior.
 
 ## Generated File Placement
 

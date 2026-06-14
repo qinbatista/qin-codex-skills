@@ -1,4 +1,4 @@
 interface:
   display_name: "Verify Skill"
-  short_description: "Multi-select verification router"
-  default_prompt: "Use $verify-skill to select every relevant verification route, run real verification, and report the real input, tool or command used, real output, and pass reason."
+  short_description: "Verification executor routed by workflow-skill"
+  default_prompt: "After $workflow-skill routes the task here, use $verify-skill to select every relevant verification route, run real verification, and report the real input, tool or command used, real output, and pass reason."

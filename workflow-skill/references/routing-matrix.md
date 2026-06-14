@@ -1,6 +1,6 @@
 # Workflow Routing Matrix
 
-Use this matrix to choose every branch needed for the current request. These rows are multi-select routes: combine them when the task spans several artifact types, but do not run unrelated rows as a checklist.
+Use this matrix from `workflow-skill` before any worker skill starts. Every row begins with `workflow-skill`; the remaining skills are executors selected by it. These rows are multi-select routes: combine them when the task spans several artifact types, but do not run unrelated rows as a checklist.
 
 | Scenario | Use when | Goal target | Skill route | Evidence |
 |---|---|---|---|---|
@@ -20,7 +20,7 @@ Use this matrix to choose every branch needed for the current request. These row
 
 ## Goal Check Rules
 
-- Every route starts with `workflow-skill`.
+- Every route starts with `workflow-skill`; all later skills are executors.
 - For executable behavior, the order must be `code-skill -> test-skill -> verify-skill`.
 - For global skill work, run `management-skill` before edits and after successful verification when the user asks to push; use its internal GitHub sync route.
 - Passing evidence must include real `Input`, `Used`, `Output`, and `Why Pass` when a report is generated.

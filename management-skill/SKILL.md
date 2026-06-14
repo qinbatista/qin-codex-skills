@@ -1,11 +1,11 @@
 ---
 name: management-skill
-description: "Unified management skill for local Codex account/profile operations and global skill GitHub synchronization. Use when the user asks to manage Codex auth profiles, switch local accounts, inspect profile state, sync global skills, commit or push skill changes, compare local and remote skill state, or run management workflows without exposing private data. Its management routes are multi-select when a request genuinely needs both profile and GitHub sync work."
+description: "Executor skill under workflow-skill for management. Use after workflow-skill routes a task into local Codex account/profile operations or global skill GitHub synchronization. Use when the user asks to manage Codex auth profiles, switch local accounts, inspect profile state, sync global skills, commit or push skill changes, compare local and remote skill state, or run management workflows without exposing private data. Its management routes are multi-select when a request genuinely needs both profile and GitHub sync work."
 ---
 
 # Management Skill
 
-Use this as the single management entry point. It contains the local Codex profile route and the global skill GitHub sync route inside this skill, so those routes are not separate top-level skills.
+Use this as the single management executor selected by `workflow-skill`. It contains the local Codex profile route and the global skill GitHub sync route inside this skill, so those routes are not separate top-level skills.
 
 ## Generated File Placement
 

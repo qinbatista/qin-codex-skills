@@ -84,7 +84,7 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
 )
 CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
-PRIMARY_SKILL_ORDER = ["code-skill", "test-skill", "verify-skill", "optimization-skill", "workflow-skill", "management-skill"]
+PRIMARY_SKILL_ORDER = ["workflow-skill", "code-skill", "test-skill", "verify-skill", "optimization-skill", "management-skill"]
 SUPPORT_SKILL_NAMES = set()
 CATEGORY_LABEL_WIDTH = 28
 SKILL_LABEL_WIDTH = 24
@@ -109,20 +109,20 @@ CHINESE_CATEGORY_LABELS = {
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "workflow-skill": "Controls task decomposition, goal checks, routing, iteration, and final evidence, with multi-select routes for mixed Codex requests.",
-    "code-skill": "Combines prompt, coding approach, Python, Unity C#, and small-code modules, selecting every applicable module for the task.",
-    "optimization-skill": "Turns stable repeated workflows into reusable local scripts, references, or assets, combining optimization routes when that saves tokens.",
-    "verify-skill": "Checks UI, scripts, generated artifacts, skills, and workflows, combining verification routes when the user's requirement spans artifacts.",
-    "test-skill": "Runs real executable checks and produces evidence-rich PDF reports, combining evidence routes when a result spans code, UI, images, documents, or PDFs.",
-    "management-skill": "Routes Codex profile management and global skill GitHub sync, using one or both management routes as required.",
+    "workflow-skill": "Always starts task execution, defines goals, selects executor skills, routes work, iterates, and checks final evidence.",
+    "code-skill": "Executes code work after workflow-skill routes the task, combining prompt, coding approach, Python, Unity C#, and small-code modules.",
+    "optimization-skill": "Executes optimization work after workflow-skill routes the task, turning stable repeated workflows into reusable local scripts, references, or assets.",
+    "verify-skill": "Executes verification after workflow-skill routes the task, checking UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
+    "test-skill": "Executes real tests and evidence reports after workflow-skill routes the task, combining evidence routes across code, UI, images, documents, or PDFs.",
+    "management-skill": "Executes management work after workflow-skill routes the task, covering Codex profiles and global skill GitHub sync.",
 }
 CHINESE_SKILL_SUMMARIES = {
-    "workflow-skill": "统一控制 Codex 任务拆分、目标检查、skill 路由、循环验证和最终证据，遇到混合任务时多选所需路线。",
-    "code-skill": "合并 prompt、代码思路、Python、Unity C# 和小代码模块，按任务需要多选所有适用模块。",
-    "optimization-skill": "把稳定重复的流程优化成本地脚本、引用资料、资产或模板，必要时组合多个优化路线来节省 token 和执行时间。",
-    "verify-skill": "检查 UI、脚本、生成物、skill 和工作流是否满足用户要求，跨类型任务可组合多个验证路线。",
-    "test-skill": "执行真实测试，并生成带输入、方法、输出和通过原因的 PDF 报告，跨代码、UI、图片、文档或 PDF 时组合证据路线。",
-    "management-skill": "统一管理 Codex 本地账号/Profile 操作和全局 skill 的 GitHub 同步，按需要使用一个或两个管理路线。",
+    "workflow-skill": "永远第一个启动任务执行，定义目标、选择执行者 skill、路由工作、循环验证并检查最终证据。",
+    "code-skill": "在 workflow-skill 路由后执行代码工作，组合 prompt、代码思路、Python、Unity C# 和小代码模块。",
+    "optimization-skill": "在 workflow-skill 路由后执行优化工作，把稳定重复流程变成本地脚本、引用资料或资产。",
+    "verify-skill": "在 workflow-skill 路由后执行验证工作，检查 UI、脚本、生成物、skill 和工作流是否满足用户要求。",
+    "test-skill": "在 workflow-skill 路由后执行真实测试和证据报告，跨代码、UI、图片、文档或 PDF 组合证据路线。",
+    "management-skill": "在 workflow-skill 路由后执行管理工作，处理 Codex profiles 和全局 skill 的 GitHub 同步。",
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
@@ -383,7 +383,7 @@ def build_readme(skill_paths, language="en"):
             "",
             *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
             "",
-            "这是全局 Codex skills 的公开镜像和路由说明。顶部先展示主图，下面列每个 skill 的大功能、可多选模块和选择规则。",
+            "这是全局 Codex skills 的公开镜像和路由说明。`workflow-skill` 永远先启动并选择执行者；其他 skill 都是它路由后的执行者。顶部先展示主图，下面列每个 skill 的角色、大功能、可多选模块和选择规则。",
             "",
             *build_skill_summary_table(primary_rows, language="zh"),
             "",
@@ -400,7 +400,7 @@ def build_readme(skill_paths, language="en"):
         "",
         *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
         "",
-        "Codex skill source and multi-select routing overview.",
+        "`workflow-skill` is the always-first controller. Every other primary skill is an executor selected by it. This is the Codex skill source and multi-select routing overview.",
         "",
         *build_skill_summary_table(primary_rows, language="en"),
         "",
@@ -483,16 +483,24 @@ def skill_modules(skill_name, language="en"):
     return "; ".join(module_names)
 
 
+def skill_role(skill_name, language="en"):
+    if language == "zh":
+        return "永远第一启动控制器" if skill_name == "workflow-skill" else "由 workflow-skill 路由启动的执行者"
+    return "Always-first controller" if skill_name == "workflow-skill" else "Executor started by workflow-skill"
+
+
 def skill_summary_lines(skill_name, description, language="en"):
     summaries = CHINESE_SKILL_SUMMARIES if language == "zh" else SKILL_SUMMARIES
     summary = summaries.get(skill_name, short_description(description))
     if language == "zh":
         return [
+            f"- **角色：** {skill_role(skill_name, language)}",
             f"- **大功能：** {summary}",
             f"- **可多选模块：** {skill_modules(skill_name, language)}",
             "- **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。",
         ]
     return [
+        f"- **Role:** {skill_role(skill_name, language)}",
         f"- **Big function:** {summary}",
         f"- **Selectable modules (multi-select):** {skill_modules(skill_name, language)}",
         "- **Selection rule:** Use every module that applies to the task; this is not one-of, and unrelated modules should not run.",
@@ -531,7 +539,8 @@ def build_skill_graph(rows, language="en"):
         skill_ids.append(skill_id)
         content_ids.append(content_id)
         content_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
-        content_label = "<br/>".join([("可多选模块" if language == "zh" else "Multi-select routes"), *[mermaid_label(content_name) for content_name in content_names]])
+        role_label = "永远第一启动控制器" if language == "zh" and skill_name == "workflow-skill" else "执行者路线" if language == "zh" else "Always-first controller" if skill_name == "workflow-skill" else "Executor routes"
+        content_label = "<br/>".join([role_label, ("可多选模块" if language == "zh" else "Multi-select routes"), *[mermaid_label(content_name) for content_name in content_names]])
         lines.append(f'  {skill_id}["{mermaid_label(skill_name)}"] --> {content_id}["{content_label}"]')
     lines.extend([
         "  classDef skill fill:#111,color:#fff,stroke:#eee;",

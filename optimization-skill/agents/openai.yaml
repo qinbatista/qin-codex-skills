@@ -1,4 +1,4 @@
 interface:
   display_name: "Optimization Skill"
-  short_description: "Multi-route workflow optimization"
-  default_prompt: "Use $optimization-skill to select every relevant optimization route, prepare the required references, convert deterministic parts into local scripts or resources when useful, follow code-skill for any code, and verify with real execution."
+  short_description: "Optimization executor routed by workflow-skill"
+  default_prompt: "After $workflow-skill routes the task here, use $optimization-skill to select every relevant optimization route, prepare the required references, convert deterministic parts into local scripts or resources when useful, follow code-skill for any code, and verify with real execution."

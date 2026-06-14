@@ -1,11 +1,17 @@
 ---
 name: workflow-skill
-description: "Global task workflow controller for Codex requests. Use at the start of any user task that needs decomposition, explicit goals, skill routing, code/script/workflow work, testing, verification, iteration to completion, or a final evidence report. It breaks the request into steps, defines artifact-specific pass criteria, routes code work through code-skill before test-skill and verify-skill, loops until the stated goals pass, and keeps process detail in the report instead of the final chat. Its routes are multi-select: combine every skill route needed by the task."
+description: "Always-first global workflow controller for Codex requests. Use for every user task request before any other user/global skill for task work. It decomposes the request, defines explicit goals, selects executor skills, routes code/script/workflow work through code-skill before test-skill and verify-skill, loops until stated goals pass, and keeps process detail in the report instead of the final chat. Its routes are multi-select: combine every executor route needed by the task."
 ---
 
 # Workflow Skill
 
-Use this as the first workflow layer for user tasks. It turns a request into a target map, chooses the relevant skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
+Use this as the mandatory first workflow layer for user tasks. It turns a request into a target map, chooses the relevant executor skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
+
+## Always-First Rule
+
+`workflow-skill` is the entrypoint and controller. Start it before any other user/global skill when executing a task. Other skills are executors selected by `workflow-skill`; they should not be treated as independent first-entry controllers for task work.
+
+For tiny direct answers, keep the target map implicit and lightweight, but the routing decision still belongs to `workflow-skill`.
 
 ## Generated File Placement
 
@@ -13,7 +19,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-This skill controls a workflow with many possible branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, code, Python, Unity C#, UI, image, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
+This skill controls a workflow with many possible executor branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, code, Python, Unity C#, UI, image, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
 
 Read `references/routing-matrix.md` when a task spans multiple artifact types, touches global skills, or the correct route is not obvious from the request.
 
@@ -21,11 +27,11 @@ Use `scripts/validate_workflow_skill.py` only to validate this skill's routing c
 
 ## Trigger
 
-Use this skill as the starting controller for user task requests that require planning, multiple steps, skill routing, testing, verification, iteration, global skill changes, or a final evidence report. For a tiny direct answer, keep the target map implicit and lightweight.
+Use this skill as the starting controller for user task requests before invoking any other user/global skill. For tasks that require planning, multiple steps, skill routing, testing, verification, iteration, global skill changes, or a final evidence report, write the target map explicitly. For a tiny direct answer, keep the target map implicit and lightweight.
 
 ## Workflow
 
-Run the start contract, route the necessary skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
+Start with `workflow-skill`, run the start contract, route the necessary executor skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
 
 ## Start Contract
 
@@ -34,7 +40,7 @@ Before doing the work, write a short target map:
 1. `Task slices`: the ordered pieces of work.
 2. `Artifacts`: what will exist or change, such as text, code, image, UI, PDF, Markdown, skill files, or GitHub state.
 3. `Pass targets`: what observable result proves each artifact is correct.
-4. `Skill route`: the skills needed and the order they must run.
+4. `Skill route`: the skills needed and the order they must run; the first skill must be `workflow-skill`.
 5. `Stop condition`: the exact condition that allows final completion.
 
 Make the pass target match the artifact:
@@ -58,9 +64,9 @@ For code, local scripts, automations, global-skill scripts, website/app work, or
 workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check
 ```
 
-- `code-skill`: write, edit, refactor, or reason about code and helper scripts.
-- `test-skill`: run a small real test with concrete input and real output. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
-- `verify-skill`: compare the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements.
+- `code-skill`: executor for writing, editing, refactoring, or reasoning about code and helper scripts.
+- `test-skill`: executor for small real tests with concrete input and real output. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
+- `verify-skill`: executor for comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements.
 
 For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `test-skill` and `verify-skill` when objective evidence or a report is required.
 
@@ -82,6 +88,7 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 
 ## Guardrails
 
+- Do not start a worker skill before `workflow-skill` for task work.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not replace `test-skill` evidence with a method-only or status-only claim.

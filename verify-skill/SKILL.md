@@ -1,11 +1,11 @@
 ---
 name: verify-skill
-description: "General verification skill for checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, or validate that an optimized local script/process still works. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes. Its verification routes are multi-select: combine every route needed by the artifact."
+description: "Executor skill under workflow-skill for verification. Use after workflow-skill routes work into checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, or validate that an optimized local script/process still works. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes. Its verification routes are multi-select: combine every route needed by the artifact."
 ---
 
 # Verify Skill
 
-Use this as the verification router. It decides what must be checked, what evidence is needed, and which specialized reference should be loaded before accepting work as correct.
+Use this as the verification executor selected by `workflow-skill`. It decides what must be checked, what evidence is needed, and which specialized reference should be loaded before accepting work as correct.
 
 ## Generated File Placement
 

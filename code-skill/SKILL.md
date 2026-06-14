@@ -1,11 +1,11 @@
 ---
 name: code-skill
-description: "Unified code skill for all code-related Codex work. Use for writing, editing, refactoring, debugging, reviewing, optimizing, or explaining code; prompt generation and prompt-in-code work; Python modules, scripts, tests, and snippets; Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; and obvious bounded code tasks that may use Spark when an allowed model route exists. Its internal routes are multi-select: use every route that applies to the task, not a one-of choice."
+description: "Executor skill under workflow-skill for code-related Codex work. Use when workflow-skill routes a task into writing, editing, refactoring, debugging, reviewing, optimizing, or explaining code; prompt generation and prompt-in-code work; Python modules, scripts, tests, and snippets; Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; and obvious bounded code tasks that may use Spark when an allowed model route exists. Its internal routes are multi-select: use every route that applies to the task, not a one-of choice."
 ---
 
 # Code Skill
 
-Use this as the single merged code skill. It replaces the former code-related global skills and routes to all relevant internal branches without loading every detail every time.
+Use this as the single merged code executor selected by `workflow-skill`. It replaces the former code-related global skills and routes to all relevant internal branches without loading every detail every time.
 
 ## Generated File Placement
 
