@@ -364,7 +364,7 @@ def read_skill_metadata(skill_dir):
     return metadata
 
 
-def build_readme(skill_paths):
+def build_readme(skill_paths, language="en"):
     rows = []
     for skill_path in skill_paths:
         metadata = read_skill_metadata(skill_path)
@@ -373,36 +373,38 @@ def build_readme(skill_paths):
         rows.append((skill_category(skill_name, description), skill_name, description, skill_path.name))
     primary_rows = ordered_primary_rows(rows)
 
+    if language == "zh":
+        readme_lines = [
+            "# qin-codex-skills",
+            "",
+            "英文版: [README.md](./README.md)",
+            "",
+            "## 技能图",
+            "",
+            *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
+            "",
+            "这是全局 Codex skills 的公开镜像和路由说明。顶部先展示主图，下面列每个 skill 的大功能和内部流程。",
+            "",
+            *build_skill_summary_table(primary_rows, language="zh"),
+            "",
+            *build_support_skill_details(rows, language="zh"),
+        ]
+        return "\n".join(readme_lines)
+
     readme_lines = [
         "# qin-codex-skills",
         "",
-        "Language: [English](#english) | [中文](#zh)",
+        "Chinese version: [README.zh.md](./README.zh.md)",
         "",
         "## Skill Map",
         "",
         *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
-        "",
-        '<a id="english"></a>',
-        "",
-        "## English",
         "",
         "Codex skill source and routing overview.",
         "",
         *build_skill_summary_table(primary_rows, language="en"),
         "",
         *build_support_skill_details(rows, language="en"),
-        "",
-        '<a id="zh"></a>',
-        "",
-        "## 中文",
-        "",
-        "语言: [English](#english) | [中文](#zh)",
-        "",
-        "这是全局 Codex skills 的公开镜像和路由说明。顶部先展示主图，下面列每个 skill 的大功能和内部流程。",
-        "",
-        *build_skill_summary_table(primary_rows, language="zh"),
-        "",
-        *build_support_skill_details(rows, language="zh"),
     ]
     return "\n".join(readme_lines)
 
@@ -588,7 +590,7 @@ def build_skill_details(rows, language="en"):
     return lines
 
 
-def build_overview(skill_paths):
+def build_overview(skill_paths, language="en"):
     rows = []
     groups = {}
     for skill_path in skill_paths:
@@ -600,18 +602,59 @@ def build_overview(skill_paths):
         groups.setdefault(category, []).append(skill_name)
     primary_rows = ordered_primary_rows(rows)
 
+    if language == "zh":
+        lines = [
+            "# 当前 Codex Skills",
+            "",
+            "英文版: [current_global_skills_overview.md](./current_global_skills_overview.md)",
+            "",
+            "## 技能图",
+            "",
+            *build_skill_graph(primary_rows, language="zh"),
+            "",
+            *build_skill_summary_table(primary_rows, language="zh"),
+            "",
+            f"生成日期: {time.strftime('%Y-%m-%d', time.localtime())}",
+            "",
+            *build_skill_details(primary_rows, language="zh"),
+            "",
+            *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"),
+            "",
+            "## Skill 列表",
+            "",
+            "| 类别 | Skill | 用途 |",
+            "|---|---|---|",
+        ]
+        for category, skill_name, description in rows:
+            lines.append(f"| {CHINESE_CATEGORY_LABELS.get(category, category)} | `{skill_name}` | {description} |")
+        lines.extend([
+            "",
+            "## 结构",
+            "",
+            "- 代码工作进入 `code-skill`。",
+            "- 固定重复流程优化进入 `optimization-skill`。",
+            "- 验证工作进入 `verify-skill`。",
+            "- 真实测试和报告进入 `test-skill`。",
+            "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。",
+            "- 每个 skill 可能包含多个内部路由；只选择当前任务需要的分支。",
+            "",
+            "## 当前说明",
+            "",
+            "- 旧代码类 skill 已合并到 `code-skill`。",
+            "- 旧测试类 skill 已合并到 `test-skill`。",
+            "- UI review 已扩展到 `verify-skill`。",
+            "- 旧图片 workflow skill 已删除。",
+        ])
+        return "\n".join(lines) + "\n"
+
     lines = [
         "# Current Codex Skills",
         "",
-        "Language: [English](#english) | [中文](#zh)",
+        "Chinese version: [current_global_skills_overview.zh.md](./current_global_skills_overview.zh.md)",
         "",
         "## Skill Map",
         "",
         *build_skill_graph(primary_rows, language="en"),
-        "",
-        '<a id="english"></a>',
-        "",
-        "## English",
         "",
         *build_skill_summary_table(primary_rows, language="en"),
         "",
@@ -621,24 +664,10 @@ def build_overview(skill_paths):
         "",
         *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="en"),
         "",
-        '<a id="zh"></a>',
-        "",
-        "## 中文",
-        "",
-        "语言: [English](#english) | [中文](#zh)",
-        "",
-        *build_skill_summary_table(primary_rows, language="zh"),
-        "",
-        f"生成日期: {time.strftime('%Y-%m-%d', time.localtime())}",
-        "",
-        *build_skill_details(primary_rows, language="zh"),
-        "",
-        *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"),
-        "",
         "## Skill List",
         "",
         "| Category | Skill | Purpose |",
-        "|---|---|---|"
+        "|---|---|---|",
     ]
     for category, skill_name, description in rows:
         lines.append(f"| {category} | `{skill_name}` | {description} |")
@@ -659,7 +688,7 @@ def build_overview(skill_paths):
         "- The old code skills were merged into `code-skill`.",
         "- The old testing skills were merged into `test-skill`.",
         "- UI review was broadened into `verify-skill`.",
-        "- The old image workflow skill was deleted."
+        "- The old image workflow skill was deleted.",
     ])
     return "\n".join(lines) + "\n"
 
@@ -739,8 +768,10 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
             path.unlink()
     (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT)
     copied_names = []
-    (repository_dir / "README.md").write_text(build_readme(skill_paths))
-    (repository_dir / "current_global_skills_overview.md").write_text(build_overview(skill_paths))
+    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"))
+    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"))
+    (repository_dir / "current_global_skills_overview.md").write_text(build_overview(skill_paths, language="en"))
+    (repository_dir / "current_global_skills_overview.zh.md").write_text(build_overview(skill_paths, language="zh"))
     for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)
