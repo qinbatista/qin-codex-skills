@@ -1,6 +1,6 @@
 ---
 name: verify-skill
-description: General verification skill for checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, or validate that an optimized local script/process still works. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes.
+description: "General verification skill for checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, or validate that an optimized local script/process still works. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes. Its verification routes are multi-select: combine every route needed by the artifact."
 ---
 
 # Verify Skill
@@ -13,7 +13,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-This skill is a verification router with multiple routes. Do not run every route for every task. Select only the route that matches the artifact and requested outcome: UI verification, local script/process verification, code behavior, skill/instruction verification, generated artifact review, or a mixed route. Load only the relevant reference files and specialized checks for that route.
+This skill is a verification router with multiple routes. Do not run every route for every task. Select every route that matches the artifact and requested outcome, and combine routes when the request spans UI, local script/process, code behavior, skill/instruction, generated artifact, document/report, or mixed work. Load only the relevant reference files and specialized checks for those routes.
 
 ## Trigger
 

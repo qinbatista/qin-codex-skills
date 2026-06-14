@@ -1,4 +1,4 @@
 interface:
   display_name: "Verify Skill"
-  short_description: "Verification router for scripts, workflows, artifacts, and UI"
-  default_prompt: "Use $verify-skill to define the right checks, run real verification, and report the real input, tool or command used, real output, and pass reason."
+  short_description: "Multi-select verification router"
+  default_prompt: "Use $verify-skill to select every relevant verification route, run real verification, and report the real input, tool or command used, real output, and pass reason."

@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Skill"
-  short_description: "Unified code rules"
-  default_prompt: "Use $code-skill to handle this code task with the merged code rules."
+  short_description: "Multi-select unified code rules"
+  default_prompt: "Use $code-skill to handle this code task by selecting every applicable code route, such as prompt, coding approach, Python, Unity C#, or small-code routing."

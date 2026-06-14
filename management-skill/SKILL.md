@@ -1,6 +1,6 @@
 ---
 name: management-skill
-description: Unified management skill for local Codex account/profile operations and global skill GitHub synchronization. Use when the user asks to manage Codex auth profiles, switch local accounts, inspect profile state, sync global skills, commit or push skill changes, compare local and remote skill state, or run management workflows without exposing private data.
+description: "Unified management skill for local Codex account/profile operations and global skill GitHub synchronization. Use when the user asks to manage Codex auth profiles, switch local accounts, inspect profile state, sync global skills, commit or push skill changes, compare local and remote skill state, or run management workflows without exposing private data. Its management routes are multi-select when a request genuinely needs both profile and GitHub sync work."
 ---
 
 # Management Skill
@@ -11,9 +11,9 @@ Use this as the single management entry point. It contains the local Codex profi
 
 Put intermediate files, temporary inputs, cache clones, generated scratch data, logs, previews, and non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Final deliverables go only to the user-requested path or the active workspace `outputs/` directory.
 
-## What This Skill Contains
+## Internal Route Selection
 
-`management-skill` contains two internal management routes. Choose only the route required by the current request.
+`management-skill` contains two internal management routes. Select every route required by the current request. Most requests need one route; mixed account-and-sync work may need both.
 
 - **Codex profile route**: inspect local Codex auth profiles, list saved profiles, review usage snapshots, refresh/login backups, import auth files, save the current auth profile, or switch `auth.json` after explicit confirmation. Use `scripts/manage_auth_profiles.py` and `scripts/show_all_auth_status.py`.
 - **Skill GitHub route**: run global skill preuse checks, status previews, public-safety scans, local/remote comparison, pulls, commits, pushes, and public-safe publishing to `qinbatista/qin-codex-skills`. Use `scripts/sync_global_skills.py`.
@@ -33,7 +33,7 @@ Do not use this skill for ordinary coding, UI verification, testing, optimizatio
 ## Workflow
 
 1. Classify the request as profile management, GitHub skill sync, or mixed management.
-2. Use only the selected internal route and its script.
+2. Use every selected internal route and its script; do not run unrelated management routes.
 3. For mixed management, run the profile route first only when account/profile state affects the sync operation; otherwise keep the routes separate.
 4. Record concrete evidence: local command input, command/tool used, output state, remote hash or profile result, and privacy constraints.
 5. For skill edits that should be pushed, run `scripts/sync_global_skills.py` before editing when state is unclear and after verification when the user asked to publish.

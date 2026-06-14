@@ -1,6 +1,6 @@
 ---
 name: optimization-skill
-description: Optimize repetitive Codex skills and fixed workflows into reusable local files, scripts, references, or assets that save tokens and execution time. Use when the user explicitly asks to optimize a skill or repeated process into local code/files; when a skill workflow is stable but too verbose; when repeated test, image, browser, computer-control, report, or generation steps can become deterministic Python scripts; or when Codex notices a highly repeated fixed flow that should be made reusable. Must prepare references first, follow code-skill for all code/script work, and verify the optimized workflow with real execution before finishing.
+description: "Optimize repetitive Codex skills and fixed workflows into reusable local files, scripts, references, or assets that save tokens and execution time. Use when the user explicitly asks to optimize a skill or repeated process into local code/files; when a skill workflow is stable but too verbose; when repeated test, image, browser, computer-control, report, or generation steps can become deterministic Python scripts; or when Codex notices a highly repeated fixed flow that should be made reusable. Must prepare references first, follow code-skill for all code/script work, and verify the optimized workflow with real execution before finishing. Its optimization routes are multi-select: combine every route needed by the repeated workflow."
 ---
 
 # Optimization Skill
@@ -19,7 +19,7 @@ Reusable resources that are meant to become part of a skill belong inside that t
 
 ## Internal Route Selection
 
-This skill supports several optimization routes. Do not optimize every listed workflow type. Choose the route that matches the repeated behavior: tighten instructions, move long stable details into `references/`, convert deterministic steps into `scripts/`, add reusable `assets/`, or leave the skill unchanged when optimization is not justified. If code is needed, use `code-skill`; if only wording or references are needed, do not invent a script.
+This skill supports several optimization routes. Do not optimize every listed workflow type. Select every route that matches the repeated behavior: tighten instructions, move long stable details into `references/`, convert deterministic steps into `scripts/`, add reusable `assets/`, or leave the skill unchanged when optimization is not justified. These routes can be combined when the workflow needs more than one. If code is needed, use `code-skill`; if only wording or references are needed, do not invent a script.
 
 ## Trigger
 

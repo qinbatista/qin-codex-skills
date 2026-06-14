@@ -1,4 +1,4 @@
 interface:
   display_name: "Test Skill"
-  short_description: "Real tests with input/output PDF evidence"
-  default_prompt: "Use $test-skill to run a real usage test and generate a concise PDF report that shows the real input, tool or command used, real output, and why the observed output passes."
+  short_description: "Multi-route real tests with PDF evidence"
+  default_prompt: "Use $test-skill to select every relevant evidence route, run real usage tests, and generate a concise PDF report that shows the real input, tool or command used, real output, and why the observed output passes."

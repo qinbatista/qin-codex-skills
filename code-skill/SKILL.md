@@ -1,11 +1,11 @@
 ---
 name: code-skill
-description: Unified code skill for all code-related Codex work. Use for writing, editing, refactoring, debugging, reviewing, optimizing, or explaining code; prompt generation and prompt-in-code work; Python modules, scripts, tests, and snippets; Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; and obvious bounded code tasks that may use Spark when an allowed model route exists.
+description: "Unified code skill for all code-related Codex work. Use for writing, editing, refactoring, debugging, reviewing, optimizing, or explaining code; prompt generation and prompt-in-code work; Python modules, scripts, tests, and snippets; Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; and obvious bounded code tasks that may use Spark when an allowed model route exists. Its internal routes are multi-select: use every route that applies to the task, not a one-of choice."
 ---
 
 # Code Skill
 
-Use this as the single merged code skill. It replaces the former code-related global skills and routes to the relevant internal branch without loading every detail every time.
+Use this as the single merged code skill. It replaces the former code-related global skills and routes to all relevant internal branches without loading every detail every time.
 
 ## Generated File Placement
 
@@ -13,7 +13,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-Choose only the route required by the current request and artifact. Do not read every reference for every code task.
+Select every route required by the current request and artifact. This is multi-select, not one-of. Do not read irrelevant references for every code task.
 
 - General implementation, assumptions, smallest viable path, naming, branching, and surgical edits: read `references/coding-approach.md`.
 - Prompt generation, prompt rewriting, prompt embedding, or Python prompt assignments: read `references/prompt-generation.md`.
@@ -21,7 +21,7 @@ Choose only the route required by the current request and artifact. Do not read 
 - Unity C# MonoBehaviours, ScriptableObjects, managers, gameplay systems, editor scripts, or Unity performance work: read `references/unity-csharp-rules.md`.
 - Obvious bounded low-risk code tasks where an allowed model/delegation route exists: read `references/spark-small-code.md`.
 
-When multiple routes apply, read only the relevant references. For example, Python prompt code needs prompt generation plus Python rules; Unity gameplay code needs coding approach plus Unity C# rules.
+When multiple routes apply, use them together and read only those relevant references. For example, Python prompt code needs prompt generation plus Python rules; Unity gameplay code needs coding approach plus Unity C# rules.
 
 ## Trigger
 

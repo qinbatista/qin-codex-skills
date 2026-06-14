@@ -109,20 +109,20 @@ CHINESE_CATEGORY_LABELS = {
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "workflow-skill": "Controls task decomposition, goal checks, routing, iteration, and final evidence for Codex requests.",
-    "code-skill": "Combines prompt, coding approach, Python, Unity C#, and small-code content.",
-    "optimization-skill": "Turns stable repeated workflows into reusable local scripts, references, or assets when that saves tokens.",
-    "verify-skill": "Checks UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
-    "test-skill": "Runs real executable checks and produces evidence-rich PDF reports.",
-    "management-skill": "Routes Codex profile management and global skill GitHub sync through its internal management routes.",
+    "workflow-skill": "Controls task decomposition, goal checks, routing, iteration, and final evidence, with multi-select routes for mixed Codex requests.",
+    "code-skill": "Combines prompt, coding approach, Python, Unity C#, and small-code modules, selecting every applicable module for the task.",
+    "optimization-skill": "Turns stable repeated workflows into reusable local scripts, references, or assets, combining optimization routes when that saves tokens.",
+    "verify-skill": "Checks UI, scripts, generated artifacts, skills, and workflows, combining verification routes when the user's requirement spans artifacts.",
+    "test-skill": "Runs real executable checks and produces evidence-rich PDF reports, combining evidence routes when a result spans code, UI, images, documents, or PDFs.",
+    "management-skill": "Routes Codex profile management and global skill GitHub sync, using one or both management routes as required.",
 }
 CHINESE_SKILL_SUMMARIES = {
-    "workflow-skill": "统一控制 Codex 任务拆分、目标检查、skill 路由、循环验证和最终证据。",
-    "code-skill": "合并 prompt、代码思路、Python、Unity C# 和小代码任务相关内容。",
-    "optimization-skill": "把稳定重复的流程优化成本地脚本、引用资料、资产或模板，用来节省 token 和执行时间。",
-    "verify-skill": "检查 UI、脚本、生成物、skill 和工作流是否真的满足用户要求。",
-    "test-skill": "执行真实测试，并生成带输入、方法、输出和通过原因的 PDF 报告。",
-    "management-skill": "统一管理 Codex 本地账号/Profile 操作，以及全局 skill 的 GitHub 同步。",
+    "workflow-skill": "统一控制 Codex 任务拆分、目标检查、skill 路由、循环验证和最终证据，遇到混合任务时多选所需路线。",
+    "code-skill": "合并 prompt、代码思路、Python、Unity C# 和小代码模块，按任务需要多选所有适用模块。",
+    "optimization-skill": "把稳定重复的流程优化成本地脚本、引用资料、资产或模板，必要时组合多个优化路线来节省 token 和执行时间。",
+    "verify-skill": "检查 UI、脚本、生成物、skill 和工作流是否满足用户要求，跨类型任务可组合多个验证路线。",
+    "test-skill": "执行真实测试，并生成带输入、方法、输出和通过原因的 PDF 报告，跨代码、UI、图片、文档或 PDF 时组合证据路线。",
+    "management-skill": "统一管理 Codex 本地账号/Profile 操作和全局 skill 的 GitHub 同步，按需要使用一个或两个管理路线。",
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
@@ -383,7 +383,7 @@ def build_readme(skill_paths, language="en"):
             "",
             *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
             "",
-            "这是全局 Codex skills 的公开镜像和路由说明。顶部先展示主图，下面列每个 skill 的大功能和内部流程。",
+            "这是全局 Codex skills 的公开镜像和路由说明。顶部先展示主图，下面列每个 skill 的大功能、可多选模块和选择规则。",
             "",
             *build_skill_summary_table(primary_rows, language="zh"),
             "",
@@ -400,7 +400,7 @@ def build_readme(skill_paths, language="en"):
         "",
         *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
         "",
-        "Codex skill source and routing overview.",
+        "Codex skill source and multi-select routing overview.",
         "",
         *build_skill_summary_table(primary_rows, language="en"),
         "",
@@ -475,12 +475,12 @@ def inline_contents(skill_name, language="en"):
     return "<br>".join(f"**{content_name}**: {content_description}" for content_name, content_description in contents_map.get(skill_name, []))
 
 
-def skill_flow(skill_name, language="en"):
+def skill_modules(skill_name, language="en"):
     contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
-    flow_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
-    if not flow_names:
+    module_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
+    if not module_names:
         return "Read the skill body." if language == "en" else "查看 skill 正文。"
-    return " -> ".join(flow_names)
+    return "; ".join(module_names)
 
 
 def skill_summary_lines(skill_name, description, language="en"):
@@ -489,11 +489,13 @@ def skill_summary_lines(skill_name, description, language="en"):
     if language == "zh":
         return [
             f"- **大功能：** {summary}",
-            f"- **内部流程：** {skill_flow(skill_name, language)}",
+            f"- **可多选模块：** {skill_modules(skill_name, language)}",
+            "- **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。",
         ]
     return [
         f"- **Big function:** {summary}",
-        f"- **Internal flow:** {skill_flow(skill_name, language)}",
+        f"- **Selectable modules (multi-select):** {skill_modules(skill_name, language)}",
+        "- **Selection rule:** Use every module that applies to the task; this is not one-of, and unrelated modules should not run.",
     ]
 
 
@@ -529,7 +531,7 @@ def build_skill_graph(rows, language="en"):
         skill_ids.append(skill_id)
         content_ids.append(content_id)
         content_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
-        content_label = "<br/>".join(mermaid_label(content_name) for content_name in content_names)
+        content_label = "<br/>".join([("可多选模块" if language == "zh" else "Multi-select routes"), *[mermaid_label(content_name) for content_name in content_names]])
         lines.append(f'  {skill_id}["{mermaid_label(skill_name)}"] --> {content_id}["{content_label}"]')
     lines.extend([
         "  classDef skill fill:#111,color:#fff,stroke:#eee;",
@@ -636,7 +638,7 @@ def build_overview(skill_paths, language="en"):
             "- 验证工作进入 `verify-skill`。",
             "- 真实测试和报告进入 `test-skill`。",
             "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。",
-            "- 每个 skill 可能包含多个内部路由；只选择当前任务需要的分支。",
+            "- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。",
             "",
             "## 当前说明",
             "",
@@ -681,7 +683,7 @@ def build_overview(skill_paths, language="en"):
         "- Verification work enters through `verify-skill`.",
         "- Real tests and report artifacts sit under `test-skill`.",
         "- Auth and GitHub mirror maintenance enter through `management-skill` internal routes.",
-        "- Each skill may contain multiple internal routes; choose only the route needed for the current request instead of running every listed case.",
+        "- Each skill may contain multiple internal routes; select every route needed for the current request. This is multi-select, not one-of, and unrelated cases should not run.",
         "",
         "## Current Notes",
         "",

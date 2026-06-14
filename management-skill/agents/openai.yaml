@@ -1,4 +1,4 @@
 interface:
   display_name: "Management Skill"
-  short_description: "Codex profile and skill sync management"
-  default_prompt: "Use $management-skill for Codex profile operations or global skill GitHub sync."
+  short_description: "Multi-route Codex management"
+  default_prompt: "Use $management-skill for Codex profile operations, global skill GitHub sync, or both when the request genuinely needs both routes."

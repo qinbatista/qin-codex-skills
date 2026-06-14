@@ -1,6 +1,6 @@
 # Workflow Routing Matrix
 
-Use this matrix to choose only the branch needed for the current request. These rows are alternatives, not a checklist.
+Use this matrix to choose every branch needed for the current request. These rows are multi-select routes: combine them when the task spans several artifact types, but do not run unrelated rows as a checklist.
 
 | Scenario | Use when | Goal target | Skill route | Evidence |
 |---|---|---|---|---|

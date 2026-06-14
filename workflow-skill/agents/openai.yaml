@@ -1,4 +1,4 @@
 interface:
   display_name: "Workflow Skill"
-  short_description: "Plan, route, test, verify, and finish tasks"
-  default_prompt: "Use $workflow-skill to plan the task, route the right skills, verify completion, and report the result."
+  short_description: "Multi-select task workflow controller"
+  default_prompt: "Use $workflow-skill to plan the task, select every required skill route, verify completion, and report the result."
