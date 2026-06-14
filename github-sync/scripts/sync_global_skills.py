@@ -262,7 +262,7 @@ def skill_category(skill_name, description):
     text = f"{skill_name} {description}".lower()
     if skill_name == "code-skill":
         return "Code"
-    if skill_name == "qin-skill-optimization":
+    if skill_name == "optimization-skill":
         return "Optimization"
     if skill_name in {"github-sync", "codex-switch"} or "github" in text or "auth" in text:
         return "Management"
@@ -327,7 +327,7 @@ def build_overview(skill_paths):
         "## Structure",
         "",
         "- Code work enters through `code-skill`.",
-        "- Repeated fixed workflow optimization enters through `qin-skill-optimization`.",
+        "- Repeated fixed workflow optimization enters through `optimization-skill`.",
         "- Verification work enters through `verify-skill`.",
         "- Real tests and report artifacts sit under `test-skill`.",
         "- Auth and GitHub mirror maintenance sit under Management.",

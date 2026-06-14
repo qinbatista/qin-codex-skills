@@ -1,0 +1,4 @@
+interface:
+  display_name: "Optimization Skill"
+  short_description: "Optimize fixed workflows into local scripts"
+  default_prompt: "Use $optimization-skill to identify repeated fixed workflow steps, prepare the required references, convert deterministic parts into local scripts or resources when useful, follow code-skill for any code, and verify with real execution."
