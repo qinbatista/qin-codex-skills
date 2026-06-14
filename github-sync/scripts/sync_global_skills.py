@@ -83,6 +83,67 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r'"(?:access_token|refresh_token|id_token|session_token|api_key|secret|password)"\s*:\s*"[^"\n]{12,}"', re.IGNORECASE),
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
 )
+CATEGORY_ORDER = ["Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
+CATEGORY_LABELS = {
+    "Code": "Code / 代码类",
+    "Optimization": "Optimization / 优化类",
+    "Generation": "Generation / 生成类",
+    "Verification": "Verification / 验证类",
+    "Testing": "Testing / 测试类",
+    "Management": "Management / 管理类",
+    "General": "General / 通用类",
+}
+SKILL_BRANCHES = {
+    "code-skill": [
+        ("Prompt generation", "Only for creating, rewriting, or embedding prompts."),
+        ("Coding approach", "Use for assumptions, smallest viable implementation, and surgical edits."),
+        ("Spark small-task routing", "Use only for obvious bounded low-risk code tasks when an allowed route exists."),
+        ("Python rules", "Use for Python modules, scripts, tests, snippets, and Python prompt assignments."),
+        ("Unity C# rules", "Use for Unity MonoBehaviours, ScriptableObjects, managers, and gameplay systems."),
+        ("Real test/report flow", "After code changes, route real executable evidence through test-skill unless testing is explicitly forbidden."),
+    ],
+    "optimization-skill": [
+        ("Instruction tightening", "Tighten triggers, workflow wording, guardrails, and duplicated requirements."),
+        ("References extraction", "Move long stable context into references/ when it should be loaded only when needed."),
+        ("Script conversion", "Move repeated deterministic steps into scripts/ when it saves tokens and remains testable."),
+        ("Assets/templates", "Store reusable fixtures, templates, or media in assets/ when they are part of the skill."),
+        ("No-op decision", "Leave the skill unchanged when optimization is not justified."),
+        ("Code-skill gate", "Use code-skill before writing or editing helper code."),
+    ],
+    "verify-skill": [
+        ("UI verification", "Use Taste Skill plus the local problem index for visual/UI checks."),
+        ("Local script/process verification", "Run local scripts with concrete cache inputs and inspect outputs."),
+        ("Code behavior verification", "Define the behavior that test-skill must prove with real execution."),
+        ("Skill/instruction verification", "Check frontmatter, triggers, references, paths, old names, and route behavior."),
+        ("Generated artifact review", "Open, render, parse, or inspect generated files and reports."),
+        ("Mixed route", "Combine only the relevant verification routes when the task spans artifacts."),
+    ],
+    "test-skill": [
+        ("Code/API/CLI evidence", "Run real commands, API calls, or scripts and record input, used method, output, and pass reason."),
+        ("UI/browser evidence", "Capture real screenshots, page states, console/runtime evidence, and viewport details."),
+        ("Image evidence", "Use real source/output images and visual artifacts."),
+        ("Document/PDF evidence", "Render, parse, or inspect documents and PDFs with local tools."),
+        ("Comparison/audit reports", "Show before/after, expected/actual, or audit findings with concrete evidence."),
+        ("Evidence contract", "Every passing case needs Input, Used, Output, and Why Pass."),
+    ],
+    "codex-switch": [
+        ("List profiles", "Inspect saved local auth profile files."),
+        ("Live usage probes", "Run isolated live checks only when current usage matters."),
+        ("Switch profile", "Copy a confirmed saved profile onto auth.json after explicit confirmation."),
+        ("Refresh/login backup", "Run browser login and save a refreshed profile backup."),
+        ("Save current auth", "Back up the current auth.json under a requested local profile name."),
+        ("Import auth file", "Import a user-supplied auth file into a named local profile."),
+        ("Privacy guardrails", "Never expose or publish tokens, auth files, account IDs, or raw logs."),
+    ],
+    "github-sync": [
+        ("sync", "Normal before/after route for global skill work."),
+        ("status", "Dry-run preview of local-to-remote changes."),
+        ("preuse", "Read-only inspection before using or editing skills."),
+        ("pull", "Accept remote changes into local global skills."),
+        ("push", "Publish local global-skill changes to GitHub."),
+        ("public safety scan", "Block auth files, secrets, cache, logs, and generated private artifacts."),
+    ],
+}
 
 
 def run_command(command, cwd=None):
@@ -283,6 +344,79 @@ def skill_category(skill_name, description):
     return "General"
 
 
+def mermaid_id(*values):
+    return re.sub(r"[^A-Za-z0-9_]+", "_", "_".join(values)).strip("_")
+
+
+def mermaid_label(value):
+    return str(value).replace('"', "'")
+
+
+def build_skill_graph(rows):
+    lines = [
+        "```mermaid",
+        "flowchart LR",
+        "  root((Global Codex Skills))",
+    ]
+    category_ids = []
+    skill_ids = []
+    branch_ids = []
+    for category in CATEGORY_ORDER:
+        category_rows = [row for row in rows if row[0] == category]
+        if not category_rows:
+            continue
+        category_id = f"category_{mermaid_id(category)}"
+        category_ids.append(category_id)
+        lines.append(f'  root --- {category_id}["{mermaid_label(CATEGORY_LABELS.get(category, category))}"]')
+        for _, skill_name, _ in category_rows:
+            skill_id = f"skill_{mermaid_id(skill_name)}"
+            skill_ids.append(skill_id)
+            lines.append(f'  {category_id} --- {skill_id}["{mermaid_label(skill_name)}"]')
+            for branch_name, _ in SKILL_BRANCHES.get(skill_name, []):
+                branch_id = f"branch_{mermaid_id(skill_name, branch_name)}"
+                branch_ids.append(branch_id)
+                lines.append(f'  {skill_id} --- {branch_id}["{mermaid_label(branch_name)}"]')
+    lines.extend([
+        "  classDef root fill:#000,color:#fff,stroke:#111,stroke-width:2px;",
+        "  classDef category fill:#2f2f2f,color:#fff,stroke:#555;",
+        "  classDef skill fill:#111,color:#fff,stroke:#eee;",
+        "  classDef branch fill:#1f1f1f,color:#fff,stroke:#777;",
+        "  class root root;",
+    ])
+    if category_ids:
+        lines.append(f"  class {','.join(category_ids)} category;")
+    if skill_ids:
+        lines.append(f"  class {','.join(skill_ids)} skill;")
+    if branch_ids:
+        lines.append(f"  class {','.join(branch_ids)} branch;")
+    lines.append("```")
+    return lines
+
+
+def build_branch_explanation(rows):
+    lines = [
+        "## Skill Internal Branches",
+        "",
+        "Each skill may contain multiple internal branches. These are alternatives selected by the current task, not a checklist to run every time.",
+        "",
+    ]
+    for category in CATEGORY_ORDER:
+        category_rows = [row for row in rows if row[0] == category]
+        if not category_rows:
+            continue
+        lines.extend([f"### {CATEGORY_LABELS.get(category, category)}", ""])
+        for _, skill_name, _ in category_rows:
+            lines.extend([f"#### `{skill_name}`", ""])
+            branches = SKILL_BRANCHES.get(skill_name, [])
+            if not branches:
+                lines.extend(["- No fixed internal branch list is defined yet; choose the narrowest route from the skill body.", ""])
+                continue
+            for branch_name, branch_description in branches:
+                lines.append(f"- **{branch_name}**: {branch_description}")
+            lines.append("")
+    return lines
+
+
 def build_overview(skill_paths):
     rows = []
     groups = {}
@@ -297,7 +431,18 @@ def build_overview(skill_paths):
     lines = [
         "# Current Global Codex Skills",
         "",
+        *build_skill_graph(rows),
+        "",
         f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
+        "",
+        "## Diagram Explanation",
+        "",
+        "- The center node is the full set of user global Codex skills.",
+        "- First-level nodes are skill categories.",
+        "- Second-level nodes are the actual skill names that Codex can invoke.",
+        "- Third-level nodes are internal branches. Codex should choose only the branch needed for the current task instead of running every branch.",
+        "",
+        *build_branch_explanation(rows),
         "",
         "## Skill List",
         "",
@@ -308,21 +453,6 @@ def build_overview(skill_paths):
         lines.append(f"| {category} | `{skill_name}` | {description} |")
 
     lines.extend([
-        "",
-        "## Mind Map",
-        "",
-        "```mermaid",
-        "mindmap",
-        "  root((Global Codex Skills))"
-    ])
-    for category in ["Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]:
-        if category not in groups:
-            continue
-        lines.append(f"    {category}")
-        for skill_name in groups[category]:
-            lines.append(f"      {skill_name}")
-    lines.extend([
-        "```",
         "",
         "## Structure",
         "",
