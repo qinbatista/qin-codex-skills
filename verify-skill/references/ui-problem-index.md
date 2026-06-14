@@ -2,6 +2,12 @@
 
 Search this file before UI generation, UI updates, UI optimization, or UI review. Use `rg -n "<component>|<symptom>|<action>" references/ui-problem-index.md`, then read only matching entries.
 
+## Contents
+
+- [Entry Format](#entry-format)
+- [Search Map](#search-map)
+- [Problems](#problems)
+
 ## Entry Format
 
 - `Terms`: search words that should find the problem.

@@ -19,6 +19,14 @@ Read `references/routing-matrix.md` when a task spans multiple artifact types, t
 
 Use `scripts/validate_workflow_skill.py` only to validate this skill's routing contract after editing the skill.
 
+## Trigger
+
+Use this skill as the starting controller for user task requests that require planning, multiple steps, skill routing, testing, verification, iteration, global skill changes, or a final evidence report. For a tiny direct answer, keep the target map implicit and lightweight.
+
+## Workflow
+
+Run the start contract, route the necessary skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
+
 ## Start Contract
 
 Before doing the work, write a short target map:
@@ -71,6 +79,19 @@ After `test-skill` and `verify-skill`, compare the observed evidence with the ta
 ## Final Response
 
 Keep the final chat short. State what changed, what passed, where the deliverables are, and any remaining unverified scope. Do not repeat the full process report in chat; put process details, inputs, commands, outputs, and why-pass evidence in the generated report.
+
+## Guardrails
+
+- Do not run every skill branch just because it exists.
+- Do not stop before the stated pass targets are met unless there is a real blocker.
+- Do not replace `test-skill` evidence with a method-only or status-only claim.
+- Do not push to GitHub unless the user request or active workflow requires saved global-skill changes.
+
+## Examples
+
+- "Create a new skill and push it" -> decompose, use github-sync, code-skill for scripts, test-skill, verify-skill, then sync.
+- "Fix this Python script" -> decompose, use code-skill, run a real Python input through test-skill, then verify behavior.
+- "Review this UI" -> decompose visual targets, use verify-skill UI route, capture real evidence, and report blockers.
 
 ## Verification
 

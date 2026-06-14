@@ -112,6 +112,7 @@ SKILL_BRANCHES = {
         ("Real test/report flow", "After code changes, route real executable evidence through test-skill unless testing is explicitly forbidden."),
     ],
     "optimization-skill": [
+        ("Official compliance audit", "Check a whole user skill collection against official structure, trigger, reference, and token-use rules."),
         ("Instruction tightening", "Tighten triggers, workflow wording, guardrails, and duplicated requirements."),
         ("References extraction", "Move long stable context into references/ when it should be loaded only when needed."),
         ("Script conversion", "Move repeated deterministic steps into scripts/ when it saves tokens and remains testable."),
@@ -604,23 +605,22 @@ def sync(repository, skills_dir, message):
         state = read_sync_state(DEFAULT_STATE_FILE)
         local_changed = local_hash != state.get("local_hash")
         remote_changed = remote_head != state.get("remote_head") or remote_hash != state.get("remote_hash")
-        match True:
-            case _ if local_changed and not remote_changed:
-                print("Local global skills are newer than the last synced state. Pushing to GitHub.")
-                push(repository, skills_dir, message, False)
-            case _ if remote_changed and not local_changed:
-                print("Remote global skills are newer than the last synced state. Pulling into ~/.codex/skills.")
-                changed_names = mirror_repository_to_local(repository_dir, skills_dir)
-                write_sync_state(DEFAULT_STATE_FILE, repository, remote_head, snapshot_hash(skill_directories(skills_dir)), remote_hash)
-                print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
-            case _ if latest_local_timestamp(local_paths) >= repository_timestamp(repository_dir):
-                print("Both sides differ; local files are newest. Pushing to GitHub.")
-                push(repository, skills_dir, message, False)
-            case _:
-                print("Both sides differ; remote commit is newest. Pulling into ~/.codex/skills.")
-                changed_names = mirror_repository_to_local(repository_dir, skills_dir)
-                write_sync_state(DEFAULT_STATE_FILE, repository, remote_head, snapshot_hash(skill_directories(skills_dir)), remote_hash)
-                print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
+        if local_changed and not remote_changed:
+            print("Local global skills are newer than the last synced state. Pushing to GitHub.")
+            push(repository, skills_dir, message, False)
+        elif remote_changed and not local_changed:
+            print("Remote global skills are newer than the last synced state. Pulling into ~/.codex/skills.")
+            changed_names = mirror_repository_to_local(repository_dir, skills_dir)
+            write_sync_state(DEFAULT_STATE_FILE, repository, remote_head, snapshot_hash(skill_directories(skills_dir)), remote_hash)
+            print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
+        elif latest_local_timestamp(local_paths) >= repository_timestamp(repository_dir):
+            print("Both sides differ; local files are newest. Pushing to GitHub.")
+            push(repository, skills_dir, message, False)
+        else:
+            print("Both sides differ; remote commit is newest. Pulling into ~/.codex/skills.")
+            changed_names = mirror_repository_to_local(repository_dir, skills_dir)
+            write_sync_state(DEFAULT_STATE_FILE, repository, remote_head, snapshot_hash(skill_directories(skills_dir)), remote_hash)
+            print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
 
 
 def main():
@@ -635,17 +635,17 @@ def main():
     subparsers.add_parser("status")
     push_parser = subparsers.add_parser("push")
     push_parser.add_argument("--message", default="Update global Codex skills")
-    match parser.parse_args():
-        case argparse.Namespace(command="sync", repo=repository, skills_dir=skills_dir, message=message):
-            sync(repository, skills_dir, message)
-        case argparse.Namespace(command="preuse", repo=repository, skills_dir=skills_dir):
-            preuse(repository, skills_dir)
-        case argparse.Namespace(command="pull", repo=repository, skills_dir=skills_dir):
-            pull(repository, skills_dir)
-        case argparse.Namespace(command="status", repo=repository, skills_dir=skills_dir):
-            push(repository, skills_dir, "Update global Codex skills", True)
-        case argparse.Namespace(command="push", repo=repository, skills_dir=skills_dir, message=message):
-            push(repository, skills_dir, message, False)
+    args = parser.parse_args()
+    if args.command == "sync":
+        sync(args.repo, args.skills_dir, args.message)
+    elif args.command == "preuse":
+        preuse(args.repo, args.skills_dir)
+    elif args.command == "pull":
+        pull(args.repo, args.skills_dir)
+    elif args.command == "status":
+        push(args.repo, args.skills_dir, "Update global Codex skills", True)
+    elif args.command == "push":
+        push(args.repo, args.skills_dir, args.message, False)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 ---
 name: test-skill
-description: Unified testing and report skill. Use after code, UI, scripts, automations, generated assets, or content have been created or changed; when the user asks to test, verify, QA, smoke test, validate, prove, or generate a report; and whenever completed work needs real executable evidence plus a concise visual PDF report. Requires real runnable tests with concrete generated inputs, real inputs/outputs, the exact command/tool used, and a clear pass reason instead of mock-only, signature-only, or pass/OK-only checks.
+description: Unified testing and report skill. Use when code, UI, scripts, automations, generated assets, or content have been created or changed; when the user asks to test, verify, QA, smoke test, validate, prove, or generate a report; and whenever completed work needs real executable evidence plus a concise visual PDF report. Requires real runnable tests with concrete generated inputs, real inputs/outputs, the exact command/tool used, and a clear pass reason instead of mock-only, signature-only, or pass/OK-only checks.
 ---
 
 # Test Skill
@@ -14,6 +14,10 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 ## Internal Route Selection
 
 This skill covers many evidence types and report layouts. Do not run every test type or force every report shape. Choose the smallest real test and report layout that proves the user's requested behavior: code/API/CLI, UI/browser, image, document/PDF, comparison, or mixed. Every passing case still needs real `Input`, `Used`, `Output`, and `Why Pass` evidence.
+
+## Trigger
+
+Use this skill when work needs proof: code changed, UI changed, a script or workflow was created, a generated artifact needs QA, the user asks for testing or reporting, or another skill has defined a pass target that needs real evidence.
 
 ## Core Rule
 
@@ -114,6 +118,12 @@ Do not force every report into one fixed layout. Do not replace real workflow ev
 - Return the PDF path and show rendered preview image(s) when practical.
 - Keep raw cache artifacts available beside the report, but do not list every internal file unless asked.
 - If no PDF can be generated, report the exact blocker and still provide the real test evidence in chat.
+
+## Verification
+
+- Run the selected real test with concrete inputs before generating a passing report.
+- Parse or inspect the generated PDF when a report is produced, and confirm every passing case includes `Input`, `Used`, `Output`, and `Why Pass`.
+- If a test fails and the fix is in scope, fix the artifact and rerun the same real check.
 
 ## Guardrails
 

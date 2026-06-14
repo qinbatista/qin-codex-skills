@@ -1,6 +1,6 @@
 ---
 name: verify-skill
-description: General verification skill for checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, optimize a repeated process into a local script, or check UI/visual quality. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes.
+description: General verification skill for checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, or validate that an optimized local script/process still works. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes.
 ---
 
 # Verify Skill
@@ -14,6 +14,10 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 ## Internal Route Selection
 
 This skill is a verification router with multiple routes. Do not run every route for every task. Select only the route that matches the artifact and requested outcome: UI verification, local script/process verification, code behavior, skill/instruction verification, generated artifact review, or a mixed route. Load only the relevant reference files and specialized checks for that route.
+
+## Trigger
+
+Use this skill when the task is about correctness, quality, audit, validation, UI review, artifact review, or confirming that a finished workflow meets the user's stated target. Do not use this as the primary optimization skill; use `optimization-skill` first for converting repeated workflows into local resources, then use this skill to verify the result.
 
 ## Core Rule
 
@@ -116,3 +120,9 @@ Use this route for generated documents, reports, images, PDFs, markdown, data fi
 - Do not verify a local script by reading it only; run it with concrete inputs when possible.
 - Do not leave generated verification inputs outside `cache/`.
 - Do not hide warnings. A warning is acceptable only when the exact remaining uncertainty is stated.
+
+## Examples
+
+- "Check whether this UI is acceptable" -> use the UI route, Taste Skill, local problem index, and real screenshots.
+- "Verify this optimized script still works" -> run the script with concrete cache inputs and inspect real outputs.
+- "Audit this generated PDF report" -> parse or render the PDF and check the required evidence rows.

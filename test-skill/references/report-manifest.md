@@ -2,6 +2,19 @@
 
 Use this JSON shape for `scripts/generate_test_pdf_report.py`.
 
+## Contents
+
+- [Required top-level fields](#required-top-level-fields)
+- [`purpose`](#purpose)
+- [`request_summary`](#request_summary)
+- [`overview`](#overview)
+- [`environment`](#environment)
+- [`artifacts`](#artifacts)
+- [`layout_style`](#layout_style)
+- [`test_cases`](#test_cases)
+- [Evidence contract](#evidence-contract)
+- [Compactness and layout behavior](#compactness-and-layout-behavior)
+
 ## Required top-level fields
 
 ```json

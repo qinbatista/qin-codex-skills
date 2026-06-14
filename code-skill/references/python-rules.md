@@ -1,0 +1,66 @@
+# Python Rules
+
+Apply these rules whenever writing or editing Python modules, classes, functions, scripts, tests, snippets, or Python prompt assignments.
+
+## Behavior
+
+- Preserve behavior unless the user explicitly asks for new behavior.
+- For vague requests such as optimize, clean up, refactor, or improve, treat the task as style enforcement plus behavior-preserving micro-optimization only.
+- Return only code when the user asks for raw Python output.
+
+## Formatting And Structure
+
+- Keep function signatures and function or method calls on one line when reasonably possible.
+- Preserve the existing manual formatting style of the touched file.
+- Do not run `ruff format`, `black`, or any auto-formatter unless explicitly requested.
+- Keep imports at the top of the file.
+- Do not add demos, TODOs, unused imports, placeholder logic, or unnecessary `__main__` guards unless requested.
+
+## Names And Variables
+
+- Use descriptive full-word names and correct English spelling.
+- Avoid vague placeholder names such as `out`, `result`, `data`, `item`, `obj`, or `response` when a more specific meaning is known.
+- Inline any value or variable used exactly once when it remains readable.
+- Create variables only when reused or when they clearly improve readability.
+
+## Helpers And Abstractions
+
+- Do not add one-off class helper methods that are only called by one other method.
+- Do not add trivial module-level helper functions for short path joins, tiny normalization steps, or one-line predicates used by one local flow.
+- Inline one-off logic into the actual method or function unless extraction removes real complexity or is reused.
+- Do not keep awkward source logic in place and add wrappers, retry-only branches, or compatibility layers when the underlying function can be fixed directly.
+
+## Contracts And Guards
+
+- Trust declared function inputs and return shapes.
+- Do not repeatedly check `dict`, `list`, `int`, or similar types across call sites unless explicitly requested.
+- Do not add fallback/default/compatibility branches, alternate input aliases, empty-value substitutes, or caller-side repair logic unless requested or required by a real external API contract.
+- Do not validate or repair a called function's return format at the caller; fix the producing function, helper contract, or prompt instead.
+- If an AI helper guarantees parsed JSON through `json_root="object"` or `json_root="array"`, use the returned `dict` or `list` directly with no `json.loads`, `ast.literal_eval`, string fallback, or duplicate parse check.
+- For AI extraction, naming, or review flows, put semantic rules in the prompt and keep local code limited to minimal schema normalization.
+
+## Error Handling
+
+- Use at most one `try`/`except` per function.
+- Keep `try`/`except` scopes narrow when only one call is risky.
+- When an `except` branch only logs and returns or raises, keep the log call on one physical line and inline single-use error formatting.
+
+## Branching
+
+- Use plain `if`/`else` for exactly two mutually exclusive outcomes.
+- Use Python `match`/`case` for three or more outcomes only when the runtime supports Python 3.10 or newer; use `if`/`elif` when a script must run on Python 3.9.
+- For complex predicates that are not one selector, use `match True` with guarded `case _ if ...` branches only when Python 3.10+ is guaranteed.
+- Normalize string comparisons with `str(...).strip().lower()` before comparing; do not enumerate casing variants.
+
+## Logging
+
+Use exactly this call shape on one line when logging is part of the code:
+
+```python
+self.__log_manager.print(function_emoji, status_text, execute_time, function_name, log_message)
+```
+
+- `status_text` must be `"done"`, `"warning"`, `"error"`, or `"pass"`.
+- Log exactly one success message per function at the end of the main successful path.
+- Log only important failures or warnings, at most one log per failure branch.
+- Do not log every branch or small step.

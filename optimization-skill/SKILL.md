@@ -63,21 +63,22 @@ If the references are missing or ambiguous, pause the optimization decision and 
 
 1. Start from the repeated or fixed behavior: what is being done again and again, and why it costs tokens or time.
 2. Run `python3 scripts/skill_optimizer.py scan "<skills-root>"` when optimizing a skill collection or when peer skills may already solve the same pattern.
-3. Run `python3 scripts/skill_optimizer.py audit "<target-skill-folder>"` before editing a target skill folder.
-4. Decide whether the fix belongs in instructions, references, scripts, assets, or a combination:
+3. Run `python3 scripts/audit_global_skills.py "<skills-root>" --output cache/skill-audit.json` when checking a whole user skill collection against official skill structure, trigger, reference, and token-use rules.
+4. Run `python3 scripts/skill_optimizer.py audit "<target-skill-folder>"` before editing a target skill folder.
+5. Decide whether the fix belongs in instructions, references, scripts, assets, or a combination:
    - Keep variable judgment in `SKILL.md`.
    - Move long reusable background into `references/`.
    - Move deterministic execution into `scripts/`.
    - Move reusable templates or fixtures into `assets/`.
-5. If adding or editing code, apply the `code-skill` workflow before the first code change.
-6. Prefer a small local Python script for fixed operations such as repeated testing setup, report manifest creation, screenshot collection, browser smoke flows, image input preparation, file normalization, or skill validation.
-7. Add concise usage instructions in `SKILL.md` that point to the local resource instead of repeating the full procedure inline.
-8. Keep the script's interface practical: clear arguments, safe defaults, `--help`, and no dependency on hidden local state unless the skill explicitly owns that state.
-9. If a workflow needs generated inputs such as images, PDFs, URLs, HTML pages, or sample files, create them in `cache/` during verification instead of committing throwaway generated files into the skill.
-10. Run `python3 scripts/skill_optimizer.py verify "<target-skill-folder>"` after editing a skill folder.
-11. Run the optimized workflow for real with concrete inputs. Do not stop at syntax checks, import checks, or parameter checks when a real local execution is practical.
-12. If the real execution fails, fix the smallest relevant instruction, reference, script, or asset and rerun until it passes or a concrete blocker remains.
-13. Report what was optimized, what local files were added or changed, what real test ran, and what remains unverified.
+6. If adding or editing code, apply the `code-skill` workflow before the first code change.
+7. Prefer a small local Python script for fixed operations such as repeated testing setup, report manifest creation, screenshot collection, browser smoke flows, image input preparation, file normalization, or skill validation.
+8. Add concise usage instructions in `SKILL.md` that point to the local resource instead of repeating the full procedure inline.
+9. Keep the script's interface practical: clear arguments, safe defaults, `--help`, and no dependency on hidden local state unless the skill explicitly owns that state.
+10. If a workflow needs generated inputs such as images, PDFs, URLs, HTML pages, or sample files, create them in `cache/` during verification instead of committing throwaway generated files into the skill.
+11. Run `python3 scripts/skill_optimizer.py verify "<target-skill-folder>"` after editing a skill folder.
+12. Run the optimized workflow for real with concrete inputs. Do not stop at syntax checks, import checks, or parameter checks when a real local execution is practical.
+13. If the real execution fails, fix the smallest relevant instruction, reference, script, or asset and rerun until it passes or a concrete blocker remains.
+14. Report what was optimized, what local files were added or changed, what real test ran, and what remains unverified.
 
 ## Good Optimization Targets
 
@@ -105,6 +106,7 @@ If the references are missing or ambiguous, pause the optimization decision and 
 ## Verification
 
 - `scan` is for reading surrounding skills before changing shared patterns.
+- `audit_global_skills.py` is for checking a full user skill collection against official skill structure, trigger wording, references, and token-use rules.
 - `audit` is for deciding whether optimization is needed and where the repeated workflow lives.
 - `verify` is required after editing a skill folder. It checks frontmatter, local references, command paths, and helper-script syntax.
 - Run `--help` for new or edited scripts.
