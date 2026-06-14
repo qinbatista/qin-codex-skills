@@ -1,0 +1,111 @@
+---
+name: verify-skill
+description: General verification skill for checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, optimize a repeated process into a local script, or check UI/visual quality. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes.
+---
+
+# Verify Skill
+
+Use this as the verification router. It decides what must be checked, what evidence is needed, and which specialized reference should be loaded before accepting work as correct.
+
+## Generated File Placement
+
+Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+
+## Core Rule
+
+Verify the user's actual outcome, not just the method. A check is only useful when it answers: "Does the thing now work, look, read, or behave the way the user asked?"
+
+- Prefer real artifacts, real screenshots, real command output, real files, real browser states, and real run logs.
+- Do not call something verified only because code compiles, a method accepts arguments, or a file exists.
+- If the task produced code, route the real execution and PDF evidence through `test-skill` after this skill defines the verification criteria.
+- If the task produced UI, run the UI verification route below before calling the UI acceptable.
+
+## Workflow
+
+1. Identify the user's requested outcome and the artifact that should prove it.
+2. Classify the verification type: UI, local script/process, code behavior, skill/instruction, generated file, document/report, or mixed.
+3. Load only the reference needed for that type.
+4. Build a concrete check with real input, real output, and pass/fail criteria.
+5. Run or inspect the actual artifact, not a mock substitute, when local execution is practical.
+6. If the check fails and the fix is in scope, fix the artifact and verify again.
+7. Report what passed, what failed, what remains unverified, and where the evidence lives.
+
+## UI Verification
+
+Use this route for UI/UX review, visual QA, responsive layout checks, frontend polish, website/app screens, dashboards, Unity Editor UI, inspector panels, browser views, typography, spacing, hierarchy, copy, buttons, forms, cards, or user-reported UI problems.
+
+### Required Sources
+
+1. Search `references/ui-problem-index.md` first by component, symptom, and requested action.
+2. Fetch or update `leonxlnx/taste-skill` into the current task or project `cache/` folder, never into a random directory:
+
+   ```bash
+   mkdir -p cache/taste-skill
+   git clone --depth 1 https://github.com/leonxlnx/taste-skill.git cache/taste-skill
+   ```
+
+   If it already exists, update it with `git fetch --depth 1 origin` or replace only that cache copy.
+3. Read the relevant Taste Skill files before UI verification:
+   - `skills/taste-skill/SKILL.md` for landing pages, portfolios, marketing pages, redesigns, visual taste, layout discipline, and final pre-flight.
+   - `skills/redesign-skill/SKILL.md` for existing project upgrades and audit-first redesigns.
+   - A more specific Taste Skill variant only when the user's UI type clearly matches it.
+
+### UI Check Procedure
+
+1. Capture or open the real UI state first: screenshot, browser target, local app, Unity Editor view, or supplied image.
+2. Apply matching local problem-index rules.
+3. Apply Taste Skill's relevant pre-flight checks, especially redesign audit, one design system, real images, contrast, CTA wrapping, hero fit, navigation line fit, mobile collapse, copy self-audit, and no generic AI layout tells.
+4. Verify at the relevant breakpoints. For browser UI, include desktop and narrow/mobile widths when practical.
+5. Treat clipped text, wrapped compact controls, unreadable contrast, fake screenshots, broken responsive layout, and missing real evidence as blockers unless the user explicitly accepts them.
+
+### UI Output
+
+State the UI verdict as pass, warning, or fail. Include the screenshots, viewport sizes, Taste Skill source used, local index entries used, and the concrete reason for any blocker.
+
+## Local Script And Process Verification
+
+Use this route when the user asks to optimize a repeated workflow into a local script, improve a local automation, validate a helper script, or confirm that a process has become runnable.
+
+1. Read the script and identify its real entry point, inputs, outputs, side effects, and failure modes.
+2. Generate small concrete test inputs inside the appropriate `cache/` folder.
+3. Run the script exactly as a user would run it.
+4. Check these minimums:
+   - the script accepts the expected arguments or config
+   - the real output matches the requested workflow
+   - intermediate/cache files stay in the correct `cache/` folder
+   - final files go only to the requested output path
+   - rerunning does not corrupt prior outputs
+   - errors are clear and non-destructive
+   - secrets, auth files, and unrelated user files are not read or written
+5. If the workflow is too broad for one check, test the smallest real happy path plus one realistic failure path.
+
+## Skill Or Instruction Verification
+
+Use this route for skill edits, prompt workflows, routing rules, and instruction-layer changes.
+
+- Confirm `SKILL.md` frontmatter has only `name` and `description`.
+- Confirm the trigger description matches the user's intended use.
+- Confirm referenced files, scripts, and paths exist.
+- Confirm old names, deleted skills, or stale references are absent when a rename or deletion was requested.
+- Run a small real scenario showing the new route would be selected or the bundled script/resource can run.
+
+## Generated Artifact Verification
+
+Use this route for generated documents, reports, images, PDFs, markdown, data files, or exports.
+
+- Confirm the artifact exists at the intended final path.
+- Open, render, parse, or inspect the artifact with the strongest practical local tool.
+- Check the artifact against the user's requested content, format, and naming.
+- Keep raw generation inputs and review logs in `cache/`; keep final deliverables in the requested location or `outputs/`.
+
+## Relationship To Test Skill
+
+`verify-skill` decides what correctness means and which reference rules apply. `test-skill` executes real tests and generates PDF evidence after code changes, scripted workflows, or report-worthy validation. Use both when a task needs verification criteria plus executable proof.
+
+## Guardrails
+
+- Do not treat taste as personal preference when a concrete UI rule, screenshot, or external taste-skill pre-flight applies.
+- Do not use UI screenshots edited by hand as proof that the live UI is fixed.
+- Do not verify a local script by reading it only; run it with concrete inputs when possible.
+- Do not leave generated verification inputs outside `cache/`.
+- Do not hide warnings. A warning is acceptable only when the exact remaining uncertainty is stated.
