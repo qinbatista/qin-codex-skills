@@ -5,6 +5,10 @@ description: Sync Qin's user global Codex skills with the GitHub repository qin-
 
 # Qin Codex Skills GitHub Sync
 
+## Generated File Placement
+
+Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+
 ## Trigger
 
 Use this skill for global Codex skill synchronization:

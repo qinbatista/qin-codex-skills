@@ -5,6 +5,10 @@ description: Inspect and switch saved Codex ChatGPT auth profiles under `~/.code
 
 # Qin Codex Auth Swithc
 
+## Generated File Placement
+
+Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+
 ## Trigger
 
 Use this skill when the user wants to inspect, switch, refresh, re-login, back up, or restore Codex ChatGPT auth profiles under `~/.codex`, especially files like `auth.json` and `auth_qincodex.json`.

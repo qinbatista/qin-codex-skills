@@ -7,6 +7,10 @@ description: Cross-project UI review and optimization baseline for browser, app,
 
 Use this as the shared baseline for UI work across projects. If a repo already has a tighter UI skill, search this global problem index first, then let the repo skill add project-specific checks.
 
+## Generated File Placement
+
+Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+
 ## Trigger
 
 - Use for any user-requested UI work: new UI generation, UI updates, UI optimization, `optimize UI`, the common typo `opitmize UI`, redesign, polish, visual review, responsive fixes, and UI bug reports.

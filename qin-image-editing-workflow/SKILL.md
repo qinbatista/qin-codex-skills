@@ -5,6 +5,10 @@ description: Global image workflow rule. Use whenever a task needs to edit, gene
 
 # Qin Image Editing Workflow
 
+## Generated File Placement
+
+Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+
 ## Trigger
 
 Use this skill for image generation, image editing, compositing, retouching, cropping, upscaling, background replacement, logo placement, asset replacement, or any other task where the final deliverable is an image asset.

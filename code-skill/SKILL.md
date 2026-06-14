@@ -7,6 +7,10 @@ description: Unified code skill for all code-related Codex work. Use for writing
 
 Use this as the single merged code skill. It contains the former code-related rules in one place and should not depend on separate code sub-skills.
 
+## Generated File Placement
+
+Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+
 ## Merged From
 
 This one skill replaces the former code-related global skills:

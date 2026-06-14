@@ -7,6 +7,10 @@ description: Unified testing and report skill. Use after code, UI, scripts, auto
 
 Use this as the single testing and reporting skill. It merges completion verification with PDF report generation.
 
+## Generated File Placement
+
+Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+
 ## Core Rule
 
 Do not finish because the edit is written. Prove the work with a real executable test and package the evidence in a report when the work is code-related, user-facing, visual, or explicitly requested as testing/QA.
