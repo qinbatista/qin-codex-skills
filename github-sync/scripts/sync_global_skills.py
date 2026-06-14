@@ -84,7 +84,7 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
 )
 CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
-PRIMARY_SKILL_ORDER = ["workflow-skill", "code-skill", "optimization-skill", "verify-skill", "test-skill", "management-skill"]
+PRIMARY_SKILL_ORDER = ["code-skill", "test-skill", "verify-skill", "optimization-skill", "workflow-skill", "management-skill"]
 SUPPORT_SKILL_NAMES = {"codex-switch", "github-sync"}
 CATEGORY_LABEL_WIDTH = 28
 SKILL_LABEL_WIDTH = 24
@@ -416,6 +416,10 @@ def build_readme(skill_paths):
         "",
         "Language: [English](#english) | [中文](#zh)",
         "",
+        "## Skill Map",
+        "",
+        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
+        "",
         '<a id="english"></a>',
         "",
         "## English",
@@ -423,10 +427,6 @@ def build_readme(skill_paths):
         "Codex skill source and routing overview.",
         "",
         *build_skill_summary_table(primary_rows, language="en"),
-        "",
-        "### Skill Map",
-        "",
-        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
         "",
         *build_support_skill_details(rows, language="en"),
         "",
@@ -436,13 +436,9 @@ def build_readme(skill_paths):
         "",
         "语言: [English](#english) | [中文](#zh)",
         "",
-        "这是全局 Codex skills 的公开镜像和路由说明。下面先列出每个 skill 的具体能力，再展示主 skill 图。",
+        "这是全局 Codex skills 的公开镜像和路由说明。顶部先展示主图，下面列每个 skill 的大功能和内部流程。",
         "",
         *build_skill_summary_table(primary_rows, language="zh"),
-        "",
-        "### 技能图",
-        "",
-        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
         "",
         *build_support_skill_details(rows, language="zh"),
     ]
@@ -555,33 +551,30 @@ def build_skill_summary_table(rows, language="en"):
 
 
 def build_skill_graph(rows, language="en"):
-    category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
+    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
     lines = [
         "```mermaid",
-        '%%{init: {"flowchart": {"nodeSpacing": 18, "rankSpacing": 36, "wrappingWidth": 220}}}%%',
-        "flowchart TD",
+        '%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 54, "wrappingWidth": 240}}}%%',
+        "flowchart LR",
     ]
-    category_ids = []
     skill_ids = []
-    for category in CATEGORY_ORDER:
-        category_rows = [row for row in rows if row[0] == category]
-        if not category_rows:
-            continue
-        category_id = f"category_{mermaid_id(category)}"
-        category_ids.append(category_id)
-        lines.append(f'  {category_id}["{mermaid_label(category_labels.get(category, category))}"]')
-        for _, skill_name, _ in category_rows:
-            skill_id = f"skill_{mermaid_id(skill_name)}"
-            skill_ids.append(skill_id)
-            lines.append(f'  {category_id} --> {skill_id}["{mermaid_label(skill_name)}"]')
+    content_ids = []
+    for _category, skill_name, _description in rows:
+        skill_id = f"skill_{mermaid_id(skill_name)}"
+        content_id = f"inside_{mermaid_id(skill_name)}"
+        skill_ids.append(skill_id)
+        content_ids.append(content_id)
+        content_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
+        content_label = "<br/>".join(mermaid_label(content_name) for content_name in content_names)
+        lines.append(f'  {skill_id}["{mermaid_label(skill_name)}"] --> {content_id}["{content_label}"]')
     lines.extend([
-        "  classDef category fill:#2f2f2f,color:#fff,stroke:#555;",
         "  classDef skill fill:#111,color:#fff,stroke:#eee;",
+        "  classDef content fill:#2f2f2f,color:#fff,stroke:#666;",
     ])
-    if category_ids:
-        lines.append(f"  class {','.join(category_ids)} category;")
     if skill_ids:
         lines.append(f"  class {','.join(skill_ids)} skill;")
+    if content_ids:
+        lines.append(f"  class {','.join(content_ids)} content;")
     lines.append("```")
     return lines
 
@@ -650,13 +643,15 @@ def build_overview(skill_paths):
         "",
         "Language: [English](#english) | [中文](#zh)",
         "",
+        "## Skill Map",
+        "",
+        *build_skill_graph(primary_rows, language="en"),
+        "",
         '<a id="english"></a>',
         "",
         "## English",
         "",
         *build_skill_summary_table(primary_rows, language="en"),
-        "",
-        *build_skill_graph(primary_rows, language="en"),
         "",
         f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
         "",
@@ -671,8 +666,6 @@ def build_overview(skill_paths):
         "语言: [English](#english) | [中文](#zh)",
         "",
         *build_skill_summary_table(primary_rows, language="zh"),
-        "",
-        *build_skill_graph(primary_rows, language="zh"),
         "",
         f"生成日期: {time.strftime('%Y-%m-%d', time.localtime())}",
         "",
