@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Skill"
-  short_description: "Unified Qin code rules"
-  default_prompt: "Use $code-skill to handle this code task with Qin's merged code rules."
+  short_description: "Unified code rules"
+  default_prompt: "Use $code-skill to handle this code task with the merged code rules."

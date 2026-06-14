@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: Unified Qin code skill for all code-related Codex work. Use for writing, editing, refactoring, debugging, reviewing, optimizing, or explaining code; prompt generation and prompt-in-code work; Python modules, scripts, tests, and snippets; Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; and obvious bounded code tasks that may use Spark when an allowed model route exists.
+description: Unified code skill for all code-related Codex work. Use for writing, editing, refactoring, debugging, reviewing, optimizing, or explaining code; prompt generation and prompt-in-code work; Python modules, scripts, tests, and snippets; Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; and obvious bounded code tasks that may use Spark when an allowed model route exists.
 ---
 
 # Code Skill
@@ -9,13 +9,13 @@ Use this as the single merged code skill. It contains the former code-related ru
 
 ## Merged From
 
-This one skill replaces the old code-related global skills:
+This one skill replaces the former code-related global skills:
 
-- `qin-easy-code-spark` -> [Spark For Small Code Tasks](#spark-for-small-code-tasks)
-- `qin-karpathy-guidelines` -> [Coding Approach](#coding-approach)
-- `qin-prompt-creating` -> [Prompt Generation](#prompt-generation)
-- `qin-python-code-checker` and its Python style reference -> [Python Rules](#python-rules)
-- `qin-unity-csharp-minimal-style` -> [Unity C# Rules](#unity-c-rules)
+- Spark model routing rules -> [Spark For Small Code Tasks](#spark-for-small-code-tasks)
+- Coding approach rules -> [Coding Approach](#coding-approach)
+- Prompt generation rules -> [Prompt Generation](#prompt-generation)
+- Python code and style rules -> [Python Rules](#python-rules)
+- Unity C# code rules -> [Unity C# Rules](#unity-c-rules)
 
 ## Workflow
 
