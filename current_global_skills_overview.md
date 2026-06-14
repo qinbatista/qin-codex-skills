@@ -1,91 +1,35 @@
-# Current Global Codex Skills
+# Current Codex Skills
 
 ```mermaid
 flowchart LR
-  root((Global Codex Skills))
-  root --- category_Workflow["Workflow / 工作流类"]
-  category_Workflow --- skill_workflow_skill["workflow-skill"]
-  skill_workflow_skill --- branch_workflow_skill_Task_decomposition["Task decomposition"]
-  skill_workflow_skill --- branch_workflow_skill_Artifact_target_map["Artifact target map"]
-  skill_workflow_skill --- branch_workflow_skill_Skill_routing["Skill routing"]
-  skill_workflow_skill --- branch_workflow_skill_Code_test_verify_spine["Code-test-verify spine"]
-  skill_workflow_skill --- branch_workflow_skill_Completion_loop["Completion loop"]
-  skill_workflow_skill --- branch_workflow_skill_Final_evidence_report["Final evidence report"]
-  root --- category_Code["Code / 代码类"]
-  category_Code --- skill_code_skill["code-skill"]
-  skill_code_skill --- branch_code_skill_Prompt_generation["Prompt generation"]
-  skill_code_skill --- branch_code_skill_Coding_approach["Coding approach"]
-  skill_code_skill --- branch_code_skill_Spark_small_task_routing["Spark small-task routing"]
-  skill_code_skill --- branch_code_skill_Python_rules["Python rules"]
-  skill_code_skill --- branch_code_skill_Unity_C_rules["Unity C# rules"]
-  skill_code_skill --- branch_code_skill_Real_test_report_flow["Real test/report flow"]
-  root --- category_Optimization["Optimization / 优化类"]
-  category_Optimization --- skill_optimization_skill["optimization-skill"]
-  skill_optimization_skill --- branch_optimization_skill_Official_compliance_audit["Official compliance audit"]
-  skill_optimization_skill --- branch_optimization_skill_Instruction_tightening["Instruction tightening"]
-  skill_optimization_skill --- branch_optimization_skill_References_extraction["References extraction"]
-  skill_optimization_skill --- branch_optimization_skill_Script_conversion["Script conversion"]
-  skill_optimization_skill --- branch_optimization_skill_Assets_templates["Assets/templates"]
-  skill_optimization_skill --- branch_optimization_skill_No_op_decision["No-op decision"]
-  skill_optimization_skill --- branch_optimization_skill_Code_skill_gate["Code-skill gate"]
-  root --- category_Verification["Verification / 验证类"]
-  category_Verification --- skill_verify_skill["verify-skill"]
-  skill_verify_skill --- branch_verify_skill_UI_verification["UI verification"]
-  skill_verify_skill --- branch_verify_skill_Local_script_process_verification["Local script/process verification"]
-  skill_verify_skill --- branch_verify_skill_Code_behavior_verification["Code behavior verification"]
-  skill_verify_skill --- branch_verify_skill_Skill_instruction_verification["Skill/instruction verification"]
-  skill_verify_skill --- branch_verify_skill_Generated_artifact_review["Generated artifact review"]
-  skill_verify_skill --- branch_verify_skill_Mixed_route["Mixed route"]
-  root --- category_Testing["Testing / 测试类"]
-  category_Testing --- skill_test_skill["test-skill"]
-  skill_test_skill --- branch_test_skill_Code_API_CLI_evidence["Code/API/CLI evidence"]
-  skill_test_skill --- branch_test_skill_UI_browser_evidence["UI/browser evidence"]
-  skill_test_skill --- branch_test_skill_Image_evidence["Image evidence"]
-  skill_test_skill --- branch_test_skill_Document_PDF_evidence["Document/PDF evidence"]
-  skill_test_skill --- branch_test_skill_Comparison_audit_reports["Comparison/audit reports"]
-  skill_test_skill --- branch_test_skill_Evidence_contract["Evidence contract"]
-  root --- category_Management["Management / 管理类"]
-  category_Management --- skill_codex_switch["codex-switch"]
-  skill_codex_switch --- branch_codex_switch_List_profiles["List profiles"]
-  skill_codex_switch --- branch_codex_switch_Live_usage_probes["Live usage probes"]
-  skill_codex_switch --- branch_codex_switch_Switch_profile["Switch profile"]
-  skill_codex_switch --- branch_codex_switch_Refresh_login_backup["Refresh/login backup"]
-  skill_codex_switch --- branch_codex_switch_Save_current_auth["Save current auth"]
-  skill_codex_switch --- branch_codex_switch_Import_auth_file["Import auth file"]
-  skill_codex_switch --- branch_codex_switch_Privacy_guardrails["Privacy guardrails"]
-  category_Management --- skill_github_sync["github-sync"]
-  skill_github_sync --- branch_github_sync_sync["sync"]
-  skill_github_sync --- branch_github_sync_status["status"]
-  skill_github_sync --- branch_github_sync_preuse["preuse"]
-  skill_github_sync --- branch_github_sync_pull["pull"]
-  skill_github_sync --- branch_github_sync_push["push"]
-  skill_github_sync --- branch_github_sync_public_safety_scan["public safety scan"]
-  classDef root fill:#000,color:#fff,stroke:#111,stroke-width:2px;
+  category_Workflow["Workflow / 工作流类"]
+  category_Workflow --> skill_workflow_skill["workflow-skill"]
+  category_Code["Code / 代码类"]
+  category_Code --> skill_code_skill["code-skill"]
+  category_Optimization["Optimization / 优化类"]
+  category_Optimization --> skill_optimization_skill["optimization-skill"]
+  category_Verification["Verification / 验证类"]
+  category_Verification --> skill_verify_skill["verify-skill"]
+  category_Testing["Testing / 测试类"]
+  category_Testing --> skill_test_skill["test-skill"]
+  category_Management["Management / 管理类"]
+  category_Management --> skill_codex_switch["codex-switch"]
+  category_Management --> skill_github_sync["github-sync"]
   classDef category fill:#2f2f2f,color:#fff,stroke:#555;
   classDef skill fill:#111,color:#fff,stroke:#eee;
-  classDef branch fill:#1f1f1f,color:#fff,stroke:#777;
-  class root root;
   class category_Workflow,category_Code,category_Optimization,category_Verification,category_Testing,category_Management category;
   class skill_workflow_skill,skill_code_skill,skill_optimization_skill,skill_verify_skill,skill_test_skill,skill_codex_switch,skill_github_sync skill;
-  class branch_workflow_skill_Task_decomposition,branch_workflow_skill_Artifact_target_map,branch_workflow_skill_Skill_routing,branch_workflow_skill_Code_test_verify_spine,branch_workflow_skill_Completion_loop,branch_workflow_skill_Final_evidence_report,branch_code_skill_Prompt_generation,branch_code_skill_Coding_approach,branch_code_skill_Spark_small_task_routing,branch_code_skill_Python_rules,branch_code_skill_Unity_C_rules,branch_code_skill_Real_test_report_flow,branch_optimization_skill_Official_compliance_audit,branch_optimization_skill_Instruction_tightening,branch_optimization_skill_References_extraction,branch_optimization_skill_Script_conversion,branch_optimization_skill_Assets_templates,branch_optimization_skill_No_op_decision,branch_optimization_skill_Code_skill_gate,branch_verify_skill_UI_verification,branch_verify_skill_Local_script_process_verification,branch_verify_skill_Code_behavior_verification,branch_verify_skill_Skill_instruction_verification,branch_verify_skill_Generated_artifact_review,branch_verify_skill_Mixed_route,branch_test_skill_Code_API_CLI_evidence,branch_test_skill_UI_browser_evidence,branch_test_skill_Image_evidence,branch_test_skill_Document_PDF_evidence,branch_test_skill_Comparison_audit_reports,branch_test_skill_Evidence_contract,branch_codex_switch_List_profiles,branch_codex_switch_Live_usage_probes,branch_codex_switch_Switch_profile,branch_codex_switch_Refresh_login_backup,branch_codex_switch_Save_current_auth,branch_codex_switch_Import_auth_file,branch_codex_switch_Privacy_guardrails,branch_github_sync_sync,branch_github_sync_status,branch_github_sync_preuse,branch_github_sync_pull,branch_github_sync_push,branch_github_sync_public_safety_scan branch;
 ```
 
 Generated: 2026-06-14
 
-## Diagram Explanation
-
-- The center node is the full set of user global Codex skills.
-- First-level nodes are skill categories.
-- Second-level nodes are the actual skill names that Codex can invoke.
-- Third-level nodes are internal branches. Codex should choose only the branch needed for the current task instead of running every branch.
-
-## Skill Internal Branches
-
-Each skill may contain multiple internal branches. These are alternatives selected by the current task, not a checklist to run every time.
+## Skill Details
 
 ### Workflow / 工作流类
 
 #### `workflow-skill`
+
+Controls task decomposition, goal checks, routing, iteration, and final evidence for Codex requests.
 
 - **Task decomposition**: Break the request into ordered task slices before execution.
 - **Artifact target map**: Define text, image, code, UI, PDF, skill, GitHub, or management pass targets.
@@ -98,6 +42,8 @@ Each skill may contain multiple internal branches. These are alternatives select
 
 #### `code-skill`
 
+Routes code work to the right coding, prompt, Python, Unity C#, or small-task branch.
+
 - **Prompt generation**: Only for creating, rewriting, or embedding prompts.
 - **Coding approach**: Use for assumptions, smallest viable implementation, and surgical edits.
 - **Spark small-task routing**: Use only for obvious bounded low-risk code tasks when an allowed route exists.
@@ -108,6 +54,8 @@ Each skill may contain multiple internal branches. These are alternatives select
 ### Optimization / 优化类
 
 #### `optimization-skill`
+
+Turns stable repeated workflows into reusable local scripts, references, or assets when that saves tokens.
 
 - **Official compliance audit**: Check a whole user skill collection against official structure, trigger, reference, and token-use rules.
 - **Instruction tightening**: Tighten triggers, workflow wording, guardrails, and duplicated requirements.
@@ -121,6 +69,8 @@ Each skill may contain multiple internal branches. These are alternatives select
 
 #### `verify-skill`
 
+Checks UI, scripts, generated artifacts, skills, and workflows against the user's requirement.
+
 - **UI verification**: Use Taste Skill plus the local problem index for visual/UI checks.
 - **Local script/process verification**: Run local scripts with concrete cache inputs and inspect outputs.
 - **Code behavior verification**: Define the behavior that test-skill must prove with real execution.
@@ -131,6 +81,8 @@ Each skill may contain multiple internal branches. These are alternatives select
 ### Testing / 测试类
 
 #### `test-skill`
+
+Runs real executable checks and produces evidence-rich PDF reports.
 
 - **Code/API/CLI evidence**: Run real commands, API calls, or scripts and record input, used method, output, and pass reason.
 - **UI/browser evidence**: Capture real screenshots, page states, console/runtime evidence, and viewport details.
@@ -143,6 +95,8 @@ Each skill may contain multiple internal branches. These are alternatives select
 
 #### `codex-switch`
 
+Manages local Codex auth profiles and account switching without exposing private auth data.
+
 - **List profiles**: Inspect saved local auth profile files.
 - **Live usage probes**: Run isolated live checks only when current usage matters.
 - **Switch profile**: Copy a confirmed saved profile onto auth.json after explicit confirmation.
@@ -153,11 +107,13 @@ Each skill may contain multiple internal branches. These are alternatives select
 
 #### `github-sync`
 
-- **sync**: Normal before/after route for global skill work.
+Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.
+
+- **sync**: Normal before/after route for skill work.
 - **status**: Dry-run preview of local-to-remote changes.
 - **preuse**: Read-only inspection before using or editing skills.
-- **pull**: Accept remote changes into local global skills.
-- **push**: Publish local global-skill changes to GitHub.
+- **pull**: Accept remote changes into local skills.
+- **push**: Publish local skill changes to GitHub.
 - **public safety scan**: Block auth files, secrets, cache, logs, and generated private artifacts.
 
 

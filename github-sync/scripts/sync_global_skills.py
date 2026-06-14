@@ -94,6 +94,15 @@ CATEGORY_LABELS = {
     "Management": "Management / 管理类",
     "General": "General / 通用类",
 }
+SKILL_SUMMARIES = {
+    "workflow-skill": "Controls task decomposition, goal checks, routing, iteration, and final evidence for Codex requests.",
+    "code-skill": "Routes code work to the right coding, prompt, Python, Unity C#, or small-task branch.",
+    "optimization-skill": "Turns stable repeated workflows into reusable local scripts, references, or assets when that saves tokens.",
+    "verify-skill": "Checks UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
+    "test-skill": "Runs real executable checks and produces evidence-rich PDF reports.",
+    "codex-switch": "Manages local Codex auth profiles and account switching without exposing private auth data.",
+    "github-sync": "Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.",
+}
 SKILL_BRANCHES = {
     "workflow-skill": [
         ("Task decomposition", "Break the request into ordered task slices before execution."),
@@ -146,11 +155,11 @@ SKILL_BRANCHES = {
         ("Privacy guardrails", "Never expose or publish tokens, auth files, account IDs, or raw logs."),
     ],
     "github-sync": [
-        ("sync", "Normal before/after route for global skill work."),
+        ("sync", "Normal before/after route for skill work."),
         ("status", "Dry-run preview of local-to-remote changes."),
         ("preuse", "Read-only inspection before using or editing skills."),
-        ("pull", "Accept remote changes into local global skills."),
-        ("push", "Publish local global-skill changes to GitHub."),
+        ("pull", "Accept remote changes into local skills."),
+        ("push", "Publish local skill changes to GitHub."),
         ("public safety scan", "Block auth files, secrets, cache, logs, and generated private artifacts."),
     ],
 }
@@ -317,31 +326,14 @@ def build_readme(skill_paths):
     readme_lines = [
         "# qin-codex-skills",
         "",
-        "Public mirror of Qin's user global Codex skills from `~/.codex/skills`.",
+        "Codex skill source and routing overview.",
         "",
-        "This repository stores global skill source files only. Do not copy the repository `.git` directory into `~/.codex/skills`.",
-        "",
-        "## Global Skill Map",
+        "## Skill Map",
         "",
         *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in rows]),
         "",
-        "## Diagram Explanation",
-        "",
-        "- The center node is the full set of user global Codex skills.",
-        "- First-level nodes are skill categories.",
-        "- Second-level nodes are the actual skill names that Codex can invoke.",
-        "- Third-level nodes are internal branches selected by task type; Codex should not run every branch every time.",
-        "",
-        "## Skills",
-        ""
+        *build_skill_details(rows),
     ]
-    for _, skill_name, description, folder_name in rows:
-        readme_lines.extend([
-            f"### [`{skill_name}`](./{folder_name}/)",
-            "",
-            description,
-            ""
-        ])
     return "\n".join(readme_lines)
 
 
@@ -380,52 +372,47 @@ def mermaid_label(value):
     return str(value).replace('"', "'")
 
 
+def short_description(description):
+    first_use_split = description.split(". Use ", 1)[0].strip()
+    if first_use_split:
+        return first_use_split if first_use_split.endswith(".") else f"{first_use_split}."
+    first_sentence = description.split(".", 1)[0].strip()
+    return f"{first_sentence}." if first_sentence else "No description provided."
+
+
 def build_skill_graph(rows):
     lines = [
         "```mermaid",
         "flowchart LR",
-        "  root((Global Codex Skills))",
     ]
     category_ids = []
     skill_ids = []
-    branch_ids = []
     for category in CATEGORY_ORDER:
         category_rows = [row for row in rows if row[0] == category]
         if not category_rows:
             continue
         category_id = f"category_{mermaid_id(category)}"
         category_ids.append(category_id)
-        lines.append(f'  root --- {category_id}["{mermaid_label(CATEGORY_LABELS.get(category, category))}"]')
+        lines.append(f'  {category_id}["{mermaid_label(CATEGORY_LABELS.get(category, category))}"]')
         for _, skill_name, _ in category_rows:
             skill_id = f"skill_{mermaid_id(skill_name)}"
             skill_ids.append(skill_id)
-            lines.append(f'  {category_id} --- {skill_id}["{mermaid_label(skill_name)}"]')
-            for branch_name, _ in SKILL_BRANCHES.get(skill_name, []):
-                branch_id = f"branch_{mermaid_id(skill_name, branch_name)}"
-                branch_ids.append(branch_id)
-                lines.append(f'  {skill_id} --- {branch_id}["{mermaid_label(branch_name)}"]')
+            lines.append(f'  {category_id} --> {skill_id}["{mermaid_label(skill_name)}"]')
     lines.extend([
-        "  classDef root fill:#000,color:#fff,stroke:#111,stroke-width:2px;",
         "  classDef category fill:#2f2f2f,color:#fff,stroke:#555;",
         "  classDef skill fill:#111,color:#fff,stroke:#eee;",
-        "  classDef branch fill:#1f1f1f,color:#fff,stroke:#777;",
-        "  class root root;",
     ])
     if category_ids:
         lines.append(f"  class {','.join(category_ids)} category;")
     if skill_ids:
         lines.append(f"  class {','.join(skill_ids)} skill;")
-    if branch_ids:
-        lines.append(f"  class {','.join(branch_ids)} branch;")
     lines.append("```")
     return lines
 
 
-def build_branch_explanation(rows):
+def build_skill_details(rows):
     lines = [
-        "## Skill Internal Branches",
-        "",
-        "Each skill may contain multiple internal branches. These are alternatives selected by the current task, not a checklist to run every time.",
+        "## Skill Details",
         "",
     ]
     for category in CATEGORY_ORDER:
@@ -433,8 +420,11 @@ def build_branch_explanation(rows):
         if not category_rows:
             continue
         lines.extend([f"### {CATEGORY_LABELS.get(category, category)}", ""])
-        for _, skill_name, _ in category_rows:
-            lines.extend([f"#### `{skill_name}`", ""])
+        for row in category_rows:
+            _, skill_name, description = row[:3]
+            folder_name = row[3] if len(row) > 3 else ""
+            skill_title = f"[`{skill_name}`](./{folder_name}/)" if folder_name else f"`{skill_name}`"
+            lines.extend([f"#### {skill_title}", "", SKILL_SUMMARIES.get(skill_name, short_description(description)), ""])
             branches = SKILL_BRANCHES.get(skill_name, [])
             if not branches:
                 lines.extend(["- No fixed internal branch list is defined yet; choose the narrowest route from the skill body.", ""])
@@ -457,20 +447,13 @@ def build_overview(skill_paths):
         groups.setdefault(category, []).append(skill_name)
 
     lines = [
-        "# Current Global Codex Skills",
+        "# Current Codex Skills",
         "",
         *build_skill_graph(rows),
         "",
         f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
         "",
-        "## Diagram Explanation",
-        "",
-        "- The center node is the full set of user global Codex skills.",
-        "- First-level nodes are skill categories.",
-        "- Second-level nodes are the actual skill names that Codex can invoke.",
-        "- Third-level nodes are internal branches. Codex should choose only the branch needed for the current task instead of running every branch.",
-        "",
-        *build_branch_explanation(rows),
+        *build_skill_details(rows),
         "",
         "## Skill List",
         "",
