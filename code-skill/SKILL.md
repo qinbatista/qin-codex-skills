@@ -28,7 +28,9 @@ This one skill replaces the former code-related global skills:
 3. For all non-trivial code work, state important assumptions, choose the smallest viable path, and define a verifiable success condition.
 4. For prompt work, create or improve the prompt first, then embed the generated prompt into the corresponding text or code.
 5. For Python or Unity C#, apply the language-specific rules in this skill.
-6. Keep edits surgical, preserve unrelated user work, and verify with the narrowest practical check unless the user explicitly tells you not to test.
+6. Keep edits surgical and preserve unrelated user work.
+7. After any code is written or changed, run the narrowest real usage test through `test-skill` unless the user explicitly tells you not to test. The evidence must include the real input, the command/tool used, the real output, and why the output passes.
+8. For code-related work that produces a report, the PDF must show `Input`, `Used`, `Output`, and `Why Pass` for each passing case; do not finish with only lint, import, signature, method-parameter, `OK`, or `PASS` evidence.
 
 ## Spark For Small Code Tasks
 
@@ -269,4 +271,5 @@ Unity guardrails:
 
 - Keep this skill as the single code skill. Do not load or depend on old code sub-skills.
 - Do not duplicate testing/reporting workflows here when a separate testing skill is active.
+- All code changes must go through the real test/report flow unless the user explicitly forbids testing. The final evidence must show what was given, what ran, what came back, and why it passes.
 - Do not claim full success without saying what was or was not verified.

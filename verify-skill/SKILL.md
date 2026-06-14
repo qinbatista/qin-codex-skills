@@ -18,6 +18,7 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 - Prefer real artifacts, real screenshots, real command output, real files, real browser states, and real run logs.
 - Do not call something verified only because code compiles, a method accepts arguments, or a file exists.
 - If the task produced code, route the real execution and PDF evidence through `test-skill` after this skill defines the verification criteria.
+- Verification PDFs must list the real `Input`, `Used`, `Output`, and `Why Pass` for every passing case. A green status, `OK`, `PASS`, or method name alone is not evidence.
 - If the task produced UI, run the UI verification route below before calling the UI acceptable.
 
 ## Workflow
@@ -27,8 +28,9 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 3. Load only the reference needed for that type.
 4. Build a concrete check with real input, real output, and pass/fail criteria.
 5. Run or inspect the actual artifact, not a mock substitute, when local execution is practical.
-6. If the check fails and the fix is in scope, fix the artifact and verify again.
-7. Report what passed, what failed, what remains unverified, and where the evidence lives.
+6. Record what was given, what tool/command/workflow was used, what came back, and why that output satisfies or fails the requirement.
+7. If the check fails and the fix is in scope, fix the artifact and verify again.
+8. Report what passed, what failed, what remains unverified, and where the evidence lives.
 
 ## UI Verification
 
@@ -60,7 +62,7 @@ Use this route for UI/UX review, visual QA, responsive layout checks, frontend p
 
 ### UI Output
 
-State the UI verdict as pass, warning, or fail. Include the screenshots, viewport sizes, Taste Skill source used, local index entries used, and the concrete reason for any blocker.
+State the UI verdict as pass, warning, or fail. Include the screenshots, viewport sizes, Taste Skill source used, local index entries used, observed page state, and the concrete reason for any blocker. If the UI passes, explain why the screenshots/page state satisfy the user's requested outcome.
 
 ## Local Script And Process Verification
 
@@ -96,6 +98,7 @@ Use this route for generated documents, reports, images, PDFs, markdown, data fi
 - Confirm the artifact exists at the intended final path.
 - Open, render, parse, or inspect the artifact with the strongest practical local tool.
 - Check the artifact against the user's requested content, format, and naming.
+- For PDF reports, verify that each passing case contains real input, used method, real output, and a pass reason; fail the report review if it only says `OK`, `PASS`, or `done`.
 - Keep raw generation inputs and review logs in `cache/`; keep final deliverables in the requested location or `outputs/`.
 
 ## Relationship To Test Skill

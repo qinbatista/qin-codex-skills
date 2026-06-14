@@ -48,6 +48,10 @@ INPUT_INLINE_IMAGE_MAX_HEIGHT = 1.3 * inch
 COMPARISON_INLINE_IMAGE_MAX_WIDTH = 2.45 * inch
 COMPARISON_INLINE_IMAGE_MAX_HEIGHT = 1.85 * inch
 FULL_DETAIL_MODES = {"full", "detailed", "verbose"}
+USED_FIELD_NAMES = ("used", "method", "tool", "command", "executed_command", "workflow", "script", "route", "endpoint")
+PASS_REASON_FIELD_NAMES = ("pass_reason", "why_passed", "why_pass", "acceptance_reason", "pass_criteria_result")
+PASS_STATUS_VALUES = {"pass", "passed"}
+BARE_PASS_OUTPUT_VALUES = {"ok", "okay", "pass", "passed", "done", "works", "success", "successful", "fixed"}
 
 
 def _status_text(value): return str(value or "info").strip().lower()
@@ -76,6 +80,82 @@ def _pairs(value):
         if isinstance(item, dict) and "label" in item: rows.append((str(item["label"]), _stringify(item.get("value", ""))))
         elif isinstance(item, (list, tuple)) and len(item) >= 2: rows.append((_stringify(item[0]), _stringify(item[1])))
     return rows
+
+
+def _first_present_value(case, case_details, field_names):
+    for field_name in field_names:
+        value = case.get(field_name)
+        if value:
+            return value
+    for field_name in field_names:
+        value = case_details.pop(field_name, "")
+        if value:
+            return value
+    return ""
+
+
+def _field_value(case, case_details, field_names):
+    for container in (case, case_details):
+        for field_name in field_names:
+            value = container.get(field_name)
+            if value:
+                return _stringify(value)
+    return ""
+
+
+def _comparison_container(case):
+    return case.get("comparison") if isinstance(case.get("comparison"), dict) else {}
+
+
+def _artifact_paths(case):
+    artifacts = case.get("artifacts") or case.get("images") or []
+    paths = []
+    for artifact in artifacts:
+        if isinstance(artifact, dict) and artifact.get("path"):
+            paths.append(_stringify(artifact["path"]))
+    return paths
+
+
+def _bare_pass_output(value):
+    return _stringify(value).strip().lower().strip(".! ") in BARE_PASS_OUTPUT_VALUES
+
+
+def _case_evidence_values(case):
+    case_details = dict(case.get("details") or {})
+    comparison = _comparison_container(case)
+    input_value = (
+        _field_value(case, case_details, ("request", "sample_request", "request_example", "request_payload", "example_input", "input", "objective", "input_image_path", "input_image"))
+        or _field_value(comparison, {}, ("before", "before_data", "baseline", "original", "before_image_path", "before_image", "baseline_image_path", "original_image_path"))
+    )
+    if not input_value and case.get("steps"):
+        input_value = " | ".join(_stringify(step) for step in case["steps"])
+    output_value = (
+        _field_value(case, case_details, ("response", "sample_response", "response_example", "response_payload", "sample_output", "sample_log_excerpt", "log_excerpt", "example_output", "output", "result"))
+        or _field_value(comparison, {}, ("after", "after_data", "current", "revised", "after_image_path", "after_image", "current_image_path", "revised_image_path"))
+    )
+    if not output_value:
+        output_value = ", ".join(_artifact_paths(case))
+    return {
+        "input": input_value,
+        "used": _field_value(case, case_details, USED_FIELD_NAMES),
+        "output": output_value,
+        "pass_reason": _field_value(case, case_details, PASS_REASON_FIELD_NAMES),
+    }
+
+
+def _validate_evidence_contract(test_cases):
+    failures = []
+    for index, case in enumerate(test_cases, start=1):
+        if _status_text(case.get("status")) not in PASS_STATUS_VALUES:
+            continue
+        evidence = _case_evidence_values(case)
+        missing = [label for label, value in evidence.items() if not value]
+        if evidence["output"] and _bare_pass_output(evidence["output"]):
+            missing.append("output must be real evidence, not a bare status word")
+        if missing:
+            failures.append(f"case {index} ({case.get('name', 'Unnamed test')}): missing {', '.join(missing)}")
+    if failures:
+        raise ValueError("Passing report cases must include real Input, Used, Output, and Why Pass evidence:\n" + "\n".join(failures))
 
 
 def _paragraph(text, style): return Paragraph(escape(_stringify(text)).replace("\n", "<br/>"), style)
@@ -339,6 +419,7 @@ def build_report(manifest, output_path):
     environment_pairs = _pairs(manifest.get("environment", {}))
     top_artifacts = manifest.get("artifacts", [])
     test_cases = manifest.get("test_cases", [])
+    _validate_evidence_contract(test_cases)
 
     flow.append(_paragraph(title, _fit_header_style(styles["ReportTitle"], title, 22, 19, 17)))
     if subtitle: flow.append(_paragraph(subtitle, _fit_header_style(styles["ReportSubtitle"], subtitle, 14, 12, 10.8)))
@@ -370,9 +451,9 @@ def build_report(manifest, output_path):
     if test_cases:
         flow.append(_paragraph("Testing Summary", styles["SectionTitle"]))
         if any(_comparison_enabled(manifest, case) for case in test_cases):
-            flow.append(_paragraph("Case labels: the title row shows the function or case. Before and After are the compared states. Input is what the function sent in. Output is what came back.", styles["Caption"]))
+            flow.append(_paragraph("Case labels: the title row shows the function or case. Before and After are the compared states. Input is what was given. Used is the command, tool, or workflow that ran. Output is what came back. Why Pass is the acceptance reason.", styles["Caption"]))
         else:
-            flow.append(_paragraph("Case labels: the title row shows the function or case. Input is what the function sent in. Output is what came back.", styles["Caption"]))
+            flow.append(_paragraph("Case labels: the title row shows the function or case. Input is what was given. Used is the command, tool, or workflow that ran. Output is what came back. Why Pass is the acceptance reason.", styles["Caption"]))
         flow.append(_case_summary_table(test_cases, styles))
         flow.append(Spacer(1, 0.12 * inch))
 
@@ -386,6 +467,8 @@ def build_report(manifest, output_path):
         case_details = dict(case.get("details") or {})
         case_is_comparison = _comparison_enabled(manifest, case)
         case_input_image = case.get("input_image_path") or case.get("input_image") or case_details.pop("input_image_path", "") or case_details.pop("input_image", "")
+        case_used = _first_present_value(case, case_details, USED_FIELD_NAMES)
+        case_pass_reason = _first_present_value(case, case_details, PASS_REASON_FIELD_NAMES)
         case_request = case.get("request") or case_details.pop("sample_request", "") or case_details.pop("request_example", "") or case_details.pop("request_payload", "")
         case_response = case.get("response") or case_details.pop("sample_response", "") or case_details.pop("response_example", "") or case_details.pop("response_payload", "") or case_details.pop("sample_output", "") or case_details.pop("sample_log_excerpt", "") or case_details.pop("log_excerpt", "")
         case_input = case_request or case.get("example_input") or case.get("input") or case.get("objective")
@@ -407,16 +490,24 @@ def build_report(manifest, output_path):
             if comparison_summary:
                 case_rows.append([Paragraph("<b>Comparison</b>", styles["TableText"]), _paragraph(comparison_summary, styles["TableText"])])
                 case_summary = ""
+            if case_used:
+                case_rows.append([Paragraph("<b>Used</b>", styles["TableText"]), _paragraph(case_used, styles["TableText"])])
             if case_output:
                 case_rows.append([Paragraph(f"<b>{escape(_label_text(case.get('output_label') or 'Final Result'))}</b>", styles["TableText"]), _paragraph(case_output, styles["TableText"])])
+            if case_pass_reason:
+                case_rows.append([Paragraph("<b>Why Pass</b>", styles["TableText"]), _paragraph(case_pass_reason, styles["TableText"])])
         else:
             if case_input or case_input_image:
                 case_rows.append([Paragraph(f"<b>{escape(_label_text(input_label))}</b>", styles["TableText"]), _input_cell_value(case_input, case_input_image, styles)])
+            if case_used:
+                case_rows.append([Paragraph("<b>Used</b>", styles["TableText"]), _paragraph(case_used, styles["TableText"])])
             if case_output:
                 case_rows.append([Paragraph(f"<b>{escape(_label_text(output_label))}</b>", styles["TableText"]), _paragraph(case_output, styles["TableText"])])
             elif case_summary:
                 case_rows.append([Paragraph("<b>Result</b>", styles["TableText"]), _paragraph(case_summary, styles["TableText"])])
                 case_summary = ""
+            if case_pass_reason:
+                case_rows.append([Paragraph("<b>Why Pass</b>", styles["TableText"]), _paragraph(case_pass_reason, styles["TableText"])])
         if show_case_details:
             if case_summary:
                 case_rows.append([Paragraph("<b>Summary</b>", styles["TableText"]), _paragraph(case_summary, styles["TableText"])])

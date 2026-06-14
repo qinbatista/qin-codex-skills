@@ -1,6 +1,6 @@
 ---
 name: test-skill
-description: Unified testing and report skill. Use after code, UI, scripts, automations, generated assets, or content have been created or changed; when the user asks to test, verify, QA, smoke test, validate, prove, or generate a report; and whenever completed work needs real executable evidence plus a concise visual PDF report. Requires real runnable tests with concrete generated inputs instead of mock-only or signature-only checks.
+description: Unified testing and report skill. Use after code, UI, scripts, automations, generated assets, or content have been created or changed; when the user asks to test, verify, QA, smoke test, validate, prove, or generate a report; and whenever completed work needs real executable evidence plus a concise visual PDF report. Requires real runnable tests with concrete generated inputs, real inputs/outputs, the exact command/tool used, and a clear pass reason instead of mock-only, signature-only, or pass/OK-only checks.
 ---
 
 # Test Skill
@@ -14,6 +14,15 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 ## Core Rule
 
 Do not finish because the edit is written. Prove the work with a real executable test and package the evidence in a report when the work is code-related, user-facing, visual, or explicitly requested as testing/QA.
+
+Every verification PDF must show the real evidence, not a vague `OK`, `PASS`, or method-only claim. For each passing case, list:
+
+- `Input`: the real input that was given, such as a file path, image, URL, prompt, request payload, command input, code snippet, or concrete test data
+- `Used`: the actual tool, command, script, browser route, model call, API endpoint, or local workflow used to run the check
+- `Output`: the real output that came back, such as stdout, JSON, rendered file, screenshot path, generated image, URL response, return value, diff, or produced artifact
+- `Why Pass`: the exact acceptance reason, tied to the user's requirement and the observed output
+
+If the evidence is an image, include the image path or rendered preview. If it is a link, include the exact URL and observed response or page state. If it is code, include the code path or snippet plus the command that ran it. If it is a result, include the actual value, log excerpt, file, screenshot, or artifact that proves the result.
 
 For code changes, the primary verification must be a small real use of the changed code:
 
@@ -29,7 +38,7 @@ For code changes, the primary verification must be a small real use of the chang
 2. Choose the smallest real test that proves that behavior.
 3. Generate any required concrete inputs, such as temporary images, local files, JSON payloads, HTML pages, localhost URLs, sample PDFs, or API bodies.
 4. Run the actual changed path with those inputs.
-5. Capture evidence: command, input, output, generated files, screenshots, returned JSON, rendered pages, logs, and pass/fail status.
+5. Capture evidence: real input, command/tool used, output, generated files, screenshots, returned JSON, rendered pages, logs, pass/fail status, and the reason the observed output satisfies or fails the requirement.
 6. If the test fails and the fix is in scope, fix the code and rerun the real test.
 7. Generate a concise PDF report when code was changed, the user asked for testing/QA/reporting, the result is visual, or the evidence would be clearer as an artifact.
 8. In the final response, state what changed, what real test ran, what passed or failed, where the report is, and what remains unverified.
@@ -61,12 +70,16 @@ Generate a PDF report when:
 The report must show real evidence, not only command names:
 
 - user request or expected outcome
-- real test input
-- real output/result
+- real test input, payload, artifact, image, URL, code path, or prompt
+- exact command, script, tool, browser route, model/API call, or workflow used
+- real output/result, including the returned value, stdout, JSON, screenshot, rendered artifact, generated file, or URL/page state
+- why the output passes or fails the user's requirement
 - pass/fail/warning/skipped status
 - generated files or screenshots when relevant
 - raw logs or run artifacts stored beside the report when useful
 - remaining unverified scope when something could not be tested
+
+Do not make a passing row whose output is only `OK`, `done`, `works`, `pass`, or similar. Those words may appear only after the report shows what was run, what came back, and why the observed output satisfies the requirement.
 
 Use the bundled manifest/report generator for ordinary reports:
 
@@ -75,6 +88,8 @@ python3 scripts/generate_test_pdf_report.py --input /path/to/manifest.json --out
 ```
 
 Read `references/report-manifest.md` when building a manifest.
+
+The generator rejects passing cases that do not include real `Input`, `Used`, `Output`, and `Why Pass` evidence, or whose output is only a bare status word such as `OK`, `PASS`, `done`, or `works`.
 
 ## Report Layout
 
@@ -100,6 +115,8 @@ Do not force every report into one fixed layout. Do not replace real workflow ev
 
 - Do not claim completion from a mock-only test when a real local test is practical.
 - Do not claim completion from method-parameter, signature, import, or lint checks alone.
+- Do not generate a passing PDF that lacks real `Input`, `Used`, `Output`, and `Why Pass` evidence for each passing case.
+- Do not use `OK`, `PASS`, `done`, or a green status as the whole result.
 - Do not invent inputs, outputs, screenshots, or pass/fail results that were not actually produced.
 - Do not hide failed or skipped tests.
 - Do not silently drop missing screenshots or artifacts; mark them missing.

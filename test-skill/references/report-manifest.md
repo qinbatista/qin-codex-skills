@@ -163,7 +163,9 @@ Each test case can include:
   "output_label": "Output",
   "input": "Open login page and submit valid credentials.",
   "input_image_path": "/absolute/path/login-form.png",
+  "used": "Playwright opened http://localhost:3000/login and submitted the form.",
   "output": "Redirected to dashboard.",
+  "pass_reason": "The final URL was /dashboard and the dashboard heading was visible, matching the expected logged-in state.",
   "show_details": false,
   "summary": "Login flow succeeded end to end.",
   "request": "POST /api/login {\"email\":\"demo@example.com\",\"password\":\"••••••••\"}",
@@ -193,6 +195,28 @@ Each test case can include:
 }
 ```
 
+## Evidence contract
+
+Every passing case must include concrete evidence rows, not only a status:
+
+- `input`: the real file, image, URL, payload, command input, code path/snippet, prompt, request, or generated test data
+- `used`: the exact tool, command, script, browser action, API endpoint, model call, or workflow used
+- `output`: the real stdout, JSON, return value, screenshot path, rendered artifact, generated file, page state, response, or diff
+- `pass_reason`: why that specific output satisfies the user's requested outcome
+
+Use aliases only when a legacy manifest already has them: `request` can stand in for `input`, `response` can stand in for `output`, and `why_passed`, `why_pass`, or `acceptance_reason` can stand in for `pass_reason`.
+
+Evidence must match the artifact type:
+
+- Image evidence: include the source/output image path and, when useful, add it in `artifacts`.
+- Link/URL evidence: include the exact URL plus HTTP response, final URL, page state, or extracted content.
+- Code evidence: include the code path or snippet, the command that ran it, and the returned value/log.
+- Result evidence: include the actual value, file, JSON, stdout, screenshot, or generated artifact.
+
+Do not write a pass case whose output is only `OK`, `PASS`, `done`, `works`, or another bare status word.
+
+The bundled PDF generator rejects passing cases that are missing `input`, `used`, `output`, or `pass_reason`, and rejects passing cases whose `output` is only a bare status word.
+
 Top-level compactness control:
 
 ```json
@@ -207,7 +231,9 @@ Preferred case rows:
 - `response`: raw API response or real returned text when available
 - `input`: real given text, command, payload, prompt, or executed action
 - `input_image_path`: optional real source image to render inside the `Input` row when the case input includes an image
+- `used`: exact command, script, tool, browser route, API endpoint, model call, or workflow used to produce the output
 - `output`: real returned text, log excerpt, or concrete result
+- `pass_reason`: required for passing cases; explain why the observed output satisfies the expected outcome
 - for model names, prompts, system prompts, request payloads, or other long setup text requested by the user, add a clearly named test case near the top, such as `Models and prompt used`, with the model names in `input`, the full prompt in `output`, and a readable prompt-card image in `artifacts` when practical
 - `function_name`: optional short function or API entry-point name to show in the title row
 - `case_detail_mode`: optional top-level manifest setting. Default is `compact`. Use `full` only when the user explicitly wants all supporting detail rows shown.
@@ -225,7 +251,7 @@ Preferred case rows:
 - render each case as one table:
   - first row: bold case title with inline status, such as `Testing 1: Login flow | PASS`
   - if `function_name` is present, prefer it in the title row so the user immediately sees which function or API path is being shown
-  - following rows: `Label | Value`, with concrete example rows first, usually `Input | ...` and `Output | ...`
+  - following rows: `Label | Value`, with concrete example rows first, usually `Input | ...`, `Used | ...`, `Output | ...`, and `Why Pass | ...`
   - default compact mode should usually stop there
   - only add `Summary`, `Scenario`, metrics, or `Notes` rows when the user explicitly wants detailed mode or one specific case needs extra explanation
   - merge repeated notes into one `Notes` row when detailed mode is enabled
@@ -324,12 +350,13 @@ For `step_by_step`, prefer one step block per page or one compact group of short
 - Keep `request_summary` short and tied to the user's real ask.
 - Prefer screenshots and tables over long prose.
 - Prefer real request, response, prompt, command, log, and result text over summary-only wording.
+- Every passing case needs real `Input`, `Used`, `Output`, and `Why Pass` rows.
 - Choose the report format from the case type instead of forcing every PDF into the default compact test-case table.
 - For comparison reports, show the real before data and after data plus before and after images when available. Do not produce a final-only case.
 - For side-by-side comparison reports, make each side visually identifiable and keep the comparison instruction, evidence panels, and supporting table together on the same page when practical.
 - For step-by-step reports, make the instructions and ordered steps visible before the evidence detail.
 - Keep report section titles explicit, usually `Summary`, `Testing Summary`, `Testing N`, and `Evidence`.
-- Add one short legend near the testing section so the user knows that `Input` is what was sent in and `Output` is what came back. `Check` / `Result` should stay fallback summary labels.
+- Add one short legend near the testing section so the user knows that `Input` is what was given, `Used` is what ran, `Output` is what came back, and `Why Pass` is the acceptance reason. `Check` / `Result` should stay fallback summary labels only for non-pass or legacy cases.
 - Keep the report header visually proportional. Avoid oversized title and subtitle blocks when a smaller, tighter title fits the page better.
 - Prefer one compact first-line meta banner for purpose, status, and counts instead of multiple full-width banner rows.
 - Keep the first page summary short, usually `Goal`, `Result`, and `Context`, instead of splitting basic metadata across many small tables.
@@ -339,7 +366,7 @@ For `step_by_step`, prefer one step block per page or one compact group of short
 - Put the case title and status together in the first row instead of adding a separate `Status:` text row.
 - Default each test case to a two-column label/value table with concrete example rows first.
 - Prefer `Input` / `Output` for function and API examples unless a more specific label is truly clearer.
-- Keep the first three case rows easy to scan: title row, `Input`, then `Output`.
+- Keep the first five case rows easy to scan: title row, `Input`, `Used`, `Output`, then `Why Pass`.
 - Keep compact mode as the default. In normal reports, do not print `Summary`, `Scenario`, `Response Length`, `Input Image Size`, or `Notes` for every case.
 - Use a short `Summary` row only when the concrete example rows still need one line of interpretation or when the manifest explicitly enables detailed mode.
 - Vertically center table cells so short labels stay visually aligned against taller wrapped value cells.
