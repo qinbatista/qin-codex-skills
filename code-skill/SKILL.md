@@ -7,6 +7,16 @@ description: Unified Qin code skill for all code-related Codex work. Use for wri
 
 Use this as the single merged code skill. It contains the former code-related rules in one place and should not depend on separate code sub-skills.
 
+## Merged From
+
+This one skill replaces the old code-related global skills:
+
+- `qin-easy-code-spark` -> [Spark For Small Code Tasks](#spark-for-small-code-tasks)
+- `qin-karpathy-guidelines` -> [Coding Approach](#coding-approach)
+- `qin-prompt-creating` -> [Prompt Generation](#prompt-generation)
+- `qin-python-code-checker` and its Python style reference -> [Python Rules](#python-rules)
+- `qin-unity-csharp-minimal-style` -> [Unity C# Rules](#unity-c-rules)
+
 ## Workflow
 
 1. Classify the task: prompt generation, general code, Python, Unity C#, small bounded task, or a combination.
