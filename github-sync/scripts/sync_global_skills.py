@@ -262,10 +262,10 @@ def skill_category(skill_name, description):
     text = f"{skill_name} {description}".lower()
     if skill_name == "code-skill":
         return "Code"
+    if skill_name == "qin-skill-optimization":
+        return "Optimization"
     if skill_name in {"github-sync", "codex-switch"} or "github" in text or "auth" in text:
         return "Management"
-    if skill_name == "qin-skill-optimization":
-        return "Generation"
     if skill_name == "test-skill":
         return "Testing"
     if skill_name == "verify-skill":
@@ -274,7 +274,9 @@ def skill_category(skill_name, description):
         return "Testing"
     if "verify" in text or "validation" in text:
         return "Verification"
-    if "optimization" in text or "prompt" in text or "generate" in text:
+    if "optimization" in text or "optimize" in text:
+        return "Optimization"
+    if "prompt" in text or "generate" in text:
         return "Generation"
     if "code-related" in text or "coding" in text:
         return "Code"
@@ -313,7 +315,7 @@ def build_overview(skill_paths):
         "mindmap",
         "  root((Global Codex Skills))"
     ])
-    for category in ["Code", "Generation", "Verification", "Testing", "Management", "General"]:
+    for category in ["Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]:
         if category not in groups:
             continue
         lines.append(f"    {category}")
@@ -325,6 +327,7 @@ def build_overview(skill_paths):
         "## Structure",
         "",
         "- Code work enters through `code-skill`.",
+        "- Repeated fixed workflow optimization enters through `qin-skill-optimization`.",
         "- Verification work enters through `verify-skill`.",
         "- Real tests and report artifacts sit under `test-skill`.",
         "- Auth and GitHub mirror maintenance sit under Management.",

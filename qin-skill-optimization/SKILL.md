@@ -1,103 +1,118 @@
 ---
 name: qin-skill-optimization
-description: Optimize an existing Codex skill or prompt-driven instruction layer from concrete failure evidence, pre-use review, or finalization checks. Use when a skill, retry/check prompt, agent instruction block, or other instruction-driven workflow mostly works but should be tightened without changing the underlying job. Scan peer skills first when relevant, merge duplicate requirements into one clear rule, prefer the smallest prompt-first fix when the issue lives in the instruction layer, and verify behavior after the change.
+description: Optimize repetitive Codex skills and fixed workflows into reusable local files, scripts, references, or assets that save tokens and execution time. Use when the user explicitly asks to optimize a skill or repeated process into local code/files; when a skill workflow is stable but too verbose; when repeated test, image, browser, computer-control, report, or generation steps can become deterministic Python scripts; or when Codex notices a highly repeated fixed flow that should be made reusable. Must prepare references first, follow code-skill for all code/script work, and verify the optimized workflow with real execution before finishing.
 ---
 
 # Qin Skill Optimization
 
-Use this skill when a skill or prompt-driven instruction layer should be tightened, not rebuilt from scratch.
+Use this as the optimization skill for turning fixed, repeated Codex workflows into reusable local resources. The main job is to reduce future token use and make repeated work faster without changing the user's intended behavior.
 
 ## Generated File Placement
 
 Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
 
+Reusable resources that are meant to become part of a skill belong inside that target skill folder:
+
+- `scripts/` for deterministic local code or command wrappers
+- `references/` for reusable instructions, API notes, schemas, checklists, or long workflow details
+- `assets/` for templates, sample files, fixtures, or reusable media
+
 ## Trigger
 
-- The user wants an existing skill improved from logs, bad output, weak behavior, broken references, or a specific complaint.
-- The user wants an agent, retry prompt, check prompt, or other instruction layer tightened from warning logs, screenshots, or output mismatches while the underlying workflow mostly works.
-- A skill is about to be used and should be checked first.
-- A newly drafted skill should be checked before it is finalized.
-- Any skill is created, edited, or updated. Treat this skill as a required finalization pass after the substantive skill change, even when no obvious failure is reported yet.
+- The user explicitly asks to optimize a skill, fixed process, prompt workflow, or repeated Codex behavior into local files or scripts.
+- A workflow repeats often enough that Codex keeps spending tokens on the same deterministic setup, checks, browser steps, image-prep steps, computer-control steps, reports, or test procedures.
+- A skill mostly works but contains bulky, repeated, or fragile instructions that could be moved into `scripts/`, `references/`, or `assets/`.
+- A local helper script, reference file, fixture, template, or cache-safe workflow would make future execution faster and more reliable.
+- A newly edited skill needs an optimization pass to remove duplicated rules, choose what should live in code versus instructions, and verify the resulting workflow.
 
-## Goal
+## Optimization Goal
 
-- Read the target skill and nearby peer skills first so the fix matches local patterns.
-- Optimize only when there is a real improvement opportunity.
-- Prefer the smallest effective fix and keep the skill portable unless it is intentionally project-specific.
-- Make skill optimization a standard close-out step for skill work instead of an optional extra.
-- Trace the strongest failure evidence to a concrete local source before editing anything.
-- When the failure involves wrong files, mixed assets, stale cache, or another source-of-truth problem, check peer skills in the same pipeline for the same package-boundary risk before finishing.
-- Prefer the smallest prompt, check, retry, or validation fix when the issue lives in the instruction layer.
-- Merge duplicate or overlapping user requirements into one clearer instruction instead of appending more prompt text.
-- Shorten prompts, helper code, and workflow wording when the same behavior can be preserved with fewer tokens.
-- Verify the original behavior before and after the optimization when practical.
-- After every skill update, run a small working test that exercises the updated behavior; if it fails, keep updating and retesting until it passes or a concrete blocker remains.
+- Convert repeated deterministic behavior into reusable local Python scripts or other local resources when that saves tokens or execution time.
+- Keep reasoning-heavy, variable, or judgment-based work in `SKILL.md`; move stable mechanics into scripts or references.
+- Preserve the original workflow contract. Optimization should make the same job faster, clearer, or more reliable, not change what the job means.
+- Use the target skill's own folder as the permanent home for reusable files whenever the optimization belongs to that skill.
+- Keep task-specific generated inputs, reports, screenshots, previews, and logs in `cache/` or `outputs/`, not inside the reusable skill source.
+
+## Required Code-Skill Gate
+
+Before writing, editing, or moving any helper code, use `code-skill` as the coding contract:
+
+1. Read the target skill, relevant existing scripts, relevant references, and nearby peer skills before coding.
+2. Identify the authoritative source paths and expected inputs/outputs. Do not write code from memory or guesses when local references exist.
+3. Define the smallest success condition that proves the optimized workflow still does the original job.
+4. For Python helpers, follow the Python rules in `code-skill`: simple structure, clear names, no unnecessary abstractions, no unrequested fallbacks, and narrow verification.
+5. Keep edits surgical. Do not rewrite an entire skill or create a large framework when one small script or reference file solves the repeated work.
+
+## Reference Preparation
+
+Do this before changing the target skill or writing code:
+
+- Collect the user's concrete complaint, repeated workflow, logs, screenshots, outputs, or examples.
+- Read the target `SKILL.md` completely and inspect its `scripts/`, `references/`, and `assets/` folders.
+- Read peer skills when the workflow crosses skill boundaries or a shared pattern already exists.
+- Read project instructions, API docs, CLI help, local examples, or official docs needed for the script to be correct.
+- Write down the real input, expected output, side effects, and files touched by the optimized workflow.
+
+If the references are missing or ambiguous, pause the optimization decision and gather more local evidence. Do not invent a local script interface from thin air.
 
 ## Required Workflow
 
-1. Start from the strongest evidence: warning log, bad output, screenshot, missing behavior, wrong trigger, pre-use review, or user complaint.
-2. Find the real source before editing anything. Inspect the target skill folder or the nearest prompt, retry, check, or validation block that actually produced the problem.
-3. If the target lives inside a skills collection, scan the peer skills first with `python3 scripts/skill_optimizer.py scan "<skills-root>"` or the equivalent absolute path.
-4. When the target is a skill folder, audit it with `python3 scripts/skill_optimizer.py audit "<target-skill-folder>"`.
-5. For source-of-truth or file-mixing failures, identify the authoritative path and add the boundary rule at the narrowest shared level that prevents the same mistake across peer skills.
-6. If the target already has runnable behavior, a helper script, or a reproducible prompt flow, run the narrowest practical baseline verification before editing so the current behavior is anchored.
-7. Use the audit result as a gate when editing a skill folder. Optimize only when there are repeated deterministic steps, poor structure, duplicated instructions, prompt or code bloat, broken paths, weak validation, or a small helper bug.
-8. Prefer the smallest effective fix. Tighten triggers, workflow steps, guardrails, validation, prompt wording, retry guidance, or helper code before considering larger rewrites.
-9. If the issue is in the instruction layer, prefer a prompt-first fix. Update the smallest relevant task, retry, check, or validation prompt instead of rewriting the whole workflow.
-10. If the output is already correct but validation says it is wrong, fix the checker or validation instructions before weakening the producing prompt.
-11. Merge duplicate or overlapping user requirements into one shorter, clearer rule. Do not keep re-stating the same requirement in different words.
-12. When repeated prompt tests fail, rewrite the affected prompt block into fewer accurate rules instead of accumulating example-specific warnings.
-13. Keep only reasoning-heavy instructions in `SKILL.md`. Move bulky setup, repeated commands, repeated UI actions, and deterministic checks into the target skill's own `scripts/` folder only when that saves tokens and preserves behavior.
-14. Only after prompt or instruction fixes are not enough, make the smallest deterministic code or helper change needed to restore the intended behavior.
-15. Keep relative links, bundled resources, and workflow contracts intact unless the user explicitly wants them changed.
-16. After any skill-folder edit, run `python3 scripts/skill_optimizer.py verify "<target-skill-folder>"`.
-17. Run a small working test for the updated skill behavior: the same prompt, the same failing artifact, the helper script with `--help`, a dry run, a targeted assertion, or the narrowest real execution that proves the optimized target still does the original job.
-18. If that small working test fails, keep editing the smallest relevant prompt, checker, workflow step, or helper code and rerun the test until it passes. Stop only when the test passes or when a concrete blocker prevents validation.
-19. When the task was to create or update a skill, do not finish after the content edit alone. Complete this audit, verify pass, and small working test before claiming the skill work is done, and report whether optimization changed anything.
+1. Start from the repeated or fixed behavior: what is being done again and again, and why it costs tokens or time.
+2. Run `python3 scripts/skill_optimizer.py scan "<skills-root>"` when optimizing a skill collection or when peer skills may already solve the same pattern.
+3. Run `python3 scripts/skill_optimizer.py audit "<target-skill-folder>"` before editing a target skill folder.
+4. Decide whether the fix belongs in instructions, references, scripts, assets, or a combination:
+   - Keep variable judgment in `SKILL.md`.
+   - Move long reusable background into `references/`.
+   - Move deterministic execution into `scripts/`.
+   - Move reusable templates or fixtures into `assets/`.
+5. If adding or editing code, apply the `code-skill` workflow before the first code change.
+6. Prefer a small local Python script for fixed operations such as repeated testing setup, report manifest creation, screenshot collection, browser smoke flows, image input preparation, file normalization, or skill validation.
+7. Add concise usage instructions in `SKILL.md` that point to the local resource instead of repeating the full procedure inline.
+8. Keep the script's interface practical: clear arguments, safe defaults, `--help`, and no dependency on hidden local state unless the skill explicitly owns that state.
+9. If a workflow needs generated inputs such as images, PDFs, URLs, HTML pages, or sample files, create them in `cache/` during verification instead of committing throwaway generated files into the skill.
+10. Run `python3 scripts/skill_optimizer.py verify "<target-skill-folder>"` after editing a skill folder.
+11. Run the optimized workflow for real with concrete inputs. Do not stop at syntax checks, import checks, or parameter checks when a real local execution is practical.
+12. If the real execution fails, fix the smallest relevant instruction, reference, script, or asset and rerun until it passes or a concrete blocker remains.
+13. Report what was optimized, what local files were added or changed, what real test ran, and what remains unverified.
 
-## What To Optimize
+## Good Optimization Targets
 
-- Weak or overly broad trigger metadata
-- Vague workflow steps or missing guardrails
-- Duplicate or overlapping requirements that should become one clear instruction
-- Bad or contradictory task, retry, check, or validation prompts
-- False validation where the output is right but the checker is wrong
-- Repeated deterministic UI or shell steps that belong in scripts
-- Long sections that can become short summaries plus a referenced helper
-- Prompt wording or helper code that can be made shorter without losing meaning
-- Broken local references, script paths, or helper syntax
-- User-added requirements that were appended instead of reorganized
+- Repeated real-test setup that can become a local runner script.
+- Repeated PDF/report manifest generation that can become a helper script or template.
+- Repeated image-generation setup, prompt packaging, asset naming, or preview preparation.
+- Repeated browser verification flows that can become a Playwright or Browser-control script.
+- Repeated computer-control flows where the UI path is stable and permission-safe.
+- Repeated skill validation, frontmatter checks, reference checks, or public-safety scans.
+- Long copied instructions that are better as a compact `SKILL.md` pointer plus a `references/` file.
+- Bulky deterministic command sequences that should become one tested local command.
 
 ## Guardrails
 
-- Do not optimize a skill just because it exists.
-- Do not rewrite the whole skill unless the user asks or the structure is fundamentally broken.
-- Do not keep repo-only assumptions in a shared skill unless the skill is intentionally project-specific.
-- Do not silence a warning or mismatch just to make the logs quieter.
-- Do not remove real behavior just to make the skill shorter.
-- Do not add filler just to make the skill longer.
-- Do not duplicate the same instructions across `SKILL.md`, scripts, and references.
-- Do not break relative links or bundled-resource paths when moving content out of `SKILL.md`.
-- Do not keep a script change that was not validated against the original behavior when a practical check exists.
-- Do not let a skill use files from another package, cache, clone, or workspace unless the user explicitly names that source and the skill records it as an input.
+- Do not optimize just because a skill exists. Optimize only when the workflow is repeated, fixed, slow, token-heavy, fragile, or explicitly requested.
+- Do not move reasoning-heavy judgment into code. Scripts should execute stable mechanics, not guess user intent.
+- Do not create untested helper code.
+- Do not leave a script that cannot run, cannot show `--help`, or depends on undocumented local files.
+- Do not replace real workflow evidence with mocks when a real local test is practical.
+- Do not store generated cache files, screenshots, reports, auth files, tokens, logs, or personal data in reusable skill source.
+- Do not mix sibling packages, clones, caches, or workspaces because paths look similar. Use the authoritative target path.
+- Do not weaken validation just to make an optimization pass.
+- Do not duplicate the same rule in `SKILL.md`, `references/`, and scripts. Keep one source of truth.
 
 ## Verification
 
-- `scan` is for reading the surrounding skills before changing anything.
-- `audit` is for deciding whether optimization is actually needed.
-- `verify` is required before finishing. It checks frontmatter, local references, command paths, and helper-script syntax.
-- Run a baseline check before editing when the skill already has a runnable path or reproducible prompt behavior.
-- When the target is a prompt-driven workflow instead of a skill folder, verify with the narrowest reproducible prompt, screenshot review, or failing artifact you can rerun locally.
-- If the target skill has important runtime behavior, run its own script validation after `verify`.
-- Every skill update needs a small working test after the edit. Prefer the cheapest real check that exercises the changed behavior, then iterate on failure instead of reporting a known-broken update as done.
-- Report whether optimization was needed, what changed, what was verified before the edit, what was verified after the edit, and any remaining risk.
+- `scan` is for reading surrounding skills before changing shared patterns.
+- `audit` is for deciding whether optimization is needed and where the repeated workflow lives.
+- `verify` is required after editing a skill folder. It checks frontmatter, local references, command paths, and helper-script syntax.
+- Run `--help` for new or edited scripts.
+- Run a real end-to-end or narrow local execution with concrete generated inputs.
+- For browser, image, computer-control, PDF, report, and test workflows, use the smallest concrete artifact that proves the optimized path actually works.
+- Keep evidence in `cache/` and final reports in `outputs/` when a report is needed.
 
 ## Natural-Language Examples
 
-- "This skill mostly works, but its trigger fires too often. Tighten it."
-- "We are about to use this skill. Audit it first, then optimize only if it is worth it."
-- "This new skill is drafted. Check whether it needs cleanup before we finalize it."
-- "This helper path looks broken. Find the real source and fix the smallest thing that makes it work."
-- "These requirements are repeated in three places. Summarize them into one clear rule and keep the behavior the same."
-- "This check prompt keeps flagging good output as wrong. Trace it and tighten the instruction layer first."
-- "The retry prompt keeps reinforcing the wrong behavior. Fix the smallest prompt or validation block that explains the failure."
+- "This skill repeats the same testing setup every time. Turn it into a local script."
+- "This workflow always creates the same report manifest. Optimize it so future runs use a helper."
+- "The browser QA flow is stable now. Make it reusable instead of spending tokens describing every click."
+- "This image generation process has fixed naming, prompt packaging, and preview steps. Put the repeatable parts into local files."
+- "Before we keep using this skill, check whether repeated deterministic parts should become scripts."
+- "This helper was added for optimization. Run it with real inputs and make sure it still works."
