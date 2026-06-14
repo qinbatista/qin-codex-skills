@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Skill"
+  short_description: "Real testing plus PDF reports"
+  default_prompt: "Use $test-skill to run a real usage test and generate a concise evidence report."

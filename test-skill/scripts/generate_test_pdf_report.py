@@ -216,7 +216,7 @@ def _meta_banner(text, styles):
 def _resolve_cleanup_root(output_path, cleanup_root):
     if cleanup_root: return Path(cleanup_root).expanduser().resolve()
     for parent in (output_path.parent, *output_path.parents):
-        if parent.name == "qin-test-pdf-report": return parent
+        if parent.name == "test-skill": return parent
     return None
 
 

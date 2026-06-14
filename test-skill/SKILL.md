@@ -1,0 +1,112 @@
+---
+name: test-skill
+description: Unified testing and report skill. Use after code, UI, scripts, automations, generated assets, or content have been created or changed; when the user asks to test, verify, QA, smoke test, validate, prove, or generate a report; and whenever completed work needs real executable evidence plus a concise visual PDF report. Requires real runnable tests with concrete generated inputs instead of mock-only or signature-only checks.
+---
+
+# Test Skill
+
+Use this as the single testing and reporting skill. It merges completion verification with PDF report generation.
+
+## Core Rule
+
+Do not finish because the edit is written. Prove the work with a real executable test and package the evidence in a report when the work is code-related, user-facing, visual, or explicitly requested as testing/QA.
+
+For code changes, the primary verification must be a small real use of the changed code:
+
+- Write or run a small script, command, browser flow, app flow, API request, CLI invocation, or generated-input example that exercises the actual changed behavior.
+- Do not stop at checking whether a function exists, whether a method accepts parameters, whether imports work, or whether a type checker/linter passes.
+- Do not call mock-only tests enough when the real behavior can be exercised locally.
+- If the code needs an image, URL, file, JSON, audio, PDF, browser page, API payload, or other input, create a concrete temporary input yourself and run the real path against it.
+- If a service or external dependency cannot be reached, run the closest real local path and state exactly what external part remains unverified.
+
+## Workflow
+
+1. Identify the user requirement and the behavior that must work.
+2. Choose the smallest real test that proves that behavior.
+3. Generate any required concrete inputs, such as temporary images, local files, JSON payloads, HTML pages, localhost URLs, sample PDFs, or API bodies.
+4. Run the actual changed path with those inputs.
+5. Capture evidence: command, input, output, generated files, screenshots, returned JSON, rendered pages, logs, and pass/fail status.
+6. If the test fails and the fix is in scope, fix the code and rerun the real test.
+7. Generate a concise PDF report when code was changed, the user asked for testing/QA/reporting, the result is visual, or the evidence would be clearer as an artifact.
+8. In the final response, state what changed, what real test ran, what passed or failed, where the report is, and what remains unverified.
+
+## Real Test Standards
+
+A good test proves the feature can actually be used:
+
+- Python function: run a short script that imports the real module and calls the changed function with concrete data.
+- CLI: execute the CLI with a temporary input file and inspect the real output file or stdout.
+- API route: send a real request to the local route or local handler and show request/response evidence.
+- UI: open a real page or local preview, interact where needed, and capture screenshots.
+- Image code: create or use a small real image, run the code, and inspect the generated output.
+- URL code: serve or use a real reachable local URL when possible; if external network is unnecessary, create a local HTML/file URL.
+- PDF/document code: create a small document or PDF, run the changed path, and inspect the generated artifact.
+- Unity/editor code: verify in the live Unity Editor when behavior depends on editor rendering, inspector controls, custom windows, import, compile, or generated previews.
+
+Supporting checks such as lint, type check, unit test, import check, build, or syntax check are useful, but they do not replace a real usage test when one is practical.
+
+## Report Requirements
+
+Generate a PDF report when:
+
+- code was changed and the user expects proof the implementation matches the requirement
+- the user asks for testing, QA, validation, smoke test, proof, visual evidence, audit, or a report
+- the output is visual, document-like, image-based, UI-based, or easier to review with screenshots/tables
+- a repo or project rule asks for a report artifact
+
+The report must show real evidence, not only command names:
+
+- user request or expected outcome
+- real test input
+- real output/result
+- pass/fail/warning/skipped status
+- generated files or screenshots when relevant
+- raw logs or run artifacts stored beside the report when useful
+- remaining unverified scope when something could not be tested
+
+Use the bundled manifest/report generator for ordinary reports:
+
+```bash
+python3 scripts/generate_test_pdf_report.py --input /path/to/manifest.json --output /path/to/report.pdf --cleanup-root /path/to/report-cache-root
+```
+
+Read `references/report-manifest.md` when building a manifest.
+
+## Report Layout
+
+Choose the report shape from the evidence:
+
+- Code/API/CLI: compact summary table, real command/input/output, key logs, and status.
+- UI/browser: screenshots, layout notes, interaction results, and console/runtime evidence.
+- Image/edit/generation: before/after or input/output images with readable labels.
+- Document/PDF/spreadsheet/slides: rendered page previews and file paths.
+- Comparison/audit: expected vs actual tables with visible pass/fail cells.
+- Mixed workflows: combine the smallest layout that makes the result reviewable.
+
+Do not force every report into one fixed layout. Do not replace real workflow evidence with only lint, pytest, or compile output.
+
+## Output Rules
+
+- Keep the chat summary short; the PDF is the report.
+- Return the PDF path and show rendered preview image(s) when practical.
+- Keep raw cache artifacts available beside the report, but do not list every internal file unless asked.
+- If no PDF can be generated, report the exact blocker and still provide the real test evidence in chat.
+
+## Guardrails
+
+- Do not claim completion from a mock-only test when a real local test is practical.
+- Do not claim completion from method-parameter, signature, import, or lint checks alone.
+- Do not invent inputs, outputs, screenshots, or pass/fail results that were not actually produced.
+- Do not hide failed or skipped tests.
+- Do not silently drop missing screenshots or artifacts; mark them missing.
+- Do not delete newly generated reports or recent report artifacts.
+- Do not sweep arbitrary folders for cleanup; only clean the selected report-cache root.
+- Do not push or publish code unless the user or active workflow explicitly asks for it.
+
+## Examples
+
+- "I fixed the Python function." -> create a tiny concrete input, call the real function, inspect output, and generate a report if this was a code edit.
+- "This image parser now supports PNG." -> generate a small PNG, run the parser, show returned data and image evidence.
+- "This URL scraper changed." -> serve a local HTML page or use a reachable URL, run the scraper, show extracted output.
+- "Fix the page layout." -> run the local app, capture before/after or current screenshots, and report layout status.
+- "Give me a QA report." -> run the real workflow and return a PDF report with concrete pass/fail evidence.
