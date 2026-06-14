@@ -307,6 +307,13 @@ def read_skill_metadata(skill_dir):
 
 
 def build_readme(skill_paths):
+    rows = []
+    for skill_path in skill_paths:
+        metadata = read_skill_metadata(skill_path)
+        skill_name = metadata.get("name", skill_path.name)
+        description = metadata.get("description", "No description provided.")
+        rows.append((skill_category(skill_name, description), skill_name, description, skill_path.name))
+
     readme_lines = [
         "# qin-codex-skills",
         "",
@@ -314,16 +321,25 @@ def build_readme(skill_paths):
         "",
         "This repository stores global skill source files only. Do not copy the repository `.git` directory into `~/.codex/skills`.",
         "",
+        "## Global Skill Map",
+        "",
+        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in rows]),
+        "",
+        "## Diagram Explanation",
+        "",
+        "- The center node is the full set of user global Codex skills.",
+        "- First-level nodes are skill categories.",
+        "- Second-level nodes are the actual skill names that Codex can invoke.",
+        "- Third-level nodes are internal branches selected by task type; Codex should not run every branch every time.",
+        "",
         "## Skills",
         ""
     ]
-    for skill_path in skill_paths:
-        metadata = read_skill_metadata(skill_path)
-        skill_name = metadata.get("name", skill_path.name)
+    for _, skill_name, description, folder_name in rows:
         readme_lines.extend([
-            f"### [`{skill_name}`](./{skill_path.name}/)",
+            f"### [`{skill_name}`](./{folder_name}/)",
             "",
-            metadata.get("description", "No description provided."),
+            description,
             ""
         ])
     return "\n".join(readme_lines)
