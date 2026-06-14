@@ -515,6 +515,28 @@ def inline_contents(skill_name, language="en"):
     return "<br>".join(f"**{content_name}**: {content_description}" for content_name, content_description in contents_map.get(skill_name, []))
 
 
+def skill_flow(skill_name, language="en"):
+    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
+    flow_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
+    if not flow_names:
+        return "Read the skill body." if language == "en" else "查看 skill 正文。"
+    return " -> ".join(flow_names)
+
+
+def skill_summary_lines(skill_name, description, language="en"):
+    summaries = CHINESE_SKILL_SUMMARIES if language == "zh" else SKILL_SUMMARIES
+    summary = summaries.get(skill_name, short_description(description))
+    if language == "zh":
+        return [
+            f"- **大功能：** {summary}",
+            f"- **内部流程：** {skill_flow(skill_name, language)}",
+        ]
+    return [
+        f"- **Big function:** {summary}",
+        f"- **Internal flow:** {skill_flow(skill_name, language)}",
+    ]
+
+
 def build_skill_summary_table(rows, language="en"):
     category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
     title = "### Skill Contents At A Glance" if language == "en" else "### Skill 内容一览"
@@ -523,12 +545,11 @@ def build_skill_summary_table(rows, language="en"):
         "",
     ]
     for row in rows:
-        category, skill_name = row[:2]
+        category, skill_name, description = row[:3]
         folder_name = row[3] if len(row) > 3 else skill_name
         skill_link = f"[`{skill_name}`](./{folder_name}/)"
         lines.extend([f"#### {skill_link} · {category_labels.get(category, category)}", ""])
-        for content_name, content_description in (CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS).get(skill_name, []):
-            lines.append(f"- **{content_name}**: {content_description}")
+        lines.extend(skill_summary_lines(skill_name, description, language))
         lines.append("")
     return lines
 
@@ -570,8 +591,6 @@ def build_support_skill_details(rows, language="en"):
     if not support_rows:
         return []
     if language == "zh":
-        summaries = CHINESE_SKILL_SUMMARIES
-        contents_map = CHINESE_SKILL_CONTENTS
         lines = [
             "### 管理支持 Skill 内容",
             "",
@@ -579,8 +598,6 @@ def build_support_skill_details(rows, language="en"):
             "",
         ]
     else:
-        summaries = SKILL_SUMMARIES
-        contents_map = SKILL_CONTENTS
         lines = [
             "### Management Support Skill Contents",
             "",
@@ -589,17 +606,14 @@ def build_support_skill_details(rows, language="en"):
         ]
     for _, skill_name, description, folder_name in support_rows:
         skill_title = f"[`{skill_name}`](./{folder_name}/)"
-        lines.extend([f"#### {skill_title}", "", summaries.get(skill_name, short_description(description)), ""])
-        for content_name, content_description in contents_map.get(skill_name, []):
-            lines.append(f"- **{content_name}**: {content_description}")
+        lines.extend([f"#### {skill_title}", ""])
+        lines.extend(skill_summary_lines(skill_name, description, language))
         lines.append("")
     return lines
 
 
 def build_skill_details(rows, language="en"):
     category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
-    summaries = CHINESE_SKILL_SUMMARIES if language == "zh" else SKILL_SUMMARIES
-    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
     lines = [
         "### 技能内容" if language == "zh" else "### Skill Contents",
         "",
@@ -613,14 +627,8 @@ def build_skill_details(rows, language="en"):
             _, skill_name, description = row[:3]
             folder_name = row[3] if len(row) > 3 else ""
             skill_title = f"[`{skill_name}`](./{folder_name}/)" if folder_name else f"`{skill_name}`"
-            lines.extend([f"##### {skill_title}", "", summaries.get(skill_name, short_description(description)), ""])
-            contents = contents_map.get(skill_name, [])
-            if not contents:
-                fallback = "尚未定义固定内容清单；请阅读 skill 正文查看具体能力。" if language == "zh" else "No fixed content list is defined yet; read the skill body for the concrete capability list."
-                lines.extend([f"- {fallback}", ""])
-                continue
-            for content_name, content_description in contents:
-                lines.append(f"- **{content_name}**: {content_description}")
+            lines.extend([f"##### {skill_title}", ""])
+            lines.extend(skill_summary_lines(skill_name, description, language))
             lines.append("")
     return lines
 
