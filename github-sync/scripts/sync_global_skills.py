@@ -537,8 +537,8 @@ def build_skill_graph(rows, language="en"):
     category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
     lines = [
         "```mermaid",
-        '%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88, "wrappingWidth": 340}}}%%',
-        "flowchart LR",
+        '%%{init: {"flowchart": {"nodeSpacing": 18, "rankSpacing": 36, "wrappingWidth": 220}}}%%',
+        "flowchart TD",
     ]
     category_ids = []
     skill_ids = []
@@ -548,11 +548,11 @@ def build_skill_graph(rows, language="en"):
             continue
         category_id = f"category_{mermaid_id(category)}"
         category_ids.append(category_id)
-        lines.append(f'  {category_id}["{padded_label(category_labels.get(category, category), CATEGORY_LABEL_WIDTH)}"]')
+        lines.append(f'  {category_id}["{mermaid_label(category_labels.get(category, category))}"]')
         for _, skill_name, _ in category_rows:
             skill_id = f"skill_{mermaid_id(skill_name)}"
             skill_ids.append(skill_id)
-            lines.append(f'  {category_id} --> {skill_id}["{padded_label(skill_name, SKILL_LABEL_WIDTH)}"]')
+            lines.append(f'  {category_id} --> {skill_id}["{mermaid_label(skill_name)}"]')
     lines.extend([
         "  classDef category fill:#2f2f2f,color:#fff,stroke:#555;",
         "  classDef skill fill:#111,color:#fff,stroke:#eee;",

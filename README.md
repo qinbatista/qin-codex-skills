@@ -62,20 +62,20 @@ Codex skill source and routing overview.
 ### Skill Map
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88, "wrappingWidth": 340}}}%%
-flowchart LR
-  category_Workflow["&emsp;&emsp;&emsp;Workflow / 工作流类&emsp;&emsp;&emsp;"]
-  category_Workflow --> skill_workflow_skill["&emsp;&emsp;&emsp;workflow-skill&emsp;&emsp;&emsp;"]
-  category_Code["&emsp;&emsp;&emsp;&emsp;Code / 代码类&emsp;&emsp;&emsp;&emsp;"]
-  category_Code --> skill_code_skill["&emsp;&emsp;&emsp;&emsp;code-skill&emsp;&emsp;&emsp;&emsp;"]
-  category_Optimization["&emsp;&emsp;Optimization / 优化类&emsp;&emsp;"]
-  category_Optimization --> skill_optimization_skill["&emsp;&emsp;optimization-skill&emsp;&emsp;"]
-  category_Verification["&emsp;&emsp;Verification / 验证类&emsp;&emsp;"]
-  category_Verification --> skill_verify_skill["&emsp;&emsp;&emsp;verify-skill&emsp;&emsp;&emsp;"]
-  category_Testing["&emsp;&emsp;&emsp;Testing / 测试类&emsp;&emsp;&emsp;"]
-  category_Testing --> skill_test_skill["&emsp;&emsp;&emsp;&emsp;test-skill&emsp;&emsp;&emsp;&emsp;"]
-  category_Management["&emsp;&emsp;&emsp;Management / 管理类&emsp;&emsp;&emsp;"]
-  category_Management --> skill_management_skill["&emsp;&emsp;management-skill&emsp;&emsp;"]
+%%{init: {"flowchart": {"nodeSpacing": 18, "rankSpacing": 36, "wrappingWidth": 220}}}%%
+flowchart TD
+  category_Workflow["Workflow / 工作流类"]
+  category_Workflow --> skill_workflow_skill["workflow-skill"]
+  category_Code["Code / 代码类"]
+  category_Code --> skill_code_skill["code-skill"]
+  category_Optimization["Optimization / 优化类"]
+  category_Optimization --> skill_optimization_skill["optimization-skill"]
+  category_Verification["Verification / 验证类"]
+  category_Verification --> skill_verify_skill["verify-skill"]
+  category_Testing["Testing / 测试类"]
+  category_Testing --> skill_test_skill["test-skill"]
+  category_Management["Management / 管理类"]
+  category_Management --> skill_management_skill["management-skill"]
   classDef category fill:#2f2f2f,color:#fff,stroke:#555;
   classDef skill fill:#111,color:#fff,stroke:#eee;
   class category_Workflow,category_Code,category_Optimization,category_Verification,category_Testing,category_Management category;
@@ -172,20 +172,20 @@ Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with 
 ### 技能图
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 44, "rankSpacing": 88, "wrappingWidth": 340}}}%%
-flowchart LR
-  category_Workflow["&emsp;&emsp;&emsp;工作流类 / Workflow&emsp;&emsp;&emsp;"]
-  category_Workflow --> skill_workflow_skill["&emsp;&emsp;&emsp;workflow-skill&emsp;&emsp;&emsp;"]
-  category_Code["&emsp;&emsp;&emsp;&emsp;代码类 / Code&emsp;&emsp;&emsp;&emsp;"]
-  category_Code --> skill_code_skill["&emsp;&emsp;&emsp;&emsp;code-skill&emsp;&emsp;&emsp;&emsp;"]
-  category_Optimization["&emsp;&emsp;优化类 / Optimization&emsp;&emsp;"]
-  category_Optimization --> skill_optimization_skill["&emsp;&emsp;optimization-skill&emsp;&emsp;"]
-  category_Verification["&emsp;&emsp;验证类 / Verification&emsp;&emsp;"]
-  category_Verification --> skill_verify_skill["&emsp;&emsp;&emsp;verify-skill&emsp;&emsp;&emsp;"]
-  category_Testing["&emsp;&emsp;&emsp;测试类 / Testing&emsp;&emsp;&emsp;"]
-  category_Testing --> skill_test_skill["&emsp;&emsp;&emsp;&emsp;test-skill&emsp;&emsp;&emsp;&emsp;"]
-  category_Management["&emsp;&emsp;&emsp;管理类 / Management&emsp;&emsp;&emsp;"]
-  category_Management --> skill_management_skill["&emsp;&emsp;management-skill&emsp;&emsp;"]
+%%{init: {"flowchart": {"nodeSpacing": 18, "rankSpacing": 36, "wrappingWidth": 220}}}%%
+flowchart TD
+  category_Workflow["工作流类 / Workflow"]
+  category_Workflow --> skill_workflow_skill["workflow-skill"]
+  category_Code["代码类 / Code"]
+  category_Code --> skill_code_skill["code-skill"]
+  category_Optimization["优化类 / Optimization"]
+  category_Optimization --> skill_optimization_skill["optimization-skill"]
+  category_Verification["验证类 / Verification"]
+  category_Verification --> skill_verify_skill["verify-skill"]
+  category_Testing["测试类 / Testing"]
+  category_Testing --> skill_test_skill["test-skill"]
+  category_Management["管理类 / Management"]
+  category_Management --> skill_management_skill["management-skill"]
   classDef category fill:#2f2f2f,color:#fff,stroke:#555;
   classDef skill fill:#111,color:#fff,stroke:#eee;
   class category_Workflow,category_Code,category_Optimization,category_Verification,category_Testing,category_Management category;
