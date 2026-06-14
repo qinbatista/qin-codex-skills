@@ -100,7 +100,7 @@ CATEGORY_LABELS = {
 }
 SKILL_SUMMARIES = {
     "workflow-skill": "Controls task decomposition, goal checks, routing, iteration, and final evidence for Codex requests.",
-    "code-skill": "Routes code work to the right coding, prompt, Python, Unity C#, or small-task branch.",
+    "code-skill": "Combines prompt, coding approach, Python, Unity C#, and small-code content.",
     "optimization-skill": "Turns stable repeated workflows into reusable local scripts, references, or assets when that saves tokens.",
     "verify-skill": "Checks UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
     "test-skill": "Runs real executable checks and produces evidence-rich PDF reports.",
@@ -108,54 +108,48 @@ SKILL_SUMMARIES = {
     "codex-switch": "Manages local Codex auth profiles and account switching without exposing private auth data.",
     "github-sync": "Syncs, commits, and pushes Codex skill changes to the public GitHub mirror with privacy checks.",
 }
-SKILL_BRANCHES = {
+SKILL_CONTENTS = {
     "workflow-skill": [
-        ("Task decomposition", "Break the request into ordered task slices before execution."),
-        ("Artifact target map", "Define text, image, code, UI, PDF, skill, GitHub, or management pass targets."),
-        ("Skill routing", "Choose only the relevant production, test, verify, sync, or management route."),
-        ("Code-test-verify spine", "For executable behavior, enforce code-skill -> test-skill -> verify-skill."),
-        ("Completion loop", "Compare evidence against the target map and continue until goals pass or a real blocker appears."),
-        ("Final evidence report", "Keep process detail in the report and keep the final chat concise."),
+        ("Text and Markdown tasks", "Text, markdown, explanation, classification, and rewrite requests with explicit format targets."),
+        ("Code tasks", "Code, Python, Unity C#, prompt-in-code, frontend/UI, scripts, and executable behavior requests."),
+        ("Visual and generated artifacts", "Image, UI, browser screenshot, document, PDF, report, and generated file tasks."),
+        ("Global skill edits", "Create, merge, rename, delete, reorganize, or update global Codex skills."),
+        ("Management tasks", "Account/profile switching and global skill GitHub sync through management-skill."),
+        ("Final evidence reports", "Evidence PDFs and completion reports when the task needs proof."),
     ],
     "code-skill": [
-        ("Prompt generation", "Only for creating, rewriting, or embedding prompts."),
-        ("Coding approach", "Use for assumptions, smallest viable implementation, and surgical edits."),
-        ("Spark small-task routing", "Use only for obvious bounded low-risk code tasks when an allowed route exists."),
-        ("Python rules", "Use for Python modules, scripts, tests, snippets, and Python prompt assignments."),
-        ("Unity C# rules", "Use for Unity MonoBehaviours, ScriptableObjects, managers, and gameplay systems."),
-        ("Real test/report flow", "After code changes, route real executable evidence through test-skill unless testing is explicitly forbidden."),
+        ("Prompt Creating", "Prompt generation only: create, rewrite, or embed prompts into the corresponding text or code."),
+        ("Karpathy Coding Guidelines", "Code thinking and implementation approach for assumptions, simple design, naming, branching, and surgical edits."),
+        ("Python Code Checker", "Python modules, scripts, tests, snippets, prompt assignments, formatting, contracts, error handling, and logging rules."),
+        ("Unity C# Minimal Style", "Unity MonoBehaviours, ScriptableObjects, managers, gameplay systems, editor scripts, lifecycle methods, and Unity C# style."),
+        ("Easy Code Spark", "Small bounded code tasks that can use the Spark small-task route when the task is obvious and low risk."),
     ],
     "optimization-skill": [
-        ("Official compliance audit", "Check a whole user skill collection against official structure, trigger, reference, and token-use rules."),
-        ("Instruction tightening", "Tighten triggers, workflow wording, guardrails, and duplicated requirements."),
-        ("References extraction", "Move long stable context into references/ when it should be loaded only when needed."),
-        ("Script conversion", "Move repeated deterministic steps into scripts/ when it saves tokens and remains testable."),
-        ("Assets/templates", "Store reusable fixtures, templates, or media in assets/ when they are part of the skill."),
-        ("No-op decision", "Leave the skill unchanged when optimization is not justified."),
-        ("Code-skill gate", "Use code-skill before writing or editing helper code."),
+        ("Skill Optimization", "Optimize fixed or repeated skill workflows into local scripts, references, assets, or templates that save tokens."),
+        ("Official skill compliance", "Audit skill structure, frontmatter, trigger descriptions, references, scripts, assets, and token-use behavior."),
+        ("Local script conversion", "Turn stable repeated test, image, browser, computer-control, report, or generation steps into reusable local code."),
+        ("Reference extraction", "Move long stable instructions into references/ so they load only when the task needs them."),
+        ("Assets and templates", "Store reusable fixtures, templates, or media in assets/ when those files are part of the optimized skill."),
     ],
     "verify-skill": [
-        ("UI verification", "Use Taste Skill plus the local problem index for visual/UI checks."),
-        ("Local script/process verification", "Run local scripts with concrete cache inputs and inspect outputs."),
-        ("Code behavior verification", "Define the behavior that test-skill must prove with real execution."),
-        ("Skill/instruction verification", "Check frontmatter, triggers, references, paths, old names, and route behavior."),
-        ("Generated artifact review", "Open, render, parse, or inspect generated files and reports."),
-        ("Mixed route", "Combine only the relevant verification routes when the task spans artifacts."),
+        ("UI Review", "UI/UX, layout, responsive checks, screenshots, frontend polish, browser states, and Taste Skill visual QA."),
+        ("Local Script Verification", "Optimized local scripts and workflows with concrete cache inputs, real outputs, rerun behavior, and output paths."),
+        ("Skill Verification", "SKILL.md frontmatter, trigger wording, referenced files, old-name cleanup, route behavior, and skill structure."),
+        ("Generated Artifact Verification", "Markdown, images, PDFs, documents, reports, data files, and exports through open/render/parse/inspect checks."),
+        ("PDF Evidence Review", "Verify generated PDF reports contain real Input, Used, Output, and Why Pass evidence."),
     ],
     "test-skill": [
-        ("Code/API/CLI evidence", "Run real commands, API calls, or scripts and record input, used method, output, and pass reason."),
-        ("UI/browser evidence", "Capture real screenshots, page states, console/runtime evidence, and viewport details."),
-        ("Image evidence", "Use real source/output images and visual artifacts."),
-        ("Document/PDF evidence", "Render, parse, or inspect documents and PDFs with local tools."),
-        ("Comparison/audit reports", "Show before/after, expected/actual, or audit findings with concrete evidence."),
-        ("Evidence contract", "Every passing case needs Input, Used, Output, and Why Pass."),
+        ("Done Means Tested", "After code or workflow changes, run a small real usage test with concrete inputs and real outputs."),
+        ("Test PDF Report", "Generate a PDF report that records exactly what input was given, what command/tool was used, what output came back, and why it passes."),
+        ("Code/API/CLI Tests", "Real scripts, commands, CLI invocations, API calls, local handlers, stdout, files, JSON, and returned values."),
+        ("UI/Browser Tests", "Real page states, screenshots, viewport sizes, console/runtime evidence, and interaction results."),
+        ("Image/Document/PDF Tests", "Real source/output images, generated files, rendered documents, parsed PDFs, and artifact paths."),
+        ("Comparison/Audit Reports", "Before/after, expected/actual, audit findings, and pass/fail evidence with concrete artifacts."),
     ],
     "management-skill": [
-        ("codex-switch route", "Use the existing codex-switch skill for local Codex auth profiles, profile inspection, backups, imports, and confirmed account switching."),
-        ("github-sync route", "Use the existing github-sync skill for global skill status, public-safety scan, sync, pull, push, and remote commit verification."),
-        ("Privacy guardrails", "Never expose auth files, tokens, cookies, profile IDs, raw logs, cache files, or secrets."),
-        ("Route selection", "Run only the management route needed by the request; do not run account switching and GitHub sync just because both exist."),
-        ("Evidence", "Record the real local command or tool used, output state, remote hash or profile result, and why it satisfies the request."),
+        ("Codex Switch", "Local Codex auth profiles, saved profile listing, usage snapshots, login refresh, profile backup/import, and confirmed account switching."),
+        ("GitHub Sync", "Global skill mirror status, preuse checks, public-safety scan, sync, pull, push, commit, and remote hash verification."),
+        ("Privacy-Safe Management", "Auth files, tokens, cookies, profile IDs, raw logs, cache files, and secrets stay local and are never published."),
     ],
     "codex-switch": [
         ("List profiles", "Inspect saved local auth profile files."),
@@ -449,20 +443,23 @@ def build_support_skill_details(rows):
     if not support_rows:
         return []
     lines = [
-        "## Management Support Skills",
+        "## Management Support Skill Contents",
         "",
         "These are real mirrored skills used by `management-skill`, but they are not shown as separate primary map rows.",
         "",
     ]
     for _, skill_name, description, folder_name in support_rows:
         skill_title = f"[`{skill_name}`](./{folder_name}/)"
-        lines.extend([f"- {skill_title}: {SKILL_SUMMARIES.get(skill_name, short_description(description))}"])
+        lines.extend([f"### {skill_title}", "", SKILL_SUMMARIES.get(skill_name, short_description(description)), ""])
+        for content_name, content_description in SKILL_CONTENTS.get(skill_name, []):
+            lines.append(f"- **{content_name}**: {content_description}")
+        lines.append("")
     return lines
 
 
 def build_skill_details(rows):
     lines = [
-        "## Skill Details",
+        "## Skill Contents",
         "",
     ]
     for category in CATEGORY_ORDER:
@@ -475,12 +472,12 @@ def build_skill_details(rows):
             folder_name = row[3] if len(row) > 3 else ""
             skill_title = f"[`{skill_name}`](./{folder_name}/)" if folder_name else f"`{skill_name}`"
             lines.extend([f"#### {skill_title}", "", SKILL_SUMMARIES.get(skill_name, short_description(description)), ""])
-            branches = SKILL_BRANCHES.get(skill_name, [])
-            if not branches:
-                lines.extend(["- No fixed internal branch list is defined yet; choose the narrowest route from the skill body.", ""])
+            contents = SKILL_CONTENTS.get(skill_name, [])
+            if not contents:
+                lines.extend(["- No fixed content list is defined yet; read the skill body for the concrete capability list.", ""])
                 continue
-            for branch_name, branch_description in branches:
-                lines.append(f"- **{branch_name}**: {branch_description}")
+            for content_name, content_description in contents:
+                lines.append(f"- **{content_name}**: {content_description}")
             lines.append("")
     return lines
 
