@@ -5,4 +5,15 @@ __pycache__/
 *.log
 .env
 .env.*
+cache/
+outputs/
+work/
 data/cache/
+.venv/
+venv/
+node_modules/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

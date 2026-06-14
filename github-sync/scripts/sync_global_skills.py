@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import argparse
+import fnmatch
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -10,7 +12,7 @@ from pathlib import Path
 
 
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
-DEFAULT_STATE_FILE = Path.home() / ".codex" / "state" / "qin-codex-skills-github-sync.json"
+DEFAULT_STATE_FILE = Path.home() / ".codex" / "state" / "github-sync.json"
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
 *.pyc
@@ -18,8 +20,69 @@ __pycache__/
 *.log
 .env
 .env.*
+cache/
+outputs/
+work/
 data/cache/
+.venv/
+venv/
+node_modules/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 """
+EXCLUDED_PARTS = {
+    ".git",
+    ".github",
+    ".DS_Store",
+    "__pycache__",
+    "cache",
+    "outputs",
+    "work",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache"
+}
+EXCLUDED_SUFFIXES = (".pyc", ".pyo", ".log")
+SENSITIVE_NAME_PATTERNS = (
+    ".env",
+    ".env.*",
+    "auth.json",
+    "auth*.json",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "id_rsa",
+    "id_rsa.*",
+    "id_ed25519",
+    "id_ed25519.*",
+    "*credential*.json",
+    "*credentials*.json",
+    "*secret*.json",
+    "*token*.json",
+    "*cookie*.json",
+    "*.sqlite",
+    "*.sqlite3",
+    "*.db"
+)
+SECRET_VALUE_PATTERNS = (
+    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"ghp_[A-Za-z0-9_]{20,}"),
+    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----"),
+    re.compile(r'"(?:access_token|refresh_token|id_token|session_token|api_key|secret|password)"\s*:\s*"[^"\n]{12,}"', re.IGNORECASE),
+    re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
+)
 
 
 def run_command(command, cwd=None):
@@ -27,7 +90,11 @@ def run_command(command, cwd=None):
 
 
 def repository_git_url(repository):
-    return run_command(["gh", "repo", "view", repository, "--json", "sshUrl", "--jq", ".sshUrl"]).stdout.strip()
+    if repository.startswith(("git@", "ssh://", "https://")):
+        return repository
+    if shutil.which("gh"):
+        return run_command(["gh", "repo", "view", repository, "--json", "sshUrl", "--jq", ".sshUrl"]).stdout.strip()
+    return f"git@github.com:{repository}.git"
 
 
 def clone_repository(repository, sandbox):
@@ -45,7 +112,7 @@ def repository_timestamp(repository_dir):
 
 
 def ignored_names(directory, names):
-    return {name for name in names if name in {".git", ".github", ".DS_Store", "__pycache__"} or name.endswith((".pyc", ".pyo", ".log"))}
+    return {name for name in names if name in EXCLUDED_PARTS or name.endswith(EXCLUDED_SUFFIXES)}
 
 
 def skill_directories(skills_dir):
@@ -57,12 +124,56 @@ def included_files(skill_dir):
     for path in skill_dir.rglob("*"):
         if not path.is_file():
             continue
-        if any(part in {".git", ".github", ".DS_Store", "__pycache__"} for part in path.relative_to(skill_dir).parts):
+        if any(part in EXCLUDED_PARTS for part in path.relative_to(skill_dir).parts):
             continue
-        if path.name.endswith((".pyc", ".pyo", ".log")):
+        if path.name.endswith(EXCLUDED_SUFFIXES):
             continue
         files.append(path)
     return sorted(files, key=lambda path: path.relative_to(skill_dir).as_posix())
+
+
+def sensitive_name(relative_path):
+    lower_path = relative_path.as_posix().lower()
+    lower_name = relative_path.name.lower()
+    return any(fnmatch.fnmatch(lower_name, pattern) or fnmatch.fnmatch(lower_path, pattern) for pattern in SENSITIVE_NAME_PATTERNS)
+
+
+def secret_value_issue(path):
+    try:
+        text = path.read_text(errors="ignore")
+    except UnicodeDecodeError:
+        return ""
+    for pattern in SECRET_VALUE_PATTERNS:
+        if pattern.search(text):
+            return pattern.pattern
+    return ""
+
+
+def public_safety_issues(skill_paths):
+    issues = []
+    for skill_path in skill_paths:
+        for path in skill_path.rglob("*"):
+            if not path.is_file():
+                continue
+            relative_path = path.relative_to(skill_path)
+            if any(part in EXCLUDED_PARTS for part in relative_path.parts) or path.name.endswith(EXCLUDED_SUFFIXES):
+                continue
+            mirror_path = f"{skill_path.name}/{relative_path.as_posix()}"
+            if sensitive_name(relative_path):
+                issues.append(f"{mirror_path}: sensitive filename")
+                continue
+            matched_pattern = secret_value_issue(path)
+            if matched_pattern:
+                issues.append(f"{mirror_path}: secret-like content matched {matched_pattern}")
+    return issues
+
+
+def assert_public_safe(skill_paths):
+    issues = public_safety_issues(skill_paths)
+    if issues:
+        message = "Refusing to push private or secret-looking data to the public skill mirror:\n"
+        message += "\n".join(f"- {issue}" for issue in issues)
+        raise RuntimeError(message)
 
 
 def snapshot_hash(skill_paths):
@@ -147,6 +258,87 @@ def build_readme(skill_paths):
     return "\n".join(readme_lines)
 
 
+def skill_category(skill_name, description):
+    text = f"{skill_name} {description}".lower()
+    if skill_name == "code-skill":
+        return "Code"
+    if skill_name in {"github-sync", "qin-codex-auth-swithc"} or "github" in text or "auth" in text:
+        return "Management"
+    if skill_name == "qin-skill-optimization":
+        return "Generation"
+    if skill_name == "test-skill":
+        return "Testing"
+    if skill_name == "verify-skill":
+        return "Verification"
+    if "testing" in text or "report" in text:
+        return "Testing"
+    if "verify" in text or "validation" in text:
+        return "Verification"
+    if "optimization" in text or "prompt" in text or "generate" in text:
+        return "Generation"
+    if "code-related" in text or "coding" in text:
+        return "Code"
+    return "General"
+
+
+def build_overview(skill_paths):
+    rows = []
+    groups = {}
+    for skill_path in skill_paths:
+        metadata = read_skill_metadata(skill_path)
+        skill_name = metadata.get("name", skill_path.name)
+        description = metadata.get("description", "No description provided.")
+        category = skill_category(skill_name, description)
+        rows.append((category, skill_name, description))
+        groups.setdefault(category, []).append(skill_name)
+
+    lines = [
+        "# Current Global Codex Skills",
+        "",
+        f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
+        "",
+        "## Skill List",
+        "",
+        "| Category | Skill | Purpose |",
+        "|---|---|---|"
+    ]
+    for category, skill_name, description in rows:
+        lines.append(f"| {category} | `{skill_name}` | {description} |")
+
+    lines.extend([
+        "",
+        "## Mind Map",
+        "",
+        "```mermaid",
+        "mindmap",
+        "  root((Global Codex Skills))"
+    ])
+    for category in ["Code", "Generation", "Verification", "Testing", "Management", "General"]:
+        if category not in groups:
+            continue
+        lines.append(f"    {category}")
+        for skill_name in groups[category]:
+            lines.append(f"      {skill_name}")
+    lines.extend([
+        "```",
+        "",
+        "## Structure",
+        "",
+        "- Code work enters through `code-skill`.",
+        "- Verification work enters through `verify-skill`.",
+        "- Real tests and report artifacts sit under `test-skill`.",
+        "- Auth and GitHub mirror maintenance sit under Management.",
+        "",
+        "## Current Notes",
+        "",
+        "- The old code skills were merged into `code-skill`.",
+        "- The old testing skills were merged into `test-skill`.",
+        "- UI review was broadened into `verify-skill`.",
+        "- The old image workflow skill was deleted."
+    ])
+    return "\n".join(lines) + "\n"
+
+
 def copy_skill_directory(source_dir, target_dir):
     if target_dir.exists():
         shutil.rmtree(target_dir)
@@ -211,6 +403,8 @@ def pull(repository, skills_dir):
 
 
 def prepare_repository_snapshot(repository_dir, skills_dir):
+    skill_paths = skill_directories(skills_dir)
+    assert_public_safe(skill_paths)
     for path in repository_dir.iterdir():
         if path.name == ".git":
             continue
@@ -220,8 +414,8 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
             path.unlink()
     (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT)
     copied_names = []
-    skill_paths = skill_directories(skills_dir)
     (repository_dir / "README.md").write_text(build_readme(skill_paths))
+    (repository_dir / "current_global_skills_overview.md").write_text(build_overview(skill_paths))
     for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)

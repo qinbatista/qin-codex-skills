@@ -1,9 +1,9 @@
 ---
-name: qin-codex-skills-github-sync
-description: Sync Qin's user global Codex skills with the GitHub repository qin-codex-skills. Use before reading, using, creating, editing, or updating global skills under ~/.codex/skills, and after any global-skill edit so the saved skill code is pushed to GitHub without placing .git metadata inside ~/.codex/skills.
+name: github-sync
+description: Sync, commit, and push Qin's user global Codex skills with the GitHub repository qin-codex-skills. Use before reading, using, creating, editing, renaming, deleting, or updating global skills under ~/.codex/skills, and after any global-skill edit when the saved skill code should be committed and pushed to GitHub without placing .git metadata inside ~/.codex/skills. Always keep the public mirror safe by excluding caches, generated artifacts, auth files, tokens, secrets, local logs, and other private personal data.
 ---
 
-# Qin Codex Skills GitHub Sync
+# GitHub Sync
 
 ## Generated File Placement
 
@@ -11,12 +11,13 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Trigger
 
-Use this skill for global Codex skill synchronization:
+Use this skill for global Codex skill synchronization and GitHub publishing:
 
 - before using or editing any user global skill under `~/.codex/skills`
 - before creating, rewriting, or deleting a user global skill
-- after any global skill has been updated and should be saved to GitHub
+- after any global skill has been updated, renamed, deleted, or created and should be committed and pushed to GitHub
 - when automatically choosing whether the remote `qin-codex-skills` copy or local global skills are newer
+- when the user asks to save, commit, push, publish, or sync global skill changes
 
 This skill is for user global skills. Do not use it for repo-local `AGENTS.md`, plugin-cache skills, bundled `.system` skills, or project-local skills unless the user explicitly asks.
 
@@ -26,14 +27,24 @@ This skill is for user global skills. Do not use it for repo-local `AGENTS.md`, 
 - Default remote repository: `qinbatista/qin-codex-skills`
 - Sync unit: direct child folders under `~/.codex/skills` that contain `SKILL.md`
 
-Exclude `.system`, `.git`, `.github`, `.DS_Store`, `__pycache__`, compiled Python files, logs, credentials, and generated cache artifacts from the global-skill mirror.
+Exclude `.system`, `.git`, `.github`, `.DS_Store`, `__pycache__`, compiled Python files, logs, credentials, auth files, tokens, secrets, private keys, generated cache artifacts, temporary work folders, and other personal/private data from the global-skill mirror.
+
+## Public Safety
+
+Before committing or pushing, inspect the exact diff and block anything that would expose private personal information:
+
+- auth files such as `auth.json`, `auth*.json`, cookies, sessions, tokens, credentials, private keys, `.env`, database files, local cache, generated reports, logs, screenshots, and temporary work folders
+- API keys or token-looking values such as OpenAI `sk-...`, GitHub `ghp_...` or `github_pat_...`, Slack `xox...`, AWS `AKIA...`, private-key blocks, or JSON fields containing real token/password/secret values
+- local-only folders such as `cache/`, `outputs/`, `work/`, `.venv/`, `node_modules/`, build output, and test caches
+
+If any private item is detected, stop the push and report the blocked path or pattern. Do not redact and push a guessed version unless the user explicitly asks for a public-safe rewrite.
 
 ## Workflow
 
 1. Before using, editing, or after editing a global skill, run automatic sync:
 
    ```bash
-   cd /Users/qin/.codex/skills/qin-codex-skills-github-sync
+   cd /Users/qin/.codex/skills/github-sync
    python3 scripts/sync_global_skills.py sync --message "Sync global Codex skills"
    ```
 
@@ -46,29 +57,30 @@ Exclude `.system`, `.git`, `.github`, `.DS_Store`, `__pycache__`, compiled Pytho
 3. Use manual precheck only when you want to inspect differences without changing anything:
 
    ```bash
-   cd /Users/qin/.codex/skills/qin-codex-skills-github-sync
+   cd /Users/qin/.codex/skills/github-sync
    python3 scripts/sync_global_skills.py preuse
    ```
 
 4. Use manual status when you want to preview a local-to-remote push:
 
    ```bash
-   cd /Users/qin/.codex/skills/qin-codex-skills-github-sync
+   cd /Users/qin/.codex/skills/github-sync
    python3 scripts/sync_global_skills.py status
    ```
 
 5. Make the requested global skill edit in `~/.codex/skills`.
 
-6. Run the normal skill validation for the edited skill, including `qin-skill-optimization` verification when a skill folder was created or updated.
+6. Run the normal skill validation for the edited skill. For public mirror changes, verify the changed skill folders parse correctly and the push diff contains only intended public-safe skill files.
 
-7. Run `sync` again after the edit so the local update is pushed if it is the newest side.
+7. Run `sync` or `push` again after the edit so the local update is committed and pushed if it is the newest side.
 
 ## Verification
 
 - After changing this skill, run `python3 scripts/sync_global_skills.py --help`.
 - Before relying on the remote copy, run `python3 scripts/sync_global_skills.py sync`.
 - Before a manual push, run `python3 scripts/sync_global_skills.py status` to preview local-to-remote changes when the scope is unclear.
-- After pushing, verify the repository with `gh repo view qin-codex-skills --json url,visibility,defaultBranchRef`.
+- Before committing or pushing, run a privacy search over the mirror diff and confirm no auth, secret, token, cache, log, or generated artifact is staged.
+- After pushing, verify the repository with `git ls-remote origin refs/heads/<branch>` or `gh repo view qin-codex-skills --json url,visibility,defaultBranchRef` when `gh` is available.
 
 ## Guardrails
 
@@ -76,9 +88,9 @@ Exclude `.system`, `.git`, `.github`, `.DS_Store`, `__pycache__`, compiled Pytho
 - Never copy a `.git` directory into `~/.codex/skills`.
 - Clone or download the GitHub repository only inside a temporary sandbox, then copy skill folders into the global skills folder.
 - Store sync state under `~/.codex/state`, not inside a skill folder or repository checkout.
-- If `gh auth status` fails or the repository is unavailable, report the blocker instead of guessing.
+- Prefer `gh` for repository metadata when available, but fall back to the SSH URL `git@github.com:<owner>/<repo>.git` when `gh` is unavailable.
 - If the remote repository does not exist and the user has asked to publish these skills, create `qin-codex-skills` as a public GitHub repository before pushing.
-- Keep the remote mirror public-safe: do not push auth files, secrets, local logs, cache folders, or binary generated artifacts unless the user explicitly asks and the files are safe.
+- Keep the remote mirror public-safe: do not push auth files, secrets, local logs, cache folders, generated reports, screenshots, local work directories, or binary generated artifacts unless the user explicitly asks and the files are safe.
 
 ## Helper
 
