@@ -269,7 +269,7 @@ def sensitive_name(relative_path):
 
 def secret_value_issue(path):
     try:
-        text = path.read_text(errors="ignore")
+        text = path.read_text(encoding="utf-8", errors="ignore")
     except UnicodeDecodeError:
         return ""
     for pattern in SECRET_VALUE_PATTERNS:
@@ -327,7 +327,7 @@ def latest_local_timestamp(skill_paths):
 def read_sync_state(state_file):
     if not state_file.exists():
         return {}
-    return json.loads(state_file.read_text())
+    return json.loads(state_file.read_text(encoding="utf-8"))
 
 
 def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
@@ -338,13 +338,13 @@ def write_sync_state(state_file, repository, remote_head, local_hash, remote_has
         "local_hash": local_hash,
         "remote_hash": remote_hash,
         "synced_at": int(time.time())
-    }, indent=2) + "\n")
+    }, indent=2) + "\n", encoding="utf-8")
 
 
 def read_skill_metadata(skill_dir):
     frontmatter_lines = []
     in_frontmatter = False
-    for line in (skill_dir / "SKILL.md").read_text().splitlines():
+    for line in (skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines():
         if line == "---":
             if in_frontmatter:
                 break
@@ -777,12 +777,12 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
             shutil.rmtree(path)
         else:
             path.unlink()
-    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT)
+    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT, encoding="utf-8")
     copied_names = []
-    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"))
-    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"))
-    (repository_dir / "current_global_skills_overview.md").write_text(build_overview(skill_paths, language="en"))
-    (repository_dir / "current_global_skills_overview.zh.md").write_text(build_overview(skill_paths, language="zh"))
+    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
+    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"), encoding="utf-8")
+    (repository_dir / "current_global_skills_overview.md").write_text(build_overview(skill_paths, language="en"), encoding="utf-8")
+    (repository_dir / "current_global_skills_overview.zh.md").write_text(build_overview(skill_paths, language="zh"), encoding="utf-8")
     for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)
