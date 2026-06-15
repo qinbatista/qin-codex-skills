@@ -1,6 +1,6 @@
 ---
 name: verify-skill
-description: "Executor skill under workflow-skill for verification. Use after workflow-skill routes work into checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, or validate that an optimized local script/process still works. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes. Its verification routes are multi-select: combine every route needed by the artifact."
+description: "Executor skill under workflow-skill for verification. Use after workflow-skill routes work into checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, validate that an optimized local script/process still works, or decide whether a failure is fixable. When verification fails, classify feasibility, try safe alternative repair routes before failing, and stop only for logical impossibility or missing user-controlled access such as tokens or private credentials. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes. Its verification routes are multi-select: combine every route needed by the artifact."
 ---
 
 # Verify Skill
@@ -29,6 +29,26 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 - Verification PDFs must list the real `Input`, `Used`, `Output`, and `Why Pass` for every passing case. A green status, `OK`, `PASS`, or method name alone is not evidence.
 - If the task produced UI, run the UI verification route below before calling the UI acceptable.
 
+## Feasibility And Repair Loop
+
+Verification includes active recovery when a failure is theoretically solvable. Do not stop at "it failed" when safe, task-scoped repair attempts are available.
+
+1. Reproduce the failure with the smallest real input that still shows the problem.
+2. Classify the blocker:
+   - **Fixable in scope**: code error, broken selector, bad layout, missing generated file, wrong command, bad local script arguments, flaky local state, missing local cache, stale dependency, browser console error, failed PDF parse, or incomplete report evidence.
+   - **Potentially fixable with alternate route**: UI needs browser inspection, local app state needs computer/browser control, logs/history may reveal a prior working state, docs or package behavior may have changed, network data is needed, or a different implementation path can satisfy the same user goal.
+   - **Not logically solvable by Codex alone**: missing user token, private website/account access not granted, required paid service unavailable, contradictory requirements, missing source artifact that cannot be recreated, external production permission not approved, or a task that would require exposing secrets.
+3. For fixable cases, try a bounded repair loop:
+   - inspect error logs, stack traces, console output, network failures, generated reports, cache contents, previous run artifacts, and relevant git/history evidence;
+   - try a direct fix when the cause is clear, then rerun the same verification;
+   - if the direct route fails, try a different safe route such as browser automation, in-app browser inspection, computer control, local script adjustment, alternate library/API, official docs, current web search, or a simpler implementation that still meets the user's target;
+   - create missing test inputs, sample files, images, URLs, or local fixtures inside `cache/` when the real workflow needs them and the user did not provide them;
+   - keep each attempt tied to the original pass target instead of drifting into a different goal.
+4. Stop and ask the user only when the remaining blocker is not logically solvable without user-controlled access, approval, payment, secrets, or a missing source artifact. State the exact missing condition and the command/page/evidence that proved it.
+5. Record every failed attempt that materially changed the diagnosis: input, method used, observed output, why it failed, next route tried, and final stop reason or pass reason.
+
+Use this loop before returning a fail verdict for code, UI, local scripts, reports, generated assets, browser flows, and skill/process verification.
+
 ## Workflow
 
 1. Identify the user's requested outcome and the artifact that should prove it.
@@ -36,9 +56,10 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 3. Load only the reference needed for that type.
 4. Build a concrete check with real input, real output, and pass/fail criteria.
 5. Run or inspect the actual artifact, not a mock substitute, when local execution is practical.
-6. Record what was given, what tool/command/workflow was used, what came back, and why that output satisfies or fails the requirement.
-7. If the check fails and the fix is in scope, fix the artifact and verify again.
-8. Report what passed, what failed, what remains unverified, and where the evidence lives.
+6. If the check fails, run the Feasibility And Repair Loop before returning a fail verdict.
+7. Record what was given, what tool/command/workflow was used, what came back, and why that output satisfies, fails, or remains blocked.
+8. If the check fails and a fix is in scope, fix the artifact and verify again.
+9. Report what passed, what failed, what was attempted, what remains unverified, and where the evidence lives.
 
 ## UI Verification
 
@@ -120,9 +141,13 @@ Use this route for generated documents, reports, images, PDFs, markdown, data fi
 - Do not verify a local script by reading it only; run it with concrete inputs when possible.
 - Do not leave generated verification inputs outside `cache/`.
 - Do not hide warnings. A warning is acceptable only when the exact remaining uncertainty is stated.
+- Do not loop forever. Prefer two to three meaningful repair routes, then stop with the exact blocker if the remaining issue requires user action.
+- Do not use private credentials, production writes, account switching, payment, or destructive actions as a repair route unless the user explicitly approves that route.
+- Do not turn an infeasible task into a fake pass. If the blocker is missing token/access or a logical contradiction, terminate verification and ask for the missing condition.
 
 ## Examples
 
 - "Check whether this UI is acceptable" -> use the UI route, Taste Skill, local problem index, and real screenshots.
 - "Verify this optimized script still works" -> run the script with concrete cache inputs and inspect real outputs.
 - "Audit this generated PDF report" -> parse or render the PDF and check the required evidence rows.
+- "Verify this browser flow but login fails" -> inspect console/network/history, try safe alternate browser or local fixture routes, then stop only if private credentials or user approval are required.

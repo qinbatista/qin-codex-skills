@@ -1,11 +1,11 @@
 ---
 name: optimization-skill
-description: "Executor skill under workflow-skill for optimization. Use after workflow-skill routes a task into optimizing repetitive Codex skills and fixed workflows into reusable local files, scripts, references, or assets that save tokens and execution time. Use when the user explicitly asks to optimize a skill or repeated process into local code/files; when a skill workflow is stable but too verbose; when repeated test, image, browser, computer-control, report, or generation steps can become deterministic Python scripts; or when Codex notices a highly repeated fixed flow that should be made reusable. Must prepare references first, follow code-skill for all code/script work, and verify the optimized workflow with real execution before finishing. Its optimization routes are multi-select: combine every route needed by the repeated workflow."
+description: "Executor skill under workflow-skill for post-task optimization of repetitive user workflows into reusable skill resources. Use when the user explicitly asks to optimize a skill or process; when a user repeats a similar task after a completed workflow; when stable image generation, browser/Chrome, computer-control, test, report, generation, or verification steps can become scripts, references, or assets; or when Codex notices a fixed flow that should be faster next time. Optimize the owning user skill after the task is complete; do not modify skills in the middle of an unrelated active task unless skill optimization is the task. Prepare references, use code-skill for code, use test-skill/verify-skill for proof, and verify real execution."
 ---
 
 # Optimization Skill
 
-Use this as the optimization executor selected by `workflow-skill` for turning fixed, repeated Codex workflows into reusable local resources. The main job is to reduce future token use and make repeated work faster without changing the user's intended behavior.
+Use this as the optimization executor selected by `workflow-skill` for turning fixed, repeated Codex workflows into reusable local resources. The main job is workflow management and workflow verification: identify stable repeated flows, move reusable mechanics into the relevant user-owned skill or local helper, and prove the optimized path still works. Optimization should reduce future token use and make repeated work faster without changing the user's intended behavior.
 
 ## Generated File Placement
 
@@ -21,9 +21,12 @@ Reusable resources that are meant to become part of a skill belong inside that t
 
 This skill supports several optimization routes. Do not optimize every listed workflow type. Select every route that matches the repeated behavior: tighten instructions, move long stable details into `references/`, convert deterministic steps into `scripts/`, add reusable `assets/`, or leave the skill unchanged when optimization is not justified. These routes can be combined when the workflow needs more than one. If code is needed, use `code-skill`; if only wording or references are needed, do not invent a script.
 
+Optimization routes may proceed by using other skills and workflows to do the work: `code-skill` for scripts, `test-skill` for real execution, `verify-skill` for proof, browser/computer-control skills for stable UI flows, and management-skill when a verified global skill change must be synced. This skill coordinates those routes; it does not replace them.
+
 ## Trigger
 
 - The user explicitly asks to optimize a skill, fixed process, prompt workflow, or repeated Codex behavior into local files or scripts.
+- A task has completed, and the user asks to do the same or similar task again, such as repeated image generation, repeated browser steps, repeated Google/Chrome page setup, repeated website interactions, repeated report creation, or repeated verification commands.
 - A workflow repeats often enough that Codex keeps spending tokens on the same deterministic setup, checks, browser steps, image-prep steps, computer-control steps, reports, or test procedures.
 - A skill mostly works but contains bulky, repeated, or fragile instructions that could be moved into `scripts/`, `references/`, or `assets/`.
 - A local helper script, reference file, fixture, template, or cache-safe workflow would make future execution faster and more reliable.
@@ -32,10 +35,25 @@ This skill supports several optimization routes. Do not optimize every listed wo
 ## Optimization Goal
 
 - Convert repeated deterministic behavior into reusable local Python scripts or other local resources when that saves tokens or execution time.
+- Optimize the related skill that owns the repeated task, not this optimization workflow itself, unless the user explicitly asks to improve `optimization-skill`.
 - Keep reasoning-heavy, variable, or judgment-based work in `SKILL.md`; move stable mechanics into scripts or references.
 - Preserve the original workflow contract. Optimization should make the same job faster, clearer, or more reliable, not change what the job means.
 - Use the target skill's own folder as the permanent home for reusable files whenever the optimization belongs to that skill.
 - Keep task-specific generated inputs, reports, screenshots, previews, and logs in `cache/` or `outputs/`, not inside the reusable skill source.
+
+## Post-Task Optimization Rule
+
+Do not edit skills while an unrelated active task is still trying to reach its user-facing goal. First finish the requested task through its normal workflow, test it, verify it, and report the result. After completion, if the user repeats a similar task or explicitly asks for optimization, run this skill as a separate optimization pass.
+
+When a repeated pattern is obvious after task completion:
+
+1. Identify the owning skill: image generation/editing, browser flow, computer-control flow, testing/reporting, verification, code, management, or another user skill.
+2. Summarize the repeated steps as concrete inputs, commands, browser actions, files, outputs, and pass criteria.
+3. Decide what belongs in that owning skill: a shorter instruction, a `references/` note, a deterministic `scripts/` helper, or a reusable `assets/` template.
+4. Add the optimization to the owning skill only after reading its current files and preparing references.
+5. Verify the optimized route with a small real run so the next similar task is faster.
+
+If the user says "optimize this", "next time faster", "make this repeatable", or repeats the same image/browser/computer/report/test flow, include concrete suggestions for proactive optimization of the user's own relevant skill, then implement them when the request authorizes skill changes.
 
 ## Required Code-Skill Gate
 
@@ -65,7 +83,7 @@ If the references are missing or ambiguous, pause the optimization decision and 
 2. Run `python3 scripts/skill_optimizer.py scan "<skills-root>"` when optimizing a skill collection or when peer skills may already solve the same pattern.
 3. Run `python3 scripts/audit_global_skills.py "<skills-root>" --output cache/skill-audit.json` when checking a whole user skill collection against official skill structure, trigger, reference, and token-use rules.
 4. Run `python3 scripts/skill_optimizer.py audit "<target-skill-folder>"` before editing a target skill folder.
-5. Decide whether the fix belongs in instructions, references, scripts, assets, or a combination:
+5. Decide which related skill owns the repeated process and whether the fix belongs in instructions, references, scripts, assets, or a combination:
    - Keep variable judgment in `SKILL.md`.
    - Move long reusable background into `references/`.
    - Move deterministic execution into `scripts/`.
@@ -85,7 +103,9 @@ If the references are missing or ambiguous, pause the optimization decision and 
 - Repeated real-test setup that can become a local runner script.
 - Repeated PDF/report manifest generation that can become a helper script or template.
 - Repeated image-generation setup, prompt packaging, asset naming, or preview preparation.
+- Repeated image workflows where the same source gathering, prompt structure, output naming, preview, or report steps recur.
 - Repeated browser verification flows that can become a Playwright or Browser-control script.
+- Repeated Chrome/Google/browser operation flows such as opening the same page, performing the same stable clicks, collecting the same evidence, or exporting the same result.
 - Repeated computer-control flows where the UI path is stable and permission-safe.
 - Repeated skill validation, frontmatter checks, reference checks, or public-safety scans.
 - Long copied instructions that are better as a compact `SKILL.md` pointer plus a `references/` file.
@@ -94,6 +114,8 @@ If the references are missing or ambiguous, pause the optimization decision and 
 ## Guardrails
 
 - Do not optimize just because a skill exists. Optimize only when the workflow is repeated, fixed, slow, token-heavy, fragile, or explicitly requested.
+- Do not modify skills during the active execution of another task unless that task is itself a skill optimization request. Finish the task first, then optimize as a separate pass.
+- Do not optimize `optimization-skill` when the repeated workflow belongs to another skill. Optimize the owning user skill or its helper resources.
 - Do not move reasoning-heavy judgment into code. Scripts should execute stable mechanics, not guess user intent.
 - Do not create untested helper code.
 - Do not leave a script that cannot run, cannot show `--help`, or depends on undocumented local files.
@@ -120,5 +142,6 @@ If the references are missing or ambiguous, pause the optimization decision and 
 - "This workflow always creates the same report manifest. Optimize it so future runs use a helper."
 - "The browser QA flow is stable now. Make it reusable instead of spending tokens describing every click."
 - "This image generation process has fixed naming, prompt packaging, and preview steps. Put the repeatable parts into local files."
+- "I need to do this same image/browser/computer-control task again" -> finish the current task, then optimize the owning skill so the repeated setup is faster next time.
 - "Before we keep using this skill, check whether repeated deterministic parts should become scripts."
 - "This helper was added for optimization. Run it with real inputs and make sure it still works."

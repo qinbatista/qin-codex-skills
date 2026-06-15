@@ -1,4 +1,4 @@
 interface:
   display_name: "Verify Skill"
-  short_description: "Verification executor routed by workflow-skill"
-  default_prompt: "After $workflow-skill routes the task here, use $verify-skill to select every relevant verification route, run real verification, and report the real input, tool or command used, real output, and pass reason."
+  short_description: "Verification with active repair attempts"
+  default_prompt: "After $workflow-skill routes the task here, use $verify-skill to run real verification, try safe repair routes for fixable failures, and report the real input, method, output, and pass or stop reason."
