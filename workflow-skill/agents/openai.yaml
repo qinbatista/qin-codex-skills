@@ -1,4 +1,4 @@
 interface:
   display_name: "Workflow Skill"
-  short_description: "Always-first task workflow controller"
-  default_prompt: "Use $workflow-skill first to plan the task, select every required executor skill route, verify completion, and report the result."
+  short_description: "Lightweight routing or full task workflow"
+  default_prompt: "Use $workflow-skill to choose lightweight routing for simple direct work, or the full workflow for concrete coding, file-changing, multi-step, or evidence-heavy tasks."

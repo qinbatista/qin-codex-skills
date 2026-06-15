@@ -1,17 +1,22 @@
 ---
 name: workflow-skill
-description: "Always-first global workflow controller for Codex requests. Use for every user task request before any other user/global skill for task work. It decomposes the request, defines explicit goals, selects executor skills, routes code/script/workflow work through code-skill before test-skill and verify-skill, loops until stated goals pass, and keeps process detail in the report instead of the final chat. Its routes are multi-select: combine every executor route needed by the task."
+description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. For obvious simple work such as answering a question, reading a file, listing state, or running a clear command, keep the workflow implicit and do not run the full code/test/verify spine unless the risk or value justifies it. For real task work, decompose goals, select executor skills, route code/script work through code-skill before test-skill and verify-skill, loop until pass, and keep process detail in the report."
 ---
 
 # Workflow Skill
 
-Use this as the mandatory first workflow layer for user tasks. It turns a request into a target map, chooses the relevant executor skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
+Use this as the workflow layer for user tasks. It has two modes:
+
+- **Lightweight routing check** for simple, obvious, low-risk work.
+- **Explicit workflow controller** for concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
+
+The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
 
 ## Always-First Rule
 
-`workflow-skill` is the entrypoint and controller. Start it before any other user/global skill when executing a task. Other skills are executors selected by `workflow-skill`; they should not be treated as independent first-entry controllers for task work.
+`workflow-skill` is the entrypoint and controller for substantive task work. Start with its routing decision before any other user/global skill when executing a task that needs planning, implementation, verification, or evidence. Other skills are executors selected by `workflow-skill`; they should not be treated as independent first-entry controllers for task work.
 
-For tiny direct answers, keep the target map implicit and lightweight, but the routing decision still belongs to `workflow-skill`.
+For tiny direct answers, obvious file inspection, state listing, or one-shot command execution, keep the target map implicit and lightweight. Do the requested action directly, then answer with the result. Do not expand into a formal target map, executor route list, report, or code/test/verify spine unless the request has real risk, ambiguity, side effects, or a verification requirement.
 
 ## Generated File Placement
 
@@ -27,15 +32,38 @@ Use `scripts/validate_workflow_skill.py` only to validate this skill's routing c
 
 ## Trigger
 
-Use this skill as the starting controller for user task requests before invoking any other user/global skill. For tasks that require planning, multiple steps, skill routing, testing, verification, iteration, global skill changes, or a final evidence report, write the target map explicitly. For a tiny direct answer, keep the target map implicit and lightweight.
+Use this skill as the starting routing decision for user task requests before invoking any other user/global skill.
+
+Write the explicit target map only when the task is worth that overhead:
+
+- concrete code/programming work
+- editing files or changing executable behavior
+- multi-step work with dependencies or unclear order
+- UI, image, document, PDF, report, or generated artifact work
+- skill creation, deletion, renaming, reorganization, or sync
+- browser/computer-control workflows with observable pass criteria
+- tests, verification, debugging, repair, optimization, or evidence reports
+- anything high-risk, high-stakes, ambiguous, or likely to require iteration
+
+Keep the workflow implicit and lightweight for simple obvious work:
+
+- answering a direct question
+- reading, listing, or summarizing a file
+- checking status
+- running a clearly requested command
+- returning a short explanation where no file changes, side effects, or formal proof are needed
+
+Even in lightweight mode, use judgment: if the simple-looking request has hidden side effects, may change state, may be destructive, or needs proof, upgrade to explicit workflow mode.
 
 ## Workflow
 
-Start with `workflow-skill`, run the start contract, route the necessary executor skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
+For explicit workflow mode, run the start contract, route the necessary executor skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
+
+For lightweight mode, do not display or run the full workflow. Make the smallest routing decision needed, perform the direct action, and answer.
 
 ## Start Contract
 
-Before doing the work, write a short target map:
+In explicit workflow mode, before doing the work, write a short target map:
 
 1. `Task slices`: the ordered pieces of work.
 2. `Artifacts`: what will exist or change, such as text, code, image, UI, PDF, Markdown, skill files, or GitHub state.
@@ -56,9 +84,11 @@ Make the pass target match the artifact:
 
 Begin after the target map unless the request is ambiguous, dangerous, destructive, or needs user credentials.
 
+Skip the written target map in lightweight mode.
+
 ## Mandatory Execution Spine
 
-For code, local scripts, automations, global-skill scripts, website/app work, or any task that creates or edits executable behavior, run this order:
+For concrete code/programming, local scripts, automations, global-skill scripts, website/app work, or any task that creates or edits executable behavior, run this order:
 
 ```text
 workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check
@@ -69,6 +99,8 @@ workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check
 - `verify-skill`: executor for comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements.
 
 For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `test-skill` and `verify-skill` when objective evidence or a report is required.
+
+Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, or a single clear command that only reports state. Use the full spine only when the task changes code/behavior/artifacts, needs debugging, or benefits from real verification evidence.
 
 For global skill creation, deletion, rename, or editing, include `management-skill` before reading/editing and after verification when the user wants the saved skill pushed. Use the GitHub sync route inside `management-skill` for the actual mirror operation.
 
@@ -82,6 +114,8 @@ After `test-skill` and `verify-skill`, compare the observed evidence with the ta
 - If any pass target is not met, continue from the relevant execution step, fix the issue, retest, and verify again.
 - Do not stop because the method was attempted. Stop only because the target is met, the user changes the goal, or a real blocker prevents progress.
 
+For lightweight mode, the stop condition is simply that the direct requested answer, file read, status check, or command output was delivered.
+
 ## Final Response
 
 Keep the final chat short. State what changed, what passed, where the deliverables are, and any remaining unverified scope. Do not repeat the full process report in chat; put process details, inputs, commands, outputs, and why-pass evidence in the generated report.
@@ -89,6 +123,7 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 ## Guardrails
 
 - Do not start a worker skill before `workflow-skill` for task work.
+- Do not over-process simple work. Avoid formal plans, internal route expansion, PDF reports, or test/verify loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not replace `test-skill` evidence with a method-only or status-only claim.
@@ -99,6 +134,8 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 - "Create a new skill and push it" -> decompose, use management-skill with its GitHub sync route, code-skill for scripts, test-skill, verify-skill, then sync.
 - "Fix this Python script" -> decompose, use code-skill, run a real Python input through test-skill, then verify behavior.
 - "Review this UI" -> decompose visual targets, use verify-skill UI route, capture real evidence, and report blockers.
+- "What does this file say?" -> lightweight mode: read the file and answer, no formal workflow.
+- "Run `date`" -> lightweight mode: run the command and report the output.
 
 ## Verification
 
