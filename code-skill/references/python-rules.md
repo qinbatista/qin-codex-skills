@@ -10,7 +10,9 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 
 ## Formatting And Structure
 
-- Keep function signatures and function or method calls on one line when reasonably possible.
+- Keep every function signature and every function/method call with parameters on one physical line, no matter how many parameters it has.
+- Do not wrap argument lists over multiple lines. This includes constructors, builtins such as `any()`/`all()`, logging calls, helper calls, and chained method calls.
+- For long calls, create clear intermediate variables first, then keep the final call on one line.
 - Preserve the existing manual formatting style of the touched file.
 - Do not run `ruff format`, `black`, or any auto-formatter unless explicitly requested.
 - Keep imports at the top of the file.
