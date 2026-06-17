@@ -112,6 +112,13 @@ Choose the report shape from the evidence:
 
 Do not force every report into one fixed layout. Do not replace real workflow evidence with only lint, pytest, or compile output.
 
+For PDF report tables, use adaptive full-page layout. The table should fill the useful page area instead of sitting as tiny text at the top or overflowing as oversized rows. Choose page size, orientation, font size, row height, column widths, and page splits from the amount of data:
+
+- If the table has little data, increase font size, row height, and spacing so it uses most of the page width and height.
+- If the table has many rows or long cells, reduce font size only enough to stay readable, wrap text cleanly, and split into logical continuation pages.
+- Keep related proof columns and status/reason columns together when practical; do not scatter one small table across several sparse pages.
+- Render preview pages and reject reports with unreadably small text, excessive blank lower page space, clipped text, or wildly inconsistent table scale between pages.
+
 ## Output Rules
 
 - Keep the chat summary short; the PDF is the report.

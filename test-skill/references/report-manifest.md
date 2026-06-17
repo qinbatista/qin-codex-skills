@@ -370,6 +370,12 @@ For `step_by_step`, prefer one step block per page or one compact group of short
 - For step-by-step reports, make the instructions and ordered steps visible before the evidence detail.
 - Keep report section titles explicit, usually `Summary`, `Testing Summary`, `Testing N`, and `Evidence`.
 - Add one short legend near the testing section so the user knows that `Input` is what was given, `Used` is what ran, `Output` is what came back, and `Why Pass` is the acceptance reason. `Check` / `Result` should stay fallback summary labels only for non-pass or legacy cases.
+- Size tables adaptively from content and the page, not from fixed tiny defaults. Estimate the row count, wrapped text length, column count, and available page rectangle before choosing the page size, orientation, font size, row height, and continuation splits.
+- Maximize useful page use: short comparison tables should become larger and easier to read, with bigger type and row height; dense comparison tables should become smaller only as needed to remain readable.
+- Avoid report pages where the table uses only the top strip and leaves most of the page blank. If a table is short, enlarge it or merge it with nearby evidence; if it is wide, use landscape or a larger page before shrinking text.
+- Avoid inconsistent table scale between pages unless the data density genuinely differs. Recompute density per logical table group, and keep same-group pages visually consistent.
+- Split tables by semantic groups, row chunks, or column groups only when a single page would be unreadable. Do not create several sparse pages for one small table.
+- After rendering, inspect page PNGs for tiny text, excessive blank space, clipped cells, awkward page breaks, and unusable column widths. Regenerate with adjusted sizing before delivering.
 - Keep the report header visually proportional. Avoid oversized title and subtitle blocks when a smaller, tighter title fits the page better.
 - Prefer one compact first-line meta banner for purpose, status, and counts instead of multiple full-width banner rows.
 - Keep the first page summary short, usually `Goal`, `Result`, and `Context`, instead of splitting basic metadata across many small tables.

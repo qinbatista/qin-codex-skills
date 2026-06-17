@@ -128,6 +128,7 @@ Use this route for generated documents, reports, images, PDFs, markdown, data fi
 - Open, render, parse, or inspect the artifact with the strongest practical local tool.
 - Check the artifact against the user's requested content, format, and naming.
 - For PDF reports, verify that each passing case contains real input, used method, real output, and a pass reason; fail the report review if it only says `OK`, `PASS`, or `done`.
+- For PDF reports with tables, render representative pages and reject unreadably small text, oversized rows, clipped cells, sparse pages where a small table sits at the top, or inconsistent table scale across continuation pages. The table should adapt font size, row height, page size, orientation, and splits to maximize useful page area while staying readable.
 - Keep raw generation inputs and review logs in `cache/`; keep final deliverables in the requested location or `outputs/`.
 
 ## Relationship To Test Skill
