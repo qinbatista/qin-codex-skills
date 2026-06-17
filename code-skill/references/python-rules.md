@@ -12,6 +12,8 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 
 - Keep every function signature and every function/method call with parameters on one physical line, no matter how many parameters it has.
 - Do not wrap argument lists over multiple lines. This includes constructors, builtins such as `any()`/`all()`, logging calls, helper calls, and chained method calls.
+- Keep every Python dict, list, set, tuple, and comprehension literal on one physical line when it appears in executable code. This includes assignments such as `prompt_json = {...}`, return values, log payloads, and inline input/output objects.
+- Do not write vertical payload literals like `prompt_json = { ... }`. Create clear intermediate variables first when needed, then keep the final literal on one line.
 - For long calls, create clear intermediate variables first, then keep the final call on one line.
 - Preserve the existing manual formatting style of the touched file.
 - Do not run `ruff format`, `black`, or any auto-formatter unless explicitly requested.
