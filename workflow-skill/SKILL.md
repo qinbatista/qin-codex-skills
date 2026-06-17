@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. For obvious simple work such as answering a question, reading a file, listing state, or running a clear command, keep the workflow implicit and do not run the full code/test/verify spine unless the risk or value justifies it. For real task work, decompose goals, select executor skills, route code/script work through code-skill before test-skill and verify-skill, loop until pass, and keep process detail in the report."
+description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real task work, decompose goals, select executor skills, route code/script work through code-skill before test-skill and verify-skill, loop until pass, and keep process detail in the report."
 ---
 
 # Workflow Skill
@@ -17,6 +17,17 @@ The explicit workflow turns a request into a target map, chooses the relevant ex
 `workflow-skill` is the entrypoint and controller for substantive task work. Start with its routing decision before any other user/global skill when executing a task that needs planning, implementation, verification, or evidence. Other skills are executors selected by `workflow-skill`; they should not be treated as independent first-entry controllers for task work.
 
 For tiny direct answers, obvious file inspection, state listing, or one-shot command execution, keep the target map implicit and lightweight. Do the requested action directly, then answer with the result. Do not expand into a formal target map, executor route list, report, or code/test/verify spine unless the request has real risk, ambiguity, side effects, or a verification requirement.
+
+## Start Diagram Rule
+
+Before task action, write a user-facing workflow diagram first whenever `workflow-skill` handles the request.
+
+- In lightweight mode, show a compact direct-route diagram and one sentence naming the direct action and stop condition.
+- In explicit workflow mode, show a task-specific Mermaid diagram and the target map before implementation, file edits, tool-side effects, or worker-skill execution.
+- The diagram must name the actual work inside the route: relevant files, artifacts, commands, tests, reports, skill sync, browser checks, or verification steps. Do not hide the task behind generic labels such as "do work" or "process".
+- Keep the diagram concise. Show meaningful task-level steps, not every tiny shell command.
+- If the request is ambiguous, dangerous, destructive, or needs credentials, show the diagram up to the decision point and ask for the missing approval/input before side effects.
+- Read `references/start-diagram-template.md` when a quick fill-in template would save time or keep the diagram consistent.
 
 ## Generated File Placement
 
@@ -45,7 +56,7 @@ Write the explicit target map only when the task is worth that overhead:
 - tests, verification, debugging, repair, optimization, or evidence reports
 - anything high-risk, high-stakes, ambiguous, or likely to require iteration
 
-Keep the workflow implicit and lightweight for simple obvious work:
+Keep the workflow lightweight for simple obvious work:
 
 - answering a direct question
 - reading, listing, or summarizing a file
@@ -53,17 +64,26 @@ Keep the workflow implicit and lightweight for simple obvious work:
 - running a clearly requested command
 - returning a short explanation where no file changes, side effects, or formal proof are needed
 
-Even in lightweight mode, use judgment: if the simple-looking request has hidden side effects, may change state, may be destructive, or needs proof, upgrade to explicit workflow mode.
+Even in lightweight mode, show the small direct-route diagram first. Use judgment: if the simple-looking request has hidden side effects, may change state, may be destructive, or needs proof, upgrade to explicit workflow mode.
 
 ## Workflow
 
-For explicit workflow mode, run the start contract, route the necessary executor skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
+For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
 
-For lightweight mode, do not display or run the full workflow. Make the smallest routing decision needed, perform the direct action, and answer.
+For lightweight mode, display only the compact direct-route diagram, make the smallest routing decision needed, perform the direct action, and answer.
 
 ## Start Contract
 
-In explicit workflow mode, before doing the work, write a short target map:
+For lightweight mode, before the direct action, write this compact shape with task-specific labels:
+
+```mermaid
+flowchart LR
+  A["User request"] --> B["Direct action"] --> C["Answer/result"]
+```
+
+Then do the direct action.
+
+For explicit workflow mode, before doing the work, write a task-specific Mermaid start diagram followed by a short target map:
 
 1. `Task slices`: the ordered pieces of work.
 2. `Artifacts`: what will exist or change, such as text, code, image, UI, PDF, Markdown, skill files, or GitHub state.
@@ -84,7 +104,7 @@ Make the pass target match the artifact:
 
 Begin after the target map unless the request is ambiguous, dangerous, destructive, or needs user credentials.
 
-Skip the written target map in lightweight mode.
+Skip the written target map in lightweight mode, but do not skip the compact direct-route diagram.
 
 ## Mandatory Execution Spine
 
@@ -123,7 +143,7 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 ## Guardrails
 
 - Do not start a worker skill before `workflow-skill` for task work.
-- Do not over-process simple work. Avoid formal plans, internal route expansion, PDF reports, or test/verify loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
+- Do not over-process simple work. Use only the compact direct-route diagram, and avoid formal target maps, internal route expansion, PDF reports, or test/verify loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not replace `test-skill` evidence with a method-only or status-only claim.
@@ -134,8 +154,8 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 - "Create a new skill and push it" -> decompose, use management-skill with its GitHub sync route, code-skill for scripts, test-skill, verify-skill, then sync.
 - "Fix this Python script" -> decompose, use code-skill, run a real Python input through test-skill, then verify behavior.
 - "Review this UI" -> decompose visual targets, use verify-skill UI route, capture real evidence, and report blockers.
-- "What does this file say?" -> lightweight mode: read the file and answer, no formal workflow.
-- "Run `date`" -> lightweight mode: run the command and report the output.
+- "What does this file say?" -> lightweight mode: show compact direct-route diagram, read the file, and answer; no formal target map.
+- "Run `date`" -> lightweight mode: show compact direct-route diagram, run the command, and report the output.
 
 ## Verification
 

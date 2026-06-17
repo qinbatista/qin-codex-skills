@@ -78,6 +78,11 @@ SCENARIOS = {
 REQUIRED_SKILL_TEXT = [
     "Always-First Rule",
     "Other skills are executors",
+    "Start Diagram Rule",
+    "Before task action",
+    "references/start-diagram-template.md",
+    "compact direct-route diagram",
+    "task-specific Mermaid start diagram",
     "Task slices",
     "Artifacts",
     "Pass targets",
@@ -192,8 +197,9 @@ def validate_execution_trace(trace):
 def validate(skill_dir):
     skill_path = skill_dir / "SKILL.md"
     matrix_path = skill_dir / "references" / "routing-matrix.md"
+    start_diagram_path = skill_dir / "references" / "start-diagram-template.md"
     script_path = skill_dir / "scripts" / "validate_workflow_skill.py"
-    for required_path in (skill_path, matrix_path, script_path):
+    for required_path in (skill_path, matrix_path, start_diagram_path, script_path):
         if not required_path.exists():
             raise ValueError(f"missing required file: {required_path}")
 
@@ -208,6 +214,10 @@ def validate(skill_dir):
     missing_text = [text for text in REQUIRED_SKILL_TEXT if text not in skill_text]
     if missing_text:
         raise ValueError("SKILL.md missing required workflow text: " + ", ".join(missing_text))
+    start_diagram_text = read_text(start_diagram_path)
+    for required_text in ("Lightweight Direct Route", "Explicit Workflow Route", "Skill Edit And Push Route", "Code Change Route"):
+        if required_text not in start_diagram_text:
+            raise ValueError(f"start diagram template missing required section: {required_text}")
 
     routes = parse_route_table(matrix_text)
     results = []
