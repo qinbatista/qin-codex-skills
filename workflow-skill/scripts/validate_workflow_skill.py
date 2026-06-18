@@ -33,9 +33,9 @@ SCENARIOS = {
         "requires_code_order": True,
     },
     "ui": {
-        "expected_route": ["workflow-skill", "code-skill", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "relevant production skill(s)", "test-skill", "verify-skill"],
         "target_terms": ["viewport", "visual"],
-        "requires_code_order": True,
+        "requires_code_order": False,
     },
     "image": {
         "expected_route": ["workflow-skill", "test-skill", "verify-skill"],

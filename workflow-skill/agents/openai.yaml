@@ -1,4 +1,4 @@
 interface:
   display_name: "Workflow Skill"
   short_description: "Start with a workflow diagram, then route the task"
-  default_prompt: "Use $workflow-skill to show the required start diagram, choose lightweight direct routing or the full task workflow, then route concrete coding, file-changing, multi-step, or evidence-heavy work through the right executor skills."
+  default_prompt: "Use $workflow-skill to show the required start diagram, choose lightweight direct routing or the full task workflow, then route Python/C# coding, file-changing, multi-step, or evidence-heavy work through the right executor skills."

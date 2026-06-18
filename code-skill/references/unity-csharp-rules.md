@@ -1,4 +1,4 @@
-# Unity C# Rules
+# C# Rules
 
 Apply these rules for Unity projects and C# code, including MonoBehaviours, ScriptableObjects, managers, gameplay systems, runtime scripts, reviews, explanations, refactors, and performance work.
 

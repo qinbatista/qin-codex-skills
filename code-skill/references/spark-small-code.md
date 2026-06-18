@@ -1,11 +1,12 @@
 # Spark Small Code Route
 
-Use `GPT-5.3-Codex-Spark` for obvious, bounded, low-risk coding work when an allowed model-selection or delegation route exists.
+Use `GPT-5.3-Codex-Spark` for obvious, bounded, low-risk Python or C# coding work when an allowed model-selection or delegation route exists.
 
 ## Use When
 
 - The request is clearly bounded and affects one or a few files.
 - The expected edit, cleanup, review target, or verification path is obvious from the request or shallow inspection.
+- The requested code language is Python or C#.
 - The task does not require deep debugging, architecture changes, security-sensitive reasoning, migrations, or broad repository archaeology.
 - Verification is simple, such as a focused lint, test, build, type check, or direct file inspection.
 

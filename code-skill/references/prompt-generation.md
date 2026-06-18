@@ -1,13 +1,19 @@
 # Prompt Generation
 
-Use this route only for AI prompt creation, rewriting, improvement, review, standardization, or prompt embedding. Do not use it for ordinary code style, architecture, debugging, or non-prompt prose.
+Use this route only for AI prompt creation, rewriting, improvement, review, standardization, or prompt embedding in Python or C# code. Do not use it for ordinary code style, architecture, debugging, non-prompt prose, or prompt snippets in other programming languages.
 
-Create compact Python prompt assignments ready to paste into code:
+Create compact Python prompt assignments or C# prompt constants ready to paste into code:
 
 ```python
 prompt = f"""
 ...
 """
+```
+
+```csharp
+const string prompt = """
+...
+""";
 ```
 
 ## Workflow
@@ -62,4 +68,4 @@ Return JSON Format:
 - Let the output schema define the container shape and fields instead of repeating verbose JSON warnings.
 - Do not add sibling-case warnings for cases the user did not mention.
 - Do not add vague filler such as "be accurate" when a concrete rule can say what accuracy requires.
-- Return only the optimized `prompt = f"""..."""` when the user asks for prompt code only.
+- Return only the optimized Python assignment or C# constant when the user asks for prompt code only.

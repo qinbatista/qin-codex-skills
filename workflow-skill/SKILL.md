@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real task work, decompose goals, select executor skills, route code/script work through code-skill before test-skill and verify-skill, loop until pass, and choose the final evidence format by complexity instead of always generating a PDF report."
+description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete Python/C# coding, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real Python/C# task work, decompose goals, select executor skills, route Python/C# code or script work through code-skill before test-skill and verify-skill, loop until pass, and choose the final evidence format by complexity instead of always generating a PDF report."
 ---
 
 # Workflow Skill
@@ -8,7 +8,7 @@ description: "Global workflow controller for Codex task work. Use for lightweigh
 Use this as the workflow layer for user tasks. It has two modes:
 
 - **Lightweight routing check** for simple, obvious, low-risk work.
-- **Explicit workflow controller** for concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
+- **Explicit workflow controller** for concrete Python/C# coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
 
 The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
 
@@ -35,7 +35,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-This skill controls a workflow with many possible executor branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, code, Python, Unity C#, UI, image, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
+This skill controls a workflow with many possible executor branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, Python code, C# code, UI, image, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
 
 Read `references/routing-matrix.md` when a task spans multiple artifact types, touches global skills, or the correct route is not obvious from the request.
 
@@ -47,7 +47,7 @@ Use this skill as the starting routing decision for user task requests before in
 
 Write the explicit target map only when the task is worth that overhead:
 
-- concrete code/programming work
+- concrete Python or C# code/programming work
 - editing files or changing executable behavior
 - multi-step work with dependencies or unclear order
 - UI, image, document, PDF, report, or generated artifact work
@@ -86,7 +86,7 @@ Then do the direct action.
 For explicit workflow mode, before doing the work, write a task-specific Mermaid start diagram followed by a short target map:
 
 1. `Task slices`: the ordered pieces of work.
-2. `Artifacts`: what will exist or change, such as text, code, image, UI, PDF, Markdown, skill files, or GitHub state.
+2. `Artifacts`: what will exist or change, such as text, Python/C# code, image, UI, PDF, Markdown, skill files, or GitHub state.
 3. `Pass targets`: what observable result proves each artifact is correct.
 4. `Skill route`: the skills needed and the order they must run; the first skill must be `workflow-skill`.
 5. `Stop condition`: the exact condition that allows final completion.
@@ -95,7 +95,7 @@ Make the pass target match the artifact:
 
 - Text: required sections, wording constraints, format, and destination.
 - Image: source image, output image, visible changes, dimensions or visual constraints.
-- Code: behavior, real input, command or app flow, real output, and pass reason.
+- Python/C# code: behavior, real input, command or app flow, real output, and pass reason.
 - UI: page or screenshot target, viewport sizes, interaction state, and visual blockers.
 - Link or URL: exact URL plus response, page state, or extracted content.
 - Document/PDF/report: file path, rendered or parsed content, and required evidence fields.
@@ -108,19 +108,19 @@ Skip the written target map in lightweight mode, but do not skip the compact dir
 
 ## Mandatory Execution Spine
 
-For concrete code/programming, local scripts, automations, global-skill scripts, website/app work, or any task that creates or edits executable behavior, run this order:
+For concrete Python or C# code/programming, local Python scripts, C# automations, global-skill Python scripts, or any task that creates or edits Python/C# executable behavior, run this order:
 
 ```text
 workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check
 ```
 
-- `code-skill`: executor for writing, editing, refactoring, or reasoning about code and helper scripts.
+- `code-skill`: executor for writing, editing, refactoring, or reasoning about Python/C# code and helper scripts only.
 - `test-skill`: executor for small real tests with concrete input and real output. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
 - `verify-skill`: executor for comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements.
 
 For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `test-skill` and `verify-skill` when objective evidence or a report is required.
 
-Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, or a single clear command that only reports state. Use the full spine only when the task changes code/behavior/artifacts, needs debugging, or benefits from real verification evidence.
+Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, or a single clear command that only reports state. Use the full spine only when the task changes Python/C# code, executable behavior, artifacts, needs debugging, or benefits from real verification evidence.
 
 For global skill creation, deletion, rename, or editing, include `management-skill` before reading/editing and after verification when the user wants the saved skill pushed. Use the GitHub sync route inside `management-skill` for the actual mirror operation.
 
@@ -153,7 +153,7 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 
 ## Examples
 
-- "Create a new skill and push it" -> decompose, use management-skill with its GitHub sync route, code-skill for scripts, test-skill, verify-skill, then sync.
+- "Create a new skill and push it" -> decompose, use management-skill with its GitHub sync route, code-skill for Python/C# scripts when needed, test-skill, verify-skill, then sync.
 - "Fix this Python script" -> decompose, use code-skill, run a real Python input through test-skill, then verify behavior.
 - "Review this UI" -> decompose visual targets, use verify-skill UI route, capture real evidence, and report blockers.
 - "What does this file say?" -> lightweight mode: show compact direct-route diagram, read the file, and answer; no formal target map.

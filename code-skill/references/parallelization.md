@@ -1,6 +1,6 @@
 # Parallelization Rules
 
-Apply these rules when code handles repeated independent work, batch file or asset processing, per-item transforms, network/API fan-out, expensive loops, test batches, generation pipelines, or a performance request in Python or Unity C#.
+Apply these rules when code handles repeated independent work, batch file or asset processing, per-item transforms, network/API fan-out, expensive loops, test batches, generation pipelines, or a performance request in Python or C#.
 
 ## Decision
 
@@ -25,7 +25,7 @@ Apply these rules when code handles repeated independent work, batch file or ass
 - Prefer ordered result collection such as `executor.map(...)` or `(index, value)` pairs over `as_completed(...)` when output order matters.
 - Cap worker counts deliberately instead of using unbounded fan-out, especially for file handles, APIs, subprocesses, or memory-heavy work.
 
-## Unity C#
+## C# / Unity C#
 
 - Keep `UnityEngine.Object`, scene, asset database, transform, renderer, physics, and most editor API access on the Unity main thread.
 - Parallelize only pure data work or immutable snapshots taken from the main thread, then apply results back on the main thread in deterministic order.
