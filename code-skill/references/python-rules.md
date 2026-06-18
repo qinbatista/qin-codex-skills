@@ -6,6 +6,7 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 
 - Preserve behavior unless the user explicitly asks for new behavior.
 - For vague requests such as optimize, clean up, refactor, or improve, treat the task as style enforcement plus behavior-preserving micro-optimization only.
+- When independent repeated work is present or discovered during optimization, also read `references/parallelization.md` and parallelize only when the same observable result can be verified.
 - Return only code when the user asks for raw Python output.
 
 ## Formatting And Structure

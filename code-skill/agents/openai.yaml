@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Skill"
   short_description: "Code executor routed by workflow-skill"
-  default_prompt: "After $workflow-skill routes the task here, use $code-skill to handle code work by selecting every applicable code route, such as prompt, coding approach, Python, Unity C#, or small-code routing."
+  default_prompt: "After $workflow-skill routes the task here, use $code-skill to handle code work by selecting every applicable route, including prompt, coding approach, Python, Unity C#, safe parallelization, or small-code routing."

@@ -7,6 +7,7 @@ Apply these rules for Unity projects and C# code, including MonoBehaviours, Scri
 1. Read repo-level `AGENTS.md`, local style notes, or direct user instructions, and let tighter local rules override this shared style.
 2. Preserve core behavior unless the user explicitly asks for a functional change.
 3. For optimize, simplify, or cleanup requests, keep edits inside the requested code path unless the user explicitly asks to broaden scope.
+4. When independent repeated work is present or discovered during optimization, also read `references/parallelization.md`; parallelize only pure data work that preserves Unity main-thread rules and the same observable result.
 
 ## Output
 
