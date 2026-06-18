@@ -1,11 +1,11 @@
 ---
 name: test-skill
-description: "Executor skill under workflow-skill for testing and report evidence. Use when workflow-skill routes completed work into proof: code, UI, scripts, automations, generated assets, or content have been created or changed; the user asks to test, verify, QA, smoke test, validate, prove, or generate a report; or completed work needs real executable evidence plus a concise visual PDF report. Requires real runnable tests with concrete generated inputs, real inputs/outputs, the exact command/tool used, and a clear pass reason instead of mock-only, signature-only, or pass/OK-only checks. Its evidence routes are multi-select: combine every test/report route needed by the artifact."
+description: "Executor skill under workflow-skill for testing and calibrated report evidence. Use when workflow-skill routes completed work into proof: code, UI, scripts, automations, generated assets, or content have been created or changed; the user asks to test, verify, QA, smoke test, validate, prove, or generate a report; or completed work needs real executable evidence. Requires real runnable tests with concrete generated inputs, real inputs/outputs, the exact command/tool used, and a clear pass reason instead of mock-only, signature-only, or pass/OK-only checks. Chooses the evidence format by complexity: simple results stay in a few chat lines, while PDF/report artifacts are reserved for long data, table-heavy evidence, image/UI/document comparisons, or explicit artifact requests. Its evidence routes are multi-select: combine every test/report route needed by the artifact."
 ---
 
 # Test Skill
 
-Use this as the single testing and reporting executor selected by `workflow-skill`. It merges completion verification with PDF report generation.
+Use this as the single testing and reporting executor selected by `workflow-skill`. It merges completion verification with calibrated evidence output: short chat evidence for simple results, lightweight tables when helpful, and PDF reports only when the evidence benefits from an artifact.
 
 ## Generated File Placement
 
@@ -13,7 +13,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-This skill covers many evidence types and report layouts. Do not run every test type or force every report shape. Select every evidence route needed by the artifact, and combine routes when the work spans types such as code plus UI or document plus PDF. Use the smallest real test set and report layout that proves the user's requested behavior. Every passing case still needs real `Input`, `Used`, `Output`, and `Why Pass` evidence.
+This skill covers many evidence types and report layouts. Do not run every test type or force every report shape. Select every evidence route needed by the artifact, and combine routes when the work spans types such as code plus UI or document plus PDF. Use the smallest real test set and evidence format that proves the user's requested behavior. When a formal report is generated, every passing case still needs real `Input`, `Used`, `Output`, and `Why Pass` evidence.
 
 ## Trigger
 
@@ -21,9 +21,9 @@ Use this skill when work needs proof: code changed, UI changed, a script or work
 
 ## Core Rule
 
-Do not finish because the edit is written. Prove the work with a real executable test and package the evidence in a report when the work is code-related, user-facing, visual, or explicitly requested as testing/QA.
+Do not finish because the edit is written. Prove the work with a real executable test. Match the evidence format to the complexity: a simple successful check can be reported in a few chat lines; use a table, Markdown summary, or PDF only when that makes the evidence easier to review.
 
-Every verification PDF must show the real evidence, not a vague `OK`, `PASS`, or method-only claim. For each passing case, list:
+Every generated report must show the real evidence, not a vague `OK`, `PASS`, or method-only claim. For each passing case, list:
 
 - `Input`: the real input that was given, such as a file path, image, URL, prompt, request payload, command input, code snippet, or concrete test data
 - `Used`: the actual tool, command, script, browser route, model call, API endpoint, or local workflow used to run the check
@@ -48,8 +48,8 @@ For code changes, the primary verification must be a small real use of the chang
 4. Run the actual changed path with those inputs.
 5. Capture evidence: real input, command/tool used, output, generated files, screenshots, returned JSON, rendered pages, logs, pass/fail status, and the reason the observed output satisfies or fails the requirement.
 6. If the test fails and the fix is in scope, fix the code and rerun the real test.
-7. Generate a concise PDF report when code was changed, the user asked for testing/QA/reporting, the result is visual, or the evidence would be clearer as an artifact.
-8. In the final response, state what changed, what real test ran, what passed or failed, where the report is, and what remains unverified.
+7. Choose the evidence format. Use chat for simple results; use Markdown/table summaries for medium evidence; generate a PDF only when long data, many rows, screenshots, visual comparisons, rendered documents, or an explicit artifact request make an artifact easier to review.
+8. In the final response, state what changed, what real test ran, what passed or failed, where any report artifact is, and what remains unverified.
 
 ## Real Test Standards
 
@@ -66,16 +66,21 @@ A good test proves the feature can actually be used:
 
 Supporting checks such as lint, type check, unit test, import check, build, or syntax check are useful, but they do not replace a real usage test when one is practical.
 
-## Report Requirements
+## Report Format Decision
+
+Do not generate a PDF report by default. For easy results, report the real evidence in a few concise chat lines: the command or tool used, the real output, and why it passes.
 
 Generate a PDF report when:
 
-- code was changed and the user expects proof the implementation matches the requirement
-- the user asks for testing, QA, validation, smoke test, proof, visual evidence, audit, or a report
-- the output is visual, document-like, image-based, UI-based, or easier to review with screenshots/tables
+- the user explicitly asks for a PDF, downloadable report, or artifact
+- evidence is long, table-heavy, multi-case, or easier to scan as structured rows
+- the output is visual, document-like, image-based, UI-based, or needs side-by-side comparison
+- screenshots, rendered pages, before/after images, or document previews need to be reviewed together
 - a repo or project rule asks for a report artifact
 
-The report must show real evidence, not only command names:
+If the user asks for a "report" and the evidence is short, prefer a concise chat or Markdown report unless they specifically ask for a PDF/artifact.
+
+Any generated report must show real evidence, not only command names:
 
 - user request or expected outcome
 - real test input, payload, artifact, image, URL, code path, or prompt
@@ -89,7 +94,7 @@ The report must show real evidence, not only command names:
 
 Do not make a passing row whose output is only `OK`, `done`, `works`, `pass`, or similar. Those words may appear only after the report shows what was run, what came back, and why the observed output satisfies the requirement.
 
-Use the bundled manifest/report generator for ordinary reports:
+Use the bundled manifest/report generator for ordinary PDF reports:
 
 ```bash
 python3 scripts/generate_test_pdf_report.py --input /path/to/manifest.json --output /path/to/report.pdf --cleanup-root /path/to/report-cache-root
@@ -101,7 +106,7 @@ The generator rejects passing cases that do not include real `Input`, `Used`, `O
 
 ## Report Layout
 
-Choose the report shape from the evidence:
+Choose the report shape from the evidence when a report artifact is warranted:
 
 - Code/API/CLI: compact summary table, real command/input/output, key logs, and status.
 - UI/browser: screenshots, layout notes, interaction results, and console/runtime evidence.
@@ -121,21 +126,22 @@ For PDF report tables, use adaptive full-page layout. The table should fill the 
 
 ## Output Rules
 
-- Keep the chat summary short; the PDF is the report.
-- Return the PDF path and show rendered preview image(s) when practical.
+- Keep simple evidence in chat; do not create a PDF just to repeat a short pass result.
+- When a PDF is generated, keep the chat summary short, return the PDF path, and show rendered preview image(s) when practical.
 - Keep raw cache artifacts available beside the report, but do not list every internal file unless asked.
 - If no PDF can be generated, report the exact blocker and still provide the real test evidence in chat.
 
 ## Verification
 
 - Run the selected real test with concrete inputs before generating a passing report.
-- Parse or inspect the generated PDF when a report is produced, and confirm every passing case includes `Input`, `Used`, `Output`, and `Why Pass`.
+- Parse or inspect the generated PDF when one is produced, and confirm every passing case includes `Input`, `Used`, `Output`, and `Why Pass`.
 - If a test fails and the fix is in scope, fix the artifact and rerun the same real check.
 
 ## Guardrails
 
 - Do not claim completion from a mock-only test when a real local test is practical.
 - Do not claim completion from method-parameter, signature, import, or lint checks alone.
+- Do not generate a PDF report for a simple result that is clearer as a few lines of chat.
 - Do not generate a passing PDF that lacks real `Input`, `Used`, `Output`, and `Why Pass` evidence for each passing case.
 - Do not use `OK`, `PASS`, `done`, or a green status as the whole result.
 - Do not invent inputs, outputs, screenshots, or pass/fail results that were not actually produced.
@@ -147,8 +153,8 @@ For PDF report tables, use adaptive full-page layout. The table should fill the 
 
 ## Examples
 
-- "I fixed the Python function." -> create a tiny concrete input, call the real function, inspect output, and generate a report if this was a code edit.
+- "I fixed the Python function." -> create a tiny concrete input, call the real function, inspect output, and summarize the command/output/pass reason in chat unless the evidence is complex.
 - "This image parser now supports PNG." -> generate a small PNG, run the parser, show returned data and image evidence.
 - "This URL scraper changed." -> serve a local HTML page or use a reachable URL, run the scraper, show extracted output.
 - "Fix the page layout." -> run the local app, capture before/after or current screenshots, and report layout status.
-- "Give me a QA report." -> run the real workflow and return a PDF report with concrete pass/fail evidence.
+- "Give me a QA report." -> run the real workflow, choose chat/Markdown/PDF based on evidence size, and return a PDF only when visual, table-heavy, long, or explicitly requested.

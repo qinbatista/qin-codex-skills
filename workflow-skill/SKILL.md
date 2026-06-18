@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real task work, decompose goals, select executor skills, route code/script work through code-skill before test-skill and verify-skill, loop until pass, and keep process detail in the report."
+description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real task work, decompose goals, select executor skills, route code/script work through code-skill before test-skill and verify-skill, loop until pass, and choose the final evidence format by complexity instead of always generating a PDF report."
 ---
 
 # Workflow Skill
@@ -124,13 +124,15 @@ Do not apply the full spine to simple read-only work, plain Q&A, obvious file vi
 
 For global skill creation, deletion, rename, or editing, include `management-skill` before reading/editing and after verification when the user wants the saved skill pushed. Use the GitHub sync route inside `management-skill` for the actual mirror operation.
 
+Choose the final evidence format by complexity. Simple successful results can be reported in a few chat lines with the command/tool used, the real output, and why it passes. Generate a PDF/report artifact only when the user explicitly asks for one, a repo rule requires one, or the evidence is long, table-heavy, visual, screenshot-based, image-comparison-based, document-like, or otherwise easier to review as an artifact.
+
 When a report is generated, every passing row must include `Input`, `Used`, `Output`, and `Why Pass` with real evidence.
 
 ## Completion Loop
 
 After `test-skill` and `verify-skill`, compare the observed evidence with the target map.
 
-- If every pass target is met, generate the final evidence report when the task produced code, a skill change, a UI/artifact change, or the user asked for proof.
+- If every pass target is met, provide concise chat evidence for simple results and generate a report artifact only when the evidence complexity, visual material, explicit user request, or repo rule warrants it.
 - If any pass target is not met, continue from the relevant execution step, fix the issue, retest, and verify again.
 - Do not stop because the method was attempted. Stop only because the target is met, the user changes the goal, or a real blocker prevents progress.
 
@@ -138,7 +140,7 @@ For lightweight mode, the stop condition is simply that the direct requested ans
 
 ## Final Response
 
-Keep the final chat short. State what changed, what passed, where the deliverables are, and any remaining unverified scope. Do not repeat the full process report in chat; put process details, inputs, commands, outputs, and why-pass evidence in the generated report.
+Keep the final chat short. State what changed, what passed, where the deliverables are, and any remaining unverified scope. If the evidence is simple, include it directly in chat. If a report artifact was generated, do not repeat the full process report in chat; point to the report and summarize the key pass/fail result.
 
 ## Guardrails
 
@@ -168,5 +170,5 @@ After editing this skill:
    ```
 
 2. Run the skill-creator quick validator when a Python with PyYAML is available.
-3. Run `test-skill` with real evidence and a PDF report.
-4. Run `verify-skill` against the requested outcome and the generated report.
+3. Run `test-skill` with real evidence; generate a PDF only when the evidence is long, table-heavy, visual, comparison-based, explicitly requested, or required by the repo.
+4. Run `verify-skill` against the requested outcome and the selected evidence/report format.

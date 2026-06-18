@@ -25,8 +25,8 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 
 - Prefer real artifacts, real screenshots, real command output, real files, real browser states, and real run logs.
 - Do not call something verified only because code compiles, a method accepts arguments, or a file exists.
-- If the task produced code, route the real execution and PDF evidence through `test-skill` after this skill defines the verification criteria.
-- Verification PDFs must list the real `Input`, `Used`, `Output`, and `Why Pass` for every passing case. A green status, `OK`, `PASS`, or method name alone is not evidence.
+- If the task produced code, route the real execution and evidence capture through `test-skill` after this skill defines the verification criteria.
+- Verification evidence must list the real input, method, output, and pass reason when a formal report is generated. A green status, `OK`, `PASS`, or method name alone is not evidence.
 - If the task produced UI, run the UI verification route below before calling the UI acceptable.
 
 ## Feasibility And Repair Loop
@@ -133,7 +133,7 @@ Use this route for generated documents, reports, images, PDFs, markdown, data fi
 
 ## Relationship To Test Skill
 
-`verify-skill` decides what correctness means and which reference rules apply. `test-skill` executes real tests and generates PDF evidence after code changes, scripted workflows, or report-worthy validation. Use both when a task needs verification criteria plus executable proof.
+`verify-skill` decides what correctness means and which reference rules apply. `test-skill` executes real tests and chooses the evidence format after code changes, scripted workflows, or report-worthy validation: concise chat for simple results, Markdown/table summaries for medium evidence, and PDFs only when long data, visual comparison, rendered artifacts, explicit requests, or repo rules warrant them. Use both when a task needs verification criteria plus executable proof.
 
 ## Guardrails
 

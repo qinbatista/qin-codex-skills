@@ -37,7 +37,7 @@ Use this skill for code writing, editing, refactoring, debugging, review, optimi
 5. For prompt work, create or improve the prompt first, then embed the generated prompt into the corresponding text or code.
 6. Keep edits surgical and preserve unrelated user work.
 7. After any code is written or changed, run the narrowest real usage test through `test-skill` unless the user explicitly forbids testing.
-8. For code-related reports, the PDF must show `Input`, `Used`, `Output`, and `Why Pass` for every passing case.
+8. For code-related reports, generated report artifacts must show `Input`, `Used`, `Output`, and `Why Pass` for every passing case. Simple code test results can stay in chat when the command, output, and pass reason are easy to read there.
 
 ## Guardrails
 

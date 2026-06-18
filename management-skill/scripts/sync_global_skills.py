@@ -113,7 +113,7 @@ SKILL_SUMMARIES = {
     "code-skill": "Executes code work after workflow-skill routes the task, combining prompt, coding approach, Python, Unity C#, and small-code modules.",
     "optimization-skill": "Executes optimization work after workflow-skill routes the task, turning stable repeated workflows into reusable local scripts, references, or assets.",
     "verify-skill": "Executes verification after workflow-skill routes the task, checking UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
-    "test-skill": "Executes real tests and evidence reports after workflow-skill routes the task, combining evidence routes across code, UI, images, documents, or PDFs.",
+    "test-skill": "Executes real tests after workflow-skill routes the task, then chooses concise chat evidence, Markdown/table summaries, or PDF report artifacts based on complexity.",
     "management-skill": "Executes management work after workflow-skill routes the task, covering Codex profiles and global skill GitHub sync.",
 }
 CHINESE_SKILL_SUMMARIES = {
@@ -121,7 +121,7 @@ CHINESE_SKILL_SUMMARIES = {
     "code-skill": "在 workflow-skill 路由后执行代码工作，组合 prompt、代码思路、Python、Unity C# 和小代码模块。",
     "optimization-skill": "在 workflow-skill 路由后执行优化工作，把稳定重复流程变成本地脚本、引用资料或资产。",
     "verify-skill": "在 workflow-skill 路由后执行验证工作，检查 UI、脚本、生成物、skill 和工作流是否满足用户要求。",
-    "test-skill": "在 workflow-skill 路由后执行真实测试和证据报告，跨代码、UI、图片、文档或 PDF 组合证据路线。",
+    "test-skill": "在 workflow-skill 路由后执行真实测试，并按复杂度选择简短聊天证据、Markdown/表格摘要或 PDF 报告 artifact。",
     "management-skill": "在 workflow-skill 路由后执行管理工作，处理 Codex profiles 和全局 skill 的 GitHub 同步。",
 }
 SKILL_CONTENTS = {
@@ -131,7 +131,7 @@ SKILL_CONTENTS = {
         ("Visual and generated artifacts", "Image, UI, browser screenshot, document, PDF, report, and generated file tasks."),
         ("Global skill edits", "Create, merge, rename, delete, reorganize, or update global Codex skills."),
         ("Management tasks", "Account/profile switching and global skill GitHub sync through management-skill."),
-        ("Final evidence reports", "Evidence PDFs and completion reports when the task needs proof."),
+        ("Calibrated evidence output", "Short chat evidence for simple results; PDF/report artifacts only for long, table-heavy, visual, comparison-based, explicit, or repo-required proof."),
     ],
     "code-skill": [
         ("Prompt Creating", "Prompt generation only: create, rewrite, or embed prompts into the corresponding text or code."),
@@ -152,11 +152,11 @@ SKILL_CONTENTS = {
         ("Local Script Verification", "Optimized local scripts and workflows with concrete cache inputs, real outputs, rerun behavior, and output paths."),
         ("Skill Verification", "SKILL.md frontmatter, trigger wording, referenced files, old-name cleanup, route behavior, and skill structure."),
         ("Generated Artifact Verification", "Markdown, images, PDFs, documents, reports, data files, and exports through open/render/parse/inspect checks."),
-        ("PDF Evidence Review", "Verify generated PDF reports contain real Input, Used, Output, and Why Pass evidence."),
+        ("Report Evidence Review", "Verify generated reports contain real Input, Used, Output, and Why Pass evidence, with PDFs reserved for report-worthy material."),
     ],
     "test-skill": [
         ("Done Means Tested", "After code or workflow changes, run a small real usage test with concrete inputs and real outputs."),
-        ("Test PDF Report", "Generate a PDF report that records exactly what input was given, what command/tool was used, what output came back, and why it passes."),
+        ("Report Format Selection", "Use a few chat lines for simple results; generate PDF reports only for long data, table-heavy evidence, visual comparisons, or explicit artifact requests."),
         ("Code/API/CLI Tests", "Real scripts, commands, CLI invocations, API calls, local handlers, stdout, files, JSON, and returned values."),
         ("UI/Browser Tests", "Real page states, screenshots, viewport sizes, console/runtime evidence, and interaction results."),
         ("Image/Document/PDF Tests", "Real source/output images, generated files, rendered documents, parsed PDFs, and artifact paths."),
@@ -175,7 +175,7 @@ CHINESE_SKILL_CONTENTS = {
         ("视觉和生成物", "图片、UI、浏览器截图、文档、PDF、报告和生成文件任务。"),
         ("全局 skill 编辑", "创建、合并、重命名、删除、重组或更新全局 Codex skills。"),
         ("管理任务", "通过 management-skill 处理账号/Profile 切换和全局 skill 的 GitHub 同步。"),
-        ("最终证据报告", "任务需要证明时生成证据 PDF 和完成报告。"),
+        ("校准后的证据输出", "简单结果用简短聊天证据；只有长数据、表格多、视觉/对比型、明确要求或仓库规则需要时才生成 PDF/报告 artifact。"),
     ],
     "code-skill": [
         ("Prompt Creating", "只负责 prompt 生成：创建、重写，或把 prompt 嵌入对应文本或代码。"),
@@ -196,11 +196,11 @@ CHINESE_SKILL_CONTENTS = {
         ("本地脚本验证", "验证优化后的本地脚本和流程，检查 cache 输入、真实输出、重复运行和输出路径。"),
         ("Skill 验证", "检查 SKILL.md frontmatter、触发说明、引用文件、旧名称清理、路由行为和 skill 结构。"),
         ("生成物验证", "通过打开、渲染、解析或检查来验证 Markdown、图片、PDF、文档、报告、数据文件和导出物。"),
-        ("PDF 证据检查", "检查生成的 PDF 报告是否包含真实 Input、Used、Output 和 Why Pass。"),
+        ("报告证据检查", "检查生成的报告是否包含真实 Input、Used、Output 和 Why Pass，并只在值得生成报告时使用 PDF。"),
     ],
     "test-skill": [
         ("Done Means Tested", "代码或工作流改完后，必须用具体输入和真实输出跑一个小的真实使用测试。"),
-        ("Test PDF Report", "生成 PDF 报告，写清楚给了什么输入、用了什么命令/工具、得到了什么输出，以及为什么通过。"),
+        ("报告格式选择", "简单结果用几行聊天文字；只有长数据、表格证据、视觉对比或明确 artifact 请求时才生成 PDF 报告。"),
         ("Code/API/CLI Tests", "真实脚本、命令、CLI 调用、API 调用、本地 handler、stdout、文件、JSON 和返回值。"),
         ("UI/Browser Tests", "真实页面状态、截图、viewport 尺寸、console/runtime 证据和交互结果。"),
         ("Image/Document/PDF Tests", "真实输入/输出图片、生成文件、渲染文档、解析 PDF 和 artifact 路径。"),
@@ -645,7 +645,7 @@ def build_overview(skill_paths, language="en"):
             "- 代码工作进入 `code-skill`。",
             "- 固定重复流程优化进入 `optimization-skill`。",
             "- 验证工作进入 `verify-skill`。",
-            "- 真实测试和报告进入 `test-skill`。",
+            "- 真实测试和校准后的证据输出进入 `test-skill`；简单结果留在聊天里，只有长数据、视觉、表格多、对比型、明确要求或仓库规则需要时才生成 PDF 报告。",
             "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。",
             "- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。",
             "",
@@ -690,7 +690,7 @@ def build_overview(skill_paths, language="en"):
         "- Code work enters through `code-skill`.",
         "- Repeated fixed workflow optimization enters through `optimization-skill`.",
         "- Verification work enters through `verify-skill`.",
-        "- Real tests and report artifacts sit under `test-skill`.",
+        "- Real tests and calibrated evidence outputs sit under `test-skill`; simple results stay in chat, while PDF reports are reserved for long, visual, table-heavy, comparison-based, explicit, or repo-required evidence.",
         "- Auth and GitHub mirror maintenance enter through `management-skill` internal routes.",
         "- Each skill may contain multiple internal routes; select every route needed for the current request. This is multi-select, not one-of, and unrelated cases should not run.",
         "",
