@@ -28,9 +28,9 @@ SCENARIOS = {
         "requires_code_order": True,
     },
     "prompt": {
-        "expected_route": ["workflow-skill", "code-skill", "test-skill", "verify-skill"],
-        "target_terms": ["prompt", "output shape"],
-        "requires_code_order": True,
+        "expected_route": ["workflow-skill", "test-skill", "verify-skill"],
+        "target_terms": ["prompt", "general rules"],
+        "requires_code_order": False,
     },
     "ui": {
         "expected_route": ["workflow-skill", "relevant production skill(s)", "test-skill", "verify-skill"],
@@ -77,6 +77,9 @@ SCENARIOS = {
 
 REQUIRED_SKILL_TEXT = [
     "Always-First Rule",
+    "prompt/instruction authoring, updates, review, or optimization",
+    "For standalone prompt/instruction work",
+    "State the general rule once",
     "Other skills are executors",
     "Start Diagram Rule",
     "Before task action",
@@ -100,6 +103,7 @@ REQUIRED_SKILL_TEXT = [
 
 TRACE_SCENARIOS = [
     "text",
+    "prompt",
     "code",
     "python",
     "skill-edit",

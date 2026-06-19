@@ -23,8 +23,9 @@ const string prompt = """
 3. Choose a content prompt for text humans will read, such as descriptions, summaries, explanations, factory notes, doctor-facing notes, customer copy, or reviewer notes.
 4. Use `Purpose:` followed by `Rules:`.
 5. Keep the prompt concise. Merge overlapping rules instead of appending repeated warnings.
-6. Treat examples, bad outputs, and edge cases as test evidence. Do not paste them into the prompt unless the example is the reusable requirement.
-7. For Python f-strings, escape literal JSON braces as `{{` and `}}`; real interpolation placeholders stay single-braced, such as `{image_width}`.
+6. State durable rules at the highest useful level. Do not add obvious prohibitions, near-duplicate warnings, or case-by-case exclusions.
+7. Treat examples, bad outputs, and edge cases as test evidence. Do not paste them into the prompt unless the example is the reusable requirement.
+8. For Python f-strings, escape literal JSON braces as `{{` and `}}`; real interpolation placeholders stay single-braced, such as `{image_width}`.
 
 ## Function Prompt Shape
 
@@ -67,5 +68,6 @@ Return JSON Format:
 - Do not start function prompts with persona text such as `You are...`.
 - Let the output schema define the container shape and fields instead of repeating verbose JSON warnings.
 - Do not add sibling-case warnings for cases the user did not mention.
+- Do not add obvious prohibitions that already follow from the purpose, rules, or output contract.
 - Do not add vague filler such as "be accurate" when a concrete rule can say what accuracy requires.
 - Return only the optimized Python assignment or C# constant when the user asks for prompt code only.

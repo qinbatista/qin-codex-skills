@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete Python/C# coding, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real Python/C# task work, decompose goals, select executor skills, route Python/C# code or script work through code-skill before test-skill and verify-skill, loop until pass, and choose the final evidence format by complexity instead of always generating a PDF report."
+description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete Python/C# coding, prompt/instruction authoring, prompt updates or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real Python/C# task work, decompose goals, select executor skills, route Python/C# code or script work through code-skill before test-skill and verify-skill, loop until pass, and choose the final evidence format by complexity instead of always generating a PDF report."
 ---
 
 # Workflow Skill
@@ -8,7 +8,7 @@ description: "Global workflow controller for Codex task work. Use for lightweigh
 Use this as the workflow layer for user tasks. It has two modes:
 
 - **Lightweight routing check** for simple, obvious, low-risk work.
-- **Explicit workflow controller** for concrete Python/C# coding/programming, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
+- **Explicit workflow controller** for concrete Python/C# coding/programming, prompt/instruction authoring, prompt updates or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
 
 The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
 
@@ -37,7 +37,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 This skill controls a workflow with many possible executor branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, Python code, C# code, UI, image, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
 
-Read `references/routing-matrix.md` when a task spans multiple artifact types, touches global skills, or the correct route is not obvious from the request.
+Read `references/routing-matrix.md` when a task spans multiple artifact types, touches global skills, edits or writes prompts/instructions, or the correct route is not obvious from the request.
 
 Use `scripts/validate_workflow_skill.py` only to validate this skill's routing contract after editing the skill.
 
@@ -48,6 +48,7 @@ Use this skill as the starting routing decision for user task requests before in
 Write the explicit target map only when the task is worth that overhead:
 
 - concrete Python or C# code/programming work
+- prompt/instruction authoring, updates, review, or optimization, including standalone prompt text not embedded in code
 - editing files or changing executable behavior
 - multi-step work with dependencies or unclear order
 - UI, image, document, PDF, report, or generated artifact work
@@ -94,6 +95,7 @@ For explicit workflow mode, before doing the work, write a task-specific Mermaid
 Make the pass target match the artifact:
 
 - Text: required sections, wording constraints, format, and destination.
+- Prompt/instruction: purpose, inputs or variables, output contract, reusable general rules, and destination; keep it concise, direct, and free of case-by-case warnings unless examples are explicitly requested.
 - Image: source image, output image, visible changes, dimensions or visual constraints.
 - Python/C# code: behavior, real input, command or app flow, real output, and pass reason.
 - UI: page or screenshot target, viewport sizes, interaction state, and visual blockers.
@@ -121,6 +123,8 @@ workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check
 For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `test-skill` and `verify-skill` when objective evidence or a report is required.
 
 Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, or a single clear command that only reports state. Use the full spine only when the task changes Python/C# code, executable behavior, artifacts, needs debugging, or benefits from real verification evidence.
+
+For standalone prompt/instruction work, do not route through `code-skill` unless the prompt is being embedded in Python or C# executable code. Treat the prompt as a text artifact, test or inspect the resulting prompt against the target output contract when practical, and verify that the rule is stated at the right level of abstraction.
 
 For global skill creation, deletion, rename, or editing, include `management-skill` before reading/editing and after verification when the user wants the saved skill pushed. Use the GitHub sync route inside `management-skill` for the actual mirror operation.
 
@@ -150,6 +154,7 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not replace `test-skill` evidence with a method-only or status-only claim.
 - Do not push to GitHub unless the user request or active workflow requires saved global-skill changes.
+- For prompt work, do not pad the prompt with obvious prohibitions, near-duplicate warnings, or case-by-case exclusions. State the general rule once, use the output contract to constrain shape, and only include examples when the user explicitly asks for examples.
 
 ## Examples
 

@@ -109,7 +109,7 @@ CHINESE_CATEGORY_LABELS = {
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "workflow-skill": "Always starts task execution, defines goals, selects executor skills, routes work, iterates, and checks final evidence.",
+    "workflow-skill": "Always starts task execution, including prompt/instruction authoring and updates, defines goals, selects executor skills, routes work, iterates, and checks final evidence.",
     "code-skill": "Executes Python and C# code work only after workflow-skill routes the task, combining prompt embedding, coding approach, Python, C#/Unity C#, and small-code modules.",
     "optimization-skill": "Executes optimization work after workflow-skill routes the task, turning stable repeated workflows into reusable local scripts, references, or assets.",
     "verify-skill": "Executes verification after workflow-skill routes the task, checking UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
@@ -117,7 +117,7 @@ SKILL_SUMMARIES = {
     "management-skill": "Executes management work after workflow-skill routes the task, covering Codex profiles and global skill GitHub sync.",
 }
 CHINESE_SKILL_SUMMARIES = {
-    "workflow-skill": "永远第一个启动任务执行，定义目标、选择执行者 skill、路由工作、循环验证并检查最终证据。",
+    "workflow-skill": "永远第一个启动任务执行，包括 prompt/instruction 编写和更新，定义目标、选择执行者 skill、路由工作、循环验证并检查最终证据。",
     "code-skill": "在 workflow-skill 路由后只执行 Python 和 C# 代码工作，组合 prompt 嵌入、代码思路、Python、C#/Unity C# 和小代码模块。",
     "optimization-skill": "在 workflow-skill 路由后执行优化工作，把稳定重复流程变成本地脚本、引用资料或资产。",
     "verify-skill": "在 workflow-skill 路由后执行验证工作，检查 UI、脚本、生成物、skill 和工作流是否满足用户要求。",
@@ -126,7 +126,7 @@ CHINESE_SKILL_SUMMARIES = {
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
-        ("Text and Markdown tasks", "Text, markdown, explanation, classification, and rewrite requests with explicit format targets."),
+        ("Text, Markdown, and prompt tasks", "Text, markdown, prompt/instruction authoring, prompt updates, and prompt optimization with explicit format and output-contract targets."),
         ("Python and C# code tasks", "Python, C#, Unity C#, prompt-in-code, scripts, and executable behavior requests; frontend/UI code should use relevant production skills instead."),
         ("Visual and generated artifacts", "Image, UI, browser screenshot, document, PDF, report, and generated file tasks."),
         ("Global skill edits", "Create, merge, rename, delete, reorganize, or update global Codex skills."),
@@ -170,7 +170,7 @@ SKILL_CONTENTS = {
 }
 CHINESE_SKILL_CONTENTS = {
     "workflow-skill": [
-        ("文本和 Markdown 任务", "文本、Markdown、解释、分类、改写，以及有明确格式要求的内容任务。"),
+        ("文本、Markdown 和 prompt 任务", "文本、Markdown、prompt/instruction 编写、prompt 更新，以及有明确格式和输出契约要求的 prompt 优化。"),
         ("Python 和 C# 代码任务", "Python、C#、Unity C#、prompt-in-code、脚本和可执行行为任务；前端/UI 代码应使用对应的生产 skill。"),
         ("视觉和生成物", "图片、UI、浏览器截图、文档、PDF、报告和生成文件任务。"),
         ("全局 skill 编辑", "创建、合并、重命名、删除、重组或更新全局 Codex skills。"),
@@ -642,8 +642,9 @@ def build_overview(skill_paths, language="en"):
             "",
             "## 结构",
             "",
-            "- Python 和 C# 代码工作进入 `code-skill`；前端/UI 等其他语言代码使用对应生产 skill。",
-            "- 固定重复流程优化进入 `optimization-skill`。",
+        "- Python 和 C# 代码工作进入 `code-skill`；前端/UI 等其他语言代码使用对应生产 skill。",
+        "- Prompt/instruction 编写、更新和优化先进入 `workflow-skill`；只有嵌入 Python/C# 可执行代码时才进入 `code-skill`。",
+        "- 固定重复流程优化进入 `optimization-skill`。",
             "- 验证工作进入 `verify-skill`。",
             "- 真实测试和校准后的证据输出进入 `test-skill`；简单结果留在聊天里，只有长数据、视觉、表格多、对比型、明确要求或仓库规则需要时才生成 PDF 报告。",
             "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。",
@@ -688,6 +689,7 @@ def build_overview(skill_paths, language="en"):
         "## Structure",
         "",
         "- Python and C# code work enters through `code-skill`; frontend/UI and other language code should use the relevant production skill instead.",
+        "- Prompt/instruction authoring, updates, and optimization start through `workflow-skill`; use `code-skill` only when embedding prompts in Python or C# executable code.",
         "- Repeated fixed workflow optimization enters through `optimization-skill`.",
         "- Verification work enters through `verify-skill`.",
         "- Real tests and calibrated evidence outputs sit under `test-skill`; simple results stay in chat, while PDF reports are reserved for long, visual, table-heavy, comparison-based, explicit, or repo-required evidence.",
