@@ -132,6 +132,16 @@ Choose the final evidence format by complexity. Simple successful results can be
 
 When a report is generated, every passing row must include `Input`, `Used`, `Output`, and `Why Pass` with real evidence.
 
+## User-Facing Output Completeness
+
+When any workflow step produces material for the user to read, copy, run, compare, or decide from, preserve the complete relevant data. This applies to examples, test code, stdout/stderr, command results, code return values, generated JSON, tables, lists, findings, warnings, errors, and any important information surfaced during execution.
+
+- Do not silently omit rows, fields, result values, errors, warnings, or important context to save tokens.
+- Do not use `...`, `{1, 2, 3, ...}`, "etc.", "and so on", "truncated", or sample-only placeholders where the user needs the full data or a reusable artifact.
+- For code and test evidence, print or relay the actual output/result values from the run, including meaningful failure output and logs. Do not replace real results with a bare status such as `OK`, `PASS`, or `done`.
+- If the complete data is too large for chat, unsafe to expose, or better reviewed as a file, create or point to the complete artifact/log/report, state exactly what it contains, include exact counts or boundaries, and show enough direct evidence in chat for the user to trust that nothing important was dropped.
+- If the user explicitly asks for a summary, say it is a summary and still include all critical values, failures, warnings, counts, and decision-relevant details.
+
 ## Completion Loop
 
 After `test-skill` and `verify-skill`, compare the observed evidence with the target map.
@@ -144,7 +154,7 @@ For lightweight mode, the stop condition is simply that the direct requested ans
 
 ## Final Response
 
-Keep the final chat short. State what changed, what passed, where the deliverables are, and any remaining unverified scope. If the evidence is simple, include it directly in chat. If a report artifact was generated, do not repeat the full process report in chat; point to the report and summarize the key pass/fail result.
+Keep the final chat short without making it incomplete. State what changed, what passed, where the deliverables are, and any remaining unverified scope. If the evidence is simple, include it directly in chat with the real output values. If a report artifact was generated, do not repeat the full process report in chat; point to the complete report and summarize the key pass/fail result.
 
 ## Guardrails
 
@@ -153,6 +163,7 @@ Keep the final chat short. State what changed, what passed, where the deliverabl
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not replace `test-skill` evidence with a method-only or status-only claim.
+- Do not hide incomplete data behind ellipses, placeholder ranges, or token-saving summaries when the user needs the complete output.
 - Do not push to GitHub unless the user request or active workflow requires saved global-skill changes.
 - For prompt work, do not pad the prompt with obvious prohibitions, near-duplicate warnings, or case-by-case exclusions. State the general rule once, use the output contract to constrain shape, and only include examples when the user explicitly asks for examples.
 
