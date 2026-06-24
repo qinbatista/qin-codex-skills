@@ -37,7 +37,7 @@ Do not use this skill for ordinary coding, UI verification, testing, optimizatio
 3. For mixed management, run the profile route first only when account/profile state affects the sync operation; otherwise keep the routes separate.
 4. Record concrete evidence: local command input, command/tool used, output state, remote hash or profile result, and privacy constraints.
 5. For skill edits that should be pushed, run `scripts/sync_global_skills.py` before editing when state is unclear and after verification when the user asked to publish.
-6. Route reports or proof through `test-skill` and `verify-skill` when the workflow changed files, pushed to GitHub, or the user asked for validation.
+6. Route reports or proof through `verify-skill` when the workflow changed files, pushed to GitHub, or the user asked for validation.
 
 ## Guardrails
 

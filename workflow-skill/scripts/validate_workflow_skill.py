@@ -13,48 +13,48 @@ SCENARIOS = {
         "requires_code_order": False,
     },
     "code": {
-        "expected_route": ["workflow-skill", "code-skill", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "code-skill", "verify-skill"],
         "target_terms": ["behavior", "input", "output"],
         "requires_code_order": True,
     },
     "python": {
-        "expected_route": ["workflow-skill", "code-skill", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "code-skill", "verify-skill"],
         "target_terms": ["python", "runnable"],
         "requires_code_order": True,
     },
     "unity-csharp": {
-        "expected_route": ["workflow-skill", "code-skill", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "code-skill", "verify-skill"],
         "target_terms": ["unity", "behavior"],
         "requires_code_order": True,
     },
     "prompt": {
-        "expected_route": ["workflow-skill", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "verify-skill"],
         "target_terms": ["prompt", "general rules"],
         "requires_code_order": False,
     },
     "ui": {
-        "expected_route": ["workflow-skill", "relevant production skill(s)", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "relevant production skill(s)", "verify-skill"],
         "target_terms": ["viewport", "visual"],
         "requires_code_order": False,
     },
     "image": {
-        "expected_route": ["workflow-skill", "test-skill", "verify-skill"],
-        "target_terms": ["image", "visual"],
+        "expected_route": ["workflow-skill", "internal image-generation route when ChatGPT-in-Chrome generation is expected or useful", "relevant production skill(s)", "verify-skill"],
+        "target_terms": ["image type", "transparency", "platform support"],
         "requires_code_order": False,
     },
     "document-pdf": {
-        "expected_route": ["workflow-skill", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "verify-skill"],
         "target_terms": ["file path", "rendered"],
         "requires_code_order": False,
     },
     "skill-edit": {
-        "expected_route": ["workflow-skill", "management-skill", "code-skill", "test-skill", "verify-skill", "management-skill"],
+        "expected_route": ["workflow-skill", "management-skill", "code-skill", "verify-skill", "management-skill"],
         "target_terms": ["frontmatter", "sync"],
         "requires_code_order": True,
     },
     "optimization": {
-        "expected_route": ["workflow-skill", "optimization-skill", "code-skill", "test-skill", "verify-skill"],
-        "target_terms": ["reusable", "script"],
+        "expected_route": ["workflow-skill", "optimization-skill", "code-skill", "verify-skill"],
+        "target_terms": ["reusable", "same-behavior"],
         "requires_code_order": True,
     },
     "management-github": {
@@ -68,7 +68,7 @@ SCENARIOS = {
         "requires_code_order": False,
     },
     "mixed": {
-        "expected_route": ["workflow-skill", "relevant production skill(s)", "test-skill", "verify-skill"],
+        "expected_route": ["workflow-skill", "relevant production skill(s)", "verify-skill"],
         "target_terms": ["per-artifact", "unresolved"],
         "requires_code_order": False,
     },
@@ -91,7 +91,9 @@ REQUIRED_SKILL_TEXT = [
     "Pass targets",
     "Skill route",
     "Stop condition",
-    "workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check",
+    "workflow-skill -> code-skill -> verify-skill -> goal check",
+    "Optimization Gate",
+    "repeated at least three times",
     "If any pass target is not met",
     "Do not stop because the method was attempted",
     "Input",
@@ -202,8 +204,9 @@ def validate(skill_dir):
     skill_path = skill_dir / "SKILL.md"
     matrix_path = skill_dir / "references" / "routing-matrix.md"
     start_diagram_path = skill_dir / "references" / "start-diagram-template.md"
+    image_generation_path = skill_dir / "references" / "image-generation.md"
     script_path = skill_dir / "scripts" / "validate_workflow_skill.py"
-    for required_path in (skill_path, matrix_path, start_diagram_path, script_path):
+    for required_path in (skill_path, matrix_path, start_diagram_path, image_generation_path, script_path):
         if not required_path.exists():
             raise ValueError(f"missing required file: {required_path}")
 
@@ -237,10 +240,10 @@ def validate(skill_dir):
             scenario_failures.append(f"route {route} != expected {expected['expected_route']}")
         if route[0] != "workflow-skill":
             scenario_failures.append("route does not start with workflow-skill")
-        if expected["requires_code_order"] and not ordered(route, ["code-skill", "test-skill", "verify-skill"]):
-            scenario_failures.append("code/test/verify order is wrong")
-        if "test-skill" in route and "verify-skill" in route and not ordered(route, ["test-skill", "verify-skill"]):
-            scenario_failures.append("test-skill must run before verify-skill")
+        if expected["requires_code_order"] and not ordered(route, ["code-skill", "verify-skill"]):
+            scenario_failures.append("code/verify order is wrong")
+        if "test-skill" in route:
+            scenario_failures.append("test-skill has been merged into verify-skill and must not appear in routes")
         lower_goal = row["goal_target"].lower()
         for target_term in expected["target_terms"]:
             if target_term not in lower_goal:
@@ -277,7 +280,7 @@ def validate(skill_dir):
 
     return {
         "skill_dir": str(skill_dir),
-        "checked_files": [str(skill_path), str(matrix_path), str(script_path)],
+        "checked_files": [str(skill_path), str(matrix_path), str(image_generation_path), str(script_path)],
         "scenario_count": len(SCENARIOS),
         "passed": len([result for result in results if result["status"] == "pass"]),
         "failed": len([result for result in results if result["status"] == "fail"]),

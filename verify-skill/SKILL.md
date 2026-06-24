@@ -1,11 +1,11 @@
 ---
 name: verify-skill
-description: "Executor skill under workflow-skill for verification. Use after workflow-skill routes work into checking whether workflows, local scripts, UI/UX, generated artifacts, skill edits, and process optimizations actually satisfy the user's requirement. Use when Codex is asked to verify, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, validate that an optimized local script/process still works, or decide whether a failure is fixable. When verification fails, classify feasibility, try safe alternative repair routes before failing, and stop only for logical impossibility or missing user-controlled access such as tokens or private credentials. For UI verification, fetch/read leonxlnx/taste-skill and combine it with the local UI problem index before deciding whether the UI passes. Its verification routes are multi-select: combine every route needed by the artifact."
+description: "Executor skill under workflow-skill for all verification, including real tests, QA, evidence capture, report generation, result comparison, UI/visual checks, generated artifact review, skill verification, and optimized workflow validation. Use when asked to verify, test, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, prove code or scripts still work, compare against previous behavior, or decide whether a failure is fixable. Run concrete checks with real inputs/outputs, choose evidence format by complexity, and require Input/Used/Output/Why Pass for reports. When verification fails, classify feasibility, try safe repair routes, and stop only for logical impossibility or missing user-controlled access. Routes are multi-select: combine every route needed by the artifact."
 ---
 
 # Verify Skill
 
-Use this as the verification executor selected by `workflow-skill`. It decides what must be checked, what evidence is needed, and which specialized reference should be loaded before accepting work as correct.
+Use this as the single verification executor selected by `workflow-skill`. It decides what must be checked, runs or coordinates the real evidence check, chooses the evidence/report format, loads specialized references, and decides whether the user's requested outcome is actually satisfied.
 
 ## Generated File Placement
 
@@ -13,11 +13,11 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-This skill is a verification router with multiple routes. Do not run every route for every task. Select every route that matches the artifact and requested outcome, and combine routes when the request spans UI, local script/process, code behavior, skill/instruction, generated artifact, document/report, or mixed work. Load only the relevant reference files and specialized checks for those routes.
+This skill is a verification router with multiple routes. Do not run every route for every task. Select every route that matches the artifact and requested outcome, and combine routes when the request spans real executable proof, report generation, functional result, regression comparison, UI/visual quality, local script/process, code behavior, skill/instruction, generated artifact, document/report, or mixed work. Load only the relevant reference files and specialized checks for those routes.
 
 ## Trigger
 
-Use this skill when the task is about correctness, quality, audit, validation, UI review, artifact review, or confirming that a finished workflow meets the user's stated target. Do not use this as the primary optimization skill; use `optimization-skill` first for converting repeated workflows into local resources, then use this skill to verify the result.
+Use this skill when the task is about correctness, real testing, proof, quality, audit, validation, UI review, artifact review, report evidence, or confirming that a finished workflow meets the user's stated target. Do not use this as the primary optimization skill; `optimization-skill` decides and implements reusable workflow optimization, then this skill verifies that the optimized route preserves the same behavior.
 
 ## Core Rule
 
@@ -25,9 +25,10 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 
 - Prefer real artifacts, real screenshots, real command output, real files, real browser states, and real run logs.
 - Do not call something verified only because code compiles, a method accepts arguments, or a file exists.
-- If the task produced code, route the real execution and evidence capture through `test-skill` after this skill defines the verification criteria.
+- If the task produced code, scripts, browser flows, automations, reports, or generated artifacts, run the smallest real usage check that exercises the changed path with concrete inputs.
 - Verification evidence must list the real input, method, output, and pass reason when a formal report is generated. A green status, `OK`, `PASS`, or method name alone is not evidence.
-- If the task produced UI, run the UI verification route below before calling the UI acceptable.
+- If the task produced visible output, run the visual verification route below before calling the artifact acceptable.
+- If the user asks whether the result matches prior behavior, preserve the current intended behavior, or "still works", compare against an available baseline such as prior screenshots, golden outputs, existing tests, git-visible behavior, saved examples, user-provided context, or documented expected behavior. If no baseline exists, state that exact gap instead of implying regression coverage.
 
 ## Feasibility And Repair Loop
 
@@ -51,8 +52,8 @@ Use this loop before returning a fail verdict for code, UI, local scripts, repor
 
 ## Workflow
 
-1. Identify the user's requested outcome and the artifact that should prove it.
-2. Classify the verification type: UI, local script/process, code behavior, skill/instruction, generated file, document/report, or mixed.
+1. Identify the user's requested outcome, background context, and artifact that should prove it.
+2. Classify the verification type: real executable proof, functional result/regression, visual/UI, local script/process, code behavior, skill/instruction, generated file, document/report, report artifact, or mixed.
 3. Load only the reference needed for that type.
 4. Build a concrete check with real input, real output, and pass/fail criteria.
 5. Run or inspect the actual artifact, not a mock substitute, when local execution is practical.
@@ -61,37 +62,111 @@ Use this loop before returning a fail verdict for code, UI, local scripts, repor
 8. If the check fails and a fix is in scope, fix the artifact and verify again.
 9. Report what passed, what failed, what was attempted, what remains unverified, and where the evidence lives.
 
-## UI Verification
+## Real Evidence And Report Generation
 
-Use this route for UI/UX review, visual QA, responsive layout checks, frontend polish, website/app screens, dashboards, Unity Editor UI, inspector panels, browser views, typography, spacing, hierarchy, copy, buttons, forms, cards, or user-reported UI problems.
+Use this route whenever work needs proof: code changed, UI changed, a script or workflow was created, a generated artifact needs QA, the user asks for testing/reporting, or another skill has defined a pass target that needs real evidence.
+
+### Real Evidence Standards
+
+Do not finish because the edit is written. Prove the work with a real executable or rendered check. Match the evidence format to the complexity: a simple successful check can stay in chat; use a table, Markdown summary, or PDF only when that makes the evidence easier to review.
+
+Every generated report must show real evidence. For each passing case, list:
+
+- `Input`: the real file, image, URL, prompt, request payload, command input, code snippet, or concrete test data
+- `Used`: the actual tool, command, script, browser route, model call, API endpoint, or local workflow used
+- `Output`: the real stdout, JSON, rendered file, screenshot path, generated image, URL response, return value, diff, or produced artifact
+- `Why Pass`: the exact acceptance reason tied to the user's requirement and observed output
+
+For code changes, the primary verification must exercise the actual changed behavior:
+
+- Python function: run a short script that imports the real module and calls the changed function with concrete data.
+- CLI: execute the CLI with a temporary input file and inspect the real output file or stdout.
+- API route: send a real request to the local route or local handler and show request/response evidence.
+- UI: open a real page or local preview, interact where needed, and capture screenshots.
+- Image code: create or use a small real image, run the code, and inspect the generated output.
+- URL code: serve or use a real reachable local URL when possible.
+- PDF/document code: create or use a small document or PDF, run the changed path, and inspect the generated artifact.
+- Unity/editor code: verify in the live Unity Editor when behavior depends on editor rendering, inspector controls, custom windows, import, compile, or generated previews.
+
+Supporting checks such as lint, type check, unit tests, imports, builds, or syntax checks are useful, but they do not replace a real usage test when one is practical.
+
+### Evidence Format Decision
+
+Do not generate a PDF report by default. For easy results, report the real evidence in a few concise chat lines: command or tool used, real output, and why it passes.
+
+Generate a PDF/report artifact only when:
+
+- the user explicitly asks for a PDF, downloadable report, or artifact
+- evidence is long, table-heavy, multi-case, or easier to scan as structured rows
+- the output is visual, document-like, image-based, UI-based, or needs side-by-side comparison
+- screenshots, rendered pages, before/after images, or document previews need to be reviewed together
+- a repo or project rule asks for a report artifact
+
+If a PDF is warranted, use the bundled manifest/report generator:
+
+```bash
+python3 scripts/generate_test_pdf_report.py --input /path/to/manifest.json --output /path/to/report.pdf --cleanup-root /path/to/report-cache-root
+```
+
+Read `references/report-manifest.md` when building a manifest. The generator rejects passing cases that do not include real `Input`, `Used`, `Output`, and `Why Pass` evidence, or whose output is only a bare status word such as `OK`, `PASS`, `done`, or `works`.
+
+### Report Layout
+
+Choose the report shape from the evidence:
+
+- Code/API/CLI: compact summary table, real command/input/output, key logs, and status.
+- UI/browser: screenshots, layout notes, interaction results, and console/runtime evidence.
+- Image/edit/generation: before/after or input/output images with readable labels.
+- Document/PDF/spreadsheet/slides: rendered page previews and file paths.
+- Comparison/audit: expected vs actual tables with visible pass/fail cells.
+- Mixed workflows: combine the smallest layout that makes the result reviewable.
+
+For PDF tables, use adaptive full-page layout. Render preview pages and reject unreadably small text, excessive blank space, clipped text, or wildly inconsistent table scale between pages.
+
+## Functional Result And Regression Verification
+
+Use this route when the user asks whether a workflow, code change, optimization, generated output, browser flow, or local process works correctly, still works, produces the same effect as before, or preserves existing behavior.
+
+1. Extract the outcome contract from the user's request and background knowledge: purpose, real input, expected output, preserved behavior, accepted differences, and explicit non-goals.
+2. Find the strongest practical baseline: existing tests, before/after screenshots, golden files, saved examples, prior outputs, git-visible behavior, logs, user-supplied references, or documented behavior. Prefer a real baseline over memory.
+3. Define pass/fail criteria for the observable effect, not just internal implementation. Include side effects, output location, data shape, user-visible state, error behavior, and any compatibility or regression target the user cares about.
+4. Run executable proof when code, scripts, browser flows, or automations are involved. The proof must exercise the changed path with concrete inputs.
+5. Compare observed output to the target and baseline. Mark intentional differences as pass only when they are requested or necessary for the goal.
+6. State unverified scope explicitly when the baseline is unavailable, private, too expensive, or blocked by missing access.
+
+## Visual And UI Verification
+
+Use this route for UI/UX review, visual QA, responsive layout checks, frontend polish, website/app screens, dashboards, Unity Editor UI, inspector panels, browser views, generated images, game screens, documents, reports, slides, PDFs, typography, spacing, hierarchy, copy, buttons, forms, cards, or user-reported visual problems.
 
 ### Required Sources
 
-1. Search `references/ui-problem-index.md` first by component, symptom, and requested action.
-2. Fetch or update `leonxlnx/taste-skill` into the current task or project `cache/` folder, never into a random directory:
+1. Read `references/visual-verification-rubric.md` for visual checks, then apply only the artifact sections that match the user's output.
+2. For UI, websites, app screens, dashboards, editor panels, or browser views, search `references/ui-problem-index.md` by component, symptom, and requested action.
+3. For landing pages, portfolios, marketing pages, visual taste reviews, and existing website/app redesigns, fetch or update `leonxlnx/taste-skill` into the current task or project `cache/` folder, never into a random directory:
 
    ```bash
-   mkdir -p cache/taste-skill
+   mkdir -p cache
    git clone --depth 1 https://github.com/leonxlnx/taste-skill.git cache/taste-skill
    ```
 
    If it already exists, update it with `git fetch --depth 1 origin` or replace only that cache copy.
-3. Read the relevant Taste Skill files before UI verification:
+4. Read the relevant Taste Skill files before those web/landing/redesign checks:
    - `skills/taste-skill/SKILL.md` for landing pages, portfolios, marketing pages, redesigns, visual taste, layout discipline, and final pre-flight.
    - `skills/redesign-skill/SKILL.md` for existing project upgrades and audit-first redesigns.
    - A more specific Taste Skill variant only when the user's UI type clearly matches it.
+5. Do not apply Taste Skill's marketing-page rules to games, documents, dense dashboards, reports, slides, or technical tools except for the general principle of reading the brief before judging aesthetics.
 
-### UI Check Procedure
+### Visual Check Procedure
 
-1. Capture or open the real UI state first: screenshot, browser target, local app, Unity Editor view, or supplied image.
-2. Apply matching local problem-index rules.
-3. Apply Taste Skill's relevant pre-flight checks, especially redesign audit, one design system, real images, contrast, CTA wrapping, hero fit, navigation line fit, mobile collapse, copy self-audit, and no generic AI layout tells.
-4. Verify at the relevant breakpoints. For browser UI, include desktop and narrow/mobile widths when practical.
-5. Treat clipped text, wrapped compact controls, unreadable contrast, fake screenshots, broken responsive layout, and missing real evidence as blockers unless the user explicitly accepts them.
+1. Capture or open the real visual state first: screenshot, browser target, local app, Unity Editor view, gameplay capture, rendered document page, PDF preview, slide export, generated image, or supplied image.
+2. Infer the visual brief from the user: audience, domain, artifact type, brand/style references, platform, constraints, intended mood, and whether beauty, clarity, fidelity, or gameplay/document usability matters most.
+3. Select the matching visual rubric section and any matching local problem-index rules. Apply Taste Skill only for the web/landing/redesign cases listed above.
+4. Verify the relevant states and sizes. For browser UI, include desktop and narrow/mobile widths when practical. For games, include gameplay-scale readability and at least one real play or motion state when practical. For documents/PDFs/slides, render representative pages or exported slides.
+5. Treat clipped text, overlapping controls, unreadable contrast, fake evidence, broken responsive layout, incorrect artifact-specific standard, and missing real visual evidence as blockers unless the user explicitly accepts them.
 
-### UI Output
+### Visual Output
 
-State the UI verdict as pass, warning, or fail. Include the screenshots, viewport sizes, Taste Skill source used, local index entries used, observed page state, and the concrete reason for any blocker. If the UI passes, explain why the screenshots/page state satisfy the user's requested outcome.
+State the visual verdict as pass, warning, or fail. Include the user's visual context used, artifact-specific standard, screenshots/previews and sizes, Taste Skill source used when applicable, local index entries used, observed state, and the concrete reason for any blocker. If the visual result passes, explain why the rendered state satisfies the user's requested outcome for that artifact type.
 
 ## Local Script And Process Verification
 
@@ -127,17 +202,21 @@ Use this route for generated documents, reports, images, PDFs, markdown, data fi
 - Confirm the artifact exists at the intended final path.
 - Open, render, parse, or inspect the artifact with the strongest practical local tool.
 - Check the artifact against the user's requested content, format, and naming.
+- If the artifact has a visual reading surface, combine this route with Visual And UI Verification and read `references/visual-verification-rubric.md`.
 - For PDF reports, verify that each passing case contains real input, used method, real output, and a pass reason; fail the report review if it only says `OK`, `PASS`, or `done`.
 - For PDF reports with tables, render representative pages and reject unreadably small text, oversized rows, clipped cells, sparse pages where a small table sits at the top, or inconsistent table scale across continuation pages. The table should adapt font size, row height, page size, orientation, and splits to maximize useful page area while staying readable.
 - Keep raw generation inputs and review logs in `cache/`; keep final deliverables in the requested location or `outputs/`.
 
-## Relationship To Test Skill
+## Relationship To Optimization Skill
 
-`verify-skill` decides what correctness means and which reference rules apply. `test-skill` executes real tests and chooses the evidence format after code changes, scripted workflows, or report-worthy validation: concise chat for simple results, Markdown/table summaries for medium evidence, and PDFs only when long data, visual comparison, rendered artifacts, explicit requests, or repo rules warrant them. Use both when a task needs verification criteria plus executable proof.
+`verify-skill` must pass before optional post-task optimization begins, unless the user explicitly asked for optimization as the primary task. After `optimization-skill` changes a script, workflow, skill, reference, or prompt, return to `verify-skill` and prove the optimized path preserves the same observable behavior while reducing repeated work or token load.
 
 ## Guardrails
 
 - Do not treat taste as personal preference when a concrete UI rule, screenshot, or external taste-skill pre-flight applies.
+- Do not judge all visuals with one generic web-design standard. Use the user's background and the artifact-specific rubric first.
+- Do not claim completion from a mock-only, import-only, signature-only, method-parameter-only, or lint-only check when a real local usage check is practical.
+- Do not generate a passing PDF that lacks real `Input`, `Used`, `Output`, and `Why Pass` evidence for each passing case.
 - Do not use UI screenshots edited by hand as proof that the live UI is fixed.
 - Do not verify a local script by reading it only; run it with concrete inputs when possible.
 - Do not leave generated verification inputs outside `cache/`.
@@ -148,7 +227,11 @@ Use this route for generated documents, reports, images, PDFs, markdown, data fi
 
 ## Examples
 
-- "Check whether this UI is acceptable" -> use the UI route, Taste Skill, local problem index, and real screenshots.
+- "Check whether this UI is acceptable" -> use the visual route, visual rubric, Taste Skill when relevant, local problem index, and real screenshots.
+- "Verify the game screen looks good" -> use the visual rubric's game section, inspect gameplay-scale readability and motion/gameplay evidence, and do not use marketing-page standards as the main bar.
+- "Verify this generated document looks professional" -> render the document/PDF/slides, use the visual rubric's document section, and check readability, hierarchy, page fit, tables, and brand consistency.
 - "Verify this optimized script still works" -> run the script with concrete cache inputs and inspect real outputs.
 - "Audit this generated PDF report" -> parse or render the PDF and check the required evidence rows.
+- "Fix this Python function" -> run a concrete input through the changed function, capture output, compare to expected behavior, and summarize command/output/pass reason in chat unless report evidence is warranted.
+- "Give me a QA report" -> run the real workflow first, choose chat/Markdown/PDF by evidence complexity, and generate a PDF only when visual, table-heavy, long, or explicitly requested.
 - "Verify this browser flow but login fails" -> inspect console/network/history, try safe alternate browser or local fixture routes, then stop only if private credentials or user approval are required.

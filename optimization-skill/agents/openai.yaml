@@ -1,4 +1,4 @@
 interface:
   display_name: "Optimization Skill"
-  short_description: "Post-task workflow and skill optimization"
-  default_prompt: "After $workflow-skill routes the task here, use $optimization-skill to optimize repeated fixed workflows in the owning user skill after the task is complete, using other skills as needed and verifying the faster path with real execution."
+  short_description: "Optional post-verify workflow optimization"
+  default_prompt: "After $workflow-skill routes the task here, use $optimization-skill only for explicit optimization requests, repeated-at-least-three-times workflows, or clearly reusable stable processes. Optimize the owning skill, script, workflow, prompt, reference, or asset to reduce repeated token cost, then use $verify-skill to prove the optimized path preserves the same behavior."

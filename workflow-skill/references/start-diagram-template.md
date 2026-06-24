@@ -23,8 +23,8 @@ flowchart TD
   A["User request: <short request>"] --> B["Target map: slices, artifacts, pass targets"]
   B --> C["Route skills: workflow-skill -> <executor skills>"]
   C --> D["Do work: <actual files/artifacts/actions>"]
-  D --> E["Test: <real command/input/output>"]
-  E --> F["Verify: <pass criteria>"]
+  D --> E["Verify: <real command/input/output + pass criteria>"]
+  E --> F["Optional optimize: <only if gate passes>"]
   F --> G["Finish: <final answer/report/push>"]
 ```
 
@@ -50,10 +50,10 @@ flowchart TD
 ```
 
 Target map:
-- `Task slices`: read skill, patch focused files, validate, test, verify, push.
+- `Task slices`: read skill, patch focused files, validate, verify with real evidence, push.
 - `Artifacts`: `SKILL.md`, references/scripts/assets, generated validation output, remote skill mirror.
 - `Pass targets`: validator passes, requested trigger/workflow behavior is present, public-safety sync allows push, remote commit/hash is reported.
-- `Skill route`: `workflow-skill -> management-skill -> code-skill -> test-skill -> verify-skill -> management-skill`.
+- `Skill route`: `workflow-skill -> management-skill -> code-skill -> verify-skill -> management-skill`.
 - `Stop condition`: global skill mirror has the verified update or a real sync blocker is reported.
 
 ## Code Change Route
@@ -72,5 +72,5 @@ Target map:
 - `Task slices`: inspect, edit, run concrete input, verify observed output.
 - `Artifacts`: changed code, test inputs/logs/report if needed.
 - `Pass targets`: real behavior matches request; no import-only or status-only proof.
-- `Skill route`: `workflow-skill -> code-skill -> test-skill -> verify-skill`.
+- `Skill route`: `workflow-skill -> code-skill -> verify-skill`.
 - `Stop condition`: observed output satisfies every pass target.

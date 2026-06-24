@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for Codex task work. Use for lightweight routing checks on simple requests, and use when concrete Python/C# coding, prompt/instruction authoring, prompt updates or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy tasks need an explicit workflow controller. Before task action, show a user-facing workflow diagram: compact direct-route diagram for lightweight mode, or full task-specific diagram plus target map for explicit mode. For real Python/C# task work, decompose goals, select executor skills, route Python/C# code or script work through code-skill before test-skill and verify-skill, loop until pass, and choose the final evidence format by complexity instead of always generating a PDF report."
+description: "Global workflow controller for Codex task work. Use for routing checks, Python/C# coding, prompt/instruction authoring, optimization, file-changing, multi-step, skill-editing, UI/artifact/report, visual/image generation, or evidence-heavy tasks. Before task action, show a workflow diagram: compact direct route for lightweight mode, or full diagram plus target map for explicit mode. For visual/image tasks that need or would benefit from ChatGPT-generated images or references, including when the user did not provide an image, use the internal image-generation route before implementation and verify the final visual result. For Python/C# work, route code or scripts through code-skill before verify-skill. After verification passes, run optimization only when explicitly requested, repeated at least three times, or clearly reusable."
 ---
 
 # Workflow Skill
@@ -16,7 +16,7 @@ The explicit workflow turns a request into a target map, chooses the relevant ex
 
 `workflow-skill` is the entrypoint and controller for substantive task work. Start with its routing decision before any other user/global skill when executing a task that needs planning, implementation, verification, or evidence. Other skills are executors selected by `workflow-skill`; they should not be treated as independent first-entry controllers for task work.
 
-For tiny direct answers, obvious file inspection, state listing, or one-shot command execution, keep the target map implicit and lightweight. Do the requested action directly, then answer with the result. Do not expand into a formal target map, executor route list, report, or code/test/verify spine unless the request has real risk, ambiguity, side effects, or a verification requirement.
+For tiny direct answers, obvious file inspection, state listing, or one-shot command execution, keep the target map implicit and lightweight. Do the requested action directly, then answer with the result. Do not expand into a formal target map, executor route list, report, or code/verify spine unless the request has real risk, ambiguity, side effects, or a verification requirement.
 
 ## Start Diagram Rule
 
@@ -35,9 +35,11 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 ## Internal Route Selection
 
-This skill controls a workflow with many possible executor branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, Python code, C# code, UI, image, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
+This skill controls a workflow with many possible executor branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, Python code, C# code, UI, image, internal ChatGPT-in-Chrome visual generation, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
 
 Read `references/routing-matrix.md` when a task spans multiple artifact types, touches global skills, edits or writes prompts/instructions, or the correct route is not obvious from the request.
+
+Read `references/image-generation.md` when the task is visual/image-related, the user did not provide a reference image and one would materially improve the result, a project expects ChatGPT-in-Chrome image output, or a project skill mentions the workflow image-generation route.
 
 Use `scripts/validate_workflow_skill.py` only to validate this skill's routing contract after editing the skill.
 
@@ -52,6 +54,7 @@ Write the explicit target map only when the task is worth that overhead:
 - editing files or changing executable behavior
 - multi-step work with dependencies or unclear order
 - UI, image, document, PDF, report, or generated artifact work
+- visual updates that need or would benefit from ChatGPT-generated image assets, concepts, sketches, or references before implementation, especially when the user did not provide a reference image
 - skill creation, deletion, renaming, reorganization, or sync
 - browser/computer-control workflows with observable pass criteria
 - tests, verification, debugging, repair, optimization, or evidence reports
@@ -69,7 +72,7 @@ Even in lightweight mode, show the small direct-route diagram first. Use judgmen
 
 ## Workflow
 
-For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, test it, verify it against the target, and loop until the stop condition is met.
+For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, verify it with real evidence against the target, and loop until the stop condition is met. After the user-facing target passes, apply the optimization gate below before deciding whether to run `optimization-skill`.
 
 For lightweight mode, display only the compact direct-route diagram, make the smallest routing decision needed, perform the direct action, and answer.
 
@@ -96,7 +99,7 @@ Make the pass target match the artifact:
 
 - Text: required sections, wording constraints, format, and destination.
 - Prompt/instruction: purpose, inputs or variables, output contract, reusable general rules, and destination; keep it concise, direct, and free of case-by-case warnings unless examples are explicitly requested.
-- Image: source image, output image, visible changes, dimensions or visual constraints.
+- Image: image type, source/reference image, output image, transparency or opaque-canvas requirement, visible changes, dimensions or visual constraints.
 - Python/C# code: behavior, real input, command or app flow, real output, and pass reason.
 - UI: page or screenshot target, viewport sizes, interaction state, and visual blockers.
 - Link or URL: exact URL plus response, page state, or extracted content.
@@ -113,14 +116,15 @@ Skip the written target map in lightweight mode, but do not skip the compact dir
 For concrete Python or C# code/programming, local Python scripts, C# automations, global-skill Python scripts, or any task that creates or edits Python/C# executable behavior, run this order:
 
 ```text
-workflow-skill -> code-skill -> test-skill -> verify-skill -> goal check
+workflow-skill -> code-skill -> verify-skill -> goal check
 ```
 
 - `code-skill`: executor for writing, editing, refactoring, or reasoning about Python/C# code and helper scripts only.
-- `test-skill`: executor for small real tests with concrete input and real output. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
-- `verify-skill`: executor for comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements.
+- `verify-skill`: executor for real tests, evidence capture, report generation, and comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
 
-For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `test-skill` and `verify-skill` when objective evidence or a report is required.
+For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `verify-skill` when objective evidence or a report is required.
+
+For visual or image-generation tasks where the user or project expects ChatGPT-in-Chrome output, or where a generated reference would materially improve the result, use this skill's internal image-generation route before continuing downstream implementation. Read `references/image-generation.md`, classify the image as asset, concept, sketch, reference, or final visual, then use the owning project/browser runner when one exists. If the platform is not macOS, ChatGPT is not logged in, or Chrome/ChatGPT is unavailable, skip only the image-generation step, continue work that does not depend on the missing image, and include the platform/login blocker in the final response.
 
 Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, or a single clear command that only reports state. Use the full spine only when the task changes Python/C# code, executable behavior, artifacts, needs debugging, or benefits from real verification evidence.
 
@@ -131,6 +135,16 @@ For global skill creation, deletion, rename, or editing, include `management-ski
 Choose the final evidence format by complexity. Simple successful results can be reported in a few chat lines with the command/tool used, the real output, and why it passes. Generate a PDF/report artifact only when the user explicitly asks for one, a repo rule requires one, or the evidence is long, table-heavy, visual, screenshot-based, image-comparison-based, document-like, or otherwise easier to review as an artifact.
 
 When a report is generated, every passing row must include `Input`, `Used`, `Output`, and `Why Pass` with real evidence.
+
+## Optimization Gate
+
+Optimization is the last optional ring, not a default branch. Do not run `optimization-skill` just because a task succeeded. Run it only when one of these is true:
+
+- the user explicitly asks to optimize a skill, prompt, script, or workflow;
+- the same or substantially identical workflow has repeated at least three times;
+- the completed workflow is clearly stable, deterministic, and likely to be reused many times, so a script, reference, asset, or shorter prompt would save future token cost without changing behavior.
+
+Before optimization, the original task must already be verified unless optimization is the user's primary request. During optimization, inspect whether code, workflow steps, references, assets, or prompt wording can reduce repeated work or token usage. After optimization, return to `verify-skill` and prove the optimized path preserves the same user-facing behavior.
 
 ## User-Facing Output Completeness
 
@@ -144,9 +158,10 @@ When any workflow step produces material for the user to read, copy, run, compar
 
 ## Completion Loop
 
-After `test-skill` and `verify-skill`, compare the observed evidence with the target map.
+After `verify-skill`, compare the observed evidence with the target map.
 
-- If every pass target is met, provide concise chat evidence for simple results and generate a report artifact only when the evidence complexity, visual material, explicit user request, or repo rule warrants it.
+- If every pass target is met, evaluate the Optimization Gate. If it does not pass, provide concise chat evidence for simple results and generate a report artifact only when the evidence complexity, visual material, explicit user request, or repo rule warrants it.
+- If the Optimization Gate passes, run `optimization-skill`, then run `verify-skill` again to prove the optimized path preserves the same behavior before final completion.
 - If any pass target is not met, continue from the relevant execution step, fix the issue, retest, and verify again.
 - Do not stop because the method was attempted. Stop only because the target is met, the user changes the goal, or a real blocker prevents progress.
 
@@ -159,18 +174,19 @@ Keep the final chat short without making it incomplete. State what changed, what
 ## Guardrails
 
 - Do not start a worker skill before `workflow-skill` for task work.
-- Do not over-process simple work. Use only the compact direct-route diagram, and avoid formal target maps, internal route expansion, PDF reports, or test/verify loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
+- Do not over-process simple work. Use only the compact direct-route diagram, and avoid formal target maps, internal route expansion, PDF reports, or verification loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
-- Do not replace `test-skill` evidence with a method-only or status-only claim.
+- Do not replace `verify-skill` evidence with a method-only or status-only claim.
+- Do not run `optimization-skill` for one-off work, vague possibilities, or novelty. Use it only for explicit optimization requests, repeated-at-least-three-times workflows, or high-confidence reusable stable processes.
 - Do not hide incomplete data behind ellipses, placeholder ranges, or token-saving summaries when the user needs the complete output.
 - Do not push to GitHub unless the user request or active workflow requires saved global-skill changes.
 - For prompt work, do not pad the prompt with obvious prohibitions, near-duplicate warnings, or case-by-case exclusions. State the general rule once, use the output contract to constrain shape, and only include examples when the user explicitly asks for examples.
 
 ## Examples
 
-- "Create a new skill and push it" -> decompose, use management-skill with its GitHub sync route, code-skill for Python/C# scripts when needed, test-skill, verify-skill, then sync.
-- "Fix this Python script" -> decompose, use code-skill, run a real Python input through test-skill, then verify behavior.
+- "Create a new skill and push it" -> decompose, use management-skill with its GitHub sync route, code-skill for Python/C# scripts when needed, verify-skill, then sync.
+- "Fix this Python script" -> decompose, use code-skill, run a real Python input through verify-skill, then verify behavior.
 - "Review this UI" -> decompose visual targets, use verify-skill UI route, capture real evidence, and report blockers.
 - "What does this file say?" -> lightweight mode: show compact direct-route diagram, read the file, and answer; no formal target map.
 - "Run `date`" -> lightweight mode: show compact direct-route diagram, run the command, and report the output.
@@ -186,5 +202,5 @@ After editing this skill:
    ```
 
 2. Run the skill-creator quick validator when a Python with PyYAML is available.
-3. Run `test-skill` with real evidence; generate a PDF only when the evidence is long, table-heavy, visual, comparison-based, explicitly requested, or required by the repo.
-4. Run `verify-skill` against the requested outcome and the selected evidence/report format.
+3. Run `verify-skill` with real evidence; generate a PDF only when the evidence is long, table-heavy, visual, comparison-based, explicitly requested, or required by the repo.
+4. If optimization was changed or triggered, run the optimized path and verify that behavior remains the same.

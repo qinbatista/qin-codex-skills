@@ -36,14 +36,14 @@ Use this skill for Python and C# code writing, editing, refactoring, debugging, 
 4. During implementation, review, refactor, or optimization, actively look for repeated work whose units are independent. If code changes are in scope and `references/parallelization.md` says the parallel path can preserve the same observable result, optimize it immediately instead of leaving it as a suggestion.
 5. For prompt work, create or improve the prompt first, then embed the generated prompt into the corresponding Python or C# text/code.
 6. Keep edits surgical and preserve unrelated user work.
-7. After any code is written or changed, run the narrowest real usage test through `test-skill` unless the user explicitly forbids testing.
+7. After any code is written or changed, run the narrowest real usage check through `verify-skill` unless the user explicitly forbids verification.
 8. For code-related reports, generated report artifacts must show `Input`, `Used`, `Output`, and `Why Pass` for every passing case. Simple code test results can stay in chat when the command, output, and pass reason are easy to read there.
 
 ## Guardrails
 
 - Keep this as the single code skill. Do not load or depend on old code sub-skills.
 - Keep this skill scoped to Python and C# authoring. Do not stretch it to JavaScript, TypeScript, frontend code, shell scripts, SQL, or other languages just because the task is code-like.
-- Do not duplicate testing/reporting workflows here when `test-skill` is active.
+- Do not duplicate testing/reporting workflows here when `verify-skill` owns real evidence and report generation.
 - Do not claim full success without saying what was or was not verified.
 - Do not add unrequested features, abstractions, configurability, fallbacks, or compatibility layers.
 - Do not parallelize order-sensitive, shared-state, main-thread-only, or side-effect-heavy code unless the same result can be proven with a real comparison test.
@@ -51,7 +51,7 @@ Use this skill for Python and C# code writing, editing, refactoring, debugging, 
 
 ## Examples
 
-- "Write a Python parser" -> read coding approach and Python rules, implement the smallest path, then run a real parser input through `test-skill`.
+- "Write a Python parser" -> read coding approach and Python rules, implement the smallest path, then run a real parser input through `verify-skill`.
 - "Speed up this Python batch processor" -> read Python rules plus parallelization rules, parallelize independent item work when safe, and compare sequential and parallel outputs.
 - "Improve this prompt in Python code" -> read prompt generation and Python rules, then test with a concrete prompt input/output shape.
 - "Fix this Unity enemy controller" -> read coding approach and C# rules, then verify with Unity compile/runtime evidence where practical.
