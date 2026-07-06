@@ -1,6 +1,6 @@
 ---
 name: verify-skill
-description: "Executor skill under workflow-skill for all verification, including real tests, QA, evidence capture, report generation, result comparison, UI/visual checks, generated artifact review, skill verification, and optimized workflow validation. Use when asked to verify, test, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, prove code or scripts still work, compare against previous behavior, or decide whether a failure is fixable. Run concrete checks with real inputs/outputs, choose evidence format by complexity, require Input/Used/Output/Why Pass for reports, and check available Obsidian memory for repeated AI-caused project failures before pass verdicts. When verification fails, classify feasibility, try safe repair routes, and stop only for logical impossibility or missing user-controlled access. Routes are multi-select: combine every route needed by the artifact."
+description: "Executor skill under workflow-skill for all verification, including real tests, QA, evidence capture, report generation, result comparison, UI/visual checks, generated artifact review, skill verification, and optimized workflow validation. Use when asked to verify, test, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, prove code or scripts still work, compare against previous behavior, or decide whether a failure is fixable. Run concrete checks with real inputs/outputs, choose evidence format by complexity, require Input/Used/Output/Why Pass for reports, and run an Obsidian regression sweep for relevant prior repeated or fixed AI-caused project failures before pass verdicts. When verification fails, classify feasibility, try safe repair routes, and stop only for logical impossibility or missing user-controlled access. Routes are multi-select: combine every route needed by the artifact."
 ---
 
 # Verify Skill
@@ -30,16 +30,20 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 - If the task produced visible output, run the visual verification route below before calling the artifact acceptable.
 - If the user asks whether the result matches prior behavior, preserve the current intended behavior, or "still works", compare against an available baseline such as prior screenshots, golden outputs, existing tests, git-visible behavior, saved examples, user-provided context, or documented expected behavior. If no baseline exists, state that exact gap instead of implying regression coverage.
 
-## Obsidian Repetition Gate
+## Obsidian Regression Sweep
 
-When verifying connected project work, repeated workflows, generated artifacts, UI/visual/Unity/image/browser/deployment work, or global skill behavior, treat available Obsidian project memory as part of the baseline.
+When verifying connected project work, repeated workflows, generated artifacts, UI/visual/Unity/image/browser/deployment work, or global skill behavior, treat available Obsidian project memory as a final regression baseline, not just background context.
 
-1. If `/Users/qin/Library/Mobile Documents/iCloud~md~obsidian/Documents/MyAILLM` exists and the task maps to a known project or skill area, read the matching folder instructions first, then inspect the project or skill index, recent DailyLog entries, `wiki/log.md`, and `Skills/Failure Learning.md` for the same artifact, requirement, user correction, or failure pattern. Use targeted search when the exact project, feature, asset, or artifact name is known.
-2. Extract a repeated AI-caused requirement only when at least two distinct Obsidian records describe the same or substantially same user-visible failure, user correction, or next-time rule, and the issue is relevant to the current artifact.
-3. Turn each matched pattern into a verification gate: expected behavior, prohibited repeated mistake, required evidence, and source note paths. Do not pass verification if the current artifact lacks evidence that it avoided the repeated mistake, even if ordinary tests, file existence, screenshots, or metrics pass.
-4. If this gate fails and generation or repair is in scope, fail the current verification, create a short avoidance brief from the Obsidian record, run one targeted regeneration or repair pass with that reason included in the prompt or implementation instructions, then verify again with the same Obsidian gate plus the normal evidence checks.
-5. If no relevant Obsidian records exist, or the vault or folder is unavailable, state that no Obsidian baseline was found and continue normal verification.
-6. Record in the verification output: searched sources, repeated patterns, gate verdict, avoidance brief, retry action if any, and remaining unverified scope. Summarize sanitized lessons only; never copy secrets, credentials, auth files, raw transcripts, or sensitive private logs from the vault.
+1. If `/Users/qin/Library/Mobile Documents/iCloud~md~obsidian/Documents/MyAILLM` exists and the task maps to a known project or skill area, read the matching folder instructions first, then inspect the project or skill index, recent DailyLog entries, `wiki/log.md`, `Skills/Failure Learning.md`, and any directly named feature, asset, file, route, or artifact pages. Use targeted search with touched file names, artifact names, feature names, route names, and user-facing labels.
+2. Build an Obsidian regression checklist before the final pass verdict. Include every relevant item in scope:
+   - repeated AI-caused failures with at least two distinct Obsidian records for the same or substantially same user-visible issue;
+   - prior user corrections, "Next-time rule", "Lesson", "Do not", "Never", "must", or "must not" records tied to touched files, generated artifacts, UI/visual state, prompts, project rules, or changed behavior;
+   - previously fixed bugs that the current code, prompt, generation, or workflow could plausibly reintroduce, even when the old issue has only one strong record.
+3. For each checklist item, define the expected preserved behavior, prohibited regression, exact evidence needed, and source note path or heading. Then run or inspect the strongest practical evidence for every item, not a sample. Mark each item `pass`, `fail`, `blocked`, or `not applicable`; `not applicable` requires a concrete scope reason.
+4. Do not pass verification if any applicable checklist item is untested, lacks evidence, or fails, even if ordinary tests, file existence, screenshots, metrics, or the main requested change pass. This is a regression failure because the current work may have brought an old AI mistake back.
+5. If the sweep fails and generation or repair is in scope, fail the current verification, create an avoidance brief that includes all failed or unverified checklist items, run one targeted regeneration or repair pass with that brief included in the prompt or implementation instructions, then rerun the full Obsidian regression checklist plus the normal evidence checks.
+6. If no relevant Obsidian records exist, or the vault or folder is unavailable, state that no Obsidian regression baseline was found and continue normal verification.
+7. Record in the verification output: searched sources, checklist items, source note paths, per-item verdicts, evidence used for each item, avoidance brief, retry action if any, and remaining unverified scope. Summarize sanitized lessons only; never copy secrets, credentials, auth files, raw transcripts, or sensitive private logs from the vault.
 
 ## Feasibility And Repair Loop
 
@@ -65,7 +69,7 @@ Use this loop before returning a fail verdict for code, UI, local scripts, repor
 
 1. Identify the user's requested outcome, background context, and artifact that should prove it.
 2. Classify the verification type: real executable proof, functional result/regression, visual/UI, local script/process, code behavior, skill/instruction, generated file, document/report, report artifact, or mixed.
-3. Run the Obsidian Repetition Gate when the task has project, skill, repeated-workflow, generated-artifact, UI/visual, Unity, image, browser, deployment, or automation context.
+3. Run the Obsidian Regression Sweep when the task has project, skill, repeated-workflow, generated-artifact, UI/visual, Unity, image, browser, deployment, or automation context.
 4. Load only the reference needed for that type.
 5. Build a concrete check with real input, real output, and pass/fail criteria.
 6. Run or inspect the actual artifact, not a mock substitute, when local execution is practical.
@@ -229,7 +233,7 @@ After editing this skill:
 
 1. Run `optimization-skill`'s targeted validator for `/Users/qin/.codex/skills/verify-skill` and confirm it reports `Verification Passed`.
 2. Run a representative contract or scenario check that proves any new verification rule appears in `SKILL.md` and `agents/openai.yaml`.
-3. For Obsidian repetition-gate changes, search a real project memory example and confirm that two or more matching records would fail an under-evidenced current artifact and produce an avoidance brief for the retry.
+3. For Obsidian regression-sweep changes, search a real project memory example and confirm that all relevant repeated or prior fixed/corrected issues become checklist items, an under-evidenced current artifact fails, and the retry receives a complete avoidance brief.
 4. When publishing, run the management-skill global sync route so public-safety checks happen before push.
 
 ## Guardrails
@@ -242,7 +246,7 @@ After editing this skill:
 - Do not verify a local script by reading it only; run it with concrete inputs when possible.
 - Do not leave generated verification inputs outside `cache/`.
 - Do not hide warnings. A warning is acceptable only when the exact remaining uncertainty is stated.
-- Do not pass verification while a relevant repeated-failure pattern from the Obsidian Repetition Gate remains unaddressed.
+- Do not pass verification while any applicable item from the Obsidian Regression Sweep remains untested, failed, or unaddressed.
 - Do not loop forever. Prefer two to three meaningful repair routes, then stop with the exact blocker if the remaining issue requires user action.
 - Do not use private credentials, production writes, account switching, payment, or destructive actions as a repair route unless the user explicitly approves that route.
 - Do not turn an infeasible task into a fake pass. If the blocker is missing token/access or a logical contradiction, terminate verification and ask for the missing condition.
