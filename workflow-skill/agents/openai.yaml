@@ -1,4 +1,4 @@
 interface:
   display_name: "Workflow Skill"
   short_description: "Start with a workflow diagram, then route the task"
-  default_prompt: "Use $workflow-skill to show the required start diagram, choose lightweight direct routing or the full task workflow, route Python/C# coding, file-changing, visual/image, multi-step, or evidence-heavy work through the right executor skills, use the internal ChatGPT-in-Chrome image route when useful, verify with $verify-skill, and run optimization only when the explicit/repeated/reusable gate passes."
+  default_prompt: "Use $workflow-skill to show the required start diagram, run the Prompt Task Gate before generic text/code routing, choose lightweight direct routing or the full task workflow, route Python/C# coding, prompt files/templates/strings, system/developer/user instructions, AI output behavior, prompt trigger fixes, any prompt-related task, file-changing, visual/image, multi-step, or evidence-heavy work through the right executor skills, use the internal ChatGPT-in-Chrome image route when useful, verify with $verify-skill, and run optimization only when the explicit/repeated/reusable gate passes."

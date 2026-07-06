@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Executor skill under workflow-skill for Python and C# Codex code work only. Use when workflow-skill routes a task into writing, editing, refactoring, debugging, reviewing, optimizing, or explaining Python or C# code; prompt generation and prompt-in-code work for Python or C#; Python modules, scripts, tests, and snippets; C# and Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; performance and parallelization opportunities for independent Python or C# workloads; and obvious bounded Python/C# code tasks that may use Spark when an allowed model route exists. Do not use this skill to author JavaScript, TypeScript, frontend, shell, SQL, or other languages unless another active instruction explicitly routes that work elsewhere. Its internal routes are multi-select: use every route that applies to the task, not a one-of choice."
+description: "Executor skill under workflow-skill for Python and C# Codex code work only. Use when workflow-skill routes a task into writing, editing, refactoring, debugging, reviewing, optimizing, or explaining Python or C# code; any Python/C# prompt-related work including prompt generation, prompt review, prompt testing, prompt editing/add/update/remove/rewrite, and prompt-in-code work; Python modules, scripts, tests, and snippets; C# and Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; performance and parallelization opportunities for independent Python or C# workloads; and obvious bounded Python/C# code tasks that may use Spark when an allowed model route exists. Do not use this skill to author JavaScript, TypeScript, frontend, shell, SQL, or other languages unless another active instruction explicitly routes that work elsewhere. Its internal routes are multi-select: use every route that applies to the task, not a one-of choice."
 ---
 
 # Code Skill
@@ -16,7 +16,7 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 Select every route required by the current Python or C# request and artifact. This is multi-select, not one-of. Do not read irrelevant references for every code task.
 
 - General implementation, assumptions, smallest viable path, naming, branching, and surgical edits: read `references/coding-approach.md`.
-- Prompt generation, prompt rewriting, prompt embedding, Python prompt assignments, or C# prompt constants: read `references/prompt-generation.md`.
+- Python/C# prompt-related work, including prompt generation, prompt review, prompt testing, prompt editing/add/update/remove/rewrite, prompt embedding, Python prompt assignments, or C# prompt constants: read `references/prompt-generation.md`.
 - Python modules, scripts, tests, snippets, or Python prompt assignments: read `references/python-rules.md`.
 - C# or Unity C# MonoBehaviours, ScriptableObjects, managers, gameplay systems, editor scripts, or Unity performance work: read `references/unity-csharp-rules.md`.
 - Independent repeated work, batch processing, expensive loops, performance optimization, or any discovered safe parallelization opportunity in Python or C#: read `references/parallelization.md`.

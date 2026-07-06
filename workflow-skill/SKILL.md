@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for Codex task work. Use for routing checks, Python/C# coding, prompt/instruction authoring, optimization, file-changing, multi-step, skill-editing, UI/artifact/report, visual/image generation, or evidence-heavy tasks. Before task action, show a workflow diagram: compact direct route for lightweight mode, or full diagram plus target map for explicit mode. For visual/image tasks that need or would benefit from ChatGPT-generated images or references, including when the user did not provide an image, use the internal image-generation route before implementation and verify the final visual result. For Python/C# work, route code or scripts through code-skill before verify-skill. After verification passes, run optimization only when explicitly requested, repeated at least three times, or clearly reusable."
+description: "Global workflow controller for Codex task work. Use for routing checks, Python/C# coding, prompt task gate matches, any prompt-related task including prompt/instruction authoring, prompt files/templates/strings, system/developer/user instructions, AI output behavior, review, editing, add/update/remove/rewrite, testing, or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, visual/image generation, or evidence-heavy tasks. Before task action, show a workflow diagram: compact direct route for lightweight mode, or full diagram plus target map for explicit mode. For visual/image tasks that need or would benefit from ChatGPT-generated images or references, including when the user did not provide an image, use the internal image-generation route before implementation and verify the final visual result. For Python/C# work, route code or scripts through code-skill before verify-skill. After verification passes, run optimization only when explicitly requested, repeated at least three times, or clearly reusable."
 ---
 
 # Workflow Skill
@@ -8,7 +8,7 @@ description: "Global workflow controller for Codex task work. Use for routing ch
 Use this as the workflow layer for user tasks. It has two modes:
 
 - **Lightweight routing check** for simple, obvious, low-risk work.
-- **Explicit workflow controller** for concrete Python/C# coding/programming, prompt/instruction authoring, prompt updates or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
+- **Explicit workflow controller** for concrete Python/C# coding/programming, any prompt-related task, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
 
 The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
 
@@ -37,6 +37,22 @@ Put intermediate files, temporary inputs, caches, generated scratch data, logs, 
 
 This skill controls a workflow with many possible executor branches. Do not run every branch just because it exists. Select every branch that matches the requested artifact and task type, and combine branches when the task spans text, Python code, C# code, UI, image, internal ChatGPT-in-Chrome visual generation, document/PDF, global skill edit, optimization, management-skill for GitHub sync or auth/profile switching, or mixed work.
 
+### Prompt Task Gate
+
+Run this gate before choosing a generic text, code, or mixed route. If the user request is about prompt behavior, prompt wording, prompt files/templates/strings/constants, system/developer/user instructions, model or agent instructions, AI output behavior, extraction/generation/checker prompts, prompt tests, prompt review, or a prompt/rule that is not triggering, classify the work as prompt-related.
+
+The gate also matches loose editing language when the object is a prompt or instruction: add, update, remove, edit, rewrite, repair, simplify, shorten, tighten, make smarter, make easier to trigger, test, review, optimize, stop case-stacking, or explain why the prompt is not working.
+
+When this gate matches:
+
+1. Show `Prompt idea -> Prompt goal -> Problems -> Solution` before drafting or revising prompt text.
+2. Read the source prompt or current instruction/rule when it exists.
+3. Decide whether the prompt is standalone text or embedded in Python/C# executable behavior.
+4. For standalone prompt/instruction work, use the prompt route and verify with a representative prompt test or contract inspection.
+5. For embedded prompt strings/constants/templates in Python/C# code, combine the code route with the prompt rules. Do not let the code route skip the prompt purpose workflow.
+
+Prompt task matching takes precedence over the generic text route whenever the request is really about changing or testing AI instructions. Use code routing only in addition to the prompt gate when executable Python/C# behavior must change.
+
 Read `references/routing-matrix.md` when a task spans multiple artifact types, touches global skills, edits or writes prompts/instructions, or the correct route is not obvious from the request.
 
 Read `references/image-generation.md` when the task is visual/image-related, the user did not provide a reference image and one would materially improve the result, a project expects ChatGPT-in-Chrome image output, or a project skill mentions the workflow image-generation route.
@@ -50,7 +66,7 @@ Use this skill as the starting routing decision for user task requests before in
 Write the explicit target map only when the task is worth that overhead:
 
 - concrete Python or C# code/programming work
-- prompt/instruction authoring, updates, review, or optimization, including standalone prompt text not embedded in code
+- any prompt-related task, including prompt/instruction authoring, updates, review, or optimization, plus testing, editing, add/remove/rewrite, and standalone prompt text not embedded in code
 - editing files or changing executable behavior
 - multi-step work with dependencies or unclear order
 - UI, image, document, PDF, report, or generated artifact work
@@ -73,6 +89,8 @@ Even in lightweight mode, show the small direct-route diagram first. Use judgmen
 ## Workflow
 
 For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, verify it with real evidence against the target, and loop until the stop condition is met. After the user-facing target passes, apply the optimization gate below before deciding whether to run `optimization-skill`.
+
+For prompt-related work, the first workflow decision after the start diagram is the Prompt Task Gate. If it matches, keep the prompt purpose workflow visible in the target map and use the prompt pass target even when the prompt lives inside a larger skill, file, or codebase.
 
 For lightweight mode, display only the compact direct-route diagram, make the smallest routing decision needed, perform the direct action, and answer.
 
@@ -98,7 +116,7 @@ For explicit workflow mode, before doing the work, write a task-specific Mermaid
 Make the pass target match the artifact:
 
 - Text: required sections, wording constraints, format, and destination.
-- Prompt/instruction: purpose, inputs or variables, output contract, reusable general rules, and destination; keep it concise, direct, and free of case-by-case warnings unless examples are explicitly requested.
+- Prompt/instruction: show the purpose workflow `Prompt idea -> Prompt goal -> Problems -> Solution`; inspect the current prompt seriously when one exists; define purpose, inputs or variables, output contract, reusable general rules, and destination; include missing logic when the current prompt does not cover the goal; keep it concise, direct, and free of redundant case-by-case warnings unless examples are explicitly requested; test or inspect the updated prompt against the target output contract.
 - Image: image type, source/reference image, output image, transparency or opaque-canvas requirement, visible changes, dimensions or visual constraints.
 - Python/C# code: behavior, real input, command or app flow, real output, and pass reason.
 - UI: page or screenshot target, viewport sizes, interaction state, and visual blockers.
@@ -129,6 +147,14 @@ For visual or image-generation tasks where the user or project expects ChatGPT-i
 Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, or a single clear command that only reports state. Use the full spine only when the task changes Python/C# code, executable behavior, artifacts, needs debugging, or benefits from real verification evidence.
 
 For standalone prompt/instruction work, do not route through `code-skill` unless the prompt is being embedded in Python or C# executable code. Treat the prompt as a text artifact, test or inspect the resulting prompt against the target output contract when practical, and verify that the rule is stated at the right level of abstraction.
+
+For any prompt-related task, always start by showing the user this purpose workflow before drafting or revising the prompt:
+
+```text
+Prompt idea -> Prompt goal -> Problems -> Solution
+```
+
+Use the workflow to understand what the prompt is trying to do, what current wording fails to do, and the smallest complete fix. If a source prompt exists, read it carefully before changing it. Add missing logic when the prompt lacks logic needed for the goal. Prefer replacing a weak or conflicting block with one clear principle over appending redundant rules. The final prompt should be complete, direct, and testable against the target output contract; it may be longer when that length carries necessary logic. After updating, test with a representative input/output scenario when practical; otherwise inspect the prompt against the contract and state why that inspection is enough.
 
 For global skill creation, deletion, rename, or editing, include `management-skill` before reading/editing and after verification when the user wants the saved skill pushed. Use the GitHub sync route inside `management-skill` for the actual mirror operation.
 
@@ -181,7 +207,9 @@ Keep the final chat short without making it incomplete. State what changed, what
 - Do not run `optimization-skill` for one-off work, vague possibilities, or novelty. Use it only for explicit optimization requests, repeated-at-least-three-times workflows, or high-confidence reusable stable processes.
 - Do not hide incomplete data behind ellipses, placeholder ranges, or token-saving summaries when the user needs the complete output.
 - Do not push to GitHub unless the user request or active workflow requires saved global-skill changes.
-- For prompt work, do not pad the prompt with obvious prohibitions, near-duplicate warnings, or case-by-case exclusions. State the general rule once, use the output contract to constrain shape, and only include examples when the user explicitly asks for examples.
+- For prompt work, trigger on any prompt-related request, not only explicit edit verbs. Do not pad the prompt with obvious prohibitions, near-duplicate warnings, or case-by-case exclusions. State the general rule once, add missing logic when the prompt does not cover the task, use the output contract to constrain shape, and only include examples when the user explicitly asks for examples.
+- For prompt editing problems, including add, update, remove, rewrite, or repair requests, fix the prompt's purpose and failure point first; add necessary new logic, but do not keep adding redundant lines to cover every observed case.
+- If a prompt-related request did not use the prompt route, treat that as a routing miss. Correct it by rerunning the Prompt Task Gate, showing `Prompt idea -> Prompt goal -> Problems -> Solution`, and then testing or contract-inspecting the prompt update.
 
 ## Examples
 
