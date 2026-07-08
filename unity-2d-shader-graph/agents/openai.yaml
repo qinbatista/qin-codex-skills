@@ -1,3 +1,0 @@
-display_name: Unity 2D Shader Graph
-short_description: Build and verify animated Unity 2D shader effects.
-default_prompt: Create or fix an animated Unity 2D Shader Graph effect and verify it with layer previews, GIF motion checks, and Unity import.

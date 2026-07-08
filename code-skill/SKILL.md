@@ -20,7 +20,7 @@ Select every route required by the current Python or C# request and artifact. Th
 - Python modules, scripts, tests, snippets, or Python prompt assignments: read `references/python-rules.md`.
 - C# or Unity C# MonoBehaviours, ScriptableObjects, managers, gameplay systems, editor scripts, or Unity performance work: read `references/unity-csharp-rules.md`.
 - Independent repeated work, batch processing, expensive loops, performance optimization, or any discovered safe parallelization opportunity in Python or C#: read `references/parallelization.md`.
-- Obvious bounded low-risk Python/C# code tasks where an allowed model/delegation route exists: read `references/spark-small-code.md`.
+- Python/C# code phases that `workflow-skill` assigns to Spark, plus obvious bounded low-risk Python/C# code tasks where an allowed model/delegation route exists: read `references/spark-small-code.md`.
 
 When multiple routes apply, use them together and read only those relevant references. For example, Python prompt code needs prompt generation plus Python rules; Unity gameplay code needs coding approach plus C# rules.
 

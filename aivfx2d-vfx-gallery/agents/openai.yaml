@@ -1,4 +1,0 @@
-interface:
-  display_name: "AIVFX2D VFX Gallery"
-  short_description: "Open and rebuild the local AIVFX2D VFX gallery."
-  default_prompt: "Open the AIVFX2D VFX gallery."

@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for Codex task work. Use for routing checks, Python/C# coding, prompt task gate matches, any prompt-related task including prompt/instruction authoring, prompt files/templates/strings, system/developer/user instructions, AI output behavior, review, editing, add/update/remove/rewrite, testing, or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, visual/image generation, or evidence-heavy tasks. Before task action, show a workflow diagram: compact direct route for lightweight mode, or full diagram plus target map for explicit mode. For visual/image tasks that need or would benefit from ChatGPT-generated images or references, including when the user did not provide an image, use the internal image-generation route before implementation and verify the final visual result. For Python/C# work, route code or scripts through code-skill before verify-skill. After verification passes, run optimization only when explicitly requested, repeated at least three times, or clearly reusable."
+description: "Global workflow controller for task work. Use for routing checks, Python/C# coding, prompt task gate matches, any prompt-related task including prompt/instruction authoring, prompt files/templates/strings, system/developer/user instructions, AI output behavior, review, editing, add/update/remove/rewrite, testing, or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, visual/image generation, or evidence-heavy tasks. Before task action, show a workflow diagram: compact direct route for lightweight mode, or full diagram plus target map for explicit mode. For visual/image tasks that need or would benefit from ChatGPT-generated images or references (even without a user-provided image), use the internal image-generation route before implementation and verify the final visual result. For Python/C# work, route code or scripts through code-skill before verify-skill. After verification passes, run optimization only when explicitly requested, repeated 3+ times, or clearly reusable."
 ---
 
 # Workflow Skill
@@ -28,6 +28,26 @@ Before task action, write a user-facing workflow diagram first whenever `workflo
 - Keep the diagram concise. Show meaningful task-level steps, not every tiny shell command.
 - If the request is ambiguous, dangerous, destructive, or needs credentials, show the diagram up to the decision point and ask for the missing approval/input before side effects.
 - Read `references/start-diagram-template.md` when a quick fill-in template would save time or keep the diagram consistent.
+
+## Model Phase Contract
+
+Always show the model route before execution whenever `workflow-skill` handles a task.
+
+- In explicit workflow mode, add `Models by phase` to the target map. In lightweight mode, add a one-line model route after the compact diagram when the direct action uses model reasoning, code writing, code testing, or verification judgment.
+- Planning, task decomposition, target-map writing, prompt/instruction planning, and final goal judgment use the newest available reasoning/planning model in the active Codex session.
+- Python/C# code writing, editing, refactoring, debugging, code-review fixes, test-code writing, and small code probes/tests are forced to `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`). This controller-level assignment supersedes optional small-code Spark wording in executor skills.
+- Code verification commands run in local tools, but any AI-authored test/probe code, failure interpretation that changes code, or repair iteration remains on `GPT-5.3-Codex-Spark`.
+- Non-code artifact work uses the model required by the selected executor/tool; if no special model is required, state `active Codex planning model`.
+- If `GPT-5.3-Codex-Spark` cannot be selected or delegated in the current environment, do not silently write or test code with another model. Mark the code/test phase as blocked or ask for explicit fallback approval.
+
+Use this compact shape unless the task needs more detail:
+
+| Phase | Model | Scope |
+|---|---|---|
+| Planning / target map | newest available reasoning/planning model | workflow-skill plan, route, pass targets |
+| Code writing / editing | `GPT-5.3-Codex-Spark` | Python/C# implementation and code review fixes |
+| Code tests / probes | `GPT-5.3-Codex-Spark` plus local commands | test/probe authoring and code-level repair; commands provide evidence |
+| Verification / final judgment | active Codex planning model plus local evidence | compare observed output with pass targets |
 
 ## Generated File Placement
 
@@ -111,7 +131,8 @@ For explicit workflow mode, before doing the work, write a task-specific Mermaid
 2. `Artifacts`: what will exist or change, such as text, Python/C# code, image, UI, PDF, Markdown, skill files, or GitHub state.
 3. `Pass targets`: what observable result proves each artifact is correct.
 4. `Skill route`: the skills needed and the order they must run; the first skill must be `workflow-skill`.
-5. `Stop condition`: the exact condition that allows final completion.
+5. `Models by phase`: the model assigned to planning, code writing/editing, code tests/probes, non-code artifacts, verification, and any blocked model requirement.
+6. `Stop condition`: the exact condition that allows final completion.
 
 Make the pass target match the artifact:
 
@@ -139,6 +160,7 @@ workflow-skill -> code-skill -> verify-skill -> goal check
 
 - `code-skill`: executor for writing, editing, refactoring, or reasoning about Python/C# code and helper scripts only.
 - `verify-skill`: executor for real tests, evidence capture, report generation, and comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
+- Model route for this spine: `workflow-skill` planning uses the newest available reasoning/planning model; all Python/C# implementation, test-code/probe authoring, code-level debugging, and code-changing repair loops use `GPT-5.3-Codex-Spark`; local test/build commands provide evidence; final pass/fail judgment uses the active Codex planning model against that evidence.
 
 For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `verify-skill` when objective evidence or a report is required.
 
@@ -203,6 +225,7 @@ Keep the final chat short without making it incomplete. State what changed, what
 - Do not over-process simple work. Use only the compact direct-route diagram, and avoid formal target maps, internal route expansion, PDF reports, or verification loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
+- Do not omit `Models by phase` in explicit workflow mode, and do not silently substitute another model for `GPT-5.3-Codex-Spark` on Python/C# code writing or code testing phases.
 - Do not replace `verify-skill` evidence with a method-only or status-only claim.
 - Do not run `optimization-skill` for one-off work, vague possibilities, or novelty. Use it only for explicit optimization requests, repeated-at-least-three-times workflows, or high-confidence reusable stable processes.
 - Do not hide incomplete data behind ellipses, placeholder ranges, or token-saving summaries when the user needs the complete output.
