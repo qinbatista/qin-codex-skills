@@ -10,7 +10,7 @@ Use this as the workflow layer for user tasks. It has two modes:
 - **Lightweight routing check** for simple, obvious, low-risk work.
 - **Explicit workflow controller** for concrete Python/C# coding/programming, any prompt-related task, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
 
-The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, checks whether the target is actually met, and prevents stopping before completion.
+The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, runs the foreground mini real test, returns the user-facing result when that gate passes, and keeps extended checks or closeout out of the user's critical path when they do not affect the delivered result.
 
 ## Always-First Rule
 
@@ -147,7 +147,7 @@ Even in lightweight mode, show the small direct-route diagram first. Use judgmen
 
 ## Workflow
 
-For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, verify it with real evidence against the target, and loop until the stop condition is met. After the user-facing target passes, apply the optimization gate below before deciding whether to run `optimization-skill`.
+For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, run the foreground mini real test against the target, and loop until that foreground gate passes. After the user-facing target and mini test pass, return the result first. Extended real testing, log checks, documentation updates, DailyLog/wiki/Obsidian records, and other closeout that does not influence the delivered code/artifact should run afterward as background or deferred follow-up.
 
 For prompt-related work, the first workflow decision after the start diagram is the Prompt Task Gate. If it matches, keep the prompt purpose workflow visible in the target map and use the prompt pass target even when the prompt lives inside a larger skill, file, or codebase.
 
@@ -171,7 +171,9 @@ For explicit workflow mode, before doing the work, write a task-specific Mermaid
 3. `Pass targets`: what observable result proves each artifact is correct.
 4. `Skill route`: the skills needed and the order they must run; the first skill must be `workflow-skill`.
 5. `Workflow with models`: a numbered task-specific list where every step name includes the model in parentheses, such as `1. Plan route (best available workflow model)` and `2. Patch prompt text (gpt-5.3-code-spark / gpt-5.3-codex-spark)`. Show Spark for text writing, prompt/rule drafting, command-line or simple checks, code writing/editing, code tests/probes, and log/wiki/Markdown closeout. Show the best available workflow/verification/reasoning model only for workflow creation, image/comprehensive reading/checking, verification judgment, route decisions, and final judgment. Include any blocked model requirement.
-6. `Stop condition`: the exact condition that allows final completion.
+6. `Foreground result gate`: the exact mini real test or small evidence check that allows the user-facing result to be returned.
+7. `Background follow-up`: extended real tests, log checks, docs, wiki/DailyLog/Obsidian records, or sync/status checks that should continue after the user-facing result when they do not change the delivered result.
+8. `Stop condition`: foreground completion means the result is delivered and the mini real test passed; full closeout means any selected background follow-up also passed or reported a reopened failure.
 
 Make the pass target match the artifact:
 
@@ -198,8 +200,8 @@ workflow-skill -> code-skill -> verify-skill -> goal check
 ```
 
 - `code-skill`: executor for writing, editing, refactoring, or reasoning about Python/C# code and helper scripts only.
-- `verify-skill`: executor for real tests, evidence capture, report generation, and comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
-- Model route for this spine: `workflow-skill` planning uses the newest available reasoning/planning model; all Python/C# implementation, test-code/probe authoring, code-level debugging, and code-changing repair loops use `GPT-5.3-Codex-Spark`; local test/build commands provide evidence; final pass/fail judgment uses the newest available reasoning/planning model against that evidence.
+- `verify-skill`: executor for the foreground mini real test, optional extended real tests, evidence capture, report generation, and comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when a mini real usage check is practical.
+- Model route for this spine: `workflow-skill` planning uses the best available workflow/reasoning model; all Python/C# implementation, test-code/probe authoring, code-level debugging, and code-changing repair loops use `GPT-5.3-Codex-Spark`; local test/build commands provide evidence; foreground mini-test and final pass/fail judgment use the best available verification/reasoning model against that evidence.
 
 For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `verify-skill` when objective evidence or a report is required. For standalone text/prompt/rule writing, log/wiki/Markdown edits, optimization edits, and simple command-line checks, follow the Model Phase Contract: use `GPT-5.3-Codex-Spark` unless the phase requires image reading, comprehensive reading/checking, deep review, or final judgment.
 
@@ -219,7 +221,7 @@ Use the workflow to understand what the prompt is trying to do, what current wor
 
 For global skill creation, deletion, rename, or editing, include `management-skill` before reading/editing and after verification when the user wants the saved skill pushed. Use the GitHub sync route inside `management-skill` for the actual mirror operation.
 
-Choose the final evidence format by complexity. Simple successful results can be reported in a few chat lines with the command/tool used, the real output, and why it passes. Generate a PDF/report artifact only when the user explicitly asks for one, a repo rule requires one, or the evidence is long, table-heavy, visual, screenshot-based, image-comparison-based, document-like, or otherwise easier to review as an artifact.
+Choose the foreground evidence format by complexity. Simple successful mini-test results can be reported in a few chat lines with the command/tool used, the real output, and why it passes. Generate a PDF/report artifact only when the user explicitly asks for one, a repo rule requires one, or the evidence is long, table-heavy, visual, screenshot-based, image-comparison-based, document-like, or otherwise easier to review as an artifact.
 
 When a report is generated, every passing row must include `Input`, `Used`, `Output`, and `Why Pass` with real evidence.
 
@@ -245,11 +247,12 @@ When any workflow step produces material for the user to read, copy, run, compar
 
 ## Completion Loop
 
-After `verify-skill`, compare the observed evidence with the target map.
+After `verify-skill`, compare the foreground mini-test evidence with the target map.
 
-- If every pass target is met, evaluate the Optimization Gate. If it does not pass, provide concise chat evidence for simple results and generate a report artifact only when the evidence complexity, visual material, explicit user request, or repo rule warrants it.
-- If the Optimization Gate passes, run `optimization-skill`, then run `verify-skill` again to prove the optimized path preserves the same behavior before final completion.
-- If any pass target is not met, continue from the relevant execution step, fix the issue, retest, and verify again.
+- If the delivered result is complete and the foreground mini real test passes, return the user-facing result immediately. Say that extended real testing, log checks, documentation, sync/status checks, or memory closeout are background follow-up when those items remain.
+- If a selected background follow-up later fails and the failure can affect the user-facing result, reopen the task, report the failing evidence, fix the issue, and rerun the foreground mini test before returning again.
+- If the Optimization Gate passes, run `optimization-skill` after the foreground result has been returned unless optimization is the user's primary task. Verify the optimized path with a mini real test and treat extended same-behavior checks as background unless the user asked to wait.
+- If the foreground mini real test or required pass target is not met, continue from the relevant execution step, fix the issue, retest, and verify again before returning.
 - Do not stop because the method was attempted. Stop only because the target is met, the user changes the goal, or a real blocker prevents progress.
 
 For lightweight mode, the stop condition is simply that the direct requested answer, file read, status check, or command output was delivered.
@@ -258,10 +261,11 @@ For fast-path simple edits or actions, completion is the direct action plus mini
 
 ## Post-Pass Non-Blocking Closeout
 
-After the user-facing task passes verification, return the result to the user immediately. Post-pass housekeeping is secondary: DailyLog entries, wiki/log updates, Obsidian memory pages, Markdown summaries, optimization notes, and other non-user-facing closeout work must not delay the user-facing result.
+After the user-facing task passes the foreground mini real test, return the result to the user immediately. Say clearly that the task result is done by the foreground gate and that extended real testing, log checks, documentation, sync/status checks, DailyLog/wiki/Obsidian memory, Markdown summaries, optimization notes, and other non-user-facing closeout are background finishing work when they remain.
 
-- If a background or async route is available, start post-pass logging/wiki/Markdown closeout in the background after the pass result is ready.
+- If a background or async route is available, start extended testing and post-pass logging/wiki/Markdown closeout in the background after the mini-test pass result is ready.
 - If no background route is available and the closeout is not required for the user-facing deliverable, defer or skip it instead of blocking the final response.
+- If background extended testing later finds a real failure, resume work, tell the user the background check reopened the task, and continue from the failing evidence.
 - If a higher-priority environment rule requires a minimal memory closeout before final response, keep it brief and do not expand it into a long secondary workflow.
 - All log/wiki/DailyLog/Obsidian/Markdown closeout drafting and file edits are Spark-default execution: use `GPT-5.3-Codex-Spark`, not the newest/current selected reasoning model.
 - Do not run optimization after verification just because verification passed. Run optimization only when the Optimization Gate passes, and treat any optimization closeout the same way: verified result first, secondary records in the background.
@@ -277,7 +281,7 @@ Keep the final chat short without making it incomplete. State what changed, what
 - Do not route simple obvious edits/actions through `verify-skill` or Obsidian recording. If the user asks for "change A to B", "rename X to Y", "open this site", or a similarly bounded low-risk action, execute it directly and stop unless the scope becomes unclear or risk appears.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
-- Do not omit `Models by phase` in explicit workflow mode. Do not show an explicit diagram/target map without concrete phase/model/scope rows. Do not silently substitute another model for `GPT-5.3-Codex-Spark` on ordinary text-writing, command-line/simple-check, Python/C# code-writing, or code-testing phases.
+- Do not omit `Workflow with models` in explicit workflow mode. Do not show an explicit diagram/target map without numbered steps that include the model in parentheses. Do not silently substitute another model for `GPT-5.3-Codex-Spark` on ordinary text-writing, command-line/simple-check, Python/C# code-writing, or code-testing phases.
 - Do not replace `verify-skill` evidence with a method-only or status-only claim.
 - Do not block the user's final result on post-pass logging, wiki updates, DailyLog entries, optimization notes, or other non-user-facing closeout after verification has passed. Return the result first; run closeout in the background when possible.
 - Do not run `optimization-skill` for one-off work, vague possibilities, or novelty. Use it only for explicit optimization requests, repeated-at-least-three-times workflows, or high-confidence reusable stable processes.

@@ -1,6 +1,6 @@
 ---
 name: verify-skill
-description: "Verification executor selected by workflow-skill. Use when work needs proof, tests, QA, review, UI/visual checks, artifact verification, regression comparison, or failure triage. Default to one mini real test; use real result testing for major or user-requested result tests. Require concrete input/output evidence and Obsidian regression sweeps when relevant."
+description: "Verification executor selected by workflow-skill. Use when work needs proof, tests, QA, review, UI/visual checks, artifact verification, regression comparison, or failure triage. Default foreground gate is one mini real test; run deeper result tests, logs, docs, and Obsidian sweeps as background follow-up unless high-risk or the user asks to wait. Require concrete input/output evidence."
 ---
 
 # Verify Skill
@@ -34,21 +34,27 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 
 The default verification shape is one mini real test: the smallest executable or inspectable check that uses real input/output and can catch the changed path breaking. For minor edits, low-risk changes, and not-important updates, one mini real test is enough when it directly exercises the affected behavior.
 
-Use real result testing, not just a mini check, when the update is major, changes user-visible behavior, touches broad/shared code, affects data/security/deployment/public APIs, changes UI/generated artifacts, or when the user asks to test the result after editing. A real result test must exercise the actual edited result the user cares about, not a substitute path.
+Use the mini real test as the normal foreground completion gate. When the mini test passes, return the pass verdict to `workflow-skill` so the user can get the result quickly.
+
+Run deeper real result testing after the foreground result as background follow-up when the update is major, changes user-visible behavior, touches broad/shared code, changes UI/generated artifacts, or when more confidence is useful but the extra checks do not change the delivered code/artifact. If a background real test fails, reopen the task, report the failing evidence, repair the issue, and rerun the foreground mini test.
+
+Keep full real result testing in the foreground only when the task is high-risk or destructive, touches security, payments, private data, production deployment, public API contracts, irreversible migrations, or the user explicitly asks not to return until full testing is complete. In those cases, the real result test must exercise the actual edited result the user cares about, not a substitute path.
 
 Do not inflate verification with many fake, shallow, or status-only checks. A compile, import, lint, existence check, route listing, mock-only call, or bare `PASS` output can support verification, but it cannot replace the one real mini test when a real test is practical. If only a shallow check is possible, say exactly what remains untested instead of saying the result passed.
 
 ## Pass Return And Background Closeout
 
-When verification passes, return the pass verdict and essential evidence to `workflow-skill` immediately so the user can receive the result. Do not keep the user waiting while doing non-user-facing closeout.
+When the foreground mini real test passes, return the pass verdict and essential evidence to `workflow-skill` immediately so the user can receive the result. Do not keep the user waiting while doing extended real testing or non-user-facing closeout.
 
-Post-pass DailyLog entries, wiki/log updates, Obsidian memory pages, Markdown summaries, optimization notes, report indexing, and similar records are secondary. Run them in a background/non-blocking route when available. If no background route is available and the record is not required for the user-facing deliverable, defer or skip it instead of delaying the final answer. If a higher-priority environment rule requires a minimal memory closeout before final response, keep it brief.
+Post-pass deeper tests, log checks, DailyLog entries, wiki/log updates, Obsidian memory pages, Markdown summaries, optimization notes, report indexing, and similar records are secondary. Run them in a background/non-blocking route when available. If no background route is available and the record is not required for the user-facing deliverable, defer or skip it instead of delaying the final answer. If a higher-priority environment rule requires a minimal memory closeout before final response, keep it brief.
+
+When returning a foreground pass while background work remains, say the task result is done by the mini-test gate and that extended checks or closeout are continuing or deferred in the background. If any background check fails, resume the task with the failing evidence instead of treating the earlier mini-test pass as final truth.
 
 Model rule: verification judgment, comprehensive review, image/visual assessment, and final pass/fail decisions always use the best available verification/reasoning model by default. Any post-pass log/wiki/DailyLog/Obsidian/Markdown drafting or file editing is Spark-default execution and must use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`; display alias `gpt-5.3-code-spark`).
 
 ## Obsidian Regression Sweep
 
-When verifying connected project work, repeated workflows, generated artifacts, UI/visual/Unity/image/browser/deployment work, or global skill behavior, treat available Obsidian project memory as a final regression baseline, not just background context.
+When verifying connected project work, repeated workflows, generated artifacts, UI/visual/Unity/image/browser/deployment work, or global skill behavior, treat available Obsidian project memory as a regression baseline. Run the full sweep in the background by default after the foreground mini test passes unless the task is explicitly about a repeated failure, high-risk output, or user-requested full verification before return.
 
 1. If `/Users/qin/Library/Mobile Documents/iCloud~md~obsidian/Documents/MyAILLM` exists and the task maps to a known project or skill area, read the matching folder instructions first, then inspect the project or skill index, recent DailyLog entries, `wiki/log.md`, `Skills/Failure Learning.md`, and any directly named feature, asset, file, route, or artifact pages. Use targeted search with touched file names, artifact names, feature names, route names, and user-facing labels.
 2. Build an Obsidian regression checklist before the final pass verdict. Include every relevant item in scope:
@@ -56,8 +62,8 @@ When verifying connected project work, repeated workflows, generated artifacts, 
    - prior user corrections, "Next-time rule", "Lesson", "Do not", "Never", "must", or "must not" records tied to touched files, generated artifacts, UI/visual state, prompts, project rules, or changed behavior;
    - previously fixed bugs that the current code, prompt, generation, or workflow could plausibly reintroduce, even when the old issue has only one strong record.
 3. For each checklist item, define the expected preserved behavior, prohibited regression, exact evidence needed, and source note path or heading. Then run or inspect the strongest practical evidence for every item, not a sample. Mark each item `pass`, `fail`, `blocked`, or `not applicable`; `not applicable` requires a concrete scope reason.
-4. Do not pass verification if any applicable checklist item is untested, lacks evidence, or fails, even if ordinary tests, file existence, screenshots, metrics, or the main requested change pass. This is a regression failure because the current work may have brought an old AI mistake back.
-5. If the sweep fails and generation or repair is in scope, fail the current verification, create an avoidance brief that includes all failed or unverified checklist items, run one targeted regeneration or repair pass with that brief included in the prompt or implementation instructions, then rerun the full Obsidian regression checklist plus the normal evidence checks.
+4. Do not pass full closeout if any applicable checklist item is untested, lacks evidence, or fails, even if ordinary tests, file existence, screenshots, metrics, or the main requested change pass. If the foreground mini test already returned to the user and the background sweep finds a failure, reopen the task and report that the background regression check found an issue.
+5. If the sweep fails and generation or repair is in scope, create an avoidance brief that includes all failed or unverified checklist items, run one targeted regeneration or repair pass with that brief included in the prompt or implementation instructions, then rerun the foreground mini test and the relevant regression checklist.
 6. If no relevant Obsidian records exist, or the vault or folder is unavailable, state that no Obsidian regression baseline was found and continue normal verification.
 7. Record in the verification output: searched sources, checklist items, source note paths, per-item verdicts, evidence used for each item, avoidance brief, retry action if any, and remaining unverified scope. Summarize sanitized lessons only; never copy secrets, credentials, auth files, raw transcripts, or sensitive private logs from the vault.
 
@@ -85,14 +91,14 @@ Use this loop before returning a fail verdict for code, UI, local scripts, repor
 
 1. Identify the user's requested outcome, background context, and artifact that should prove it.
 2. Classify the verification type: real executable proof, functional result/regression, visual/UI, local script/process, code behavior, skill/instruction, generated file, document/report, report artifact, or mixed.
-3. Run the Obsidian Regression Sweep when the task has project, skill, repeated-workflow, generated-artifact, UI/visual, Unity, image, browser, deployment, or automation context.
+3. Run the foreground mini real test first unless the task is high-risk or the user asked to wait for full verification. Schedule the Obsidian Regression Sweep and deeper tests as background follow-up by default when they are relevant but not required to decide whether the immediate result works.
 4. Load only the reference needed for that type.
 5. Build a concrete check with real input, real output, and pass/fail criteria.
 6. Run or inspect the actual artifact, not a mock substitute, when local execution is practical.
 7. If the check fails, run the Feasibility And Repair Loop before returning a fail verdict.
 8. Record what was given, what tool/command/workflow was used, what came back, and why that output satisfies, fails, or remains blocked.
 9. If the check fails and a fix is in scope, fix the artifact and verify again.
-10. Report what passed, what failed, what was attempted, what remains unverified, and where the evidence lives. After a pass verdict, return the result immediately; route non-user-facing logging/wiki/Markdown closeout as background work when possible.
+10. Report what passed in the foreground mini test, what background checks remain, what failed if anything, what remains unverified, and where the evidence lives. After a foreground pass verdict, return the result immediately; route extended testing and non-user-facing logging/wiki/Markdown closeout as background work when possible.
 
 ## Real Evidence And Report Generation
 
@@ -102,7 +108,7 @@ Use this route whenever work needs proof: code changed, UI changed, a script or 
 
 Do not finish because the edit is written. Prove the work with a real executable or rendered check. Match the evidence format to the complexity: a simple successful check can stay in chat; use a table, Markdown summary, or PDF only when that makes the evidence easier to review.
 
-Scale from the Default Mini Real Test Rule: one focused real check for routine changes, broader real result testing only for major, risky, user-requested, or failing cases.
+Scale from the Default Mini Real Test Rule: one focused real check is the foreground completion gate. Broader real result testing runs as background follow-up by default after the user-facing result, except for high-risk, destructive, production/security/payment/data/API, explicitly user-blocking, or failing cases.
 
 Every generated report must show real evidence. For each passing case, list:
 
@@ -164,8 +170,8 @@ Use this route when the user asks whether a workflow, code change, optimization,
 1. Extract the outcome contract from the user's request and background knowledge: purpose, real input, expected output, preserved behavior, accepted differences, and explicit non-goals.
 2. Find the strongest practical baseline: existing tests, before/after screenshots, golden files, saved examples, prior outputs, git-visible behavior, logs, user-supplied references, or documented behavior. Prefer a real baseline over memory.
 3. Define pass/fail criteria for the observable effect, not just internal implementation. Include side effects, output location, data shape, user-visible state, error behavior, and any compatibility or regression target the user cares about.
-4. Run executable proof when code, scripts, browser flows, or automations are involved. The proof must exercise the changed path with concrete inputs.
-5. Compare observed output to the target and baseline. Mark intentional differences as pass only when they are requested or necessary for the goal.
+4. Run executable proof when code, scripts, browser flows, or automations are involved. The foreground proof must exercise the changed path with concrete inputs; broader regression comparisons can run in background follow-up unless the task is high-risk or the user asks to wait.
+5. Compare observed output to the target and baseline. Mark intentional differences as pass only when they are requested or necessary for the goal. If a background comparison fails after the user-facing result was returned, reopen the task with the failing evidence.
 6. State unverified scope explicitly when the baseline is unavailable, private, too expensive, or blocked by missing access.
 
 ## Visual And UI Verification
@@ -265,8 +271,8 @@ After editing this skill:
 - Do not verify a local script by reading it only; run it with concrete inputs when possible.
 - Do not leave generated verification inputs outside `cache/`.
 - Do not hide warnings. A warning is acceptable only when the exact remaining uncertainty is stated.
-- Do not pass verification while any applicable item from the Obsidian Regression Sweep remains untested, failed, or unaddressed.
-- Do not block the user-facing result on post-pass DailyLog, wiki, Obsidian, Markdown, optimization notes, or other secondary closeout after verification has passed.
+- Do not call full closeout complete while any applicable item from the Obsidian Regression Sweep remains untested, failed, or unaddressed.
+- Do not block the user-facing result on background real tests, log checks, DailyLog, wiki, Obsidian, Markdown, optimization notes, or other secondary closeout after the foreground mini real test has passed.
 - Do not loop forever. Prefer two to three meaningful repair routes, then stop with the exact blocker if the remaining issue requires user action.
 - Do not use private credentials, production writes, account switching, payment, or destructive actions as a repair route unless the user explicitly approves that route.
 - Do not turn an infeasible task into a fake pass. If the blocker is missing token/access or a logical contradiction, terminate verification and ask for the missing condition.
