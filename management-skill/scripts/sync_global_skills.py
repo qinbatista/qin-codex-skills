@@ -361,48 +361,18 @@ def read_skill_metadata(skill_dir):
 
 
 def build_readme(skill_paths, language="en"):
-    rows = []
-    for skill_path in skill_paths:
-        metadata = read_skill_metadata(skill_path)
-        skill_name = metadata.get("name", skill_path.name)
-        description = metadata.get("description", "No description provided.")
-        rows.append((skill_category(skill_name, description), skill_name, description, skill_path.name))
-    primary_rows = ordered_primary_rows(rows)
-
     if language == "zh":
-        readme_lines = [
-            "# qin-codex-skills",
-            "",
-            "英文版: [README.md](./README.md)",
-            "",
-            "## 技能图",
-            "",
-            *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
-            "",
-            "这是全局 Codex skills 的公开镜像和路由说明。`workflow-skill` 永远先启动并选择执行者；其他 skill 都是它路由后的执行者。顶部先展示主图，下面列每个 skill 的角色、大功能、可多选模块和选择规则。",
-            "",
-            *build_skill_summary_table(primary_rows, language="zh"),
-            "",
-            *build_support_skill_details(rows, language="zh"),
-        ]
-        return "\n".join(readme_lines)
+        return build_overview(skill_paths, language="zh").replace(
+            "# 当前 Codex Skills\n\n英文版: [README.md](./README.md)",
+            "# qin-codex-skills\n\n英文版: [README.md](./README.md)",
+            1,
+        )
 
-    readme_lines = [
-        "# qin-codex-skills",
-        "",
-        "Chinese version: [README.zh.md](./README.zh.md)",
-        "",
-        "## Skill Map",
-        "",
-        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
-        "",
-        "`workflow-skill` is the always-first controller. Every other primary skill is an executor selected by it. This is the Codex skill source and multi-select routing overview.",
-        "",
-        *build_skill_summary_table(primary_rows, language="en"),
-        "",
-        *build_support_skill_details(rows, language="en"),
-    ]
-    return "\n".join(readme_lines)
+    return build_overview(skill_paths, language="en").replace(
+        "# Current Codex Skills\n\nChinese version: [README.zh.md](./README.zh.md)",
+        "# qin-codex-skills\n\nChinese version: [README.zh.md](./README.zh.md)",
+        1,
+    )
 
 
 def skill_category(skill_name, description):
@@ -611,7 +581,7 @@ def build_overview(skill_paths, language="en"):
         lines = [
             "# 当前 Codex Skills",
             "",
-            "英文版: [current_global_skills_overview.md](./current_global_skills_overview.md)",
+            "英文版: [README.md](./README.md)",
             "",
             "## 技能图",
             "",
@@ -655,7 +625,7 @@ def build_overview(skill_paths, language="en"):
     lines = [
         "# Current Codex Skills",
         "",
-        "Chinese version: [current_global_skills_overview.zh.md](./current_global_skills_overview.zh.md)",
+        "Chinese version: [README.zh.md](./README.zh.md)",
         "",
         "## Skill Map",
         "",
@@ -776,8 +746,6 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
     copied_names = []
     (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"))
     (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"))
-    (repository_dir / "current_global_skills_overview.md").write_text(build_overview(skill_paths, language="en"))
-    (repository_dir / "current_global_skills_overview.zh.md").write_text(build_overview(skill_paths, language="zh"))
     for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)
