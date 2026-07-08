@@ -85,6 +85,7 @@ SECRET_VALUE_PATTERNS = (
 )
 CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Management", "General"]
 PRIMARY_SKILL_ORDER = ["workflow-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"]
+APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 CATEGORY_LABEL_WIDTH = 28
 SKILL_LABEL_WIDTH = 24
@@ -282,6 +283,21 @@ def assert_public_safe(skill_paths):
     if issues:
         message = "Refusing to push private or secret-looking data to the public skill mirror:\n"
         message += "\n".join(f"- {issue}" for issue in issues)
+        raise RuntimeError(message)
+
+
+def assert_approved_global_skill_set(skill_paths):
+    observed_names = {path.name for path in skill_paths}
+    unexpected_names = sorted(observed_names - APPROVED_GLOBAL_SKILL_NAMES)
+    missing_names = sorted(APPROVED_GLOBAL_SKILL_NAMES - observed_names)
+    if unexpected_names or missing_names:
+        message = "Refusing to mirror global skills because the top-level skill folders must be exactly:\n"
+        message += "\n".join(f"- {skill_name}" for skill_name in PRIMARY_SKILL_ORDER)
+        if unexpected_names:
+            message += "\nUnexpected folders found:\n" + "\n".join(f"- {skill_name}" for skill_name in unexpected_names)
+        if missing_names:
+            message += "\nRequired folders missing:\n" + "\n".join(f"- {skill_name}" for skill_name in missing_names)
+        message += "\nCheck why the local global skill folder set changed before pushing."
         raise RuntimeError(message)
 
 
@@ -747,6 +763,7 @@ def pull(repository, skills_dir):
 
 def prepare_repository_snapshot(repository_dir, skills_dir):
     skill_paths = skill_directories(skills_dir)
+    assert_approved_global_skill_set(skill_paths)
     assert_public_safe(skill_paths)
     for path in repository_dir.iterdir():
         if path.name == ".git":

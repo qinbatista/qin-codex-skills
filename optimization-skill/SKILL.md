@@ -43,6 +43,12 @@ Optimization routes may proceed by using other skills and workflows to do the wo
 - Use the target skill's own folder as the permanent home for reusable files whenever the optimization belongs to that skill.
 - Keep task-specific generated inputs, reports, screenshots, previews, and logs in `cache/` or `outputs/`, not inside the reusable skill source.
 
+## Model And Closeout Rule
+
+Newest/current selected reasoning models are only for deciding whether the optimization gate applies, designing the workflow route, and judging whether verification proves same behavior. All actual optimization implementation is Spark-default execution: code edits, scripts, command-line work, reference updates, prompt/rule text edits, Markdown edits, log/wiki/DailyLog/Obsidian memory updates, and post-pass closeout use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`) unless the phase requires image reading, comprehensive review, or final pass/fail judgment.
+
+After the optimized path is verified, return the user-facing result immediately. Do not keep the user waiting for secondary records such as DailyLog/wiki/log updates, Obsidian memory pages, Markdown summaries, or optimization notes. Start those in a background/non-blocking route when available; otherwise defer or skip non-required closeout rather than delaying final response. If a higher-priority environment rule requires minimal memory closeout before final, keep it brief.
+
 ## Post-Task Optimization Rule
 
 Do not edit skills while an unrelated active task is still trying to reach its user-facing goal. First finish the requested task through its normal workflow, verify it with real evidence, and report the result. After completion, run this skill only if the optimization gate passes: explicit user request, repeated-at-least-three-times workflow, or high-confidence stable future reuse.
@@ -54,6 +60,7 @@ When a repeated pattern is obvious after task completion:
 3. Decide what belongs in that owning skill: a shorter instruction, a `references/` note, a deterministic `scripts/` helper, or a reusable `assets/` template.
 4. Add the optimization to the owning skill only after reading its current files and preparing references.
 5. Verify the optimized route with a small real run and compare it with the original behavior so the next similar task is faster without behavior drift.
+6. After the optimized route passes, return the result first. Treat logging, wiki updates, DailyLog entries, and other non-user-facing records as background/secondary work.
 
 If the user says "optimize this", "next time faster", "make this repeatable", or has repeated the same image/browser/computer/report/verification flow at least three times, include concrete suggestions for proactive optimization of the user's own relevant skill, then implement them when the request authorizes skill changes.
 
@@ -100,7 +107,7 @@ If the references are missing or ambiguous, pause the optimization decision and 
 12. Run the optimized workflow for real with concrete inputs through `verify-skill`. Do not stop at syntax checks, import checks, or parameter checks when a real local execution is practical.
 13. Compare the optimized output to the pre-optimization behavior, baseline, or pass target. Intentional differences are allowed only when the optimization request explicitly included them.
 14. If the real execution fails, fix the smallest relevant instruction, reference, script, or asset and rerun until it passes or a concrete blocker remains.
-15. Report what was optimized, what local files were added or changed, what real verification ran, how behavior stayed the same, and what remains unverified.
+15. Report what was optimized, what local files were added or changed, what real verification ran, how behavior stayed the same, and what remains unverified. Do not delay this report for post-pass logging/wiki/Markdown closeout.
 
 ## Good Optimization Targets
 
@@ -126,6 +133,7 @@ If the references are missing or ambiguous, pause the optimization decision and 
 - Do not shrink prompts so far that required inputs, output contract, safety constraints, or pass criteria become ambiguous.
 - Do not leave a script that cannot run, cannot show `--help`, or depends on undocumented local files.
 - Do not replace real workflow evidence with mocks when a real local test is practical.
+- Do not block the user-facing optimized result on DailyLog, wiki, Obsidian, Markdown, or other secondary post-pass closeout after same-behavior verification has passed.
 - Do not store generated cache files, screenshots, reports, auth files, tokens, logs, or personal data in reusable skill source.
 - Do not mix sibling packages, clones, caches, or workspaces because paths look similar. Use the authoritative target path.
 - Do not weaken validation just to make an optimization pass.

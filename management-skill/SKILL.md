@@ -45,6 +45,7 @@ Do not use this skill for ordinary coding, UI verification, testing, optimizatio
 - Do not print, expose, commit, or upload tokens, auth files, cookies, profile IDs, raw account logs, private keys, `.env` files, cache contents, or temporary generated artifacts.
 - Do not switch the active `auth.json` profile without explicit user confirmation at action time.
 - Do not push skill changes until public-safety checks pass.
+- Before pushing or syncing the global skill mirror, the selected top-level skill folders must be exactly `workflow-skill`, `code-skill`, `verify-skill`, `optimization-skill`, and `management-skill`. If any other skill folder appears, stop, inspect where it came from, and reject the push.
 - Do not put `.git` metadata inside `~/.codex/skills`.
 
 ## Examples

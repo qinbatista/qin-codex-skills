@@ -30,6 +30,14 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 - If the task produced visible output, run the visual verification route below before calling the artifact acceptable.
 - If the user asks whether the result matches prior behavior, preserve the current intended behavior, or "still works", compare against an available baseline such as prior screenshots, golden outputs, existing tests, git-visible behavior, saved examples, user-provided context, or documented expected behavior. If no baseline exists, state that exact gap instead of implying regression coverage.
 
+## Pass Return And Background Closeout
+
+When verification passes, return the pass verdict and essential evidence to `workflow-skill` immediately so the user can receive the result. Do not keep the user waiting while doing non-user-facing closeout.
+
+Post-pass DailyLog entries, wiki/log updates, Obsidian memory pages, Markdown summaries, optimization notes, report indexing, and similar records are secondary. Run them in a background/non-blocking route when available. If no background route is available and the record is not required for the user-facing deliverable, defer or skip it instead of delaying the final answer. If a higher-priority environment rule requires a minimal memory closeout before final response, keep it brief.
+
+Model rule: newest/current selected reasoning models are for verification judgment, comprehensive review, image/visual assessment, and final pass/fail decisions only. Any post-pass log/wiki/DailyLog/Obsidian/Markdown drafting or file editing is Spark-default execution and must use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`).
+
 ## Obsidian Regression Sweep
 
 When verifying connected project work, repeated workflows, generated artifacts, UI/visual/Unity/image/browser/deployment work, or global skill behavior, treat available Obsidian project memory as a final regression baseline, not just background context.
@@ -76,7 +84,7 @@ Use this loop before returning a fail verdict for code, UI, local scripts, repor
 7. If the check fails, run the Feasibility And Repair Loop before returning a fail verdict.
 8. Record what was given, what tool/command/workflow was used, what came back, and why that output satisfies, fails, or remains blocked.
 9. If the check fails and a fix is in scope, fix the artifact and verify again.
-10. Report what passed, what failed, what was attempted, what remains unverified, and where the evidence lives.
+10. Report what passed, what failed, what was attempted, what remains unverified, and where the evidence lives. After a pass verdict, return the result immediately; route non-user-facing logging/wiki/Markdown closeout as background work when possible.
 
 ## Real Evidence And Report Generation
 
@@ -247,6 +255,7 @@ After editing this skill:
 - Do not leave generated verification inputs outside `cache/`.
 - Do not hide warnings. A warning is acceptable only when the exact remaining uncertainty is stated.
 - Do not pass verification while any applicable item from the Obsidian Regression Sweep remains untested, failed, or unaddressed.
+- Do not block the user-facing result on post-pass DailyLog, wiki, Obsidian, Markdown, optimization notes, or other secondary closeout after verification has passed.
 - Do not loop forever. Prefer two to three meaningful repair routes, then stop with the exact blocker if the remaining issue requires user action.
 - Do not use private credentials, production writes, account switching, payment, or destructive actions as a repair route unless the user explicitly approves that route.
 - Do not turn an infeasible task into a fake pass. If the blocker is missing token/access or a logical contradiction, terminate verification and ask for the missing condition.

@@ -56,8 +56,8 @@ Before task action, write a user-facing workflow diagram first whenever `workflo
 Always show the model route before execution whenever `workflow-skill` handles a task.
 
 - In explicit workflow mode, add a visible `Models by phase` block/table to the target map before file edits, shell commands, browser/computer actions, or worker-skill execution. In lightweight mode, add a one-line model route after the compact diagram when the direct action uses model reasoning, text writing, command interpretation, code writing, code testing, or verification judgment.
-- Planning, task decomposition, target-map writing, route selection, ambiguity/risk decisions, and final goal judgment use the newest available reasoning/planning model in the active Codex session.
-- Ordinary execution that does not require image/visual reading, comprehensive reading, comprehensive checking, broad repo archaeology, deep debugging, or high-stakes review is forced to `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`). This includes writing text, drafting or editing prompts/rules/instructions, simple Markdown or config text edits, command-line work, shell/Git status checks, simple file inspection or summarization, small tests/probes, and Python/C# implementation or test-code authoring.
+- Newest/current user-selected reasoning models are reserved for workflow creation, task decomposition, target-map writing, route selection, ambiguity/risk decisions, image/visual reading, comprehensive reading/checking, deep review, verification judgment, and final goal judgment.
+- All actual execution that does not require image/visual reading, comprehensive reading, comprehensive checking, broad repo archaeology, deep debugging, high-stakes review, or final pass/fail judgment is forced to `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`). This includes writing text, drafting or editing prompts/rules/instructions, simple Markdown or config text edits, log/wiki/DailyLog/Obsidian memory edits, command-line work, shell/Git status checks, simple file inspection or summarization, small tests/probes, optimization implementation, and Python/C# implementation or test-code authoring.
 - Shell commands run in local tools. The Spark assignment covers the AI text/reasoning used to choose simple commands, write command-adjacent text, interpret simple command output, and author small probes/tests.
 - Image reading, visual understanding, large or cross-file reading, comprehensive verification/review, merge/loss audits, security/legal/financial/high-stakes review, ambiguous architecture/debugging, and final pass/fail judgment use the newest available reasoning/planning model unless a selected tool/executor requires a stricter route.
 - Code verification commands run in local tools, but any AI-authored test/probe code, failure interpretation that changes code, or repair iteration remains on `GPT-5.3-Codex-Spark`.
@@ -68,9 +68,9 @@ Use this compact shape unless the task needs more detail:
 | Phase | Model | Scope |
 |---|---|---|
 | Planning / target map / route | newest available reasoning/planning model | workflow plan, risk, ambiguity, pass targets |
-| Text writing / prompt or rule drafting | `GPT-5.3-Codex-Spark` | ordinary text/instruction work that is not comprehensive reading/checking |
+| Text / Markdown / prompt / rule / memory drafting | `GPT-5.3-Codex-Spark` | ordinary text, instruction, log, wiki, DailyLog, Obsidian, and Markdown work that is not comprehensive reading/checking |
 | Command-line / simple file checks | `GPT-5.3-Codex-Spark` plus local commands | status/list/read/grep/simple test interpretation; commands provide evidence |
-| Code writing / code tests / probes | `GPT-5.3-Codex-Spark` plus local commands | Python/C# implementation, test/probe authoring, and code-level repair |
+| Code / optimization implementation / tests / probes | `GPT-5.3-Codex-Spark` plus local commands | Python/C# implementation, optimization edits, test/probe authoring, and code-level repair |
 | Image or comprehensive review | newest available reasoning/planning model plus local evidence | image reading, visual QA, large reading, deep audits, merge/loss checks |
 | Verification / final judgment | newest available reasoning/planning model plus local evidence | compare observed output with pass targets |
 
@@ -158,7 +158,7 @@ For explicit workflow mode, before doing the work, write a task-specific Mermaid
 2. `Artifacts`: what will exist or change, such as text, Python/C# code, image, UI, PDF, Markdown, skill files, or GitHub state.
 3. `Pass targets`: what observable result proves each artifact is correct.
 4. `Skill route`: the skills needed and the order they must run; the first skill must be `workflow-skill`.
-5. `Models by phase`: the model assigned to planning/route, text writing or prompt/rule drafting, command-line or simple checks, code writing/editing, code tests/probes, image/comprehensive review, verification, and any blocked model requirement. Show `GPT-5.3-Codex-Spark` for Spark-default execution phases and the newest reasoning/planning model for image, comprehensive reading/checking, route decisions, and final judgment.
+5. `Models by phase`: the model assigned to planning/route, text writing or prompt/rule drafting, command-line or simple checks, code writing/editing, code tests/probes, log/wiki/Markdown closeout, image/comprehensive review, verification, and any blocked model requirement. Show `GPT-5.3-Codex-Spark` for Spark-default execution phases and the newest/current selected reasoning model only for workflow creation, image/comprehensive reading/checking, verification, route decisions, and final judgment.
 6. `Stop condition`: the exact condition that allows final completion.
 
 Make the pass target match the artifact:
@@ -189,7 +189,7 @@ workflow-skill -> code-skill -> verify-skill -> goal check
 - `verify-skill`: executor for real tests, evidence capture, report generation, and comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when real usage is practical.
 - Model route for this spine: `workflow-skill` planning uses the newest available reasoning/planning model; all Python/C# implementation, test-code/probe authoring, code-level debugging, and code-changing repair loops use `GPT-5.3-Codex-Spark`; local test/build commands provide evidence; final pass/fail judgment uses the newest available reasoning/planning model against that evidence.
 
-For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `verify-skill` when objective evidence or a report is required. For standalone text/prompt/rule writing and simple command-line checks, follow the Model Phase Contract: use `GPT-5.3-Codex-Spark` unless the phase requires image reading, comprehensive reading/checking, deep review, or final judgment.
+For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `verify-skill` when objective evidence or a report is required. For standalone text/prompt/rule writing, log/wiki/Markdown edits, optimization edits, and simple command-line checks, follow the Model Phase Contract: use `GPT-5.3-Codex-Spark` unless the phase requires image reading, comprehensive reading/checking, deep review, or final judgment.
 
 For visual or image-generation tasks where the user or project expects ChatGPT-in-Chrome output, or where a generated reference would materially improve the result, use this skill's internal image-generation route before continuing downstream implementation. Read `references/image-generation.md`, classify the image as asset, concept, sketch, reference, or final visual, then use the owning project/browser runner when one exists. If the platform is not macOS, ChatGPT is not logged in, or Chrome/ChatGPT is unavailable, skip only the image-generation step, continue work that does not depend on the missing image, and include the platform/login blocker in the final response.
 
@@ -244,6 +244,16 @@ For lightweight mode, the stop condition is simply that the direct requested ans
 
 For fast-path simple edits or actions, completion is the direct action plus minimal local confirmation. Do not append daily-log/wiki memory or a verification report for that kind of small task.
 
+## Post-Pass Non-Blocking Closeout
+
+After the user-facing task passes verification, return the result to the user immediately. Post-pass housekeeping is secondary: DailyLog entries, wiki/log updates, Obsidian memory pages, Markdown summaries, optimization notes, and other non-user-facing closeout work must not delay the user-facing result.
+
+- If a background or async route is available, start post-pass logging/wiki/Markdown closeout in the background after the pass result is ready.
+- If no background route is available and the closeout is not required for the user-facing deliverable, defer or skip it instead of blocking the final response.
+- If a higher-priority environment rule requires a minimal memory closeout before final response, keep it brief and do not expand it into a long secondary workflow.
+- All log/wiki/DailyLog/Obsidian/Markdown closeout drafting and file edits are Spark-default execution: use `GPT-5.3-Codex-Spark`, not the newest/current selected reasoning model.
+- Do not run optimization after verification just because verification passed. Run optimization only when the Optimization Gate passes, and treat any optimization closeout the same way: verified result first, secondary records in the background.
+
 ## Final Response
 
 Keep the final chat short without making it incomplete. State what changed, what passed, where the deliverables are, and any remaining unverified scope. If the evidence is simple, include it directly in chat with the real output values. If a report artifact was generated, do not repeat the full process report in chat; point to the complete report and summarize the key pass/fail result.
@@ -257,6 +267,7 @@ Keep the final chat short without making it incomplete. State what changed, what
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not omit `Models by phase` in explicit workflow mode. Do not show an explicit diagram/target map without concrete phase/model/scope rows. Do not silently substitute another model for `GPT-5.3-Codex-Spark` on ordinary text-writing, command-line/simple-check, Python/C# code-writing, or code-testing phases.
 - Do not replace `verify-skill` evidence with a method-only or status-only claim.
+- Do not block the user's final result on post-pass logging, wiki updates, DailyLog entries, optimization notes, or other non-user-facing closeout after verification has passed. Return the result first; run closeout in the background when possible.
 - Do not run `optimization-skill` for one-off work, vague possibilities, or novelty. Use it only for explicit optimization requests, repeated-at-least-three-times workflows, or high-confidence reusable stable processes.
 - Do not hide incomplete data behind ellipses, placeholder ranges, or token-saving summaries when the user needs the complete output.
 - Do not push to GitHub unless the user request or active workflow requires saved global-skill changes.
