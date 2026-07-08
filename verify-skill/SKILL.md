@@ -44,7 +44,7 @@ When verification passes, return the pass verdict and essential evidence to `wor
 
 Post-pass DailyLog entries, wiki/log updates, Obsidian memory pages, Markdown summaries, optimization notes, report indexing, and similar records are secondary. Run them in a background/non-blocking route when available. If no background route is available and the record is not required for the user-facing deliverable, defer or skip it instead of delaying the final answer. If a higher-priority environment rule requires a minimal memory closeout before final response, keep it brief.
 
-Model rule: newest/current selected reasoning models are for verification judgment, comprehensive review, image/visual assessment, and final pass/fail decisions only. Any post-pass log/wiki/DailyLog/Obsidian/Markdown drafting or file editing is Spark-default execution and must use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`).
+Model rule: verification judgment, comprehensive review, image/visual assessment, and final pass/fail decisions always use the best available verification/reasoning model by default. Any post-pass log/wiki/DailyLog/Obsidian/Markdown drafting or file editing is Spark-default execution and must use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`; display alias `gpt-5.3-code-spark`).
 
 ## Obsidian Regression Sweep
 
