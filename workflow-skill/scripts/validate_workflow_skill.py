@@ -7,6 +7,11 @@ from pathlib import Path
 
 
 SCENARIOS = {
+    "fast-path-simple": {
+        "expected_route": ["workflow-skill"],
+        "target_terms": ["direct action", "minimal local confirmation", "no formal verification"],
+        "requires_code_order": False,
+    },
     "text": {
         "expected_route": ["workflow-skill", "verify-skill"],
         "target_terms": ["content", "format"],
@@ -77,6 +82,9 @@ SCENARIOS = {
 
 REQUIRED_SKILL_TEXT = [
     "Always-First Rule",
+    "Simple Task Fast Path",
+    "do not route through `verify-skill`",
+    "Do not append daily-log/wiki memory",
     "prompt/instruction authoring, updates, review, or optimization",
     "For standalone prompt/instruction work",
     "State the general rule once",
@@ -104,6 +112,7 @@ REQUIRED_SKILL_TEXT = [
 
 
 TRACE_SCENARIOS = [
+    "fast-path-simple",
     "text",
     "prompt",
     "code",

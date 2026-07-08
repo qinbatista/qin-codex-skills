@@ -18,6 +18,28 @@ The explicit workflow turns a request into a target map, chooses the relevant ex
 
 For tiny direct answers, obvious file inspection, state listing, or one-shot command execution, keep the target map implicit and lightweight. Do the requested action directly, then answer with the result. Do not expand into a formal target map, executor route list, report, or code/verify spine unless the request has real risk, ambiguity, side effects, or a verification requirement.
 
+## Simple Task Fast Path
+
+Use the fast path when the user asks for a simple, obvious, low-risk action and the expected result is directly knowable without broad reading or proof. Execute it directly, then stop.
+
+Fast-path examples include:
+
+- change one clear text/value/label from A to B;
+- rename a local function, variable, label, heading, or file when the scope is obvious and the user is not asking for behavior changes;
+- open a website or file;
+- run one clearly requested status/list/read command;
+- make a tiny mechanical edit that does not alter real project functionality, data, security, deployment, public API behavior, or UI/visual quality.
+
+For fast-path tasks:
+
+- do not write a formal target map;
+- do not route through `verify-skill`;
+- do not run broad tests, regression sweeps, audits, reports, optimization, or Obsidian recording;
+- do only the minimum local confirmation needed to avoid an obvious mistake, such as re-reading the changed line, checking the opened URL, or confirming the command returned;
+- answer in one or a few lines with what changed or what happened.
+
+Upgrade out of the fast path when scope is unclear, multiple files or references are not obvious, the edit may affect real project behavior, tests, generated artifacts, UI/visual output, public APIs, auth/security/payment/data handling, deployment, merge safety, or when the user explicitly asks to verify, test, audit, sync, record, or prove the result.
+
 ## Start Diagram Rule
 
 Before task action, write a user-facing workflow diagram first whenever `workflow-skill` handles the request.
@@ -90,7 +112,7 @@ Write the explicit target map only when the task is worth that overhead:
 
 - concrete Python or C# code/programming work
 - any prompt-related task, including prompt/instruction authoring, updates, review, or optimization, plus testing, editing, add/remove/rewrite, and standalone prompt text not embedded in code
-- editing files or changing executable behavior
+- non-trivial file edits, behavior changes, or edits with unclear scope
 - multi-step work with dependencies or unclear order
 - UI, image, document, PDF, report, or generated artifact work
 - visual updates that need or would benefit from ChatGPT-generated image assets, concepts, sketches, or references before implementation, especially when the user did not provide a reference image
@@ -105,6 +127,8 @@ Keep the workflow lightweight for simple obvious work:
 - reading, listing, or summarizing a file
 - checking status
 - running a clearly requested command
+- opening a website or file
+- making a simple mechanical A-to-B edit, rename, or value/text change when the target and scope are obvious and it does not affect real project functionality
 - returning a short explanation where no file changes, side effects, or formal proof are needed
 
 Even in lightweight mode, show the small direct-route diagram first. Use judgment: if the simple-looking request has hidden side effects, may change state, may be destructive, or needs proof, upgrade to explicit workflow mode.
@@ -169,7 +193,7 @@ For non-code artifacts, replace `code-skill` with the relevant production skill 
 
 For visual or image-generation tasks where the user or project expects ChatGPT-in-Chrome output, or where a generated reference would materially improve the result, use this skill's internal image-generation route before continuing downstream implementation. Read `references/image-generation.md`, classify the image as asset, concept, sketch, reference, or final visual, then use the owning project/browser runner when one exists. If the platform is not macOS, ChatGPT is not logged in, or Chrome/ChatGPT is unavailable, skip only the image-generation step, continue work that does not depend on the missing image, and include the platform/login blocker in the final response.
 
-Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, or a single clear command that only reports state. Use the full spine only when the task changes Python/C# code, executable behavior, artifacts, needs debugging, or benefits from real verification evidence.
+Do not apply the full spine to simple read-only work, plain Q&A, obvious file viewing, opening a website, a single clear command that only reports state, or a simple mechanical edit/rename/value change that does not alter real project functionality. Use the full spine only when the task changes Python/C# executable behavior, artifacts, needs debugging, has unclear references, or benefits from real verification evidence.
 
 For standalone prompt/instruction work, do not route through `code-skill` unless the prompt is being embedded in Python or C# executable code. Treat the prompt as a text artifact, test or inspect the resulting prompt against the target output contract when practical, and verify that the rule is stated at the right level of abstraction.
 
@@ -218,6 +242,8 @@ After `verify-skill`, compare the observed evidence with the target map.
 
 For lightweight mode, the stop condition is simply that the direct requested answer, file read, status check, or command output was delivered.
 
+For fast-path simple edits or actions, completion is the direct action plus minimal local confirmation. Do not append daily-log/wiki memory or a verification report for that kind of small task.
+
 ## Final Response
 
 Keep the final chat short without making it incomplete. State what changed, what passed, where the deliverables are, and any remaining unverified scope. If the evidence is simple, include it directly in chat with the real output values. If a report artifact was generated, do not repeat the full process report in chat; point to the complete report and summarize the key pass/fail result.
@@ -226,6 +252,7 @@ Keep the final chat short without making it incomplete. State what changed, what
 
 - Do not start a worker skill before `workflow-skill` for task work.
 - Do not over-process simple work. Use only the compact direct-route diagram, and avoid formal target maps, internal route expansion, PDF reports, or verification loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
+- Do not route simple obvious edits/actions through `verify-skill` or Obsidian recording. If the user asks for "change A to B", "rename X to Y", "open this site", or a similarly bounded low-risk action, execute it directly and stop unless the scope becomes unclear or risk appears.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not omit `Models by phase` in explicit workflow mode. Do not show an explicit diagram/target map without concrete phase/model/scope rows. Do not silently substitute another model for `GPT-5.3-Codex-Spark` on ordinary text-writing, command-line/simple-check, Python/C# code-writing, or code-testing phases.
