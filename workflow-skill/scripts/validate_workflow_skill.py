@@ -95,7 +95,7 @@ REQUIRED_SKILL_TEXT = [
     "Each step label must include the model in parentheses",
     "best available workflow model",
     "best available verification model",
-    "gpt-5.3-code-spark",
+    "gpt-5.3-codex-spark",
     "The workflow creation, task decomposition, target-map writing, route selection, ambiguity/risk decisions, and final route judgment phases always use the best available workflow/reasoning model by default",
     "Verification judgment always uses the best available verification/reasoning model by default",
     "prompt/instruction authoring, updates, review, or optimization",

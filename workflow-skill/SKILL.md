@@ -55,11 +55,11 @@ Before task action, write a user-facing workflow diagram first whenever `workflo
 
 Always show the model route before execution whenever `workflow-skill` handles a task.
 
-- In explicit workflow mode, add a visible `Workflow with models` numbered list to the target map before file edits, shell commands, browser/computer actions, or worker-skill execution. Each step label must include the model in parentheses, for example `1. Inspect current rule (best available workflow model)` or `2. Patch text (gpt-5.3-code-spark / gpt-5.3-codex-spark)`. A table may follow, but it cannot replace the numbered step-model list.
+- In explicit workflow mode, add a visible `Workflow with models` numbered list to the target map before file edits, shell commands, browser/computer actions, or worker-skill execution. Each step label must include the model in parentheses, for example `1. Inspect current rule (best available workflow model)` or `2. Patch text (gpt-5.3-codex-spark)`. A table may follow, but it cannot replace the numbered step-model list.
 - In lightweight mode, add one short model route after the compact diagram when the direct action uses model reasoning, text writing, command interpretation, code writing, code testing, image reading, or verification judgment.
 - The workflow creation, task decomposition, target-map writing, route selection, ambiguity/risk decisions, and final route judgment phases always use the best available workflow/reasoning model by default.
 - Verification judgment always uses the best available verification/reasoning model by default. Image tasks, visual understanding, comprehensive reading/checking, deep review, merge/loss audits, security/legal/financial/high-stakes review, and final pass/fail judgment also use the best available reasoning model.
-- All actual execution that does not require image/visual reading, comprehensive reading, comprehensive checking, broad repo archaeology, deep debugging, high-stakes review, or final pass/fail judgment is forced to `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`; display alias `gpt-5.3-code-spark`). This includes writing text, drafting or editing prompts/rules/instructions, simple Markdown or config text edits, log/wiki/DailyLog/Obsidian memory edits, command-line work, shell/Git status checks, simple file inspection or summarization, small tests/probes, optimization implementation, and Python/C# implementation or test-code authoring.
+- All actual execution that does not require image/visual reading, comprehensive reading, comprehensive checking, broad repo archaeology, deep debugging, high-stakes review, or final pass/fail judgment is forced to `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`). This includes writing text, drafting or editing prompts/rules/instructions, simple Markdown or config text edits, log/wiki/DailyLog/Obsidian memory edits, command-line work, shell/Git status checks, simple file inspection or summarization, small tests/probes, optimization implementation, and Python/C# implementation or test-code authoring.
 - Shell commands run in local tools. The Spark assignment covers the AI text/reasoning used to choose simple commands, write command-adjacent text, interpret simple command output, and author small probes/tests.
 - Image reading, visual understanding, large or cross-file reading, comprehensive verification/review, merge/loss audits, security/legal/financial/high-stakes review, ambiguous architecture/debugging, and final pass/fail judgment use the best available reasoning/planning model unless a selected tool/executor requires a stricter route.
 - Code verification commands run in local tools, but any AI-authored test/probe code, failure interpretation that changes code, or repair iteration remains on `GPT-5.3-Codex-Spark`.
@@ -70,7 +70,7 @@ Use this compact shape unless the task needs more detail:
 ```text
 Workflow with models
 1. Plan route and pass target (best available workflow model) - workflow creation, risk, scope, and stop condition.
-2. Edit text/prompt/rule/code or run simple commands (gpt-5.3-code-spark / gpt-5.3-codex-spark) - all ordinary execution and text/code updates.
+2. Edit text/prompt/rule/code or run simple commands (gpt-5.3-codex-spark) - all ordinary execution and text/code updates.
 3. Read images or run comprehensive review, if needed (best available reasoning model) - image, visual, large-reading, deep-review, or high-stakes phases only.
 4. Verify result and final judgment (best available verification model) - compare evidence with the user's target.
 ```
@@ -80,7 +80,7 @@ Optional table detail:
 | Phase | Model | Scope |
 |---|---|---|
 | Planning / target map / route | best available workflow model | workflow plan, risk, ambiguity, pass targets |
-| Text / Markdown / prompt / rule / memory drafting | `GPT-5.3-Codex-Spark` (`gpt-5.3-code-spark` display alias) | ordinary text, instruction, log, wiki, DailyLog, Obsidian, and Markdown work that is not comprehensive reading/checking |
+| Text / Markdown / prompt / rule / memory drafting | `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`) | ordinary text, instruction, log, wiki, DailyLog, Obsidian, and Markdown work that is not comprehensive reading/checking |
 | Command-line / simple file checks | `GPT-5.3-Codex-Spark` plus local commands | status/list/read/grep/simple test interpretation; commands provide evidence |
 | Code / optimization implementation / tests / probes | `GPT-5.3-Codex-Spark` plus local commands | Python/C# implementation, optimization edits, test/probe authoring, and code-level repair |
 | Image or comprehensive review | best available reasoning model plus local evidence | image reading, visual QA, large reading, deep audits, merge/loss checks |
@@ -170,7 +170,7 @@ For explicit workflow mode, before doing the work, write a task-specific Mermaid
 2. `Artifacts`: what will exist or change, such as text, Python/C# code, image, UI, PDF, Markdown, skill files, or GitHub state.
 3. `Pass targets`: what observable result proves each artifact is correct.
 4. `Skill route`: the skills needed and the order they must run; the first skill must be `workflow-skill`.
-5. `Workflow with models`: a numbered task-specific list where every step name includes the model in parentheses, such as `1. Plan route (best available workflow model)` and `2. Patch prompt text (gpt-5.3-code-spark / gpt-5.3-codex-spark)`. Show Spark for text writing, prompt/rule drafting, command-line or simple checks, code writing/editing, code tests/probes, and log/wiki/Markdown closeout. Show the best available workflow/verification/reasoning model only for workflow creation, image/comprehensive reading/checking, verification judgment, route decisions, and final judgment. Include any blocked model requirement.
+5. `Workflow with models`: a numbered task-specific list where every step name includes the model in parentheses, such as `1. Plan route (best available workflow model)` and `2. Patch prompt text (gpt-5.3-codex-spark)`. Show Spark for text writing, prompt/rule drafting, command-line or simple checks, code writing/editing, code tests/probes, and log/wiki/Markdown closeout. Show the best available workflow/verification/reasoning model only for workflow creation, image/comprehensive reading/checking, verification judgment, route decisions, and final judgment. Include any blocked model requirement.
 6. `Foreground result gate`: the exact mini real test or small evidence check that allows the user-facing result to be returned.
 7. `Background follow-up`: extended real tests, log checks, docs, wiki/DailyLog/Obsidian records, or sync/status checks that should continue after the user-facing result when they do not change the delivered result.
 8. `Stop condition`: foreground completion means the result is delivered and the mini real test passed; full closeout means any selected background follow-up also passed or reported a reopened failure.

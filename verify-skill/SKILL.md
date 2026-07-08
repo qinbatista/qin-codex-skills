@@ -50,7 +50,7 @@ Post-pass deeper tests, log checks, DailyLog entries, wiki/log updates, Obsidian
 
 When returning a foreground pass while background work remains, say the task result is done by the mini-test gate and that extended checks or closeout are continuing or deferred in the background. If any background check fails, resume the task with the failing evidence instead of treating the earlier mini-test pass as final truth.
 
-Model rule: verification judgment, comprehensive review, image/visual assessment, and final pass/fail decisions always use the best available verification/reasoning model by default. Any post-pass log/wiki/DailyLog/Obsidian/Markdown drafting or file editing is Spark-default execution and must use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`; display alias `gpt-5.3-code-spark`).
+Model rule: verification judgment, comprehensive review, image/visual assessment, and final pass/fail decisions always use the best available verification/reasoning model by default. Any post-pass log/wiki/DailyLog/Obsidian/Markdown drafting or file editing is Spark-default execution and must use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`).
 
 ## Obsidian Regression Sweep
 
