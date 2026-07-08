@@ -32,11 +32,13 @@ Fast-path examples include:
 
 For fast-path tasks:
 
+- show the compact direct-route diagram and one-line model route before the direct action;
 - do not write a formal target map;
 - do not route through `verify-skill`;
 - do not run broad tests, regression sweeps, audits, reports, optimization, or Obsidian recording;
 - do only the minimum local confirmation needed to avoid an obvious mistake, such as re-reading the changed line, checking the opened URL, or confirming the command returned;
-- answer in one or a few lines with what changed or what happened.
+- answer in one or a few lines with what changed or what happened;
+- return the user-facing result immediately after the direct action and minimal confirmation. Do not append DailyLog/wiki/Obsidian memory, broad checks, or reports before answering. If a higher-priority rule still requires memory, defer it until after the user result or skip it when no background route exists.
 
 Upgrade out of the fast path when scope is unclear, multiple files or references are not obvious, the edit may affect real project behavior, tests, generated artifacts, UI/visual output, public APIs, auth/security/payment/data handling, deployment, merge safety, or when the user explicitly asks to verify, test, audit, sync, record, or prove the result.
 
@@ -55,8 +57,9 @@ Before task action, write a user-facing workflow diagram first whenever `workflo
 
 Always show the model route before execution whenever `workflow-skill` handles a task.
 
+- **Hard model-route gate:** if no user-visible `Workflow with models` numbered list has been shown for an explicit workflow in the current turn, do not edit files, run shell commands, open browser/computer tools, call executor skills, or perform other task side effects. Show the diagram and model list first, then continue. A prose note, hidden reasoning, or table alone does not satisfy this gate. If you realize after starting that the gate was missed, stop immediately, show the missing `Workflow with models` list, name it as a route correction, and then resume.
 - In explicit workflow mode, add a visible `Workflow with models` numbered list to the target map before file edits, shell commands, browser/computer actions, or worker-skill execution. Each step label must include the model in parentheses, for example `1. Inspect current rule (best available workflow model)` or `2. Patch text (gpt-5.3-codex-spark)`. A table may follow, but it cannot replace the numbered step-model list.
-- In lightweight mode, add one short model route after the compact diagram when the direct action uses model reasoning, text writing, command interpretation, code writing, code testing, image reading, or verification judgment.
+- In lightweight mode, add one short model route after the compact diagram before the direct action. Use `GPT-5.3-Codex-Spark` for direct text/value edits, command/simple-check interpretation, and small local confirmations; use the best available reasoning model only for the tiny route decision or final judgment when needed.
 - The workflow creation, task decomposition, target-map writing, route selection, ambiguity/risk decisions, and final route judgment phases always use the best available workflow/reasoning model by default.
 - Verification judgment always uses the best available verification/reasoning model by default. Image tasks, visual understanding, comprehensive reading/checking, deep review, merge/loss audits, security/legal/financial/high-stakes review, and final pass/fail judgment also use the best available reasoning model.
 - All actual execution that does not require image/visual reading, comprehensive reading, comprehensive checking, broad repo archaeology, deep debugging, high-stakes review, or final pass/fail judgment is forced to `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`). This includes writing text, drafting or editing prompts/rules/instructions, simple Markdown or config text edits, log/wiki/DailyLog/Obsidian memory edits, command-line work, shell/Git status checks, simple file inspection or summarization, small tests/probes, optimization implementation, and Python/C# implementation or test-code authoring.
@@ -152,6 +155,8 @@ For explicit workflow mode, run the start diagram and start contract, route the 
 For prompt-related work, the first workflow decision after the start diagram is the Prompt Task Gate. If it matches, keep the prompt purpose workflow visible in the target map and use the prompt pass target even when the prompt lives inside a larger skill, file, or codebase.
 
 For lightweight mode, display only the compact direct-route diagram, make the smallest routing decision needed, perform the direct action, and answer.
+
+If a lightweight or fast-path task starts expanding into broad verification, DailyLog/wiki/Obsidian updates, report writing, optimization, or multi-step closeout after the direct result is known, treat that as a workflow failure. Stop the expansion and return the user result first. Run secondary closeout only afterward when a true background route exists, otherwise defer or skip it.
 
 ## Start Contract
 
@@ -282,6 +287,7 @@ Keep the final chat short without making it incomplete. State what changed, what
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
 - Do not omit `Workflow with models` in explicit workflow mode. Do not show an explicit diagram/target map without numbered steps that include the model in parentheses. Do not silently substitute another model for `GPT-5.3-Codex-Spark` on ordinary text-writing, command-line/simple-check, Python/C# code-writing, or code-testing phases.
+- If the model route was omitted or a Spark-required execution phase used the active reasoning model without explicit fallback approval, treat it as a routing failure. Correct the route immediately, then redo the affected task step under the displayed model contract.
 - Do not replace `verify-skill` evidence with a method-only or status-only claim.
 - Do not block the user's final result on post-pass logging, wiki updates, DailyLog entries, optimization notes, or other non-user-facing closeout after verification has passed. Return the result first; run closeout in the background when possible.
 - Do not run `optimization-skill` for one-off work, vague possibilities, or novelty. Use it only for explicit optimization requests, repeated-at-least-three-times workflows, or high-confidence reusable stable processes.
