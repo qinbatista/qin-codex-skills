@@ -36,7 +36,7 @@ Use this skill for Python and C# code writing, editing, refactoring, debugging, 
 4. During implementation, review, refactor, or optimization, actively look for repeated work whose units are independent. If code changes are in scope and `references/parallelization.md` says the parallel path can preserve the same observable result, optimize it immediately instead of leaving it as a suggestion.
 5. For prompt work, create or improve the prompt first, then embed the generated prompt into the corresponding Python or C# text/code.
 6. Keep edits surgical and preserve unrelated user work.
-7. After any code is written or changed, run the narrowest real usage check through `verify-skill` unless the user explicitly forbids verification.
+7. After any code is written or changed, run the default mini real usage check through `verify-skill` unless the user explicitly forbids verification. For major edits or when the user asks to test the edited result, verify the real result path instead of relying on compile/import/mock-only checks.
 8. For code-related reports, generated report artifacts must show `Input`, `Used`, `Output`, and `Why Pass` for every passing case. Simple code test results can stay in chat when the command, output, and pass reason are easy to read there.
 
 ## Guardrails

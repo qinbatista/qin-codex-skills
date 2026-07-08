@@ -1,6 +1,6 @@
 ---
 name: verify-skill
-description: "Executor skill under workflow-skill for all verification, including real tests, QA, evidence capture, report generation, result comparison, UI/visual checks, generated artifact review, skill verification, and optimized workflow validation. Use when asked to verify, test, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, prove code or scripts still work, compare against previous behavior, or decide whether a failure is fixable. Run concrete checks with real inputs/outputs, choose evidence format by complexity, require Input/Used/Output/Why Pass for reports, and run an Obsidian regression sweep for relevant prior repeated or fixed AI-caused project failures before pass verdicts. When verification fails, classify feasibility, try safe repair routes, and stop only for logical impossibility or missing user-controlled access. Routes are multi-select: combine every route needed by the artifact."
+description: "Executor skill under workflow-skill for all verification, including real tests, QA, evidence capture, report generation, result comparison, UI/visual checks, generated artifact review, skill verification, and optimized workflow validation. Use when asked to verify, test, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, prove code or scripts still work, compare against previous behavior, or decide whether a failure is fixable. Default to one mini real test that can catch the changed path breaking; for major updates or when the user asks to test the edited result, run real result testing. Require concrete inputs/outputs, choose evidence format by complexity, require Input/Used/Output/Why Pass for reports, and run an Obsidian regression sweep for relevant prior repeated or fixed AI-caused project failures before pass verdicts. When verification fails, classify feasibility, try safe repair routes, and stop only for logical impossibility or missing user-controlled access. Routes are multi-select: combine every route needed by the artifact."
 ---
 
 # Verify Skill
@@ -29,6 +29,14 @@ Verify the user's actual outcome, not just the method. A check is only useful wh
 - Verification evidence must list the real input, method, output, and pass reason when a formal report is generated. A green status, `OK`, `PASS`, or method name alone is not evidence.
 - If the task produced visible output, run the visual verification route below before calling the artifact acceptable.
 - If the user asks whether the result matches prior behavior, preserve the current intended behavior, or "still works", compare against an available baseline such as prior screenshots, golden outputs, existing tests, git-visible behavior, saved examples, user-provided context, or documented expected behavior. If no baseline exists, state that exact gap instead of implying regression coverage.
+
+## Default Mini Real Test Rule
+
+The default verification shape is one mini real test: the smallest executable or inspectable check that uses real input/output and can catch the changed path breaking. For minor edits, low-risk changes, and not-important updates, one mini real test is enough when it directly exercises the affected behavior.
+
+Use real result testing, not just a mini check, when the update is major, changes user-visible behavior, touches broad/shared code, affects data/security/deployment/public APIs, changes UI/generated artifacts, or when the user asks to test the result after editing. A real result test must exercise the actual edited result the user cares about, not a substitute path.
+
+Do not inflate verification with many fake, shallow, or status-only checks. A compile, import, lint, existence check, route listing, mock-only call, or bare `PASS` output can support verification, but it cannot replace the one real mini test when a real test is practical. If only a shallow check is possible, say exactly what remains untested instead of saying the result passed.
 
 ## Pass Return And Background Closeout
 
@@ -93,6 +101,8 @@ Use this route whenever work needs proof: code changed, UI changed, a script or 
 ### Real Evidence Standards
 
 Do not finish because the edit is written. Prove the work with a real executable or rendered check. Match the evidence format to the complexity: a simple successful check can stay in chat; use a table, Markdown summary, or PDF only when that makes the evidence easier to review.
+
+Default to one focused mini real test for routine code and artifact changes. Add broader testing only when the change is major, the user asks to test the edited result, the risk is broad, or the mini test reveals a problem that needs repair and retest.
 
 Every generated report must show real evidence. For each passing case, list:
 
@@ -249,6 +259,7 @@ After editing this skill:
 - Do not treat taste as personal preference when a concrete UI rule, screenshot, or external taste-skill pre-flight applies.
 - Do not judge all visuals with one generic web-design standard. Use the user's background and the artifact-specific rubric first.
 - Do not claim completion from a mock-only, import-only, signature-only, method-parameter-only, or lint-only check when a real local usage check is practical.
+- Do not replace the default mini real test with fake, shallow, status-only, compile-only, import-only, route-listing-only, or mock-only checks when a real edited-path test is practical.
 - Do not generate a passing PDF that lacks real `Input`, `Used`, `Output`, and `Why Pass` evidence for each passing case.
 - Do not use UI screenshots edited by hand as proof that the live UI is fixed.
 - Do not verify a local script by reading it only; run it with concrete inputs when possible.
