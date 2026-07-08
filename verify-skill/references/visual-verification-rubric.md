@@ -2,6 +2,16 @@
 
 Use this reference when `verify-skill` needs to judge whether visible output is acceptable. Visual verification is not one universal taste score. Anchor every verdict to the user's brief, background knowledge, artifact type, and real rendered evidence.
 
+## Table of Contents
+
+- [Core Procedure](#core-procedure)
+- [Universal Blockers](#universal-blockers)
+- [Web, App, And Product UI](#web-app-and-product-ui)
+- [Games And Playable Scenes](#games-and-playable-scenes)
+- [Documents, PDFs, Reports, And Slides](#documents-pdfs-reports-and-slides)
+- [Images, Artwork, And Generated Visual Assets](#images-artwork-and-generated-visual-assets)
+- [Verification Output](#verification-output)
+
 ## Core Procedure
 
 1. Read the user's visual context first: audience, domain, output type, target platform, style references, brand constraints, intended mood, accessibility constraints, and what must stay consistent with prior work.

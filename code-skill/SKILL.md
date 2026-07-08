@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Executor skill under workflow-skill for Python and C# Codex code work only. Use when workflow-skill routes a task into writing, editing, refactoring, debugging, reviewing, optimizing, or explaining Python or C# code; any Python/C# prompt-related work including prompt generation, prompt review, prompt testing, prompt editing/add/update/remove/rewrite, and prompt-in-code work; Python modules, scripts, tests, and snippets; C# and Unity C# MonoBehaviours, ScriptableObjects, managers, and gameplay systems; performance and parallelization opportunities for independent Python or C# workloads; and obvious bounded Python/C# code tasks that may use Spark when an allowed model route exists. Do not use this skill to author JavaScript, TypeScript, frontend, shell, SQL, or other languages unless another active instruction explicitly routes that work elsewhere. Its internal routes are multi-select: use every route that applies to the task, not a one-of choice."
+description: "Python/C# executor selected by workflow-skill. Use when routed work involves Python, C#, Unity C#, prompt-in-code, tests, debugging, refactoring, explanation, performance, or small bounded code edits. Do not use for other languages or pure prose/config unless another skill owns that work."
 ---
 
 # Code Skill

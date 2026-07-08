@@ -1,6 +1,6 @@
 ---
 name: optimization-skill
-description: "Executor skill under workflow-skill for post-verification optimization of repetitive user workflows into reusable skill resources. Use only when the user explicitly asks to optimize a skill/process, the same or substantially identical workflow has repeated at least three times, or Codex has high confidence that a stable deterministic workflow will be reused many times and can save future token cost. Optimize after the original task passes verification unless optimization is the task. Check whether code, workflow steps, prompts, references, scripts, or assets can reduce repeated work while preserving behavior. Use code-skill for Python/C# helper code and verify-skill for same-behavior proof after optimization."
+description: "Workflow optimization executor selected by workflow-skill. Use when the user asks to optimize a skill/process, a workflow has repeated at least three times, or a stable reusable process can become scripts, references, prompts, assets, or templates. Preserve behavior and verify same-behavior proof through verify-skill."
 ---
 
 # Optimization Skill

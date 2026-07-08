@@ -108,18 +108,18 @@ CHINESE_CATEGORY_LABELS = {
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "workflow-skill": "Always starts task execution, including prompt/instruction authoring and updates, defines goals, selects executor skills, routes work, iterates, and checks final evidence.",
-    "code-skill": "Executes Python and C# code work only after workflow-skill routes the task, combining prompt embedding, coding approach, Python, C#/Unity C#, and small-code modules.",
-    "optimization-skill": "Executes optional post-verification optimization for explicit, repeated, or clearly reusable stable workflows, turning them into reusable scripts, references, prompts, or assets.",
-    "verify-skill": "Executes real tests, evidence capture, report generation, and verification after workflow-skill routes the task, checking outputs against the user's requirement.",
-    "management-skill": "Executes management work after workflow-skill routes the task, covering Codex profiles and global skill GitHub sync.",
+    "workflow-skill": "Always-first controller that fast-paths simple work, shows diagrams and model routes, selects executors, and drives tasks to verified completion.",
+    "code-skill": "Python/C# executor for implementation, debugging, refactoring, prompt-in-code, Unity C#, and focused code tests after workflow-skill routes the task.",
+    "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
+    "verify-skill": "Runs proof after workflow-skill routes the task: one mini real test by default, real result testing for major/user-requested checks, and calibrated evidence.",
+    "management-skill": "Handles Codex profile operations and global skill GitHub sync without exposing private data.",
 }
 CHINESE_SKILL_SUMMARIES = {
-    "workflow-skill": "永远第一个启动任务执行，包括 prompt/instruction 编写和更新，定义目标、选择执行者 skill、路由工作、循环验证并检查最终证据。",
-    "code-skill": "在 workflow-skill 路由后只执行 Python 和 C# 代码工作，组合 prompt 嵌入、代码思路、Python、C#/Unity C# 和小代码模块。",
-    "optimization-skill": "在 workflow-skill 路由后执行可选的后置优化，只处理明确要求、重复多次或明显可复用的稳定流程，把它们变成本地脚本、引用资料、prompt 或资产。",
-    "verify-skill": "在 workflow-skill 路由后执行真实测试、证据捕获、报告生成和验证，检查输出是否满足用户要求。",
-    "management-skill": "在 workflow-skill 路由后执行管理工作，处理 Codex profiles 和全局 skill 的 GitHub 同步。",
+    "workflow-skill": "永远第一启动控制器：简单任务快走，复杂任务显示图和模型路线，选择执行者，并推进到已验证完成。",
+    "code-skill": "Python/C# 执行者：在 workflow-skill 路由后处理实现、调试、重构、prompt-in-code、Unity C# 和聚焦代码测试。",
+    "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
+    "verify-skill": "执行验证：默认一个 mini real test；重大或用户要求的结果测试走真实结果验证，并输出校准证据。",
+    "management-skill": "处理 Codex profile 操作和全局 skill GitHub 同步，不暴露私人数据。",
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
@@ -589,37 +589,24 @@ def build_overview(skill_paths, language="en"):
             "",
             *build_skill_summary_table(primary_rows, language="zh"),
             "",
-            f"生成日期: {time.strftime('%Y-%m-%d', time.localtime())}",
-            "",
-            *build_skill_details(primary_rows, language="zh"),
-            "",
             *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"),
             "",
-            "## Skill 列表",
-            "",
-            "| 类别 | Skill | 用途 |",
-            "|---|---|---|",
-        ]
-        for category, skill_name, description in rows:
-            lines.append(f"| {CHINESE_CATEGORY_LABELS.get(category, category)} | `{skill_name}` | {description} |")
-        lines.extend([
-            "",
-            "## 结构",
+            "## 运行规则",
             "",
         "- Python 和 C# 代码工作进入 `code-skill`；前端/UI 等其他语言代码使用对应生产 skill。",
         "- Prompt/instruction 编写、更新和优化先进入 `workflow-skill`；只有嵌入 Python/C# 可执行代码时才进入 `code-skill`。",
         "- 固定重复流程优化进入 `optimization-skill`。",
             "- 验证、真实测试和校准后的证据输出进入 `verify-skill`；简单结果留在聊天里，只有长数据、视觉、表格多、对比型、明确要求或仓库规则需要时才生成 PDF 报告。",
             "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。",
-            "- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。",
+        "- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。",
             "",
-            "## 当前说明",
+            "## 当前结构",
             "",
             "- 旧代码类 skill 已合并到 `code-skill`。",
             "- 旧测试类 skill 已合并到 `verify-skill`。",
             "- UI review 已扩展到 `verify-skill`。",
             "- 旧图片 workflow skill 已删除。",
-        ])
+        ]
         return "\n".join(lines) + "\n"
 
     lines = [
@@ -633,23 +620,9 @@ def build_overview(skill_paths, language="en"):
         "",
         *build_skill_summary_table(primary_rows, language="en"),
         "",
-        f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
-        "",
-        *build_skill_details(primary_rows, language="en"),
-        "",
         *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="en"),
         "",
-        "## Skill List",
-        "",
-        "| Category | Skill | Purpose |",
-        "|---|---|---|",
-    ]
-    for category, skill_name, description in rows:
-        lines.append(f"| {category} | `{skill_name}` | {description} |")
-
-    lines.extend([
-        "",
-        "## Structure",
+        "## Operating Rules",
         "",
         "- Python and C# code work enters through `code-skill`; frontend/UI and other language code should use the relevant production skill instead.",
         "- Prompt/instruction authoring, updates, and optimization start through `workflow-skill`; use `code-skill` only when embedding prompts in Python or C# executable code.",
@@ -658,13 +631,13 @@ def build_overview(skill_paths, language="en"):
         "- Auth and GitHub mirror maintenance enter through `management-skill` internal routes.",
         "- Each skill may contain multiple internal routes; select every route needed for the current request. This is multi-select, not one-of, and unrelated cases should not run.",
         "",
-        "## Current Notes",
+        "## Current Structure",
         "",
         "- The old code skills were merged into `code-skill`.",
         "- The old testing skills were merged into `verify-skill`.",
         "- UI review was broadened into `verify-skill`.",
         "- The old image workflow skill was deleted.",
-    ])
+    ]
     return "\n".join(lines) + "\n"
 
 

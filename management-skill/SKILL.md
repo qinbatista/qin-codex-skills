@@ -1,6 +1,6 @@
 ---
 name: management-skill
-description: "Executor skill under workflow-skill for management. Use after workflow-skill routes a task into local Codex account/profile operations or global skill GitHub synchronization. Use when the user asks to manage Codex auth profiles, switch local accounts, inspect profile state, sync global skills, commit or push skill changes, compare local and remote skill state, or run management workflows without exposing private data. Its management routes are multi-select when a request genuinely needs both profile and GitHub sync work."
+description: "Management executor selected by workflow-skill. Use when routed work involves Codex auth/profile operations or global skill GitHub sync: inspect profiles, switch after confirmation, compare local/remote skill state, pull, commit, push, or verify mirror status without exposing private data."
 ---
 
 # Management Skill
@@ -64,3 +64,7 @@ python3 scripts/manage_auth_profiles.py switch <profile> --dry-run
 python3 scripts/sync_global_skills.py status
 python3 scripts/sync_global_skills.py sync --message "Sync global Codex skills"
 ```
+
+## Verification
+
+After profile management, report only the non-secret profile/status result. After global skill sync, run `scripts/sync_global_skills.py status` and confirm the selected skill folders are exactly `workflow-skill`, `code-skill`, `verify-skill`, `optimization-skill`, and `management-skill` with no local-to-remote differences.

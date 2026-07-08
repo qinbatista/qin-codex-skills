@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller for task work. Use for routing checks, Python/C# coding, prompt task gate matches, any prompt-related task including prompt/instruction authoring, prompt files/templates/strings, system/developer/user instructions, AI output behavior, review, editing, add/update/remove/rewrite, testing, or optimization, file-changing, multi-step, skill-editing, UI/artifact/report, visual/image generation, or evidence-heavy tasks. Before task action, show a workflow diagram: compact direct route for lightweight mode, or full diagram plus target map for explicit mode. For visual/image tasks that need or would benefit from ChatGPT-generated images or references (even without a user-provided image), use the internal image-generation route before implementation and verify the final visual result. For Python/C# work, route code or scripts through code-skill before verify-skill. After verification passes, run optimization only when explicitly requested, repeated 3+ times, or clearly reusable."
+description: "Global workflow controller. Use when task work needs routing, planning, file changes, prompt/instruction updates, Python/C# work, UI/image/document/report artifacts, skill edits, verification, optimization, or management sync. Shows the required diagram and model route, fast-paths simple low-risk actions, selects executor skills, and verifies completion."
 ---
 
 # Workflow Skill

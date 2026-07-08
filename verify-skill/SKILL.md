@@ -1,6 +1,6 @@
 ---
 name: verify-skill
-description: "Executor skill under workflow-skill for all verification, including real tests, QA, evidence capture, report generation, result comparison, UI/visual checks, generated artifact review, skill verification, and optimized workflow validation. Use when asked to verify, test, review, audit, validate, inspect quality, confirm a workflow, check UI/visual quality, prove code or scripts still work, compare against previous behavior, or decide whether a failure is fixable. Default to one mini real test that can catch the changed path breaking; for major updates or when the user asks to test the edited result, run real result testing. Require concrete inputs/outputs, choose evidence format by complexity, require Input/Used/Output/Why Pass for reports, and run an Obsidian regression sweep for relevant prior repeated or fixed AI-caused project failures before pass verdicts. When verification fails, classify feasibility, try safe repair routes, and stop only for logical impossibility or missing user-controlled access. Routes are multi-select: combine every route needed by the artifact."
+description: "Verification executor selected by workflow-skill. Use when work needs proof, tests, QA, review, UI/visual checks, artifact verification, regression comparison, or failure triage. Default to one mini real test; use real result testing for major or user-requested result tests. Require concrete input/output evidence and Obsidian regression sweeps when relevant."
 ---
 
 # Verify Skill
@@ -102,7 +102,7 @@ Use this route whenever work needs proof: code changed, UI changed, a script or 
 
 Do not finish because the edit is written. Prove the work with a real executable or rendered check. Match the evidence format to the complexity: a simple successful check can stay in chat; use a table, Markdown summary, or PDF only when that makes the evidence easier to review.
 
-Default to one focused mini real test for routine code and artifact changes. Add broader testing only when the change is major, the user asks to test the edited result, the risk is broad, or the mini test reveals a problem that needs repair and retest.
+Scale from the Default Mini Real Test Rule: one focused real check for routine changes, broader real result testing only for major, risky, user-requested, or failing cases.
 
 Every generated report must show real evidence. For each passing case, list:
 
