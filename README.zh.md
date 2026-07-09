@@ -7,7 +7,7 @@
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 54, "wrappingWidth": 240}}}%%
 flowchart LR
-  skill_workflow_skill["workflow-skill"] --> inside_workflow_skill["永远第一启动控制器<br/>可多选模块<br/>文本、Markdown 和 prompt 任务<br/>Python 和 C# 代码任务<br/>视觉和生成物<br/>全局 skill 编辑<br/>管理任务<br/>校准后的证据输出"]
+  skill_workflow_skill["workflow-skill"] --> inside_workflow_skill["永远第一启动控制器<br/>可多选模块<br/>Main Goal / Ending Workflow 分流<br/>文本、Markdown 和 prompt 任务<br/>Python 和 C# 代码任务<br/>视觉和生成物<br/>全局 skill 编辑<br/>管理任务<br/>校准后的证据输出"]
   skill_code_skill["code-skill"] --> inside_code_skill["执行者路线<br/>可多选模块<br/>Prompt Creating<br/>Karpathy Coding Guidelines<br/>Python Code Checker<br/>C# Minimal Style<br/>Easy Python/C# Spark"]
   skill_verify_skill["verify-skill"] --> inside_verify_skill["执行者路线<br/>可多选模块<br/>UI Review<br/>本地脚本验证<br/>Skill 验证<br/>生成物验证<br/>真实证据和报告"]
   skill_optimization_skill["optimization-skill"] --> inside_optimization_skill["执行者路线<br/>可多选模块<br/>Skill Optimization<br/>官方 skill 合规检查<br/>本地脚本转换<br/>引用资料抽取<br/>资产和模板"]
@@ -18,13 +18,38 @@ flowchart LR
   class inside_workflow_skill,inside_code_skill,inside_verify_skill,inside_optimization_skill,inside_management_skill content;
 ```
 
+## Main Goal 和 Ending Workflow
+
+GitHub README 只展示最重要的全局工作流约定；完整规则在 [`workflow-skill/SKILL.md`](./workflow-skill/SKILL.md)。
+
+```mermaid
+flowchart TD
+  A["用户请求"] --> B["Target map + model route"]
+  B --> C["Main lane: 产出请求结果"]
+  C --> D{"Main Goal Done Gate"}
+  D -->|必需前置条件失败| C
+  D -->|主目标完成| E["并行派发 Ending Workflow workers"]
+  E --> F["Final response: 结果 + worker 名字/目的"]
+  E --> G["Ending worker: validation/tests"]
+  E --> H["Ending worker: docs/wiki/memory"]
+  E --> I["Ending worker: remote/status/visual proof"]
+  G --> J["后台通知或 follow-up"]
+  H --> J
+  I --> J
+```
+
+- **Main lane / main-goal worker:** 只负责产出或修改用户请求的 artifact/state，并处理 public-safety、privacy、irreversible-action 等必需前置条件。只有 worker 的输出是主结果必需输入时，main agent 才等待它。
+- **Main Goal Done Gate:** 请求的 edit、artifact、push、publish、command 或 primary state change 已完成，且必需前置条件已通过。
+- **Ending Workflow workers:** 在 Main Goal Done Gate 之后启动，负责 local mini tests、real tests、validation/verification、docs/Markdown、Obsidian/wiki/DailyLog/log、remote hash/status proof、visual/browser review 和 no-op inventory。
+- **Parallel dispatch:** 独立 ending purposes 必须并行创建 subagents。Final response 报告 worker 名字/目的后返回；用户不会等待所有 ending workers 完成，除非用户明确要求等待。
+
 ### Skill 内容一览
 
 #### [`workflow-skill`](./workflow-skill/) · 工作流类 / Workflow
 
 - **角色：** 永远第一启动控制器
-- **大功能：** 永远第一启动控制器：简单任务快走，复杂任务显示图和模型路线，选择执行者，并推进到已验证完成。
-- **可多选模块：** 文本、Markdown 和 prompt 任务; Python 和 C# 代码任务; 视觉和生成物; 全局 skill 编辑; 管理任务; 校准后的证据输出
+- **大功能：** 永远第一启动控制器：简单任务快走，复杂任务显示图和模型路线，主线推进到 Main Goal Done Gate，然后并行派发 Ending Workflow workers。
+- **可多选模块：** Main Goal / Ending Workflow 分流; 文本、Markdown 和 prompt 任务; Python 和 C# 代码任务; 视觉和生成物; 全局 skill 编辑; 管理任务; 校准后的证据输出
 - **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。
 
 #### [`code-skill`](./code-skill/) · 代码类 / Code

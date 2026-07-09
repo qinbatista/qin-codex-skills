@@ -108,14 +108,14 @@ CHINESE_CATEGORY_LABELS = {
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "workflow-skill": "Always-first controller that fast-paths simple work, shows diagrams and model routes, selects executors, and drives tasks to verified completion.",
+    "workflow-skill": "Always-first controller that fast-paths simple work, shows diagrams and model routes, drives the main goal to Main Goal Done Gate, then dispatches parallel Ending Workflow workers.",
     "code-skill": "Python/C# executor for implementation, debugging, refactoring, prompt-in-code, Unity C#, and focused code tests after workflow-skill routes the task.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
     "verify-skill": "Runs proof after workflow-skill routes the task: one mini real test by default, real result testing for major/user-requested checks, and calibrated evidence.",
     "management-skill": "Handles Codex profile operations and global skill GitHub sync without exposing private data.",
 }
 CHINESE_SKILL_SUMMARIES = {
-    "workflow-skill": "永远第一启动控制器：简单任务快走，复杂任务显示图和模型路线，选择执行者，并推进到已验证完成。",
+    "workflow-skill": "永远第一启动控制器：简单任务快走，复杂任务显示图和模型路线，主线推进到 Main Goal Done Gate，然后并行派发 Ending Workflow workers。",
     "code-skill": "Python/C# 执行者：在 workflow-skill 路由后处理实现、调试、重构、prompt-in-code、Unity C# 和聚焦代码测试。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
     "verify-skill": "执行验证：默认一个 mini real test；重大或用户要求的结果测试走真实结果验证，并输出校准证据。",
@@ -123,6 +123,7 @@ CHINESE_SKILL_SUMMARIES = {
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
+        ("Main Goal / Ending Workflow split", "Main lane produces the requested result and stops at Main Goal Done Gate; testing, validation, docs, memory, remote proof, and no-op inventory fan out to parallel Ending Workflow workers."),
         ("Text, Markdown, and prompt tasks", "Text, markdown, prompt/instruction authoring, prompt updates, and prompt optimization with explicit format and output-contract targets."),
         ("Python and C# code tasks", "Python, C#, Unity C#, prompt-in-code, scripts, and executable behavior requests; frontend/UI code should use relevant production skills instead."),
         ("Visual and generated artifacts", "Image, UI, browser screenshot, document, PDF, report, and generated file tasks."),
@@ -159,6 +160,7 @@ SKILL_CONTENTS = {
 }
 CHINESE_SKILL_CONTENTS = {
     "workflow-skill": [
+        ("Main Goal / Ending Workflow 分流", "主线产出用户请求的结果并停在 Main Goal Done Gate；测试、验证、文档、记忆、远端 proof 和 no-op inventory 并行交给 Ending Workflow workers。"),
         ("文本、Markdown 和 prompt 任务", "文本、Markdown、prompt/instruction 编写、prompt 更新，以及有明确格式和输出契约要求的 prompt 优化。"),
         ("Python 和 C# 代码任务", "Python、C#、Unity C#、prompt-in-code、脚本和可执行行为任务；前端/UI 代码应使用对应的生产 skill。"),
         ("视觉和生成物", "图片、UI、浏览器截图、文档、PDF、报告和生成文件任务。"),
@@ -544,6 +546,64 @@ def build_support_skill_details(rows, language="en"):
     return lines
 
 
+def workflow_lane_section(language="en"):
+    if language == "zh":
+        return [
+            "## Main Goal 和 Ending Workflow",
+            "",
+            "GitHub README 只展示最重要的全局工作流约定；完整规则在 [`workflow-skill/SKILL.md`](./workflow-skill/SKILL.md)。",
+            "",
+            "```mermaid",
+            "flowchart TD",
+            "  A[\"用户请求\"] --> B[\"Target map + model route\"]",
+            "  B --> C[\"Main lane: 产出请求结果\"]",
+            "  C --> D{\"Main Goal Done Gate\"}",
+            "  D -->|必需前置条件失败| C",
+            "  D -->|主目标完成| E[\"并行派发 Ending Workflow workers\"]",
+            "  E --> F[\"Final response: 结果 + worker 名字/目的\"]",
+            "  E --> G[\"Ending worker: validation/tests\"]",
+            "  E --> H[\"Ending worker: docs/wiki/memory\"]",
+            "  E --> I[\"Ending worker: remote/status/visual proof\"]",
+            "  G --> J[\"后台通知或 follow-up\"]",
+            "  H --> J",
+            "  I --> J",
+            "```",
+            "",
+            "- **Main lane / main-goal worker:** 只负责产出或修改用户请求的 artifact/state，并处理 public-safety、privacy、irreversible-action 等必需前置条件。只有 worker 的输出是主结果必需输入时，main agent 才等待它。",
+            "- **Main Goal Done Gate:** 请求的 edit、artifact、push、publish、command 或 primary state change 已完成，且必需前置条件已通过。",
+            "- **Ending Workflow workers:** 在 Main Goal Done Gate 之后启动，负责 local mini tests、real tests、validation/verification、docs/Markdown、Obsidian/wiki/DailyLog/log、remote hash/status proof、visual/browser review 和 no-op inventory。",
+            "- **Parallel dispatch:** 独立 ending purposes 必须并行创建 subagents。Final response 报告 worker 名字/目的后返回；用户不会等待所有 ending workers 完成，除非用户明确要求等待。",
+            "",
+        ]
+    return [
+        "## Main Goal And Ending Workflow",
+        "",
+        "This README shows the high-level global workflow contract. The full rule lives in [`workflow-skill/SKILL.md`](./workflow-skill/SKILL.md).",
+        "",
+        "```mermaid",
+        "flowchart TD",
+        "  A[\"User request\"] --> B[\"Target map + model route\"]",
+        "  B --> C[\"Main lane: produce requested result\"]",
+        "  C --> D{\"Main Goal Done Gate\"}",
+        "  D -->|required precondition failed| C",
+        "  D -->|major goal done| E[\"Dispatch Ending Workflow workers in parallel\"]",
+        "  E --> F[\"Final response: result + worker names/purposes\"]",
+        "  E --> G[\"Ending worker: validation/tests\"]",
+        "  E --> H[\"Ending worker: docs/wiki/memory\"]",
+        "  E --> I[\"Ending worker: remote/status/visual proof\"]",
+        "  G --> J[\"Background notification or follow-up\"]",
+        "  H --> J",
+        "  I --> J",
+        "```",
+        "",
+        "- **Main lane / main-goal worker:** produces or changes the requested artifact/state and handles required public-safety, privacy, or irreversible-action preconditions. The main agent waits for a worker only when that worker's output is required for the requested result.",
+        "- **Main Goal Done Gate:** the requested edit, artifact, push, publish, command, or primary state change is complete and required preconditions have passed.",
+        "- **Ending Workflow workers:** start after Main Goal Done Gate for local mini tests, real tests, validation/verification, docs/Markdown, Obsidian/wiki/DailyLog/log updates, remote hash/status proof, visual/browser review, and no-op inventory.",
+        "- **Parallel dispatch:** independent ending purposes must be spawned as subagents in parallel. The final response reports worker names/purposes and returns without waiting for every ending worker unless the user explicitly asks to wait.",
+        "",
+    ]
+
+
 def build_skill_details(rows, language="en"):
     category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
     lines = [
@@ -587,6 +647,7 @@ def build_overview(skill_paths, language="en"):
             "",
             *build_skill_graph(primary_rows, language="zh"),
             "",
+            *workflow_lane_section(language="zh"),
             *build_skill_summary_table(primary_rows, language="zh"),
             "",
             *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"),
@@ -618,6 +679,7 @@ def build_overview(skill_paths, language="en"):
         "",
         *build_skill_graph(primary_rows, language="en"),
         "",
+        *workflow_lane_section(language="en"),
         *build_skill_summary_table(primary_rows, language="en"),
         "",
         *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="en"),
