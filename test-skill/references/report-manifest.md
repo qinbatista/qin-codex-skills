@@ -262,7 +262,7 @@ Preferred case rows:
 - for comparison cases, provide `before`, `after`, `before_image_path`, and `after_image_path` directly on the case or inside a `comparison` object
 - comparison cases render `Before` and `After` rows before any `Comparison` or `Final Result` row, so do not put only the final output in `output`
 - render each case as one table:
-  - first row: bold case title with inline status, such as `Verification 1: Login flow | PASS`
+  - first row: bold case title with inline status, such as `Testing 1: Login flow | PASS`
   - if `function_name` is present, prefer it in the title row so the user immediately sees which function or API path is being shown
   - following rows: `Label | Value`, with concrete example rows first, usually `Input | ...`, `Used | ...`, `Output | ...`, and `Why Pass | ...`
   - default compact mode should usually stop there
@@ -368,7 +368,7 @@ For `step_by_step`, prefer one step block per page or one compact group of short
 - For comparison reports, show the real before data and after data plus before and after images when available. Do not produce a final-only case.
 - For side-by-side comparison reports, make each side visually identifiable and keep the comparison instruction, evidence panels, and supporting table together on the same page when practical.
 - For step-by-step reports, make the instructions and ordered steps visible before the evidence detail.
-- Keep report section titles explicit, usually `Summary`, `Verification Summary`, `Verification N`, and `Evidence`.
+- Keep report section titles explicit, usually `Summary`, `Testing Summary`, `Testing N`, and `Evidence`.
 - Add one short legend near the testing section so the user knows that `Input` is what was given, `Used` is what ran, `Output` is what came back, and `Why Pass` is the acceptance reason. `Check` / `Result` should stay fallback summary labels only for non-pass or legacy cases.
 - Size tables adaptively from content and the page, not from fixed tiny defaults. Estimate the row count, wrapped text length, column count, and available page rectangle before choosing the page size, orientation, font size, row height, and continuation splits.
 - Maximize useful page use: short comparison tables should become larger and easier to read, with bigger type and row height; dense comparison tables should become smaller only as needed to remain readable.

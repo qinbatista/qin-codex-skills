@@ -1,21 +1,4 @@
 interface:
   display_name: "Optimization Skill"
-  short_description: "Optional post-verify workflow optimization"
-  default_prompt: >-
-    After $workflow-skill routes the task here, use $optimization-skill only for
-    explicit optimization requests, repeated-at-least-three-times workflows, or
-    clearly reusable stable processes. Use newest/current selected reasoning
-    models only for optimization-gate decisions, workflow design, and
-    same-behavior judgment. Use GPT-5.3-Codex-Spark for actual optimization
-    implementation, scripts, commands, references, prompt/rule text edits,
-    Markdown, log/wiki/DailyLog/Obsidian updates, and post-pass closeout, unless
-    $workflow-skill visibly switches that phase to the protected GPT-5.5 light
-    fallback (gpt-5.5, low effort) because Spark is unreachable or limited.
-    Optimize the owning skill, script, workflow, prompt, reference, or asset to
-    reduce repeated token cost, then use $verify-skill for a foreground mini
-    real test that proves the optimized route works. After that mini test
-    passes, return the user-facing result and closeout scope immediately to
-    $workflow-skill. Do not decide that closeout is deferred, skipped, or not
-    needed inside $optimization-skill; $workflow-skill owns mandatory Ending
-    Workflow subagent delegation. If an Ending Workflow check fails, reopen the
-    task with failing evidence.
+  short_description: "Post-task workflow and skill optimization"
+  default_prompt: "After $workflow-skill routes the task here, use $optimization-skill to optimize repeated fixed workflows in the owning user skill after the task is complete, using other skills as needed and verifying the faster path with real execution."

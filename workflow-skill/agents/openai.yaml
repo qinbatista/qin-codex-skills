@@ -1,39 +1,4 @@
 interface:
   display_name: "Workflow Skill"
   short_description: "Start with a workflow diagram, then route the task"
-  default_prompt: >-
-    Use $workflow-skill to make the task-size decision before exploration:
-    classify as fast-path simple or explicit workflow first. Fast-path simple
-    work shows the compact direct-route diagram plus one-line model route, does
-    the direct action and smallest local confirmation, returns the result, then
-    satisfies the Ending Workflow Tool-Call Gate. Explicit workflows show the
-    required start diagram and a task-specific Workflow with models numbered
-    list before real task action. Each step label must include the model in
-    parentheses, such as 1. Plan route (best available workflow model), 2. Patch
-    text/prompt/code (gpt-5.3-codex-spark), and 3. Mini test result (best
-    available verification model). Workflow creation, route decisions,
-    image/comprehensive reading, verification judgment, and final judgment use
-    the best available reasoning/verification model by default. Actual
-    execution, ordinary text writing, prompt/rule edits, command-line/simple
-    checks, shell/Git interpretation, optimization implementation, Python/C#
-    code writing, and code tests/probes use GPT-5.3-Codex-Spark unless image
-    reading, comprehensive reading/checking, deep review, or final judgment is
-    required. If Spark cannot be reached/selected/delegated or hits
-    rate/capacity/access/tool/context/output limits, use only the protected
-    visible fallback: Model switch: Spark -> GPT-5.5 light (gpt-5.5, low
-    effort), with the concrete reason in the step, then switch later
-    Spark-default phases back to Spark when available. Do not silently
-    substitute another model. After the direct fast-path result, lightweight result, or explicit Main Goal Done Gate passes, return the user-facing result on the user-facing path, then actually call one or more purpose-specific task-local Ending Workflow subagents when callable.
-    Record every worker handle and record Ending Workflow delegated: <worker-id-or-name> with its purpose. Do not wait for every ending worker to complete before final response; report each background worker as running unless it already completed.
-    A plan, queue note, intention, or written promise is not delegation.
-    If no subagent tool is callable, state Ending Workflow blocked: no subagent tool.
-    Show the explicit workflow diagram as two lanes: the main lane produces the requested result and ends at Main Goal Done Gate; then independent Ending Workflow workers fan out in parallel. A main-goal worker or executor is on the critical path only when its output is required before Main Goal Done Gate. Ending Workflow workers are different: they start after that gate for tests, validation, docs, Obsidian/wiki/DailyLog memory, remote proof, visual review, or no-op inventory, and they do not change the delivered main result unless they prove a required precondition was misclassified.
-    Ending Workflow handles every post-goal item: local mini test, local real testing, validation/verification, DailyLog/wiki/Obsidian/log updates, Markdown/docs or report-index updates, sync/status inspection, post-goal remote status/hash proof, comprehensive records, or no-op closeout confirmation.
-    Ending Workflow Fan-Out uses multiple purpose-specific Ending Workflow subagents when the task has distinct closeout purposes.
-    Parallel Ending Workflow Dispatch: when two or more ending purposes are independent, spawn all independent Ending Workflow subagents in parallel before the final response. Sequential one-by-one ending delegation is a workflow failure when the tasks could run independently. The user does not wait for all background subagents to finish unless they explicitly asked to wait.
-    Ending Worker Direct-Execution Contract: every Ending Workflow worker prompt must say the worker is an Ending Workflow worker only, must not call $workflow-skill, must not restart global workflow routing, and must not create, spawn, resume, or wait on subagents. The worker must do the assigned task directly with local tools, code, commands, and bounded file edits. If it thinks another subagent or workflow route is needed, it must report blocked with checked sources and remaining items instead of delegating again.
-    Give each Ending Workflow worker the concrete purpose, allowed files/directories, allowed checks or commands, forbidden actions such as pushing when not requested, expected evidence, and final report shape.
-    Ending Workflow Related Update Scope is task-local, proportional, and document-related: check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages for the current task, update stale or missing related information, and stop when those related updates are done.
-    Do not set fixed time limits in the skill. Do not bundle previous tasks, reopen old work, scan the whole repo, or scan the whole vault unless the user asked or the delivered result depends on it.
-    It must run a Related Closeout Inventory, inspect related docs/wiki/Obsidian/Markdown/log sources, and allow no-op only with checked sources plus per-source reasons.
-    If required related sources cannot be inspected, report blocked with checked sources and remaining items.
+  default_prompt: "Use $workflow-skill to show the required start diagram, choose lightweight direct routing or the full task workflow, then route Python/C# coding, file-changing, multi-step, or evidence-heavy work through the right executor skills."

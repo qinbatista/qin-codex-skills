@@ -1,29 +1,10 @@
 import argparse
-import os
 import json
 import sys
 import time
 from html import escape
 from io import BytesIO
 from pathlib import Path
-
-
-def _ensure_bundled_python_runtime(required_modules):
-    missing = []
-    for module_name in required_modules:
-        try:
-            __import__(module_name)
-        except ModuleNotFoundError:
-            missing.append(module_name)
-    if not missing:
-        return
-
-    bundled_python = Path.home() / ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
-    if bundled_python.is_file() and Path(sys.executable).resolve() != bundled_python.resolve():
-        os.execv(str(bundled_python), [str(bundled_python), __file__, *sys.argv[1:]])
-
-
-_ensure_bundled_python_runtime(("PIL", "reportlab"))
 
 from PIL import Image as PILImage
 from reportlab.lib import colors
@@ -315,7 +296,7 @@ def _meta_banner(text, styles):
 def _resolve_cleanup_root(output_path, cleanup_root):
     if cleanup_root: return Path(cleanup_root).expanduser().resolve()
     for parent in (output_path.parent, *output_path.parents):
-        if parent.name == "verify-skill": return parent
+        if parent.name == "test-skill": return parent
     return None
 
 
@@ -468,7 +449,7 @@ def build_report(manifest, output_path):
         flow.extend(_artifact_blocks(top_artifacts, styles, section_title="Evidence"))
 
     if test_cases:
-        flow.append(_paragraph("Verification Summary", styles["SectionTitle"]))
+        flow.append(_paragraph("Testing Summary", styles["SectionTitle"]))
         if any(_comparison_enabled(manifest, case) for case in test_cases):
             flow.append(_paragraph("Case labels: the title row shows the function or case. Before and After are the compared states. Input is what was given. Used is the command, tool, or workflow that ran. Output is what came back. Why Pass is the acceptance reason.", styles["Caption"]))
         else:
@@ -481,7 +462,7 @@ def build_report(manifest, output_path):
         case_name = _stringify(case.get("name", "Unnamed test"))
         function_name = _stringify(case.get("function_name", "")).strip()
         show_case_details = _show_case_details(manifest, case)
-        case_title = f"Verification {index}: {function_name or case_name}"
+        case_title = f"Testing {index}: {function_name or case_name}"
         case_rows = [[Paragraph(f"{escape(case_title)} | <font color='{_status_color(status).hexval()}'>{escape(_stringify(status).upper())}</font>", styles["CaseHeader"]), ""]]
         case_details = dict(case.get("details") or {})
         case_is_comparison = _comparison_enabled(manifest, case)

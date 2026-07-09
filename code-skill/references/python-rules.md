@@ -34,23 +34,15 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 - Do not add trivial module-level helper functions for short path joins, tiny normalization steps, or one-line predicates used by one local flow.
 - Inline one-off logic into the actual method or function unless extraction removes real complexity or is reused.
 - Do not keep awkward source logic in place and add wrappers, retry-only branches, or compatibility layers when the underlying function can be fixed directly.
-- Write logic functions step by step inside the owning function. When the input and return contract are confirmed, express any needed conditions in that function instead of adding wrapper functions, nested functions, or caller-side routing layers.
 
 ## Contracts And Guards
 
 - Trust declared function inputs and return shapes.
-- When a source JSON key, object field, or return value is confirmed, read that exact value directly. Do not search sibling aliases, typo variants, protective keys, or backup holder objects such as `user_text`, `user`, `text`, and misspelled variants unless the real source contract requires them.
 - Do not repeatedly check `dict`, `list`, `int`, or similar types across call sites unless explicitly requested.
 - Do not add fallback/default/compatibility branches, alternate input aliases, empty-value substitutes, or caller-side repair logic unless requested or required by a real external API contract.
 - Do not validate or repair a called function's return format at the caller; fix the producing function, helper contract, or prompt instead.
 - If an AI helper guarantees parsed JSON through `json_root="object"` or `json_root="array"`, use the returned `dict` or `list` directly with no `json.loads`, `ast.literal_eval`, string fallback, or duplicate parse check.
 - For AI extraction, naming, or review flows, put semantic rules in the prompt and keep local code limited to minimal schema normalization.
-
-## Post-Write Simplicity Review
-
-- After writing or editing Python code, review the touched code for unnecessary wrappers, nested helpers, defensive aliases, repeated type checks, fallback branches, and single-use variables before running final tests.
-- If the simplest value path is unclear, re-read the source function, prompt contract, schema, or nearby pattern to confirm the actual input and return shape, then simplify the code to use that confirmed source directly.
-- Treat this review as the first optimization pass: remove complexity that does not change the confirmed behavior, then run the real code test and verification.
 
 ## Error Handling
 

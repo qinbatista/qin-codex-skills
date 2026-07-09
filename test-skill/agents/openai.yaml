@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Skill"
+  short_description: "Test executor routed by workflow-skill"
+  default_prompt: "After $workflow-skill routes the task here, use $test-skill to select every relevant evidence route, run real usage tests, and choose the evidence format by complexity: concise chat for simple results, Markdown/table summaries when helpful, and PDF reports only for long, visual, comparison-heavy, or explicitly requested artifacts."
