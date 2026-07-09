@@ -160,6 +160,18 @@ Even in lightweight mode, show the small direct-route diagram first. Use judgmen
 
 For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the result-producing work, and loop only on failures that block the major goal itself. The `Main Goal Done Gate` is the point where the requested edit, artifact, push, publish, command, or other primary state change has completed and any required minimum precondition checks for public-safety, privacy, or irreversible-action safety have passed. After that gate, the main agent must not run post-goal validation, verification, local mini tests, real tests, docs, wiki, Obsidian, reports, or sync/status proof itself when a subagent tool is callable; delegate those tasks into `Ending Workflow` subagent(s). If an ending subagent finds a real failure, it reports the follow-up issue after the main result instead of blocking the already delivered result, unless the failure proves a required precondition was misclassified.
 
+### Main Goal Lane And Subagent Split
+
+The main lane owns the user-facing result. It may use executor skills or a main-goal subagent before the `Main Goal Done Gate` only when that worker's output is required to produce the requested result. A main-goal worker is on the critical path, so the main agent may wait for it and integrate its output before claiming the major goal is done.
+
+`Ending Workflow` subagents are different. They start after the `Main Goal Done Gate`, own post-goal purposes, run in the background, and do not influence the delivered main result unless they prove a required precondition was misclassified. Their job is to protect quality and memory without making the user wait for every test, validator, document update, wiki/DailyLog update, remote hash proof, or no-op inventory.
+
+Use this split:
+
+- **Main lane / main-goal worker**: produces or changes the requested artifact/state, handles required preconditions, fixes failures that block the requested result, and reaches `Main Goal Done Gate`.
+- **Ending Workflow worker**: runs local mini tests, real tests, validation/verification, docs/Markdown/report-index updates, Obsidian/wiki/DailyLog/log updates, visual/browser review, remote status/hash proof, or related closeout inventory after the main goal is done.
+- **Final response**: allowed after the main goal is done and all required independent ending workers have been dispatched in parallel with visible names/purposes. The user does not wait for every ending worker to finish unless they explicitly ask to wait.
+
 For prompt-related work, the first workflow decision after the start diagram is the Prompt Task Gate. If it matches, keep the prompt purpose workflow visible in the target map and use the prompt pass target even when the prompt lives inside a larger skill, file, or codebase.
 
 For lightweight mode, display only the compact direct-route diagram, make the smallest routing decision needed, perform the direct action, and answer.
@@ -177,7 +189,25 @@ flowchart LR
 
 Then do the direct action.
 
-For explicit workflow mode, before doing the work, write a task-specific Mermaid start diagram followed by a short target map:
+For explicit workflow mode, before doing the work, write a task-specific Mermaid start diagram followed by a short target map. The diagram must show the main-goal lane ending at `Main Goal Done Gate`, then show independent `Ending Workflow` workers in parallel:
+
+```mermaid
+flowchart TD
+  A["User request"] --> B["Target map + model route"]
+  B --> C["Main lane: produce requested result"]
+  C --> D{"Main Goal Done Gate"}
+  D -->|required precondition failed| C
+  D -->|major goal done| E["Dispatch Ending Workflow workers in parallel"]
+  E --> F["Final response: result + worker names/purposes"]
+  E --> G["Ending worker: validation/tests"]
+  E --> H["Ending worker: docs/wiki/memory"]
+  E --> I["Ending worker: remote/status/visual proof"]
+  G --> J["Background notification or follow-up"]
+  H --> J
+  I --> J
+```
+
+In this diagram, `C` is the only result-producing lane. `G`, `H`, and `I` are examples of background ending purposes. Replace them with task-specific worker names such as `local mini test`, `real API test`, `Obsidian memory`, `remote hash proof`, or `visual browser review`.
 
 1. `Task slices`: the ordered pieces of work.
 2. `Artifacts`: what will exist or change, such as text, Python/C# code, image, UI, PDF, Markdown, skill files, or GitHub state.
