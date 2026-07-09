@@ -83,8 +83,9 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r'"(?:access_token|refresh_token|id_token|session_token|api_key|secret|password)"\s*:\s*"[^"\n]{12,}"', re.IGNORECASE),
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
 )
-CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Testing", "Management", "General"]
-PRIMARY_SKILL_ORDER = ["workflow-skill", "code-skill", "test-skill", "verify-skill", "optimization-skill", "management-skill"]
+CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Management", "General"]
+PRIMARY_SKILL_ORDER = ["workflow-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"]
+APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 CATEGORY_LABEL_WIDTH = 28
 SKILL_LABEL_WIDTH = 24
@@ -94,7 +95,6 @@ CATEGORY_LABELS = {
     "Optimization": "Optimization / 优化类",
     "Generation": "Generation / 生成类",
     "Verification": "Verification / 验证类",
-    "Testing": "Testing / 测试类",
     "Management": "Management / 管理类",
     "General": "General / 通用类",
 }
@@ -104,34 +104,32 @@ CHINESE_CATEGORY_LABELS = {
     "Optimization": "优化类 / Optimization",
     "Generation": "生成类 / Generation",
     "Verification": "验证类 / Verification",
-    "Testing": "测试类 / Testing",
     "Management": "管理类 / Management",
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "workflow-skill": "Always starts task execution, including prompt/instruction authoring and updates, defines goals, selects executor skills, routes work, iterates, and checks final evidence.",
-    "code-skill": "Executes Python and C# code work only after workflow-skill routes the task, combining prompt embedding, coding approach, Python, C#/Unity C#, and small-code modules.",
-    "optimization-skill": "Executes optimization work after workflow-skill routes the task, turning stable repeated workflows into reusable local scripts, references, or assets.",
-    "verify-skill": "Executes verification after workflow-skill routes the task, checking UI, scripts, generated artifacts, skills, and workflows against the user's requirement.",
-    "test-skill": "Executes real tests after workflow-skill routes the task, then chooses concise chat evidence, Markdown/table summaries, or PDF report artifacts based on complexity.",
-    "management-skill": "Executes management work after workflow-skill routes the task, covering Codex profiles and global skill GitHub sync.",
+    "workflow-skill": "Always-first controller that fast-paths simple work, shows diagrams and model routes, drives the main goal to Main Goal Done Gate, then dispatches parallel Ending Workflow workers.",
+    "code-skill": "Python/C# executor for implementation, debugging, refactoring, prompt-in-code, Unity C#, and focused code tests after workflow-skill routes the task.",
+    "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
+    "verify-skill": "Runs proof after workflow-skill routes the task: one mini real test by default, real result testing for major/user-requested checks, and calibrated evidence.",
+    "management-skill": "Handles Codex profile operations and global skill GitHub sync without exposing private data.",
 }
 CHINESE_SKILL_SUMMARIES = {
-    "workflow-skill": "永远第一个启动任务执行，包括 prompt/instruction 编写和更新，定义目标、选择执行者 skill、路由工作、循环验证并检查最终证据。",
-    "code-skill": "在 workflow-skill 路由后只执行 Python 和 C# 代码工作，组合 prompt 嵌入、代码思路、Python、C#/Unity C# 和小代码模块。",
-    "optimization-skill": "在 workflow-skill 路由后执行优化工作，把稳定重复流程变成本地脚本、引用资料或资产。",
-    "verify-skill": "在 workflow-skill 路由后执行验证工作，检查 UI、脚本、生成物、skill 和工作流是否满足用户要求。",
-    "test-skill": "在 workflow-skill 路由后执行真实测试，并按复杂度选择简短聊天证据、Markdown/表格摘要或 PDF 报告 artifact。",
-    "management-skill": "在 workflow-skill 路由后执行管理工作，处理 Codex profiles 和全局 skill 的 GitHub 同步。",
+    "workflow-skill": "永远第一启动控制器：简单任务快走，复杂任务显示图和模型路线，主线推进到 Main Goal Done Gate，然后并行派发 Ending Workflow workers。",
+    "code-skill": "Python/C# 执行者：在 workflow-skill 路由后处理实现、调试、重构、prompt-in-code、Unity C# 和聚焦代码测试。",
+    "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
+    "verify-skill": "执行验证：默认一个 mini real test；重大或用户要求的结果测试走真实结果验证，并输出校准证据。",
+    "management-skill": "处理 Codex profile 操作和全局 skill GitHub 同步，不暴露私人数据。",
 }
 SKILL_CONTENTS = {
     "workflow-skill": [
+        ("Main Goal / Ending Workflow split", "Main lane produces the requested result and stops at Main Goal Done Gate; testing, validation, docs, memory, remote proof, and no-op inventory fan out to parallel Ending Workflow workers."),
         ("Text, Markdown, and prompt tasks", "Text, markdown, prompt/instruction authoring, prompt updates, and prompt optimization with explicit format and output-contract targets."),
         ("Python and C# code tasks", "Python, C#, Unity C#, prompt-in-code, scripts, and executable behavior requests; frontend/UI code should use relevant production skills instead."),
         ("Visual and generated artifacts", "Image, UI, browser screenshot, document, PDF, report, and generated file tasks."),
         ("Global skill edits", "Create, merge, rename, delete, reorganize, or update global Codex skills."),
         ("Management tasks", "Account/profile switching and global skill GitHub sync through management-skill."),
-        ("Calibrated evidence output", "Short chat evidence for simple results; PDF/report artifacts only for long, table-heavy, visual, comparison-based, explicit, or repo-required proof."),
+        ("Calibrated evidence output", "Handled by verify-skill: short chat evidence for simple results; PDF/report artifacts only for long, table-heavy, visual, comparison-based, explicit, or repo-required proof."),
     ],
     "code-skill": [
         ("Prompt Creating", "Prompt generation only: create, rewrite, or embed prompts into Python or C# text/code."),
@@ -141,9 +139,9 @@ SKILL_CONTENTS = {
         ("Easy Python/C# Spark", "Small bounded Python/C# code tasks that can use the Spark small-task route when the task is obvious and low risk."),
     ],
     "optimization-skill": [
-        ("Skill Optimization", "Optimize fixed or repeated skill workflows into local scripts, references, assets, or templates that save tokens."),
+        ("Skill Optimization", "Optimize explicit, repeated-at-least-three-times, or clearly reusable stable workflows into local scripts, references, assets, prompts, or templates that save tokens."),
         ("Official skill compliance", "Audit skill structure, frontmatter, trigger descriptions, references, scripts, assets, and token-use behavior."),
-        ("Local script conversion", "Turn stable repeated test, image, browser, computer-control, report, or generation steps into reusable local code."),
+        ("Local script conversion", "Turn stable repeated verification, image, browser, computer-control, report, or generation steps into reusable local code."),
         ("Reference extraction", "Move long stable instructions into references/ so they load only when the task needs them."),
         ("Assets and templates", "Store reusable fixtures, templates, or media in assets/ when those files are part of the optimized skill."),
     ],
@@ -152,15 +150,7 @@ SKILL_CONTENTS = {
         ("Local Script Verification", "Optimized local scripts and workflows with concrete cache inputs, real outputs, rerun behavior, and output paths."),
         ("Skill Verification", "SKILL.md frontmatter, trigger wording, referenced files, old-name cleanup, route behavior, and skill structure."),
         ("Generated Artifact Verification", "Markdown, images, PDFs, documents, reports, data files, and exports through open/render/parse/inspect checks."),
-        ("Report Evidence Review", "Verify generated reports contain real Input, Used, Output, and Why Pass evidence, with PDFs reserved for report-worthy material."),
-    ],
-    "test-skill": [
-        ("Done Means Tested", "After code or workflow changes, run a small real usage test with concrete inputs and real outputs."),
-        ("Report Format Selection", "Use a few chat lines for simple results; generate PDF reports only for long data, table-heavy evidence, visual comparisons, or explicit artifact requests."),
-        ("Code/API/CLI Tests", "Real scripts, commands, CLI invocations, API calls, local handlers, stdout, files, JSON, and returned values."),
-        ("UI/Browser Tests", "Real page states, screenshots, viewport sizes, console/runtime evidence, and interaction results."),
-        ("Image/Document/PDF Tests", "Real source/output images, generated files, rendered documents, parsed PDFs, and artifact paths."),
-        ("Comparison/Audit Reports", "Before/after, expected/actual, audit findings, and pass/fail evidence with concrete artifacts."),
+        ("Real Evidence And Reports", "Run real checks with concrete inputs and outputs, choose chat/Markdown/PDF evidence by complexity, and require Input/Used/Output/Why Pass for reports."),
     ],
     "management-skill": [
         ("Codex Switch", "Local Codex auth profiles, saved profile listing, usage snapshots, login refresh, profile backup/import, and confirmed account switching."),
@@ -170,12 +160,13 @@ SKILL_CONTENTS = {
 }
 CHINESE_SKILL_CONTENTS = {
     "workflow-skill": [
+        ("Main Goal / Ending Workflow 分流", "主线产出用户请求的结果并停在 Main Goal Done Gate；测试、验证、文档、记忆、远端 proof 和 no-op inventory 并行交给 Ending Workflow workers。"),
         ("文本、Markdown 和 prompt 任务", "文本、Markdown、prompt/instruction 编写、prompt 更新，以及有明确格式和输出契约要求的 prompt 优化。"),
         ("Python 和 C# 代码任务", "Python、C#、Unity C#、prompt-in-code、脚本和可执行行为任务；前端/UI 代码应使用对应的生产 skill。"),
         ("视觉和生成物", "图片、UI、浏览器截图、文档、PDF、报告和生成文件任务。"),
         ("全局 skill 编辑", "创建、合并、重命名、删除、重组或更新全局 Codex skills。"),
         ("管理任务", "通过 management-skill 处理账号/Profile 切换和全局 skill 的 GitHub 同步。"),
-        ("校准后的证据输出", "简单结果用简短聊天证据；只有长数据、表格多、视觉/对比型、明确要求或仓库规则需要时才生成 PDF/报告 artifact。"),
+        ("校准后的证据输出", "由 verify-skill 处理：简单结果用简短聊天证据；只有长数据、表格多、视觉/对比型、明确要求或仓库规则需要时才生成 PDF/报告 artifact。"),
     ],
     "code-skill": [
         ("Prompt Creating", "只负责 prompt 生成：创建、重写，或把 prompt 嵌入 Python 或 C# 文本/代码。"),
@@ -185,9 +176,9 @@ CHINESE_SKILL_CONTENTS = {
         ("Easy Python/C# Spark", "明显、低风险、小范围的 Python/C# 代码任务，可以走 Spark 小任务路线。"),
     ],
     "optimization-skill": [
-        ("Skill Optimization", "把固定或重复的 skill 流程优化成本地脚本、引用资料、资产或模板。"),
+        ("Skill Optimization", "把明确要求、重复至少三次或明显可复用的稳定流程优化成本地脚本、引用资料、资产、prompt 或模板。"),
         ("官方 skill 合规检查", "检查 skill 结构、frontmatter、触发描述、references、scripts、assets 和 token 使用方式。"),
-        ("本地脚本转换", "把稳定重复的测试、图片、浏览器、电脑控制、报告或生成步骤转成本地可复用代码。"),
+        ("本地脚本转换", "把稳定重复的验证、图片、浏览器、电脑控制、报告或生成步骤转成本地可复用代码。"),
         ("引用资料抽取", "把较长且稳定的说明移到 references/，只在任务需要时加载。"),
         ("资产和模板", "当可复用 fixture、模板或媒体属于 skill 的一部分时，放进 assets/。"),
     ],
@@ -196,15 +187,7 @@ CHINESE_SKILL_CONTENTS = {
         ("本地脚本验证", "验证优化后的本地脚本和流程，检查 cache 输入、真实输出、重复运行和输出路径。"),
         ("Skill 验证", "检查 SKILL.md frontmatter、触发说明、引用文件、旧名称清理、路由行为和 skill 结构。"),
         ("生成物验证", "通过打开、渲染、解析或检查来验证 Markdown、图片、PDF、文档、报告、数据文件和导出物。"),
-        ("报告证据检查", "检查生成的报告是否包含真实 Input、Used、Output 和 Why Pass，并只在值得生成报告时使用 PDF。"),
-    ],
-    "test-skill": [
-        ("Done Means Tested", "代码或工作流改完后，必须用具体输入和真实输出跑一个小的真实使用测试。"),
-        ("报告格式选择", "简单结果用几行聊天文字；只有长数据、表格证据、视觉对比或明确 artifact 请求时才生成 PDF 报告。"),
-        ("Code/API/CLI Tests", "真实脚本、命令、CLI 调用、API 调用、本地 handler、stdout、文件、JSON 和返回值。"),
-        ("UI/Browser Tests", "真实页面状态、截图、viewport 尺寸、console/runtime 证据和交互结果。"),
-        ("Image/Document/PDF Tests", "真实输入/输出图片、生成文件、渲染文档、解析 PDF 和 artifact 路径。"),
-        ("Comparison/Audit Reports", "before/after、expected/actual、审计发现，以及带具体 artifact 的 pass/fail 证据。"),
+        ("真实证据和报告", "用具体输入和真实输出运行检查，按复杂度选择聊天/Markdown/PDF 证据，并要求报告包含 Input/Used/Output/Why Pass。"),
     ],
     "management-skill": [
         ("Codex Switch", "本地 Codex auth profile、已保存 profile 列表、使用快照、登录刷新、profile 备份/导入和确认后的账号切换。"),
@@ -269,7 +252,7 @@ def sensitive_name(relative_path):
 
 def secret_value_issue(path):
     try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
+        text = path.read_text(errors="ignore")
     except UnicodeDecodeError:
         return ""
     for pattern in SECRET_VALUE_PATTERNS:
@@ -305,6 +288,21 @@ def assert_public_safe(skill_paths):
         raise RuntimeError(message)
 
 
+def assert_approved_global_skill_set(skill_paths):
+    observed_names = {path.name for path in skill_paths}
+    unexpected_names = sorted(observed_names - APPROVED_GLOBAL_SKILL_NAMES)
+    missing_names = sorted(APPROVED_GLOBAL_SKILL_NAMES - observed_names)
+    if unexpected_names or missing_names:
+        message = "Refusing to mirror global skills because the top-level skill folders must be exactly:\n"
+        message += "\n".join(f"- {skill_name}" for skill_name in PRIMARY_SKILL_ORDER)
+        if unexpected_names:
+            message += "\nUnexpected folders found:\n" + "\n".join(f"- {skill_name}" for skill_name in unexpected_names)
+        if missing_names:
+            message += "\nRequired folders missing:\n" + "\n".join(f"- {skill_name}" for skill_name in missing_names)
+        message += "\nCheck why the local global skill folder set changed before pushing."
+        raise RuntimeError(message)
+
+
 def snapshot_hash(skill_paths):
     digest = hashlib.sha256()
     for skill_path in skill_paths:
@@ -327,7 +325,7 @@ def latest_local_timestamp(skill_paths):
 def read_sync_state(state_file):
     if not state_file.exists():
         return {}
-    return json.loads(state_file.read_text(encoding="utf-8"))
+    return json.loads(state_file.read_text())
 
 
 def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
@@ -338,13 +336,13 @@ def write_sync_state(state_file, repository, remote_head, local_hash, remote_has
         "local_hash": local_hash,
         "remote_hash": remote_hash,
         "synced_at": int(time.time())
-    }, indent=2) + "\n", encoding="utf-8")
+    }, indent=2) + "\n")
 
 
 def read_skill_metadata(skill_dir):
     frontmatter_lines = []
     in_frontmatter = False
-    for line in (skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines():
+    for line in (skill_dir / "SKILL.md").read_text().splitlines():
         if line == "---":
             if in_frontmatter:
                 break
@@ -365,48 +363,18 @@ def read_skill_metadata(skill_dir):
 
 
 def build_readme(skill_paths, language="en"):
-    rows = []
-    for skill_path in skill_paths:
-        metadata = read_skill_metadata(skill_path)
-        skill_name = metadata.get("name", skill_path.name)
-        description = metadata.get("description", "No description provided.")
-        rows.append((skill_category(skill_name, description), skill_name, description, skill_path.name))
-    primary_rows = ordered_primary_rows(rows)
-
     if language == "zh":
-        readme_lines = [
-            "# qin-codex-skills",
-            "",
-            "英文版: [README.md](./README.md)",
-            "",
-            "## 技能图",
-            "",
-            *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="zh"),
-            "",
-            "这是全局 Codex skills 的公开镜像和路由说明。`workflow-skill` 永远先启动并选择执行者；其他 skill 都是它路由后的执行者。顶部先展示主图，下面列每个 skill 的角色、大功能、可多选模块和选择规则。",
-            "",
-            *build_skill_summary_table(primary_rows, language="zh"),
-            "",
-            *build_support_skill_details(rows, language="zh"),
-        ]
-        return "\n".join(readme_lines)
+        return build_overview(skill_paths, language="zh").replace(
+            "# 当前 Codex Skills\n\n英文版: [README.md](./README.md)",
+            "# qin-codex-skills\n\n英文版: [README.md](./README.md)",
+            1,
+        )
 
-    readme_lines = [
-        "# qin-codex-skills",
-        "",
-        "Chinese version: [README.zh.md](./README.zh.md)",
-        "",
-        "## Skill Map",
-        "",
-        *build_skill_graph([(category, skill_name, description) for category, skill_name, description, _ in primary_rows], language="en"),
-        "",
-        "`workflow-skill` is the always-first controller. Every other primary skill is an executor selected by it. This is the Codex skill source and multi-select routing overview.",
-        "",
-        *build_skill_summary_table(primary_rows, language="en"),
-        "",
-        *build_support_skill_details(rows, language="en"),
-    ]
-    return "\n".join(readme_lines)
+    return build_overview(skill_paths, language="en").replace(
+        "# Current Codex Skills\n\nChinese version: [README.zh.md](./README.zh.md)",
+        "# qin-codex-skills\n\nChinese version: [README.zh.md](./README.zh.md)",
+        1,
+    )
 
 
 def skill_category(skill_name, description):
@@ -421,12 +389,10 @@ def skill_category(skill_name, description):
         return "Management"
     if "github" in text or "auth" in text:
         return "Management"
-    if skill_name == "test-skill":
-        return "Testing"
     if skill_name == "verify-skill":
         return "Verification"
     if "testing" in text or "report" in text:
-        return "Testing"
+        return "Verification"
     if "verify" in text or "validation" in text:
         return "Verification"
     if "optimization" in text or "optimize" in text:
@@ -580,6 +546,64 @@ def build_support_skill_details(rows, language="en"):
     return lines
 
 
+def workflow_lane_section(language="en"):
+    if language == "zh":
+        return [
+            "## Main Goal 和 Ending Workflow",
+            "",
+            "GitHub README 只展示最重要的全局工作流约定；完整规则在 [`workflow-skill/SKILL.md`](./workflow-skill/SKILL.md)。",
+            "",
+            "```mermaid",
+            "flowchart TD",
+            "  A[\"用户请求\"] --> B[\"Target map + model route\"]",
+            "  B --> C[\"Main lane: 产出请求结果\"]",
+            "  C --> D{\"Main Goal Done Gate\"}",
+            "  D -->|必需前置条件失败| C",
+            "  D -->|主目标完成| E[\"并行派发 Ending Workflow workers\"]",
+            "  E --> F[\"Final response: 结果 + worker 名字/目的\"]",
+            "  E --> G[\"Ending worker: validation/tests\"]",
+            "  E --> H[\"Ending worker: docs/wiki/memory\"]",
+            "  E --> I[\"Ending worker: remote/status/visual proof\"]",
+            "  G --> J[\"后台通知或 follow-up\"]",
+            "  H --> J",
+            "  I --> J",
+            "```",
+            "",
+            "- **Main lane / main-goal worker:** 只负责产出或修改用户请求的 artifact/state，并处理 public-safety、privacy、irreversible-action 等必需前置条件。只有 worker 的输出是主结果必需输入时，main agent 才等待它。",
+            "- **Main Goal Done Gate:** 请求的 edit、artifact、push、publish、command 或 primary state change 已完成，且必需前置条件已通过。",
+            "- **Ending Workflow workers:** 在 Main Goal Done Gate 之后启动，负责 local mini tests、real tests、validation/verification、docs/Markdown、Obsidian/wiki/DailyLog/log、remote hash/status proof、visual/browser review 和 no-op inventory。",
+            "- **Parallel dispatch:** 独立 ending purposes 必须并行创建 subagents。Final response 报告 worker 名字/目的后返回；用户不会等待所有 ending workers 完成，除非用户明确要求等待。",
+            "",
+        ]
+    return [
+        "## Main Goal And Ending Workflow",
+        "",
+        "This README shows the high-level global workflow contract. The full rule lives in [`workflow-skill/SKILL.md`](./workflow-skill/SKILL.md).",
+        "",
+        "```mermaid",
+        "flowchart TD",
+        "  A[\"User request\"] --> B[\"Target map + model route\"]",
+        "  B --> C[\"Main lane: produce requested result\"]",
+        "  C --> D{\"Main Goal Done Gate\"}",
+        "  D -->|required precondition failed| C",
+        "  D -->|major goal done| E[\"Dispatch Ending Workflow workers in parallel\"]",
+        "  E --> F[\"Final response: result + worker names/purposes\"]",
+        "  E --> G[\"Ending worker: validation/tests\"]",
+        "  E --> H[\"Ending worker: docs/wiki/memory\"]",
+        "  E --> I[\"Ending worker: remote/status/visual proof\"]",
+        "  G --> J[\"Background notification or follow-up\"]",
+        "  H --> J",
+        "  I --> J",
+        "```",
+        "",
+        "- **Main lane / main-goal worker:** produces or changes the requested artifact/state and handles required public-safety, privacy, or irreversible-action preconditions. The main agent waits for a worker only when that worker's output is required for the requested result.",
+        "- **Main Goal Done Gate:** the requested edit, artifact, push, publish, command, or primary state change is complete and required preconditions have passed.",
+        "- **Ending Workflow workers:** start after Main Goal Done Gate for local mini tests, real tests, validation/verification, docs/Markdown, Obsidian/wiki/DailyLog/log updates, remote hash/status proof, visual/browser review, and no-op inventory.",
+        "- **Parallel dispatch:** independent ending purposes must be spawned as subagents in parallel. The final response reports worker names/purposes and returns without waiting for every ending worker unless the user explicitly asks to wait.",
+        "",
+    ]
+
+
 def build_skill_details(rows, language="en"):
     category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
     lines = [
@@ -617,92 +641,65 @@ def build_overview(skill_paths, language="en"):
         lines = [
             "# 当前 Codex Skills",
             "",
-            "英文版: [current_global_skills_overview.md](./current_global_skills_overview.md)",
+            "英文版: [README.md](./README.md)",
             "",
             "## 技能图",
             "",
             *build_skill_graph(primary_rows, language="zh"),
             "",
+            *workflow_lane_section(language="zh"),
             *build_skill_summary_table(primary_rows, language="zh"),
-            "",
-            f"生成日期: {time.strftime('%Y-%m-%d', time.localtime())}",
-            "",
-            *build_skill_details(primary_rows, language="zh"),
             "",
             *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"),
             "",
-            "## Skill 列表",
-            "",
-            "| 类别 | Skill | 用途 |",
-            "|---|---|---|",
-        ]
-        for category, skill_name, description in rows:
-            lines.append(f"| {CHINESE_CATEGORY_LABELS.get(category, category)} | `{skill_name}` | {description} |")
-        lines.extend([
-            "",
-            "## 结构",
+            "## 运行规则",
             "",
         "- Python 和 C# 代码工作进入 `code-skill`；前端/UI 等其他语言代码使用对应生产 skill。",
         "- Prompt/instruction 编写、更新和优化先进入 `workflow-skill`；只有嵌入 Python/C# 可执行代码时才进入 `code-skill`。",
         "- 固定重复流程优化进入 `optimization-skill`。",
-            "- 验证工作进入 `verify-skill`。",
-            "- 真实测试和校准后的证据输出进入 `test-skill`；简单结果留在聊天里，只有长数据、视觉、表格多、对比型、明确要求或仓库规则需要时才生成 PDF 报告。",
+            "- 验证、真实测试和校准后的证据输出进入 `verify-skill`；简单结果留在聊天里，只有长数据、视觉、表格多、对比型、明确要求或仓库规则需要时才生成 PDF 报告。",
             "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。",
-            "- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。",
+        "- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。",
             "",
-            "## 当前说明",
+            "## 当前结构",
             "",
             "- 旧代码类 skill 已合并到 `code-skill`。",
-            "- 旧测试类 skill 已合并到 `test-skill`。",
+            "- 旧测试类 skill 已合并到 `verify-skill`。",
             "- UI review 已扩展到 `verify-skill`。",
             "- 旧图片 workflow skill 已删除。",
-        ])
+        ]
         return "\n".join(lines) + "\n"
 
     lines = [
         "# Current Codex Skills",
         "",
-        "Chinese version: [current_global_skills_overview.zh.md](./current_global_skills_overview.zh.md)",
+        "Chinese version: [README.zh.md](./README.zh.md)",
         "",
         "## Skill Map",
         "",
         *build_skill_graph(primary_rows, language="en"),
         "",
+        *workflow_lane_section(language="en"),
         *build_skill_summary_table(primary_rows, language="en"),
-        "",
-        f"Generated: {time.strftime('%Y-%m-%d', time.localtime())}",
-        "",
-        *build_skill_details(primary_rows, language="en"),
         "",
         *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="en"),
         "",
-        "## Skill List",
-        "",
-        "| Category | Skill | Purpose |",
-        "|---|---|---|",
-    ]
-    for category, skill_name, description in rows:
-        lines.append(f"| {category} | `{skill_name}` | {description} |")
-
-    lines.extend([
-        "",
-        "## Structure",
+        "## Operating Rules",
         "",
         "- Python and C# code work enters through `code-skill`; frontend/UI and other language code should use the relevant production skill instead.",
         "- Prompt/instruction authoring, updates, and optimization start through `workflow-skill`; use `code-skill` only when embedding prompts in Python or C# executable code.",
         "- Repeated fixed workflow optimization enters through `optimization-skill`.",
-        "- Verification work enters through `verify-skill`.",
-        "- Real tests and calibrated evidence outputs sit under `test-skill`; simple results stay in chat, while PDF reports are reserved for long, visual, table-heavy, comparison-based, explicit, or repo-required evidence.",
+        "- Verification, real tests, and calibrated evidence outputs sit under `verify-skill`; simple results stay in chat, while PDF reports are reserved for long, visual, table-heavy, comparison-based, explicit, or repo-required evidence.",
         "- Auth and GitHub mirror maintenance enter through `management-skill` internal routes.",
         "- Each skill may contain multiple internal routes; select every route needed for the current request. This is multi-select, not one-of, and unrelated cases should not run.",
         "",
-        "## Current Notes",
+        "## Current Structure",
         "",
         "- The old code skills were merged into `code-skill`.",
-        "- The old testing skills were merged into `test-skill`.",
+        "- The old testing skills were merged into `verify-skill`.",
         "- UI review was broadened into `verify-skill`.",
         "- The old image workflow skill was deleted.",
-    ])
+    ]
     return "\n".join(lines) + "\n"
 
 
@@ -771,6 +768,7 @@ def pull(repository, skills_dir):
 
 def prepare_repository_snapshot(repository_dir, skills_dir):
     skill_paths = skill_directories(skills_dir)
+    assert_approved_global_skill_set(skill_paths)
     assert_public_safe(skill_paths)
     for path in repository_dir.iterdir():
         if path.name == ".git":
@@ -779,12 +777,10 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
             shutil.rmtree(path)
         else:
             path.unlink()
-    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT, encoding="utf-8")
+    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT)
     copied_names = []
-    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
-    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"), encoding="utf-8")
-    (repository_dir / "current_global_skills_overview.md").write_text(build_overview(skill_paths, language="en"), encoding="utf-8")
-    (repository_dir / "current_global_skills_overview.zh.md").write_text(build_overview(skill_paths, language="zh"), encoding="utf-8")
+    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"))
+    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"))
     for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)
@@ -795,16 +791,16 @@ def push(repository, skills_dir, message, dry_run):
     with tempfile.TemporaryDirectory(prefix="qin-codex-skills-") as sandbox_name:
         repository_dir = clone_repository(repository, Path(sandbox_name))
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
-        run_command(["git", "add", "-A"], cwd=repository_dir)
-        staged_text = run_command(["git", "diff", "--cached", "--name-status"], cwd=repository_dir).stdout.strip()
+        status_text = run_command(["git", "status", "--short"], cwd=repository_dir).stdout.strip()
         if dry_run:
             print_lines("Local skills selected for mirror:", copied_names)
-            print(staged_text or "No local-to-remote differences.")
+            print(status_text or "No local-to-remote differences.")
             return
-        if not staged_text:
+        if not status_text:
             write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
             print("No global skill changes to push.")
             return
+        run_command(["git", "add", "-A"], cwd=repository_dir)
         branch_name = run_command(["git", "branch", "--show-current"], cwd=repository_dir).stdout.strip() or "main"
         run_command(["git", "checkout", "-B", branch_name], cwd=repository_dir)
         run_command(["git", "commit", "-m", message], cwd=repository_dir)

@@ -22,10 +22,17 @@ Use for file edits, code, debugging, generated artifacts, skill work, verificati
 flowchart TD
   A["User request: <short request>"] --> B["Target map: slices, artifacts, pass targets"]
   B --> C["Route skills: workflow-skill -> <executor skills>"]
-  C --> D["Do work: <actual files/artifacts/actions>"]
-  D --> E["Test: <real command/input/output>"]
-  E --> F["Verify: <pass criteria>"]
-  F --> G["Finish: <final answer/report/push>"]
+  C --> D["Main lane: <produce requested result>"]
+  D --> E{"Main Goal Done Gate"}
+  E -->|required precondition failed| D
+  E -->|major goal done| F["Dispatch Ending Workflow workers in parallel"]
+  F --> G["Final response: result + worker names/purposes"]
+  F --> H["Ending worker: validation/tests"]
+  F --> I["Ending worker: docs/wiki/memory"]
+  F --> J["Ending worker: remote/status/visual proof"]
+  H --> K["Background notification or follow-up"]
+  I --> K
+  J --> K
 ```
 
 Target map:
@@ -33,7 +40,11 @@ Target map:
 - `Artifacts`: `<files/artifacts/state that will change>`
 - `Pass targets`: `<observable proof>`
 - `Skill route`: `workflow-skill -> <skills in order>`
-- `Stop condition`: `<exact finish condition>`
+- `Main Goal Done Gate`: `<requested result/state is complete + required preconditions passed>`
+- `Ending Workflow Fan-Out`: `<purpose-specific background workers to spawn in parallel>`
+- `Stop condition`: `<main result returned after ending workers are dispatched with visible names/purposes>`
+
+Main-goal workers and Ending Workflow workers are different. A main-goal worker is on the critical path before `Main Goal Done Gate`; its output is required to produce the requested result. An Ending Workflow worker starts after that gate for tests, validation, docs, memory, remote proof, visual review, or no-op inventory, and the final response does not wait for every worker unless the user explicitly asks.
 
 ## Skill Edit And Push Route
 
@@ -42,19 +53,24 @@ Use when editing global skills and publishing them.
 ```mermaid
 flowchart TD
   A["Read current skill + routing references"] --> B["Patch skill files"]
-  B --> C["Run skill validator"]
-  C --> D["Run real evidence check"]
-  D --> E["Verify requested behavior"]
-  E --> F["Run management-skill sync/push"]
-  F --> G["Confirm remote sync result"]
+  B --> C["Required pre-push safety checks"]
+  C --> D["Run management-skill sync/push"]
+  D --> E{"Main Goal Done Gate: pushed or blocked"}
+  E -->|pushed| F["Dispatch Ending Workflow workers in parallel"]
+  F --> G["Final response: pushed + worker names/purposes"]
+  F --> H["Ending worker: validators"]
+  F --> I["Ending worker: remote hash/no-diff proof"]
+  F --> J["Ending worker: docs/wiki memory"]
 ```
 
 Target map:
-- `Task slices`: read skill, patch focused files, validate, test, verify, push.
+- `Task slices`: read skill, patch focused files, run required pre-push safety checks, push.
 - `Artifacts`: `SKILL.md`, references/scripts/assets, generated validation output, remote skill mirror.
-- `Pass targets`: validator passes, requested trigger/workflow behavior is present, public-safety sync allows push, remote commit/hash is reported.
-- `Skill route`: `workflow-skill -> management-skill -> code-skill -> test-skill -> verify-skill -> management-skill`.
-- `Stop condition`: global skill mirror has the verified update or a real sync blocker is reported.
+- `Pass targets`: requested trigger/workflow behavior is present, public-safety sync allows push, push succeeds or a real sync blocker is reported.
+- `Skill route`: `workflow-skill -> management-skill -> code-skill -> verify-skill -> management-skill`.
+- `Main Goal Done Gate`: global skill mirror push succeeds, or a real sync blocker is reported.
+- `Ending Workflow Fan-Out`: validators, post-push remote hash/no-diff proof, and docs/wiki memory run as purpose-specific background workers.
+- `Stop condition`: push result is returned after ending workers are dispatched with visible names/purposes.
 
 ## Code Change Route
 
@@ -72,5 +88,5 @@ Target map:
 - `Task slices`: inspect, edit, run concrete input, verify observed output.
 - `Artifacts`: changed code, test inputs/logs/report if needed.
 - `Pass targets`: real behavior matches request; no import-only or status-only proof.
-- `Skill route`: `workflow-skill -> code-skill -> test-skill -> verify-skill`.
+- `Skill route`: `workflow-skill -> code-skill -> verify-skill`.
 - `Stop condition`: observed output satisfies every pass target.
