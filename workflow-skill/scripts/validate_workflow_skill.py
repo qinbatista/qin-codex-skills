@@ -9,7 +9,7 @@ from pathlib import Path
 SCENARIOS = {
     "fast-path-simple": {
         "expected_route": ["workflow-skill"],
-        "target_terms": ["direct action", "minimal local confirmation", "no formal verification"],
+        "target_terms": ["direct action", "minimal local confirmation", "no formal verification", "mandatory comprehensive ending workflow subagent"],
         "requires_code_order": False,
     },
     "text": {
@@ -82,16 +82,63 @@ SCENARIOS = {
 
 REQUIRED_SKILL_TEXT = [
     "Always-First Rule",
+    "Make the task-size decision before exploration",
+    "change value(s)",
+    "do not read project memory, scan unrelated files, run broad searches",
+    "every non-result-changing tail item",
     "Simple Task Fast Path",
     "do not route through `verify-skill`",
-    "Do not append daily-log/wiki memory",
+    "do not read project memory, broad instructions, or unrelated files before the direct action",
+    "smallest reasonable local confirmation",
+    "Always delegate records, docs, Markdown/wiki/log updates, extended checks, or no-op closeout confirmation through `Ending Workflow` after the answer path is clear",
+    "keep that ending pass task-local and related-information focused",
     "show the compact direct-route diagram and one-line model route before the direct action",
     "return the user-facing result immediately after the direct action and minimal confirmation",
-    "Post-Pass Non-Blocking Closeout",
-    "After the user-facing task passes the foreground mini real test, return the result to the user immediately",
+    "Ending Workflow",
+    "Ending Workflow Tool-Call Gate",
+    "Ending Workflow delegated",
+    "Ending Workflow blocked: no subagent tool",
+    "The only allowed ending statuses",
+    "Do not use `Ending Workflow deferred`, `Ending Workflow not needed`, or silent skip statuses",
+    "must call the available subagent/delegation tool",
+    "Ending Workflow Related Update Scope",
+    "task-local, proportional, and document-related",
+    "check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages",
+    "update stale or missing related information",
+    "Do not set fixed time limits in the skill",
+    "Do not turn ending into broad testing, whole-repo archaeology, whole-vault scans, or unrelated cleanup",
+    "Do not bundle previous tasks into the current `Ending Workflow`",
+    "re-audit the whole project, or scan the whole vault/repo",
+    "Related Closeout Inventory",
+    "a no-op from the changed file alone is invalid",
+    "No-op is allowed only after the worker reports the checked sources and a per-source reason",
+    "No-op is forbidden for a user correction, repeated failure, global skill change, project contract, schema, mock API, fixture, public output shape, or API/documentation behavior change",
+    "If the worker cannot inspect the related information",
+    "Do not report no-op from the changed file alone",
+    "Final response is not allowed until",
+    "hard pre-final gate",
+    "A plan, queue note, intention, or written promise is not delegation",
+    "Record the worker id, name, or tool-return handle immediately",
+    "Wait for the ending worker to complete with changed closeout files",
+    "report blocked closeout with remaining items",
+    "checked sources and per-source reasons",
+    "close the ending worker before final response",
+    "Every final response after task work must report one visible ending state",
+    "Ending Workflow delegated: <worker-id-or-name> blocked",
+    "A no-op final state must include a concise checked-source inventory summary",
+    "a blocked state must include remaining items",
+    "Do not send a final response with only an intended, planned, queued, or silent ending",
+    "This applies no matter whether the task is fast-path simple, lightweight, or explicit workflow",
+    "same task-local `Ending Workflow` task",
+    "real tests beyond the foreground mini verification",
+    "Any update that will not influence the code/artifact/result must be assigned here instead of done in the main task",
+    "The main task must not skip reasonable checking just because a comprehensive ending subagent exists",
+    "For project-specific work, it must update the related project memory page",
+    "Projects/<Project>/index.md",
+    "After a fast-path direct result, lightweight result, or explicit foreground mini real test passes",
     "Foreground result gate",
-    "Background follow-up",
-    "If background extended testing later finds a real failure, resume work",
+    "Ending Workflow subagent",
+    "If the `Ending Workflow` subagent later finds a real failure",
     "log/wiki/DailyLog/Obsidian/Markdown closeout drafting and file edits are Spark-default execution",
     "Workflow with models",
     "Hard model-route gate",
@@ -100,6 +147,10 @@ REQUIRED_SKILL_TEXT = [
     "best available workflow model",
     "best available verification model",
     "gpt-5.3-codex-spark",
+    "Protected Spark fallback",
+    "Model switch: Spark -> GPT-5.5 light",
+    "gpt-5.5",
+    "Spark is unreachable or limited",
     "The workflow creation, task decomposition, target-map writing, route selection, ambiguity/risk decisions, and final route judgment phases always use the best available workflow/reasoning model by default",
     "Verification judgment always uses the best available verification/reasoning model by default",
     "prompt/instruction authoring, updates, review, or optimization",
@@ -128,6 +179,15 @@ REQUIRED_SKILL_TEXT = [
     "Output",
     "Why Pass",
 ]
+
+
+REQUIRED_AGENT_TEXT = ["Ending Workflow Tool-Call Gate", "actually call one focused task-local Ending Workflow subagent", "record Ending Workflow delegated: <worker-id-or-name>", "wait for completion/no-op/blocked/reopened failure", "A plan, queue note, intention, or written promise is not delegation", "Ending Workflow blocked: no subagent tool", "Ending Workflow Related Update Scope is task-local, proportional, and document-related", "check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages", "update stale or missing related information", "Do not set fixed time limits in the skill", "Do not bundle previous tasks", "scan the whole repo", "scan the whole vault", "Related Closeout Inventory", "inspect related docs/wiki/Obsidian/Markdown/log sources", "no-op only with checked sources plus per-source reasons", "report blocked with checked sources and remaining items"]
+
+
+REQUIRED_MATRIX_TEXT = ["Ending Workflow Tool-Call Gate", "actual evidence", "worker id/name", "waited completion/no-op/reopened status", "A plan, queue note, intention, or written promise is not delegation", "Ending Workflow Related Update Scope is proportional and document-related", "check relevant log/history and directly related docs/wiki/Obsidian/Markdown pages", "update stale or missing related information", "Do not set fixed time limits in the skill", "Do not bundle previous tasks", "scan the whole repo", "scan the whole vault", "Related Closeout Inventory", "checked sources with per-source reasons"]
+
+
+FORBIDDEN_SKILL_TEXT = ["Then decide and state the ending status: `Ending Workflow queued`, `Ending Workflow deferred`, or `Ending Workflow not needed`.", "If no background route is available and closeout is optional, defer it and say it was deferred instead of silently skipping it.", "state Ending Workflow queued, deferred, or not needed", "are background follow-up when those items remain", "treat extended same-behavior checks as background unless", "A worker may inspect the closeout scope and report that no durable file updates are needed, but the worker must still be started", "scan the whole repo/vault by default", "Fast-path/simple tasks get a 60-120 second ending budget", "Explicit/comprehensive tasks normally get a 3-5 minute ending budget", "wait only within the `Ending Workflow Budget`"]
 
 
 TRACE_SCENARIOS = [
@@ -234,12 +294,14 @@ def validate(skill_dir):
     start_diagram_path = skill_dir / "references" / "start-diagram-template.md"
     image_generation_path = skill_dir / "references" / "image-generation.md"
     script_path = skill_dir / "scripts" / "validate_workflow_skill.py"
-    for required_path in (skill_path, matrix_path, start_diagram_path, image_generation_path, script_path):
+    agent_yaml_path = skill_dir / "agents" / "openai.yaml"
+    for required_path in (skill_path, matrix_path, start_diagram_path, image_generation_path, script_path, agent_yaml_path):
         if not required_path.exists():
             raise ValueError(f"missing required file: {required_path}")
 
     skill_text = read_text(skill_path)
     matrix_text = read_text(matrix_path)
+    agent_text = read_text(agent_yaml_path)
     metadata = parse_frontmatter(skill_text)
     if metadata.get("name") != "workflow-skill":
         raise ValueError("frontmatter name must be workflow-skill")
@@ -249,6 +311,15 @@ def validate(skill_dir):
     missing_text = [text for text in REQUIRED_SKILL_TEXT if text not in skill_text]
     if missing_text:
         raise ValueError("SKILL.md missing required workflow text: " + ", ".join(missing_text))
+    forbidden_text = [text for text in FORBIDDEN_SKILL_TEXT if text in skill_text]
+    if forbidden_text:
+        raise ValueError("SKILL.md contains forbidden weak ending-workflow text: " + ", ".join(forbidden_text))
+    missing_agent_text = [text for text in REQUIRED_AGENT_TEXT if text not in agent_text]
+    if missing_agent_text:
+        raise ValueError("agents/openai.yaml missing required ending tool-call text: " + ", ".join(missing_agent_text))
+    missing_matrix_text = [text for text in REQUIRED_MATRIX_TEXT if text not in matrix_text]
+    if missing_matrix_text:
+        raise ValueError("routing-matrix.md missing required ending tool-call text: " + ", ".join(missing_matrix_text))
     start_diagram_text = read_text(start_diagram_path)
     for required_text in ("Lightweight Direct Route", "Explicit Workflow Route", "Skill Edit And Push Route", "Code Change Route"):
         if required_text not in start_diagram_text:
@@ -308,7 +379,7 @@ def validate(skill_dir):
 
     return {
         "skill_dir": str(skill_dir),
-        "checked_files": [str(skill_path), str(matrix_path), str(image_generation_path), str(script_path)],
+        "checked_files": [str(skill_path), str(matrix_path), str(image_generation_path), str(script_path), str(agent_yaml_path)],
         "scenario_count": len(SCENARIOS),
         "passed": len([result for result in results if result["status"] == "pass"]),
         "failed": len([result for result in results if result["status"] == "fail"]),

@@ -10,17 +10,24 @@ Use this as the workflow layer for user tasks. It has two modes:
 - **Lightweight routing check** for simple, obvious, low-risk work.
 - **Explicit workflow controller** for concrete Python/C# coding/programming, any prompt-related task, file-changing, multi-step, skill-editing, UI/artifact/report, or evidence-heavy work.
 
-The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, runs the foreground mini real test, returns the user-facing result when that gate passes, and keeps extended checks or closeout out of the user's critical path when they do not affect the delivered result.
+The explicit workflow turns a request into a target map, chooses the relevant executor skill routes, drives execution, runs the foreground mini real test, returns the user-facing result when that gate passes, and moves every non-result-changing tail item to the same comprehensive `Ending Workflow` subagent when subagent tools are available. Final response is not allowed until the `Ending Workflow Tool-Call Gate` below is satisfied.
 
 ## Always-First Rule
 
 `workflow-skill` is the entrypoint and controller for substantive task work. Start with its routing decision before any other user/global skill when executing a task that needs planning, implementation, verification, or evidence. Other skills are executors selected by `workflow-skill`; they should not be treated as independent first-entry controllers for task work.
 
+Make the task-size decision before exploration. First classify the request as one of:
+
+- **Fast-path simple**: direct wording such as "change value(s)", "change A to B", "rename X", "update this label/text/key", "open this", "run this status command", or another bounded low-risk action where the target file/object is obvious.
+- **Explicit workflow**: unclear scope, broad search, behavior change, prompt/code logic change, public API/runtime impact, UI/visual output, generated artifact, security/payment/private data, deployment, merge/loss risk, or user-requested testing/proof.
+
+If the first classification is fast-path simple, do not read project memory, scan unrelated files, run broad searches, start formal verification, or append DailyLog/wiki/Obsidian records before the user-facing result. Do the direct edit/action, run only a tiny local confirmation, answer on the user-facing path, then delegate the separate task-local `Ending Workflow` lane to a focused subagent for extended real tests beyond the mini check, documents, wiki, logs, Markdown, sync/status, or any other update that will not influence the delivered result. This ending delegation is required even for simple tasks; it is not optional closeout, but it must stay task-local and related-information focused. The final chat response must still report the concrete ending-worker tool-call status.
+
 For tiny direct answers, obvious file inspection, state listing, or one-shot command execution, keep the target map implicit and lightweight. Do the requested action directly, then answer with the result. Do not expand into a formal target map, executor route list, report, or code/verify spine unless the request has real risk, ambiguity, side effects, or a verification requirement.
 
 ## Simple Task Fast Path
 
-Use the fast path when the user asks for a simple, obvious, low-risk action and the expected result is directly knowable without broad reading or proof. Execute it directly, then stop.
+Use the fast path when the user asks for a simple, obvious, low-risk action and the expected result is directly knowable without broad reading or proof. Execute it directly, run the smallest reasonable local confirmation in the main task, return the result to the user-facing path, then delegate the same task-local `Ending Workflow` task to a subagent when subagent tools are available.
 
 Fast-path examples include:
 
@@ -35,10 +42,11 @@ For fast-path tasks:
 - show the compact direct-route diagram and one-line model route before the direct action;
 - do not write a formal target map;
 - do not route through `verify-skill`;
-- do not run broad tests, regression sweeps, audits, reports, optimization, or Obsidian recording;
+- do not read project memory, broad instructions, or unrelated files before the direct action unless the target is not identifiable without them;
+- do not run broad tests, regression sweeps, audits, reports, optimization, or Obsidian recording in the main foreground path;
 - do only the minimum local confirmation needed to avoid an obvious mistake, such as re-reading the changed line, checking the opened URL, or confirming the command returned;
 - answer in one or a few lines with what changed or what happened;
-- return the user-facing result immediately after the direct action and minimal confirmation. Do not append DailyLog/wiki/Obsidian memory, broad checks, or reports before answering. If a higher-priority rule still requires memory, defer it until after the user result or skip it when no background route exists.
+- return the user-facing result immediately after the direct action and minimal confirmation. Do not append DailyLog/wiki/Obsidian memory, broad checks, reports, docs, Markdown summaries, or extended real tests in the main foreground path before the result is ready. After the answer path is clear, always delegate the task-local `Ending Workflow` task to a subagent when the subagent tool is callable. The worker may decide no durable file changes are needed, but the worker must be started and the final response must report the tool-call status.
 
 Upgrade out of the fast path when scope is unclear, multiple files or references are not obvious, the edit may affect real project behavior, tests, generated artifacts, UI/visual output, public APIs, auth/security/payment/data handling, deployment, merge safety, or when the user explicitly asks to verify, test, audit, sync, record, or prove the result.
 
@@ -59,21 +67,21 @@ Always show the model route before execution whenever `workflow-skill` handles a
 
 - **Hard model-route gate:** if no user-visible `Workflow with models` numbered list has been shown for an explicit workflow in the current turn, do not edit files, run shell commands, open browser/computer tools, call executor skills, or perform other task side effects. Show the diagram and model list first, then continue. A prose note, hidden reasoning, or table alone does not satisfy this gate. If you realize after starting that the gate was missed, stop immediately, show the missing `Workflow with models` list, name it as a route correction, and then resume.
 - In explicit workflow mode, add a visible `Workflow with models` numbered list to the target map before file edits, shell commands, browser/computer actions, or worker-skill execution. Each step label must include the model in parentheses, for example `1. Inspect current rule (best available workflow model)` or `2. Patch text (gpt-5.3-codex-spark)`. A table may follow, but it cannot replace the numbered step-model list.
-- In lightweight mode, add one short model route after the compact diagram before the direct action. Use `GPT-5.3-Codex-Spark` for direct text/value edits, command/simple-check interpretation, and small local confirmations; use the best available reasoning model only for the tiny route decision or final judgment when needed.
+- In lightweight mode, add one short model route after the compact diagram before the direct action. Use `GPT-5.3-Codex-Spark` for direct text/value edits, command/simple-check interpretation, and small local confirmations; use `GPT-5.5` with light reasoning (`gpt-5.5`, low effort) only as the protected fallback when Spark is unreachable or too limited for that phase; use the best available reasoning model only for the tiny route decision or final judgment when needed.
 - The workflow creation, task decomposition, target-map writing, route selection, ambiguity/risk decisions, and final route judgment phases always use the best available workflow/reasoning model by default.
 - Verification judgment always uses the best available verification/reasoning model by default. Image tasks, visual understanding, comprehensive reading/checking, deep review, merge/loss audits, security/legal/financial/high-stakes review, and final pass/fail judgment also use the best available reasoning model.
 - All actual execution that does not require image/visual reading, comprehensive reading, comprehensive checking, broad repo archaeology, deep debugging, high-stakes review, or final pass/fail judgment is forced to `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`). This includes writing text, drafting or editing prompts/rules/instructions, simple Markdown or config text edits, log/wiki/DailyLog/Obsidian memory edits, command-line work, shell/Git status checks, simple file inspection or summarization, small tests/probes, optimization implementation, and Python/C# implementation or test-code authoring.
 - Shell commands run in local tools. The Spark assignment covers the AI text/reasoning used to choose simple commands, write command-adjacent text, interpret simple command output, and author small probes/tests.
 - Image reading, visual understanding, large or cross-file reading, comprehensive verification/review, merge/loss audits, security/legal/financial/high-stakes review, ambiguous architecture/debugging, and final pass/fail judgment use the best available reasoning/planning model unless a selected tool/executor requires a stricter route.
-- Code verification commands run in local tools, but any AI-authored test/probe code, failure interpretation that changes code, or repair iteration remains on `GPT-5.3-Codex-Spark`.
-- If `GPT-5.3-Codex-Spark` cannot be selected or delegated for a Spark-required phase, do not silently substitute another model. Mark the phase as blocked or ask for explicit fallback approval.
+- Code verification commands run in local tools, but any AI-authored test/probe code, failure interpretation that changes code, or repair iteration remains on `GPT-5.3-Codex-Spark` unless the protected fallback below is triggered.
+- Protected Spark fallback: if `GPT-5.3-Codex-Spark` cannot be reached, selected, or delegated, or if a Spark-required phase hits Spark rate/capacity/access/tool/context/output limits, switch that phase to `GPT-5.5` with light reasoning (`gpt-5.5`, low effort). This is not silent fallback: show `Model switch: Spark -> GPT-5.5 light` in the `Workflow with models` step, name the concrete reason, keep the same execution scope, and switch later Spark-default phases back to Spark when Spark is available. If both Spark and `GPT-5.5` light are unavailable, mark the phase blocked or ask for user direction.
 
 Use this compact shape unless the task needs more detail:
 
 ```text
 Workflow with models
 1. Plan route and pass target (best available workflow model) - workflow creation, risk, scope, and stop condition.
-2. Edit text/prompt/rule/code or run simple commands (gpt-5.3-codex-spark) - all ordinary execution and text/code updates.
+2. Edit text/prompt/rule/code or run simple commands (gpt-5.3-codex-spark; fallback gpt-5.5 light when Spark is unreachable/limited) - all ordinary execution and text/code updates.
 3. Read images or run comprehensive review, if needed (best available reasoning model) - image, visual, large-reading, deep-review, or high-stakes phases only.
 4. Verify result and final judgment (best available verification model) - compare evidence with the user's target.
 ```
@@ -83,9 +91,9 @@ Optional table detail:
 | Phase | Model | Scope |
 |---|---|---|
 | Planning / target map / route | best available workflow model | workflow plan, risk, ambiguity, pass targets |
-| Text / Markdown / prompt / rule / memory drafting | `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`) | ordinary text, instruction, log, wiki, DailyLog, Obsidian, and Markdown work that is not comprehensive reading/checking |
-| Command-line / simple file checks | `GPT-5.3-Codex-Spark` plus local commands | status/list/read/grep/simple test interpretation; commands provide evidence |
-| Code / optimization implementation / tests / probes | `GPT-5.3-Codex-Spark` plus local commands | Python/C# implementation, optimization edits, test/probe authoring, and code-level repair |
+| Text / Markdown / prompt / rule / memory drafting | `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`), protected fallback `GPT-5.5` light (`gpt-5.5`, low effort) | ordinary text, instruction, log, wiki, DailyLog, Obsidian, and Markdown work that is not comprehensive reading/checking |
+| Command-line / simple file checks | `GPT-5.3-Codex-Spark`, protected fallback `GPT-5.5` light, plus local commands | status/list/read/grep/simple test interpretation; commands provide evidence |
+| Code / optimization implementation / tests / probes | `GPT-5.3-Codex-Spark`, protected fallback `GPT-5.5` light, plus local commands | Python/C# implementation, optimization edits, test/probe authoring, and code-level repair |
 | Image or comprehensive review | best available reasoning model plus local evidence | image reading, visual QA, large reading, deep audits, merge/loss checks |
 | Verification / final judgment | best available verification model plus local evidence | compare observed output with pass targets |
 
@@ -150,13 +158,13 @@ Even in lightweight mode, show the small direct-route diagram first. Use judgmen
 
 ## Workflow
 
-For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, run the foreground mini real test against the target, and loop until that foreground gate passes. After the user-facing target and mini test pass, return the result first. Extended real testing, log checks, documentation updates, DailyLog/wiki/Obsidian records, and other closeout that does not influence the delivered code/artifact should run afterward as background or deferred follow-up.
+For explicit workflow mode, run the start diagram and start contract, route the necessary executor skills, execute the work, run the foreground mini real test against the target, and loop until that foreground gate passes. The main task must not skip reasonable checking just because a comprehensive ending subagent exists: it owns the result-producing work plus the smallest meaningful verification needed to know the delivered result is not obviously broken. After the user-facing target and mini test pass, return the result first on the user-facing path. Extended real testing, log checks, documentation updates, DailyLog/wiki/Obsidian records, Markdown updates, and any other closeout that does not influence the delivered code/artifact must run afterward through a bounded `Ending Workflow` subagent when subagent tools are available. The final response still waits for the ending-worker tool-call lifecycle to complete, no-op, reopen the task, or report blocked.
 
 For prompt-related work, the first workflow decision after the start diagram is the Prompt Task Gate. If it matches, keep the prompt purpose workflow visible in the target map and use the prompt pass target even when the prompt lives inside a larger skill, file, or codebase.
 
 For lightweight mode, display only the compact direct-route diagram, make the smallest routing decision needed, perform the direct action, and answer.
 
-If a lightweight or fast-path task starts expanding into broad verification, DailyLog/wiki/Obsidian updates, report writing, optimization, or multi-step closeout after the direct result is known, treat that as a workflow failure. Stop the expansion and return the user result first. Run secondary closeout only afterward when a true background route exists, otherwise defer or skip it.
+If a lightweight or fast-path task starts expanding into broad verification, DailyLog/wiki/Obsidian updates, report writing, optimization, or multi-step closeout before the direct result is returned, treat that as a workflow failure. Stop the expansion and return the user result first. Run secondary closeout only afterward through an `Ending Workflow` subagent.
 
 ## Start Contract
 
@@ -175,10 +183,10 @@ For explicit workflow mode, before doing the work, write a task-specific Mermaid
 2. `Artifacts`: what will exist or change, such as text, Python/C# code, image, UI, PDF, Markdown, skill files, or GitHub state.
 3. `Pass targets`: what observable result proves each artifact is correct.
 4. `Skill route`: the skills needed and the order they must run; the first skill must be `workflow-skill`.
-5. `Workflow with models`: a numbered task-specific list where every step name includes the model in parentheses, such as `1. Plan route (best available workflow model)` and `2. Patch prompt text (gpt-5.3-codex-spark)`. Show Spark for text writing, prompt/rule drafting, command-line or simple checks, code writing/editing, code tests/probes, and log/wiki/Markdown closeout. Show the best available workflow/verification/reasoning model only for workflow creation, image/comprehensive reading/checking, verification judgment, route decisions, and final judgment. Include any blocked model requirement.
+5. `Workflow with models`: a numbered task-specific list where every step name includes the model in parentheses, such as `1. Plan route (best available workflow model)` and `2. Patch prompt text (gpt-5.3-codex-spark; fallback gpt-5.5 light)`. Show Spark for text writing, prompt/rule drafting, command-line or simple checks, code writing/editing, code tests/probes, and log/wiki/Markdown closeout. Show `GPT-5.5` light only when the protected Spark fallback is actually needed, with the reason in that step. Show the best available workflow/verification/reasoning model only for workflow creation, image/comprehensive reading/checking, verification judgment, route decisions, and final judgment. Include any blocked model requirement.
 6. `Foreground result gate`: the exact mini real test or small evidence check that allows the user-facing result to be returned.
-7. `Background follow-up`: extended real tests, log checks, docs, wiki/DailyLog/Obsidian records, or sync/status checks that should continue after the user-facing result when they do not change the delivered result.
-8. `Stop condition`: foreground completion means the result is delivered and the mini real test passed; full closeout means any selected background follow-up also passed or reported a reopened failure.
+7. `Ending Workflow subagent`: the bounded post-result worker that will handle the same task-local ending task for simple and comprehensive workflows: extended real tests beyond the foreground mini check, log checks, docs, wiki/DailyLog/Obsidian records, Markdown updates, sync/status checks, or no-op closeout confirmation after the user-facing result when those items do not change the delivered result.
+8. `Stop condition`: foreground completion means the result is delivered and the mini real test passed; full closeout means the `Ending Workflow` subagent completed, reported no durable closeout needed, or reported a reopened failure.
 
 Make the pass target match the artifact:
 
@@ -206,9 +214,9 @@ workflow-skill -> code-skill -> verify-skill -> goal check
 
 - `code-skill`: executor for writing, editing, refactoring, or reasoning about Python/C# code and helper scripts only.
 - `verify-skill`: executor for the foreground mini real test, optional extended real tests, evidence capture, report generation, and comparing the observed result against the original pass targets, including UI, generated artifacts, skill instructions, or process requirements. Do not accept import-only, signature-only, mock-only, or bare `OK` evidence when a mini real usage check is practical.
-- Model route for this spine: `workflow-skill` planning uses the best available workflow/reasoning model; all Python/C# implementation, test-code/probe authoring, code-level debugging, and code-changing repair loops use `GPT-5.3-Codex-Spark`; local test/build commands provide evidence; foreground mini-test and final pass/fail judgment use the best available verification/reasoning model against that evidence.
+- Model route for this spine: `workflow-skill` planning uses the best available workflow/reasoning model; all Python/C# implementation, test-code/probe authoring, code-level debugging, and code-changing repair loops use `GPT-5.3-Codex-Spark` unless the protected Spark fallback visibly switches that phase to `GPT-5.5` light; local test/build commands provide evidence; foreground mini-test and final pass/fail judgment use the best available verification/reasoning model against that evidence.
 
-For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `verify-skill` when objective evidence or a report is required. For standalone text/prompt/rule writing, log/wiki/Markdown edits, optimization edits, and simple command-line checks, follow the Model Phase Contract: use `GPT-5.3-Codex-Spark` unless the phase requires image reading, comprehensive reading/checking, deep review, or final judgment.
+For non-code artifacts, replace `code-skill` with the relevant production skill or direct artifact work, then still use `verify-skill` when objective evidence or a report is required. For standalone text/prompt/rule writing, log/wiki/Markdown edits, optimization edits, and simple command-line checks, follow the Model Phase Contract: use `GPT-5.3-Codex-Spark` unless the phase requires image reading, comprehensive reading/checking, deep review, or final judgment; use `GPT-5.5` light only through the protected Spark fallback.
 
 For visual or image-generation tasks where the user or project expects ChatGPT-in-Chrome output, or where a generated reference would materially improve the result, use this skill's internal image-generation route before continuing downstream implementation. Read `references/image-generation.md`, classify the image as asset, concept, sketch, reference, or final visual, then use the owning project/browser runner when one exists. If the platform is not macOS, ChatGPT is not logged in, or Chrome/ChatGPT is unavailable, skip only the image-generation step, continue work that does not depend on the missing image, and include the platform/login blocker in the final response.
 
@@ -254,42 +262,63 @@ When any workflow step produces material for the user to read, copy, run, compar
 
 After `verify-skill`, compare the foreground mini-test evidence with the target map.
 
-- If the delivered result is complete and the foreground mini real test passes, return the user-facing result immediately. Say that extended real testing, log checks, documentation, sync/status checks, or memory closeout are background follow-up when those items remain.
-- If a selected background follow-up later fails and the failure can affect the user-facing result, reopen the task, report the failing evidence, fix the issue, and rerun the foreground mini test before returning again.
-- If the Optimization Gate passes, run `optimization-skill` after the foreground result has been returned unless optimization is the user's primary task. Verify the optimized path with a mini real test and treat extended same-behavior checks as background unless the user asked to wait.
+- If the delivered result is complete and the foreground mini real test passes, return the user-facing result immediately on the user-facing path. Say that extended real testing, log checks, documentation, sync/status checks, or memory closeout are `Ending Workflow` subagent scope when those items remain, then satisfy the `Ending Workflow Tool-Call Gate` before final response.
+- If a selected `Ending Workflow` subagent check later fails and the failure can affect the user-facing result, reopen the task, report the failing evidence, fix the issue, and rerun the foreground mini test before returning again.
+- If the Optimization Gate passes, run `optimization-skill` after the foreground result has been returned unless optimization is the user's primary task. Verify the optimized path with a mini real test and treat extended same-behavior checks as `Ending Workflow` subagent scope unless the user asked to wait.
 - If the foreground mini real test or required pass target is not met, continue from the relevant execution step, fix the issue, retest, and verify again before returning.
 - Do not stop because the method was attempted. Stop only because the target is met, the user changes the goal, or a real blocker prevents progress.
 
 For lightweight mode, the stop condition is simply that the direct requested answer, file read, status check, or command output was delivered.
 
-For fast-path simple edits or actions, completion is the direct action plus minimal local confirmation. Do not append daily-log/wiki memory or a verification report for that kind of small task.
+For fast-path simple edits or actions, foreground completion is the direct action plus minimal local confirmation. Do not append daily-log/wiki memory or a verification report before the result is ready. Always delegate records, docs, Markdown/wiki/log updates, extended checks, or no-op closeout confirmation through `Ending Workflow` after the answer path is clear, keep that ending pass task-local and related-information focused, then report the ending-worker tool-call status in the final response.
 
-## Post-Pass Non-Blocking Closeout
+## Ending Workflow
 
-After the user-facing task passes the foreground mini real test, return the result to the user immediately. Say clearly that the task result is done by the foreground gate and that extended real testing, log checks, documentation, sync/status checks, DailyLog/wiki/Obsidian memory, Markdown summaries, optimization notes, and other non-user-facing closeout are background finishing work when they remain.
+`Ending Workflow` is the mandatory post-result lane. It exists so simple tasks stay fast while comprehensive tasks still get proper ending work. The main task spends time only on result-producing work plus a reasonable foreground mini verification; the ending subagent handles every non-result-changing tail item.
 
-- If a background or async route is available, start extended testing and post-pass logging/wiki/Markdown closeout in the background after the mini-test pass result is ready.
-- If no background route is available and the closeout is not required for the user-facing deliverable, defer or skip it instead of blocking the final response.
-- If background extended testing later finds a real failure, resume work, tell the user the background check reopened the task, and continue from the failing evidence.
-- If a higher-priority environment rule requires a minimal memory closeout before final response, keep it brief and do not expand it into a long secondary workflow.
-- All log/wiki/DailyLog/Obsidian/Markdown closeout drafting and file edits are Spark-default execution: use `GPT-5.3-Codex-Spark`, not the newest/current selected reasoning model.
-- Do not run optimization after verification just because verification passed. Run optimization only when the Optimization Gate passes, and treat any optimization closeout the same way: verified result first, secondary records in the background.
+- After a fast-path direct result, lightweight result, or explicit foreground mini real test passes, return the result to the user path immediately, then start a bounded `Ending Workflow` subagent when the subagent tool is callable. This applies no matter whether the task is fast-path simple, lightweight, or explicit workflow.
+- The only allowed ending statuses are `Ending Workflow delegated` and `Ending Workflow blocked: no subagent tool`. Do not use `Ending Workflow deferred`, `Ending Workflow not needed`, or silent skip statuses.
+- `Ending Workflow Related Update Scope`: the ending task is task-local, proportional, and document-related. It should check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages for the current task, update stale or missing related information, and stop when those related updates are done. Do not set fixed time limits in the skill. Do not turn ending into broad testing, whole-repo archaeology, whole-vault scans, or unrelated cleanup.
+- Do not bundle previous tasks into the current `Ending Workflow`. The worker may mention a directly stale prior record only when the current task changes that same contract, but it must not reopen old tasks, re-audit the whole project, or scan the whole vault/repo unless the user explicitly asks for that or the foreground result depends on it.
+- The main agent must call the available subagent/delegation tool for the ending task whenever that tool exists in the current environment. A worker may report that no durable file updates are needed only after completing the `Related Closeout Inventory`; a no-op from the changed file alone is invalid.
+- Give the subagent only the comprehensive ending scope: real tests beyond the foreground mini verification, DailyLog/wiki/Obsidian/log updates, Markdown/docs/report-index updates, sync/status inspection, comprehensive records, or verification that no durable closeout is needed. Any update that will not influence the code/artifact/result must be assigned here instead of done in the main task. For project-specific work, it must update the related project memory page such as `Projects/<Project>/index.md` or the matching local project `.md`, not only DailyLog. It must not change the delivered result unless it finds a real failure and reopens the task.
+- `Related Closeout Inventory`: before updating or reporting no-op, the worker must identify touched or created files, the project or global-skill area, user corrections, public contract/schema/mock API/fixture/output-shape terms, and docs or memory surfaces likely affected. It must inspect only the bounded task-local related sources such as repo `AGENTS.md` or instructions, README/API/mockup/docs/Markdown/report indexes, tests/fixtures/validators, Obsidian DailyLog/wiki/Projects/Skills pages required by current rules, and any project memory page named by higher-priority instructions.
+- No-op is allowed only after the worker reports the checked sources and a per-source reason such as current, not relevant, or no durable lesson. No-op is forbidden for a user correction, repeated failure, global skill change, project contract, schema, mock API, fixture, public output shape, or API/documentation behavior change until related docs/wiki/Obsidian surfaces are inspected and either updated or explicitly proven current. If the worker cannot inspect the related information, it must report blocked or reopen the task, not no-op. Do not report no-op from the changed file alone.
+- Use one same-purpose `Ending Workflow` subagent per user task rather than inventing separate ad hoc workers for docs, tests, logs, wiki, or Markdown. Give that worker the task-specific ending checklist and let it complete or report no-op.
+- If no subagent tool is callable and closeout is required by higher-priority project/global rules, state `Ending Workflow blocked: no subagent tool`, then keep only the minimum required closeout in the main agent and avoid expanding it into broad foreground work.
+- If no subagent tool is callable and closeout would otherwise be optional, state `Ending Workflow blocked: no subagent tool` instead of deferring or silently skipping it.
+- If the `Ending Workflow` subagent later finds a real failure, resume work, tell the user the ending worker reopened the task, and continue from the failing evidence.
+- If a higher-priority environment rule requires a minimal memory closeout before final response, still delegate the ending task to a subagent when callable; use the main agent only for the minimum needed to unblock the response.
+- All log/wiki/DailyLog/Obsidian/Markdown closeout drafting and file edits are Spark-default execution: use `GPT-5.3-Codex-Spark`, not the newest/current selected reasoning model; if Spark is unreachable or too limited, use the protected fallback `GPT-5.5` light and state the switch.
+- Do not run optimization after verification just because verification passed. Run optimization only when the Optimization Gate passes, and treat any optimization closeout the same way: verified result first, mandatory `Ending Workflow` subagent after the result path.
+
+## Ending Workflow Tool-Call Gate
+
+This is a hard pre-final gate. The final response is not allowed until the main agent has either completed the subagent/delegation lifecycle or stated that the subagent tool is not callable.
+
+1. Detect the callable subagent/delegation tool in the current environment. When it exists, call it for one `Ending Workflow` worker with the task-specific closeout checklist. A plan, queue note, intention, or written promise is not delegation.
+2. Record the worker id, name, or tool-return handle immediately as `Ending Workflow delegated: <worker-id-or-name>`.
+3. Wait for the ending worker to complete with changed closeout files, report a no-op inventory summary with checked sources and per-source reasons, report blocked closeout with remaining items, or report a reopened failure. If the tool has a close action for completed workers, close the ending worker before final response.
+4. If the worker reports a real failure that can affect the delivered result, reopen the main task instead of finalizing. Repair and rerun the foreground mini test before a new final response.
+5. If no subagent/delegation tool is callable, state `Ending Workflow blocked: no subagent tool` before doing any required minimum closeout in the main agent.
+6. Every final response after task work must report one visible ending state: `Ending Workflow delegated: <worker-id-or-name> completed`, `Ending Workflow delegated: <worker-id-or-name> no-op`, `Ending Workflow delegated: <worker-id-or-name> blocked`, `Ending Workflow delegated: <worker-id-or-name> reopened task`, or `Ending Workflow blocked: no subagent tool`. A no-op final state must include a concise checked-source inventory summary; a blocked state must include remaining items.
 
 ## Final Response
 
-Keep the final chat short without making it incomplete. State what changed, what passed, where the deliverables are, and any remaining unverified scope. If the evidence is simple, include it directly in chat with the real output values. If a report artifact was generated, do not repeat the full process report in chat; point to the complete report and summarize the key pass/fail result.
+Keep the final chat short without making it incomplete. State what changed, what passed, where the deliverables are, and any remaining unverified scope. Always include the visible `Ending Workflow` state from the `Ending Workflow Tool-Call Gate`; when the state is no-op, include the checked-source inventory summary. If the evidence is simple, include it directly in chat with the real output values. If a report artifact was generated, do not repeat the full process report in chat; point to the complete report and summarize the key pass/fail result.
 
 ## Guardrails
 
 - Do not start a worker skill before `workflow-skill` for task work.
 - Do not over-process simple work. Use only the compact direct-route diagram, and avoid formal target maps, internal route expansion, PDF reports, or verification loops when the request is a direct answer, file read, status check, or one clear command with no meaningful side effects.
-- Do not route simple obvious edits/actions through `verify-skill` or Obsidian recording. If the user asks for "change A to B", "rename X to Y", "open this site", or a similarly bounded low-risk action, execute it directly and stop unless the scope becomes unclear or risk appears.
+- Do not route simple obvious edits/actions through `verify-skill` or Obsidian recording before answering. If the user asks for "change A to B", "rename X to Y", "open this site", or a similarly bounded low-risk action, execute it directly, answer, then delegate `Ending Workflow` to a subagent for records, deeper checks, or no-op closeout confirmation.
 - Do not run every skill branch just because it exists; select every branch that is actually needed for the task.
 - Do not stop before the stated pass targets are met unless there is a real blocker.
-- Do not omit `Workflow with models` in explicit workflow mode. Do not show an explicit diagram/target map without numbered steps that include the model in parentheses. Do not silently substitute another model for `GPT-5.3-Codex-Spark` on ordinary text-writing, command-line/simple-check, Python/C# code-writing, or code-testing phases.
-- If the model route was omitted or a Spark-required execution phase used the active reasoning model without explicit fallback approval, treat it as a routing failure. Correct the route immediately, then redo the affected task step under the displayed model contract.
+- Do not omit `Workflow with models` in explicit workflow mode. Do not show an explicit diagram/target map without numbered steps that include the model in parentheses. Do not silently substitute another model for `GPT-5.3-Codex-Spark` on ordinary text-writing, command-line/simple-check, Python/C# code-writing, or code-testing phases; the only default fallback is the visible protected switch to `GPT-5.5` light when Spark is unreachable or limited.
+- If the model route was omitted or a Spark-required execution phase used the active reasoning model without the protected `GPT-5.5` light fallback being displayed with a reason, treat it as a routing failure. Correct the route immediately, then redo the affected task step under the displayed model contract.
 - Do not replace `verify-skill` evidence with a method-only or status-only claim.
-- Do not block the user's final result on post-pass logging, wiki updates, DailyLog entries, optimization notes, or other non-user-facing closeout after verification has passed. Return the result first; run closeout in the background when possible.
+- Do not block the user's final result on post-pass logging, wiki updates, DailyLog entries, docs, Markdown updates, extended real tests beyond the foreground mini check, optimization notes, or other non-user-facing closeout after verification has passed. Return the result first; then run all of that through one mandatory comprehensive `Ending Workflow` subagent when callable.
+- Do not send a final response with only an intended, planned, queued, or silent ending. Final response requires an actual ending-worker tool call lifecycle, or `Ending Workflow blocked: no subagent tool` when no callable tool exists.
 - Do not run `optimization-skill` for one-off work, vague possibilities, or novelty. Use it only for explicit optimization requests, repeated-at-least-three-times workflows, or high-confidence reusable stable processes.
 - Do not hide incomplete data behind ellipses, placeholder ranges, or token-saving summaries when the user needs the complete output.
 - Do not push to GitHub unless the user request or active workflow requires saved global-skill changes.

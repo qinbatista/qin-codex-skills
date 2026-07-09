@@ -45,9 +45,9 @@ Optimization routes may proceed by using other skills and workflows to do the wo
 
 ## Model And Closeout Rule
 
-Newest/current selected reasoning models are only for deciding whether the optimization gate applies, designing the workflow route, and judging whether verification proves same behavior. All actual optimization implementation is Spark-default execution: code edits, scripts, command-line work, reference updates, prompt/rule text edits, Markdown edits, log/wiki/DailyLog/Obsidian memory updates, and post-pass closeout use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`) unless the phase requires image reading, comprehensive review, or final pass/fail judgment.
+Newest/current selected reasoning models are only for deciding whether the optimization gate applies, designing the workflow route, and judging whether verification proves same behavior. All actual optimization implementation is Spark-default execution: code edits, scripts, command-line work, reference updates, prompt/rule text edits, Markdown edits, log/wiki/DailyLog/Obsidian memory updates, and post-pass closeout use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`) unless the phase requires image reading, comprehensive review, final pass/fail judgment, or `workflow-skill` visibly switches the phase to the protected `GPT-5.5` light fallback (`gpt-5.5`, low effort) because Spark is unreachable or limited.
 
-After the optimized path passes the foreground mini real test, return the user-facing result immediately. Do not keep the user waiting for extended same-behavior checks, secondary records such as DailyLog/wiki/log updates, Obsidian memory pages, Markdown summaries, or optimization notes. Start those in a background/non-blocking route when available; otherwise defer or skip non-required closeout rather than delaying final response. If a background check later fails, reopen the task with the failing evidence. If a higher-priority environment rule requires minimal memory closeout before final, keep it brief.
+After the optimized path passes the foreground mini real test, return the user-facing result immediately to `workflow-skill`. Do not keep the user waiting for extended same-behavior checks, secondary records such as DailyLog/wiki/log updates, Obsidian memory pages, Markdown summaries, or optimization notes. `workflow-skill` owns mandatory `Ending Workflow` subagent delegation for those records. Do not decide that closeout is deferred, skipped, or not needed inside `optimization-skill`; if no subagent tool is callable, report that condition back to `workflow-skill`. If an `Ending Workflow` check later fails, reopen the task with the failing evidence. If a higher-priority environment rule requires minimal memory closeout before final, keep it brief and still return the closeout need to `workflow-skill`.
 
 ## Post-Task Optimization Rule
 
@@ -59,8 +59,8 @@ When a repeated pattern is obvious after task completion:
 2. Summarize the repeated steps as concrete inputs, commands, browser actions, files, outputs, and pass criteria.
 3. Decide what belongs in that owning skill: a shorter instruction, a `references/` note, a deterministic `scripts/` helper, or a reusable `assets/` template.
 4. Add the optimization to the owning skill only after reading its current files and preparing references.
-5. Verify the optimized route with a small real run before returning. Run broader same-behavior comparisons in the background unless the user explicitly asks to wait or the optimization is high-risk.
-6. After the optimized route passes the mini real run, return the result first. Treat extended comparisons, logging, wiki updates, DailyLog entries, and other non-user-facing records as background/secondary work.
+5. Verify the optimized route with a small real run before returning. Return broader same-behavior comparisons to `workflow-skill` as `Ending Workflow` subagent scope unless the user explicitly asks to wait or the optimization is high-risk.
+6. After the optimized route passes the mini real run, return the result first to `workflow-skill`. Treat extended comparisons, logging, wiki updates, DailyLog entries, and other non-user-facing records as `Ending Workflow` subagent scope.
 
 If the user says "optimize this", "next time faster", "make this repeatable", or has repeated the same image/browser/computer/report/verification flow at least three times, include concrete suggestions for proactive optimization of the user's own relevant skill, then implement them when the request authorizes skill changes.
 
@@ -105,9 +105,9 @@ If the references are missing or ambiguous, pause the optimization decision and 
 10. If a workflow needs generated inputs such as images, PDFs, URLs, HTML pages, or sample files, create them in `cache/` during verification instead of committing throwaway generated files into the skill.
 11. Run `python3 scripts/skill_optimizer.py verify "<target-skill-folder>"` after editing a skill folder.
 12. Run the optimized workflow for real with concrete inputs through `verify-skill` as the foreground mini real test. Do not stop at syntax checks, import checks, or parameter checks when a real local execution is practical.
-13. Compare the optimized output to the pre-optimization behavior, baseline, or pass target as background follow-up by default when the comparison is broad or slow. Intentional differences are allowed only when the optimization request explicitly included them. If background comparison fails, reopen the task and repair.
+13. Compare the optimized output to the pre-optimization behavior, baseline, or pass target as `Ending Workflow` subagent scope by default when the comparison is broad or slow. Intentional differences are allowed only when the optimization request explicitly included them. If an ending comparison fails, reopen the task and repair.
 14. If the real execution fails, fix the smallest relevant instruction, reference, script, or asset and rerun until it passes or a concrete blocker remains.
-15. Report what was optimized, what local files were added or changed, what real verification ran, how behavior stayed the same, and what remains unverified. Do not delay this report for post-pass logging/wiki/Markdown closeout.
+15. Report what was optimized, what local files were added or changed, what real verification ran, how behavior stayed the same, and what remains unverified. Do not delay this report for post-pass logging/wiki/Markdown closeout; return that closeout scope to `workflow-skill` for mandatory `Ending Workflow` subagent delegation.
 
 ## Good Optimization Targets
 
@@ -133,7 +133,7 @@ If the references are missing or ambiguous, pause the optimization decision and 
 - Do not shrink prompts so far that required inputs, output contract, safety constraints, or pass criteria become ambiguous.
 - Do not leave a script that cannot run, cannot show `--help`, or depends on undocumented local files.
 - Do not replace real workflow evidence with mocks when a real local test is practical.
-- Do not block the user-facing optimized result on broad same-behavior sweeps, DailyLog, wiki, Obsidian, Markdown, or other secondary post-pass closeout after the optimized route's foreground mini real test has passed.
+- Do not block the user-facing optimized result on broad same-behavior sweeps, DailyLog, wiki, Obsidian, Markdown, or other secondary post-pass closeout after the optimized route's foreground mini real test has passed. Return that scope to `workflow-skill` for mandatory `Ending Workflow` subagent delegation.
 - Do not store generated cache files, screenshots, reports, auth files, tokens, logs, or personal data in reusable skill source.
 - Do not mix sibling packages, clones, caches, or workspaces because paths look similar. Use the authoritative target path.
 - Do not weaken validation just to make an optimization pass.
