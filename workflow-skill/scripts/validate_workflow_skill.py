@@ -85,12 +85,12 @@ REQUIRED_SKILL_TEXT = [
     "Make the task-size decision before exploration",
     "change value(s)",
     "do not read project memory, scan unrelated files, run broad searches",
-    "every non-result-changing tail item",
+    "post-goal validation, verification, tests, documents, sync/status proof, and wiki/log closeout",
     "Simple Task Fast Path",
     "do not route through `verify-skill`",
     "do not read project memory, broad instructions, or unrelated files before the direct action",
-    "smallest reasonable local confirmation",
-    "Always delegate records, docs, Markdown/wiki/log updates, extended checks, or no-op closeout confirmation through `Ending Workflow` after the answer path is clear",
+    "smallest action-done confirmation",
+    "Always delegate records, docs, Markdown/wiki/log updates, tests, verification, extended checks, or no-op closeout confirmation through `Ending Workflow` after the answer path is clear",
     "keep that ending pass task-local and related-information focused",
     "show the compact direct-route diagram and one-line model route before the direct action",
     "return the user-facing result immediately after the direct action and minimal confirmation",
@@ -115,29 +115,38 @@ REQUIRED_SKILL_TEXT = [
     "No-op is forbidden for a user correction, repeated failure, global skill change, project contract, schema, mock API, fixture, public output shape, or API/documentation behavior change",
     "If the worker cannot inspect the related information",
     "Do not report no-op from the changed file alone",
-    "Final response is not allowed until",
+    "Final response is allowed after the required background ending workers are dispatched",
     "hard pre-final gate",
     "A plan, queue note, intention, or written promise is not delegation",
-    "Record the worker id, name, or tool-return handle immediately",
-    "Wait for the ending worker to complete with changed closeout files",
+    "Record every worker id, name, or tool-return handle immediately",
+    "Do not wait for every ending worker to complete before final response",
     "report blocked closeout with remaining items",
     "checked sources and per-source reasons",
-    "close the ending worker before final response",
-    "Every final response after task work must report one visible ending state",
+    "Let ending workers run in the background",
+    "Every final response after task work must report visible background ending dispatch states for each worker",
     "Ending Workflow delegated: <worker-id-or-name> blocked",
     "A no-op final state must include a concise checked-source inventory summary",
     "a blocked state must include remaining items",
     "Do not send a final response with only an intended, planned, queued, or silent ending",
     "This applies no matter whether the task is fast-path simple, lightweight, or explicit workflow",
+    "Main Goal Done Gate",
+    "Ending Workflow Fan-Out",
+    "Parallel Ending Workflow Dispatch",
     "same task-local `Ending Workflow` task",
-    "real tests beyond the foreground mini verification",
-    "Any update that will not influence the code/artifact/result must be assigned here instead of done in the main task",
-    "The main task must not skip reasonable checking just because a comprehensive ending subagent exists",
+    "post-goal validation, verification, local mini tests, real tests, docs, wiki, Obsidian, reports, or sync/status proof",
+    "Use multiple purpose-specific Ending Workflow subagents when the task has distinct closeout purposes",
+    "spawn independent ending workers in parallel before returning",
+    "The user does not wait for every ending worker to finish unless they explicitly ask to wait",
+    "Sequential one-by-one ending delegation is a workflow failure",
+    "local mini test",
+    "post-goal remote status/hash proof",
+    "Any task after the major goal is done must be assigned here instead of done in the main task",
+    "the main agent must not run post-goal validation",
     "For project-specific work, it must update the related project memory page",
     "Projects/<Project>/index.md",
-    "After a fast-path direct result, lightweight result, or explicit foreground mini real test passes",
-    "Foreground result gate",
-    "Ending Workflow subagent",
+    "When the main goal is done",
+    "Main Goal Done Gate",
+    "Ending Workflow Fan-Out",
     "If the `Ending Workflow` subagent later finds a real failure",
     "log/wiki/DailyLog/Obsidian/Markdown closeout drafting and file edits are Spark-default execution",
     "Workflow with models",
@@ -170,7 +179,7 @@ REQUIRED_SKILL_TEXT = [
     "workflow-skill -> code-skill -> verify-skill -> goal check",
     "Optimization Gate",
     "repeated at least three times",
-    "If the foreground mini real test or required pass target is not met",
+    "If an `Ending Workflow` local mini test, real test, or verification result fails",
     "If a lightweight or fast-path task starts expanding into broad verification",
     "If the model route was omitted or a Spark-required execution phase used the active reasoning model",
     "Do not stop because the method was attempted",
@@ -181,13 +190,13 @@ REQUIRED_SKILL_TEXT = [
 ]
 
 
-REQUIRED_AGENT_TEXT = ["Ending Workflow Tool-Call Gate", "actually call one focused task-local Ending Workflow subagent", "record Ending Workflow delegated: <worker-id-or-name>", "wait for completion/no-op/blocked/reopened failure", "A plan, queue note, intention, or written promise is not delegation", "Ending Workflow blocked: no subagent tool", "Ending Workflow Related Update Scope is task-local, proportional, and document-related", "check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages", "update stale or missing related information", "Do not set fixed time limits in the skill", "Do not bundle previous tasks", "scan the whole repo", "scan the whole vault", "Related Closeout Inventory", "inspect related docs/wiki/Obsidian/Markdown/log sources", "no-op only with checked sources plus per-source reasons", "report blocked with checked sources and remaining items"]
+REQUIRED_AGENT_TEXT = ["Ending Workflow Tool-Call Gate", "actually call one or more", "purpose-specific task-local Ending Workflow subagents", "record Ending Workflow delegated: <worker-id-or-name>", "Do not wait for every ending worker to complete before final response", "A plan, queue note, intention, or written promise is not delegation", "Ending Workflow blocked: no subagent tool", "Ending Workflow handles every post-goal item", "local mini test", "local real testing", "validation/verification", "post-goal remote", "Ending Workflow Fan-Out uses multiple purpose-specific Ending Workflow subagents", "Parallel Ending Workflow Dispatch", "spawn all independent Ending Workflow subagents in parallel before the final response", "Sequential one-by-one ending delegation is a workflow failure", "The user should not wait for all background subagents to finish", "Ending Workflow Related Update Scope is task-local, proportional, and document-related", "check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages", "update stale or missing related information", "Do not set fixed time limits in the skill", "Do not bundle previous tasks", "scan the whole repo", "scan the whole vault", "Related Closeout Inventory", "inspect related docs/wiki/Obsidian/Markdown/log sources", "no-op only with checked sources plus per-source reasons", "report blocked with checked sources and remaining items"]
 
 
-REQUIRED_MATRIX_TEXT = ["Ending Workflow Tool-Call Gate", "actual evidence", "worker id/name", "waited completion/no-op/reopened status", "A plan, queue note, intention, or written promise is not delegation", "Ending Workflow Related Update Scope is proportional and document-related", "check relevant log/history and directly related docs/wiki/Obsidian/Markdown pages", "update stale or missing related information", "Do not set fixed time limits in the skill", "Do not bundle previous tasks", "scan the whole repo", "scan the whole vault", "Related Closeout Inventory", "checked sources with per-source reasons"]
+REQUIRED_MATRIX_TEXT = ["Ending Workflow Tool-Call Gate", "dispatch evidence", "worker id/name", "purpose", "running status", "A plan, queue note, intention, or written promise is not delegation", "Main Goal Done Gate", "local mini tests", "validation/verification", "post-goal remote status/hash proof", "Ending Workflow Fan-Out", "purpose-specific Ending Workflow subagents", "Parallel Ending Workflow Dispatch", "parallel before the final response", "The user should not wait for all background subagents to finish", "Ending Workflow Related Update Scope is proportional and document-related", "check relevant log/history and directly related docs/wiki/Obsidian/Markdown pages", "update stale or missing related information", "Do not set fixed time limits in the skill", "Do not bundle previous tasks", "scan the whole repo", "scan the whole vault", "Related Closeout Inventory", "checked sources with per-source reasons"]
 
 
-FORBIDDEN_SKILL_TEXT = ["Then decide and state the ending status: `Ending Workflow queued`, `Ending Workflow deferred`, or `Ending Workflow not needed`.", "If no background route is available and closeout is optional, defer it and say it was deferred instead of silently skipping it.", "state Ending Workflow queued, deferred, or not needed", "are background follow-up when those items remain", "treat extended same-behavior checks as background unless", "A worker may inspect the closeout scope and report that no durable file updates are needed, but the worker must still be started", "scan the whole repo/vault by default", "Fast-path/simple tasks get a 60-120 second ending budget", "Explicit/comprehensive tasks normally get a 3-5 minute ending budget", "wait only within the `Ending Workflow Budget`"]
+FORBIDDEN_SKILL_TEXT = ["Then decide and state the ending status: `Ending Workflow queued`, `Ending Workflow deferred`, or `Ending Workflow not needed`.", "If no background route is available and closeout is optional, defer it and say it was deferred instead of silently skipping it.", "state Ending Workflow queued, deferred, or not needed", "treat extended same-behavior checks as background unless", "A worker may inspect the closeout scope and report that no durable file updates are needed, but the worker must still be started", "scan the whole repo/vault by default", "Fast-path/simple tasks get a 60-120 second ending budget", "Explicit/comprehensive tasks normally get a 3-5 minute ending budget", "wait only within the `Ending Workflow Budget`", "keep the foreground mini verification in the main path", "real tests beyond that mini check", "real tests beyond the foreground mini verification", "The main task must not skip reasonable checking just because a comprehensive ending subagent exists", "waited completion/no-op/reopened status", "Wait for every ending worker to complete"]
 
 
 TRACE_SCENARIOS = [

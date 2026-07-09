@@ -23,11 +23,14 @@ interface:
     visible fallback: Model switch: Spark -> GPT-5.5 light (gpt-5.5, low
     effort), with the concrete reason in the step, then switch later
     Spark-default phases back to Spark when available. Do not silently
-    substitute another model. After the direct fast-path result, lightweight
-    result, or explicit foreground mini real test passes, return the
-    user-facing result on the user-facing path, then actually call one focused task-local Ending Workflow subagent when callable. Record the worker handle and record Ending Workflow delegated: <worker-id-or-name>, wait for completion/no-op/blocked/reopened failure, close the completed worker when the tool supports closing, and include the completed/no-op/blocked/reopened state in the final response. A plan, queue note, intention, or written promise is not delegation. If no subagent
-    tool is callable, state Ending Workflow blocked: no subagent tool. Ending
-    Workflow handles every non-result-changing tail item: real tests beyond the
-    foreground mini check, DailyLog/wiki/Obsidian/log updates, Markdown/docs or
-    report-index updates, sync/status inspection, comprehensive records, or
-    no-op closeout confirmation. Ending Workflow Related Update Scope is task-local, proportional, and document-related: check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages for the current task, update stale or missing related information, and stop when those related updates are done. Do not set fixed time limits in the skill. Do not bundle previous tasks, reopen old work, scan the whole repo, or scan the whole vault unless the user asked or the foreground result depends on it. It must run a Related Closeout Inventory, inspect related docs/wiki/Obsidian/Markdown/log sources, and allow no-op only with checked sources plus per-source reasons. If required related sources cannot be inspected, report blocked with checked sources and remaining items.
+    substitute another model. After the direct fast-path result, lightweight result, or explicit Main Goal Done Gate passes, return the user-facing result on the user-facing path, then actually call one or more purpose-specific task-local Ending Workflow subagents when callable.
+    Record every worker handle and record Ending Workflow delegated: <worker-id-or-name> with its purpose. Do not wait for every ending worker to complete before final response; report each background worker as running unless it already completed.
+    A plan, queue note, intention, or written promise is not delegation.
+    If no subagent tool is callable, state Ending Workflow blocked: no subagent tool.
+    Ending Workflow handles every post-goal item: local mini test, local real testing, validation/verification, DailyLog/wiki/Obsidian/log updates, Markdown/docs or report-index updates, sync/status inspection, post-goal remote status/hash proof, comprehensive records, or no-op closeout confirmation.
+    Ending Workflow Fan-Out uses multiple purpose-specific Ending Workflow subagents when the task has distinct closeout purposes.
+    Parallel Ending Workflow Dispatch: when two or more ending purposes are independent, spawn all independent Ending Workflow subagents in parallel before the final response. Sequential one-by-one ending delegation is a workflow failure when the tasks could run independently. The user should not wait for all background subagents to finish unless they explicitly asked to wait.
+    Ending Workflow Related Update Scope is task-local, proportional, and document-related: check the relevant log/history and directly related docs/wiki/Obsidian/Markdown pages for the current task, update stale or missing related information, and stop when those related updates are done.
+    Do not set fixed time limits in the skill. Do not bundle previous tasks, reopen old work, scan the whole repo, or scan the whole vault unless the user asked or the delivered result depends on it.
+    It must run a Related Closeout Inventory, inspect related docs/wiki/Obsidian/Markdown/log sources, and allow no-op only with checked sources plus per-source reasons.
+    If required related sources cannot be inspected, report blocked with checked sources and remaining items.
