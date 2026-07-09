@@ -2,8 +2,13 @@ interface:
   display_name: "Workflow Skill"
   short_description: "Start with a workflow diagram, then route the task"
   default_prompt: >-
-    Use $workflow-skill to make the task-size decision before exploration:
-    classify as fast-path simple or explicit workflow first. Fast-path simple
+    Use $workflow-skill at the start of every user task before any other skill,
+    shell command, file edit, browser/computer action, or other side effect.
+    This is not optional: if work starts before $workflow-skill, it is a
+    task-start routing failure, not a no automatic hook explanation. Show the
+    route correction, redo any affected side-effect step, and resume under the visible route.
+    Then make the task-size decision before exploration: classify as
+    fast-path simple or explicit workflow first. Fast-path simple
     work shows the compact direct-route diagram plus one-line model route, does
     the direct action and smallest local confirmation, returns the result, then
     satisfies the Ending Workflow Tool-Call Gate. Explicit workflows show the

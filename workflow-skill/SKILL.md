@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Global workflow controller. Use when task work needs routing, planning, file changes, prompt/instruction updates, Python/C# work, UI/image/document/report artifacts, skill edits, verification, optimization, or management sync. Shows the required diagram and model route, fast-paths simple low-risk actions, selects executor skills, and verifies completion."
+description: "Global workflow controller. Use at the start of every user task for routing, including simple direct answers, one-shot commands, file reads, file changes, prompt/instruction updates, skill edits, verification, optimization, or management sync. Shows the required diagram/model route, fast-paths simple low-risk actions, selects executor skills, and verifies completion."
 ---
 
 # Workflow Skill
@@ -15,6 +15,8 @@ The explicit workflow turns a request into a target map, chooses the relevant ex
 ## Always-First Rule
 
 `workflow-skill` is the entrypoint and controller for substantive task work. Start with its routing decision before any other user/global skill when executing a task that needs planning, implementation, verification, or evidence. Other skills are executors selected by `workflow-skill`; they should not be treated as independent first-entry controllers for task work.
+
+Every user task must start with this skill's route check, including simple direct answers, one-shot commands, file reads, status checks, file changes, and global-skill work. This is a main-agent execution contract, not optional behavior. Do not explain a miss as "no automatic hook" or as a system limitation; if work starts before `workflow-skill`, treat it as a task-start routing failure, stop, show the route correction, and redo any affected side-effect step under the visible route.
 
 Make the task-size decision before exploration. First classify the request as one of:
 
@@ -129,7 +131,7 @@ Use `scripts/validate_workflow_skill.py` only to validate this skill's routing c
 
 ## Trigger
 
-Use this skill as the starting routing decision for user task requests before invoking any other user/global skill.
+Use this skill as the starting routing decision for every user task request before invoking any other user/global skill.
 
 Write the explicit target map only when the task is worth that overhead:
 

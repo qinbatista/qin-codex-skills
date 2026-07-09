@@ -1,6 +1,6 @@
 # Workflow Routing Matrix
 
-Use this matrix from `workflow-skill` before any worker skill starts. First show the user-facing start diagram required by `SKILL.md`; then use the matching route row. Every row begins with `workflow-skill`; the remaining skills are executors selected by it. These rows are multi-select routes: combine them when the task spans several artifact types, but do not run unrelated rows as a checklist.
+Use this matrix from `workflow-skill` before any worker skill starts. Every user task must begin with `workflow-skill` route selection, including direct answers, one-shot commands, file reads, and simple edits. First show the user-facing start diagram required by `SKILL.md`; then use the matching route row. Every row begins with `workflow-skill`; the remaining skills are executors selected by it. These rows are multi-select routes: combine them when the task spans several artifact types, but do not run unrelated rows as a checklist.
 
 ## Prompt Task Gate
 
@@ -28,6 +28,7 @@ Prompt route takes precedence over generic text work. If the prompt is embedded 
 ## Goal Check Rules
 
 - Every route starts with `workflow-skill`; all later skills are executors.
+- Task-start misses are routing failures, not acceptable "no automatic hook" explanations. If work starts before `workflow-skill`, stop, show the route correction, and redo any affected side-effect step under the visible route.
 - Every workflow-skill task starts with a user-facing start diagram: compact direct-route diagram for lightweight work, or task-specific Mermaid diagram plus target map for explicit work.
 - A subagent/delegation tool is callable only when it is both exposed in the current environment and allowed by higher-priority system, developer, and tool instructions. If a tool exists but higher-priority policy forbids spawning without an explicit user request for subagents, delegation, or parallel agent work, use `Ending Workflow blocked: no subagent tool` with the policy reason.
 - For simple obvious low-risk actions, use `fast-path-simple`: execute directly with minimal local confirmation, then delegate the same task-local `Ending Workflow` task to subagent(s) without running `verify-skill`, reports, optimization, Obsidian recording, docs, Markdown updates, local mini tests, real tests, validation, verification, or extended real tests in the main path.
