@@ -795,16 +795,16 @@ def push(repository, skills_dir, message, dry_run):
     with tempfile.TemporaryDirectory(prefix="qin-codex-skills-") as sandbox_name:
         repository_dir = clone_repository(repository, Path(sandbox_name))
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
-        status_text = run_command(["git", "status", "--short"], cwd=repository_dir).stdout.strip()
+        run_command(["git", "add", "-A"], cwd=repository_dir)
+        staged_text = run_command(["git", "diff", "--cached", "--name-status"], cwd=repository_dir).stdout.strip()
         if dry_run:
             print_lines("Local skills selected for mirror:", copied_names)
-            print(status_text or "No local-to-remote differences.")
+            print(staged_text or "No local-to-remote differences.")
             return
-        if not status_text:
+        if not staged_text:
             write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
             print("No global skill changes to push.")
             return
-        run_command(["git", "add", "-A"], cwd=repository_dir)
         branch_name = run_command(["git", "branch", "--show-current"], cwd=repository_dir).stdout.strip() or "main"
         run_command(["git", "checkout", "-B", branch_name], cwd=repository_dir)
         run_command(["git", "commit", "-m", message], cwd=repository_dir)
