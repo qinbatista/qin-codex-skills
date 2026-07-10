@@ -161,6 +161,36 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("has no fallback reason" in failure for failure in failures))
 
+    def test_qualified_plugin_result_node_resolves_and_uses_its_skill_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            synthetic_skills_root = root / "skills"
+            plugin_skill = root / "plugins" / "cache" / "openai-curated-remote" / "build-web-apps" / "1.0.0" / "skills" / "frontend-app-builder" / "SKILL.md"
+            plugin_skill.parent.mkdir(parents=True)
+            plugin_skill.write_text("frontend-app-builder\n", encoding="utf-8")
+            for skill_name in ("workflow-skill", "verify-skill"):
+                skill_path = synthetic_skills_root / skill_name / "SKILL.md"
+                skill_path.parent.mkdir(parents=True, exist_ok=True)
+                skill_path.write_text(f"{skill_name}\n", encoding="utf-8")
+            plan = self.plan(root / "work" / "cache" / "route")
+            node = plan["nodes"][0]
+            node["skill"] = "build-web-apps:frontend-app-builder"
+            node["purpose"] = "implement"
+            node["execution_domain"] = "general"
+            node["routing_condition"]["owning_skill"] = "build-web-apps:frontend-app-builder"
+            with patch.object(module, "validate_execution_domain_registry"):
+                self.assertEqual(module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root), [])
+            (root / "work" / "cache" / "route").mkdir(parents=True)
+            captured = []
+            def fake_run_receipt(_args, prompt):
+                captured.append(prompt)
+                Path(_args.result_output).write_text("RESULT=plugin\n", encoding="utf-8")
+                return {"status": "pass", "failure_class": None, "requested_model": _args.model, "requested_effort": _args.effort, "requested_pair": f"{_args.model}|{_args.effort}", "resolved_model": _args.model, "resolved_effort": _args.effort, "effective_model": _args.model, "effective_pair": f"{_args.model}|{_args.effort}", "turn_completed": True, "route_attempts": [{"requested_pair": f"{_args.model}|{_args.effort}", "resolved_pair": f"{_args.model}|{_args.effort}", "effective_pair": f"{_args.model}|{_args.effort}", "executed_pair": f"{_args.model}|{_args.effort}", "status": "pass", "model_match": True, "effort_match": True, "pair_match": True}]}
+            with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
+                record = module.run_node(node, root / "work" / "cache" / "route", {}, root / "state.sqlite", root, skills_root=synthetic_skills_root)
+            self.assertEqual(record["status"], "pass")
+            self.assertIn("skills/frontend-app-builder/SKILL.md", captured[0])
+
     def test_run_plan_executes_result_then_mini_sequentially(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -9,9 +9,9 @@ Finish the requested task, run the smallest meaningful Mini Verify, and show the
 Task Analyze remains the 100 percent entry skill, but an obvious reversible tool action with no graph runs its installed tool skill directly after the concise route. It uses no cached plan, model child, or internal dispatcher, and tool-only work gets no fabricated downstream model receipt. Mini Verify checks only the observable stop condition. Graduated scenarios:
 
 - Open Chrome: `chrome:control-chrome`, no dispatcher; verify Chrome is open.
-- Open YouTube: direct browser action, no dispatcher; verify `youtube.com` is loaded.
-- Search CCTV on YouTube: bounded browser interaction, no dispatcher; verify the query and visible results.
-- Design a YouTube-like website: complex dispatcher route through `frontend-app-builder`, grounded implementation, Mini render/core interaction, then Ending responsive/console/navigation/accessibility/visual review.
+- Open Chrome and open YouTube: `chrome:control-chrome`, no dispatcher; verify `youtube.com` is loaded.
+- Open Chrome, open YouTube, and search CCTV: `chrome:control-chrome`, no dispatcher; verify the CCTV query and visible results.
+- Design a website like YouTube: complex dispatcher route through `build-web-apps:frontend-app-builder`: `gpt-5.6-sol|high` design, `gpt-5.6-terra|high` implementation, `gpt-5.6-terra|medium` Mini, `gpt-5.6-luna|low` result/Ending coordination, and `gpt-5.6-terra|high` Ending Real review. Model nodes are receipt-backed and the producer is adaptively recorded; Ending checks responsive, console, navigation, accessibility, and visual behavior.
 
 ## Extension Guide
 
@@ -75,6 +75,8 @@ Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher e
 
 ## Plan-Lock Invariants
 
+The graduated complex fixture is a portable template: materialization injects only the active cache directory and observed entry model|effort, then the real dispatcher validator runs it for every supported entry pair. Downstream node pairs, dependencies, roles, adaptive producer, Ending checks, and controller transitions remain fixture-controlled; direct fixtures retain their exact no-dispatch key set.
+
 - Task Analyze is the individual first node and uses only the selected entry pair.
 - Bounded preflight resolves that pair with `resolve_entry_model.py`; no fixed entry model is implied.
 - The entry pair is never inherited by downstream nodes.
@@ -84,7 +86,7 @@ Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher e
 - Mini Verify is downstream of all requested result work and upstream of Main Result.
 - Main Result is upstream of Ending Task.
 - Ending Real Verify, optimization verification, reports, logs, docs, and memory do not gate the first result.
-- Record the main result-producer receipt after Mini and update that same attempt after Real. This applies to dispatcher and direct non-dispatch routes; verifier models are never recorded as result producers.
+- Record the main result-producer receipt after Mini and update that same attempt after Real. This applies to dispatcher and direct non-dispatch model routes; tool-only routes never record adaptive producer samples, and verifier models are never recorded as result producers.
 - A later correctness failure notifies and reopens.
 - No lifecycle hook or chat-visible machine plan is required.
 - Ending wave scheduling requires dependency-ready batches with a three-node concurrency cap.
@@ -92,3 +94,4 @@ Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher e
 - A targeted optimization verifier must depend directly on Mini Verify and on its target node; only this verifier may depend on another Ending node.
 - Targeted optimizer verifiers must carry explicit `verifies_node`, use a distinct sanitized worker identity from target, and fail when identities are missing or equal.
 - Worker identity is `SHA-256(thread_id)`; raw thread IDs are never stored in dispatch manifests.
+- Direct-action timings use external wall-clock-to-stop evidence. Complex timing/token claims require passing runtime receipts, and savings claims require like-for-like repeated baselines.

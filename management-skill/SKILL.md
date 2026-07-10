@@ -18,7 +18,7 @@ Select only what the locked plan requires:
 
 ## Personal Routing Performance
 
-Task Analyze owns selection and storage. Management records the original result-producer attempt after receipt-backed Mini and updates that same attempt after Real Verify; direct non-dispatch routes invoke the same recorder.
+Task Analyze owns selection and storage. Management records the original result-producer attempt after receipt-backed Mini and updates that same attempt after Real Verify; direct non-dispatch model routes invoke the same recorder, while tool-only routes never record adaptive producer samples.
 
 - Store only the generated local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger; never mirror it.
 - Record controlled task-profile enums, a generalized privacy-filtered task summary, requested/resolved/effective producer model and effort, Mini/Real status, explicit success/failed model ranges, failure class, tokens, and timing only.

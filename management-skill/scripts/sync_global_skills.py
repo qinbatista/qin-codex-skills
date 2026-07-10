@@ -4,6 +4,7 @@ import fnmatch
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -161,6 +162,46 @@ def ignored_names(directory, names):
     return {name for name in names if name in EXCLUDED_PARTS or name.endswith(EXCLUDED_SUFFIXES)}
 
 
+def symlink_issues(paths):
+    issues = []
+    for root in paths:
+        _, root_issues = _scan_tree(Path(root))
+        issues.extend(root_issues)
+    return sorted(issues, key=lambda path: path.as_posix())
+
+
+def _scan_tree(root):
+    files = []
+    issues = []
+    if root.is_symlink():
+        return files, [root]
+    if not root.exists():
+        return files, issues
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                path = directory / entry.name
+                if entry.is_symlink():
+                    issues.append(path)
+                    continue
+                relative_path = path.relative_to(root)
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+                elif not any(part in EXCLUDED_PARTS for part in relative_path.parts) and not path.name.endswith(EXCLUDED_SUFFIXES) and entry.is_file(follow_symlinks=False):
+                    files.append(path)
+    return files, issues
+
+
+def assert_no_symlinks(paths, label="skill source tree"):
+    issues = symlink_issues(paths)
+    if issues:
+        message = f"Refusing {label} containing symlinks:\n"
+        message += "\n".join(f"- {path}" for path in issues)
+        raise RuntimeError(message)
+
+
 def all_skill_directories(skills_dir):
     return sorted([path for path in skills_dir.iterdir() if path.is_dir() and not path.name.startswith(".") and (path / "SKILL.md").exists()], key=lambda path: path.name)
 
@@ -170,15 +211,12 @@ def skill_directories(skills_dir):
 
 
 def included_files(skill_dir):
-    files = []
-    for path in skill_dir.rglob("*"):
-        if not path.is_file():
-            continue
-        if any(part in EXCLUDED_PARTS for part in path.relative_to(skill_dir).parts):
-            continue
-        if path.name.endswith(EXCLUDED_SUFFIXES):
-            continue
-        files.append(path)
+    skill_dir = Path(skill_dir)
+    files, issues = _scan_tree(skill_dir)
+    if issues:
+        message = f"Refusing skill tree containing symlinks:\n"
+        message += "\n".join(f"- {path}" for path in sorted(issues, key=lambda path: path.as_posix()))
+        raise RuntimeError(message)
     return sorted(files, key=lambda path: path.relative_to(skill_dir).as_posix())
 
 
@@ -202,12 +240,17 @@ def secret_value_issue(path):
 def public_safety_issues(skill_paths):
     issues = []
     for skill_path in skill_paths:
-        for path in skill_path.rglob("*"):
-            if not path.is_file():
-                continue
+        files, symlink_paths = _scan_tree(skill_path)
+        for symlink_path in symlink_paths:
+            try:
+                relative_path = symlink_path.relative_to(skill_path)
+            except ValueError:
+                relative_path = Path(symlink_path.name)
+            issues.append(f"{skill_path.name}/{relative_path.as_posix()}: symlink")
+        if symlink_paths:
+            continue
+        for path in sorted(files, key=lambda path: path.relative_to(skill_path).as_posix()):
             relative_path = path.relative_to(skill_path)
-            if any(part in EXCLUDED_PARTS for part in relative_path.parts) or path.name.endswith(EXCLUDED_SUFFIXES):
-                continue
             mirror_path = f"{skill_path.name}/{relative_path.as_posix()}"
             if sensitive_name(relative_path):
                 issues.append(f"{mirror_path}: sensitive filename")
@@ -579,8 +622,12 @@ def build_overview(skill_paths, language="en"):
 
 
 def copy_skill_directory(source_dir, target_dir, preserve_local=False):
+    assert_no_symlinks([source_dir], "source skill tree")
+    if target_dir.exists() or target_dir.is_symlink():
+        assert_no_symlinks([target_dir], "target skill tree")
     local_source = target_dir / "local"
     if preserve_local and local_source.exists():
+        assert_no_symlinks([local_source], "preserved local content")
         with tempfile.TemporaryDirectory(prefix="qin-codex-private-local-") as sandbox_name:
             preserved_local = Path(sandbox_name) / "local"
             shutil.copytree(local_source, preserved_local)
@@ -610,12 +657,14 @@ def print_lines(title, lines):
 
 
 def mirror_repository_to_local(repository_dir, skills_dir):
+    assert_no_symlinks([repository_dir], "repository tree")
     assert_repository_skill_set(repository_dir)
     remote_paths = skill_directories(repository_dir)
     remote_names = {path.name for path in remote_paths}
     changed_names = []
     for path in skill_directories(skills_dir):
         if path.name not in remote_names:
+            assert_no_symlinks([path], "local skill tree")
             shutil.rmtree(path)
             changed_names.append(path.name)
     for path in remote_paths:
@@ -653,8 +702,10 @@ def pull(repository, skills_dir):
 
 
 def prepare_repository_snapshot(repository_dir, skills_dir):
+    assert_no_symlinks([repository_dir], "repository tree")
     skill_paths = skill_directories(skills_dir)
     assert_approved_global_skill_set(skill_paths)
+    assert_no_symlinks(skill_paths, "approved source skill trees")
     load_staged_routing_policy(skill_paths)
     assert_public_safe(skill_paths)
     for path in repository_dir.iterdir():

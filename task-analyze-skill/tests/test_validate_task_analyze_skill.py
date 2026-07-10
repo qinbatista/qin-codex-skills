@@ -80,7 +80,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         with self._with_rust_domain() as synthetic_skills_root:
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
         self.assertEqual(failures, [])
-    def make_skill_copy(self):
+    def make_validation_inputs(self):
         source = Path(__file__).resolve().parents[1]
         temp_dir = Path(tempfile.mkdtemp(prefix="task-analyze-validate-"))
         for relative in module.REQUIRED_FILES:
@@ -88,14 +88,28 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text((source / relative).read_text(encoding="utf-8"), encoding="utf-8")
         models_cache = temp_dir / "models_cache.json"
-        models_cache.write_text((Path.home() / ".codex" / "models_cache.json").read_text(encoding="utf-8"), encoding="utf-8")
-        return temp_dir, models_cache
+        models_cache.write_text(json.dumps({"models": []}) + "\n", encoding="utf-8")
+        global_agents = temp_dir / "AGENTS.md"
+        global_agents.write_text("\n".join(["Global Codex Task Entry Rule", "100% task-start contract", "hookless", "exact visible shape", "LOCKED_ROUTE_NODE", "task_route_dispatcher.py run-plan", "same task through `workflow-skill`", "adaptive-routing"]) + "\n", encoding="utf-8")
+        global_skills = temp_dir / "skills"
+        for skill_name in APPROVED:
+            skill_dir = global_skills / skill_name
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(f"{skill_name}\n", encoding="utf-8")
+        for relative in ("task-analyze-skill/references/model-selection.md", "code-skill/references/python-rules.md", "code-skill/references/csharp-rules.md", "code-skill/references/unity-csharp-rules.md", "code-skill/references/spark-small-code.md"):
+            reference = global_skills / relative
+            reference.parent.mkdir(parents=True, exist_ok=True)
+            reference.write_text(f"reference: {relative}\n", encoding="utf-8")
+        for plugin_id, skill_name in (("chrome", "control-chrome"), ("build-web-apps", "frontend-app-builder")):
+            plugin_skill = temp_dir / "plugins" / "cache" / "openai-curated-remote" / plugin_id / "1.0.0" / "skills" / skill_name
+            plugin_skill.mkdir(parents=True)
+            (plugin_skill / "SKILL.md").write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")
+        return temp_dir, models_cache, global_agents, global_skills
 
     def test_current_contract_passes(self):
-        temp_dir, models_cache = self.make_skill_copy()
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
-            with patch.object(module, "installed_skills", return_value=APPROVED):
-                result = module.validate(temp_dir, models_cache)
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertTrue(result["valid"], result["failures"])
             self.assertEqual(sum(plan["status"] == "pass" for plan in result["plans"]), len(module.sample_plans()))
             self.assertEqual(len(module.sample_plans()), sum(len(efforts) for efforts in module.MODEL_EFFORTS.values()) * 2)
@@ -116,36 +130,33 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertEqual(failures, [])
 
     def test_fixed_sol_entry_contract_is_rejected(self):
-        temp_dir, models_cache = self.make_skill_copy()
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             skill_path = temp_dir / "SKILL.md"
             skill_path.write_text(skill_path.read_text(encoding="utf-8") + "\nRun Task Analyze with `GPT-5.6-Sol`.\n", encoding="utf-8")
-            with patch.object(module, "installed_skills", return_value=APPROVED):
-                result = module.validate(temp_dir, models_cache)
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])
             self.assertTrue(any("obsolete text" in failure for failure in result["failures"]))
         finally:
             shutil.rmtree(temp_dir)
 
     def test_complex_route_without_mermaid_is_rejected(self):
-        temp_dir, models_cache = self.make_skill_copy()
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             route_path = temp_dir / "references" / "route-contract.md"
             route_path.write_text(route_path.read_text(encoding="utf-8").replace("## Complex Task: Mermaid Route", "## Complex Task").replace("```mermaid", "```text"), encoding="utf-8")
-            with patch.object(module, "installed_skills", return_value=APPROVED):
-                result = module.validate(temp_dir, models_cache)
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])
             self.assertTrue(any("Mermaid" in failure for failure in result["failures"]))
         finally:
             shutil.rmtree(temp_dir)
 
     def test_hook_or_chat_machine_plan_contract_is_rejected(self):
-        temp_dir, models_cache = self.make_skill_copy()
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             skill_path = temp_dir / "SKILL.md"
             skill_path.write_text(skill_path.read_text(encoding="utf-8") + "\nRequire the user-level Codex hook and TASK_ANALYZE_PLAN_JSON output.\n", encoding="utf-8")
-            with patch.object(module, "installed_skills", return_value=APPROVED):
-                result = module.validate(temp_dir, models_cache)
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])
             self.assertTrue(any("obsolete text" in failure for failure in result["failures"]))
         finally:
@@ -192,13 +203,13 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertTrue(any("must not depend on Ending Task" in failure for failure in failures))
 
     def test_stale_model_snapshot_is_rejected(self):
-        temp_dir, models_cache = self.make_skill_copy()
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             snapshot = temp_dir / "references" / "model-capabilities.md"
             snapshot.write_text(snapshot.read_text(encoding="utf-8") + "stale", encoding="utf-8")
             invalid_status = {"valid": False, "status": "stale", "missing_cache_models": []}
-            with patch.object(module, "installed_skills", return_value=APPROVED), patch.object(module.sync_model_capabilities, "check_snapshot", return_value=invalid_status):
-                result = module.validate(temp_dir, models_cache)
+            with patch.object(module.sync_model_capabilities, "check_snapshot", return_value=invalid_status):
+                result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])
             self.assertTrue(any("capability check" in failure for failure in result["failures"]))
         finally:

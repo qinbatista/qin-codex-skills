@@ -52,4 +52,4 @@ Use `recommend` and `record` with the complete controlled profile: `--task-famil
 - `code_unspecified` for legacy code evidence.
 - `general` for non-code evidence.
 
-`record` also takes the main producer `--receipt`, `--verify-level`, `--verify-status`, and the same sanitized `--run-id` for Mini then Real. Direct non-dispatch routes invoke it too.
+`record` also takes the main producer `--receipt`, `--verify-level`, `--verify-status`, and the same sanitized `--run-id` for Mini then Real. Direct non-dispatch model routes invoke it too; tool-only routes never record adaptive producer samples.

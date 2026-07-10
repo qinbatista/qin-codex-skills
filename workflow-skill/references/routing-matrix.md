@@ -5,10 +5,10 @@ Every route begins with independent `task-analyze-skill`. `workflow-skill` then 
 | Scenario | Use when | Skill route | Model pattern | Main-result Mini Verify | Ending Task |
 |---|---|---|---|---|---|
 | easy-direct | One obvious low-risk answer, read, command, open, or A-to-B edit. | task-analyze-skill -> workflow-skill -> verify-skill | Entry is current selection only; Luna normally owns bounded non-code work. | Minimal focused confirmation. | Relevant Real Verify/no-op inventory/records only. |
-| open-chrome | Open an always-loaded browser profile. | task-analyze-skill -> workflow-skill -> direct tool action | Tool-only: no child model, receipt, or adaptive record. | Chrome window opens. | No-op only. |
-| open-youtube | Open YouTube directly without a dispatch graph. | task-analyze-skill -> workflow-skill -> direct tool action | Tool-only: no child model, receipt, or adaptive record. | `youtube.com` loaded. | No-op only. |
-| search-cctv-on-youtube | One bounded search interaction with query visible in results. | task-analyze-skill -> workflow-skill -> direct tool action | Tool-only: no child model, receipt, or adaptive record. | Query and visible results are present. | No-op only. |
-| design-youtube-like-website | Build a YouTube-like frontend experience. | task-analyze-skill -> workflow-skill -> frontend-app-builder -> verify-skill | Terra for implementation/review; Luna or Sol for report as bounded. | Rendered draft exists and basic interaction paths render. | Ending Real: responsive, console, navigation, accessibility, visual review. |
+| open-chrome | Open an always-loaded browser profile. | task-analyze-skill -> workflow-skill -> chrome:control-chrome -> direct tool action | Tool-only: no child model, receipt, dispatcher, or adaptive record. | Chrome window opens. | No-op only. |
+| open-youtube | Open Chrome and open YouTube without a dispatch graph. | task-analyze-skill -> workflow-skill -> chrome:control-chrome -> direct tool action | Tool-only: no child model, receipt, dispatcher, or adaptive record. | `youtube.com` loaded. | No-op only. |
+| search-cctv-on-youtube | Open Chrome, open YouTube, then search CCTV. | task-analyze-skill -> workflow-skill -> chrome:control-chrome -> direct tool action | Tool-only: no child model, receipt, dispatcher, or adaptive record. | CCTV query and visible results are present. | No-op only. |
+| design-youtube-like-website | Build a YouTube-like frontend experience. | task-analyze-skill -> workflow-skill -> build-web-apps:frontend-app-builder -> verify-skill | Sol-high design; Terra-high implementation (the receipt-backed adaptive producer); Terra-medium Mini; Luna-low ending records; Terra-high Ending Real. Main-result release and Ending dispatch are observed entry-coordinator transitions, not child-model receipts. | Receipt-backed rendered draft and core interaction paths render. | Responsive, console, navigation, accessibility, visual review. |
 | easy-code-domain | One obvious bounded read or edit in an active code domain. | task-analyze-skill -> workflow-skill -> code-skill -> verify-skill | Spark first for the code node; visible planned Luna/Terra fallback only. | Syntax/basic input-output or changed-path confirmation. | Real code-path replay and related records. |
 | text | Explanation, Markdown, classification, or rewrite not caught by Prompt Task Gate. | task-analyze-skill -> workflow-skill -> verify-skill | Luna direct; Terra source-rich; Sol unresolved. | Content/format/target check. | Source-depth review, docs/logs/memory. |
 | prompt | Prompt/instruction creation, edit, repair, optimization, test, or trigger rule. | task-analyze-skill -> workflow-skill -> verify-skill | Luna direct wording; Terra source-backed system; Sol unresolved behavior. | Contract inspection or one representative basic case. | Real prompt replay, broader cases, docs/memory. |
@@ -26,6 +26,8 @@ Every route begins with independent `task-analyze-skill`. `workflow-skill` then 
 
 ## Goal Rules
 
+The graduated raw-prompt fixture is executable route evidence: direct scenarios allow exactly their tool-route keys and never dispatch; the complex website plan is a portable template materialized with the observed entry pair and cache directory. Its fixed roles are Sol-high design, Terra-high implementation/adaptive producer, Terra-medium Mini, Luna-low management records, and Terra-high Ending Real. Main-result release and Ending dispatch are controller transitions, not child receipts.
+
 - The entry model may be any supported current selection and executes Task Analyze only.
 - Every model-executed node uses an installed skill and exact supported model/effort; direct tool-only routes instead use their installed tool skill and observable Mini check.
 - Every active registry-owned code-domain node loads `code-skill`; Spark is first for implementation and authored probes.
@@ -34,4 +36,5 @@ Every route begins with independent `task-analyze-skill`. `workflow-skill` then 
 - Real Verify, independent optimization verification, reports, logs, docs, memory, and supplementary status proof belong after Main Result.
 - A background correctness failure notifies the user and reopens the task.
 - Runtime receipts prove observed routing; labels and availability probes do not.
+- Direct-action timing is external wall-clock-to-stop evidence. Complex timing/token claims require passing runtime receipts; savings require like-for-like repeated baselines.
 - Do not publish or push unless explicitly requested.

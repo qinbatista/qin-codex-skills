@@ -142,9 +142,6 @@ def resolve_execution_domain(owning_skill=None, task_family=None, explicit_domai
             if normalized in aliases:
                 return domain
 
-    if purpose in {"implement", "author-probe"}:
-        return EXECUTION_DOMAIN_REGISTRY_LEGACY
-
     if owning_skill == "code-skill":
         return EXECUTION_DOMAIN_REGISTRY_LEGACY
 

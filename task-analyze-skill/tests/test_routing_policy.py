@@ -13,6 +13,9 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class RoutingPolicyTests(unittest.TestCase):
+    def test_plugin_frontend_implementation_without_language_is_general(self):
+        self.assertEqual(module.resolve_execution_domain(owning_skill="build-web-apps:frontend-app-builder", task_family="integration", purpose="implement"), "general")
+
     def setUp(self):
         self.pairs = module.canonical_pairs(
             [
@@ -213,7 +216,7 @@ class RoutingPolicyTests(unittest.TestCase):
         }
         for domain in expected_paths:
             self.assertEqual(module.EXECUTION_DOMAINS[domain]["reference_path"], expected_paths[domain])
-            path = Path("/Users/qin/.codex/skills") / expected_paths[domain]
+            path = SCRIPT_PATH.parents[2] / expected_paths[domain]
             self.assertTrue(path.is_file(), f"reference path missing: {path}")
 
     def test_validate_execution_domain_registry_rejects_noncanonical_aliases(self):

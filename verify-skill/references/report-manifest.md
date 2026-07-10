@@ -43,7 +43,7 @@ Use this JSON shape for `scripts/generate_test_pdf_report.py`.
     "skipped": 0
   },
   "environment": {
-    "workspace": "/Users/qin/QinProject/Muse/MuseAI",
+    "workspace": "/path/to/workspace",
     "target": "http://localhost:3000",
     "branch": "main"
   },

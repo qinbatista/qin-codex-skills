@@ -5,6 +5,11 @@ import re
 import sys
 from pathlib import Path
 
+TASK_ANALYZE_SCRIPTS = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts"
+sys.path.insert(0, str(TASK_ANALYZE_SCRIPTS))
+from validate_graduated_routes import validate_fixture
+from skill_resolver import resolve_skill_path
+
 import importlib.util
 
 try:
@@ -33,6 +38,8 @@ except ModuleNotFoundError:
 
 
 EXPECTED_ROUTE_PREFIX = ["task-analyze-skill", "workflow-skill"]
+DIRECT_TOOL_ROUTE_PREFIX = ["task-analyze-skill", "workflow-skill", "chrome:control-chrome"]
+FRONTEND_ROUTE_PREFIX = ["task-analyze-skill", "workflow-skill", "build-web-apps:frontend-app-builder"]
 REQUIRED_WORKFLOW = [
     "100%-trigger individual entry skill",
     "observable entry model and effort belong only to Task Analyze and route coordination",
@@ -145,6 +152,8 @@ def validate_trace(name, trace, skills_root=Path(__file__).resolve().parents[2])
     for node in trace:
         if not node.get("model") or not node.get("effort"):
             failures.append(f"{node.get('id', '<unknown>')} lacks model/effort")
+        if resolve_skill_path(node.get("skill"), skills_root) is None:
+            failures.append(f"{node.get('id', '<unknown>')} names unavailable skill {node.get('skill')}")
     mini_index = ids.index("mini-verify") if "mini-verify" in ids else -1
     result_index = ids.index("main-result") if "main-result" in ids else -1
     ending_index = ids.index("ending-dispatch") if "ending-dispatch" in ids else -1
@@ -238,7 +247,8 @@ def validate(skill_dir):
     routes = parse_routes(texts["matrix"])
     route_results = []
     for name, route in routes.items():
-        route_failures = [] if route[:2] == EXPECTED_ROUTE_PREFIX else [f"route must begin {EXPECTED_ROUTE_PREFIX}, got {route[:2]}"]
+        expected_prefix = DIRECT_TOOL_ROUTE_PREFIX if name in {"open-chrome", "open-youtube", "search-cctv-on-youtube"} else FRONTEND_ROUTE_PREFIX if name == "design-youtube-like-website" else EXPECTED_ROUTE_PREFIX
+        route_failures = [] if route[:len(expected_prefix)] == expected_prefix else [f"route must begin {expected_prefix}, got {route[:len(expected_prefix)]}"]
         if any(is_code_execution_domain(node.get("execution_domain")) for node in sample_traces().get(name, []) if node.get("execution_domain")) and "code-skill" not in route:
             route_failures.append("registered code-domain route bypasses code-skill")
         route_results.append({"name": name, "status": "pass" if not route_failures else "fail", "route": route, "failures": route_failures})
@@ -253,7 +263,15 @@ def validate(skill_dir):
     entry_models = {trace[0]["model"] for trace in sample_traces().values()}
     if len(entry_models) < 3:
         failures.append("entry-model regression samples do not prove arbitrary selected entry models")
-    return {"skill_dir": str(skill_dir), "routes": route_results, "gates": gate_results, "traces": trace_results, "failures": failures}
+    fixture_path = global_root / "task-analyze-skill" / "assets" / "graduated-route-fixtures.json"
+    graduated_failures = validate_fixture(fixture_path, global_root, True)
+    try:
+        graduated_count = len(json.loads(fixture_path.read_text(encoding="utf-8")).get("scenarios", []))
+    except (OSError, json.JSONDecodeError):
+        graduated_count = 0
+    graduated_results = [{"name": "graduated-raw-prompts", "status": "pass" if not graduated_failures else "fail", "failures": graduated_failures, "scenario_count": graduated_count}]
+    failures.extend([f"graduated scenario: {failure}" for failure in graduated_failures])
+    return {"skill_dir": str(skill_dir), "routes": route_results, "gates": gate_results, "traces": trace_results, "graduated": graduated_results, "failures": failures}
 
 
 def main():
@@ -265,10 +283,14 @@ def main():
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    for label in ("routes", "gates", "traces"):
+    for label in ("routes", "gates", "traces", "graduated"):
         items = result[label]
         passed = sum(1 for item in items if item.get("status", "pass" if item.get("observed") == item.get("expected") else "fail") == "pass")
-        print(f"workflow-skill {label}: {passed}/{len(items)} passed")
+        if label == "graduated":
+            total = sum(item.get("scenario_count", 0) for item in items)
+            print(f"workflow-skill {label}: {total if passed == len(items) else 0}/{total} passed")
+        else:
+            print(f"workflow-skill {label}: {passed}/{len(items)} passed")
     if result["failures"]:
         print("Failures:", file=sys.stderr)
         for failure in result["failures"]:

@@ -146,7 +146,11 @@ class ModelRoutingHistoryTests(unittest.TestCase):
     def test_validate_condition_normalizes_inactive_domain_with_trimming(self):
         with self._with_inactive_domain():
             condition = module.validate_condition(dict(CONDITION, execution_domain="  code_unspecified  "), allow_history_only=True)
-        self.assertEqual(condition["execution_domain"], "code_unspecified")
+            self.assertEqual(condition["execution_domain"], "code_unspecified")
+
+    def test_validate_condition_accepts_canonical_plugin_owning_skill(self):
+        condition = module.validate_condition(dict(CONDITION, owning_skill="build-web-apps:frontend-app-builder", execution_domain="general"))
+        self.assertEqual(condition["owning_skill"], "build-web-apps:frontend-app-builder")
 
     def test_validate_condition_rejects_unknown_domain_without_crashing(self):
         with self.assertRaises(ValueError) as error:

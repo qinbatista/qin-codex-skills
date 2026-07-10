@@ -6,6 +6,20 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    from skill_resolver import resolve_skill_path
+    from validate_graduated_routes import validate_fixture
+except ModuleNotFoundError:
+    _scripts_root = Path(__file__).resolve().parent
+    _skill_resolver_spec = importlib.util.spec_from_file_location("task_analyze_skill_resolver", _scripts_root / "skill_resolver.py")
+    _skill_resolver = importlib.util.module_from_spec(_skill_resolver_spec)
+    _skill_resolver_spec.loader.exec_module(_skill_resolver)
+    resolve_skill_path = _skill_resolver.resolve_skill_path
+    _graduated_spec = importlib.util.spec_from_file_location("task_analyze_graduated_routes", _scripts_root / "validate_graduated_routes.py")
+    _graduated = importlib.util.module_from_spec(_graduated_spec)
+    _graduated_spec.loader.exec_module(_graduated)
+    validate_fixture = _graduated.validate_fixture
+
 
 SYNC_PATH = Path(__file__).resolve().parent / "sync_model_capabilities.py"
 SYNC_SPEC = importlib.util.spec_from_file_location("task_analyze_sync_model_capabilities", SYNC_PATH)
@@ -57,6 +71,9 @@ REQUIRED_FILES = [
     "scripts/model_execution_receipt.py",
     "scripts/model_routing_history.py",
     "scripts/task_route_dispatcher.py",
+    "scripts/skill_resolver.py",
+    "scripts/validate_graduated_routes.py",
+    "assets/graduated-route-fixtures.json",
     "scripts/validate_task_analyze_skill.py",
 ]
 REQUIRED_SKILL_TEXT = [
@@ -182,8 +199,8 @@ def missing_terms(label, text, required):
     return [f"{label} missing required contract: {term}" for term in required if normalize(term) not in normalized]
 
 
-def installed_skills(skill_dir):
-    return {path.name for path in skill_dir.parent.iterdir() if path.is_dir() and (path / "SKILL.md").exists()}
+def installed_skills(skills_root):
+    return {path.name for path in skills_root.iterdir() if path.is_dir() and (path / "SKILL.md").exists()}
 
 
 
@@ -227,7 +244,7 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
         skill = node.get("skill")
         if model not in MODEL_EFFORTS or effort not in MODEL_EFFORTS.get(model, set()):
             failures.append(f"{node_id} has unsupported model/effort")
-        if skill not in installed:
+        if skill not in installed and resolve_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
         for dependency in node.get("dependencies", []):
             if dependency not in node_by_id:
@@ -435,7 +452,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     capability_status = sync_model_capabilities.check_snapshot(models_cache_path.expanduser().resolve(), read_text(paths["references/model-capabilities.md"]))
     if not capability_status["valid"]:
         failures.append(f"model-capabilities.md failed capability check: {capability_status['status']}")
-    installed = installed_skills(skill_dir)
+    installed = installed_skills(global_skills_root)
     plans = sample_plans()
     expected_plan_count = sum(len(efforts) for efforts in MODEL_EFFORTS.values())
     expected_route_plan_count = expected_plan_count * 2
@@ -450,7 +467,15 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
         plan_failures = validate_plan(plan, installed, global_skills_root)
         plan_results.append({"name": name, "status": "pass" if not plan_failures else "fail", "failures": plan_failures})
         failures.extend([f"plan {name}: {failure}" for failure in plan_failures])
-    return {"valid": not failures, "skill_dir": str(skill_dir), "capability_status": capability_status, "plans": plan_results, "failures": failures}
+    fixture_path = skill_dir / "assets" / "graduated-route-fixtures.json"
+    graduated_failures = validate_fixture(fixture_path, global_skills_root, True)
+    try:
+        graduated_count = len(json.loads(fixture_path.read_text(encoding="utf-8")).get("scenarios", []))
+    except (OSError, json.JSONDecodeError):
+        graduated_count = 0
+    graduated_results = [{"name": "graduated-raw-prompts", "status": "pass" if not graduated_failures else "fail", "failures": graduated_failures, "scenario_count": graduated_count}]
+    failures.extend([f"graduated scenario: {failure}" for failure in graduated_failures])
+    return {"valid": not failures, "skill_dir": str(skill_dir), "capability_status": capability_status, "plans": plan_results, "graduated": graduated_results, "failures": failures}
 
 
 def main():
@@ -467,6 +492,8 @@ def main():
         args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     for plan in result["plans"]:
         print(f"task-analyze-skill plan {plan['name']}: {plan['status']}")
+    for scenario in result["graduated"]:
+        print(f"task-analyze-skill graduated {scenario['name']}: {scenario['scenario_count'] if scenario['status'] == 'pass' else 0}/{scenario['scenario_count']} passed")
     if result["failures"]:
         print("Failures:", file=sys.stderr)
         for failure in result["failures"]:

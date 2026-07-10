@@ -19,6 +19,79 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def primary_skill_paths(self):
         return [SKILLS_DIR / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]
 
+    def staged_skill_copy(self, root):
+        skills_dir = root / "skills"
+        skills_dir.mkdir()
+        for skill_path in self.primary_skill_paths():
+            sync_global_skills.copy_skill_directory(skill_path, skills_dir / skill_path.name)
+        return skills_dir
+
+    def test_external_file_symlink_is_rejected_even_when_excluded(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            skill_dir = root / "skill"
+            skill_dir.mkdir()
+            outside = root / "outside.txt"
+            outside.write_text("outside", encoding="utf-8")
+            link = skill_dir / "local" / "linked.txt"
+            link.parent.mkdir()
+            link.symlink_to(outside)
+            with self.assertRaisesRegex(RuntimeError, "symlink"):
+                sync_global_skills.included_files(skill_dir)
+
+    def test_external_directory_symlink_is_rejected_even_when_excluded(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            skill_dir = root / "skill"
+            skill_dir.mkdir()
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "secret.txt").write_text("outside", encoding="utf-8")
+            link = skill_dir / "local"
+            link.symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, "symlink"):
+                sync_global_skills.snapshot_hash([skill_dir])
+
+    def test_symlink_rejection_does_not_copy_outside_bytes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            target = root / "target"
+            source.mkdir()
+            target.mkdir()
+            outside = root / "outside.txt"
+            outside.write_text("must stay outside", encoding="utf-8")
+            (source / "SKILL.md").write_text("source", encoding="utf-8")
+            (source / "linked.txt").symlink_to(outside)
+            (target / "sentinel.txt").write_text("keep", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "symlink"):
+                sync_global_skills.copy_skill_directory(source, target)
+            self.assertEqual(outside.read_text(encoding="utf-8"), "must stay outside")
+            self.assertEqual((target / "sentinel.txt").read_text(encoding="utf-8"), "keep")
+            self.assertFalse((target / "linked.txt").exists())
+
+    def test_target_and_repository_sentinels_survive_symlink_rejection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            staged_skills = self.staged_skill_copy(root)
+            outside_target = root / "outside-target"
+            outside_target.mkdir()
+            (outside_target / "sentinel.txt").write_text("target sentinel", encoding="utf-8")
+            target_link = root / "target"
+            target_link.symlink_to(outside_target, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, "symlink"):
+                sync_global_skills.copy_skill_directory(staged_skills / "task-analyze-skill", target_link)
+            self.assertEqual((outside_target / "sentinel.txt").read_text(encoding="utf-8"), "target sentinel")
+
+            outside_repository = root / "outside-repository"
+            outside_repository.mkdir()
+            (outside_repository / "sentinel.txt").write_text("repository sentinel", encoding="utf-8")
+            repository_link = root / "repository"
+            repository_link.symlink_to(outside_repository, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, "symlink"):
+                sync_global_skills.prepare_repository_snapshot(repository_link, staged_skills)
+            self.assertEqual((outside_repository / "sentinel.txt").read_text(encoding="utf-8"), "repository sentinel")
+
     def test_english_readme_uses_durable_template_and_current_contract(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
         template = sync_global_skills.ENGLISH_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
@@ -28,65 +101,59 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         )
 
         self.assertEqual(readme, expected)
-        self.assertIn("## 🧩 The six independent skills", readme)
-        self.assertIn("The model selected when the user starts the task runs Task Analyze and route coordination only", readme)
-        self.assertIn("The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is condition-keyed", readme)
-        self.assertIn("success_model", readme)
-        self.assertIn("failed_model", readme)
-        self.assertIn("requested_pair", readme)
-        self.assertIn("resolved_pair", readme)
-        self.assertIn("effective_pair", readme)
-        self.assertIn("operational_failure_pairs", readme)
-        self.assertNotIn('"producer":', readme)
-        self.assertIn("exhausted top boundary returns no selected pair", readme)
-        self.assertIn("effort-first", readme.lower())
-        self.assertIn("schema_version", readme)
-        self.assertIn("Spark-low", readme)
-        self.assertIn("static", readme)
-        self.assertIn("Easy tasks do not need a forced diagram", readme)
-        self.assertIn("Mini Verify is the main-result gate", readme)
-        self.assertIn("Real Verify runs in background Ending Task", readme)
-        self.assertIn("First Result Principle", readme)
-        self.assertIn("show the basically verified result immediately", readme)
-        self.assertIn("never describe Mini Verify as exhaustive proof", readme)
-        self.assertIn("weak-to-strong quality ladder", readme)
-        self.assertIn("Downgrade exactly one eligible rung", readme)
-        self.assertIn("correctness-first routing", readme)
-        self.assertIn("Open Chrome", readme)
-        self.assertIn("Open YouTube", readme)
-        self.assertIn("Search CCTV on YouTube", readme)
-        self.assertIn("Design a YouTube-like website", readme)
-        self.assertIn("## 🧰 Extension recipe", readme)
-        self.assertIn("execution_domain", readme)
-        self.assertIn("| Domain | Kind | Owner | Spark first | Reference |", readme)
-        self.assertIn("`python` (active)", readme)
-        self.assertIn("response time and token use", readme)
-        self.assertIn("exactly six public skills", readme)
-        self.assertIn("a **different** `verify-skill` worker", readme)
-        self.assertIn("Runtime receipts", readme)
-        self.assertIn("hookless", readme)
-        self.assertIn("task_route_dispatcher.py", readme)
-        self.assertIn("release-main-result <handoff>", readme)
-        self.assertNotIn("hooks.json", readme)
-        self.assertNotIn("Task Analyze is an internal phase", readme)
-        self.assertNotIn("Real Verify always stays before", readme)
-        self.assertNotIn("model_experience.json` ledger is mirrored", readme)
-        self.assertNotIn("TASK_ANALYZE_PLAN_JSON", readme)
-        self.assertNotIn("median token", readme.lower())
-        self.assertNotIn("cheapest-to-strongest", readme.lower())
-        self.assertNotIn("fastest reasonable", readme.lower())
+        self.assertLessEqual(len(template.splitlines()), 230)
+        self.assertLessEqual(len(template.split()), 1700)
+        skills_section = readme.split("## 🧩 Six independent skills", 1)[1].split("\n## ", 1)[0]
+        skill_rows = re.findall(r"^\| .*?\[`([^`]+)`\]\(\./([^/]+)/SKILL\.md\)", skills_section, re.M)
+        expected_skill_rows = {"Task Analyze": "task-analyze-skill", "Workflow": "workflow-skill", "Code": "code-skill", "Verify": "verify-skill", "Optimization": "optimization-skill", "Management": "management-skill"}
+        self.assertEqual(len(skill_rows), 6)
+        self.assertEqual(dict(skill_rows), expected_skill_rows)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
-        model_experience_match = re.search(r"\{\n  \"schema_version\": 3,.*?\n\}", readme, re.S)
-        self.assertIsNotNone(model_experience_match)
-        model_experience_payload = json.loads(model_experience_match.group(0))
-        self.assertEqual(model_experience_payload["schema_version"], 3)
-        condition = model_experience_payload["conditions"]["799b5cc30bcb4d107e081f34c0e6dff164d70cb85dc99397ca7ebca18c907729"]["condition"]
-        self.assertIn("execution_domain", condition)
-        self.assertEqual(condition["execution_domain"], "general")
-        self.assertNotIn("producer", model_experience_payload)
-        self.assertIn("requested_pair", model_experience_payload["conditions"]["799b5cc30bcb4d107e081f34c0e6dff164d70cb85dc99397ca7ebca18c907729"]["tasks"][0])
+        visual_pairs = ("qin-codex-skills-hero", "task-lifecycle", "model-router", "runtime-receipt", "model-experience", "verification-topologies")
+        svg_references = sum(readme.count(f"./management-skill/assets/readme/{asset_name}{suffix}.svg") for asset_name in visual_pairs for suffix in ("", "-mobile"))
+        self.assertEqual(svg_references, 12)
+        for asset_name in visual_pairs:
+            self.assertEqual(readme.count(f"./management-skill/assets/readme/{asset_name}.svg"), 1)
+            self.assertEqual(readme.count(f"./management-skill/assets/readme/{asset_name}-mobile.svg"), 1)
+
+        self.assertIn("hookless, 100% entry", readme)
+        self.assertIn("entry model and effort analyze and route only", readme)
+        self.assertIn("First Result Principle", readme)
+        self.assertIn("per-node `model | effort`", readme)
+        self.assertIn("Downgrade exactly one eligible rung", readme)
+        self.assertIn("effort first", readme)
+        self.assertIn("upgrade in the exact reverse direction", readme)
+        self.assertIn("reuse the calibrated/frozen pair", readme)
+        self.assertIn("Static floors, safety, domain ownership, and correctness always win", readme)
+        self.assertIn("may start at Spark-low; runtime failure uses the static fallback without a quality penalty", readme)
+        self.assertIn("an exhausted top boundary returns no selected pair", readme)
+        self.assertIn("sanitized runtime receipt", readme)
+        self.assertIn("receipt-backed", readme)
+        self.assertIn("like-for-like", readme)
+        self.assertIn("private `local/model_experience.json` ledger is **condition-keyed**", readme)
+        self.assertIn("success_model` / `failed_model`", readme)
+        self.assertIn("neutral operational events", readme)
+        self.assertIn("Mini Verify", readme)
+        self.assertIn("Before the result", readme)
+        self.assertIn("Real Verify runs in background Ending Task", readme)
+        self.assertIn("a **different** [`verify-skill`](./verify-skill/SKILL.md) worker", readme)
+        self.assertIn("One obvious reversible action with no dependency graph", readme)
+        for example in ("Open Chrome", "Open YouTube", "Search CCTV on YouTube", "Design a YouTube-like website"):
+            self.assertIn(example, readme)
+        self.assertIn("generated table above is injected at the exact `EXECUTION_DOMAIN_TABLE` marker", readme)
+        self.assertIn("publishes only after an explicit current request", readme)
+        self.assertIn("exactly six public skills", readme)
+        self.assertNotIn('"schema_version":', readme)
+        self.assertNotIn('"conditions":', readme)
+        self.assertNotIn('"producer":', readme)
+        self.assertNotIn('"requested_pair":', readme)
+        self.assertNotIn('"resolved_pair":', readme)
+        self.assertNotIn('"effective_pair":', readme)
+        self.assertNotIn("/Users/", readme)
+        self.assertNotIn("hooks.json", readme)
+        self.assertNotIn("TASK_ANALYZE_PLAN_JSON", readme)
 
     def test_snapshot_renders_synthetic_registered_rust_domain_without_generator_changes(self):
         with tempfile.TemporaryDirectory() as temp_dir:

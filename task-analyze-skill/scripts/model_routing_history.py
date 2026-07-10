@@ -66,12 +66,15 @@ CONTROL_ENUMS = {
 QUALITY_FAILURES = {"quality", "correctness"}
 RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+PLUGIN_SKILL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}:[a-z0-9][a-z0-9-]{0,63}$")
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 FORBIDDEN_SUMMARY = [re.compile(r"```"), re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://"), re.compile(r"(?:^|\s)/[^\s]+"), re.compile(r"\b(?:api|auth|secret|password|token)[_-]?(?:key|token|secret|password)?\s*[:=]", re.I)]
 
 
-def sanitize_slug(value):
+def sanitize_slug(value, *, field=None):
     value = str(value).strip().lower()
+    if field == "owning_skill" and PLUGIN_SKILL_PATTERN.fullmatch(value):
+        return value
     if not SLUG_PATTERN.fullmatch(value):
         raise ValueError("condition values must be short lowercase slugs")
     return value
@@ -107,7 +110,7 @@ def validate_condition(values, *, allow_history_only=False):
         if has_explicit_domain:
             raise ValueError(f"execution_domain must be active: {supplied['execution_domain']}")
         raise ValueError(f"execution_domain must not infer to inactive row: {supplied['execution_domain']}")
-    condition = {field: sanitize_slug(supplied[field]) for field in CONTROL_FIELDS}
+    condition = {field: sanitize_slug(supplied[field], field=field) for field in CONTROL_FIELDS}
     for field, allowed in CONTROL_ENUMS.items():
         if condition[field] not in allowed:
             raise ValueError(f"{field} is invalid")

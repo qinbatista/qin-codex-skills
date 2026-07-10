@@ -11,6 +11,15 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
+try:
+    from skill_resolver import resolve_skill_path
+except ModuleNotFoundError:
+    _skill_resolver_path = Path(__file__).with_name("skill_resolver.py")
+    _skill_resolver_spec = importlib.util.spec_from_file_location("task_analyze_skill_resolver", _skill_resolver_path)
+    _skill_resolver = importlib.util.module_from_spec(_skill_resolver_spec)
+    _skill_resolver_spec.loader.exec_module(_skill_resolver)
+    resolve_skill_path = _skill_resolver.resolve_skill_path
+
 
 RECEIPT_PATH = Path(__file__).resolve().parent / "model_execution_receipt.py"
 RECEIPT_SPEC = importlib.util.spec_from_file_location(
@@ -79,6 +88,13 @@ def resolve_skills_root(skills_root=None):
     if skills_root is None:
         return DISPATCHER_SKILLS_ROOT
     return Path(skills_root).resolve()
+
+
+def resolve_node_skill_path(skill_id, skills_root):
+    try:
+        return resolve_skill_path(skill_id, skills_root)
+    except ValueError:
+        return None
 
 
 def _resolve_execution_domain(node):
@@ -189,7 +205,7 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
         if model not in MODEL_EFFORTS or effort not in MODEL_EFFORTS.get(model, set()):
             failures.append(f"{node_id} has unsupported model/effort")
         skill = node.get("skill")
-        if not isinstance(skill, str) or not (skills_root / skill / "SKILL.md").exists():
+        if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
         if node.get("phase") not in ALLOWED_PHASES:
             failures.append(f"{node_id} has invalid phase")
@@ -508,12 +524,15 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     node_id = node["id"]
     receipt_path = cache_dir / f"{node_id}-receipt.json"
     result_path = cache_dir / f"{node_id}-result.md"
+    skill_path = resolve_node_skill_path(node["skill"], skills_root)
+    if skill_path is None:
+        raise ValueError(f"node skill cannot be resolved: {node['skill']}")
     dependency_text = dependency_context(node, completed)
     prompt = (
         f"Owning skill: {node['skill']}\n"
         f"Node id: {node_id}\n"
         f"Phase: {node['phase']}\n"
-        f"Execute only this bounded locked node. Read and obey {skills_root / node['skill'] / 'SKILL.md'}.\n\n"
+        f"Execute only this bounded locked node. Read and obey {skill_path}.\n\n"
         f"{node['prompt']}"
     )
     if execution_domain_is_active(_resolve_execution_domain(node)) and is_code_execution_domain(_resolve_execution_domain(node)):
