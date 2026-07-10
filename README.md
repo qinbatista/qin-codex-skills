@@ -54,6 +54,10 @@ The entry skill is always `task-analyze-skill`, but the entry **model can be any
 7. 🔒 A hookless dispatcher or direct model runner executes dependency-ready nodes in separate `LOCKED_ROUTE_NODE` runs, so downstream work cannot inherit the entrance pair accidentally.
 8. 📟 Mini Verify gates the first result. Private adaptive-routing records learn from receipt-backed Mini/Real outcomes afterward.
 
+### First Result Principle
+
+Finish the user requested task, run the smallest meaningful Mini Verify, and show the basically verified result immediately. After the result is shown, continue deeper Real Verify, broader regression checks, optimization proof, reports, logs, documentation, and routing learning in Ending Task. If later verification finds a correctness problem, notify the user, reopen the task, fix it, rerun Mini Verify, and present the corrected result. Never delay a basically verified result for optional deep closeout, and never describe Mini Verify as exhaustive proof.
+
 ### 📝 Easy task — text route
 
 Easy tasks do not need a forced diagram:
@@ -114,6 +118,9 @@ flowchart TD
 
 Model selection is semantic, not a fixed pipeline. Task size alone does not require Sol. A large, well-grounded change may fit Terra; a small Python change should still load `code-skill` and prefer Spark.
 
+A routing rung is the complete `model_name|effort` pair on a weak-to-strong quality ladder; never assume cross-model means cheaper. Downgrade exactly one eligible rung: lower effort on the same model first, then after its minimum eligible effort move to the next weaker model at that model's highest eligible effort. Upgrade in the exact reverse direction after a Mini/Real correctness or quality failure. Floors always win.
+The adaptive goal is correctness-first routing with receipts used for like-for-like optimization evidence; receipt timing/tokens cannot bypass quality boundaries.
+
 ## 📟 Runtime receipts
 
 <picture>
@@ -146,7 +153,7 @@ Token or time savings may be claimed only from a like-for-like baseline with ide
 
 ## 📚 Private adaptive-routing learning
 
-Personal routing history stays under `task-analyze-skill/local/adaptive-routing/` and is never mirrored. Task Analyze first applies hard safety/project/skill floors, then consults only a compact sanitized profile. A verified pass may trial one cheaper or faster rung next time; a correctness failure restores and emphasizes the next stronger verified floor. Correctness ranks before median token use, then median process time. Tokens are a usage proxy, not a dollar-price claim. Fallback order is effort-first, then model.
+Personal routing history stays under `task-analyze-skill/local/adaptive-routing/` and is never mirrored. Task Analyze first applies hard safety/project/skill floors, then consults only a compact sanitized profile. A verified pass may trial one cheaper or faster rung next time; a correctness failure restores and emphasizes the next stronger verified floor. Receipt timing/tokens are recorded for like-for-like optimization evidence and do not drive pair ordering. Fallback order is effort-first, then model.
 
 Management records controlled task-profile enums, the receipt-backed result attempt's requested/resolved/effective pair, Mini/Real verdict, allowlisted failure class, token counts, and timing. It never records raw prompts, task text, results, paths, thread/session IDs, account data, or secrets.
 
@@ -155,16 +162,17 @@ Management records controlled task-profile enums, the receipt-backed result atte
   <img src="./management-skill/assets/readme/model-experience.svg" alt="Condition-keyed model experience: Task Analyze routes a receipt-backed workflow, Mini Verify records first, and Ending Task updates Real Verify in the same attempt">
 </picture>
 
-The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is condition-keyed, not model-keyed, with generalized summaries and explicit `success_model`/`failed_model` bounds. This avoids contradictory moving ranges when one model appears in different task conditions. A missing file auto-generates when `recommend`, `status`, or `record` needs it. Matching uses exact controlled condition fields, with the current entry pair as a boundary for Task Analyze and routing only:
+The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is condition-keyed, not model-keyed, with generalized summaries and explicit full-pair `success_model`/`failed_model` bounds. This avoids contradictory moving ranges when one model appears in different task conditions. A missing file auto-generates when `recommend`, `status`, or `record` needs it. Matching uses exact controlled condition fields, with the current entry pair as a boundary for Task Analyze and routing only. Never claim a field or ranking that the recorder does not produce, and never expose this file in the public mirror:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "updated_at": "2026-07-10T05:55:12.000000+00:00",
   "conditions": {
     "799b5cc30bcb4d107e081f34c0e6dff164d70cb85dc99397ca7ebca18c907729": {
       "condition": {
         "task_family": "document",
+        "execution_domain": "general",
         "artifact": "document",
         "scope": "single",
         "ambiguity": "low",
@@ -248,6 +256,8 @@ The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledg
 
 The result-producing model and effort come from its receipt-backed attempt, never from the verifier. Mini Verify records first; Real Verify updates that same attempt afterward. A verified pass lowers same-model effort first, then model. Sticky Mini/Real quality or correctness failures raise `failed_model`; an exhausted top boundary returns no selected pair. Availability, timeout, protocol, telemetry, execution, and receipt failures remain operational failures. Safe tiny text/code/command work starts Spark-low; a runtime Spark failure may use the exact planned static fallback without a quality penalty. The ledger is private and is excluded from snapshots, sync, and every public mirror.
 
+Receipts and model selection evidence separate execution domains (`python`, `unity_csharp`, `general`) from model-effort pairs; domain values are explicitly preserved in each `condition`.
+
 ## 🧪 Mini Verify and Ending Task
 
 <picture>
@@ -294,6 +304,21 @@ The verifier compares raw before/after inputs and outputs, order, side effects, 
 | Profile or mirror management | `task-analyze-skill → workflow-skill → management-skill → verify-skill` |
 
 All routes show the basic result after Mini Verify. Relevant Real Verify, optimization proof, reports, logs, docs, and memory continue in Ending Task.
+
+## ⚡ Direct action boundary and graduated routes
+
+Task Analyze still runs for every task. One obvious reversible action with no graph executes its installed tool skill directly after the concise route, with no cached plan, model child, or internal dispatcher; Mini Verify checks only the observable state and no tool-only model receipt is fabricated.
+
+| Scenario | Route and Mini Verify |
+|---|---|
+| Open Chrome | Easy direct `chrome:control-chrome`; no dispatcher; verify Chrome is open. |
+| Open YouTube | Easy direct browser action; no dispatcher; verify `youtube.com` is loaded. |
+| Search CCTV on YouTube | Easy bounded browser interaction; no dispatcher; verify the query and visible results. |
+| Design a YouTube-like website | Complex dispatcher through `frontend-app-builder`; grounded implementation; Mini render/core interaction; Ending responsive, console, navigation, accessibility, and visual review. |
+
+## 🧰 Extension recipe
+
+To add a code domain, add routing-registry metadata, add a `code-skill` reference, extend adaptive schema/validator cases, add routing-scenario tests, and update the README table. Python and Unity C# share `code-skill` but keep separate `execution_domain` evidence and language reference files. Registry metadata only identifies the domain; language rules stay in executor references. Keep easy routes direct and use receipts/topology for complex work. Optimize reasonable response time and token use only after correctness passes. The public mirror contains exactly six public skills; local `model_experience.json` stays private and excluded.
 
 ## 🗂️ Repository structure
 

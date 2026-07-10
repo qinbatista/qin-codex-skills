@@ -5,13 +5,13 @@ description: "Use at the start of every Codex user task as the independent 100%-
 
 # Task Analyze Skill
 
-Use this skill first for every user task: direct answers, reads, commands, edits, code, prompts, visuals, documents, verification, optimization, management, and mixed work. It is an individual global skill, not a phase hidden inside `workflow-skill`.
+Use this skill first for every user task: direct answers, reads, commands, edits, code, prompts, visuals, documents, verification, optimization, management, and mixed work. It is an individual global skill, not a phase hidden inside `workflow-skill`. This is a 100 percent entry contract, not a lifecycle hook and not a recursive phase.
 
 ## 100% Task-Start Contract
 
 The always-loaded `~/.codex/AGENTS.md` contains the Task Entry Rule from `assets/global-agents-entry-rule.md`. That instruction plus this skill's loader description is the hookless global entry mechanism.
 
-Do not create, require, or use lifecycle hooks for this workflow. Do not print an internal machine plan or plan marker in chat. Hook state must never strand the task at a route display.
+Do not create, require, or use lifecycle hooks for this workflow. Do not print an internal machine plan or plan marker in chat. The route must never strand the task at a route display.
 
 Prompts already marked `LOCKED_ROUTE_NODE` or direct bounded `ENDING_TASK_WORKER` prompts belong to an existing route. Execute those nodes directly without restarting Task Analyze.
 
@@ -77,6 +77,10 @@ Static role floors:
 
 Choose the lowest effort that can reliably satisfy the node. Then consult the private routing history for the same sanitized task profile. Static safety, authority, modality, project, and skill floors always override learned cost reductions.
 
+## First Result Principle
+
+Finish the user requested task, run the smallest meaningful Mini Verify, and show the basically verified result immediately. After the result is shown, continue deeper Real Verify, broader regression checks, optimization proof, reports, logs, documentation, and routing learning in Ending Task. If later verification finds a correctness problem, notify the user, reopen the task, fix it, rerun Mini Verify, and present the corrected result. Never delay a basically verified result for optional deep closeout, and never describe Mini Verify as exhaustive proof.
+
 ## Private Adaptive Routing
 
 Personal routing evidence lives under `task-analyze-skill/local/adaptive-routing/` and never enters the public skill mirror.
@@ -87,12 +91,18 @@ For the same task profile:
 
 1. With no prior success, use the static suggestion; the sole automatic exception is safe, low-risk, text-only `tiny_text`, `tiny_code`, or `command_generation` work, which starts at Spark-low when eligible.
 2. A runtime Spark failure for that exception uses the static suggestion and does not become a quality penalty. A result node retries only its explicit `model|effort` fallback pairs, in order; Mini/Ending verdict failures never trigger a model retry.
-3. After a receipt-matched verification pass, trial exactly one cheaper/faster candidate: one lower effort on the same model. Only after that model's eligible efforts are exhausted, trial the next weaker eligible model.
+3. After a receipt-matched verification pass, trial exactly one lower effort on the same model. Only after that model's eligible efforts are exhausted, trial the next weaker eligible model.
 4. A Mini or Real correctness/quality failure is sticky: raise the failed boundary and select the nearest eligible rung above it. Do not retry the failed or weaker rung for that profile. If no stronger current candidate exists, return an exhausted result with no selected pair. Never overwrite a failed attempt with a later pass under the same route-run ID; a genuine retry uses a new ID.
 5. Runtime availability, timeout, telemetry, execution, or receipt failures do not become quality evidence.
 6. Record the result-producer receipt after Mini Verify, then update the same route-run attempt after Real Verify; Real Verify failure overrides an earlier Mini pass. Direct non-dispatch routes invoke the same recorder.
 
-Correctness ranks before median token count, then median process time. Dollar savings require current official pricing; otherwise report token/time savings only.
+Correctness boundaries control selection first: the weakest verified complete pair is the boundary floor to move above on failure, and a stronger or faster pair can never bypass that boundary. Receipts are used for like-for-like optimization evidence after correctness gates are met. The recorder does not run active median-ranking across all candidates. Legacy `success_model` and `failed_model` fields store full model|effort pair boundaries; never claim a field or ranking that the recorder does not produce. Do not assume that crossing models means cheaper.
+
+## Easy Direct-Action Boundary
+
+Task Analyze always runs, but the internal dispatcher does not for one obvious reversible action with no graph. After the concise visible route, execute the installed tool skill directly and perform only a minimal observable-state Mini Verify. Do not create a cached plan, launch a model child, or call `task_route_dispatcher.py` for a direct tool action. Do not fabricate downstream model receipts for tool-only actions. Examples include opening Chrome, loading YouTube, or searching CCTV on YouTube; their stop conditions are respectively Chrome open, `youtube.com` loaded, and the query plus visible results.
+
+Complex work uses locked dispatched model|effort nodes, dependency topology, receipts, Mini Verify, Main Result, then Ending Task.
 
 ## Mini Verify, Main Result, And Ending Task
 
@@ -109,6 +119,8 @@ Ending Task must not delay the first Mini-verified result. A later correctness f
 Use `scripts/model_execution_receipt.py run` for every downstream model node when a selectable surface is callable. The receipt must match requested versus resolved/effective model and effort before claiming that node ran as planned.
 
 Use identical bounded workload prompts, inputs, topology, sandbox, acceptance criteria, and `workload_prompt_sha256` for like-for-like savings checks. One pair is a smoke result; repeated alternating runs and medians are required for a durable benchmark.
+
+To add or change execution-domain routing, follow the [router extension guide](references/router-extension-guide.md).
 
 ## Workflow Execution
 
@@ -133,7 +145,7 @@ After editing this skill:
 1. Run `python3 scripts/sync_model_capabilities.py --check`.
 2. Run `python3 scripts/validate_task_analyze_skill.py`.
 3. Run all Python unit tests under `tests/`.
-4. Confirm no hook file, hook state, raw-plan mandate, or chat JSON handoff remains.
+4. Confirm no lifecycle dependency, raw-plan mandate, or chat JSON handoff remains.
 5. Replay one easy and one complex route.
 6. Capture a receipt proving a downstream pair differs from the verified entry pair when the route plans a different pair.
 7. Run a like-for-like receipt comparison using `workload_prompt_sha256` and verified acceptance evidence.

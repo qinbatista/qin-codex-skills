@@ -9,17 +9,17 @@ If a refreshed cache omits one of these models while the current Codex UI/runtim
 
 | Display name | Model ID | Inputs | Context | API | Default effort | Supported efforts | Speed tiers |
 |---|---|---|---:|---|---|---|---|
-| GPT-5.6-Sol | `gpt-5.6-sol` | text, image | 372,000 | yes | `low` | low, medium, high, xhigh, max, ultra | fast |
-| GPT-5.6-Terra | `gpt-5.6-terra` | text, image | 372,000 | yes | `medium` | low, medium, high, xhigh, max, ultra | fast |
-| GPT-5.6-Luna | `gpt-5.6-luna` | text, image | 372,000 | yes | `medium` | low, medium, high, xhigh, max | fast |
 | GPT-5.3-Codex-Spark | `gpt-5.3-codex-spark` | text | 128,000 | no | `high` | low, medium, high, xhigh | default |
+| GPT-5.6-Luna | `gpt-5.6-luna` | text, image | 372,000 | yes | `medium` | low, medium, high, xhigh, max | fast |
+| GPT-5.6-Terra | `gpt-5.6-terra` | text, image | 372,000 | yes | `medium` | low, medium, high, xhigh, max, ultra | fast |
+| GPT-5.6-Sol | `gpt-5.6-sol` | text, image | 372,000 | yes | `low` | low, medium, high, xhigh, max, ultra | fast |
 
 ## Effort Compatibility
 
-- `GPT-5.6-Sol`: low, medium, high, xhigh, max, ultra.
-- `GPT-5.6-Terra`: low, medium, high, xhigh, max, ultra.
-- `GPT-5.6-Luna`: low, medium, high, xhigh, max.
-- `GPT-5.3-Codex-Spark`: low, medium, high, xhigh.
+- `gpt-5.3-codex-spark`: low, medium, high, xhigh.
+- `gpt-5.6-luna`: low, medium, high, xhigh, max.
+- `gpt-5.6-terra`: low, medium, high, xhigh, max, ultra.
+- `gpt-5.6-sol`: low, medium, high, xhigh, max, ultra.
 - Sol, Terra, and Luna accept image input. Spark is text-only.
 - Spark is unavailable through API-only execution surfaces.
 - If an effort is unsupported, use the highest supported effort below it and show the normalization.

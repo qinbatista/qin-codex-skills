@@ -80,6 +80,23 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         failures = module.validate_plan(plan, APPROVED)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
 
+    def test_plan_rejects_unity_csharp_node_without_code_skill(self):
+        complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
+        plan = json.loads(json.dumps(complex_plan))
+        plan["nodes"][2]["language"] = "unity_csharp"
+        plan["nodes"][2]["skill"] = "workflow-skill"
+        failures = module.validate_plan(plan, APPROVED)
+        self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
+
+    def test_plan_rejects_unity_csharp_non_spark_without_fallback(self):
+        complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
+        plan = json.loads(json.dumps(complex_plan))
+        plan["nodes"][2]["language"] = "unity_csharp"
+        plan["nodes"][2]["skill"] = "code-skill"
+        plan["nodes"][2]["model"] = "gpt-5.6-luna"
+        failures = module.validate_plan(plan, APPROVED)
+        self.assertTrue(any("has no fallback reason" in failure for failure in failures))
+
     def test_plan_rejects_real_verify_before_main_result(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
         plan = json.loads(json.dumps(complex_plan))

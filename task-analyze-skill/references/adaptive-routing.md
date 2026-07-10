@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Learn Qin's best downstream model and effort per sanitized task profile from real execution receipts plus independent verification. The goal is correctness first, then fewer tokens and less execution time—not expensive models by default and not Task Analyze intuition alone.
+Learn Qin's best downstream model and effort per sanitized task profile from real execution receipts plus independent verification. The goal is correctness first, then like-for-like optimization evidence after correctness gates are met—not expensive models by default and not Task Analyze intuition alone. Receipt timing/tokens cannot bypass quality boundaries. A rung is a complete `model_name|effort` pair on a weak-to-strong quality ladder; cross-model movement is not assumed to be cheaper.
 
 ## Storage
 
@@ -27,20 +27,26 @@ A result-producer attempt may contain requested/resolved/effective model and eff
 
 ## Recommendation Policy
 
-Task Analyze supplies a cheapest-to-strongest candidate ladder, static baseline, and hard floor. The entry model is not an input.
+Task Analyze supplies a weak-to-strong quality ladder, static baseline, and hard floor. The entry model is not an input.
 
 1. Apply supported-input, supported-effort, safety, authority, project, language, code-style, and owning-skill floors first.
 2. With no prior success, use the static suggestion. The sole automatic exception is safe low-risk text-only tiny text/code/command work, which starts at eligible Spark-low.
 3. A runtime Spark failure for that exception uses the static suggestion without a quality penalty. Result execution retries only the exact planned `model|effort` fallback pairs and keeps sanitized attempt evidence; Mini/Ending verdict failures do not model-retry.
-4. After a receipt-matched verification pass, trial exactly one cheaper/faster candidate: one lower effort on the same model; only after its eligible efforts are exhausted, trial the next weaker eligible model.
-5. A Mini or Real correctness or quality failure is sticky: it raises the failed boundary and prevents the failed or weaker rungs from being selected; choose the nearest eligible rung above it. When no stronger current candidate exists, return a blocked/exhausted recommendation with no selected pair.
+4. After a receipt-matched verification pass, trial exactly one lower eligible rung: lower effort on the same model first; only after that model reaches its minimum eligible effort, trial the next weaker model at that model's highest eligible effort.
+5. A Mini or Real correctness or quality failure is sticky: it raises the failed boundary and prevents the failed or weaker rungs from being selected; upgrade one eligible rung in the exact reverse ladder direction and choose the nearest eligible rung above it. When no stronger current candidate exists, return a blocked/exhausted recommendation with no selected pair.
 6. Real Verify failure overrides an earlier Mini pass for the same route-run ID.
 7. Availability, timeout, protocol, telemetry, execution, or receipt failures block pass credit but do not become model-quality failures.
 8. An attempt-level quality failure cannot be erased by a later pass under the same route-run ID. A genuine retry gets a new route-run ID so both samples remain auditable.
 9. High-risk or irreversible work records evidence but does not auto-downgrade.
 
-Among verified eligible candidates, rank correctness first, then median total tokens, then median process time. Tokens are a usage proxy, not a dollar-cost claim.
+Among verified eligible candidates, the recorder uses a correctness boundary and the weakest verified complete pair control anchor. Receipts then provide like-for-like token/time evidence for future optimization. Tokens are a usage proxy, not a dollar-cost claim. `success_model` and `failed_model` are legacy full pair-boundary fields; do not claim any field or ranking the recorder does not produce.
 
 ## Commands
 
-Use `recommend` and `record` with the complete controlled profile: `--task-family`, `--artifact`, `--scope`, `--ambiguity`, `--modality`, `--risk`, `--complexity`, `--owning-skill`, `--project-family`, `--verification-shape`, generalized `--task-summary`, repeated canonical `--candidate-ladder`, `--static-suggestion`, and `--hard-floor`. `record` also takes the main producer `--receipt`, `--verify-level`, `--verify-status`, and the same sanitized `--run-id` for Mini then Real. Direct non-dispatch routes invoke it too.
+Use `recommend` and `record` with the complete controlled profile: `--task-family`, `--artifact`, `--execution-domain`, `--scope`, `--ambiguity`, `--modality`, `--risk`, `--complexity`, `--owning-skill`, `--project-family`, `--verification-shape`, generalized `--task-summary`, repeated canonical `--candidate-ladder`, `--static-suggestion`, and `--hard-floor`.  
+`--execution-domain` is optional. Migrate missing values as:
+
+- `code_unspecified` for legacy code evidence.
+- `general` for non-code evidence.
+
+`record` also takes the main producer `--receipt`, `--verify-level`, `--verify-status`, and the same sanitized `--run-id` for Mini then Real. Direct non-dispatch routes invoke it too.

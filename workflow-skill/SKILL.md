@@ -80,6 +80,14 @@ When the task changes or tests prompt behavior, prompt wording, templates, strin
 
 Read `references/routing-matrix.md` for multi-artifact routes. Read `references/image-generation.md` for image-related work or when a generated visual materially improves the requested result.
 
+## First Result Principle
+
+Finish the requested task, run the smallest meaningful Mini Verify, and show the basically verified result immediately. Afterward, Ending Task owns deeper Real Verify, broader regression, optimization proof, reports, logs, documentation, and routing learning. A later correctness problem must notify the user, reopen the task, repair, rerun Mini Verify, and present the corrected result. Mini Verify is not exhaustive proof.
+
+## Direct Action Boundary
+
+Task Analyze always runs. For one obvious reversible action with no graph, Workflow executes the installed tool skill directly after the visible route, without a cached plan, model child, or internal dispatcher; Mini Verify checks the observable state and no downstream model receipt is fabricated. Complex work uses dispatched model|effort nodes, dependency topology, receipts, Mini Verify, Main Result, then Ending Task.
+
 ## Mini Verify And Main Result
 
 Mini Verify is the basic proportional result gate for every task. For a tiny easy task, Mini Verify may be the minimal confirmation that the requested state or answer is present. For complex work, follow the returned topology:

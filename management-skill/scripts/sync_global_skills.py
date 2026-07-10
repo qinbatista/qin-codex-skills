@@ -111,8 +111,8 @@ CHINESE_CATEGORY_LABELS = {
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "task-analyze-skill": "Independent 100%-trigger entry skill. The selected entry model and effort run only Task Analyze routing. It returns a locked per-node graph, with local condition-keyed `model_experience.json` summaries and explicit `success_model` / `failed_model` bounds.",
-    "workflow-skill": "Executes the locked Task Analyze route per node, trying effort-first fallbacks before model changes; runs Mini Verify then dispatches Ending Task work.",
+    "task-analyze-skill": "Independent 100%-trigger entry skill. The selected entry model and effort run only bounded Task Analyze routing. It returns a locked per-node graph, with private condition-keyed success_model / failed_model pair bounds and direct-action rules.",
+    "workflow-skill": "Executes the locked Task Analyze route per node; direct tool actions stay undispatched, complex work uses topology and receipts, then Mini Verify releases the first result before Ending Task.",
     "code-skill": "Spark-first Python/C# executor for implementation, debugging, refactoring, prompt-in-code, Unity C#, and authored probes; tiny text/code jobs start with Spark-low and may use safe static fallback on runtime failure.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
     "verify-skill": "Mini Verify before the first result and Real Verify after it in Ending Task; applies both outcomes to the original receipt-backed result attempt.",

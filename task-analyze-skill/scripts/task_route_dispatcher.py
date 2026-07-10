@@ -18,6 +18,17 @@ RECEIPT_SPEC = importlib.util.spec_from_file_location(
 receipt_module = importlib.util.module_from_spec(RECEIPT_SPEC)
 RECEIPT_SPEC.loader.exec_module(receipt_module)
 MODEL_EFFORTS = receipt_module.MODEL_EFFORTS
+try:
+    from routing_policy import EXECUTION_DOMAINS, infer_execution_domain
+except ModuleNotFoundError:
+    import importlib.util as _importlib_util
+
+    _routing_policy_path = Path(__file__).with_name("routing_policy.py")
+    _routing_policy_spec = _importlib_util.spec_from_file_location("task_analyze_routing_policy", _routing_policy_path)
+    _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
+    _routing_policy_spec.loader.exec_module(_routing_policy)
+    EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
+    infer_execution_domain = _routing_policy.infer_execution_domain
 
 HISTORY_PATH = Path(__file__).resolve().parent / "model_routing_history.py"
 HISTORY_SPEC = importlib.util.spec_from_file_location(
@@ -30,10 +41,6 @@ NODE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 ALLOWED_PHASES = {"result", "mini", "ending"}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 ENDING_SKILLS = {"verify-skill", "optimization-skill", "management-skill"}
-PYTHON_CSHARP_PATTERN = re.compile(r"(?i)(?:\bpython\b|\bc#\b|\bcsharp\b|\bunity\s+c#\b|\.py\b|\.cs\b)")
-CODE_ACTION_PATTERN = re.compile(
-    r"(?i)\b(?:implement|write|create|edit|modify|patch|fix|debug|refactor|code|script|function|class)\b"
-)
 
 CONTROLLED_FIELDS = [
     "task_family",
@@ -46,7 +53,35 @@ CONTROLLED_FIELDS = [
     "owning_skill",
     "project_family",
     "verification_shape",
+    "execution_domain",
 ]
+
+
+def _resolve_execution_domain(node):
+    explicit_domain = node.get("execution_domain")
+    if explicit_domain:
+        return str(explicit_domain)
+    purpose = node.get("purpose")
+    if purpose in {"implement", "author-probe"}:
+        return "code_unspecified"
+    language = node.get("language")
+    if language in EXECUTION_DOMAINS:
+        return str(language)
+    return str(
+        infer_execution_domain(
+            owning_skill=node.get("skill"),
+            task_family=node.get("task_family"),
+            explicit_domain=None,
+        )
+    )
+
+
+def _is_code_implementation(node):
+    if node.get("phase") != "result":
+        return False
+    if node.get("purpose") in {"implement", "author-probe"}:
+        return True
+    return _resolve_execution_domain(node) in {"python", "csharp", "unity_csharp"}
 
 
 
@@ -151,20 +186,26 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=Path.home() 
         if not isinstance(spark_exception, str) or len(spark_exception) > 240:
             failures.append(f"{node_id} spark_exception_reason must be a string of at most 240 characters")
 
-        python_code_result = node.get("phase") == "result" and isinstance(prompt, str) and PYTHON_CSHARP_PATTERN.search(prompt) and CODE_ACTION_PATTERN.search(prompt)
-        if python_code_result and skill != "code-skill":
-            failures.append(f"{node_id} Python/C# implementation must be owned by code-skill")
-        if python_code_result and model != "gpt-5.3-codex-spark" and not spark_exception.strip():
-            failures.append(f"{node_id} Python/C# implementation must use Spark first or state spark_exception_reason")
+        execution_domain = _resolve_execution_domain(node)
+        if execution_domain not in EXECUTION_DOMAINS:
+            failures.append(f"{node_id} execution_domain is unknown")
+
+        if _is_code_implementation(node) and skill != "code-skill":
+            failures.append(f"{node_id} Python/C#/Unity C# implementation bypasses code-skill")
+        if _is_code_implementation(node) and node.get("model") != "gpt-5.3-codex-spark" and not (spark_exception.strip() or node.get("fallback_reason", "").strip()):
+            failures.append(f"{node_id} has no fallback reason; implementation must be Spark-first or state spark_exception_reason/fallback_reason")
 
         if node_id == plan.get("main_result_node"):
             routing_condition = node.get("routing_condition")
+            if not isinstance(routing_condition, dict):
+                failures.append(f"{node_id} requires routing_condition")
+                routing_condition = {}
+            elif "execution_domain" not in routing_condition:
+                failures.append(f"{node_id} requires routing_condition.execution_domain")
             candidate_ladder = node.get("candidate_ladder")
             static_suggestion = node.get("static_suggestion")
             hard_floor = node.get("hard_floor")
-            if not isinstance(routing_condition, dict):
-                failures.append(f"{node_id} requires routing_condition")
-            else:
+            if isinstance(routing_condition, dict):
                 try:
                     routing_condition = routing_history_module.validate_condition(routing_condition)
                 except ValueError as error:
@@ -496,11 +537,13 @@ def _route_run_id():
     return f"route-{uuid.uuid4().hex}"
 
 
-def _run_record(result_path, verify_level, verify_status, main_result_receipt_path, route_run_id, main_node):
+def _run_record(result_path, verify_level, verify_status, main_result_receipt_path, route_run_id, main_node, execution_domain=None):
     if not main_result_receipt_path:
         return {"status": "skipped", "reason": "missing-main-result-receipt"}
     node = main_node
-    condition = node.get("routing_condition", {})
+    condition = dict(node.get("routing_condition", {}))
+    if execution_domain is not None:
+        condition["execution_domain"] = execution_domain
     verify_status = verify_status if verify_status in {"pass", "fail", "unknown"} else "unknown"
     failure_class = "none"
     if verify_status == "fail":
@@ -522,6 +565,7 @@ def _run_record(result_path, verify_level, verify_status, main_result_receipt_pa
         candidate_ladder=node.get("candidate_ladder", []),
         static_suggestion=node.get("static_suggestion", ""),
         hard_floor=node.get("hard_floor", ""),
+        execution_domain=condition.get("execution_domain") or None,
         receipt=main_result_receipt_path,
         verify_level=verify_level,
         verify_status=verify_status,
@@ -620,6 +664,7 @@ def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".code
                 main_result_receipt_path=main_record.get("receipt_path"),
                 route_run_id=route_run_id,
                 main_node=main_node,
+                execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
             )
         elif main_record.get("status") != "pass":
             _run_record(
@@ -629,6 +674,7 @@ def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".code
                 main_result_receipt_path=main_record.get("receipt_path"),
                 route_run_id=route_run_id,
                 main_node=main_node,
+                execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
             )
 
     status = "pass" if not failures and main_record.get("status") == "pass" and mini_record.get("status") == "pass" else "fail"
@@ -771,7 +817,17 @@ def run_ending_handoff(handoff_path, codex_bin="codex"):
             if node_by_id.get(ending_record.get("id"), {}).get("verifies_node"):
                 continue
             ending_status = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
-            _run_record(main_record.get("receipt_path"), "real", ending_status if ending_status in {"pass", "fail"} else "unknown", main_record.get("receipt_path"), route_run_id, main_node)
+            if ending_status != "pass":
+                failures.append(f"Non-targeted Ending verify node {ending_record['id']} did not pass ENDING_TASK marker")
+            _run_record(
+                main_record.get("receipt_path"),
+                "real",
+                ending_status if ending_status in {"pass", "fail"} else "unknown",
+                main_record.get("receipt_path"),
+                route_run_id,
+                main_node,
+                execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
+            )
 
     status = (
         "pass"
@@ -785,6 +841,8 @@ def run_ending_handoff(handoff_path, codex_bin="codex"):
         "failures": failures,
         "entry": entry,
         "nodes": ordered,
+        "reopen_required": status != "pass",
+        "notification_required": status != "pass",
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

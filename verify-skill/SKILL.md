@@ -7,6 +7,10 @@ description: "Use when the locked task-analyze-skill plan needs Mini Verify, Rea
 
 Use this as the verification executor named by the locked `task-analyze-skill` plan and coordinated by `workflow-skill`. Follow each verification node's exact model, effort, dependencies, input, output, and stop condition. Do not move a node across the Main Result boundary or silently change its model.
 
+## First Result Principle
+
+Finish the requested task, run the smallest meaningful Mini Verify, and show the basically verified result immediately. Continue deeper Real Verify, broader regression checks, optimization proof, reports, logs, documentation, and routing learning in Ending Task after the result. If later verification finds a correctness problem, notify the user, reopen the task, repair, rerun Mini Verify, and present the corrected result. Never call Mini Verify exhaustive proof.
+
 ## Internal Route Selection
 
 ### Two Verification Categories

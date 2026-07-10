@@ -12,13 +12,19 @@ SYNC_SPEC = importlib.util.spec_from_file_location("task_analyze_sync_model_capa
 sync_model_capabilities = importlib.util.module_from_spec(SYNC_SPEC)
 SYNC_SPEC.loader.exec_module(sync_model_capabilities)
 
-MODEL_EFFORTS = {
-    "gpt-5.6-sol": {"low", "medium", "high", "xhigh", "max", "ultra"},
-    "gpt-5.6-terra": {"low", "medium", "high", "xhigh", "max", "ultra"},
-    "gpt-5.6-luna": {"low", "medium", "high", "xhigh", "max"},
-    "gpt-5.3-codex-spark": {"low", "medium", "high", "xhigh"},
-}
-EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max", "ultra"]
+try:
+    from routing_policy import EXECUTION_DOMAINS, MODEL_EFFORTS, MODEL_EFFORT_ORDER, MODEL_ORDER
+except ModuleNotFoundError:
+    import importlib.util as _importlib_util
+
+    _routing_policy_path = Path(__file__).with_name("routing_policy.py")
+    _routing_policy_spec = _importlib_util.spec_from_file_location("task_analyze_routing_policy", _routing_policy_path)
+    _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
+    _routing_policy_spec.loader.exec_module(_routing_policy)
+    EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
+    MODEL_EFFORTS = _routing_policy.MODEL_EFFORTS
+    MODEL_EFFORT_ORDER = _routing_policy.MODEL_EFFORT_ORDER
+    MODEL_ORDER = _routing_policy.MODEL_ORDER
 REQUIRED_FILES = [
     ".gitignore",
     "SKILL.md",
@@ -51,7 +57,7 @@ REQUIRED_SKILL_TEXT = [
     "Python/C#/Unity C#",
     "Spark first",
     "Private Adaptive Routing",
-    "trial exactly one cheaper/faster candidate",
+    "trial exactly one lower effort on the same model",
     "Mini Verify",
     "show the main result immediately",
     "Ending Task",
@@ -163,6 +169,19 @@ def installed_skills(skill_dir):
     return {path.name for path in skill_dir.parent.iterdir() if path.is_dir() and (path / "SKILL.md").exists()}
 
 
+
+
+def _is_code_implementation(node):
+    if node.get("purpose") in {"implement", "author-probe"}:
+        return True
+    language = node.get("language")
+    execution_domain = node.get("execution_domain")
+    return (
+        language in {"python", "csharp", "unity_csharp"}
+        or execution_domain in {"python", "csharp", "unity_csharp"}
+    )
+
+
 def validate_plan(plan, installed):
     failures = []
     nodes = plan.get("nodes", [])
@@ -188,9 +207,17 @@ def validate_plan(plan, installed):
         for dependency in node.get("dependencies", []):
             if dependency not in node_by_id:
                 failures.append(f"{node_id} has missing dependency {dependency}")
-        if node.get("language") in {"python", "csharp"} and skill != "code-skill":
+        execution_domain = node.get("execution_domain")
+        if execution_domain and execution_domain not in EXECUTION_DOMAINS:
+            failures.append(f"{node_id} uses unknown execution_domain: {execution_domain}")
+        if _is_code_implementation(node) and skill != "code-skill":
             failures.append(f"{node_id} bypasses code-skill")
-        if node.get("language") in {"python", "csharp"} and node.get("purpose") in {"implement", "author-probe"} and model != "gpt-5.3-codex-spark" and not node.get("fallback_reason"):
+        if (
+            _is_code_implementation(node)
+            and model != "gpt-5.3-codex-spark"
+            and not node.get("spark_exception_reason")
+            and not node.get("fallback_reason")
+        ):
             failures.append(f"{node_id} is not Spark-first and has no fallback reason")
         if index > 0 and model == entry_model and effort == entry_effort:
             failures.append(f"{node_id} reuses resolved entry model and effort")
@@ -213,23 +240,24 @@ def validate_plan(plan, installed):
 
 
 def _downstream_model(entry_model):
-    return {
-        "gpt-5.6-luna": "gpt-5.6-terra",
-        "gpt-5.6-terra": "gpt-5.6-sol",
-        "gpt-5.6-sol": "gpt-5.6-luna",
-        "gpt-5.3-codex-spark": "gpt-5.6-luna",
-    }[entry_model]
+    index = MODEL_ORDER.index(entry_model)
+    if index + 1 < len(MODEL_ORDER):
+        return MODEL_ORDER[index + 1]
+    return MODEL_ORDER[1]
 
 
 def _downstream_effort(model):
-    return "low" if "low" in MODEL_EFFORTS[model] else "medium"
+    for effort in MODEL_EFFORT_ORDER:
+        if effort in MODEL_EFFORTS[model]:
+            return effort
+    raise ValueError(f"model has no supported effort: {model}")
 
 
 def sample_plans():
-    ordered_models = ["gpt-5.3-codex-spark", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
+    ordered_models = list(MODEL_ORDER)
     plans = {}
     for model in ordered_models:
-        for effort in EFFORT_ORDER:
+        for effort in MODEL_EFFORT_ORDER:
             if effort not in MODEL_EFFORTS[model]:
                 continue
             downstream_model = _downstream_model(model)
@@ -240,28 +268,29 @@ def sample_plans():
                     "display": "mermaid",
                     "nodes": [
                         {
-                            "id": "task-analyze",
-                            "skill": "task-analyze-skill",
-                            "model": model,
-                            "effort": effort,
-                            "dependencies": [],
+                        "id": "task-analyze",
+                        "skill": "task-analyze-skill",
+                        "model": model,
+                        "effort": effort,
+                        "dependencies": [],
                         },
-                        {"id": "audit", "skill": "workflow-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["task-analyze"]},
+                        {"id": "audit", "skill": "workflow-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["task-analyze"], "execution_domain": "general"},
                         {
                             "id": "implement",
                             "skill": "code-skill",
                             "model": "gpt-5.3-codex-spark",
                             "effort": "high",
                             "dependencies": ["audit"],
+                            "execution_domain": "python",
                             "language": "python",
                             "purpose": "implement",
                         },
-                        {"id": "mini-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["implement"]},
-                        {"id": "main-result", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["mini-verify"]},
-                        {"id": "ending-dispatch", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["main-result"]},
-                        {"id": "real-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["ending-dispatch"]},
-                        {"id": "optimization-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["ending-dispatch"]},
-                        {"id": "records", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["ending-dispatch"]},
+                        {"id": "mini-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["implement"], "execution_domain": "general"},
+                        {"id": "main-result", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
+                        {"id": "ending-dispatch", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["main-result"], "execution_domain": "general"},
+                        {"id": "real-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                        {"id": "optimization-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                        {"id": "records", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
                     ],
                 }
             else:
@@ -270,11 +299,18 @@ def sample_plans():
                     "display": "text",
                     "nodes": [
                         {"id": "task-analyze", "skill": "task-analyze-skill", "model": model, "effort": effort, "dependencies": []},
-                        {"id": "direct", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["task-analyze"]},
-                        {"id": "mini-verify", "skill": "verify-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["direct"]},
-                        {"id": "main-result", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["mini-verify"]},
-                        {"id": "ending-dispatch", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["main-result"]},
-                        {"id": "records", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["ending-dispatch"]},
+                        {
+                            "id": "direct",
+                            "skill": "workflow-skill",
+                            "model": downstream_model,
+                            "effort": downstream_effort,
+                            "dependencies": ["task-analyze"],
+                            "execution_domain": "general",
+                        },
+                        {"id": "mini-verify", "skill": "verify-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["direct"], "execution_domain": "general"},
+                        {"id": "main-result", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
+                        {"id": "ending-dispatch", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["main-result"], "execution_domain": "general"},
+                        {"id": "records", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
                     ],
                 }
     return plans

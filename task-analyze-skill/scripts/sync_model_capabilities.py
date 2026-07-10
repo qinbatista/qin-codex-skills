@@ -3,8 +3,20 @@ import argparse
 import json
 from pathlib import Path
 
+try:
+    from routing_policy import MODEL_DEFINITIONS, MODEL_ORDER
+except ModuleNotFoundError:
+    import importlib.util
 
-MODEL_SLUGS = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"]
+    _routing_policy_path = Path(__file__).with_name("routing_policy.py")
+    _routing_policy_spec = importlib.util.spec_from_file_location("task_analyze_routing_policy", _routing_policy_path)
+    _routing_policy = importlib.util.module_from_spec(_routing_policy_spec)
+    _routing_policy_spec.loader.exec_module(_routing_policy)
+    MODEL_DEFINITIONS = _routing_policy.MODEL_DEFINITIONS
+    MODEL_ORDER = _routing_policy.MODEL_ORDER
+
+
+MODEL_SLUGS = list(MODEL_ORDER)
 
 
 def cache_models(models_cache_path):
@@ -17,8 +29,18 @@ def missing_required_models(models_cache_path):
     return [slug for slug in MODEL_SLUGS if slug not in models_by_slug]
 
 
+def effort_markdown_lines():
+    lines = []
+    for slug in MODEL_SLUGS:
+        efforts = ", ".join(MODEL_DEFINITIONS[slug]["efforts"])
+        lines.append(f"- `{slug}`: {efforts}.")
+    return lines
+
+
 def snapshot_has_required_models(snapshot):
-    return all(f"`{slug}`" in snapshot for slug in MODEL_SLUGS) and all(text in snapshot for text in ["low, medium, high, xhigh, max, ultra", "low, medium, high, xhigh, max", "low, medium, high, xhigh"])
+    slug_checks = [f"`{slug}`" in snapshot for slug in MODEL_SLUGS]
+    effort_checks = [line in snapshot for line in effort_markdown_lines()]
+    return all(slug_checks) and all(effort_checks)
 
 
 def check_snapshot(models_cache_path, snapshot):
@@ -43,7 +65,7 @@ def build_snapshot(models_cache_path):
         api_support = "yes" if model["supported_in_api"] else "no"
         speed_tiers = ", ".join(model.get("additional_speed_tiers", [])) or "default"
         lines.append(f"| {model['display_name']} | `{slug}` | {inputs} | {model['context_window']:,} | {api_support} | `{model['default_reasoning_level']}` | {efforts} | {speed_tiers} |")
-    lines.extend(["", "## Effort Compatibility", "", "- `GPT-5.6-Sol`: low, medium, high, xhigh, max, ultra.", "- `GPT-5.6-Terra`: low, medium, high, xhigh, max, ultra.", "- `GPT-5.6-Luna`: low, medium, high, xhigh, max.", "- `GPT-5.3-Codex-Spark`: low, medium, high, xhigh.", "- Sol, Terra, and Luna accept image input. Spark is text-only.", "- Spark is unavailable through API-only execution surfaces.", "- If an effort is unsupported, use the highest supported effort below it and show the normalization.", "", "## Refresh", "", "```bash", "python3 scripts/sync_model_capabilities.py", "python3 scripts/sync_model_capabilities.py --check", "```", ""])
+    lines.extend(["", "## Effort Compatibility", "", *effort_markdown_lines(), "- Sol, Terra, and Luna accept image input. Spark is text-only.", "- Spark is unavailable through API-only execution surfaces.", "- If an effort is unsupported, use the highest supported effort below it and show the normalization.", "", "## Refresh", "", "```bash", "python3 scripts/sync_model_capabilities.py", "python3 scripts/sync_model_capabilities.py --check", "```", ""])
     return "\n".join(lines)
 
 

@@ -3,9 +3,11 @@ import importlib.util
 import json
 import multiprocessing
 import os
+import sys
 import stat
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -65,6 +67,15 @@ def concurrent_record(history, receipt, number):
     module.record_event(arguments(Path(history), Path(receipt), run_id=f"run-{number}"))
 
 
+def parse_profile_args(argv):
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = ["task-analyze-skill"] + argv
+        return module.parse_args()
+    finally:
+        sys.argv = original_argv
+
+
 class ModelRoutingHistoryTests(unittest.TestCase):
     def test_bootstrap_preserves_legacy_and_private_summary_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -75,7 +86,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             history = root / "model_experience.json"
             loaded = module.load_history(history)
             self.assertEqual(legacy.read_text(encoding="utf-8"), source)
-            self.assertEqual(loaded["schema_version"], 2)
+            self.assertEqual(loaded["schema_version"], 3)
             self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
             with self.assertRaises(ValueError):
                 module.validate_summary("Read /private/token.txt and api_key=secret now.")
@@ -195,7 +206,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertIsNone(recommendation["failed_model"])
             self.assertFalse(recommendation["trial"])
 
-    def test_bounds_compare_median_totals_then_process_for_verified_passes(self):
+    def test_performance_evidence_cannot_bypass_weakest_verified_quality_boundary(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             receipt = root / "receipt.json"
@@ -218,8 +229,8 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=150, process_elapsed_ms=50)
             module.record_event(strong)
             recommendation = module.recommend_route(weak_low_a)
-            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|high")
-            self.assertEqual(recommendation["reason"], "performance_ranked")
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(recommendation["reason"], "success_and_failure_boundary")
 
     def test_high_risk_does_not_downgrade_and_concurrent_records_are_atomic(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -298,6 +309,324 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             module.record_event(args)
             split_history = module.load_history(root / "history.json")
             self.assertEqual(len(split_history["conditions"]), 2)
+
+    def test_no_success_pass_exploration_is_one_downgrade_from_success_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt = root / "receipt.json"
+            history = root / "history.json"
+            args = arguments(history, receipt, verify_level="mini", verify_status="pass", failure_class="none", run_id="run-pass")
+            args.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|high", "gpt-5.6-terra|low"]
+            args.static_suggestion = "gpt-5.6-terra|low"
+            args.hard_floor = "gpt-5.3-codex-spark|low"
+            write_receipt(receipt, "gpt-5.6-terra", "low", total_tokens=120, process_elapsed_ms=60)
+            module.record_event(args)
+            recommendation = module.recommend_route(args)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|high")
+
+    def test_higher_performance_stronger_pair_must_not_bypass_weakest_verified_success(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt = root / "receipt.json"
+            history = root / "history.json"
+            args = arguments(history, receipt, verify_level="mini", verify_status="pass", failure_class="none", run_id="run-baseline")
+            args.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high", "gpt-5.6-terra|low"]
+            args.static_suggestion = "gpt-5.6-luna|low"
+            args.hard_floor = "gpt-5.3-codex-spark|low"
+            write_receipt(receipt, "gpt-5.6-luna", "low", total_tokens=900, process_elapsed_ms=900)
+            module.record_event(args)
+            args.run_id = "run-high"
+            write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=100, process_elapsed_ms=100)
+            module.record_event(args)
+            failure = arguments(history, receipt, verify_level="mini", verify_status="fail", failure_class="quality", run_id="run-failure")
+            failure.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high", "gpt-5.6-terra|low"]
+            failure.static_suggestion = "gpt-5.6-luna|low"
+            failure.hard_floor = "gpt-5.3-codex-spark|low"
+            write_receipt(receipt, "gpt-5.6-terra", "low", status="fail", total_tokens=10, process_elapsed_ms=10)
+            module.record_event(failure)
+            recommendation = module.recommend_route(args)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+
+    def test_schema2_records_preserve_tasks_and_boundaries_with_inferred_execution_domain(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            payload = {
+                "schema_version": 2,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "conditions": {
+                    "legacy": {
+                        "condition": {
+                            "task_family": "code",
+                            "artifact": "script",
+                            "scope": "single",
+                            "ambiguity": "low",
+                            "modality": "text",
+                            "risk": "low",
+                            "complexity": "easy",
+                            "owning_skill": "code-skill",
+                            "project_family": "global",
+                            "verification_shape": "mini_real",
+                        },
+                        "summary": "Schema2 route history migration test summary.",
+                        "candidate_ladder": [
+                            "gpt-5.3-codex-spark|low",
+                            "gpt-5.6-luna|low",
+                            "gpt-5.6-luna|medium",
+                            "gpt-5.6-terra|low",
+                        ],
+                        "static_suggestion": "gpt-5.6-luna|low",
+                        "hard_floor": "gpt-5.3-codex-spark|low",
+                        "success_model": "gpt-5.6-luna|medium",
+                        "failed_model": "gpt-5.6-luna|low",
+                        "tasks": [
+                            {
+                                "run_id": "run-a",
+                                "requested_pair": "gpt-5.3-codex-spark|low",
+                                "resolved_pair": "gpt-5.3-codex-spark|low",
+                                "effective_pair": "gpt-5.3-codex-spark|low",
+                                "executed_pair": "gpt-5.3-codex-spark|low",
+                                "receipt_status": "pass",
+                                "mini_status": "fail",
+                                "real_status": "unknown",
+                                "allowlisted_failure_class": "quality",
+                                "turn_completed": True,
+                                "model_match": True,
+                                "effort_match": True,
+                                "trial": False,
+                                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                            },
+                            {
+                                "run_id": "run-b",
+                                "requested_pair": "gpt-5.6-luna|medium",
+                                "resolved_pair": "gpt-5.6-luna|medium",
+                                "effective_pair": "gpt-5.6-luna|medium",
+                                "executed_pair": "gpt-5.6-luna|medium",
+                                "receipt_status": "pass",
+                                "mini_status": "pass",
+                                "real_status": "pass",
+                                "allowlisted_failure_class": "none",
+                                "turn_completed": True,
+                                "model_match": True,
+                                "effort_match": True,
+                                "trial": False,
+                                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                            },
+                        ],
+                    }
+                },
+            }
+            history.write_text(json.dumps(payload), encoding="utf-8")
+            loaded = module.load_history(history)
+            self.assertEqual(loaded["schema_version"], 3)
+            expected_key = module.condition_key(dict(payload["conditions"]["legacy"]["condition"], execution_domain="code_unspecified"))
+            self.assertIn(expected_key, loaded["conditions"])
+            loaded_record = loaded["conditions"][expected_key]
+            self.assertEqual(len(loaded_record["tasks"]), 2)
+            self.assertEqual(loaded_record["failed_model"], "gpt-5.6-luna|low")
+            self.assertEqual(loaded_record["success_model"], "gpt-5.6-luna|medium")
+
+    def test_python_and_unity_distinct_execution_domains_change_condition_keys(self):
+        python_condition = dict(CONDITION, execution_domain="python")
+        unity_condition = dict(CONDITION, execution_domain="unity_csharp")
+        self.assertNotEqual(module.condition_key(module.validate_condition(python_condition)), module.condition_key(module.validate_condition(unity_condition)))
+
+    def test_cli_profile_domain_distinguishes_python_and_unity_keys(self):
+        args_py = parse_profile_args(
+            [
+                "recommend",
+                "--task-family",
+                "code",
+                "--artifact",
+                "script",
+                "--scope",
+                "single",
+                "--ambiguity",
+                "low",
+                "--modality",
+                "text",
+                "--risk",
+                "low",
+                "--complexity",
+                "easy",
+                "--owning-skill",
+                "code-skill",
+                "--project-family",
+                "global",
+                "--verification-shape",
+                "mini_real",
+                "--task-summary",
+                SUMMARY,
+                "--candidate-ladder",
+                "gpt-5.3-codex-spark|low",
+                "--candidate-ladder",
+                "gpt-5.6-luna|low",
+                "--static-suggestion",
+                "gpt-5.6-luna|low",
+                "--hard-floor",
+                "gpt-5.3-codex-spark|low",
+                "--execution-domain",
+                "python",
+            ]
+        )
+        args_unity = parse_profile_args(
+            [
+                "recommend",
+                "--task-family",
+                "code",
+                "--artifact",
+                "script",
+                "--scope",
+                "single",
+                "--ambiguity",
+                "low",
+                "--modality",
+                "text",
+                "--risk",
+                "low",
+                "--complexity",
+                "easy",
+                "--owning-skill",
+                "code-skill",
+                "--project-family",
+                "global",
+                "--verification-shape",
+                "mini_real",
+                "--task-summary",
+                SUMMARY,
+                "--candidate-ladder",
+                "gpt-5.3-codex-spark|low",
+                "--candidate-ladder",
+                "gpt-5.6-luna|low",
+                "--static-suggestion",
+                "gpt-5.6-luna|low",
+                "--hard-floor",
+                "gpt-5.3-codex-spark|low",
+                "--execution-domain",
+                "unity_csharp",
+            ]
+        )
+        self.assertNotEqual(module.condition_key(module.validate_condition(vars(args_py))), module.condition_key(module.validate_condition(vars(args_unity))))
+
+    def test_cli_profile_infers_execution_domain_when_not_provided(self):
+        args_code = parse_profile_args(
+            [
+                "recommend",
+                "--task-family",
+                "code",
+                "--artifact",
+                "script",
+                "--scope",
+                "single",
+                "--ambiguity",
+                "low",
+                "--modality",
+                "text",
+                "--risk",
+                "low",
+                "--complexity",
+                "easy",
+                "--owning-skill",
+                "code-skill",
+                "--project-family",
+                "global",
+                "--verification-shape",
+                "mini_real",
+                "--task-summary",
+                SUMMARY,
+                "--candidate-ladder",
+                "gpt-5.3-codex-spark|low",
+                "--candidate-ladder",
+                "gpt-5.6-luna|low",
+                "--static-suggestion",
+                "gpt-5.6-luna|low",
+                "--hard-floor",
+                "gpt-5.3-codex-spark|low",
+            ]
+        )
+        self.assertEqual(module.validate_condition(vars(args_code))["execution_domain"], "code_unspecified")
+
+        args_general = parse_profile_args(
+            [
+                "recommend",
+                "--task-family",
+                "grounded",
+                "--artifact",
+                "document",
+                "--scope",
+                "single",
+                "--ambiguity",
+                "low",
+                "--modality",
+                "text",
+                "--risk",
+                "low",
+                "--complexity",
+                "easy",
+                "--owning-skill",
+                "workflow-skill",
+                "--project-family",
+                "global",
+                "--verification-shape",
+                "mini_real",
+                "--task-summary",
+                SUMMARY,
+                "--candidate-ladder",
+                "gpt-5.3-codex-spark|low",
+                "--candidate-ladder",
+                "gpt-5.6-luna|low",
+                "--static-suggestion",
+                "gpt-5.6-luna|low",
+                "--hard-floor",
+                "gpt-5.3-codex-spark|low",
+            ]
+        )
+        self.assertEqual(module.validate_condition(vars(args_general))["execution_domain"], "general")
+
+    def test_record_event_same_run_id_unions_operational_failure_pairs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            args = arguments(history, receipt, run_id="run-union")
+            args.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
+            write_receipt(
+                receipt,
+                "gpt-5.6-terra",
+                "low",
+                status="fail",
+                route_attempts=route_attempt_fail("gpt-5.6-terra", "low"),
+            )
+            module.record_event(args)
+            args.verify_level = "real"
+            args.verify_status = "fail"
+            args.failure_class = "execution"
+            write_receipt(
+                receipt,
+                "gpt-5.6-luna",
+                "low",
+                status="fail",
+                route_attempts=route_attempt_fail("gpt-5.6-luna", "low"),
+            )
+            module.record_event(args)
+            task = module.load_history(history)["conditions"][module.condition_key(CONDITION)]["tasks"][0]
+            self.assertEqual(task["operational_failure_pairs"], ["gpt-5.6-luna|low", "gpt-5.6-terra|low"])
+
+    def test_hard_floor_verified_success_is_retained_when_floor_strength_is_max(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt = root / "receipt.json"
+            history = root / "history.json"
+            args = arguments(history, receipt, verify_level="mini", verify_status="pass", failure_class="none", run_id="run-floor")
+            args.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
+            args.static_suggestion = "gpt-5.6-luna|low"
+            args.hard_floor = "gpt-5.3-codex-spark|low"
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", total_tokens=77, process_elapsed_ms=77)
+            module.record_event(args)
+            recommendation = module.recommend_route(args)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.3-codex-spark|low")
+            self.assertEqual(recommendation["trial"], False)
+            self.assertEqual(recommendation["reason"], "verified_floor_retained")
 
 
 if __name__ == "__main__":

@@ -102,9 +102,31 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(attempt["status"], "fail")
         self.assertEqual(attempt["failure_class"], "execution")
         self.assertEqual(attempt["requested_pair"], "gpt-5.3-codex-spark|low")
-        self.assertEqual(attempt["resolved_pair"], "gpt-5.3-codex-spark|low")
-        self.assertEqual(attempt["executed_pair"], "gpt-5.3-codex-spark|low")
+        self.assertIsNone(attempt["resolved_pair"])
+        self.assertIsNone(attempt["effective_pair"])
+        self.assertIsNone(receipt["resolved_model"])
+        self.assertIsNone(receipt["effective_model"])
+        self.assertFalse(attempt["model_match"])
+        self.assertFalse(attempt["effort_match"])
+        self.assertFalse(attempt["pair_match"])
         self.assertNotIn("boom", json.dumps(attempt))
+
+    def test_run_receipt_ignores_stale_thread_state_when_rollout_missing_turn_context(self):
+        stdout_text = json.dumps({"type": "thread.started", "thread_id": "thread-1"})
+        process = SimpleNamespace(stdout=stdout_text, stderr="boom", returncode=1)
+        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-5.3-codex-spark", "effort": "low", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {}, "reroutes": [], "usage": {}, "task_complete": {}}
+        args = argparse.Namespace(model="gpt-5.6-terra", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="runtime-fail-stale", allow_fallback=[])
+        with patch.object(module.subprocess, "run", return_value=process), patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
+            receipt = module.run_receipt(args, "same prompt")
+        attempt = receipt["route_attempts"][0]
+        self.assertIsNone(attempt["resolved_pair"])
+        self.assertIsNone(attempt["effective_pair"])
+        self.assertIsNone(receipt["resolved_model"])
+        self.assertIsNone(receipt["effective_model"])
+        self.assertEqual(attempt["status"], "fail")
+        self.assertFalse(receipt["turn_completed"])
+        self.assertEqual(attempt["executed_pair"], "gpt-5.6-terra|low")
 
     def test_failed_run_receipt_is_sanitized_and_does_not_claim_execution(self):
         args = argparse.Namespace(

@@ -32,6 +32,8 @@ Read only what the locked node needs:
 - safe repeated/parallel Python/C# work: `references/parallelization.md`;
 - Spark and fallback behavior: `references/spark-small-code.md`.
 
+Python and Unity C# share this executor but keep separate `execution_domain` evidence and language references. Registry metadata identifies the domain; language rules belong in `references/python-rules.md` and `references/unity-csharp-rules.md`.
+
 For prompt-in-code work, show `Prompt idea -> Prompt goal -> Problems -> Solution`, inspect the existing prompt, fix the smallest complete logic, then embed and Mini Verify it.
 
 ## Model Contract

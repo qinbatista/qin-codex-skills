@@ -1,5 +1,24 @@
 # Task Analyze Route Contract
 
+## First Result Principle
+
+Finish the requested task, run the smallest meaningful Mini Verify, and show the basically verified result immediately. Deeper Real Verify, broader regression, optimization proof, reports, logs, documentation, and routing learning belong after that result in Ending Task. A later correctness failure must notify the user, reopen the task, repair, rerun Mini Verify, and present the corrected result. Mini Verify is basic readiness, never exhaustive proof.
+
+## Easy Direct Tool Action
+
+Task Analyze remains the 100 percent entry skill, but an obvious reversible tool action with no graph runs its installed tool skill directly after the concise route. It uses no cached plan, model child, or internal dispatcher, and tool-only work gets no fabricated downstream model receipt. Mini Verify checks only the observable stop condition. Graduated scenarios:
+
+- Open Chrome: `chrome:control-chrome`, no dispatcher; verify Chrome is open.
+- Open YouTube: direct browser action, no dispatcher; verify `youtube.com` is loaded.
+- Search CCTV on YouTube: bounded browser interaction, no dispatcher; verify the query and visible results.
+- Design a YouTube-like website: complex dispatcher route through `frontend-app-builder`, grounded implementation, Mini render/core interaction, then Ending responsive/console/navigation/accessibility/visual review.
+
+## Extension Guide
+
+For full extension steps, use [`router-extension-guide`](router-extension-guide.md).
+
+A code-domain extension adds routing-registry metadata, a matching code-domain `execution_domain` evidence plan, `code-skill` language references, schema/validator updates, routing-scenario coverage, and README updates. Python and Unity C# share `code-skill` but retain separate `execution_domain` evidence and language reference files. Keep language-specific rules in executor references, not in registry metadata. The six public skills and the private adaptive-routing boundary remain unchanged.
+
 ## Easy Task: Text Route
 
 Do not draw Mermaid for an easy task. Show this compact route before execution:

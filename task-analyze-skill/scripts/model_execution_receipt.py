@@ -10,23 +10,25 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from routing_policy import MODEL_EFFORTS, parse_model_effort_pair, pair_text
+except ModuleNotFoundError:
+    import importlib.util
 
-MODEL_EFFORTS = {"gpt-5.6-sol": {"low", "medium", "high", "xhigh", "max", "ultra"}, "gpt-5.6-terra": {"low", "medium", "high", "xhigh", "max", "ultra"}, "gpt-5.6-luna": {"low", "medium", "high", "xhigh", "max"}, "gpt-5.3-codex-spark": {"low", "medium", "high", "xhigh"}}
+    _routing_policy_path = Path(__file__).with_name("routing_policy.py")
+    _routing_policy_spec = importlib.util.spec_from_file_location("task_analyze_routing_policy", _routing_policy_path)
+    _routing_policy = importlib.util.module_from_spec(_routing_policy_spec)
+    _routing_policy_spec.loader.exec_module(_routing_policy)
+    MODEL_EFFORTS = _routing_policy.MODEL_EFFORTS
+    parse_model_effort_pair = _routing_policy.parse_model_effort_pair
+    pair_text = _routing_policy.pair_text
+
 ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER"}
 RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
 
 
 def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def parse_model_effort_pair(value):
-    if not isinstance(value, str) or "|" not in value:
-        raise ValueError("fallback must be a model|effort pair")
-    model, effort = value.strip().split("|", 1)
-    if model not in MODEL_EFFORTS or effort not in MODEL_EFFORTS[model]:
-        raise ValueError("unsupported model|effort pair")
-    return model, effort
 
 
 def normalize_fallback_pairs(values):
@@ -37,11 +39,7 @@ def normalize_fallback_pairs(values):
         pair = parse_model_effort_pair(value)
         if pair not in pairs:
             pairs.append(pair)
-    return [f"{model}|{effort}" for model, effort in pairs]
-
-
-def pair_text(model, effort):
-    return f"{model}|{effort}" if model is not None and effort is not None else None
+    return [pair_text(model, effort) for model, effort in pairs]
 
 
 def infer_failure_class(process, status, turn_completed, turn_failed, model_match, effort_match, pair_match, token_consistent):
@@ -224,10 +222,9 @@ def normalize_usage(usage):
 
 
 def run_receipt(args, prompt_text):
-    if args.effort not in MODEL_EFFORTS[args.model]:
-        raise ValueError(f"unsupported effort {args.effort} for {args.model}")
+    requested_pair_tuple = parse_model_effort_pair(pair_text(args.model, args.effort))
     allowed_fallback_pairs = normalize_fallback_pairs(getattr(args, "allow_fallback", []))
-    requested_pair = (args.model, args.effort)
+    requested_pair = requested_pair_tuple
     allowed_pairs = [requested_pair] + [parse_model_effort_pair(value) for value in allowed_fallback_pairs]
     command = [args.codex_bin, "exec", "--model", args.model, "-c", f'model_reasoning_effort="{args.effort}"', "--sandbox", args.sandbox, "--skip-git-repo-check", "--json"]
     command.extend(["--ignore-user-config"] if args.ignore_user_config else [])
@@ -245,17 +242,23 @@ def run_receipt(args, prompt_text):
     stdout_summary = parse_stdout_events(process.stdout)
     thread_state = read_thread_state(args.state_db, stdout_summary["thread_id"])
     rollout = parse_rollout_allowlist(thread_state["rollout_path"] if thread_state else None)
-    turn_context = rollout["turn_context"] or {}
+    turn_context = rollout["turn_context"] if rollout.get("turn_context") else {}
     reroutes = rollout["reroutes"]
-    resolved_model = turn_context.get("model") or (thread_state or {}).get("model")
-    resolved_effort = turn_context.get("effort") or (thread_state or {}).get("effort")
-    effective_model = reroutes[-1]["to_model"] if reroutes else resolved_model
+    has_turn_context = bool(turn_context.get("model") and turn_context.get("effort"))
+    if has_turn_context:
+        resolved_model = turn_context.get("model")
+        resolved_effort = turn_context.get("effort")
+        effective_model = reroutes[-1]["to_model"] if reroutes else resolved_model
+    else:
+        resolved_model = None
+        resolved_effort = None
+        effective_model = None
     usage = normalize_usage(rollout["usage"] or stdout_summary["usage"])
     allowed_models = {model for model, _ in allowed_pairs}
     allowed_efforts = {effort for _, effort in allowed_pairs}
-    model_match = effective_model in allowed_models
+    model_match = resolved_model in allowed_models
     effort_match = resolved_effort in allowed_efforts
-    pair_match = (effective_model, resolved_effort) in allowed_pairs
+    pair_match = (effective_model, resolved_effort) in allowed_pairs if effective_model and resolved_effort else False
     token_consistent = thread_state is not None and usage["total_tokens"] == thread_state.get("tokens_used")
     status = "pass" if process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and pair_match and token_consistent else "fail"
     task_complete = rollout["task_complete"] or {}
@@ -272,8 +275,8 @@ def run_receipt(args, prompt_text):
     requested_pair = f"{args.model}|{args.effort}"
     attempt = route_attempt_summary(
         requested_pair=requested_pair,
-        resolved_pair=(resolved_model, resolved_effort),
-        effective_pair=(effective_model, resolved_effort),
+        resolved_pair=(resolved_model, resolved_effort) if resolved_model and resolved_effort else None,
+        effective_pair=(effective_model, resolved_effort) if effective_model and resolved_effort else None,
         status=status,
         model_match=model_match,
         effort_match=effort_match,

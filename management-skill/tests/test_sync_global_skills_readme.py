@@ -42,6 +42,20 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Easy tasks do not need a forced diagram", readme)
         self.assertIn("Mini Verify is the main-result gate", readme)
         self.assertIn("Real Verify runs in background Ending Task", readme)
+        self.assertIn("First Result Principle", readme)
+        self.assertIn("show the basically verified result immediately", readme)
+        self.assertIn("never describe Mini Verify as exhaustive proof", readme)
+        self.assertIn("weak-to-strong quality ladder", readme)
+        self.assertIn("Downgrade exactly one eligible rung", readme)
+        self.assertIn("correctness-first routing", readme)
+        self.assertIn("Open Chrome", readme)
+        self.assertIn("Open YouTube", readme)
+        self.assertIn("Search CCTV on YouTube", readme)
+        self.assertIn("Design a YouTube-like website", readme)
+        self.assertIn("## 🧰 Extension recipe", readme)
+        self.assertIn("execution_domain", readme)
+        self.assertIn("reasonable response time and token use", readme)
+        self.assertIn("exactly six public skills", readme)
         self.assertIn("a **different** `verify-skill` worker", readme)
         self.assertIn("Runtime receipts", readme)
         self.assertIn("hookless", readme)
@@ -49,8 +63,23 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertNotIn("hooks.json", readme)
         self.assertNotIn("Task Analyze is an internal phase", readme)
         self.assertNotIn("Real Verify always stays before", readme)
+        self.assertNotIn("model_experience.json` ledger is mirrored", readme)
+        self.assertNotIn("TASK_ANALYZE_PLAN_JSON", readme)
+        self.assertNotIn("median token", readme.lower())
+        self.assertNotIn("cheapest-to-strongest", readme.lower())
+        self.assertNotIn("fastest reasonable", readme.lower())
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
+
+        model_experience_match = re.search(r"\{\n  \"schema_version\": 3,.*?\n\}", readme, re.S)
+        self.assertIsNotNone(model_experience_match)
+        model_experience_payload = json.loads(model_experience_match.group(0))
+        self.assertEqual(model_experience_payload["schema_version"], 3)
+        condition = model_experience_payload["conditions"]["799b5cc30bcb4d107e081f34c0e6dff164d70cb85dc99397ca7ebca18c907729"]["condition"]
+        self.assertIn("execution_domain", condition)
+        self.assertEqual(condition["execution_domain"], "general")
+        self.assertNotIn("producer", model_experience_payload)
+        self.assertIn("requested_pair", model_experience_payload["conditions"]["799b5cc30bcb4d107e081f34c0e6dff164d70cb85dc99397ca7ebca18c907729"]["tasks"][0])
 
     def test_repository_snapshot_contains_every_local_readme_reference(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -140,19 +169,22 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             private_model_experience = local_dir / "task-analyze-skill" / "local" / "adaptive-routing" / "model_experience.json"
             private_model_experience.parent.mkdir(parents=True)
             private_model_experience_data = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "updated_at": "2026-07-10T06:00:00.000000+00:00",
                 "conditions": {
                     "local-model-experience-test": {
                         "condition": {
                             "task_family": "document",
                             "artifact": "document",
+                            "execution_domain": "general",
                             "scope": "single",
                             "ambiguity": "low",
                             "modality": "text",
                             "risk": "low",
                             "complexity": "easy",
                             "owning_skill": "management-skill",
+                            "project_family": "global-codex-skills",
+                            "verification_shape": "mini_real",
                         },
                         "summary": "test local private model_experience preservation",
                         "candidate_ladder": ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|medium"],

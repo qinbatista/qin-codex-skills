@@ -4,6 +4,8 @@ Task Analyze runs on the model and effort currently selected at task entry. That
 
 ## Selection Order
 
+A routing rung is the complete `model_name|effort` pair. This is a weak-to-strong quality ladder, not a price ladder: never assume cross-model means cheaper. To downgrade, move exactly one eligible rung. Lower effort on the same model first; only after that model reaches its minimum eligible effort, move to the next weaker model at that model's highest eligible effort. Upgrade in the exact reverse direction after a Mini or Real correctness/quality failure. Floors always win.
+
 1. During bounded read-only preflight, call `scripts/resolve_entry_model.py` to preserve the current entry pair exactly; use `unverified` only when exact resolution fails.
 2. Confirm the owning skill is installed.
 3. Apply safety, authority, modality, project, language, and owning-skill floors.
@@ -52,7 +54,7 @@ Every fallback is a planned or observed event with `from`, `to`, reason, and eff
 
 ## Receipt-Backed Personal Learning
 
-Use `scripts/model_routing_history.py recommend` with a controlled task profile and a cheapest-to-strongest candidate ladder. Do not pass the entry model or effort into the recommendation function.
+Use `scripts/model_routing_history.py recommend` with a controlled task profile and a weak-to-strong candidate ladder. Do not pass the entry model or effort into the recommendation function.
 
 - No prior success: use the static suggestion, except safe low-risk text-only `tiny_text`, `tiny_code`, or `command_generation` work starts at eligible Spark-low.
 - Runtime failure of that Spark-low exception: use the static suggestion without recording a quality failure. Result nodes retry only exact planned `model|effort` fallbacks; Mini/Ending verdict failures do not model-retry.
@@ -63,7 +65,7 @@ Use `scripts/model_routing_history.py recommend` with a controlled task profile 
 - Real Verify failure overrides an earlier Mini pass.
 - High-risk, irreversible, or authority-sensitive work may record outcomes but must not auto-downgrade.
 
-Rank eligible verified choices by correctness first, then median total tokens, then median process time. Tokens are a usage proxy, not a currency claim. Read `adaptive-routing.md` for the private schema and exact policy.
+Use a correctness boundary and the weakest verified complete pair as the control selection anchor. Receipts are for like-for-like optimization evidence only and do not actively rank all candidates by median token or median process-time alone. Read `adaptive-routing.md` for the private schema and exact policy.
 
 ## Efficiency Guard
 

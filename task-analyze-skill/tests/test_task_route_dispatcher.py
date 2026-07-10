@@ -15,12 +15,36 @@ MODULE_SPEC.loader.exec_module(module)
 
 class TaskRouteDispatcherTests(unittest.TestCase):
     def plan(self, cache_dir):
-        condition = {"task_family": "direct", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "owning_skill": "workflow-skill", "project_family": "global", "verification_shape": "mini_real"}
+        condition = {
+            "task_family": "direct",
+            "artifact": "answer",
+            "scope": "single",
+            "ambiguity": "low",
+            "modality": "text",
+            "risk": "low",
+            "complexity": "easy",
+            "owning_skill": "workflow-skill",
+            "project_family": "global",
+            "verification_shape": "mini_real",
+            "execution_domain": "general",
+        }
         ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
         return {"schema_version": 1, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a verified direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low", "trial": False}, {"id": "mini-verify", "phase": "mini", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Verify the dependency result equals 12", "sandbox": "read-only"}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["mini-verify"], "prompt": "Run the bounded post-result verification inventory.", "sandbox": "read-only"}], "main_result_node": "direct", "mini_verify_node": "mini-verify"}
 
     def plan_with_ending_optimization(self, cache_dir):
-        condition = {"task_family": "direct", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "owning_skill": "workflow-skill", "project_family": "global", "verification_shape": "mini_real"}
+        condition = {
+            "task_family": "direct",
+            "artifact": "answer",
+            "scope": "single",
+            "ambiguity": "low",
+            "modality": "text",
+            "risk": "low",
+            "complexity": "easy",
+            "owning_skill": "workflow-skill",
+            "project_family": "global",
+            "verification_shape": "mini_real",
+            "execution_domain": "general",
+        }
         ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
         return {
             "schema_version": 1,
@@ -106,6 +130,23 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan = self.plan_with_ending_optimization(root / "work" / "cache" / "route")
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
+
+    def test_plan_rejects_unity_csharp_result_node_not_owned_by_code_skill(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["language"] = "unity_csharp"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
+
+    def test_plan_rejects_unity_csharp_non_spark_node_without_fallback(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["language"] = "unity_csharp"
+            plan["nodes"][0]["skill"] = "code-skill"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("has no fallback reason" in failure for failure in failures))
 
     def test_run_plan_executes_result_then_mini_sequentially(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -367,8 +408,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 result_path.write_text("MINI_VERIFY=PASS\n" if node["phase"] == "mini" else node["id"] + "\n", encoding="utf-8")
                 receipt_path.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
                 return {"id": node["id"], "phase": node["phase"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "tokens": {}, "process_elapsed_ms": 1}
-        with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}):
-            manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root)
+            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}):
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(set(calls[:2]), {"branch-a", "branch-b"})
         self.assertEqual(calls[2:], ["merge", "mini-verify"])
         self.assertEqual(manifest["status"], "pass")
@@ -621,13 +662,78 @@ class TaskRouteDispatcherTests(unittest.TestCase):
 
             with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
                 manifest = module.run_ending_handoff(handoff_path)
-        self.assertEqual(manifest["status"], "pass")
+        self.assertEqual(manifest["status"], "fail")
         self.assertEqual(len(recorded_calls), 1)
         self.assertEqual(recorded_calls[0].verify_level, "real")
         self.assertEqual(recorded_calls[0].verify_status, "fail")
         self.assertEqual(recorded_calls[0].failure_class, "quality")
         self.assertEqual(recorded_calls[0].run_id, route_run_id)
         self.assertEqual(recorded_calls[0].receipt, str(cache_dir / "direct-receipt.json"))
+
+    def test_ending_handoff_records_unknown_status_when_non_targeted_marker_missing_or_malformed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            plan = self.plan(cache_dir)
+            route_run_id = "route-end-unknown-001"
+            handoff = {
+                "schema_version": 1,
+                "cwd": str(root.resolve()),
+                "state_db": str((root / "state.db").resolve()),
+                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
+                "route_run_id": route_run_id,
+                "plan": plan,
+                "completed": [
+                    {"id": "direct", "status": "pass", "phase": "result", "model": "gpt-5.6-luna", "effort": "low", "receipt_path": str(cache_dir / "direct-receipt.json"), "result_path": str(cache_dir / "direct-result.md")},
+                    {"id": "mini-verify", "status": "pass", "phase": "mini", "model": "gpt-5.6-luna", "effort": "low", "receipt_path": str(cache_dir / "mini-verify-receipt.json"), "result_path": str(cache_dir / "mini-verify-result.md")},
+                ],
+                "ending_handoff_path": str(cache_dir / "ending-handoff.json"),
+                "ending_manifest_path": str(cache_dir / "ending-dispatch-manifest.json"),
+            }
+            handoff_path = cache_dir / "ending-handoff.json"
+            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+                ending_receipt = cache_dir / f"{node['id']}-receipt.json"
+                ending_result = cache_dir / f"{node['id']}-result.md"
+                ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
+                ending_receipt.write_text("{}", encoding="utf-8")
+                return {
+                    "id": node["id"],
+                    "phase": node["phase"],
+                    "status": "pass",
+                    "receipt_path": str(ending_receipt),
+                    "result_path": str(ending_result),
+                }
+
+            recorded_calls = []
+
+            def fake_record_event(args):
+                recorded_calls.append(args)
+                return {"status": "recorded"}
+
+            def run_no_marker(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+                ending_receipt = cache_dir / f"{node['id']}-receipt.json"
+                ending_result = cache_dir / f"{node['id']}-result.md"
+                ending_result.write_text("ENDING summary only\n", encoding="utf-8")
+                ending_receipt.write_text("{}", encoding="utf-8")
+                return {
+                    "id": node["id"],
+                    "phase": node["phase"],
+                    "status": "pass",
+                    "receipt_path": str(ending_receipt),
+                    "result_path": str(ending_result),
+                }
+
+            with patch.object(module, "run_node", side_effect=lambda *args, **kwargs: (
+                fake_run_node(*args, **kwargs) if args[0]["id"] != "ending-verify" else run_no_marker(*args, **kwargs)
+            )), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
+                manifest = module.run_ending_handoff(handoff_path)
+        self.assertEqual(manifest["status"], "fail")
+        self.assertEqual(len(recorded_calls), 1)
+        self.assertEqual(recorded_calls[0].verify_status, "unknown")
+        self.assertEqual(recorded_calls[0].failure_class, "execution")
 
 
 if __name__ == "__main__":

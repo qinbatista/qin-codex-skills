@@ -5,6 +5,18 @@ import re
 import sys
 from pathlib import Path
 
+import importlib.util
+
+try:
+    from routing_policy import EXECUTION_DOMAINS
+except ModuleNotFoundError:
+    _routing_policy_spec = importlib.util.spec_from_file_location(
+        "task_analyze_routing_policy", Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "routing_policy.py"
+    )
+    _routing_policy = importlib.util.module_from_spec(_routing_policy_spec)
+    _routing_policy_spec.loader.exec_module(_routing_policy)
+    EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
+
 
 EXPECTED_ROUTE_PREFIX = ["task-analyze-skill", "workflow-skill"]
 REQUIRED_WORKFLOW = [
@@ -89,6 +101,17 @@ def can_show_main_result(requested_work_done, mini_passed):
     return bool(requested_work_done and mini_passed)
 
 
+def _is_code_implementation(node):
+    if node.get("purpose") in {"implement", "author-probe"}:
+        return True
+    language = node.get("language")
+    execution_domain = node.get("execution_domain")
+    return (
+        language in {"python", "csharp", "unity_csharp"}
+        or execution_domain in {"python", "csharp", "unity_csharp", "code_unspecified"}
+    )
+
+
 def validate_trace(name, trace):
     failures = []
     ids = [node["id"] for node in trace]
@@ -106,9 +129,16 @@ def validate_trace(name, trace):
         if ending_id in ids and ids.index(ending_id) <= result_index:
             failures.append(f"{ending_id} is not downstream of Main Result")
     for node in trace:
-        if node.get("language") in {"python", "csharp"} and node.get("skill") != "code-skill":
+        if node.get("execution_domain") and node["execution_domain"] not in EXECUTION_DOMAINS:
+            failures.append(f"{node['id']} uses unknown execution_domain {node['execution_domain']}")
+        if _is_code_implementation(node) and node.get("skill") != "code-skill":
             failures.append(f"{node['id']} bypasses code-skill")
-        if node.get("language") in {"python", "csharp"} and node.get("purpose") in {"implement", "author-probe"} and node.get("model") != "gpt-5.3-codex-spark" and not node.get("fallback_reason"):
+        if (
+            _is_code_implementation(node)
+            and node.get("model") != "gpt-5.3-codex-spark"
+            and not node.get("spark_exception_reason")
+            and not node.get("fallback_reason")
+        ):
             failures.append(f"{node['id']} is not Spark-first and has no fallback reason")
     return {"name": name, "status": "pass" if not failures else "fail", "failures": failures}
 
