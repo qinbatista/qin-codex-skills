@@ -1,6 +1,6 @@
 # Prompt Generation
 
-Use this route only for Python/C# AI prompt-related work: creation, review, testing, editing, add/update/remove/rewrite, improvement, standardization, or prompt embedding in Python or C# code. Do not use it for ordinary code style, architecture, debugging, non-prompt prose, or prompt snippets in other programming languages.
+Use this route only for AI prompt-related work embedded in an active registry-owned code domain: creation, review, testing, editing, add/update/remove/rewrite, improvement, or standardization. Current examples are Python and C#. Do not use it for ordinary code style, architecture, debugging, non-prompt prose, or prompt snippets outside the planned code domain.
 
 Create compact Python prompt assignments or C# prompt constants ready to paste into code:
 

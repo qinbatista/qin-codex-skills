@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+from copy import deepcopy
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -88,6 +90,17 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             "mini_verify_node": "mini-verify",
         }
 
+    def _release_ending_handoff(self, handoff):
+        handoff.setdefault("cache_dir", str(Path(handoff["ending_handoff_path"]).resolve().parent))
+        mini_record = next(record for record in handoff.get("completed", []) if record.get("id") == "mini-verify")
+        mini_result = Path(mini_record.setdefault("result_path", Path(handoff["cache_dir"]) / "mini-verify-result.md"))
+        mini_result.parent.mkdir(parents=True, exist_ok=True)
+        mini_result.write_text("MINI_VERIFY=PASS\n", encoding="utf-8")
+        release = module._release_main_result(handoff)
+        if release["status"] != "pass":
+            raise AssertionError(f"release-main-result failed: {release.get('failures')}")
+        return release
+
     def test_valid_plan_keeps_entry_separate_from_downstream(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -154,7 +167,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             cache_dir = root / "work" / "cache" / "route"
             plan = self.plan(cache_dir)
             calls = []
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 calls.append(node["id"])
                 result_path = cache_dir / f"{node['id']}-result.md"
                 receipt_path = cache_dir / f"{node['id']}-receipt.json"
@@ -319,7 +332,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan = self.plan(cache_dir)
             calls = []
 
-            def fake_run_node(node, cache_dir, completed, _state_db, _workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, _state_db, _workdir, codex_bin="codex", skills_root=None):
                 calls.append(node["id"])
                 if node["phase"] != "result":
                     return {"id": node["id"], "phase": node["phase"], "status": "pass", "receipt_path": str(cache_dir / f"{node['id']}-receipt.json"), "result_path": str(cache_dir / f"{node['id']}-result.md"), "requested_model": node["model"], "requested_effort": node["effort"], "model": node["model"], "effort": node["effort"], "tokens": {}, "process_elapsed_ms": 1}
@@ -401,7 +414,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan["nodes"] = [{"id": "branch-a", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return A.", "sandbox": "read-only"}, {"id": "branch-b", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return B.", "sandbox": "read-only"}, {"id": "merge", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["branch-a", "branch-b"], "prompt": "Merge A and B.", "sandbox": "read-only", **profile}, {"id": "mini-verify", "phase": "mini", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["merge"], "prompt": "Verify the merge.", "sandbox": "read-only"}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "low", "dependencies": ["mini-verify"], "prompt": "Run post-result verification.", "sandbox": "read-only"}]
             plan["main_result_node"] = "merge"
             calls = []
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 calls.append(node["id"])
                 result_path = cache_dir / f"{node['id']}-result.md"
                 receipt_path = cache_dir / f"{node['id']}-receipt.json"
@@ -437,6 +450,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             }
             handoff_path = cache_dir / "ending-handoff.json"
             handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            self._release_ending_handoff(handoff)
             calls = []
             identities = {
                 "optimization": "opt-target",
@@ -444,7 +458,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 "real-verify": "real-worker",
             }
 
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 calls.append(node["id"])
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
@@ -488,7 +502,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             }
             handoff_path = cache_dir / "ending-handoff.json"
             handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            self._release_ending_handoff(handoff)
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
                 ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
@@ -535,6 +550,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             }
             handoff_path = cache_dir / "ending-handoff.json"
             handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            self._release_ending_handoff(handoff)
 
             identities = {
                 "optimization": "opt-target-worker",
@@ -542,7 +558,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 "real-verify": "real-worker",
             }
 
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
                 ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
@@ -593,8 +609,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             }
             handoff_path = cache_dir / "ending-handoff.json"
             handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            self._release_ending_handoff(handoff)
 
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
                 ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
@@ -640,8 +657,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             }
             handoff_path = cache_dir / "ending-handoff.json"
             handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            self._release_ending_handoff(handoff)
 
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
                 ending_result.write_text("ENDING_TASK=FAIL\n", encoding="utf-8")
@@ -693,8 +711,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             }
             handoff_path = cache_dir / "ending-handoff.json"
             handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            self._release_ending_handoff(handoff)
 
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
                 ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
@@ -713,7 +732,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 recorded_calls.append(args)
                 return {"status": "recorded"}
 
-            def run_no_marker(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+            def run_no_marker(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
                 ending_result.write_text("ENDING summary only\n", encoding="utf-8")
@@ -734,6 +753,355 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(len(recorded_calls), 1)
         self.assertEqual(recorded_calls[0].verify_status, "unknown")
         self.assertEqual(recorded_calls[0].failure_class, "execution")
+
+    def test_plan_rejects_explicit_history_only_domain(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["execution_domain"] = "code_unspecified"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("execution_domain is non-active: code_unspecified" in failure for failure in failures))
+
+    def test_release_main_result_requires_passed_main_and_mini_records(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            handoff = {
+                "schema_version": 1,
+                "route_run_id": "route-release-miss",
+                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
+                "plan": {
+                    "nodes": [
+                        {"id": "main-result"},
+                        {"id": "mini-verify"},
+                    ],
+                },
+                "completed": [
+                    {"id": "main-result", "status": "fail", "phase": "result", "receipt_path": str(root / "main-receipt.json")},
+                    {"id": "mini-verify", "status": "pass", "phase": "mini", "receipt_path": str(root / "mini-receipt.json")},
+                ],
+                "main_result_node": "main-result",
+                "mini_verify_node": "mini-verify",
+            }
+            (root / "mini-result.md").write_text("MINI_VERIFY=PASS\n", encoding="utf-8")
+            handoff["completed"][1]["result_path"] = str(root / "mini-result.md")
+            handoff_path = root / "ending-handoff.json"
+            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            release = module._release_main_result(handoff)
+        self.assertEqual(release["status"], "fail")
+        self.assertEqual(release.get("failures"), ["main result and mini verify must both pass before release"])
+
+    def test_release_main_result_persists_ack_and_marks_handoff(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            handoff = {
+                "schema_version": 1,
+                "route_run_id": "route-release-pass",
+                "cache_dir": str(root),
+                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
+                "plan": {
+                    "nodes": [],
+                },
+                "completed": [
+                    {"id": "main-result", "status": "pass", "phase": "result", "receipt_path": str(root / "main-receipt.json")},
+                    {"id": "mini-verify", "status": "pass", "phase": "mini", "receipt_path": str(root / "mini-receipt.json")},
+                ],
+                "main_result_node": "main-result",
+                "mini_verify_node": "mini-verify",
+            }
+            mini_result = root / "mini-result.md"
+            mini_result.write_text("MINI_VERIFY=PASS\n", encoding="utf-8")
+            handoff["completed"][1]["result_path"] = str(mini_result)
+            handoff_path = root / "ending-handoff.json"
+            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            release = module._release_main_result(handoff)
+            self.assertEqual(release["status"], "pass")
+            self.assertEqual(release["route_run_id"], "route-release-pass")
+            self.assertTrue(Path(release["release_path"]).exists())
+            self.assertEqual(handoff["completed"][0]["status"], "pass")
+
+    @contextmanager
+    def _with_rust_domain(self, owner="code-skill", spark_first=True, language_alias="rust"):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        original_history_domains = deepcopy(module.routing_history_module.EXECUTION_DOMAINS)
+        original_history_control = deepcopy(module.routing_history_module.CONTROL_ENUMS["execution_domain"])
+        with tempfile.TemporaryDirectory(prefix="task-route-dispatcher-skills-") as temporary:
+            temporary_skills_root = Path(temporary)
+            rust_reference_path = "code-skill/references/rust-small-code.md"
+            module.EXECUTION_DOMAINS["rust"] = {
+                "display_name": "Rust",
+                "kind": "code",
+                "language_aliases": [language_alias],
+                "owner_skill": owner,
+                "owner_enforced": True,
+                "spark_first": spark_first,
+                "reference_path": rust_reference_path,
+                "active": True,
+                "history_only": False,
+            }
+            module.routing_history_module.EXECUTION_DOMAINS["rust"] = module.EXECUTION_DOMAINS["rust"]
+            module.routing_history_module.CONTROL_ENUMS["execution_domain"] = set(module.routing_history_module.EXECUTION_DOMAINS.keys())
+            required_owners = {"task-analyze-skill", "workflow-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"}
+            for metadata in module.EXECUTION_DOMAINS.values():
+                owner_skill = metadata["owner_skill"]
+                skill_dir = temporary_skills_root / owner_skill
+                skill_dir.mkdir(parents=True, exist_ok=True)
+                (skill_dir / "SKILL.md").write_text(f"{owner_skill} skill\n", encoding="utf-8")
+                reference = temporary_skills_root / metadata["reference_path"]
+                reference.parent.mkdir(parents=True, exist_ok=True)
+                reference.write_text(f"reference: {metadata['reference_path']}\n", encoding="utf-8")
+            for owner_skill in required_owners:
+                skill_dir = temporary_skills_root / owner_skill
+                skill_dir.mkdir(parents=True, exist_ok=True)
+                (skill_dir / "SKILL.md").write_text(f"{owner_skill} skill\n", encoding="utf-8")
+            yield temporary_skills_root
+            module.EXECUTION_DOMAINS.clear()
+            module.routing_history_module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+            module.routing_history_module.EXECUTION_DOMAINS.update(original_history_domains)
+            module.routing_history_module.CONTROL_ENUMS["execution_domain"] = original_history_control
+        # cleanup via TemporaryDirectory context
+
+    def test_plan_rejects_invalid_execution_domain_registry_with_missing_reference(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            with self._with_rust_domain() as synthetic_skills_root:
+                missing_reference = synthetic_skills_root / module.EXECUTION_DOMAINS["general"]["reference_path"]
+                missing_reference.unlink()
+                failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
+        self.assertTrue(any("execution_domain registry is invalid" in failure for failure in failures))
+        self.assertFalse(any("execution_domain is unknown" in failure for failure in failures))
+
+    def test_plan_accepts_valid_execution_domain_registry_for_temp_skills_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            with self._with_rust_domain() as synthetic_skills_root:
+                failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
+        self.assertEqual(failures, [])
+
+    def test_plan_rejects_rust_domain_wrong_owner(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["execution_domain"] = "rust"
+            plan["nodes"][0]["language"] = "rust"
+            plan["nodes"][0]["skill"] = "workflow-skill"
+            with self._with_rust_domain(owner="code-skill") as synthetic_skills_root:
+                failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
+        self.assertTrue(any("implementation owner mismatch for rust" in failure for failure in failures))
+
+    def test_plan_rejects_unknown_execution_domain_with_clean_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["execution_domain"] = "rust_lang"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("execution_domain is unknown" in failure for failure in failures))
+        self.assertFalse(any("implementation owner mismatch" in failure for failure in failures))
+
+    def test_plan_rejects_rust_domain_non_spark_without_reason(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["execution_domain"] = "rust"
+            plan["nodes"][0]["language"] = "rust"
+            plan["nodes"][0]["skill"] = "code-skill"
+            plan["nodes"][0]["model"] = "gpt-5.6-luna"
+            with self._with_rust_domain() as synthetic_skills_root:
+                failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
+        self.assertTrue(any("has no fallback reason" in failure for failure in failures))
+
+    def test_plan_main_result_rejects_routing_condition_domain_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["execution_domain"] = "python"
+            plan["nodes"][0]["routing_condition"]["execution_domain"] = "general"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("execution_domain must match routing_condition.execution_domain" in failure for failure in failures))
+
+    def test_plan_main_result_rejects_routing_condition_owner_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["execution_domain"] = "python"
+            plan["nodes"][0]["routing_condition"]["execution_domain"] = "python"
+            plan["nodes"][0]["routing_condition"]["owning_skill"] = "workflow-skill"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("bypasses code-skill; implementation owner mismatch for python" in failure for failure in failures))
+
+    def test_plan_main_result_rejects_general_routing_condition_owner_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["skill"] = "management-skill"
+            plan["nodes"][0]["routing_condition"]["execution_domain"] = "general"
+            plan["nodes"][0]["routing_condition"]["owning_skill"] = "workflow-skill"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("routing_condition.owning_skill must match the executing node skill" in failure for failure in failures))
+
+    def test_plan_main_result_allows_management_skill_general_with_matching_condition_owner(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["skill"] = "management-skill"
+            plan["nodes"][0]["routing_condition"]["execution_domain"] = "general"
+            plan["nodes"][0]["routing_condition"]["owning_skill"] = "management-skill"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
+    def test_plan_accepts_rust_domain_with_spark(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["execution_domain"] = "rust"
+            plan["nodes"][0]["language"] = "rust"
+            plan["nodes"][0]["skill"] = "code-skill"
+            plan["nodes"][0]["model"] = "gpt-5.3-codex-spark"
+            plan["nodes"][0]["routing_condition"]["execution_domain"] = "rust"
+            plan["nodes"][0]["routing_condition"]["owning_skill"] = "code-skill"
+            with self._with_rust_domain() as synthetic_skills_root:
+                failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
+        self.assertEqual(failures, [])
+
+    def test_plan_injects_reference_prompt_for_synthetic_domain(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            node = {
+                "id": "main-result",
+                "phase": "result",
+                "skill": "code-skill",
+                "model": "gpt-5.3-codex-spark",
+                "effort": "low",
+                "dependencies": [],
+                "prompt": "Return a minimal rust answer",
+                "sandbox": "read-only",
+                "execution_domain": "rust",
+                "language": "rust",
+                "routing_condition": {
+                    "task_family": "code",
+                    "artifact": "script",
+                    "scope": "single",
+                    "ambiguity": "low",
+                    "modality": "text",
+                    "risk": "low",
+                    "complexity": "easy",
+                    "owning_skill": "code-skill",
+                    "project_family": "global",
+                    "verification_shape": "mini_real",
+                    "execution_domain": "rust",
+                },
+                "task_summary": "Emit a rust answer.",
+                "candidate_ladder": ["gpt-5.3-codex-spark|low"],
+                "static_suggestion": "gpt-5.3-codex-spark|low",
+                "hard_floor": "gpt-5.3-codex-spark|low",
+                "trial": False,
+            }
+            captured = {}
+
+            def fake_run_receipt(_args, prompt):
+                captured["prompt"] = prompt
+                return {
+                    "schema_version": 1,
+                    "requested_model": "gpt-5.3-codex-spark",
+                    "requested_effort": "low",
+                    "requested_pair": "gpt-5.3-codex-spark|low",
+                    "resolved_model": "gpt-5.3-codex-spark",
+                    "resolved_effort": "low",
+                    "effective_model": "gpt-5.3-codex-spark",
+                    "status": "pass",
+                    "route_attempts": [{
+                        "requested_pair": "gpt-5.3-codex-spark|low",
+                        "resolved_pair": "gpt-5.3-codex-spark|low",
+                        "effective_pair": "gpt-5.3-codex-spark|low",
+                        "executed_pair": "gpt-5.3-codex-spark|low",
+                        "status": "pass",
+                        "failure_class": None,
+                        "model_match": True,
+                        "effort_match": True,
+                        "pair_match": True,
+                        "process_elapsed_ms": 1,
+                        "model_turn_duration_ms": 1,
+                        "time_to_first_token_ms": 1,
+                    }],
+                    "process_elapsed_ms": 1,
+                }
+
+            with self._with_rust_domain() as synthetic_skills_root:
+                with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
+                    result = module.run_node(
+                        node,
+                        cache_dir,
+                        {},
+                        root / "state.sqlite",
+                        root,
+                        skills_root=synthetic_skills_root,
+                    )
+        self.assertEqual(result["status"], "pass")
+        prompt_lines = captured["prompt"].splitlines()
+        owner_line = f"Execute only this bounded locked node. Read and obey {synthetic_skills_root.resolve() / 'code-skill/SKILL.md'}."
+        self.assertIn(owner_line, prompt_lines)
+        self.assertIn(
+            f"Reference rules for this execution domain: {synthetic_skills_root.resolve() / 'code-skill/references/rust-small-code.md'}",
+            prompt_lines,
+        )
+
+    def test_run_ending_rejects_unreleased_or_mismatched_handoff(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            plan = self.plan(cache_dir)
+            handoff_path = cache_dir / "ending-handoff.json"
+            handoff = {
+                "schema_version": 1,
+                "cwd": str(root.resolve()),
+                "state_db": str((root / "state.db").resolve()),
+                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
+                "route_run_id": "route-unreleased",
+                "plan": plan,
+                "completed": [
+                    {"id": "direct", "status": "pass", "phase": "result", "model": "gpt-5.6-luna", "effort": "low", "receipt_path": str(cache_dir / "direct-receipt.json"), "result_path": str(cache_dir / "direct-result.md")},
+                    {"id": "mini-verify", "status": "pass", "phase": "mini", "model": "gpt-5.6-luna", "effort": "low", "receipt_path": str(cache_dir / "mini-verify-receipt.json"), "result_path": str(cache_dir / "mini-verify-result.md")},
+                ],
+                "ending_handoff_path": str(handoff_path),
+                "ending_manifest_path": str(cache_dir / "ending-dispatch-manifest.json"),
+            }
+            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            with patch.object(module, "run_node", side_effect=AssertionError("run_node should not execute")):
+                unreleased = module.run_ending_handoff(handoff_path)
+        self.assertEqual(unreleased["status"], "fail")
+        self.assertTrue(any("ending handoff is not released" in failure for failure in unreleased["failures"]))
+        release_plan = {
+            "schema_version": 1,
+            "cache_dir": str(cache_dir),
+            "route_run_id": "route-release",
+            "entry": {"model": "gpt-5.6-terra", "effort": "low"},
+            "plan": {
+                "nodes": [],
+            },
+            "completed": [
+                {"id": "main-result", "status": "pass", "phase": "result", "receipt_path": str(cache_dir / "main-receipt.json")},
+                {"id": "mini-verify", "status": "pass", "phase": "mini", "receipt_path": str(cache_dir / "mini-receipt.json")},
+            ],
+            "main_result_node": "main-result",
+            "mini_verify_node": "mini-verify",
+        }
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "mini-result.md").write_text("MINI_VERIFY=PASS\n", encoding="utf-8")
+        release_plan["completed"][1]["result_path"] = str(cache_dir / "mini-result.md")
+        release = module._release_main_result(json.loads(json.dumps(release_plan)))
+        self.assertEqual(release["status"], "pass")
+        handoff["route_run_id"] = "route-release-mismatch"
+        mismatch_path = cache_dir / "ending-handoff-mismatch.json"
+        mismatch_path.write_text(json.dumps(handoff), encoding="utf-8")
+        with patch.object(module, "run_node", side_effect=AssertionError("run_node should not execute")):
+            mismatched = module.run_ending_handoff(mismatch_path)
+        self.assertEqual(mismatched["status"], "fail")
+        self.assertTrue(any("ending handoff release does not match route_run_id" in failure for failure in mismatched["failures"]))
 
 
 if __name__ == "__main__":

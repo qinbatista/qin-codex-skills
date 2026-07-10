@@ -1,6 +1,6 @@
 # Python Rules
 
-Use `execution_domain=python` in routing evidence for Python work. This domain shares `code-skill` with Unity C# but is not interchangeable with its language rules or evidence.
+Use `execution_domain=python` in routing evidence for Python work. This domain shares `code-skill` with other registry-owned code domains but is not interchangeable with their language rules or evidence.
 
 Apply these rules whenever writing or editing Python modules, classes, functions, scripts, tests, snippets, or Python prompt assignments.
 

@@ -2,4 +2,4 @@ interface:
   display_name: "Verify Skill"
   short_description: "Mini gate now, Real proof in Ending Task"
   default_prompt: >-
-    Follow the verification node in the locked task-analyze-skill plan. Mini Verify is the proportional basic gate before the first main result; return pass/fail with concrete input, method, output, and reason. After the result, Real Verify runs in background Ending Task for realistic behavior, regressions, UI/visual/artifact evidence, integrations, model-route replay, or same-behavior optimization comparison. A Real failure must notify the user and reopen the task. Use the assigned model and effort, require runtime receipts for model claims, and require a verifier different from the optimization implementer.
+    $verify-skill: run proportional Mini Verify before releasing the basically verified result, with concrete input, method, output, and reason. Afterward, Ending Task runs Real Verify, regressions, artifact/integration checks, and optimization comparison. A Real correctness failure notifies and reopens. Use the assigned model|effort and receipts for model claims; optimization verification must use a different worker.

@@ -17,7 +17,7 @@ Task Analyze remains the 100 percent entry skill, but an obvious reversible tool
 
 For full extension steps, use [`router-extension-guide`](router-extension-guide.md).
 
-A code-domain extension adds routing-registry metadata, a matching code-domain `execution_domain` evidence plan, `code-skill` language references, schema/validator updates, routing-scenario coverage, and README updates. Python and Unity C# share `code-skill` but retain separate `execution_domain` evidence and language reference files. Keep language-specific rules in executor references, not in registry metadata. The six public skills and the private adaptive-routing boundary remain unchanged.
+A code-domain extension follows the single registry seam in [`router-extension-guide`](router-extension-guide.md): one `EXECUTION_DOMAINS` row, one executor reference, and generic registry-driven tests. Current examples are `python`, `csharp`, and `unity_csharp`; `code_unspecified` is migration/history-only. Keep language rules in executor references, not registry metadata. Additive values do not require a schema bump.
 
 ## Easy Task: Text Route
 
@@ -33,7 +33,7 @@ During bounded preflight call `resolve_entry_model.py`; use `unverified` only wh
 
 ## Complex Task: Mermaid Route
 
-Use real dependencies and concurrency. Label every non-user node with exact model and effort.
+Use real dependencies and concurrency. Label every model-executed node with exact model and effort; direct tool-only nodes name their installed skill and observable stop condition instead.
 
 ```mermaid
 flowchart TD
@@ -80,7 +80,7 @@ Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher e
 - The entry pair is never inherited by downstream nodes.
 - Every downstream model and effort is supported and receipt-backed when execution proof is required.
 - Every owning skill is installed.
-- Python/C#/Unity C# implementation and authored probes use `code-skill`, Qin's applicable style, and Spark first unless a visible fallback reason applies.
+- Active registry-owned code-domain implementation and authored probes use `code-skill`, the domain's applicable style, and Spark first unless a visible fallback reason applies.
 - Mini Verify is downstream of all requested result work and upstream of Main Result.
 - Main Result is upstream of Ending Task.
 - Ending Real Verify, optimization verification, reports, logs, docs, and memory do not gate the first result.

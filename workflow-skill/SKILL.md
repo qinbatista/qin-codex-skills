@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Use when independent task-analyze-skill has returned a locked route. Validates and executes the per-node skill/model/effort plan, preserves dependencies and topology, routes Python/C# through code-skill, runs proportional Mini Verify, releases the main result, then dispatches background Ending Task work such as Real Verify, independent optimization verification, reports, logs, docs, and memory."
+description: "Use when independent task-analyze-skill has returned a locked route. Validates and executes the per-node skill/model/effort plan, preserves dependencies and topology, routes active registry-owned code domains through code-skill, runs proportional Mini Verify, releases the main result, then dispatches background Ending Task work such as Real Verify, independent optimization verification, reports, logs, docs, and memory."
 ---
 
 # Workflow Skill
@@ -25,7 +25,7 @@ Before side effects, confirm the returned plan includes:
 - post-result Ending Task branches and fallbacks;
 - runtime-receipt requirement when model execution must be proved.
 
-Reject the plan back to `task-analyze-skill` for one bounded repair if it invents a skill, uses an unsupported model/effort, omits a node label, leaves a dependency unresolved, routes Python/C# around `code-skill`, puts Main Result before Mini Verify, or places Real Verify/optimization closeout before the first result. Do not repair route semantics by silently reselecting models inside Workflow.
+Reject the plan back to `task-analyze-skill` for one bounded repair if it invents a skill, uses an unsupported model/effort, omits a node label, leaves a dependency unresolved, routes an active registry-owned code domain around `code-skill`, puts Main Result before Mini Verify, or places Real Verify/optimization closeout before the first result. Do not repair route semantics by silently reselecting models inside Workflow.
 
 ## Visible Route Contract
 
@@ -47,7 +47,7 @@ Workflow may report a model switch or repair, but it does not repeat the whole r
 7. Preserve unrelated user work and do not broaden authorization.
 8. Do not push, publish, deploy, message, switch profiles, or perform an irreversible action unless the user explicitly authorized that action.
 
-For a direct bounded node, use `../task-analyze-skill/scripts/model_execution_receipt.py run` with the exact planned pair and call `../task-analyze-skill/scripts/model_routing_history.py record` after Mini using the result-producer receipt; call it again after Real with the same route-run ID and producer receipt. For a multi-node sequential, parallel, or mixed route, save the structured plan only in the active task cache and run `../task-analyze-skill/scripts/task_route_dispatcher.py run-plan <plan-file>`; it records after Mini and updates after Real. Child prompts use `LOCKED_ROUTE_NODE`; no lifecycle hook is involved. Read the result and Mini verdict from cache, then present the self-contained result without recomputing it on the entry model.
+For a direct model node, use `../task-analyze-skill/scripts/model_execution_receipt.py run` with the exact planned pair and call `../task-analyze-skill/scripts/model_routing_history.py record` after Mini using the result-producer receipt; call it again after Real with the same route-run ID and producer receipt. A direct tool-only node uses its installed tool skill and observable Mini check: no child model, receipt, or adaptive sample. For a multi-node sequential, parallel, or mixed route, save the structured plan only in the active task cache and run `../task-analyze-skill/scripts/task_route_dispatcher.py run-plan <plan-file>`; it records after Mini and updates after Real. Enforce `run-plan` -> read Mini-passed result -> show self-contained basically verified result -> `release-main-result <handoff>` -> `run-ending <handoff>`; no Ending node may run before release. Child prompts use `LOCKED_ROUTE_NODE`; no lifecycle hook is involved.
 
 Local commands use the local runner, but the planned model/effort still owns command selection, interpretation, and any authored probe. Labeling a runner `LOCAL` does not remove the node's model/effort requirement.
 
@@ -59,14 +59,14 @@ Use every planned executor that matches; do not run unrelated branches.
 
 | Work | Required route |
 |---|---|
-| Python, C#, Unity C#, Python/C# debugging/refactoring, prompt-in-code, or authored Python/C# probe | `code-skill` |
+| Active registry-owned code domain, debugging/refactoring, prompt-in-code, or authored code probe | `code-skill` |
 | Tests, QA, artifact inspection, UI/visual review, Mini Verify, or Real Verify | `verify-skill` |
 | Explicit/repeated reusable workflow improvement | `optimization-skill`, with a different verifier in Ending Task |
 | Global skill scope, auth/profile work, or approved mirror operations | `management-skill` |
 | Prompt/instruction behavior | Prompt Task Gate below, plus `code-skill` only when embedded in Python/C# |
 | Other production work | The relevant installed production skill returned by Task Analyze |
 
-Every Python/C# node loads `code-skill`. Spark is first for text-only Python/C# implementation and authored probes; use only the visible planned fallback when Spark is unavailable, rejected, over context, image-dependent, or unsupported on the execution surface.
+Every active registry-owned code-domain node loads `code-skill`. Spark is first for text-only implementation and authored probes; current examples are Python, plain C#, and Unity C#. Use only the visible planned fallback when Spark is unavailable, rejected, over context, image-dependent, or unsupported on the execution surface.
 
 ### Prompt Task Gate
 
@@ -103,7 +103,7 @@ When Mini Verify fails, repair the affected result-bearing node and rerun the re
 1. cross `Main Goal Done Gate`;
 2. show the main result immediately;
 3. state that deeper Ending Task proof is running when relevant;
-4. dispatch the planned Ending Task branches after the result.
+4. only after the result is actually shown, call `release-main-result <handoff>` and then `run-ending <handoff>`.
 
 Do not claim Real Verify, independent optimization verification, report completion, or memory completion before those background branches report.
 
@@ -156,7 +156,7 @@ Task routing never broadens permission. Before the affected action, obtain requi
 ## Representative Routes
 
 - Direct answer/read: Task Analyze text route -> Workflow direct node -> lightweight Mini Verify -> Main Result -> relevant Ending Task.
-- Python/C# change: Task Analyze -> Workflow -> `code-skill` on Spark-first node -> Mini Verify -> Main Result -> Real Verify in Ending Task.
+- Active code-domain change: Task Analyze -> Workflow -> `code-skill` on Spark-first node -> Mini Verify -> Main Result -> Real Verify in Ending Task.
 - Global skill update: Task Analyze -> Workflow -> `management-skill` for authoritative scope -> `code-skill` for Python helpers -> Mini Verify -> Main Result -> Ending Real Verify/docs/memory. Push only if explicitly requested.
 - Explicit optimization: Task Analyze -> Workflow result-bearing implementation -> Mini Verify -> Main Result -> separate optimization verifier in Ending Task. Report the optimization as independently verified only after that worker passes.
 - UI/image/document: Task Analyze complex Mermaid route -> relevant production skill -> Mini Verify -> Main Result -> rendered/realistic review in Ending Task.

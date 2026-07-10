@@ -8,7 +8,15 @@ from pathlib import Path
 import importlib.util
 
 try:
-    from routing_policy import EXECUTION_DOMAINS
+    from routing_policy import (
+        EXECUTION_DOMAINS,
+        expected_owner_skill,
+        execution_domain_is_active,
+        is_code_execution_domain,
+        resolve_execution_domain,
+        requires_spark_first,
+        validate_execution_domain_registry,
+    )
 except ModuleNotFoundError:
     _routing_policy_spec = importlib.util.spec_from_file_location(
         "task_analyze_routing_policy", Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "routing_policy.py"
@@ -16,6 +24,12 @@ except ModuleNotFoundError:
     _routing_policy = importlib.util.module_from_spec(_routing_policy_spec)
     _routing_policy_spec.loader.exec_module(_routing_policy)
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
+    expected_owner_skill = _routing_policy.expected_owner_skill
+    execution_domain_is_active = _routing_policy.execution_domain_is_active
+    is_code_execution_domain = _routing_policy.is_code_execution_domain
+    resolve_execution_domain = _routing_policy.resolve_execution_domain
+    requires_spark_first = _routing_policy.requires_spark_first
+    validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
 
 
 EXPECTED_ROUTE_PREFIX = ["task-analyze-skill", "workflow-skill"]
@@ -29,7 +43,7 @@ REQUIRED_WORKFLOW = [
     "Do not wait for a lifecycle hook",
     "Easy task: concise text explanation",
     "Complex task: task-specific Mermaid",
-    "Every Python/C# node loads `code-skill`",
+    "Every active registry-owned code-domain node loads `code-skill`",
     "Mini Verify is the basic proportional result gate for every task",
     "show the main result immediately",
     "Ending Task starts after the main result",
@@ -40,7 +54,7 @@ REQUIRED_WORKFLOW = [
     "Runtime Receipt Gate",
 ]
 REQUIRED_TEMPLATE = ["## Easy Task: Text Only", "## Complex Task: Mermaid", "current selected model | current selected effort", "Show main result now", "Dispatch Ending Task", "Real Verify", "Independent optimization verification", "Main Result always follows Mini Verify", "Ending Task always follows Main Result", "Workflow with models"]
-REQUIRED_MATRIX = ["Every route begins with independent `task-analyze-skill`", "Easy tasks use concise text", "complex tasks use Mermaid", "Every Python/C# node loads `code-skill`", "Mini Verify is the basic first-result gate", "Main Result precedes Ending Task", "background correctness failure"]
+REQUIRED_MATRIX = ["Every route begins with independent `task-analyze-skill`", "Easy tasks use concise text", "complex tasks use Mermaid", "Every active registry-owned code-domain node loads `code-skill`", "Mini Verify is the basic first-result gate", "Main Result precedes Ending Task", "background correctness failure"]
 REQUIRED_CODE = ["task-analyze-skill", "locked", "code-skill", "Spark first", "Mini Verify", "Ending Task", "Real Verify"]
 REQUIRED_VERIFY = ["task-analyze-skill", "Mini Verify", "main result", "Ending Task", "Real Verify", "reopen"]
 REQUIRED_OPTIMIZATION = ["task-analyze-skill", "Ending Task", "different", "verifier", "before/after"]
@@ -104,16 +118,27 @@ def can_show_main_result(requested_work_done, mini_passed):
 def _is_code_implementation(node):
     if node.get("purpose") in {"implement", "author-probe"}:
         return True
-    language = node.get("language")
-    execution_domain = node.get("execution_domain")
-    return (
-        language in {"python", "csharp", "unity_csharp"}
-        or execution_domain in {"python", "csharp", "unity_csharp", "code_unspecified"}
-    )
+    if node.get("phase") != "result":
+        return False
+    try:
+        execution_domain = resolve_execution_domain(
+            owning_skill=node.get("skill"),
+            task_family=node.get("task_family"),
+            explicit_domain=node.get("execution_domain"),
+            language=node.get("language"),
+            purpose=node.get("purpose"),
+        )
+    except ValueError:
+        return False
+    return is_code_execution_domain(execution_domain)
 
 
-def validate_trace(name, trace):
+def validate_trace(name, trace, skills_root=Path(__file__).resolve().parents[2]):
     failures = []
+    try:
+        validate_execution_domain_registry(skills_root)
+    except ValueError as error:
+        failures.append(f"execution-domain registry is invalid: {error}")
     ids = [node["id"] for node in trace]
     if not ids or ids[0] != "task-analyze":
         failures.append("Task Analyze is not first")
@@ -129,16 +154,30 @@ def validate_trace(name, trace):
         if ending_id in ids and ids.index(ending_id) <= result_index:
             failures.append(f"{ending_id} is not downstream of Main Result")
     for node in trace:
-        if node.get("execution_domain") and node["execution_domain"] not in EXECUTION_DOMAINS:
-            failures.append(f"{node['id']} uses unknown execution_domain {node['execution_domain']}")
-        if _is_code_implementation(node) and node.get("skill") != "code-skill":
+        explicit_domain = node.get("execution_domain")
+        try:
+            execution_domain = resolve_execution_domain(
+                owning_skill=node.get("skill"),
+                task_family=node.get("task_family"),
+                explicit_domain=explicit_domain,
+                language=node.get("language"),
+                purpose=node.get("purpose"),
+            )
+        except ValueError:
+            if explicit_domain:
+                failures.append(f"{node['id']} uses unknown execution_domain {explicit_domain}")
+            continue
+        if not execution_domain_is_active(execution_domain):
+            failures.append(f"{node['id']} execution_domain is non-active: {execution_domain}")
+        if execution_domain not in EXECUTION_DOMAINS:
+            failures.append(f"{node['id']} uses unknown execution_domain {execution_domain}")
+            continue
+        if not is_code_execution_domain(execution_domain):
+            continue
+        owner = expected_owner_skill(execution_domain)
+        if owner is not None and node.get("skill") != owner:
             failures.append(f"{node['id']} bypasses code-skill")
-        if (
-            _is_code_implementation(node)
-            and node.get("model") != "gpt-5.3-codex-spark"
-            and not node.get("spark_exception_reason")
-            and not node.get("fallback_reason")
-        ):
+        if requires_spark_first(execution_domain) and node.get("model") != "gpt-5.3-codex-spark" and not node.get("spark_exception_reason") and not node.get("fallback_reason"):
             failures.append(f"{node['id']} is not Spark-first and has no fallback reason")
     return {"name": name, "status": "pass" if not failures else "fail", "failures": failures}
 
@@ -200,15 +239,15 @@ def validate(skill_dir):
     route_results = []
     for name, route in routes.items():
         route_failures = [] if route[:2] == EXPECTED_ROUTE_PREFIX else [f"route must begin {EXPECTED_ROUTE_PREFIX}, got {route[:2]}"]
-        if name == "easy-python-csharp" and "code-skill" not in route:
-            route_failures.append("easy Python/C# route bypasses code-skill")
+        if any(is_code_execution_domain(node.get("execution_domain")) for node in sample_traces().get(name, []) if node.get("execution_domain")) and "code-skill" not in route:
+            route_failures.append("registered code-domain route bypasses code-skill")
         route_results.append({"name": name, "status": "pass" if not route_failures else "fail", "route": route, "failures": route_failures})
         failures.extend([f"route {name}: {failure}" for failure in route_failures])
     gate_results = [{"name": "done+mini", "observed": can_show_main_result(True, True), "expected": True}, {"name": "done+mini-fail", "observed": can_show_main_result(True, False), "expected": False}, {"name": "not-done+mini", "observed": can_show_main_result(False, True), "expected": False}]
     for result in gate_results:
         if result["observed"] != result["expected"]:
             failures.append(f"gate {result['name']} mismatch")
-    trace_results = [validate_trace(name, trace) for name, trace in sample_traces().items()]
+    trace_results = [validate_trace(name, trace, global_root) for name, trace in sample_traces().items()]
     for result in trace_results:
         failures.extend([f"trace {result['name']}: {failure}" for failure in result["failures"]])
     entry_models = {trace[0]["model"] for trace in sample_traces().values()}

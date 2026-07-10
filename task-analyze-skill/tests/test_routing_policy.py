@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
 from copy import deepcopy
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -102,11 +103,111 @@ class RoutingPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.parse_model_effort_pair("gpt-5.6-luna||low")
 
+    def test_resolve_execution_domain_precedence_and_infer_compatibility(self):
+        self.assertEqual(
+            module.resolve_execution_domain(
+                explicit_domain="unity_csharp",
+                language="python",
+                owning_skill="code-skill",
+                task_family="code",
+                purpose="implement",
+            ),
+            "unity_csharp",
+        )
+        self.assertEqual(
+            module.resolve_execution_domain(owning_skill="code-skill", language="python", task_family="code", purpose="implement"),
+            "python",
+        )
+        self.assertEqual(
+            module.resolve_execution_domain(owning_skill="code-skill", language="unity-csharp", task_family="code", purpose="implement"),
+            "unity_csharp",
+        )
+        self.assertEqual(
+            module.resolve_execution_domain(owning_skill="code-skill", task_family="code", purpose="implement"),
+            "code_unspecified",
+        )
+        self.assertNotEqual(
+            module.resolve_execution_domain(owning_skill="code-skill", task_family="code", language="python"),
+            module.resolve_execution_domain(owning_skill="code-skill", task_family="code", language="unity_csharp"),
+        )
+        self.assertEqual(
+            module.resolve_execution_domain(owning_skill="workflow-skill", task_family="direct", language="mystery"),
+            "general",
+        )
+        self.assertEqual(
+            module.infer_execution_domain(owning_skill="workflow-skill", task_family="direct", language="python", purpose="implement"),
+            module.resolve_execution_domain(owning_skill="workflow-skill", task_family="direct", language="python", purpose="implement"),
+        )
+
+    def test_public_execution_domain_rows_are_complete_and_unambiguous(self):
+        rows = module.public_execution_domain_rows()
+        self.assertEqual(len(rows), len(module.EXECUTION_DOMAINS))
+        row_ids = {row["id"] for row in rows}
+        self.assertEqual(row_ids, set(module.EXECUTION_DOMAINS))
+        for row in rows:
+            domain = row["id"]
+            metadata = module.EXECUTION_DOMAINS[domain]
+            self.assertEqual(row["display_name"], metadata["display_name"])
+            self.assertEqual(row["kind"], metadata["kind"])
+            self.assertEqual(row["owner_skill"], metadata["owner_skill"])
+            self.assertEqual(row["owner_enforced"], metadata["owner_enforced"])
+            self.assertEqual(row["spark_first"], metadata["spark_first"])
+            self.assertEqual(row["reference_path"], metadata["reference_path"])
+            self.assertEqual(row["active"], metadata["active"])
+            self.assertEqual(row["history_only"], metadata["history_only"])
+
+        aliases = [alias for row in rows for alias in row["language_aliases"]]
+        references = [row["reference_path"] for row in rows]
+        self.assertEqual(len(aliases), len(set(aliases)))
+        self.assertEqual(len(references), len(set(references)))
+
+    def test_validate_execution_domain_registry_rejects_duplicate_aliases(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            duplicate_alias_domain = {
+                "display_name": "Duplicate Alias",
+                "kind": "code",
+                "language_aliases": ["python"],
+                "owner_skill": "code-skill",
+                "owner_enforced": True,
+                "spark_first": True,
+                "reference_path": "code-skill/references/python-rules.md",
+                "active": True,
+                "history_only": False,
+            }
+            module.EXECUTION_DOMAINS["duplicate_alias"] = duplicate_alias_domain
+            with self.assertRaises(ValueError):
+                module.validate_execution_domain_registry()
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+
+    def test_validate_execution_domain_registry_rejects_duplicate_reference_paths(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            duplicate_ref_domain = {
+                "display_name": "Duplicate Path",
+                "kind": "code",
+                "language_aliases": ["dupref"],
+                "owner_skill": "code-skill",
+                "owner_enforced": True,
+                "spark_first": True,
+                "reference_path": module.EXECUTION_DOMAINS["python"]["reference_path"],
+                "active": True,
+                "history_only": False,
+            }
+            module.EXECUTION_DOMAINS["duplicate_reference_path"] = duplicate_ref_domain
+            with self.assertRaises(ValueError):
+                module.validate_execution_domain_registry()
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+
     def test_execution_domain_reference_paths_are_real_files(self):
         expected_paths = {
             "general": "task-analyze-skill/references/model-selection.md",
             "python": "code-skill/references/python-rules.md",
-            "csharp": "code-skill/references/unity-csharp-rules.md",
+            "csharp": "code-skill/references/csharp-rules.md",
             "unity_csharp": "code-skill/references/unity-csharp-rules.md",
             "code_unspecified": "code-skill/references/spark-small-code.md",
         }
@@ -114,6 +215,129 @@ class RoutingPolicyTests(unittest.TestCase):
             self.assertEqual(module.EXECUTION_DOMAINS[domain]["reference_path"], expected_paths[domain])
             path = Path("/Users/qin/.codex/skills") / expected_paths[domain]
             self.assertTrue(path.is_file(), f"reference path missing: {path}")
+
+    def test_validate_execution_domain_registry_rejects_noncanonical_aliases(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            module.EXECUTION_DOMAINS["noncanonical_alias"] = {
+                "display_name": "Noncanonical Alias",
+                "kind": "code",
+                "language_aliases": [" Python "],
+                "owner_skill": "code-skill",
+                "owner_enforced": True,
+                "spark_first": True,
+                "reference_path": "code-skill/references/python-rules.md",
+                "active": True,
+                "history_only": False,
+            }
+            with self.assertRaises(ValueError):
+                module.validate_execution_domain_registry()
+            self.assertEqual(module.EXECUTION_DOMAINS["noncanonical_alias"]["language_aliases"], [" Python "])
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+
+    def test_validate_execution_domain_registry_rejects_uppercase_aliases_and_preserves_registry(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            module.EXECUTION_DOMAINS["uppercase_alias"] = {
+                "display_name": "Uppercase Alias",
+                "kind": "code",
+                "language_aliases": ["Python"],
+                "owner_skill": "code-skill",
+                "owner_enforced": True,
+                "spark_first": True,
+                "reference_path": "code-skill/references/python-rules.md",
+                "active": True,
+                "history_only": False,
+            }
+            with self.assertRaises(ValueError):
+                module.validate_execution_domain_registry()
+            self.assertEqual(module.EXECUTION_DOMAINS["uppercase_alias"]["language_aliases"], ["Python"])
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+
+    def test_validate_execution_domain_registry_rejects_absolute_reference_path(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            module.EXECUTION_DOMAINS["abs_reference"] = {
+                "display_name": "Absolute Reference",
+                "kind": "code",
+                "language_aliases": ["absref"],
+                "owner_skill": "code-skill",
+                "owner_enforced": True,
+                "spark_first": True,
+                "reference_path": "/tmp/task-analyze-abs-domain.md",
+                "active": True,
+                "history_only": False,
+            }
+            with tempfile.TemporaryDirectory(prefix="task-analyze-policy-abs-") as temporary:
+                for metadata in module.EXECUTION_DOMAINS.values():
+                    owner_skill = metadata["owner_skill"]
+                    skill_dir = Path(temporary) / owner_skill
+                    skill_dir.mkdir(parents=True, exist_ok=True)
+                    (skill_dir / "SKILL.md").write_text(f"{owner_skill} skill\n", encoding="utf-8")
+                    reference = Path(temporary) / metadata["reference_path"]
+                    reference.parent.mkdir(parents=True, exist_ok=True)
+                    reference.write_text(f"reference: {metadata['reference_path']}\n", encoding="utf-8")
+                (Path(temporary) / "task-analyze-abs-domain.md").write_text("absolute reference\n", encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    module.validate_execution_domain_registry(skills_root=temporary)
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+
+    def test_validate_execution_domain_registry_rejects_parent_traversal_reference_path(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            module.EXECUTION_DOMAINS["traversal_reference"] = {
+                "display_name": "Traversal Reference",
+                "kind": "code",
+                "language_aliases": ["traverse"],
+                "owner_skill": "code-skill",
+                "owner_enforced": True,
+                "spark_first": True,
+                "reference_path": "code-skill/references/../outside.md",
+                "active": True,
+                "history_only": False,
+            }
+            with tempfile.TemporaryDirectory(prefix="task-analyze-policy-traversal-") as temporary:
+                for metadata in module.EXECUTION_DOMAINS.values():
+                    owner_skill = metadata["owner_skill"]
+                    skill_dir = Path(temporary) / owner_skill
+                    skill_dir.mkdir(parents=True, exist_ok=True)
+                    (skill_dir / "SKILL.md").write_text(f"{owner_skill} skill\n", encoding="utf-8")
+                    if metadata["reference_path"] == "code-skill/references/../outside.md":
+                        continue
+                    reference = Path(temporary) / metadata["reference_path"]
+                    reference.parent.mkdir(parents=True, exist_ok=True)
+                    reference.write_text(f"reference: {metadata['reference_path']}\n", encoding="utf-8")
+                (Path(temporary) / "code-skill/references").mkdir(parents=True, exist_ok=True)
+                (Path(temporary) / "outside.md").write_text("outside\n", encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    module.validate_execution_domain_registry(skills_root=temporary)
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+
+    def test_validate_execution_domain_registry_accepts_relative_reference_path(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            with tempfile.TemporaryDirectory(prefix="task-analyze-policy-ok-") as temporary:
+                for metadata in original.values():
+                    owner_skill = metadata["owner_skill"]
+                    skill_dir = Path(temporary) / owner_skill
+                    skill_dir.mkdir(parents=True, exist_ok=True)
+                    (skill_dir / "SKILL.md").write_text(f"{owner_skill} skill\n", encoding="utf-8")
+                    reference = Path(temporary) / metadata["reference_path"]
+                    reference.parent.mkdir(parents=True, exist_ok=True)
+                    reference.write_text(f"reference: {metadata['reference_path']}\n", encoding="utf-8")
+                module.validate_execution_domain_registry(skills_root=temporary)
+            self.assertEqual(module.EXECUTION_DOMAINS["general"]["reference_path"], "task-analyze-skill/references/model-selection.md")
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
 
 
 if __name__ == "__main__":

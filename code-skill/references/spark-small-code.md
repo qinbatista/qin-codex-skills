@@ -1,6 +1,6 @@
 # Spark Code Route
 
-The locked plan from `task-analyze-skill` is the authority for model and effort. Use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`) first for text-only Python/C# implementation, code edits, bounded repair/refactor, and authored Python/C# probes.
+The locked plan from `task-analyze-skill` is the authority for model and effort. Use `GPT-5.3-Codex-Spark` (`gpt-5.3-codex-spark`) first for text-only implementation, code edits, bounded repair/refactor, and authored probes in an active registry-owned code domain.
 
 ## Capability Contract
 
@@ -12,7 +12,7 @@ The locked plan from `task-analyze-skill` is the authority for model and effort.
 
 ## Use When
 
-- The node is Python/C#/Unity C# and loads `code-skill`.
+- The node is an active registry-owned code domain and loads `code-skill`; current examples are Python, plain C#, and Unity C#.
 - The work fits Spark context and does not require image input or unresolved cross-system judgment.
 - The plan already defines sources, output, stop condition, Mini Verify, and fallback.
 

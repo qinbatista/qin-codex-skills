@@ -1,17 +1,17 @@
 ---
 name: code-skill
-description: "Python/C# executor selected in the locked task-analyze-skill plan and coordinated by workflow-skill. Use for Python, C#, Unity C#, prompt-in-code, tests/probes, debugging, refactoring, explanation, or bounded optimization implementation. Spark is first for text-only Python/C# work. Preserve Qin's coding style, keep changes surgical, and return the code path to Mini Verify before the main result."
+description: "Registry-owned code-domain executor selected in the locked task-analyze-skill plan and coordinated by workflow-skill. Built-in examples are Python, plain C#, and Unity C#. Spark is first for text-only registered-code work."
 ---
 
 # Code Skill
 
-Use this as the only global Python/C# executor. `task-analyze-skill` chooses the code node's model, effort, dependencies, and stop condition; `workflow-skill` delivers that locked node. Do not reselect the route inside `code-skill`.
+Use this as the global executor for every active registry-owned code domain. `task-analyze-skill` chooses the code node's model, effort, dependencies, and stop condition; `workflow-skill` delivers that locked node. Do not reselect the route inside `code-skill`.
 
 ## Internal Route Selection
 
 ### Required Scope
 
-Load this skill for every task node that reads, writes, explains, debugs, refactors, tests, or authors probes for:
+Load this skill for every task node that reads, writes, explains, debugs, refactors, tests, or authors probes in an active registry-owned code domain, including:
 
 - Python;
 - C# or Unity C#;
@@ -19,7 +19,18 @@ Load this skill for every task node that reads, writes, explains, debugs, refact
 - Python/C# helper scripts used by another skill;
 - Python/C# optimization implementation.
 
-Do not use it for JavaScript, TypeScript, frontend, shell, SQL, config-only work, pure prose, images, account switching, or GitHub sync unless the planned node also touches Python/C#.
+Use only the locked registered domain; other production language domains remain with their owning production skill until explicitly registered here.
+
+## Execution-domain routing
+
+| Work | `execution_domain` | Rules |
+|---|---|---|
+| Python | `python` | `references/python-rules.md` |
+| Plain non-Unity C# | `csharp` | `references/csharp-rules.md` |
+| Unity C# | `unity_csharp` | `references/csharp-rules.md` then `references/unity-csharp-rules.md` |
+| Legacy code with no domain | `code_unspecified` | migration/history-only; do not use for new work |
+
+Any new active code domain is registry-owned by `routing_policy.py::EXECUTION_DOMAINS` and follows the [extension guide](../task-analyze-skill/references/router-extension-guide.md). Do not infer a new domain from a similar name.
 
 ## References
 
@@ -27,18 +38,19 @@ Read only what the locked node needs:
 
 - all non-trivial code: `references/coding-approach.md`;
 - Python: `references/python-rules.md`;
-- C#/Unity: `references/unity-csharp-rules.md`;
+- plain C#: `references/csharp-rules.md`;
+- Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`;
 - prompt-in-code: `references/prompt-generation.md`;
-- safe repeated/parallel Python/C# work: `references/parallelization.md`;
+- safe repeated/parallel registered-code work: `references/parallelization.md`;
 - Spark and fallback behavior: `references/spark-small-code.md`.
 
-Python and Unity C# share this executor but keep separate `execution_domain` evidence and language references. Registry metadata identifies the domain; language rules belong in `references/python-rules.md` and `references/unity-csharp-rules.md`.
+Active registry-owned code domains share this executor while retaining separate evidence keys and references. Current examples are `python`, `csharp`, and `unity_csharp`; `code_unspecified` is migration/history-only. Registry metadata identifies the domain; language rules are documented in this skill's `references` directory (for example, `python-rules.md`, `csharp-rules.md`, and `unity-csharp-rules.md`).
 
 For prompt-in-code work, show `Prompt idea -> Prompt goal -> Problems -> Solution`, inspect the existing prompt, fix the smallest complete logic, then embed and Mini Verify it.
 
 ## Model Contract
 
-- Use Spark first for text-only Python/C# implementation, bounded repair/refactor, and authored Python/C# probes at the effort in the locked plan.
+- Use Spark first for text-only registered-code implementation, bounded repair/refactor, and authored probes at the effort in the locked plan.
 - Use only a fallback already allowed by Task Analyze, with a visible reason and runtime reroute/receipt when available.
 - Never keep the entry model merely because it is active.
 - Image-dependent, over-context, broad integration, or evidence-heavy work may use planned Terra; bounded Spark-unavailable work may use planned Luna.
@@ -46,7 +58,7 @@ For prompt-in-code work, show `Prompt idea -> Prompt goal -> Problems -> Solutio
 
 ## Workflow
 
-1. Confirm the node is Python/C# and the locked route names `code-skill`.
+1. Confirm the node names an active registered code domain and `code-skill`.
 2. Read the relevant references and existing source.
 3. State important assumptions and choose the smallest viable design.
 4. Preserve Qin's existing style, naming, structure, and unrelated user changes.

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -19,7 +20,16 @@ receipt_module = importlib.util.module_from_spec(RECEIPT_SPEC)
 RECEIPT_SPEC.loader.exec_module(receipt_module)
 MODEL_EFFORTS = receipt_module.MODEL_EFFORTS
 try:
-    from routing_policy import EXECUTION_DOMAINS, infer_execution_domain
+    from routing_policy import (
+        EXECUTION_DOMAINS,
+        execution_domain_is_active,
+        expected_owner_skill,
+        is_code_execution_domain,
+        requires_spark_first,
+        resolve_execution_domain,
+        reference_path_for,
+        validate_execution_domain_registry,
+    )
 except ModuleNotFoundError:
     import importlib.util as _importlib_util
 
@@ -28,7 +38,13 @@ except ModuleNotFoundError:
     _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
     _routing_policy_spec.loader.exec_module(_routing_policy)
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
-    infer_execution_domain = _routing_policy.infer_execution_domain
+    execution_domain_is_active = _routing_policy.execution_domain_is_active
+    expected_owner_skill = _routing_policy.expected_owner_skill
+    is_code_execution_domain = _routing_policy.is_code_execution_domain
+    requires_spark_first = _routing_policy.requires_spark_first
+    resolve_execution_domain = _routing_policy.resolve_execution_domain
+    reference_path_for = _routing_policy.reference_path_for
+    validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
 
 HISTORY_PATH = Path(__file__).resolve().parent / "model_routing_history.py"
 HISTORY_SPEC = importlib.util.spec_from_file_location(
@@ -56,24 +72,30 @@ CONTROLLED_FIELDS = [
     "execution_domain",
 ]
 
+DISPATCHER_SKILLS_ROOT = Path(__file__).resolve().parents[2]
+
+
+def resolve_skills_root(skills_root=None):
+    if skills_root is None:
+        return DISPATCHER_SKILLS_ROOT
+    return Path(skills_root).resolve()
+
 
 def _resolve_execution_domain(node):
+    domain, _ = _resolve_execution_domain_with_flag(node)
+    return domain
+
+
+def _resolve_execution_domain_with_flag(node):
     explicit_domain = node.get("execution_domain")
-    if explicit_domain:
-        return str(explicit_domain)
-    purpose = node.get("purpose")
-    if purpose in {"implement", "author-probe"}:
-        return "code_unspecified"
-    language = node.get("language")
-    if language in EXECUTION_DOMAINS:
-        return str(language)
-    return str(
-        infer_execution_domain(
-            owning_skill=node.get("skill"),
-            task_family=node.get("task_family"),
-            explicit_domain=None,
-        )
+    domain = resolve_execution_domain(
+        owning_skill=node.get("skill"),
+        task_family=node.get("task_family"),
+        explicit_domain=explicit_domain,
+        language=node.get("language"),
+        purpose=node.get("purpose"),
     )
+    return domain, bool(explicit_domain)
 
 
 def _is_code_implementation(node):
@@ -81,7 +103,11 @@ def _is_code_implementation(node):
         return False
     if node.get("purpose") in {"implement", "author-probe"}:
         return True
-    return _resolve_execution_domain(node) in {"python", "csharp", "unity_csharp"}
+    try:
+        execution_domain = _resolve_execution_domain(node)
+    except ValueError:
+        return False
+    return is_code_execution_domain(execution_domain)
 
 
 
@@ -108,7 +134,10 @@ def dependency_closure(node_id, node_by_id):
 def phase_verdict(path, pass_marker, fail_marker):
     if not path:
         return "unknown"
-    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "unknown"
     if pass_marker in text and fail_marker not in text:
         return "pass"
     if fail_marker in text and pass_marker not in text:
@@ -116,8 +145,13 @@ def phase_verdict(path, pass_marker, fail_marker):
     return "unknown"
 
 
-def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=Path.home() / ".codex" / "skills"):
+def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
+    skills_root = resolve_skills_root(skills_root)
     failures = []
+    try:
+        validate_execution_domain_registry(skills_root)
+    except ValueError as error:
+        failures.append(f"execution_domain registry is invalid: {error}")
     if plan.get("schema_version") != 1:
         failures.append("schema_version must be 1")
     if plan.get("complexity") not in {"easy", "complex"}:
@@ -186,14 +220,31 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=Path.home() 
         if not isinstance(spark_exception, str) or len(spark_exception) > 240:
             failures.append(f"{node_id} spark_exception_reason must be a string of at most 240 characters")
 
-        execution_domain = _resolve_execution_domain(node)
-        if execution_domain not in EXECUTION_DOMAINS:
+        try:
+            execution_domain, explicitly_explicit = _resolve_execution_domain_with_flag(node)
+        except ValueError:
+            execution_domain = str(node.get("execution_domain") or "")
             failures.append(f"{node_id} execution_domain is unknown")
+            explicitly_explicit = bool(node.get("execution_domain"))
+        else:
+            node["execution_domain"] = execution_domain
 
-        if _is_code_implementation(node) and skill != "code-skill":
-            failures.append(f"{node_id} Python/C#/Unity C# implementation bypasses code-skill")
-        if _is_code_implementation(node) and node.get("model") != "gpt-5.3-codex-spark" and not (spark_exception.strip() or node.get("fallback_reason", "").strip()):
-            failures.append(f"{node_id} has no fallback reason; implementation must be Spark-first or state spark_exception_reason/fallback_reason")
+        expected_owner = None
+        if execution_domain in EXECUTION_DOMAINS:
+            if not execution_domain_is_active(execution_domain):
+                failures.append(f"{node_id} execution_domain is non-active: {execution_domain}")
+            expected_owner = expected_owner_skill(execution_domain) if is_code_execution_domain(execution_domain) else None
+        else:
+            expected_owner = None
+        if expected_owner is not None and skill != expected_owner:
+            failures.append(f"{node_id} bypasses code-skill; implementation owner mismatch for {execution_domain}")
+
+        if _is_code_implementation(node):
+            spark_forced = requires_spark_first(execution_domain)
+            if spark_forced and node.get("model") != "gpt-5.3-codex-spark" and not (
+                spark_exception.strip() or node.get("fallback_reason", "").strip()
+            ):
+                failures.append(f"{node_id} has no fallback reason; implementation must be Spark-first or state spark_exception_reason/fallback_reason")
 
         if node_id == plan.get("main_result_node"):
             routing_condition = node.get("routing_condition")
@@ -206,11 +257,20 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=Path.home() 
             static_suggestion = node.get("static_suggestion")
             hard_floor = node.get("hard_floor")
             if isinstance(routing_condition, dict):
+                condition_domain = routing_condition.get("execution_domain")
+                if condition_domain != execution_domain:
+                    failures.append(
+                        f"{node_id} execution_domain must match routing_condition.execution_domain"
+                    )
                 try:
                     routing_condition = routing_history_module.validate_condition(routing_condition)
                 except ValueError as error:
                     failures.append(f"{node_id} routing_condition is invalid: {error}")
                 node["routing_condition"] = routing_condition
+                if routing_condition.get("owning_skill") != node.get("skill"):
+                    failures.append(
+                        f"{node_id} routing_condition.owning_skill must match the executing node skill"
+                    )
             try:
                 node["task_summary"] = routing_history_module.validate_summary(node.get("task_summary"))
             except ValueError as error:
@@ -398,7 +458,53 @@ def _normalize_route_attempt(attempt_receipt, fallback_pair, status, phase_failu
     }
 
 
-def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
+def _ending_release_path(cache_dir, route_run_id):
+    safe_route_run_id = re.sub(r"[^a-zA-Z0-9._-]", "-", route_run_id)
+    return Path(cache_dir) / f"{safe_route_run_id}.ending-release.json"
+
+
+def _release_record(route_run_id, completed, cache_dir):
+    return {
+        "schema_version": 1,
+        "route_run_id": route_run_id,
+        "released_at": datetime.now(timezone.utc).isoformat(),
+        "released_by": "run-plan",
+        "main_result_node": completed.get("main_result_node"),
+        "mini_verify_node": completed.get("mini_verify_node"),
+        "main_result_receipt_path": completed.get("main_result_receipt_path"),
+        "mini_verify_receipt_path": completed.get("mini_verify_receipt_path"),
+        "mini_verify_result_path": completed.get("mini_verify_result_path"),
+        "cache_dir": str(cache_dir),
+    }
+
+
+def _write_release_record(path, record):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(record, indent=2) + "\n"
+    path.write_text(payload, encoding="utf-8")
+    path.chmod(0o600)
+
+
+def _read_release_record(path):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _has_mismatched_release_record(cache_dir, route_run_id):
+    for release_path in Path(cache_dir).glob("*.ending-release.json"):
+        release_record = _read_release_record(release_path)
+        if not isinstance(release_record, dict):
+            continue
+        if release_record.get("route_run_id") and release_record.get("route_run_id") != route_run_id:
+            return True
+    return False
+
+
+def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
+    skills_root = resolve_skills_root(skills_root)
     node_id = node["id"]
     receipt_path = cache_dir / f"{node_id}-receipt.json"
     result_path = cache_dir / f"{node_id}-result.md"
@@ -407,9 +513,14 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex"):
         f"Owning skill: {node['skill']}\n"
         f"Node id: {node_id}\n"
         f"Phase: {node['phase']}\n"
-        f"Execute only this bounded locked node. Read and obey /Users/qin/.codex/skills/{node['skill']}/SKILL.md.\n\n"
+        f"Execute only this bounded locked node. Read and obey {skills_root / node['skill'] / 'SKILL.md'}.\n\n"
         f"{node['prompt']}"
     )
+    if execution_domain_is_active(_resolve_execution_domain(node)) and is_code_execution_domain(_resolve_execution_domain(node)):
+        execution_domain, _ = _resolve_execution_domain_with_flag(node)
+        reference_path = reference_path_for(execution_domain)
+        if reference_path:
+            prompt += f"\n\nReference rules for this execution domain: {skills_root / reference_path}"
     if dependency_text:
         prompt += f"\n\nVerified dependency handoff:\n{dependency_text}"
     if node["phase"] == "mini":
@@ -577,8 +688,59 @@ def _run_record(result_path, verify_level, verify_status, main_result_receipt_pa
     return routing_history_module.record_event(args)
 
 
-def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".codex" / "state_5.sqlite", codex_bin="codex"):
-    failures = validate_plan(plan, entry_model, entry_effort, cwd)
+def _release_main_result(handoff):
+    handoff_data = dict(handoff)
+    route_run_id = handoff_data.get("route_run_id")
+    if not isinstance(route_run_id, str) or not route_run_id:
+        return {"schema_version": 1, "status": "fail", "route_run_id": None, "failures": ["ending handoff is missing route_run_id"]}
+
+    cache_dir = Path(handoff_data.get("cache_dir") or "/").expanduser().resolve()
+    plan = handoff_data.get("plan") if isinstance(handoff_data.get("plan"), dict) else {}
+    node_by_id = {node.get("id"): node for node in plan.get("nodes", []) if isinstance(node, dict) and isinstance(node.get("id"), str)}
+    completed = {
+        record.get("id"): record
+        for record in handoff_data.get("completed", [])
+        if isinstance(record, dict) and isinstance(record.get("id"), str)
+    }
+    main_node_id = handoff_data.get("main_result_node") or plan.get("main_result_node")
+    mini_node_id = handoff_data.get("mini_verify_node") or plan.get("mini_verify_node")
+    main_record = completed.get(main_node_id) if isinstance(main_node_id, str) else None
+    mini_record = completed.get(mini_node_id) if isinstance(mini_node_id, str) else None
+    if main_record is None or mini_record is None:
+        return {"schema_version": 1, "status": "fail", "route_run_id": route_run_id, "failures": ["ending handoff is missing main or mini record"]}
+    if main_record.get("status") != "pass" or mini_record.get("status") != "pass":
+        return {"schema_version": 1, "status": "fail", "route_run_id": route_run_id, "failures": ["main result and mini verify must both pass before release"]}
+    mini_marker_status = phase_verdict(mini_record.get("result_path"), "MINI_VERIFY=PASS", "MINI_VERIFY=FAIL")
+    if mini_marker_status != "pass":
+        return {
+            "schema_version": 1,
+            "status": "fail",
+            "route_run_id": route_run_id,
+            "failures": ["Mini Verify result must contain an unambiguous MINI_VERIFY=PASS marker before release"],
+        }
+
+    release_path = _ending_release_path(cache_dir, route_run_id)
+    release_record = _release_record(
+        route_run_id,
+        {
+            "main_result_node": main_node_id,
+            "mini_verify_node": mini_node_id,
+            "main_result_receipt_path": main_record.get("receipt_path"),
+            "mini_verify_receipt_path": mini_record.get("receipt_path"),
+            "mini_verify_result_path": mini_record.get("result_path"),
+        },
+        cache_dir,
+    )
+    _write_release_record(release_path, release_record)
+    handoff_data["released"] = True
+    handoff_data["release_path"] = str(release_path)
+    handoff_path = Path(handoff_data.get("ending_handoff_path") or cache_dir / "ending-handoff.json")
+    handoff_path.write_text(json.dumps(handoff_data, indent=2) + "\n", encoding="utf-8")
+    return {"schema_version": 1, "status": "pass", "route_run_id": route_run_id, "release_path": str(release_path)}
+
+
+def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".codex" / "state_5.sqlite", codex_bin="codex", skills_root=None):
+    failures = validate_plan(plan, entry_model, entry_effort, cwd, skills_root=skills_root)
     cache_dir = Path(plan["cache_dir"]).expanduser().resolve() if not failures else cwd.resolve() / "work" / "cache" / "invalid-task-route"
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / "dispatch-manifest.json"
@@ -617,7 +779,7 @@ def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".code
         if plan["topology"] == "sequential" or len(ready) == 1:
             ready_records = {
                 node_id: run_node(
-                    node_by_id[node_id], cache_dir, completed_snapshot, state_db, cwd, codex_bin
+                    node_by_id[node_id], cache_dir, completed_snapshot, state_db, cwd, codex_bin, skills_root
                 )
                 for node_id in ready
             }
@@ -632,6 +794,7 @@ def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".code
                         state_db,
                         cwd,
                         codex_bin,
+                        skills_root,
                     )
                     for node_id in ready
                 }
@@ -680,6 +843,7 @@ def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".code
     status = "pass" if not failures and main_record.get("status") == "pass" and mini_record.get("status") == "pass" else "fail"
     ending_handoff_path = cache_dir / "ending-handoff.json"
     ending_manifest_path = cache_dir / "ending-dispatch-manifest.json"
+    ending_release_path = _ending_release_path(cache_dir, route_run_id)
 
     if status == "pass":
         ending_handoff = {
@@ -690,6 +854,11 @@ def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".code
             "route_run_id": route_run_id,
             "plan": plan,
             "completed": ordered,
+            "main_result_node": plan.get("main_result_node"),
+            "mini_verify_node": mini_node_id,
+            "cache_dir": str(cache_dir),
+            "released": False,
+            "release_path": str(ending_release_path),
             "ending_manifest_path": str(ending_manifest_path),
         }
         ending_handoff_path.write_text(json.dumps(ending_handoff, indent=2) + "\n", encoding="utf-8")
@@ -723,7 +892,7 @@ def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".code
     return manifest
 
 
-def run_ending_handoff(handoff_path, codex_bin="codex"):
+def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     try:
         handoff = json.loads(handoff_path.expanduser().resolve().read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -733,9 +902,27 @@ def run_ending_handoff(handoff_path, codex_bin="codex"):
     cwd = Path(handoff.get("cwd") or "/").expanduser().resolve()
     entry = handoff.get("entry") if isinstance(handoff.get("entry"), dict) else {}
     state_db = Path(handoff.get("state_db") or Path.home() / ".codex" / "state_5.sqlite").expanduser().resolve()
-    failures = validate_plan(plan, entry.get("model"), entry.get("effort"), cwd)
     route_run_id = handoff.get("route_run_id")
-    cache_dir = Path(plan.get("cache_dir") or cwd / "work" / "cache" / "invalid-task-route").expanduser().resolve()
+    failures = []
+    if not route_run_id:
+        failures.append("ending handoff is missing route_run_id")
+    cache_dir = Path(handoff.get("cache_dir") or plan.get("cache_dir") or cwd / "work" / "cache" / "invalid-task-route").expanduser().resolve()
+    if route_run_id:
+        release_path = Path(handoff.get("release_path") or _ending_release_path(cache_dir, route_run_id))
+        release_record = _read_release_record(release_path)
+        if not isinstance(release_record, dict):
+            if _has_mismatched_release_record(cache_dir, route_run_id):
+                failures.append("ending handoff release does not match route_run_id")
+            else:
+                failures.append("ending handoff is not released")
+        elif release_record.get("route_run_id") != route_run_id:
+            failures.append("ending handoff release does not match route_run_id")
+        elif handoff.get("released") is not True:
+            failures.append("ending handoff is not marked released")
+        elif release_record.get("main_result_node") != (handoff.get("main_result_node") or plan.get("main_result_node")) or release_record.get("mini_verify_node") != (handoff.get("mini_verify_node") or plan.get("mini_verify_node")):
+            failures.append("ending handoff release does not match main or mini node")
+    if not failures:
+        failures.extend(validate_plan(plan, entry.get("model"), entry.get("effort"), cwd, skills_root=skills_root))
     manifest_path = Path(
         handoff.get("ending_manifest_path") or cache_dir / "ending-dispatch-manifest.json"
     ).expanduser().resolve()
@@ -754,6 +941,11 @@ def run_ending_handoff(handoff_path, codex_bin="codex"):
     runnable_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
     main_node = node_by_id.get(plan.get("main_result_node"), {})
     main_record = completed.get(plan.get("main_result_node"), {})
+    mini_record = completed.get(plan.get("mini_verify_node"), {})
+    if not failures:
+        mini_marker_status = phase_verdict(mini_record.get("result_path"), "MINI_VERIFY=PASS", "MINI_VERIFY=FAIL")
+        if mini_marker_status != "pass":
+            failures.append("ending handoff Mini Verify result is missing an unambiguous MINI_VERIFY=PASS marker")
     ordered = []
     if not failures:
         while runnable_ids:
@@ -768,7 +960,14 @@ def run_ending_handoff(handoff_path, codex_bin="codex"):
             with ThreadPoolExecutor(max_workers=min(3, len(ready))) as executor:
                 futures = {
                     node_id: executor.submit(
-                        run_node, node_by_id[node_id], cache_dir, completed_snapshot, state_db, cwd, codex_bin
+                        run_node,
+                        node_by_id[node_id],
+                        cache_dir,
+                        completed_snapshot,
+                        state_db,
+                        cwd,
+                        codex_bin,
+                        skills_root,
                     )
                     for node_id in ready
                 }
@@ -858,9 +1057,14 @@ def main():
     plan_parser.add_argument("--cwd", type=Path, default=Path.cwd())
     plan_parser.add_argument("--state-db", type=Path, default=Path.home() / ".codex" / "state_5.sqlite")
     plan_parser.add_argument("--codex-bin", default="codex")
+    plan_parser.add_argument("--skills-root", type=Path)
     ending_parser = subparsers.add_parser("run-ending")
     ending_parser.add_argument("handoff", type=Path)
     ending_parser.add_argument("--codex-bin", default="codex")
+    ending_parser.add_argument("--skills-root", type=Path)
+    release_parser = subparsers.add_parser("release-main-result")
+    release_parser.add_argument("handoff", type=Path)
+
 
     args = parser.parse_args()
     if args.command == "run-plan":
@@ -873,9 +1077,13 @@ def main():
             args.cwd.expanduser().resolve(),
             args.state_db.expanduser().resolve(),
             args.codex_bin,
+            args.skills_root,
         )
+    elif args.command == "release-main-result":
+        handoff = json.loads(args.handoff.expanduser().resolve().read_text(encoding="utf-8"))
+        manifest = _release_main_result(handoff)
     else:
-        manifest = run_ending_handoff(args.handoff, args.codex_bin)
+        manifest = run_ending_handoff(args.handoff, args.codex_bin, args.skills_root)
     print(json.dumps(manifest, separators=(",", ":")))
     return 0 if manifest.get("status") == "pass" else 1
 

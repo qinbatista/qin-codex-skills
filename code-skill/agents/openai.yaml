@@ -1,6 +1,5 @@
 interface:
   display_name: "Code Skill"
-  short_description: "Spark-first Python and C# executor"
+  short_description: "Spark-first registered code-domain executor"
   default_prompt: >-
-    Use code-skill for every Python/C#/Unity C# node in the locked task-analyze-skill plan. Follow the assigned model and effort; Spark is first for text-only implementation and authored probes, with only the visible planned Luna/Terra fallback. Read the relevant coding, language, prompt, and parallelization references. Preserve Qin's style and unrelated work, keep changes surgical, and do not add unrequested behavior. Return concrete Mini Verify evidence to workflow-skill. The main result follows passing Mini Verify; Real code-path tests, broad regressions, and a different verifier for optimization belong to Ending Task.
-
+    $code-skill: execute every active registry-owned code domain named by the locked plan. Follow its exact model|effort; Spark is first for text-only implementation and probes, with only visible fallbacks. Read the matching coding/language references, preserve local style, keep edits surgical, and return Mini Verify evidence. The basically verified result comes before Ending Task's deeper code-path checks and independent optimization proof.

@@ -13,7 +13,18 @@ sync_model_capabilities = importlib.util.module_from_spec(SYNC_SPEC)
 SYNC_SPEC.loader.exec_module(sync_model_capabilities)
 
 try:
-    from routing_policy import EXECUTION_DOMAINS, MODEL_EFFORTS, MODEL_EFFORT_ORDER, MODEL_ORDER
+    from routing_policy import (
+        EXECUTION_DOMAINS,
+        MODEL_EFFORTS,
+        MODEL_EFFORT_ORDER,
+        MODEL_ORDER,
+        expected_owner_skill,
+        execution_domain_is_active,
+        is_code_execution_domain,
+        resolve_execution_domain,
+        requires_spark_first,
+        validate_execution_domain_registry,
+    )
 except ModuleNotFoundError:
     import importlib.util as _importlib_util
 
@@ -25,6 +36,12 @@ except ModuleNotFoundError:
     MODEL_EFFORTS = _routing_policy.MODEL_EFFORTS
     MODEL_EFFORT_ORDER = _routing_policy.MODEL_EFFORT_ORDER
     MODEL_ORDER = _routing_policy.MODEL_ORDER
+    expected_owner_skill = _routing_policy.expected_owner_skill
+    execution_domain_is_active = _routing_policy.execution_domain_is_active
+    is_code_execution_domain = _routing_policy.is_code_execution_domain
+    resolve_execution_domain = _routing_policy.resolve_execution_domain
+    requires_spark_first = _routing_policy.requires_spark_first
+    validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
 REQUIRED_FILES = [
     ".gitignore",
     "SKILL.md",
@@ -54,7 +71,7 @@ REQUIRED_SKILL_TEXT = [
     "concise text",
     "Complex",
     "Mermaid",
-    "Python/C#/Unity C#",
+    "Personal routing evidence",
     "Spark first",
     "Private Adaptive Routing",
     "trial exactly one lower effort on the same model",
@@ -81,9 +98,9 @@ REQUIRED_ROUTE_TEXT = [
 ]
 REQUIRED_SELECTION_TEXT = [
     "selected at task entry",
-    "static model by the node's real work",
+    "lowest reliable static `model|effort` pair for the node's real work",
     "Spark first",
-    "lowest supported effort that can reliably meet the stop condition",
+    "Receipt-Backed Personal Learning",
     "Receipt-Backed Personal Learning",
     "one cheaper/faster rung",
     "Efficiency Guard",
@@ -112,7 +129,7 @@ REQUIRED_ADAPTIVE_TEXT = [
     "failed_model",
     "result-producer attempt",
     "After a receipt-matched verification pass",
-    "correctness or quality failure",
+    "Receipt-matched Mini or Real correctness/quality failure",
     "Real Verify failure overrides",
     "Tokens are a usage proxy",
 ]
@@ -172,18 +189,26 @@ def installed_skills(skill_dir):
 
 
 def _is_code_implementation(node):
-    if node.get("purpose") in {"implement", "author-probe"}:
-        return True
+    explicit_domain = node.get("execution_domain")
     language = node.get("language")
-    execution_domain = node.get("execution_domain")
-    return (
-        language in {"python", "csharp", "unity_csharp"}
-        or execution_domain in {"python", "csharp", "unity_csharp"}
-    )
+    try:
+        execution_domain = resolve_execution_domain(
+            owning_skill=node.get("skill"),
+            purpose=node.get("purpose"),
+            language=language,
+            explicit_domain=explicit_domain,
+        )
+    except ValueError:
+        execution_domain = "general"
+    return is_code_execution_domain(execution_domain)
 
 
-def validate_plan(plan, installed):
+def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[2]):
     failures = []
+    try:
+        validate_execution_domain_registry(skills_root)
+    except ValueError as error:
+        failures.append(f"execution-domain registry is invalid: {error}")
     nodes = plan.get("nodes", [])
     entry = nodes[0] if nodes else {}
     entry_model = entry.get("model")
@@ -207,20 +232,40 @@ def validate_plan(plan, installed):
         for dependency in node.get("dependencies", []):
             if dependency not in node_by_id:
                 failures.append(f"{node_id} has missing dependency {dependency}")
-        execution_domain = node.get("execution_domain")
-        if execution_domain and execution_domain not in EXECUTION_DOMAINS:
-            failures.append(f"{node_id} uses unknown execution_domain: {execution_domain}")
-        if _is_code_implementation(node) and skill != "code-skill":
+        explicit_domain = node.get("execution_domain")
+        if isinstance(explicit_domain, str):
+            explicit_domain = explicit_domain.strip() or None
+        try:
+            resolved_domain = resolve_execution_domain(
+                owning_skill=skill,
+                task_family=node.get("task_family"),
+                explicit_domain=explicit_domain,
+                language=node.get("language"),
+                purpose=node.get("purpose"),
+            )
+        except ValueError:
+            resolved_domain = str(explicit_domain or "")
+            failures.append(f"{node_id} execution_domain is unknown")
+        else:
+            if not execution_domain_is_active(resolved_domain):
+                failures.append(f"{node_id} execution_domain is non-active: {resolved_domain}")
+            node["execution_domain"] = resolved_domain
+
+        if node.get("execution_domain") is None:
+            execution_domain = resolved_domain
+        else:
+            execution_domain = node.get("execution_domain")
+        is_code_node = False if execution_domain not in EXECUTION_DOMAINS else is_code_execution_domain(execution_domain)
+        if is_code_node and skill != "code-skill" and expected_owner_skill(execution_domain) is not None:
             failures.append(f"{node_id} bypasses code-skill")
         if (
-            _is_code_implementation(node)
+            is_code_node
+            and requires_spark_first(execution_domain)
             and model != "gpt-5.3-codex-spark"
             and not node.get("spark_exception_reason")
             and not node.get("fallback_reason")
         ):
             failures.append(f"{node_id} is not Spark-first and has no fallback reason")
-        if index > 0 and model == entry_model and effort == entry_effort:
-            failures.append(f"{node_id} reuses resolved entry model and effort")
     mini = node_by_id.get("mini-verify")
     main = node_by_id.get("main-result")
     ending = node_by_id.get("ending-dispatch")
@@ -237,82 +282,76 @@ def validate_plan(plan, installed):
         if ending_id in node_by_id and "ending-dispatch" not in node_by_id[ending_id].get("dependencies", []):
             failures.append(f"{ending_id} must depend on Ending dispatch")
     return failures
+def _easy_followup_node_pair():
+    return "gpt-5.6-luna", "low"
 
 
-def _downstream_model(entry_model):
-    index = MODEL_ORDER.index(entry_model)
-    if index + 1 < len(MODEL_ORDER):
-        return MODEL_ORDER[index + 1]
-    return MODEL_ORDER[1]
+def _complex_followup_node_pair():
+    return "gpt-5.6-terra", "medium"
 
 
-def _downstream_effort(model):
-    for effort in MODEL_EFFORT_ORDER:
-        if effort in MODEL_EFFORTS[model]:
-            return effort
-    raise ValueError(f"model has no supported effort: {model}")
+def _complex_followup_implementation_pair():
+    return "gpt-5.3-codex-spark", "high"
 
 
 def sample_plans():
     ordered_models = list(MODEL_ORDER)
+    easy_followup_model, easy_followup_effort = _easy_followup_node_pair()
+    complex_followup_model, complex_followup_effort = _complex_followup_node_pair()
+    implementation_model, implementation_effort = _complex_followup_implementation_pair()
     plans = {}
     for model in ordered_models:
-        for effort in MODEL_EFFORT_ORDER:
-            if effort not in MODEL_EFFORTS[model]:
-                continue
-            downstream_model = _downstream_model(model)
-            downstream_effort = _downstream_effort(downstream_model)
-            if model == "gpt-5.6-sol" and effort == "ultra":
-                plans[f"complex-{model}-{effort}"] = {
-                    "complexity": "complex",
-                    "display": "mermaid",
-                    "nodes": [
-                        {
-                        "id": "task-analyze",
-                        "skill": "task-analyze-skill",
-                        "model": model,
-                        "effort": effort,
-                        "dependencies": [],
-                        },
-                        {"id": "audit", "skill": "workflow-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["task-analyze"], "execution_domain": "general"},
-                        {
-                            "id": "implement",
-                            "skill": "code-skill",
-                            "model": "gpt-5.3-codex-spark",
-                            "effort": "high",
-                            "dependencies": ["audit"],
-                            "execution_domain": "python",
-                            "language": "python",
-                            "purpose": "implement",
-                        },
-                        {"id": "mini-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["implement"], "execution_domain": "general"},
-                        {"id": "main-result", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
-                        {"id": "ending-dispatch", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["main-result"], "execution_domain": "general"},
-                        {"id": "real-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["ending-dispatch"], "execution_domain": "general"},
-                        {"id": "optimization-verify", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["ending-dispatch"], "execution_domain": "general"},
-                        {"id": "records", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
-                    ],
-                }
-            else:
-                plans[f"easy-{model}-{effort}"] = {
-                    "complexity": "easy",
-                    "display": "text",
-                    "nodes": [
-                        {"id": "task-analyze", "skill": "task-analyze-skill", "model": model, "effort": effort, "dependencies": []},
-                        {
-                            "id": "direct",
-                            "skill": "workflow-skill",
-                            "model": downstream_model,
-                            "effort": downstream_effort,
-                            "dependencies": ["task-analyze"],
-                            "execution_domain": "general",
-                        },
-                        {"id": "mini-verify", "skill": "verify-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["direct"], "execution_domain": "general"},
-                        {"id": "main-result", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
-                        {"id": "ending-dispatch", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["main-result"], "execution_domain": "general"},
-                        {"id": "records", "skill": "workflow-skill", "model": downstream_model, "effort": downstream_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
-                    ],
-                }
+        for effort in MODEL_EFFORTS[model]:
+            plans[f"easy-{model}-{effort}"] = {
+                "complexity": "easy",
+                "display": "text",
+                "nodes": [
+                    {"id": "task-analyze", "skill": "task-analyze-skill", "model": model, "effort": effort, "dependencies": []},
+                    {
+                        "id": "direct",
+                        "skill": "workflow-skill",
+                        "model": easy_followup_model,
+                        "effort": easy_followup_effort,
+                        "dependencies": ["task-analyze"],
+                        "execution_domain": "general",
+                    },
+                    {"id": "mini-verify", "skill": "verify-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["direct"], "execution_domain": "general"},
+                    {"id": "main-result", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
+                    {"id": "ending-dispatch", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["main-result"], "execution_domain": "general"},
+                    {"id": "records", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                ],
+            }
+            plans[f"complex-{model}-{effort}"] = {
+                "complexity": "complex",
+                "display": "mermaid",
+                "nodes": [
+                    {"id": "task-analyze", "skill": "task-analyze-skill", "model": model, "effort": effort, "dependencies": []},
+                    {
+                        "id": "audit",
+                        "skill": "workflow-skill",
+                        "model": complex_followup_model,
+                        "effort": complex_followup_effort,
+                        "dependencies": ["task-analyze"],
+                        "execution_domain": "general",
+                    },
+                    {
+                        "id": "implement",
+                        "skill": "code-skill",
+                        "model": implementation_model,
+                        "effort": implementation_effort,
+                        "dependencies": ["audit"],
+                        "execution_domain": "python",
+                        "language": "python",
+                        "purpose": "implement",
+                    },
+                    {"id": "mini-verify", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["implement"], "execution_domain": "general"},
+                    {"id": "main-result", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
+                    {"id": "ending-dispatch", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["main-result"], "execution_domain": "general"},
+                    {"id": "real-verify", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                    {"id": "optimization-verify", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                    {"id": "records", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                ],
+            }
     return plans
 
 
@@ -399,15 +438,16 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     installed = installed_skills(skill_dir)
     plans = sample_plans()
     expected_plan_count = sum(len(efforts) for efforts in MODEL_EFFORTS.values())
-    if len(plans) != expected_plan_count:
-        failures.append(f"sample plans do not cover all supported entry pairs (expected {expected_plan_count}, got {len(plans)})")
+    expected_route_plan_count = expected_plan_count * 2
+    if len(plans) != expected_route_plan_count:
+        failures.append(f"sample plans do not cover easy+complex entry pairs (expected {expected_route_plan_count}, got {len(plans)})")
     if len({(plan["nodes"][0]["model"], plan["nodes"][0]["effort"]) for plan in plans.values()}) != expected_plan_count:
         failures.append("sample plans do not cover arbitrary supported entry model + effort")
     if not any(plan["complexity"] == "complex" for plan in plans.values()):
         failures.append("sample plans must include at least one complex route")
     plan_results = []
     for name, plan in plans.items():
-        plan_failures = validate_plan(plan, installed)
+        plan_failures = validate_plan(plan, installed, global_skills_root)
         plan_results.append({"name": name, "status": "pass" if not plan_failures else "fail", "failures": plan_failures})
         failures.extend([f"plan {name}: {failure}" for failure in plan_failures])
     return {"valid": not failures, "skill_dir": str(skill_dir), "capability_status": capability_status, "plans": plan_results, "failures": failures}

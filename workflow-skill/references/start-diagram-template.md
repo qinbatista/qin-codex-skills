@@ -40,8 +40,8 @@ Follow with a numbered `Workflow with models` list. Every item names exact model
 ```mermaid
 flowchart TD
   U["User request"] --> A["Task Analyze<br/>[current selected model | current selected effort]"]
-  A --> B["Read Python/C# context<br/>[<planned model> | <effort> · code-skill]"]
-  B --> C["Implement Python/C#<br/>[GPT-5.3-Codex-Spark | <effort> · code-skill]"]
+  A --> B["Read code-domain context<br/>[<planned model> | <effort> · code-skill]"]
+  B --> C["Implement active code domain<br/>[GPT-5.3-Codex-Spark | <effort> · code-skill]"]
   C --> V["Mini Verify<br/>[<model> | <effort> · verify-skill]"]
   V -->|fail| C
   V -->|pass| G{"Main Goal Done Gate<br/>[<model> | <effort>]"}
@@ -81,4 +81,3 @@ Add publish/sync nodes only when the user explicitly requested them.
 - Main Result always follows Mini Verify.
 - Ending Task always follows Main Result.
 - Real Verify and optimization verification never feed the first Main Result.
-

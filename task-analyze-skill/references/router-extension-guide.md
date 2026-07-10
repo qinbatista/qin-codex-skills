@@ -1,45 +1,32 @@
-# Router extension guide (documentation workflow)
-Use this for adding or extending routing domains and evidence-aware execution domains.
+# Router extension guide
 
-## 1) Add domain metadata
+`skills/task-analyze-skill/scripts/routing_policy.py::EXECUTION_DOMAINS` is the single authoritative registry for active execution domains. Domain IDs are immutable evidence keys: do not rename an existing ID, and use `code_unspecified` only for migration and historical evidence.
 
-- Add routing registry metadata for the new domain under `task-analyze-skill`.
-- Keep existing domains in existing scenario shape unless a new scenario is required.
-- For code domains, keep them attached to `code-skill`.
+## Add one active domain
 
-## 2) Add execution-domain evidence
+For a new registry-owned code domain, make one additive registry row with all nine required metadata fields: `display_name`, `kind`, `language_aliases`, `owner_skill`, `owner_enforced`, `spark_first`, `reference_path`, `active`, and `history_only`. Then add the matching reference page and generic routing/validator coverage that reads the registry. Do not edit every validator, scenario, or skill description just to enumerate the new domain. A new additive domain value does not require a schema-version bump.
 
-- Add or update `task-analyze-skill/local/adaptive-routing` schema/validator coverage for the new domain field values.
-- Use exact domain names:
-  - `python`
-  - `unity_csharp`
-  - `general`
-- Never use `unity-csharp` in routing evidence.
+The normal seam is:
 
-## 3) Add/update code-skill references
+1. Add one `EXECUTION_DOMAINS` row with an immutable ID and reference path.
+2. Add the domain-specific executor reference and, when applicable, a language/style reference under `code-skill/references/`.
+3. Add one representative routing scenario and generic registry-driven tests for valid, unknown, and migration-only domains.
+4. Update concise user documentation only where the active domain list or extension seam is explained.
 
-- Update `code-skill` reference docs for implementation guidance and rules for each language that shares it.
-- Python and Unity C# share `code-skill`; they keep separate evidence keys in `execution_domain` and separate language rules:
-  - `references/python-rules.md`
-  - `references/unity-csharp-rules.md`
+Discover the current non-mutating registry view with:
 
-## 4) Update CLI command docs
+```bash
+python3 skills/task-analyze-skill/scripts/model_routing_history.py domains
+```
 
-- In CLI guidance for adaptive routing, document `--execution-domain` as optional.
-- Missing explicit domain behavior:
-  - `code_unspecified` for legacy code evidence
-  - `general` otherwise
-- This inference is migration-safe and makes old payloads parse under the new schema.
+Keep language rules in executor references, not in registry metadata. A domain may share an executor with another domain while retaining separate evidence and rules. Current code examples are `python`, `csharp`, and `unity_csharp`; `general` is the non-code default.
 
-## 5) Update route scenarios and tests
+## Evidence and migration
 
-- Add fixtures/scenarios in routing tables (for example in `workflow-skill/references/routing-matrix.md`) for expected direct/dispatch shapes.
-- Add focused tests for each new scenario, model pattern, and minimum observable evidence.
+`execution_domain` is part of adaptive-profile identity. New records use the exact registry ID. When reading legacy records with no domain, infer `code_unspecified` for legacy code evidence and `general` otherwise; never reinterpret old evidence as a newly named active domain. `code_unspecified` is not an extension target.
 
-## 6) Update README
+The entry model|effort is route-coordination metadata only and is never a learning feature. Direct tool-only routes use their installed tool skill and an observable Mini Verify, but create no child model, model receipt, or adaptive producer sample. Model-executed routes record the actual producer receipt and verification outcomes.
 
-- Update `management-skill/assets/readme/github-readme-template.md` example contract:
-  - `schema_version: 3`
-  - include `condition.execution_domain`
-  - only fields that the real writer serializes
-  - scenario coverage and direct-route wording aligned with runtime behavior.
+## Canonical policy
+
+Correctness is the gate. Among routes that satisfy it, prefer direct execution for one reversible action, the frozen calibrated pair for similar model work, bounded context, and dependency-safe parallelism. Tokens and elapsed time are receipt evidence for like-for-like optimization; they never override quality or safety boundaries.

@@ -23,7 +23,7 @@ This repository is the public, privacy-safe mirror of Qin's six-skill global Cod
 Task Analyze returns a locked route with the exact installed skill, model, effort, dependencies, input/output, verification point, and stop condition for every executable node. [`workflow-skill`](./workflow-skill/SKILL.md) executes that route without silently replacing its choices.
 
 > [!IMPORTANT]
-> **Selected entry model ≠ workflow-wide model.** `GPT-5.6-Sol | ultra` is a valid extreme entry example, but it applies only to Task Analyze. Every downstream node uses the model and effort chosen for its own work.
+> **Selected entry model ≠ workflow-wide model.** `GPT-5.6-Sol | ultra` is a valid extreme entry example, but it applies only to Task Analyze. Every downstream model node uses the model and effort chosen for its own work; direct tool-only nodes use their installed tool skill and observable check without a model receipt.
 
 ## 🧩 The six independent skills
 
@@ -47,7 +47,7 @@ The entry skill is always `task-analyze-skill`, but the entry **model can be any
 
 1. 🧭 The selected pair runs Task Analyze and route coordination only; unavailable metadata is shown as `unverified`, never guessed.
 2. 🎯 Static safety, project, modality, language, and skill floors constrain every downstream choice.
-3. 🎯 Task Analyze chooses an installed skill, model, and effort for every downstream task.
+3. 🎯 Task Analyze chooses an installed skill for every downstream task and model|effort for every model-executed node.
 4. 📝 Easy tasks receive a concise text route.
 5. 🗺️ Complex tasks receive a Mermaid dependency workflow plus a numbered `Workflow with models` list.
 6. ▶️ Workflow continues in the same task; no lifecycle hook or chat-visible machine plan is required.
@@ -68,7 +68,7 @@ Easy tasks do not need a forced diagram:
 
 ### 🗺️ Complex task — Mermaid route
 
-Complex routes show dependencies, concurrency, fallbacks, Mini Verify, the result boundary, and Ending Task. Every executable node displays `[model | effort]`.
+Complex routes show dependencies, concurrency, fallbacks, Mini Verify, the result boundary, and Ending Task. Every model-executed node displays `[model | effort]`; direct tool nodes display their installed skill and observable stop condition.
 
 ```mermaid
 flowchart TD
@@ -96,7 +96,7 @@ flowchart TD
 1. 🧭 Analyze with the current selected entry model/effort.
 2. 🎯 Lock one exact model/effort and installed owner skill per node.
 3. 🗺️ Execute real sequential, parallel, or mixed dependencies.
-4. 💻 Route every Python/C# node through `code-skill`; Spark is first for implementation and authored probes.
+4. 💻 Route every active registry-owned code-domain node through `code-skill`; Spark is first for implementation and authored probes.
 5. 🧪 Run proportional Mini Verify.
 6. ✅ When the requested work and Mini Verify pass, cross Main Goal Done Gate and show the result immediately.
 7. 🌙 After the result, dispatch relevant Ending Task branches.
@@ -118,8 +118,10 @@ flowchart TD
 
 Model selection is semantic, not a fixed pipeline. Task size alone does not require Sol. A large, well-grounded change may fit Terra; a small Python change should still load `code-skill` and prefer Spark.
 
-A routing rung is the complete `model_name|effort` pair on a weak-to-strong quality ladder; never assume cross-model means cheaper. Downgrade exactly one eligible rung: lower effort on the same model first, then after its minimum eligible effort move to the next weaker model at that model's highest eligible effort. Upgrade in the exact reverse direction after a Mini/Real correctness or quality failure. Floors always win.
-The adaptive goal is correctness-first routing with receipts used for like-for-like optimization evidence; receipt timing/tokens cannot bypass quality boundaries.
+A routing rung is the complete `model_name|effort` pair on a weak-to-strong quality ladder; never assume cross-model means cheaper. Downgrade exactly one eligible rung with an effort-first rule: lower effort on the same model first, then after its minimum eligible effort move to the next weaker model at that model's highest eligible effort. Upgrade in the exact reverse direction after a Mini/Real correctness or quality failure. Floors always win.
+The adaptive goal is correctness-first routing with receipts used for like-for-like optimization evidence; receipt timing/tokens cannot bypass quality boundaries. Correctness is the gate. Among routes that satisfy it, prefer direct execution for one reversible action, the frozen calibrated pair for similar model work, bounded context, and dependency-safe parallelism. Tokens and elapsed time are receipt evidence for like-for-like optimization; they never override quality or safety boundaries.
+
+Calibration is a bounded search for the selected complete `model|effort` pair for one exact similar-task profile, including `execution_domain`. Effort changes before model. Recommendation output is `selected_pair`, `reason`, `trial`, `success_model`, and `failed_model`; once adjacent receipt-matched pass/fail evidence establishes the bounds, or a receipt-matched pass proves the current hard floor, Task Analyze derives and reuses the calibrated/frozen selected pair with `trial=false`. It does not perpetually downgrade or upgrade. Reopen only for verified Mini/Real correctness or quality failure, material drift, policy/ladder change, or explicit reset. Availability, timeout, execution, telemetry, protocol, or unverified receipt failures remain temporary diagnostics and never rewrite the learned quality best. The entry pair is route metadata, never a learning feature.
 
 ## 📟 Runtime receipts
 
@@ -153,7 +155,7 @@ Token or time savings may be claimed only from a like-for-like baseline with ide
 
 ## 📚 Private adaptive-routing learning
 
-Personal routing history stays under `task-analyze-skill/local/adaptive-routing/` and is never mirrored. Task Analyze first applies hard safety/project/skill floors, then consults only a compact sanitized profile. A verified pass may trial one cheaper or faster rung next time; a correctness failure restores and emphasizes the next stronger verified floor. Receipt timing/tokens are recorded for like-for-like optimization evidence and do not drive pair ordering. Fallback order is effort-first, then model.
+Personal routing history stays under `task-analyze-skill/local/adaptive-routing/` and is never mirrored. Task Analyze first applies owner/domain and hard safety/project/skill floors, then consults only the exact matching compact sanitized profile. During bounded calibration, a verified pass trials one lower effort on the same model before trying a weaker model. The calibrated/frozen selected pair is derived from the recorded bounds and reused with `trial=false`. Verified failure, material drift, policy/ladder change, or explicit reset reopens the search. Operational or unverified failures may explain a temporary fallback but do not alter learned quality boundaries. Receipt timing/tokens are recorded for like-for-like optimization evidence and do not drive pair ordering.
 
 Management records controlled task-profile enums, the receipt-backed result attempt's requested/resolved/effective pair, Mini/Real verdict, allowlisted failure class, token counts, and timing. It never records raw prompts, task text, results, paths, thread/session IDs, account data, or secrets.
 
@@ -162,7 +164,7 @@ Management records controlled task-profile enums, the receipt-backed result atte
   <img src="./management-skill/assets/readme/model-experience.svg" alt="Condition-keyed model experience: Task Analyze routes a receipt-backed workflow, Mini Verify records first, and Ending Task updates Real Verify in the same attempt">
 </picture>
 
-The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is condition-keyed, not model-keyed, with generalized summaries and explicit full-pair `success_model`/`failed_model` bounds. This avoids contradictory moving ranges when one model appears in different task conditions. A missing file auto-generates when `recommend`, `status`, or `record` needs it. Matching uses exact controlled condition fields, with the current entry pair as a boundary for Task Analyze and routing only. Never claim a field or ranking that the recorder does not produce, and never expose this file in the public mirror:
+The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is condition-keyed, not model-keyed, with generalized summaries and explicit full-pair `success_model`/`failed_model` bounds. This avoids contradictory moving ranges when one model appears in different task conditions. A missing file auto-generates when `recommend`, `status`, or `record` needs it. Matching uses exact controlled condition fields; the current entry pair is route metadata only, never a profile field. Never claim a field or ranking that the recorder does not produce, and never expose this file in the public mirror:
 
 ```json
 {
@@ -185,12 +187,12 @@ The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledg
       },
       "summary": "Repair a bounded README JSON schema example for the global Codex skill mirror.",
       "candidate_ladder": [
-        "gpt-5.3-codex-spark|low",
         "gpt-5.6-luna|low",
-        "gpt-5.6-luna|medium"
+        "gpt-5.6-luna|medium",
+        "gpt-5.6-luna|high"
       ],
       "static_suggestion": "gpt-5.6-luna|medium",
-      "hard_floor": "gpt-5.3-codex-spark|low",
+      "hard_floor": "gpt-5.6-luna|low",
       "failed_model": "gpt-5.6-luna|low",
       "success_model": "gpt-5.6-luna|medium",
       "tasks": [
@@ -254,9 +256,17 @@ The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledg
 }
 ```
 
-The result-producing model and effort come from its receipt-backed attempt, never from the verifier. Mini Verify records first; Real Verify updates that same attempt afterward. A verified pass lowers same-model effort first, then model. Sticky Mini/Real quality or correctness failures raise `failed_model`; an exhausted top boundary returns no selected pair. Availability, timeout, protocol, telemetry, execution, and receipt failures remain operational failures. Safe tiny text/code/command work starts Spark-low; a runtime Spark failure may use the exact planned static fallback without a quality penalty. The ledger is private and is excluded from snapshots, sync, and every public mirror.
+The result-producing model and effort come from its receipt-backed attempt, never from the verifier. Mini Verify records first; Real Verify updates that same attempt afterward. Searching lowers same-model effort first, then model; calibrated profiles reuse the derived frozen `selected_pair` with `trial=false`. Sticky receipt-matched Mini/Real quality or correctness failures reopen calibration and update the bounds; eligible-ladder or hard-floor changes also reopen it. Availability, timeout, protocol, telemetry, execution, and unverified receipt failures remain operational diagnostics and never change the quality best. An exhausted top boundary returns no selected pair. Safe tiny text/code/command work starts Spark-low; a runtime Spark failure may use the exact planned static fallback without a quality penalty. The ledger is private and is excluded from snapshots, sync, and every public mirror.
 
-Receipts and model selection evidence separate execution domains (`python`, `unity_csharp`, `general`) from model-effort pairs; domain values are explicitly preserved in each `condition`.
+Receipts and model selection evidence separate execution domains from model-effort pairs; domain values are explicitly preserved in each `condition`. The table is generated from the staged registry during mirror preparation, so a valid added domain appears automatically.
+
+| Domain | Kind | Owner | Spark first | Reference |
+|---|---|---|---|---|
+| `general` (active) | general | `workflow-skill` | no | [`task-analyze-skill/references/model-selection.md`](./task-analyze-skill/references/model-selection.md) |
+| `python` (active) | code | `code-skill` | yes | [`code-skill/references/python-rules.md`](./code-skill/references/python-rules.md) |
+| `csharp` (active) | code | `code-skill` | yes | [`code-skill/references/csharp-rules.md`](./code-skill/references/csharp-rules.md) |
+| `unity_csharp` (active) | code | `code-skill` | yes | [`code-skill/references/unity-csharp-rules.md`](./code-skill/references/unity-csharp-rules.md) |
+| `code_unspecified` (history-only) | code | `code-skill` | yes | [`code-skill/references/spark-small-code.md`](./code-skill/references/spark-small-code.md) |
 
 ## 🧪 Mini Verify and Ending Task
 
@@ -296,14 +306,14 @@ The verifier compares raw before/after inputs and outputs, order, side effects, 
 
 | Request | Route |
 |---|---|
-| Direct answer/read/change | `task-analyze-skill → workflow-skill → verify-skill` |
+| Direct answer/read/change | Direct model route: exact model|effort, producer receipt, then Mini/Real learning. |
 | Python/C#/Unity C# | `task-analyze-skill → workflow-skill → code-skill → verify-skill` |
 | Prompt/instruction | `task-analyze-skill → workflow-skill → prompt gate → verify-skill` |
 | Global skill update | `task-analyze-skill → workflow-skill → management-skill → code-skill when Python changes → verify-skill` |
 | Explicit optimization | `task-analyze-skill → workflow-skill → optimization-skill → code-skill when needed → verify-skill` |
 | Profile or mirror management | `task-analyze-skill → workflow-skill → management-skill → verify-skill` |
 
-All routes show the basic result after Mini Verify. Relevant Real Verify, optimization proof, reports, logs, docs, and memory continue in Ending Task.
+All model routes show the basic result after Mini Verify. The exact release sequence is `run-plan` -> read Mini-passed result -> show the self-contained basically verified result -> `release-main-result <handoff>` -> `run-ending <handoff>`. Relevant Real Verify, optimization proof, reports, logs, docs, and memory continue in Ending Task.
 
 ## ⚡ Direct action boundary and graduated routes
 
@@ -311,14 +321,14 @@ Task Analyze still runs for every task. One obvious reversible action with no gr
 
 | Scenario | Route and Mini Verify |
 |---|---|
-| Open Chrome | Easy direct `chrome:control-chrome`; no dispatcher; verify Chrome is open. |
-| Open YouTube | Easy direct browser action; no dispatcher; verify `youtube.com` is loaded. |
-| Search CCTV on YouTube | Easy bounded browser interaction; no dispatcher; verify the query and visible results. |
+| Open Chrome | Tool-only `chrome:control-chrome`; no model/receipt/sample; verify Chrome is open. |
+| Open YouTube | Tool-only browser action; no model/receipt/sample; verify `youtube.com` is loaded. |
+| Search CCTV on YouTube | Tool-only browser interaction; no model/receipt/sample; verify the query and visible results. |
 | Design a YouTube-like website | Complex dispatcher through `frontend-app-builder`; grounded implementation; Mini render/core interaction; Ending responsive, console, navigation, accessibility, and visual review. |
 
 ## 🧰 Extension recipe
 
-To add a code domain, add routing-registry metadata, add a `code-skill` reference, extend adaptive schema/validator cases, add routing-scenario tests, and update the README table. Python and Unity C# share `code-skill` but keep separate `execution_domain` evidence and language reference files. Registry metadata only identifies the domain; language rules stay in executor references. Keep easy routes direct and use receipts/topology for complex work. Optimize reasonable response time and token use only after correctness passes. The public mirror contains exactly six public skills; local `model_experience.json` stays private and excluded.
+To extend routing, follow the single authoritative [`router-extension-guide`](./task-analyze-skill/references/router-extension-guide.md), whose seam is `routing_policy.py::EXECUTION_DOMAINS`. The entry pair is route metadata, never a profile field. A new active code domain needs all nine registry metadata fields, one executor reference, and generic registry-driven tests. Direct tool-only work uses its installed skill and observable Mini check without a child model, receipt, or adaptive sample; direct model routes carry exact model|effort, a receipt, and Mini/Real learning. Optimize response time and token use only among correctness-passing routes. The public mirror contains exactly six public skills; local `model_experience.json` stays private and excluded.
 
 ## 🗂️ Repository structure
 

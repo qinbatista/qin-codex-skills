@@ -60,7 +60,7 @@ flowchart TD
 #### [`code-skill`](./code-skill/) · 代码类 / Code
 
 - **角色：** 由锁定路线启动的执行者
-- **大功能：** Spark 优先的 Python/C# 执行者：实现、调试、重构、prompt-in-code、Unity C# 和代码 probe；小体量文本/代码先用 Spark-low，Spark 运行失败可安全回退静态方案。
+- **大功能：** Spark 优先的活动注册代码域执行者；Python、普通 C#、Unity C# 是内置示例。小体量文本/代码先用 Spark-low，Spark 运行失败可安全回退静态方案。
 - **可多选模块：** Prompt Creating; Karpathy Coding Guidelines; Python Code Checker; C# Minimal Style; Easy Python/C# Spark
 - **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。
 
@@ -89,21 +89,11 @@ flowchart TD
 
 ## 运行规则
 
-- Python 和 C# 代码工作进入 `code-skill`；前端/UI 等其他语言代码使用对应生产 skill。
-- 每个任务先进入 `task-analyze-skill`；入口模型和 effort 只做 Task Analyze 的边界分析与路由协调，不可作为全局默认。
-- 路由记账使用 `task-analyze-skill/local/adaptive-routing/model_experience.json`，它是按任务条件泛化的摘要，并携带 `success_model` / `failed_model` 边界。
-- 路由先尝试小 effort，再回退/升级到其他模型。
+- 每个任务先进入 `task-analyze-skill`；入口模型和 effort 只做 Task Analyze 的边界分析与路由协调，不可作为全局默认，也不是 profile 字段。
+- 每个活动的注册代码域都进入 `code-skill`；Python、普通 C#、Unity 项目中的 C# 是内置示例。
+- 直接工具路线只有安装的工具 skill 和可观察的 Mini 检查：没有子模型、receipt 或自适应样本；模型路线保留准确 model|effort、receipt 与 Mini/Real 学习。
+- 分发路线必须依序执行：`run-plan` -> 读取 Mini 通过结果 -> 显示完整的基本验证结果 -> `release-main-result <handoff>` -> `run-ending <handoff>`；显示结果前不得释放 Ending。
+- 路由记账输出 `selected_pair`、`reason`、`trial`、`success_model`、`failed_model`；校准/冻结选择从边界推导并以 `trial=false` 复用。先调 effort，再换模型；仅验证失败、实质漂移、策略变化或明确重置才重新打开。
+- 正确性是 gate；token 和耗时只是 receipt 证据，不能覆盖正确性或安全边界。
 - Mini Verify 先记录原始结果尝试；Real Verify 后续更新同一个结果尝试，不会把 verifier 当作结果模型。
-- Prompt/instruction 编写、更新和优化由 Task Analyze 路由；只有嵌入 Python/C# 可执行代码时才进入 `code-skill`。
-- 固定重复流程优化进入 `optimization-skill`。
-- 验证、真实测试和校准后的证据输出进入 `verify-skill`；简单结果留在聊天里，只有长数据、视觉、表格多、对比型、明确要求或仓库规则需要时才生成 PDF 报告。
-- tiny 体量文本/代码先默认走 Spark-low；Spark 运行失败后可安全走静态回退。
-- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。
-- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。
-
-## 当前结构
-
-- 旧代码类 skill 已合并到 `code-skill`。
-- 旧测试类 skill 已合并到 `verify-skill`。
-- UI review 已扩展到 `verify-skill`。
-- 旧图片 workflow skill 已删除。
+- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由；私有 ledger 不进入镜像。

@@ -6,14 +6,12 @@ Task Analyze runs on the model and effort currently selected at task entry. That
 
 A routing rung is the complete `model_name|effort` pair. This is a weak-to-strong quality ladder, not a price ladder: never assume cross-model means cheaper. To downgrade, move exactly one eligible rung. Lower effort on the same model first; only after that model reaches its minimum eligible effort, move to the next weaker model at that model's highest eligible effort. Upgrade in the exact reverse direction after a Mini or Real correctness/quality failure. Floors always win.
 
-1. During bounded read-only preflight, call `scripts/resolve_entry_model.py` to preserve the current entry pair exactly; use `unverified` only when exact resolution fails.
-2. Confirm the owning skill is installed.
-3. Apply safety, authority, modality, project, language, and owning-skill floors.
-4. Choose the static model by the node's real work, never by the entry pair.
-5. Consult the matching private adaptive-routing profile and accept only a recommendation at or above every static floor.
-6. Choose the lowest supported effort that can reliably meet the stop condition.
-7. Record dependencies, inputs, output, fallback, routing profile, and proof requirement.
-8. Validate the full plan before any side effect.
+1. During bounded read-only preflight, call `scripts/resolve_entry_model.py` to preserve the current entry pair exactly; use `unverified` only when exact resolution fails. The entry pair is route metadata, never a learning feature.
+2. Resolve the owning skill and exact `execution_domain` from the authoritative registry.
+3. Apply safety, authority, modality, project, language, code-style, and owning-skill floors.
+4. Select the lowest reliable static `model|effort` pair for the node's real work, never from the entry pair.
+5. Validate the eligible weak-to-strong ladder and consult the exact calibrated profile, reusing its frozen `selected_pair` only when it remains eligible.
+6. Validate the selected pair and explicit fallbacks, dependencies, inputs, output, and proof requirement before any side effect.
 
 If a refreshed local cache temporarily omits a model that the current UI/runtime has already executed successfully, preserve the last validated capability snapshot and require a new runtime receipt. Do not silently rewrite the plan from one incomplete cache view.
 
@@ -24,9 +22,9 @@ If a refreshed local cache temporarily omits a model that the current UI/runtime
 | Missing context, open-ended synthesis, ambiguous architecture, or difficult cross-system judgment | `gpt-5.6-sol` | high, xhigh, max; ultra only when automatic delegation is both useful and authorized |
 | Grounded, source-rich integration, repository search, realistic testing, or evidence-heavy review | `gpt-5.6-terra` | medium, high, xhigh |
 | Direct bounded non-code work, concise writing, Mini Verify judgment, result delivery, or records | `gpt-5.6-luna` | low or medium |
-| Text-only Python/C# implementation, repair, refactor, or authored Python/C# probe | `gpt-5.3-codex-spark` plus `code-skill` | low, medium, high, or xhigh |
+| Text-only work in an active registry-owned code domain, repair, refactor, or authored probe | `gpt-5.3-codex-spark` plus `code-skill` | low, medium, high, or xhigh |
 
-Use Spark first for every eligible Python/C# implementation or authored probe.
+Use Spark first for every eligible implementation or authored probe in an active registry-owned code domain.
 
 Do not assign Spark to image reading. Do not assign Luna merely because the requested wording is short when surrounding behavior is unclear. Do not assign Sol merely because a task is large when Terra has complete grounded sources.
 
@@ -56,11 +54,16 @@ Every fallback is a planned or observed event with `from`, `to`, reason, and eff
 
 Use `scripts/model_routing_history.py recommend` with a controlled task profile and a weak-to-strong candidate ladder. Do not pass the entry model or effort into the recommendation function.
 
+The learner performs a bounded calibration search for the selected complete `model|effort` pair per exact sanitized task profile. Effort changes always precede model changes in both directions. After adjacent verified pass/fail evidence establishes the bounds, or a verified pass proves the current hard floor, derive/reuse `selected_pair` with `trial=false`; do not repeatedly explore an unchanged calibrated profile.
+
+The older shorthand "one cheaper/faster rung" means one lower eligible pair to measure; it is never a price or speed assumption and cannot bypass quality evidence.
+
 - No prior success: use the static suggestion, except safe low-risk text-only `tiny_text`, `tiny_code`, or `command_generation` work starts at eligible Spark-low.
 - Runtime failure of that Spark-low exception: use the static suggestion without recording a quality failure. Result nodes retry only exact planned `model|effort` fallbacks; Mini/Ending verdict failures do not model-retry.
-- Verified Mini/Real pass: trial exactly one cheaper/faster rung: one lower effort on the same model; after its eligible efforts are exhausted, try the next weaker eligible model.
-- Mini or Real correctness/quality failure: sticky failed boundary; use the nearest eligible rung above it and exclude the failed and weaker rungs. If no stronger current candidate exists, return no selected pair and report the boundary exhausted.
-- Availability, timeout, protocol, telemetry, execution, or receipt mismatch: do not count as quality evidence.
+- Verified Mini/Real pass while searching: trial exactly one lower rung, lowering effort on the same model first; after its eligible efforts are exhausted, try the next weaker eligible model.
+- Receipt-matched Mini or Real correctness/quality failure: reopen calibration, keep a sticky failed boundary, and upgrade by effort first and model second. Exclude the failed and weaker rungs. If no stronger current candidate exists, return no selected pair and report the boundary exhausted.
+- Eligible-ladder or hard-floor change: reopen calibration because the prior best may no longer be eligible or a newly inserted adjacent rung may need proof.
+- Availability, timeout, protocol, telemetry, execution, or unverified/receipt-mismatch failure: treat as temporary diagnostic evidence only. It may use an explicit runtime fallback, but it does not change the learned quality best or quality boundaries.
 - Record the main result-producer receipt after Mini and update that same attempt after Real; never learn the verifier model as the producer.
 - Real Verify failure overrides an earlier Mini pass.
 - High-risk, irreversible, or authority-sensitive work may record outcomes but must not auto-downgrade.

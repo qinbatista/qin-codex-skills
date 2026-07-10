@@ -1,6 +1,6 @@
-# C# Rules
+# Unity C# rules
 
-Use `execution_domain=unity_csharp` in routing evidence for Unity C# work. This domain shares `code-skill` with Python but is not interchangeable with its language rules or evidence.
+Use `execution_domain=unity_csharp` in routing evidence for Unity C# work. Unity uses this file plus [`csharp-rules.md`](csharp-rules.md); the general rules apply unless a Unity-specific rule below is tighter. This domain shares `code-skill` with plain C# and Python but is not interchangeable with their evidence keys.
 
 Apply these rules for Unity projects and C# code, including MonoBehaviours, ScriptableObjects, managers, gameplay systems, runtime scripts, reviews, explanations, refactors, and performance work.
 

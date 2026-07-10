@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Single source of truth for model routing metadata used by task-analyze-skill."""
 
+from pathlib import Path
+
 MODEL_DEFINITIONS = {
     "gpt-5.3-codex-spark": {
         "efforts": ["low", "medium", "high", "xhigh"],
@@ -19,37 +21,256 @@ MODEL_DEFINITIONS = {
 MODEL_ORDER = list(MODEL_DEFINITIONS.keys())
 MODEL_EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max", "ultra"]
 MODEL_EFFORTS = {model: set(data["efforts"]) for model, data in MODEL_DEFINITIONS.items()}
-
 MODEL_EFFORT_INDEX = {model: {effort: index for index, effort in enumerate(data["efforts"])} for model, data in MODEL_DEFINITIONS.items()}
 MODEL_POSITION = {model: index for index, model in enumerate(MODEL_ORDER)}
 
+EXECUTION_DOMAIN_REGISTRY_VERSION = 1
+EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"
+EXECUTION_DOMAIN_REGISTRY_LEGACY = "code_unspecified"
+
 EXECUTION_DOMAINS = {
     "general": {
+        "display_name": "General",
+        "kind": "general",
+        "language_aliases": [],
         "owner_skill": "workflow-skill",
+        "owner_enforced": False,
         "spark_first": False,
         "reference_path": "task-analyze-skill/references/model-selection.md",
+        "active": True,
+        "history_only": False,
     },
     "python": {
+        "display_name": "Python",
+        "kind": "code",
+        "language_aliases": ["python", "py", "python3"],
         "owner_skill": "code-skill",
+        "owner_enforced": True,
         "spark_first": True,
         "reference_path": "code-skill/references/python-rules.md",
+        "active": True,
+        "history_only": False,
     },
     "csharp": {
+        "display_name": "C#",
+        "kind": "code",
+        "language_aliases": ["csharp", "c#"],
         "owner_skill": "code-skill",
+        "owner_enforced": True,
         "spark_first": True,
-        "reference_path": "code-skill/references/unity-csharp-rules.md",
+        "reference_path": "code-skill/references/csharp-rules.md",
+        "active": True,
+        "history_only": False,
     },
     "unity_csharp": {
+        "display_name": "Unity C#",
+        "kind": "code",
+        "language_aliases": ["unity_csharp", "unity-csharp", "unitycsharp"],
         "owner_skill": "code-skill",
+        "owner_enforced": True,
         "spark_first": True,
         "reference_path": "code-skill/references/unity-csharp-rules.md",
+        "active": True,
+        "history_only": False,
     },
     "code_unspecified": {
+        "display_name": "Unspecified Code",
+        "kind": "code",
+        "language_aliases": [],
         "owner_skill": "code-skill",
+        "owner_enforced": False,
         "spark_first": True,
         "reference_path": "code-skill/references/spark-small-code.md",
+        "active": False,
+        "history_only": True,
     },
 }
+
+
+def execution_domain_names():
+    return list(EXECUTION_DOMAINS.keys())
+
+
+def execution_domain_metadata(execution_domain):
+    metadata = EXECUTION_DOMAINS.get(execution_domain)
+    if metadata is None:
+        raise ValueError(f"unknown execution domain: {execution_domain}")
+    payload = dict(metadata)
+    payload["id"] = execution_domain
+    payload["language_aliases"] = list(metadata.get("language_aliases", []))
+    return payload
+
+
+def execution_domain_names_set():
+    return set(execution_domain_names())
+
+
+def is_code_execution_domain(execution_domain):
+    return execution_domain_metadata(execution_domain).get("kind") == "code"
+
+
+def expected_owner_skill(execution_domain):
+    metadata = execution_domain_metadata(execution_domain)
+    if not metadata.get("owner_enforced", False):
+        return None
+    return metadata.get("owner_skill")
+
+
+def requires_spark_first(execution_domain):
+    return bool(execution_domain_metadata(execution_domain).get("spark_first"))
+
+
+def reference_path_for(execution_domain):
+    return execution_domain_metadata(execution_domain).get("reference_path")
+
+
+def execution_domain_is_active(execution_domain):
+    return bool(execution_domain_metadata(execution_domain).get("active"))
+
+
+def resolve_execution_domain(owning_skill=None, task_family=None, explicit_domain=None, language=None, purpose=None):
+    if explicit_domain is not None:
+        explicit_domain = str(explicit_domain).strip()
+        if explicit_domain not in EXECUTION_DOMAINS:
+            raise ValueError(f"unknown execution domain {explicit_domain}")
+        return explicit_domain
+
+    if language is not None:
+        normalized = str(language).strip().lower()
+        for domain in execution_domain_names():
+            aliases = execution_domain_metadata(domain).get("language_aliases", [])
+            if normalized in aliases:
+                return domain
+
+    if purpose in {"implement", "author-probe"}:
+        return EXECUTION_DOMAIN_REGISTRY_LEGACY
+
+    if owning_skill == "code-skill":
+        return EXECUTION_DOMAIN_REGISTRY_LEGACY
+
+    if task_family in {"code", "tiny_code"}:
+        return EXECUTION_DOMAIN_REGISTRY_LEGACY
+
+    return EXECUTION_DOMAIN_REGISTRY_DEFAULT
+
+
+def infer_execution_domain(owning_skill=None, task_family=None, explicit_domain=None, purpose=None, language=None):
+    return resolve_execution_domain(
+        owning_skill=owning_skill,
+        task_family=task_family,
+        explicit_domain=explicit_domain,
+        language=language,
+        purpose=purpose,
+    )
+
+
+def validate_execution_domain_registry(skills_root=None):
+    skills_root = Path(skills_root) if skills_root is not None else Path(__file__).resolve().parents[2]
+    if not execution_domain_names():
+        raise ValueError("execution domain registry must contain at least one domain")
+    if EXECUTION_DOMAIN_REGISTRY_DEFAULT not in execution_domain_names():
+        raise ValueError(f"execution domain default is unknown: {EXECUTION_DOMAIN_REGISTRY_DEFAULT}")
+    if EXECUTION_DOMAIN_REGISTRY_LEGACY not in execution_domain_names():
+        raise ValueError(f"execution domain legacy id is unknown: {EXECUTION_DOMAIN_REGISTRY_LEGACY}")
+
+    seen_aliases = set()
+    seen_reference_paths = set()
+
+    def _normalize_reference_path(value, *, domain):
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"execution domain {domain} has invalid reference_path")
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(f"execution domain {domain} has invalid reference_path")
+        reference = Path(normalized)
+        if reference.is_absolute():
+            raise ValueError(f"execution domain {domain} reference_path must be relative to the skills root: {normalized}")
+        if any(part == ".." for part in reference.parts):
+            raise ValueError(f"execution domain {domain} reference_path must not use parent traversal: {normalized}")
+        if not reference.as_posix():
+            raise ValueError(f"execution domain {domain} has invalid reference_path")
+        return normalized
+
+    for domain in execution_domain_names():
+        metadata = execution_domain_metadata(domain)
+        required = {
+            "display_name",
+            "kind",
+            "language_aliases",
+            "owner_skill",
+            "owner_enforced",
+            "spark_first",
+            "reference_path",
+            "active",
+            "history_only",
+        }
+        missing = required - set(metadata.keys())
+        if missing:
+            raise ValueError(f"execution domain {domain} missing metadata: {', '.join(sorted(missing))}")
+        if not isinstance(metadata["display_name"], str) or not metadata["display_name"]:
+            raise ValueError(f"execution domain {domain} has invalid display_name")
+        if metadata["kind"] not in {"general", "code"}:
+            raise ValueError(f"execution domain {domain} has invalid kind: {metadata['kind']}")
+        if not isinstance(metadata["language_aliases"], list):
+            raise ValueError(f"execution domain {domain} language_aliases must be a list")
+        aliases = []
+        for alias in metadata["language_aliases"]:
+            raw_alias = str(alias)
+            if raw_alias != raw_alias.strip().lower():
+                raise ValueError(f"execution domain {domain} has non-canonical language_alias: {raw_alias}")
+            alias = raw_alias
+            if not alias:
+                raise ValueError(f"execution domain {domain} has empty language_alias")
+            if alias in seen_aliases:
+                raise ValueError(f"language_alias is reused by registry: {alias}")
+            aliases.append(alias)
+            seen_aliases.add(alias)
+        if not isinstance(metadata["owner_skill"], str) or not metadata["owner_skill"]:
+            raise ValueError(f"execution domain {domain} has invalid owner_skill")
+        owner_skill_path = skills_root / metadata["owner_skill"] / "SKILL.md"
+        if not owner_skill_path.is_file():
+            raise ValueError(f"execution domain {domain} owner SKILL.md is missing: {owner_skill_path}")
+        if not isinstance(metadata["owner_enforced"], bool):
+            raise ValueError(f"execution domain {domain} owner_enforced must be bool")
+        if not isinstance(metadata["spark_first"], bool):
+            raise ValueError(f"execution domain {domain} spark_first must be bool")
+        if not isinstance(metadata["reference_path"], str) or not metadata["reference_path"]:
+            raise ValueError(f"execution domain {domain} must include a reference_path")
+        normalized_reference = _normalize_reference_path(metadata["reference_path"], domain=domain)
+        if normalized_reference in seen_reference_paths:
+            raise ValueError(f"execution domain {domain} reuses reference_path")
+        seen_reference_paths.add(normalized_reference)
+        reference = skills_root / normalized_reference
+        if not reference.is_file():
+            raise ValueError(f"execution domain {domain} reference file is missing: {reference}")
+        if not isinstance(metadata["active"], bool):
+            raise ValueError(f"execution domain {domain} active must be bool")
+        if not isinstance(metadata["history_only"], bool):
+            raise ValueError(f"execution domain {domain} history_only must be bool")
+        if metadata["active"] and metadata["history_only"]:
+            raise ValueError(f"execution domain {domain} cannot be both active and history-only")
+    return True
+
+
+def public_execution_domain_rows():
+    return [
+        {
+            "id": domain,
+            "display_name": metadata.get("display_name"),
+            "kind": metadata.get("kind"),
+            "language_aliases": list(metadata.get("language_aliases", [])),
+            "owner_skill": metadata.get("owner_skill"),
+            "owner_enforced": metadata.get("owner_enforced"),
+            "spark_first": metadata.get("spark_first"),
+            "reference_path": metadata.get("reference_path"),
+            "active": metadata.get("active"),
+            "history_only": metadata.get("history_only"),
+        }
+        for domain, metadata in (
+            (domain, execution_domain_metadata(domain))
+            for domain in execution_domain_names()
+        )
+    ]
 
 
 def pair_text(model, effort):
@@ -172,13 +393,4 @@ def canonical_pair_texts(pairs):
     return [pair_text(*pair) for pair in canonical_pairs(pairs)]
 
 
-def infer_execution_domain(owning_skill=None, task_family=None, explicit_domain=None):
-    if explicit_domain is not None:
-        if explicit_domain not in EXECUTION_DOMAINS:
-            raise ValueError(f"unknown execution domain {explicit_domain}")
-        return explicit_domain
-    if owning_skill == "code-skill":
-        return "code_unspecified"
-    if task_family in {"code", "tiny_code"}:
-        return "code_unspecified"
-    return "general"
+validate_execution_domain_registry()

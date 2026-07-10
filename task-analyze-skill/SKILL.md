@@ -43,7 +43,7 @@ After the route is visible, continue the same task through `workflow-skill`; do 
 - **Easy:** one direct, bounded, low-risk result with obvious inputs and stop condition. Show concise text, not Mermaid.
 - **Complex:** multiple dependent or parallel nodes, behavior-changing file work, code/prompt logic, UI/generated artifacts, broad ambiguity, or meaningful risk. Show a task-specific Mermaid workflow plus a numbered `Workflow with models` list.
 
-Every executable, verification, merge, gate, result, dispatch, and Ending Task node displays its exact model and effort. Read `references/route-contract.md` for the required shapes.
+Every model-executed, verification, merge, gate, result, dispatch, and Ending Task node displays its exact model and effort. A direct tool-only action uses its installed skill and observable Mini check without a child model or model receipt. Read `references/route-contract.md` for the required shapes.
 
 For easy tasks, keep the complete visible node set: Task Analyze -> direct task -> Mini Verify -> Main result -> Ending Task.
 
@@ -62,7 +62,7 @@ Create the route before side effects. It contains:
 
 Show only the human route. When machine execution needs a structured plan, save schema-1 JSON privately inside the active task cache and pass its file path to `scripts/task_route_dispatcher.py run-plan`. Never paste that JSON into the conversation.
 
-Use only installed skills. Every Python/C#/Unity C# implementation or authored probe loads `code-skill`, follows Qin's applicable project/code style, and uses Spark first unless a visible supported fallback is triggered.
+Use only installed skills. Every active registry-owned code-domain implementation or authored probe loads `code-skill`, follows its rules, and uses Spark first unless a visible supported fallback is triggered.
 
 ## Model And Effort Choice
 
@@ -73,7 +73,7 @@ Static role floors:
 - Sol: missing context, open-ended synthesis, ambiguous architecture, or genuinely difficult judgment.
 - Terra: grounded source-rich work, integration, repository archaeology, realistic testing, or evidence-heavy review.
 - Luna: direct bounded non-code work, concise results, Mini Verify judgment, and lightweight records.
-- Spark first: text-only Python/C#/Unity C# implementation, debugging, refactoring, and authored probes through `code-skill`.
+- Spark first: text-only work in any active registry-owned code domain through `code-skill`; current examples are Python, plain C#, and Unity C#. `code_unspecified` is migration/history-only.
 
 Choose the lowest effort that can reliably satisfy the node. Then consult the private routing history for the same sanitized task profile. Static safety, authority, modality, project, and skill floors always override learned cost reductions.
 
@@ -87,16 +87,17 @@ Personal routing evidence lives under `task-analyze-skill/local/adaptive-routing
 
 `scripts/model_routing_history.py` creates `local/adaptive-routing/model_experience.json` locally when absent. It records controlled task-profile enums, a generalized one-line task summary, requested/resolved/effective model and effort, receipt status, Mini/Real verdict, failure class, tokens, timing, and explicit `success_model`/`failed_model` ranges. It is never mirrored. Raw prompts, results, paths, secrets, thread/session IDs, and private task content are forbidden.
 
-For the same task profile:
+For the same task profile, including `execution_domain`:
 
 1. With no prior success, use the static suggestion; the sole automatic exception is safe, low-risk, text-only `tiny_text`, `tiny_code`, or `command_generation` work, which starts at Spark-low when eligible.
 2. A runtime Spark failure for that exception uses the static suggestion and does not become a quality penalty. A result node retries only its explicit `model|effort` fallback pairs, in order; Mini/Ending verdict failures never trigger a model retry.
-3. After a receipt-matched verification pass, trial exactly one lower effort on the same model. Only after that model's eligible efforts are exhausted, trial the next weaker eligible model.
-4. A Mini or Real correctness/quality failure is sticky: raise the failed boundary and select the nearest eligible rung above it. Do not retry the failed or weaker rung for that profile. If no stronger current candidate exists, return an exhausted result with no selected pair. Never overwrite a failed attempt with a later pass under the same route-run ID; a genuine retry uses a new ID.
-5. Runtime availability, timeout, telemetry, execution, or receipt failures do not become quality evidence.
-6. Record the result-producer receipt after Mini Verify, then update the same route-run attempt after Real Verify; Real Verify failure overrides an earlier Mini pass. Direct non-dispatch routes invoke the same recorder.
+3. Treat calibration as a bounded search for the best complete `model|effort` pair for this exact sanitized task profile. After a receipt-matched verification pass, trial exactly one lower effort on the same model. Only after that model's eligible efforts are exhausted, trial the next weaker eligible model.
+4. When adjacent pass/fail evidence establishes the selected eligible pair, or a receipt-matched pass proves the current hard floor, derive that calibrated/frozen selection from the bounds and reuse it with `trial=false`; do not keep searching while trial is closed.
+5. Reopen calibration only when a receipt-matched Mini or Real correctness/quality failure invalidates the calibrated pair, or when the eligible candidate ladder or hard floor changes. Upgrade in reverse order: raise effort on the same model first, then move to the next stronger eligible model only after that model's efforts are exhausted. If no stronger current candidate exists, return an exhausted result with no selected pair. Never overwrite a failed attempt with a later pass under the same route-run ID; a genuine retry uses a new ID.
+6. Runtime availability, timeout, telemetry, execution, or receipt failures and unverified/mismatched receipts are temporary diagnostic evidence. They may trigger an allowed execution fallback, but they never change the learned quality best, success boundary, or failed boundary.
+7. Record the result-producer receipt after Mini Verify, then update the same route-run attempt after Real Verify; Real Verify failure overrides an earlier Mini pass. Direct non-dispatch routes invoke the same recorder.
 
-Correctness boundaries control selection first: the weakest verified complete pair is the boundary floor to move above on failure, and a stronger or faster pair can never bypass that boundary. Receipts are used for like-for-like optimization evidence after correctness gates are met. The recorder does not run active median-ranking across all candidates. Legacy `success_model` and `failed_model` fields store full model|effort pair boundaries; never claim a field or ranking that the recorder does not produce. Do not assume that crossing models means cheaper.
+Correctness boundaries control selection first: the weakest verified complete pair is the boundary floor to move above on failure, and a stronger or faster pair can never bypass that boundary. Receipts are used for like-for-like optimization evidence after correctness gates are met. The recorder does not run active median-ranking across all candidates. Its recommendation output is `selected_pair`, `reason`, `trial`, `success_model`, and `failed_model`; the calibrated/frozen selection is derived from those bounds and reused with `trial=false`. Never claim a field or ranking that the recorder does not produce. Do not assume that crossing models means cheaper.
 
 ## Easy Direct-Action Boundary
 
@@ -110,7 +111,7 @@ Complex work uses locked dispatched model|effort nodes, dependency topology, rec
 2. Run proportional Mini Verify.
 3. Repair and rerun when Mini Verify fails.
 4. When Mini Verify passes, cross `Main Goal Done Gate` and show the main result immediately.
-5. After the result is shown, launch planned Ending Task workers for Real Verify, independent optimization verification, reports, logs, docs, and memory.
+5. After the result is shown, execute this enforced sequence: `run-plan` -> read the Mini-passed result -> show the self-contained basically verified result -> `release-main-result <handoff>` -> `run-ending <handoff>`. Ending Task must never be released before the main result is actually shown.
 
 Ending Task must not delay the first Mini-verified result. A later correctness failure notifies the user and reopens the task.
 
@@ -130,7 +131,7 @@ After showing the route, load `workflow-skill` and continue in the same task.
 - Multi-node sequential/parallel/mixed work may save an internal plan in the task cache and call `task_route_dispatcher.py run-plan <plan-file>`.
 - Every child prompt receives `LOCKED_ROUTE_NODE`; Ending workers receive `ENDING_TASK_WORKER`.
 - After Mini, call `model_routing_history.py record` with the main result-producer receipt and route-run ID. After Real, call it again with that same receipt and route-run ID; do not record the verifier's model as the producer attempt.
-- Read the produced main result and Mini verdict from cache, show the self-contained result, then launch the Ending handoff after the result.
+- Enforce `run-plan` -> read Mini-passed result -> show self-contained basically verified result -> `release-main-result <handoff>` -> `run-ending <handoff>`; never release Ending before the user-facing result is shown.
 
 Do not recursively launch another Task Analyze. Do not expose raw dispatcher plans, stdout, stderr, prompts, or secrets.
 

@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import io
 import multiprocessing
+from copy import deepcopy
 import os
 import sys
 import stat
 import tempfile
 import unittest
+from contextlib import contextmanager, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "model_routing_history.py"
@@ -18,7 +22,7 @@ module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
 
 
-CONDITION = {"task_family": "code", "artifact": "script", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "owning_skill": "code-skill", "project_family": "global", "verification_shape": "mini_real"}
+CONDITION = {"task_family": "code", "artifact": "script", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "owning_skill": "code-skill", "project_family": "global", "verification_shape": "mini_real", "execution_domain": "python"}
 SUMMARY = "Implement a compact verified routing-history behavior test."
 LADDER = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
 FULL_SOL_LADDER = [
@@ -47,7 +51,20 @@ FULL_SOL_LADDER = [
 
 
 def arguments(history, receipt, verify_level="mini", verify_status="pass", failure_class="none", run_id="run-one"):
-    return SimpleNamespace(**CONDITION, task_summary=SUMMARY, candidate_ladder=LADDER, static_suggestion="gpt-5.6-luna|low", hard_floor="gpt-5.3-codex-spark|low", history=history, receipt=receipt, verify_level=verify_level, verify_status=verify_status, failure_class=failure_class, run_id=run_id, trial=False)
+    return SimpleNamespace(
+        **CONDITION,
+        task_summary=SUMMARY,
+        candidate_ladder=LADDER,
+        static_suggestion="gpt-5.6-luna|low",
+        hard_floor="gpt-5.3-codex-spark|low",
+        history=history,
+        receipt=receipt,
+        verify_level=verify_level,
+        verify_status=verify_status,
+        failure_class=failure_class,
+        run_id=run_id,
+        trial=False,
+    )
 
 
 def write_receipt(path, model="gpt-5.6-luna", effort="low", status="pass", turn_completed=None, total_tokens=12, process_elapsed_ms=5, route_attempts=None):
@@ -77,6 +94,69 @@ def parse_profile_args(argv):
 
 
 class ModelRoutingHistoryTests(unittest.TestCase):
+    @contextmanager
+    def _with_rust_domain(self, owner="code-skill", spark_first=True, language_alias="rust"):
+        original_domains = deepcopy(module.EXECUTION_DOMAINS)
+        rust_reference_path = "code-skill/references/rust-small-code.md"
+        original_control = module.CONTROL_ENUMS["execution_domain"]
+        try:
+            module.EXECUTION_DOMAINS["rust"] = {
+                "display_name": "Rust",
+                "kind": "code",
+                "language_aliases": [language_alias],
+                "owner_skill": owner,
+                "owner_enforced": True,
+                "spark_first": spark_first,
+                "reference_path": rust_reference_path,
+                "active": True,
+                "history_only": False,
+            }
+            if "execution_domain" in module.CONTROL_ENUMS:
+                module.CONTROL_ENUMS["execution_domain"] = set(module.EXECUTION_DOMAINS.keys())
+            yield
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original_domains)
+            module.CONTROL_ENUMS["execution_domain"] = original_control
+
+    @contextmanager
+    def _with_inactive_domain(self, domain_name="legacy_inactive"):
+        original_domains = deepcopy(module.EXECUTION_DOMAINS)
+        original_control = module.CONTROL_ENUMS["execution_domain"]
+        try:
+            module.EXECUTION_DOMAINS[domain_name] = {
+                "display_name": "Legacy Inactive",
+                "kind": "code",
+                "language_aliases": [domain_name],
+                "owner_skill": "code-skill",
+                "owner_enforced": True,
+                "spark_first": False,
+                "reference_path": "code-skill/references/legacy-inactive.md",
+                "active": False,
+                "history_only": False,
+            }
+            if "execution_domain" in module.CONTROL_ENUMS:
+                module.CONTROL_ENUMS["execution_domain"] = set(module.EXECUTION_DOMAINS.keys())
+            yield
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original_domains)
+            module.CONTROL_ENUMS["execution_domain"] = original_control
+
+    def test_validate_condition_normalizes_inactive_domain_with_trimming(self):
+        with self._with_inactive_domain():
+            condition = module.validate_condition(dict(CONDITION, execution_domain="  code_unspecified  "), allow_history_only=True)
+        self.assertEqual(condition["execution_domain"], "code_unspecified")
+
+    def test_validate_condition_rejects_unknown_domain_without_crashing(self):
+        with self.assertRaises(ValueError) as error:
+            module.validate_condition(dict(CONDITION, execution_domain="definitely_unknown_domain"))
+        self.assertIn("execution_domain is unknown", str(error.exception))
+
+    def test_validate_condition_accepts_synthetic_rust_domain(self):
+        with self._with_rust_domain():
+            self.assertEqual(module.validate_condition(dict(CONDITION, execution_domain="rust"))["execution_domain"], "rust")
+
     def test_bootstrap_preserves_legacy_and_private_summary_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -90,6 +170,33 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
             with self.assertRaises(ValueError):
                 module.validate_summary("Read /private/token.txt and api_key=secret now.")
+
+    def test_status_creates_private_ledger_when_missing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            self.assertFalse(history.exists())
+            status = module.status(history)
+            self.assertTrue(history.exists())
+            self.assertEqual(status["schema_version"], module.SCHEMA_VERSION)
+            self.assertEqual(status["conditions"], 0)
+            self.assertEqual(status["tasks"], 0)
+            loaded = module.load_history(history)
+            self.assertEqual(loaded["schema_version"], module.SCHEMA_VERSION)
+            self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
+
+    def test_validate_condition_rejects_inactive_domain_in_new_profiles(self):
+        with self._with_inactive_domain():
+            with self.assertRaises(ValueError):
+                module.validate_condition(dict(CONDITION, execution_domain="legacy_inactive"))
+
+    def test_validate_condition_allows_inactive_domain_for_history_records(self):
+        with self._with_inactive_domain():
+            condition = module.validate_condition(
+                dict(CONDITION, execution_domain="legacy_inactive"),
+                allow_history_only=True,
+            )
+        self.assertEqual(condition["execution_domain"], "legacy_inactive")
 
     def test_condition_identity_ignores_summary_and_effort_precedes_model(self):
         self.assertEqual([module.pair_text(*pair) for pair in module.canonical_pairs(["gpt-5.6-terra|xhigh", "gpt-5.3-codex-spark|medium", "gpt-5.6-luna|low", "gpt-5.6-luna|max", "gpt-5.6-sol|xhigh", "gpt-5.6-terra|medium", "gpt-5.6-sol|max"])], ["gpt-5.3-codex-spark|medium", "gpt-5.6-luna|low", "gpt-5.6-luna|max", "gpt-5.6-terra|medium", "gpt-5.6-terra|xhigh", "gpt-5.6-sol|xhigh", "gpt-5.6-sol|max"])
@@ -192,14 +299,14 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertEqual(recommendation["reason"], "quality_failure_boundary_exhausted")
             self.assertEqual(recommendation["failed_model"], "gpt-5.6-sol|ultra")
 
-    def test_route_attempts_runtime_failure_prevents_tiny_spark_trial(self):
+    def test_route_attempts_runtime_history_keeps_tiny_spark_first(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             receipt = root / "receipt.json"
             history = root / "history.json"
             tiny_condition = dict(CONDITION, task_family="tiny_code")
             args = SimpleNamespace(**tiny_condition, task_summary=SUMMARY, candidate_ladder=LADDER, static_suggestion="gpt-5.6-luna|low", hard_floor="gpt-5.3-codex-spark|low", history=history, receipt=receipt, verify_level="mini", verify_status="pass", failure_class="none", run_id="run-tiny-route", trial=False)
-            write_receipt(receipt, "gpt-5.6-luna", "low", total_tokens=16, process_elapsed_ms=7, route_attempts=route_attempt_fail())
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", total_tokens=16, process_elapsed_ms=7, route_attempts=route_attempt_fail())
             module.record_event(args)
             recommendation = module.recommend_route(args)
             self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
@@ -231,6 +338,243 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             recommendation = module.recommend_route(weak_low_a)
             self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
             self.assertEqual(recommendation["reason"], "success_and_failure_boundary")
+
+    def test_repeated_recommendations_and_passes_keep_calibrated_adjacent_best(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", status="pass")
+            module.record_event(failure)
+            success = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-success-a")
+            write_receipt(receipt, "gpt-5.6-luna", "low", status="pass")
+            module.record_event(success)
+            for run_id in ("run-success-a", "run-success-b"):
+                success.run_id = run_id
+                module.record_event(success)
+                recommendation = module.recommend_route(success)
+                self.assertFalse(recommendation["trial"])
+
+    def test_gap_selects_intermediate_then_freezes_after_pass(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high"]
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            failure.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(failure)
+            stronger = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-stronger")
+            stronger.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "high")
+            module.record_event(stronger)
+            recommendation = module.recommend_route(stronger)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(recommendation["reason"], "success_and_failure_boundary")
+            self.assertTrue(recommendation["trial"])
+            trial = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-trial")
+            trial.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "low")
+            module.record_event(trial)
+            frozen = module.recommend_route(trial)
+            self.assertEqual(frozen["selected_pair"], "gpt-5.6-luna|low")
+            self.assertFalse(frozen["trial"])
+
+    def test_recommendation_stays_on_gap_rung_until_tested(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high"]
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            failure.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(failure)
+            stronger = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-stronger")
+            stronger.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "high")
+            module.record_event(stronger)
+            first = module.recommend_route(stronger)
+            self.assertEqual(first["selected_pair"], "gpt-5.6-luna|low")
+            self.assertTrue(first["trial"])
+            second = module.recommend_route(stronger)
+            self.assertEqual(second["selected_pair"], "gpt-5.6-luna|low")
+            self.assertTrue(second["trial"])
+
+    def test_best_quality_failure_reopens_immediate_stronger_and_freezes_after_pass(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            baseline = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-baseline")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(baseline)
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-best-failure")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(failure)
+            reopened = module.recommend_route(failure)
+            self.assertEqual(reopened["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(reopened["reason"], "failure_and_success_boundary")
+            self.assertTrue(reopened["trial"])
+            stronger = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-stronger")
+            write_receipt(receipt, "gpt-5.6-luna", "low")
+            module.record_event(stronger)
+            frozen = module.recommend_route(stronger)
+            self.assertEqual(frozen["selected_pair"], "gpt-5.6-luna|low")
+            self.assertFalse(frozen["trial"])
+
+    def test_hard_floor_best_ignores_operational_and_receipt_invalid_quality_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            baseline = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-floor")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(baseline)
+            operational = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="execution", run_id="run-operational")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", status="fail", turn_completed=False, route_attempts=route_attempt_fail())
+            module.record_event(operational)
+            invalid_quality = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-invalid-quality")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", status="fail", turn_completed=False)
+            module.record_event(invalid_quality)
+            recommendation = module.recommend_route(baseline)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertFalse(recommendation["trial"])
+
+    def test_same_profile_summary_shares_best_while_complexity_splits(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            baseline = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-shared")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(baseline)
+            changed_summary = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-summary")
+            changed_summary.task_summary = "A second summary with the same routing profile remains shared."
+            shared = module.recommend_route(changed_summary)
+            self.assertEqual(shared["selected_pair"], "gpt-5.6-luna|low")
+            split = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-complex")
+            split.complexity = "complex"
+            self.assertEqual(module.recommend_route(split)["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(len(module.load_history(history)["conditions"]), 2)
+
+    def test_inserting_intermediate_rung_reopens_searching(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            old_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-terra|low"]
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            failure.candidate_ladder = old_ladder
+            failure.static_suggestion = old_ladder[1]
+            failure.hard_floor = old_ladder[0]
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(failure)
+            success = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-success")
+            success.candidate_ladder = old_ladder
+            success.static_suggestion = old_ladder[1]
+            success.hard_floor = old_ladder[0]
+            write_receipt(receipt, "gpt-5.6-terra", "low")
+            module.record_event(success)
+            self.assertEqual(module.recommend_route(success)["selected_pair"], "gpt-5.6-terra|low")
+            new_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
+            changed = arguments(history, receipt, run_id="run-new-rung")
+            changed.candidate_ladder = new_ladder
+            changed.static_suggestion = new_ladder[2]
+            changed.hard_floor = new_ladder[0]
+            recommendation = module.recommend_route(changed)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(recommendation["reason"], "success_and_failure_boundary")
+            self.assertTrue(recommendation["trial"])
+
+    def test_current_ladder_narrowing_cannot_select_removed_historical_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            full = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(full)
+            full.run_id = "run-success"
+            full.verify_status = "pass"
+            full.failure_class = "none"
+            write_receipt(receipt, "gpt-5.6-luna", "low")
+            module.record_event(full)
+            narrowed = arguments(history, receipt, run_id="run-narrowed")
+            narrowed.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-terra|low"]
+            narrowed.static_suggestion = "gpt-5.6-terra|low"
+            recommendation = module.recommend_route(narrowed)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|low")
+            self.assertEqual(recommendation["reason"], "failure_and_success_boundary")
+            self.assertEqual(recommendation["failed_model"], "gpt-5.3-codex-spark|low")
+            self.assertEqual(recommendation["success_model"], "gpt-5.6-luna|low")
+            write_receipt(receipt, "gpt-5.6-terra", "low")
+            module.record_event(narrowed)
+            frozen = module.recommend_route(narrowed)
+            self.assertEqual(frozen["selected_pair"], "gpt-5.6-terra|low")
+            self.assertFalse(frozen["trial"])
+            self.assertEqual(frozen["success_model"], "gpt-5.6-luna|low")
+
+    def test_removed_historical_success_recalibrates_current_policy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            success = arguments(history, receipt, verify_level="real", verify_status="pass", run_id="run-success")
+            write_receipt(receipt, "gpt-5.6-luna", "low")
+            module.record_event(success)
+            changed = arguments(history, receipt, run_id="run-policy-change")
+            changed.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-terra|low"]
+            changed.static_suggestion = "gpt-5.6-terra|low"
+            recommendation = module.recommend_route(changed)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.3-codex-spark|low")
+            self.assertEqual(recommendation["reason"], "success_boundary_trial")
+            self.assertTrue(recommendation["trial"])
+
+    def test_historical_success_below_raised_floor_recalibrates_current_policy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            old_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low"]
+            success = arguments(history, receipt, verify_level="real", verify_status="pass", run_id="run-old-success")
+            success.candidate_ladder = old_ladder
+            success.static_suggestion = old_ladder[1]
+            write_receipt(receipt, "gpt-5.6-luna", "low")
+            module.record_event(success)
+
+            current_ladder = old_ladder + ["gpt-5.6-terra|low", "gpt-5.6-sol|low"]
+            changed = arguments(history, receipt, run_id="run-raised-floor")
+            changed.candidate_ladder = current_ladder
+            changed.static_suggestion = "gpt-5.6-terra|low"
+            changed.hard_floor = "gpt-5.6-terra|low"
+            recommendation = module.recommend_route(changed)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|low")
+            self.assertEqual(recommendation["reason"], "success_boundary_exhausted")
+            self.assertFalse(recommendation["trial"])
+            write_receipt(receipt, "gpt-5.6-terra", "low")
+            module.record_event(changed)
+            for _ in range(2):
+                frozen = module.recommend_route(changed)
+                self.assertEqual(frozen["selected_pair"], "gpt-5.6-terra|low")
+                self.assertFalse(frozen["trial"])
+            stored = module.load_history(history)["conditions"][module.condition_key(CONDITION)]
+            self.assertEqual(stored["success_model"], "gpt-5.6-luna|low")
+            self.assertEqual(stored["hard_floor"], "gpt-5.6-terra|low")
+
+    def test_high_risk_pass_does_not_auto_downgrade_and_reports_disabled(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt = root / "receipt.json"
+            high = SimpleNamespace(**dict(CONDITION, risk="high"), task_summary=SUMMARY, candidate_ladder=LADDER, static_suggestion="gpt-5.6-terra|low", hard_floor="gpt-5.3-codex-spark|low", history=root / "high.json", receipt=receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-high", trial=False)
+            write_receipt(receipt, "gpt-5.6-terra", "low")
+            module.record_event(high)
+            recommendation = module.recommend_route(high)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|low")
+            self.assertEqual(recommendation["reason"], "high_risk_no_autodowngrade")
+            self.assertFalse(recommendation["trial"])
 
     def test_high_risk_does_not_downgrade_and_concurrent_records_are_atomic(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -324,7 +668,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             recommendation = module.recommend_route(args)
             self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|high")
 
-    def test_higher_performance_stronger_pair_must_not_bypass_weakest_verified_success(self):
+    def test_current_ladder_limits_selection_to_current_pairs(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             receipt = root / "receipt.json"
@@ -367,7 +711,9 @@ class ModelRoutingHistoryTests(unittest.TestCase):
                             "owning_skill": "code-skill",
                             "project_family": "global",
                             "verification_shape": "mini_real",
+                            "execution_domain": "code_unspecified",
                         },
+                        "execution_domain": "python",
                         "summary": "Schema2 route history migration test summary.",
                         "candidate_ladder": [
                             "gpt-5.3-codex-spark|low",
@@ -419,12 +765,56 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             history.write_text(json.dumps(payload), encoding="utf-8")
             loaded = module.load_history(history)
             self.assertEqual(loaded["schema_version"], 3)
-            expected_key = module.condition_key(dict(payload["conditions"]["legacy"]["condition"], execution_domain="code_unspecified"))
+            expected_key = module.condition_key(
+                dict(payload["conditions"]["legacy"]["condition"], execution_domain="code_unspecified"),
+                allow_history_only=True,
+            )
             self.assertIn(expected_key, loaded["conditions"])
             loaded_record = loaded["conditions"][expected_key]
             self.assertEqual(len(loaded_record["tasks"]), 2)
             self.assertEqual(loaded_record["failed_model"], "gpt-5.6-luna|low")
             self.assertEqual(loaded_record["success_model"], "gpt-5.6-luna|medium")
+
+    def test_schema2_records_accept_legacy_code_unspecified_keys(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            payload = {
+                "schema_version": 2,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "conditions": {
+                    "legacy": {
+                        "condition": {
+                            "task_family": "code",
+                            "artifact": "script",
+                            "scope": "single",
+                            "ambiguity": "low",
+                            "modality": "text",
+                            "risk": "low",
+                            "complexity": "easy",
+                            "owning_skill": "code-skill",
+                            "project_family": "global",
+                            "verification_shape": "mini_real",
+                        },
+                        "execution_domain": "code_unspecified",
+                        "summary": "Schema2 legacy history retains code-unspecified.",
+                        "candidate_ladder": ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low"],
+                        "static_suggestion": "gpt-5.6-luna|low",
+                        "hard_floor": "gpt-5.3-codex-spark|low",
+                        "success_model": "gpt-5.6-luna|low",
+                        "failed_model": None,
+                        "tasks": [],
+                    }
+                },
+            }
+            history.write_text(json.dumps(payload), encoding="utf-8")
+            loaded = module.load_history(history)
+            expected_key = module.condition_key(
+                dict(payload["conditions"]["legacy"]["condition"], execution_domain="code_unspecified"),
+                allow_history_only=True,
+            )
+            self.assertIn(expected_key, loaded["conditions"])
+            self.assertEqual(loaded["conditions"][expected_key]["failed_model"], None)
 
     def test_python_and_unity_distinct_execution_domains_change_condition_keys(self):
         python_condition = dict(CONDITION, execution_domain="python")
@@ -508,7 +898,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
         )
         self.assertNotEqual(module.condition_key(module.validate_condition(vars(args_py))), module.condition_key(module.validate_condition(vars(args_unity))))
 
-    def test_cli_profile_infers_execution_domain_when_not_provided(self):
+    def test_cli_profile_without_execution_domain_rejects_omitted_code_domain(self):
         args_code = parse_profile_args(
             [
                 "recommend",
@@ -544,7 +934,8 @@ class ModelRoutingHistoryTests(unittest.TestCase):
                 "gpt-5.3-codex-spark|low",
             ]
         )
-        self.assertEqual(module.validate_condition(vars(args_code))["execution_domain"], "code_unspecified")
+        with self.assertRaises(ValueError):
+            module.validate_condition(vars(args_code))
 
         args_general = parse_profile_args(
             [
@@ -582,6 +973,125 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             ]
         )
         self.assertEqual(module.validate_condition(vars(args_general))["execution_domain"], "general")
+
+    def test_cli_profile_rejects_explicit_code_unspecified(self):
+        with self.assertRaises(SystemExit):
+            parse_profile_args(
+                [
+                    "recommend",
+                    "--task-family",
+                    "code",
+                    "--artifact",
+                    "script",
+                    "--scope",
+                    "single",
+                    "--ambiguity",
+                    "low",
+                    "--modality",
+                    "text",
+                    "--risk",
+                    "low",
+                    "--complexity",
+                    "easy",
+                    "--owning-skill",
+                    "code-skill",
+                    "--project-family",
+                    "global",
+                    "--verification-shape",
+                    "mini_real",
+                    "--task-summary",
+                    SUMMARY,
+                    "--candidate-ladder",
+                    "gpt-5.3-codex-spark|low",
+                    "--candidate-ladder",
+                    "gpt-5.6-luna|low",
+                    "--static-suggestion",
+                    "gpt-5.6-luna|low",
+                    "--hard-floor",
+                    "gpt-5.3-codex-spark|low",
+                    "--execution-domain",
+                    "code_unspecified",
+                ]
+            )
+
+    def test_cli_profile_rejects_explicit_inactive_non_history_domain(self):
+        with self._with_inactive_domain():
+            with self.assertRaises(SystemExit):
+                parse_profile_args(
+                    [
+                        "recommend",
+                        "--task-family",
+                        "code",
+                        "--artifact",
+                        "script",
+                        "--scope",
+                        "single",
+                        "--ambiguity",
+                        "low",
+                        "--modality",
+                        "text",
+                        "--risk",
+                        "low",
+                        "--complexity",
+                        "easy",
+                        "--owning-skill",
+                        "code-skill",
+                        "--project-family",
+                        "global",
+                        "--verification-shape",
+                        "mini_real",
+                        "--task-summary",
+                        SUMMARY,
+                        "--candidate-ladder",
+                        "gpt-5.3-codex-spark|low",
+                        "--candidate-ladder",
+                        "gpt-5.6-luna|low",
+                        "--static-suggestion",
+                        "gpt-5.6-luna|low",
+                        "--hard-floor",
+                        "gpt-5.3-codex-spark|low",
+                        "--execution-domain",
+                        "legacy_inactive",
+                    ]
+                )
+
+    def test_cli_profile_domains_command_filters_history_only_domains(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            history.write_text(json.dumps(module.empty_history()), encoding="utf-8")
+            payload = io.StringIO()
+            with redirect_stdout(payload), patch.object(sys, "argv", ["model_routing_history.py", "--history", str(history), "domains"]):
+                module.main()
+            rows = json.loads(payload.getvalue()).get("rows", [])
+        self.assertNotIn("code_unspecified", rows)
+
+    def test_cli_domains_command_is_read_only_and_reports_registry_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            history.write_text(json.dumps(module.empty_history()), encoding="utf-8")
+            before = history.read_text(encoding="utf-8")
+            stdout = io.StringIO()
+            with redirect_stdout(stdout), patch.object(sys, "argv", ["model_routing_history.py", "--history", str(history), "domains"]):
+                module.main()
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload.get("schema_version"), 1)
+            self.assertEqual(payload.get("registry_version"), module.EXECUTION_DOMAIN_REGISTRY_VERSION)
+            self.assertEqual(payload.get("rows"), module.public_execution_domain_rows())
+            self.assertEqual(history.read_text(encoding="utf-8"), before)
+
+    def test_cli_domains_command_does_not_create_or_mutate_history_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            stdout = io.StringIO()
+            with redirect_stdout(stdout), patch.object(sys, "argv", ["model_routing_history.py", "--history", str(history), "domains"]):
+                module.main()
+            self.assertFalse(history.exists())
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload.get("schema_version"), 1)
+            self.assertEqual(payload.get("rows"), module.public_execution_domain_rows())
 
     def test_record_event_same_run_id_unions_operational_failure_pairs(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -627,6 +1137,77 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertEqual(recommendation["selected_pair"], "gpt-5.3-codex-spark|low")
             self.assertEqual(recommendation["trial"], False)
             self.assertEqual(recommendation["reason"], "verified_floor_retained")
+
+    def test_same_run_valid_mini_pass_survives_operational_and_invalid_updates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            args = arguments(history, receipt, verify_level="mini", verify_status="pass", failure_class="none", run_id="run-sticky-pass")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(args)
+
+            args.verify_level = "real"
+            args.verify_status = "fail"
+            args.failure_class = "execution"
+            write_receipt(receipt, "gpt-5.6-luna", "low", status="pass", total_tokens=99, process_elapsed_ms=19)
+            module.record_event(args)
+
+            args.failure_class = "quality"
+            write_receipt(receipt, "gpt-5.6-terra", "low", status="fail", turn_completed=False, total_tokens=101, process_elapsed_ms=21)
+            module.record_event(args)
+            task = module.load_history(history)["conditions"][module.condition_key(CONDITION)]["tasks"][0]
+            self.assertIsNone(module.task_verdict(task))
+            self.assertEqual(task["receipt_status"], "fail")
+            self.assertEqual(task["executed_pair"], "gpt-5.3-codex-spark|low")
+            self.assertEqual(task["token_totals"]["total"], 12)
+            self.assertEqual(task["process_ms"], 5)
+            recommendation = module.recommend_route(args)
+            self.assertFalse(recommendation["trial"])
+
+    def test_same_run_valid_quality_failure_survives_operational_and_invalid_updates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            args = arguments(history, receipt, verify_level="mini", verify_status="fail", failure_class="quality", run_id="run-sticky-fail")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(args)
+
+            args.verify_level = "real"
+            args.verify_status = "fail"
+            args.failure_class = "execution"
+            write_receipt(receipt, "gpt-5.6-luna", "low", status="pass", total_tokens=99, process_elapsed_ms=19)
+            module.record_event(args)
+
+            args.failure_class = "quality"
+            write_receipt(receipt, "gpt-5.6-terra", "low", status="fail", turn_completed=False, total_tokens=101, process_elapsed_ms=21)
+            module.record_event(args)
+            task = module.load_history(history)["conditions"][module.condition_key(CONDITION)]["tasks"][0]
+            self.assertIsNone(module.task_verdict(task))
+            self.assertEqual(task["mini_status"], "fail")
+            self.assertEqual(task["allowlisted_failure_class"], "quality")
+            self.assertEqual(task["executed_pair"], "gpt-5.6-terra|low")
+            self.assertEqual(task["token_totals"]["total"], 12)
+            self.assertEqual(task["process_ms"], 5)
+
+    def test_same_run_receipt_valid_quality_failure_reopens_preserved_pass(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            args = arguments(history, receipt, verify_level="mini", verify_status="pass", failure_class="none", run_id="run-reopen")
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low")
+            module.record_event(args)
+            args.verify_level = "real"
+            args.verify_status = "fail"
+            args.failure_class = "quality"
+            write_receipt(receipt, "gpt-5.6-luna", "low", status="pass")
+            module.record_event(args)
+            task = module.load_history(history)["conditions"][module.condition_key(CONDITION)]["tasks"][0]
+            self.assertEqual(module.task_verdict(task), "fail")
+            self.assertEqual(task["executed_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(task["real_status"], "fail")
 
 
 if __name__ == "__main__":

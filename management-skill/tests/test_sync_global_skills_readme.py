@@ -22,8 +22,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_english_readme_uses_durable_template_and_current_contract(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
         template = sync_global_skills.ENGLISH_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
+        expected = template.replace(
+            "<!-- EXECUTION_DOMAIN_TABLE -->",
+            sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())),
+        )
 
-        self.assertEqual(readme, template)
+        self.assertEqual(readme, expected)
         self.assertIn("## 🧩 The six independent skills", readme)
         self.assertIn("The model selected when the user starts the task runs Task Analyze and route coordination only", readme)
         self.assertIn("The local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is condition-keyed", readme)
@@ -54,12 +58,15 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Design a YouTube-like website", readme)
         self.assertIn("## 🧰 Extension recipe", readme)
         self.assertIn("execution_domain", readme)
-        self.assertIn("reasonable response time and token use", readme)
+        self.assertIn("| Domain | Kind | Owner | Spark first | Reference |", readme)
+        self.assertIn("`python` (active)", readme)
+        self.assertIn("response time and token use", readme)
         self.assertIn("exactly six public skills", readme)
         self.assertIn("a **different** `verify-skill` worker", readme)
         self.assertIn("Runtime receipts", readme)
         self.assertIn("hookless", readme)
         self.assertIn("task_route_dispatcher.py", readme)
+        self.assertIn("release-main-result <handoff>", readme)
         self.assertNotIn("hooks.json", readme)
         self.assertNotIn("Task Analyze is an internal phase", readme)
         self.assertNotIn("Real Verify always stays before", readme)
@@ -80,6 +87,37 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(condition["execution_domain"], "general")
         self.assertNotIn("producer", model_experience_payload)
         self.assertIn("requested_pair", model_experience_payload["conditions"]["799b5cc30bcb4d107e081f34c0e6dff164d70cb85dc99397ca7ebca18c907729"]["tasks"][0])
+
+    def test_snapshot_renders_synthetic_registered_rust_domain_without_generator_changes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            staged_skills = sandbox / "skills"
+            staged_skills.mkdir()
+            for skill_path in self.primary_skill_paths():
+                sync_global_skills.copy_skill_directory(skill_path, staged_skills / skill_path.name)
+            policy = staged_skills / "task-analyze-skill" / "scripts" / "routing_policy.py"
+            text = policy.read_text(encoding="utf-8")
+            text = text.replace('    "code_unspecified": {', '    "rust": {"display_name": "Rust", "kind": "code", "language_aliases": ["rust", "rs"], "owner_skill": "code-skill", "owner_enforced": True, "spark_first": True, "reference_path": "code-skill/references/rust-rules.md", "active": True, "history_only": False},\n    "code_unspecified": {')
+            policy.write_text(text, encoding="utf-8")
+            (staged_skills / "code-skill" / "references" / "rust-rules.md").write_text("# Rust rules\n", encoding="utf-8")
+            repository_dir = sandbox / "repository"
+            repository_dir.mkdir()
+            sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
+            self.assertIn("`rust` (active)", (repository_dir / "README.md").read_text(encoding="utf-8"))
+
+    def test_snapshot_rejects_staged_domain_missing_owner_or_reference(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            staged_skills = sandbox / "skills"
+            staged_skills.mkdir()
+            for skill_path in self.primary_skill_paths():
+                sync_global_skills.copy_skill_directory(skill_path, staged_skills / skill_path.name)
+            policy = staged_skills / "task-analyze-skill" / "scripts" / "routing_policy.py"
+            policy.write_text(policy.read_text(encoding="utf-8").replace('"code-skill/references/python-rules.md"', '"missing-skill/references/missing.md"'), encoding="utf-8")
+            repository_dir = sandbox / "repository"
+            repository_dir.mkdir()
+            with self.assertRaisesRegex(RuntimeError, "owner SKILL.md is missing|reference file is missing"):
+                sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
 
     def test_repository_snapshot_contains_every_local_readme_reference(self):
         with tempfile.TemporaryDirectory() as temp_dir:

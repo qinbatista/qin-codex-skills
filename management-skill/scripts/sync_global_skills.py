@@ -2,6 +2,7 @@
 import argparse
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import re
 import shutil
@@ -113,7 +114,7 @@ CHINESE_CATEGORY_LABELS = {
 SKILL_SUMMARIES = {
     "task-analyze-skill": "Independent 100%-trigger entry skill. The selected entry model and effort run only bounded Task Analyze routing. It returns a locked per-node graph, with private condition-keyed success_model / failed_model pair bounds and direct-action rules.",
     "workflow-skill": "Executes the locked Task Analyze route per node; direct tool actions stay undispatched, complex work uses topology and receipts, then Mini Verify releases the first result before Ending Task.",
-    "code-skill": "Spark-first Python/C# executor for implementation, debugging, refactoring, prompt-in-code, Unity C#, and authored probes; tiny text/code jobs start with Spark-low and may use safe static fallback on runtime failure.",
+    "code-skill": "Spark-first executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. Tiny text/code jobs start Spark-low and may use safe static fallback on runtime failure.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
     "verify-skill": "Mini Verify before the first result and Real Verify after it in Ending Task; applies both outcomes to the original receipt-backed result attempt.",
     "management-skill": "Handles Codex profile operations and global skill GitHub sync while preserving local private folders, local route history, and model-experience files from public mirrors.",
@@ -121,7 +122,7 @@ SKILL_SUMMARIES = {
 CHINESE_SKILL_SUMMARIES = {
     "task-analyze-skill": "独立且 100% 触发的入口 skill：当前入口模型和 effort 只做 Task Analyze 路由，返回锁定的逐节点图谱，并使用本地 `model_experience.json` 的条件化汇总与 `success_model` / `failed_model` 边界。",
     "workflow-skill": "执行 Task Analyze 锁定的路线，按节点先尝试不同 effort 再切换模型；先运行 Mini Verify 再派发 Ending Task。",
-    "code-skill": "Spark 优先的 Python/C# 执行者：实现、调试、重构、prompt-in-code、Unity C# 和代码 probe；小体量文本/代码先用 Spark-low，Spark 运行失败可安全回退静态方案。",
+    "code-skill": "Spark 优先的活动注册代码域执行者；Python、普通 C#、Unity C# 是内置示例。小体量文本/代码先用 Spark-low，Spark 运行失败可安全回退静态方案。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
     "verify-skill": "Mini Verify 在主结果前做基础检查；Real Verify 在结果后的 Ending Task 中执行，并把两次结果回填到原始的 receipt-backed 结果尝试。",
     "management-skill": "处理 Codex profile 操作和全局 skill GitHub 同步，不暴露私人数据，并保留本地私有路由历史。",
@@ -312,6 +313,39 @@ def read_skill_metadata(skill_dir):
     return metadata
 
 
+def load_staged_routing_policy(skill_paths):
+    """Load and validate the registry from the exact staged mirror inputs."""
+    by_name = {path.name: path for path in skill_paths}
+    task_skill = by_name.get("task-analyze-skill")
+    if task_skill is None:
+        raise RuntimeError("cannot render execution domains: task-analyze-skill is missing")
+    policy_path = task_skill / "scripts" / "routing_policy.py"
+    if not policy_path.is_file():
+        raise RuntimeError(f"cannot render execution domains: registry is missing: {policy_path}")
+    spec = importlib.util.spec_from_file_location("staged_routing_policy", policy_path)
+    module = importlib.util.module_from_spec(spec)
+    if spec.loader is None:
+        raise RuntimeError("cannot render execution domains: registry loader is unavailable")
+    try:
+        spec.loader.exec_module(module)
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f"cannot render execution domains: {error}") from error
+    try:
+        module.validate_execution_domain_registry(task_skill.parent)
+        return module.public_execution_domain_rows()
+    except (AttributeError, ValueError) as error:
+        raise RuntimeError(f"cannot render execution domains: {error}") from error
+
+
+def execution_domain_table(rows):
+    lines = ["| Domain | Kind | Owner | Spark first | Reference |", "|---|---|---|---|---|"]
+    for row in rows:
+        state = "active" if row["active"] else "history-only"
+        spark = "yes" if row["spark_first"] else "no"
+        lines.append(f"| `{row['id']}` ({state}) | {row['kind']} | `{row['owner_skill']}` | {spark} | [`{row['reference_path']}`](./{row['reference_path']}) |")
+    return "\n".join(lines)
+
+
 def build_readme(skill_paths, language="en"):
     if language == "zh":
         return build_overview(skill_paths, language="zh").replace(
@@ -320,7 +354,11 @@ def build_readme(skill_paths, language="en"):
             1,
         )
 
-    return ENGLISH_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
+    template = ENGLISH_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
+    marker = "<!-- EXECUTION_DOMAIN_TABLE -->"
+    if template.count(marker) != 1:
+        raise RuntimeError("English README template must contain exactly one execution-domain marker")
+    return template.replace(marker, execution_domain_table(load_staged_routing_policy(skill_paths)))
 
 
 def skill_category(skill_name, description):
@@ -536,10 +574,7 @@ def build_overview(skill_paths, language="en"):
     primary_rows = ordered_primary_rows(rows)
 
     if language == "zh":
-        lines = ["# 当前 Codex Skills", "", "英文版: [README.md](./README.md)", "", "## 技能图", "", *build_skill_graph(primary_rows, language="zh"), "", *workflow_lane_section(language="zh"), *build_skill_summary_table(primary_rows, language="zh"), "", *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"), "", "## 运行规则", "", "- Python 和 C# 代码工作进入 `code-skill`；前端/UI 等其他语言代码使用对应生产 skill。", "- 每个任务先进入 `task-analyze-skill`；入口模型和 effort 只做 Task Analyze 的边界分析与路由协调，不可作为全局默认。", "- 路由记账使用 `task-analyze-skill/local/adaptive-routing/model_experience.json`，它是按任务条件泛化的摘要，并携带 `success_model` / `failed_model` 边界。", "- 路由先尝试小 effort，再回退/升级到其他模型。", "- Mini Verify 先记录原始结果尝试；Real Verify 后续更新同一个结果尝试，不会把 verifier 当作结果模型。", "- Prompt/instruction 编写、更新和优化由 Task Analyze 路由；只有嵌入 Python/C# 可执行代码时才进入 `code-skill`。", "- 固定重复流程优化进入 `optimization-skill`。", "- 验证、真实测试和校准后的证据输出进入 `verify-skill`；简单结果留在聊天里，只有长数据、视觉、表格多、对比型、明确要求或仓库规则需要时才生成 PDF 报告。", "- tiny 体量文本/代码先默认走 Spark-low；Spark 运行失败后可安全走静态回退。", "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由。", "- 每个 skill 可能包含多个内部路由；需要哪个就选哪个，同一个任务可以多选，不是单选，也不要运行无关分支。", "", "## 当前结构", "", "- 旧代码类 skill 已合并到 `code-skill`。", "- 旧测试类 skill 已合并到 `verify-skill`。", "- UI review 已扩展到 `verify-skill`。", "- 旧图片 workflow skill 已删除。"]
-        return "\n".join(lines) + "\n"
-
-        lines = ["# Current Codex Skills", "", "Chinese version: [README.zh.md](./README.zh.md)", "", "## Skill Map", "", *build_skill_graph(primary_rows, language="en"), "", *workflow_lane_section(language="en"), *build_skill_summary_table(primary_rows, language="en"), "", *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="en"), "", "## Operating Rules", "", "- Python and C# code work enters through `code-skill`; frontend/UI and other language code should use the relevant production skill instead.", "- Every task starts through `task-analyze-skill`; the selected entry model and effort are only the resolver boundary for Task Analyze and route coordination.", "- Routing decisions are anchored by `task-analyze-skill/local/adaptive-routing/model_experience.json`, with generalized condition summaries and explicit `success_model` / `failed_model` bounds.", "- Attempt selection is effort-first, then model, before moving down the fallback chain.", "- Mini Verify records the original result attempt first; Real Verify updates that same result attempt and never substitutes the verifier as the result model.", "- Prompt/instruction authoring, updates, and optimization follow the Task Analyze route; use `code-skill` only when embedding prompts in Python or C# executable code.", "- Repeated fixed workflow optimization enters through `optimization-skill`.", "- Verification, real tests, and calibrated evidence outputs sit under `verify-skill`; simple results stay in chat, while PDF reports are reserved for long, visual, table-heavy, comparison-based, explicit, or repo-required evidence.", "- Tiny text/code jobs may start with Spark-low and can safely fall back to static execution when Spark runtime fails.", "- Auth and GitHub mirror maintenance enter through `management-skill` internal routes.", "- Each skill may contain multiple internal routes; select every route needed for the current request. This is multi-select, not one-of, and unrelated cases should not run.", "", "## Current Structure", "", "- The old code skills were merged into `code-skill`.", "- The old testing skills were merged into `verify-skill`.", "- UI review was broadened into `verify-skill`.", "- The old image workflow skill was deleted."]
+        lines = ["# 当前 Codex Skills", "", "英文版: [README.md](./README.md)", "", "## 技能图", "", *build_skill_graph(primary_rows, language="zh"), "", *workflow_lane_section(language="zh"), *build_skill_summary_table(primary_rows, language="zh"), "", *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"), "", "## 运行规则", "", "- 每个任务先进入 `task-analyze-skill`；入口模型和 effort 只做 Task Analyze 的边界分析与路由协调，不可作为全局默认，也不是 profile 字段。", "- 每个活动的注册代码域都进入 `code-skill`；Python、普通 C#、Unity 项目中的 C# 是内置示例。", "- 直接工具路线只有安装的工具 skill 和可观察的 Mini 检查：没有子模型、receipt 或自适应样本；模型路线保留准确 model|effort、receipt 与 Mini/Real 学习。", "- 分发路线必须依序执行：`run-plan` -> 读取 Mini 通过结果 -> 显示完整的基本验证结果 -> `release-main-result <handoff>` -> `run-ending <handoff>`；显示结果前不得释放 Ending。", "- 路由记账输出 `selected_pair`、`reason`、`trial`、`success_model`、`failed_model`；校准/冻结选择从边界推导并以 `trial=false` 复用。先调 effort，再换模型；仅验证失败、实质漂移、策略变化或明确重置才重新打开。", "- 正确性是 gate；token 和耗时只是 receipt 证据，不能覆盖正确性或安全边界。", "- Mini Verify 先记录原始结果尝试；Real Verify 后续更新同一个结果尝试，不会把 verifier 当作结果模型。", "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由；私有 ledger 不进入镜像。"]
         return "\n".join(lines) + "\n"
 
 
@@ -620,6 +655,7 @@ def pull(repository, skills_dir):
 def prepare_repository_snapshot(repository_dir, skills_dir):
     skill_paths = skill_directories(skills_dir)
     assert_approved_global_skill_set(skill_paths)
+    load_staged_routing_policy(skill_paths)
     assert_public_safe(skill_paths)
     for path in repository_dir.iterdir():
         if path.name == ".git":
@@ -703,6 +739,8 @@ def main():
     subparsers.add_parser("preuse")
     subparsers.add_parser("pull")
     subparsers.add_parser("status")
+    render_parser = subparsers.add_parser("render-readme")
+    render_parser.add_argument("--output", type=Path, required=True)
     push_parser = subparsers.add_parser("push")
     push_parser.add_argument("--message", default="Update global Codex skills")
     args = parser.parse_args()
@@ -714,6 +752,12 @@ def main():
         pull(args.repo, args.skills_dir)
     elif args.command == "status":
         push(args.repo, args.skills_dir, "Update global Codex skills", True)
+    elif args.command == "render-readme":
+        skill_paths = skill_directories(args.skills_dir)
+        assert_approved_global_skill_set(skill_paths)
+        assert_public_safe(skill_paths)
+        args.output.expanduser().resolve().write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
+        print(f"Rendered public README: {args.output.expanduser().resolve()}")
     elif args.command == "push":
         push(args.repo, args.skills_dir, args.message, False)
 

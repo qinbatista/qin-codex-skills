@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+from copy import deepcopy
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from contextlib import contextmanager
 from unittest.mock import patch
 
 
@@ -16,6 +18,68 @@ APPROVED = {"task-analyze-skill", "workflow-skill", "code-skill", "verify-skill"
 
 
 class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
+    @contextmanager
+    def _with_rust_domain(self, owner="code-skill", spark_first=True, language_alias="rust"):
+        original_domains = deepcopy(module.EXECUTION_DOMAINS)
+        with tempfile.TemporaryDirectory(prefix="task-analyze-synthetic-skills-") as temporary:
+            synthetic_skills_root = Path(temporary)
+            try:
+                module.EXECUTION_DOMAINS["rust"] = {
+                    "display_name": "Rust",
+                    "kind": "code",
+                    "language_aliases": [language_alias],
+                    "owner_skill": owner,
+                    "owner_enforced": True,
+                    "spark_first": spark_first,
+                    "reference_path": "code-skill/references/rust-small-code.md",
+                    "active": True,
+                    "history_only": False,
+                }
+                for metadata in module.EXECUTION_DOMAINS.values():
+                    owner_skill = metadata["owner_skill"]
+                    skill_dir = synthetic_skills_root / owner_skill
+                    skill_dir.mkdir(parents=True, exist_ok=True)
+                    (skill_dir / "SKILL.md").write_text(f"{owner_skill} skill\n", encoding="utf-8")
+                    reference = synthetic_skills_root / metadata["reference_path"]
+                    reference.parent.mkdir(parents=True, exist_ok=True)
+                    reference.write_text(f"reference: {metadata['reference_path']}\n", encoding="utf-8")
+                yield synthetic_skills_root
+            finally:
+                module.EXECUTION_DOMAINS.clear()
+                module.EXECUTION_DOMAINS.update(original_domains)
+            # cleanup via TemporaryDirectory context
+
+    def test_plan_rejects_rust_domain_wrong_owner(self):
+        complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
+        plan = json.loads(json.dumps(complex_plan))
+        impl = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
+        impl["execution_domain"] = "rust"
+        impl["skill"] = "workflow-skill"
+        with self._with_rust_domain(owner="code-skill") as synthetic_skills_root:
+            failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
+        self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
+
+    def test_plan_rejects_rust_domain_non_spark_without_reason(self):
+        complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
+        plan = json.loads(json.dumps(complex_plan))
+        impl = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
+        impl["execution_domain"] = "rust"
+        impl["skill"] = "code-skill"
+        impl["model"] = "gpt-5.6-luna"
+        with self._with_rust_domain() as synthetic_skills_root:
+            failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
+        self.assertTrue(any("must use spark-first" in failure or "has no fallback reason" in failure for failure in failures))
+
+    def test_plan_accepts_rust_domain_with_spark_when_code_skill(self):
+        complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
+        plan = json.loads(json.dumps(complex_plan))
+        impl = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
+        impl["execution_domain"] = "rust"
+        impl["skill"] = "code-skill"
+        impl["model"] = "gpt-5.3-codex-spark"
+        with self._with_rust_domain() as synthetic_skills_root:
+            failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
+        self.assertEqual(failures, [])
     def make_skill_copy(self):
         source = Path(__file__).resolve().parents[1]
         temp_dir = Path(tempfile.mkdtemp(prefix="task-analyze-validate-"))
@@ -34,8 +98,22 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                 result = module.validate(temp_dir, models_cache)
             self.assertTrue(result["valid"], result["failures"])
             self.assertEqual(sum(plan["status"] == "pass" for plan in result["plans"]), len(module.sample_plans()))
+            self.assertEqual(len(module.sample_plans()), sum(len(efforts) for efforts in module.MODEL_EFFORTS.values()) * 2)
         finally:
             shutil.rmtree(temp_dir)
+
+    def test_sample_plans_cover_all_supported_entry_pairs(self):
+        sample_plans = module.sample_plans()
+        expected_plan_count = sum(len(efforts) for efforts in module.MODEL_EFFORTS.values()) * 2
+        entry_pairs = {(plan["nodes"][0]["model"], plan["nodes"][0]["effort"]) for plan in sample_plans.values()}
+        self.assertEqual(len(sample_plans), expected_plan_count)
+        self.assertEqual(len(entry_pairs), sum(len(efforts) for efforts in module.MODEL_EFFORTS.values()))
+
+    def test_downstream_pairs_may_equal_entry_pair(self):
+        sample_plans = module.sample_plans()
+        plan = json.loads(json.dumps(sample_plans["easy-gpt-5.6-luna-low"]))
+        failures = module.validate_plan(plan, APPROVED)
+        self.assertEqual(failures, [])
 
     def test_fixed_sol_entry_contract_is_rejected(self):
         temp_dir, models_cache = self.make_skill_copy()
@@ -79,6 +157,14 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         plan["nodes"][2]["skill"] = "workflow-skill"
         failures = module.validate_plan(plan, APPROVED)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
+
+    def test_plan_rejects_unknown_execution_domain_cleanly(self):
+        easy_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "easy")
+        plan = json.loads(json.dumps(easy_plan))
+        plan["nodes"][0]["execution_domain"] = "rust_lang"
+        failures = module.validate_plan(plan, APPROVED)
+        self.assertTrue(any("execution_domain is unknown" in failure for failure in failures))
+        self.assertFalse(any("expected owner" in failure or "has no fallback reason" in failure for failure in failures))
 
     def test_plan_rejects_unity_csharp_node_without_code_skill(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
