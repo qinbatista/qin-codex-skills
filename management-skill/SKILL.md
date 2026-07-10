@@ -1,70 +1,78 @@
 ---
 name: management-skill
-description: "Management executor selected by workflow-skill. Use when routed work involves Codex auth/profile operations or global skill GitHub sync: inspect profiles, switch after confirmation, compare local/remote skill state, pull, commit, push, or verify mirror status without exposing private data."
+description: "Management executor selected by the locked task-analyze-skill plan. Use for local adaptive-routing performance records, Codex auth/profile inspection or confirmed switching, and privacy-safe global skill mirror status, pull, snapshot, sync, or push. Personal routing history stays under task-analyze-skill/local and is excluded from every mirror. The approved public mirror contains the six workflow skills; unrelated local skills are preserved."
 ---
 
 # Management Skill
 
-Use this as the single management executor selected by `workflow-skill`. It contains the local Codex profile route and the global skill GitHub sync route inside this skill, so those routes are not separate top-level skills.
-
-## Generated File Placement
-
-Put intermediate files, temporary inputs, cache clones, generated scratch data, logs, previews, and non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Final deliverables go only to the user-requested path or the active workspace `outputs/` directory.
+Use this executor after `task-analyze-skill` and `workflow-skill` route a management node. It owns local Codex profile operations and the approved global-skill GitHub mirror. It does not choose the workflow model or effort and never inherits the entry model silently.
 
 ## Internal Route Selection
 
-`management-skill` contains two internal management routes. Select every route required by the current request. Most requests need one route; mixed account-and-sync work may need both.
+Select only what the locked plan requires:
 
-- **Codex profile route**: inspect local Codex auth profiles, list saved profiles, review usage snapshots, refresh/login backups, import auth files, save the current auth profile, or switch `auth.json` after explicit confirmation. Use `scripts/manage_auth_profiles.py` and `scripts/show_all_auth_status.py`.
-- **Skill GitHub route**: run global skill preuse checks, status previews, public-safety scans, local/remote comparison, pulls, commits, pushes, and public-safe publishing to `qinbatista/qin-codex-skills`. Use `scripts/sync_global_skills.py`.
+- **Routing performance route**: record or inspect sanitized receipt-backed model/effort accuracy, verification, token, and timing evidence through `../task-analyze-skill/scripts/model_routing_history.py`.
+- **Profile route**: inspect saved profiles, refresh login state, import/backup a profile, show sanitized status, or switch the active profile after explicit confirmation.
+- **Global skill mirror route**: inspect authoritative local skills, generate a privacy-safe snapshot, compare local/remote state, pull, or explicitly sync/push.
+- Use multiple routes only when the locked plan requires them.
 
-## Trigger
+## Personal Routing Performance
 
-Use this skill for management work:
+Task Analyze owns selection and storage. Management records the original result-producer attempt after receipt-backed Mini and updates that same attempt after Real Verify; direct non-dispatch routes invoke the same recorder.
 
-- local Codex account/profile management or switching
-- Codex auth profile backup, import, refresh, or usage inspection
-- global skill synchronization, publishing, commit, push, pull, or status checks
-- comparing local `~/.codex/skills` against the GitHub mirror
-- mixed management tasks that involve both local profiles and global skill publishing
+- Store only the generated local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger; never mirror it.
+- Record controlled task-profile enums, a generalized privacy-filtered task summary, requested/resolved/effective producer model and effort, Mini/Real status, explicit success/failed model ranges, failure class, tokens, and timing only.
+- Never store raw prompts, raw results, paths, thread/session IDs, account data, receipt bodies, secrets, or private task content.
+- No prior success uses the static suggestion, except safe low-risk text-only tiny text/code/command work starts Spark-low; runtime Spark failure falls back to static without a quality penalty. A pass tries one lower same-model effort, then a weaker eligible model. Mini/Real correctness or quality failure is sticky and selects the nearest eligible rung above the failed boundary. Availability, timeout, protocol, telemetry, execution, or receipt failures do not become model-quality failures.
+- Static safety, authority, modality, project, code-style, and skill floors always win.
+- Never push, sync, snapshot, hash, or overwrite `task-analyze-skill/local/`. Pull must preserve it byte-for-byte.
 
-Do not use this skill for ordinary coding, UI verification, testing, optimization, or pure prose unless the request also includes a management action.
+## Approved Six-Skill Mirror
 
-## Workflow
+The public mirror set and order are exactly:
 
-1. Classify the request as profile management, GitHub skill sync, or mixed management.
-2. Use every selected internal route and its script; do not run unrelated management routes.
-3. For mixed management, run the profile route first only when account/profile state affects the sync operation; otherwise keep the routes separate.
-4. Record concrete evidence: local command input, command/tool used, output state, remote hash or profile result, and privacy constraints.
-5. For skill edits that should be pushed, run only required minimum precondition checks in the main lane before the irreversible push: the five-folder allow-list, public-safety/secret scan, and any state check needed to avoid publishing the wrong mirror. Do not run broad validators, post-push remote hash proof, reports, docs, wiki, or no-diff proof in the main lane when subagent tools are callable for the current task under higher-priority tool policy.
-6. After the sync/push command succeeds, route status, remote hash/no-diff proof, broad validators, reports, docs, and Obsidian/wiki/log closeout through `workflow-skill`'s `Ending Workflow` subagent(s). Use `verify-skill` inside those ending workers when proof is needed.
+1. `task-analyze-skill`
+2. `workflow-skill`
+3. `code-skill`
+4. `verify-skill`
+5. `optimization-skill`
+6. `management-skill`
 
-## Guardrails
+The local global skill directory may contain unrelated skills such as `chronicle`. Mirror selection, hashing, status, pull, and deletion logic must ignore and preserve those unrelated local folders. The remote mirror itself must contain exactly the approved six.
 
-- Do not run both management routes just because both exist.
-- Do not print, expose, commit, or upload tokens, auth files, cookies, profile IDs, raw account logs, private keys, `.env` files, cache contents, or temporary generated artifacts.
-- Do not switch the active `auth.json` profile without explicit user confirmation at action time.
-- Do not push skill changes until required minimum public-safety checks pass, but keep broader validation and post-push proof in `Ending Workflow` subagent(s) after the major push goal when subagent tools are callable for the current task under higher-priority tool policy.
-- Before pushing or syncing the global skill mirror, the selected top-level skill folders must be exactly `workflow-skill`, `code-skill`, `verify-skill`, `optimization-skill`, and `management-skill`. If any other skill folder appears, stop, inspect where it came from, and reject the push.
-- Do not put `.git` metadata inside `~/.codex/skills`.
+## Privacy And Authorization
 
-## Examples
+- Never reveal or publish tokens, auth files, cookies, profile IDs, private keys, private logs, state databases, receipts with raw prompts, or temporary artifacts.
+- Never switch active `auth.json` without explicit confirmation at action time.
+- Never push/sync/publish unless the user explicitly requested publishing in the current task.
+- Run public-safety checks before any authorized push.
+- Preserve unrelated local skills and user files during pull/snapshot operations.
 
-- "切换 Codex 账号" -> use the profile route, confirm the target profile, switch only after confirmation, and verify without exposing tokens.
-- "提交我的 skill 到 GitHub" -> use the GitHub sync route, run only required minimum public-safety checks, push, then delegate remote commit/status proof and broader validation to Ending Workflow subagent(s).
-- "看看本地 skill 和 GitHub 是否一致" -> run `scripts/sync_global_skills.py status` or `sync` depending on whether updates are allowed.
+## README Generation
 
-## Helper Commands
+The durable English README source is `assets/readme/github-readme-template.md`. Its 12 local SVG assets (six desktop/mobile diagram pairs) explain the six-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, and private adaptive routing. The README must explain that the portable Task Analyze entry rule is hookless, the selected entrance pair runs Task Analyze only, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
 
-```bash
-python3 scripts/manage_auth_profiles.py list
-python3 scripts/manage_auth_profiles.py list --live
-python3 scripts/show_all_auth_status.py
-python3 scripts/manage_auth_profiles.py switch <profile> --dry-run
-python3 scripts/sync_global_skills.py status
-python3 scripts/sync_global_skills.py sync --message "Sync global Codex skills"
-```
+For README changes:
 
-## Verification
+1. Edit the durable template and adjacent SVGs.
+2. Generate a local repository snapshot only.
+3. Verify internal links, SVG parsing/accessibility, desktop/narrow rendering, and six-skill selection.
+4. Do not publish without a separate explicit request.
 
-After profile management, report only the non-secret profile/status result. After global skill sync, delegate `scripts/sync_global_skills.py status`, remote hash checks, no-diff proof, and broad validators to Ending Workflow subagent(s) when callable for the current task under higher-priority tool policy. If no subagent tool is callable or policy-authorized, run the minimum post-sync status check in the main lane and state that Ending Workflow was blocked.
+## Main Result And Ending Task
+
+For management work, Mini Verify confirms sanitized scope/state before the first result. After the result, Ending Task may run deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. A background mismatch/failure notifies and reopens the task.
+
+## Commands
+
+Use the maintained scripts instead of ad hoc profile or mirror logic:
+
+- `scripts/manage_auth_profiles.py`
+- `scripts/show_all_auth_status.py`
+- `scripts/sync_global_skills.py`
+
+Use snapshot/dry-run/status modes for testing. Do not call `sync` or `push` in a task that was authorized only to edit/test local skills.
+
+## Generated File Placement
+
+Put local snapshots, diffs, test repositories, logs, and status evidence in the active task `cache/` or `work/` area. Never place private auth/profile artifacts in a public snapshot or user-facing output.

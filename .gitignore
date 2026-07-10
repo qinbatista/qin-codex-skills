@@ -9,6 +9,7 @@ cache/
 outputs/
 work/
 data/cache/
+local/
 .venv/
 venv/
 node_modules/

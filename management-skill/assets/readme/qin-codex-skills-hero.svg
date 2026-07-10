@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">qin-codex-skills six-skill workflow</title>
+  <desc id="desc">Six independent global Codex skills: Task Analyze, Workflow, Code, Verify, Optimization, and Management.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#07111f"/><stop offset="1" stop-color="#16213a"/></linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#2dd4bf"/><stop offset="0.5" stop-color="#60a5fa"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity="0.35"/></filter>
+  </defs>
+  <rect width="1600" height="900" rx="32" fill="url(#bg)"/>
+  <circle cx="1450" cy="90" r="230" fill="#7c3aed" opacity="0.10"/><circle cx="90" cy="820" r="250" fill="#0ea5e9" opacity="0.09"/>
+  <g font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <rect x="74" y="54" width="310" height="44" rx="22" fill="#10253d" stroke="#2dd4bf"/><text x="229" y="83" text-anchor="middle" fill="#99f6e4" font-size="18" font-weight="700" letter-spacing="2">GLOBAL CODEX WORKFLOW</text>
+    <text x="74" y="180" fill="#f8fafc" font-size="78" font-weight="800">qin-codex-skills</text>
+    <rect x="74" y="207" width="860" height="6" rx="3" fill="url(#line)"/>
+    <text x="74" y="260" fill="#cbd5e1" font-size="29">Entry pair runs Task Analyze + routing only. Hookless Workflow runs downstream pairs.</text>
+
+    <g filter="url(#shadow)">
+      <rect x="74" y="330" width="450" height="180" rx="22" fill="#0d2e35" stroke="#2dd4bf" stroke-width="2"/>
+      <text x="104" y="372" fill="#99f6e4" font-size="18" font-weight="800" letter-spacing="1.5">01 · 100% ENTRY</text><text x="104" y="420" fill="#f8fafc" font-size="30" font-weight="750">🧭 task-analyze-skill</text><text x="104" y="462" fill="#cbd5e1" font-size="21">Analyze · human route · private learning</text>
+      <rect x="574" y="330" width="450" height="180" rx="22" fill="#122844" stroke="#60a5fa" stroke-width="2"/>
+      <text x="604" y="372" fill="#bfdbfe" font-size="18" font-weight="800" letter-spacing="1.5">02 · DISPATCH</text><text x="604" y="420" fill="#f8fafc" font-size="30" font-weight="750">🗺️ workflow-skill</text><text x="604" y="462" fill="#cbd5e1" font-size="21">Hookless runner launches plan</text>
+      <rect x="1074" y="330" width="450" height="180" rx="22" fill="#302716" stroke="#fbbf24" stroke-width="2"/>
+      <text x="1104" y="372" fill="#fde68a" font-size="18" font-weight="800" letter-spacing="1.5">03 · CODE</text><text x="1104" y="420" fill="#f8fafc" font-size="30" font-weight="750">💻 code-skill</text><text x="1104" y="462" fill="#cbd5e1" font-size="21">Python · C# · Unity C# · Spark first</text>
+
+      <rect x="74" y="550" width="450" height="180" rx="22" fill="#162d28" stroke="#34d399" stroke-width="2"/>
+      <text x="104" y="592" fill="#a7f3d0" font-size="18" font-weight="800" letter-spacing="1.5">04 · VERIFY</text><text x="104" y="640" fill="#f8fafc" font-size="30" font-weight="750">🧪 verify-skill</text><text x="104" y="682" fill="#cbd5e1" font-size="21">Mini before · Real after</text>
+      <rect x="574" y="550" width="450" height="180" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
+      <text x="604" y="592" fill="#e9d5ff" font-size="18" font-weight="800" letter-spacing="1.5">05 · OPTIMIZE</text><text x="604" y="640" fill="#f8fafc" font-size="27" font-weight="750">⚡ optimization-skill</text><text x="604" y="682" fill="#cbd5e1" font-size="21">Reuse + independent proof</text>
+      <rect x="1074" y="550" width="450" height="180" rx="22" fill="#3b1c2a" stroke="#fb7185" stroke-width="2"/>
+      <text x="1104" y="592" fill="#fecdd3" font-size="18" font-weight="800" letter-spacing="1.5">06 · MANAGE</text><text x="1104" y="640" fill="#f8fafc" font-size="27" font-weight="750">🔐 management-skill</text><text x="1104" y="682" fill="#cbd5e1" font-size="21">Route records + profiles + mirror</text>
+    </g>
+
+    <g font-size="18" font-weight="700">
+      <rect x="74" y="782" width="330" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="239" y="818" text-anchor="middle" fill="#dbeafe">🧭 Task Analyze every task</text>
+      <rect x="424" y="782" width="330" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="589" y="818" text-anchor="middle" fill="#dbeafe">🤖 model + effort per node</text>
+      <rect x="774" y="782" width="330" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="939" y="818" text-anchor="middle" fill="#dbeafe">✅ Mini Verify gates result</text>
+      <rect x="1124" y="782" width="400" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="1324" y="818" text-anchor="middle" fill="#dbeafe">🌙 Ending Task closes deeply</text>
+    </g>
+  </g>
+</svg>

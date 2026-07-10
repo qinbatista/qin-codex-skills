@@ -1,59 +1,73 @@
 ---
 name: code-skill
-description: "Python/C# executor selected by workflow-skill. Use when routed work involves Python, C#, Unity C#, prompt-in-code, tests, debugging, refactoring, explanation, performance, or small bounded code edits. Do not use for other languages or pure prose/config unless another skill owns that work."
+description: "Python/C# executor selected in the locked task-analyze-skill plan and coordinated by workflow-skill. Use for Python, C#, Unity C#, prompt-in-code, tests/probes, debugging, refactoring, explanation, or bounded optimization implementation. Spark is first for text-only Python/C# work. Preserve Qin's coding style, keep changes surgical, and return the code path to Mini Verify before the main result."
 ---
 
 # Code Skill
 
-Use this as the single merged Python/C# code executor selected by `workflow-skill`. It replaces the former code-related global skills and routes to all relevant Python and C# internal branches without loading every detail every time.
-
-## Generated File Placement
-
-Put intermediate files, temporary inputs, caches, generated scratch data, logs, previews, and other non-final artifacts in the relevant `cache/` directory. Use the current task or project directory's `cache/` folder for task-specific artifacts, or this skill's `cache/` folder for skill-internal artifacts. Create the folder if needed. Do not scatter generated files across the working tree, desktop, home directory, or unrelated folders. Final deliverables should go only to the user-requested path or the active workspace `outputs/` directory.
+Use this as the only global Python/C# executor. `task-analyze-skill` chooses the code node's model, effort, dependencies, and stop condition; `workflow-skill` delivers that locked node. Do not reselect the route inside `code-skill`.
 
 ## Internal Route Selection
 
-Select every route required by the current Python or C# request and artifact. This is multi-select, not one-of. Do not read irrelevant references for every code task.
+### Required Scope
 
-- General implementation, assumptions, smallest viable path, naming, branching, and surgical edits: read `references/coding-approach.md`.
-- Python/C# prompt-related work, including prompt generation, prompt review, prompt testing, prompt editing/add/update/remove/rewrite, prompt embedding, Python prompt assignments, or C# prompt constants: read `references/prompt-generation.md`.
-- Python modules, scripts, tests, snippets, or Python prompt assignments: read `references/python-rules.md`.
-- C# or Unity C# MonoBehaviours, ScriptableObjects, managers, gameplay systems, editor scripts, or Unity performance work: read `references/unity-csharp-rules.md`.
-- Independent repeated work, batch processing, expensive loops, performance optimization, or any discovered safe parallelization opportunity in Python or C#: read `references/parallelization.md`.
-- Python/C# code phases that `workflow-skill` assigns to Spark, plus obvious bounded low-risk Python/C# code tasks where an allowed model/delegation route exists or `workflow-skill` has visibly switched to the protected `GPT-5.5` light fallback: read `references/spark-small-code.md`.
+Load this skill for every task node that reads, writes, explains, debugs, refactors, tests, or authors probes for:
 
-When multiple routes apply, use them together and read only those relevant references. For example, Python prompt code needs prompt generation plus Python rules; Unity gameplay code needs coding approach plus C# rules.
+- Python;
+- C# or Unity C#;
+- prompts embedded in Python/C# executable behavior;
+- Python/C# helper scripts used by another skill;
+- Python/C# optimization implementation.
 
-## Trigger
+Do not use it for JavaScript, TypeScript, frontend, shell, SQL, config-only work, pure prose, images, account switching, or GitHub sync unless the planned node also touches Python/C#.
 
-Use this skill for Python and C# code writing, editing, refactoring, debugging, review, optimization, explanation, prompt-in-code work, Unity C#, and small bounded Python/C# code tasks. Do not use it for JavaScript, TypeScript, frontend implementation, shell, SQL, config-only edits, pure prose, pure image generation, pure account switching, or GitHub sync unless the task also includes Python or C# code or helper-script work.
+## References
+
+Read only what the locked node needs:
+
+- all non-trivial code: `references/coding-approach.md`;
+- Python: `references/python-rules.md`;
+- C#/Unity: `references/unity-csharp-rules.md`;
+- prompt-in-code: `references/prompt-generation.md`;
+- safe repeated/parallel Python/C# work: `references/parallelization.md`;
+- Spark and fallback behavior: `references/spark-small-code.md`.
+
+For prompt-in-code work, show `Prompt idea -> Prompt goal -> Problems -> Solution`, inspect the existing prompt, fix the smallest complete logic, then embed and Mini Verify it.
+
+## Model Contract
+
+- Use Spark first for text-only Python/C# implementation, bounded repair/refactor, and authored Python/C# probes at the effort in the locked plan.
+- Use only a fallback already allowed by Task Analyze, with a visible reason and runtime reroute/receipt when available.
+- Never keep the entry model merely because it is active.
+- Image-dependent, over-context, broad integration, or evidence-heavy work may use planned Terra; bounded Spark-unavailable work may use planned Luna.
+- A planned label is not execution proof. Return receipt evidence when the workflow requires it.
 
 ## Workflow
 
-1. Classify the task: prompt generation, Python, C#/Unity C#, parallelization/performance, Spark-eligible small Python/C# code, or a combination.
-2. Read the relevant reference file(s) from `references/`.
-3. For all non-trivial code work, state important assumptions, choose the smallest viable path, and define a verifiable success condition.
-4. During implementation, review, refactor, or optimization, actively look for repeated work whose units are independent. If code changes are in scope and `references/parallelization.md` says the parallel path can preserve the same observable result, optimize it immediately instead of leaving it as a suggestion.
-5. For prompt work, create or improve the prompt first, then embed the generated prompt into the corresponding Python or C# text/code.
-6. Keep edits surgical and preserve unrelated user work.
-7. After any code is written or changed, run the default mini real usage check through `verify-skill` unless the user explicitly forbids verification. For major edits or when the user asks to test the edited result, verify the real result path instead of relying on compile/import/mock-only checks.
-8. For code-related reports, generated report artifacts must show `Input`, `Used`, `Output`, and `Why Pass` for every passing case. Simple code test results can stay in chat when the command, output, and pass reason are easy to read there.
+1. Confirm the node is Python/C# and the locked route names `code-skill`.
+2. Read the relevant references and existing source.
+3. State important assumptions and choose the smallest viable design.
+4. Preserve Qin's existing style, naming, structure, and unrelated user changes.
+5. Keep Python signatures, calls, and literals on one line when the project/global rules require that style.
+6. Implement only the requested behavior; avoid unrequested abstractions, features, fallbacks, or compatibility layers.
+7. Return the changed path, concrete behavior, and focused Mini Verify target to `workflow-skill`.
+8. After Mini Verify passes, the main result may be shown. Real code-path testing, broader regressions, and independent optimization verification run in Ending Task.
+
+Compile, import, lint, schema, build, or existence checks may satisfy the basic Mini Verify when proportional. They do not become Real Verify merely by being labeled tests.
+
+## Optimization Boundary
+
+When optimization is explicitly planned, implement only the authorized change and return raw before/after inputs, outputs, token/time evidence when relevant, and known risks. The optimization implementer never self-certifies same behavior. A different `verify-skill` worker performs Real Verify in Ending Task.
+
+When optimization is not the requested result, report a discovered candidate to the parent instead of silently expanding scope. Task Analyze may place it in Ending Task.
+
+## Generated File Placement
+
+Put temporary code, fixtures, logs, receipts, and test outputs in the task/project `cache/` or `work/` area. Put final deliverables only in the requested location or active workspace `outputs/`.
 
 ## Guardrails
 
-- Keep this as the single code skill. Do not load or depend on old code sub-skills.
-- Keep this skill scoped to Python and C# authoring. Do not stretch it to JavaScript, TypeScript, frontend code, shell scripts, SQL, or other languages just because the task is code-like.
-- Do not duplicate testing/reporting workflows here when `verify-skill` owns real evidence and report generation.
-- Do not claim full success without saying what was or was not verified.
-- Do not add unrequested features, abstractions, configurability, fallbacks, or compatibility layers.
-- Do not parallelize order-sensitive, shared-state, main-thread-only, or side-effect-heavy code unless the same result can be proven with a real comparison test.
-- Do not touch unrelated files or user changes.
-
-## Examples
-
-- "Write a Python parser" -> read coding approach and Python rules, implement the smallest path, then run a real parser input through `verify-skill`.
-- "Speed up this Python batch processor" -> read Python rules plus parallelization rules, parallelize independent item work when safe, and compare sequential and parallel outputs.
-- "Improve this prompt in Python code" -> read prompt generation and Python rules, then test with a concrete prompt input/output shape.
-- "Fix this Unity enemy controller" -> read coding approach and C# rules, then verify with Unity compile/runtime evidence where practical.
-- "Optimize this C# pathfinding preprocessing" -> read C# rules plus parallelization rules, keep Unity API access on the main thread when applicable, and parallelize only pure data work with equivalent output.
-- "Small obvious Python/C# code cleanup" -> consider the Spark route only when an allowed delegation/model route exists, then still verify.
+- Preserve execution order, side effects, exception behavior, Unity main-thread rules, and public contracts unless the request changes them.
+- Do not parallelize order-sensitive or shared-state code without an authorized plan and independent comparison.
+- Do not claim Real Verify before the Ending worker completes.
+- Do not push or publish unless explicitly authorized.

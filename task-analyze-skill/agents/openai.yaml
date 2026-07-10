@@ -1,0 +1,5 @@
+interface:
+  display_name: "Task Analyze"
+  short_description: "Always-first per-task model and effort router"
+  default_prompt: >-
+    Start every task with Task Analyze only. In bounded preflight call resolve_entry_model.py; use its exact pair or unverified only on failure. Show the human easy/complex route, then execute through workflow-skill without hooks or chat JSON. Downstream pairs need receipts; Python/C#/Unity C# uses code-skill and Spark first. Apply static floors before local model_experience.json: no success uses static, except safe low-risk text-only tiny work starts Spark-low; runtime Spark failure falls back without quality penalty. Passes try one lower same-model effort, then a weaker model; Mini/Real quality failures are sticky. Record the result producer after Mini and update it after Real.

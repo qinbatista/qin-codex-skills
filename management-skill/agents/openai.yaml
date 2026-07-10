@@ -1,4 +1,5 @@
 interface:
   display_name: "Management Skill"
-  short_description: "Management executor routed by workflow-skill"
-  default_prompt: "After $workflow-skill routes the task here, use $management-skill for Codex profile operations, global skill GitHub sync, or both when the request genuinely needs both routes."
+  short_description: "Routing records, profiles, and six-skill mirror"
+  default_prompt: >-
+    Follow the locked management node and exact model/effort. Keep only local, never-mirrored model_experience.json: controlled profiles, generalized summaries, producer receipts, Mini/Real outcomes, success/failed ranges, tokens, and timing; never raw prompts/results/paths/secrets. Record the producer after Mini and update that same attempt after Real, including direct routes. No success uses static except safe text-only low-risk tiny work at Spark-low; runtime Spark failure falls back without penalty; passes step down one same-model effort then a weaker model; Mini/Real quality failures are sticky. Preserve local state across mirror actions; never expose secrets, switch profiles without confirmation, or publish without current authorization.

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 600 920">
+  <title id="title">Runtime model receipt mobile diagram</title>
+  <desc id="desc">A mobile-friendly receipt showing requested and resolved model and effort, token and time evidence, pass status, and a like-for-like comparison.</desc>
+  <rect width="600" height="920" rx="36" fill="#07111f"/>
+  <text x="300" y="62" text-anchor="middle" fill="#f8fafc" font-family="Arial, sans-serif" font-size="38" font-weight="700">Runtime receipt</text>
+  <g font-family="Arial, sans-serif">
+    <rect x="45" y="102" width="510" height="138" rx="24" fill="#1e3a8a"/><text x="72" y="145" fill="#bfdbfe" font-size="25" font-weight="700">Requested</text><text x="72" y="183" fill="#eff6ff" font-size="23">model + effort + prompt hash</text><text x="72" y="216" fill="#93c5fd" font-size="20">intent only</text>
+    <rect x="45" y="262" width="510" height="170" rx="24" fill="#0f766e"/><text x="72" y="305" fill="#99f6e4" font-size="25" font-weight="700">Observed runtime</text><text x="72" y="343" fill="#f0fdfa" font-size="23">resolved model + effort</text><text x="72" y="378" fill="#f0fdfa" font-size="23">effective model after reroute</text><text x="72" y="410" fill="#5eead4" font-size="20">local operational evidence</text>
+    <rect x="45" y="454" width="510" height="170" rx="24" fill="#4c1d95"/><text x="72" y="497" fill="#ddd6fe" font-size="25" font-weight="700">Measured</text><text x="72" y="535" fill="#f5f3ff" font-size="23">input · cached · output · total tokens</text><text x="72" y="570" fill="#f5f3ff" font-size="23">turn time · TTFT · process time</text><text x="72" y="602" fill="#c4b5fd" font-size="20">availability is sanitized</text>
+    <rect x="45" y="646" width="510" height="98" rx="22" fill="#166534"/><text x="300" y="688" text-anchor="middle" fill="#dcfce7" font-size="28" font-weight="700">PASS</text><text x="300" y="720" text-anchor="middle" fill="#f0fdf4" font-size="21">model match · effort match · completed</text>
+    <rect x="45" y="768" width="510" height="96" rx="22" fill="#9a3412"/><text x="300" y="809" text-anchor="middle" fill="#ffedd5" font-size="25" font-weight="700">Like-for-like baseline only</text><text x="300" y="841" text-anchor="middle" fill="#fff7ed" font-size="20">one pair = smoke · repeats = durable claim</text>
+  </g>
+</svg>

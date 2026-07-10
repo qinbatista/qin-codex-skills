@@ -1,92 +1,84 @@
-# Start Diagram Template
+# Workflow Display Templates
 
-Use this reference when `workflow-skill` needs a fast task-specific diagram and target map before work begins.
+`task-analyze-skill` chooses the display. The entry placeholders mean the model and effort currently selected when the user starts the task; they are never hard-coded to Sol.
 
-## Lightweight Direct Route
+## Easy Task: Text Only
 
-Use for direct answers, file reads, status checks, or one clear command with no meaningful side effects.
-
-```mermaid
-flowchart LR
-  A["User request: <short request>"] --> B["Direct action: <read/run/check/explain>"]
-  B --> C["Answer/result: <what will be returned>"]
+```text
+Task: <result> — easy, <overall effort>
+Route: Task Analyze [current selected model | current selected effort] -> <direct action> [<model> | <effort>, <skill>] -> Mini Verify [<model> | <effort>, verify-skill] -> Main result [<model> | <effort>] -> Ending Task [<model> | <effort>]
+Why these models: <one sentence>
 ```
 
-Direct route: `<action>`; stop when `<observable answer/result>` is delivered.
+Do not add Mermaid, a formal target map, or broad explanation for an easy task. Mini Verify may be one minimal action-done confirmation.
 
-## Explicit Workflow Route
-
-Use for file edits, code, debugging, generated artifacts, skill work, verification, UI, reports, or any multi-step task.
+## Complex Task: Mermaid
 
 ```mermaid
 flowchart TD
-  A["User request: <short request>"] --> B["Target map: slices, artifacts, pass targets"]
-  B --> C["Route skills: workflow-skill -> <executor skills>"]
-  C --> D["Main lane: <produce requested result>"]
-  D --> E{"Main Goal Done Gate"}
-  E -->|required precondition failed| D
-  E -->|major goal done| F["Dispatch Ending Workflow workers in parallel"]
-  F --> G["Final response: result + worker names/purposes"]
-  F --> H["Ending worker: validation/tests"]
-  F --> I["Ending worker: docs/wiki/memory"]
-  F --> J["Ending worker: remote/status/visual proof"]
-  H --> K["Background notification or follow-up"]
-  I --> K
-  J --> K
+  U["User request"] --> A["Task Analyze<br/>[current selected model | current selected effort]"]
+  A --> B["<inspect/plan task><br/>[<model> | <effort> · <skill>]"]
+  B --> C1["<independent branch A><br/>[<model> | <effort> · <skill>]"]
+  B --> C2["<independent branch B><br/>[<model> | <effort> · <skill>]"]
+  C1 --> M["Merge/integrate<br/>[<model> | <effort>]"]
+  C2 --> M
+  M --> V["Mini Verify<br/>[<model> | <effort> · verify-skill]"]
+  V -->|fail: repair| B
+  V -->|pass| G{"Main Goal Done Gate<br/>[<model> | <effort>]"}
+  G --> R["Show main result now<br/>[<model> | <effort>]"]
+  R --> E["Dispatch Ending Task<br/>[<model> | <effort>]"]
+  E --> RV["Real Verify<br/>[<model> | <effort> · verify-skill]"]
+  E --> OV["Independent optimization verification<br/>[<model> | <effort>]"]
+  E --> D["Reports · logs · docs · memory<br/>[<model> | <effort>]"]
+  RV -->|failure| O["Notify user + reopen<br/>[<model> | <effort>]"]
 ```
 
-Target map:
-- `Task slices`: `<ordered work>`
-- `Artifacts`: `<files/artifacts/state that will change>`
-- `Pass targets`: `<observable proof>`
-- `Skill route`: `workflow-skill -> <skills in order>`
-- `Main Goal Done Gate`: `<requested result/state is complete + required preconditions passed>`
-- `Ending Workflow Fan-Out`: `<purpose-specific background workers to spawn in parallel>`
-- `Stop condition`: `<main result returned after ending workers are dispatched with visible names/purposes>`
+Follow with a numbered `Workflow with models` list. Every item names exact model ID, effort, skill, dependency, and stop condition.
 
-Main-goal workers and Ending Workflow workers are different. A main-goal worker is on the critical path before `Main Goal Done Gate`; its output is required to produce the requested result. An Ending Workflow worker starts after that gate for tests, validation, docs, memory, remote proof, visual review, or no-op inventory, and the final response does not wait for every worker unless the user explicitly asks.
-
-## Skill Edit And Push Route
-
-Use when editing global skills and publishing them.
+## Sequential Code Route
 
 ```mermaid
 flowchart TD
-  A["Read current skill + routing references"] --> B["Patch skill files"]
-  B --> C["Required pre-push safety checks"]
-  C --> D["Run management-skill sync/push"]
-  D --> E{"Main Goal Done Gate: pushed or blocked"}
-  E -->|pushed| F["Dispatch Ending Workflow workers in parallel"]
-  F --> G["Final response: pushed + worker names/purposes"]
-  F --> H["Ending worker: validators"]
-  F --> I["Ending worker: remote hash/no-diff proof"]
-  F --> J["Ending worker: docs/wiki memory"]
+  U["User request"] --> A["Task Analyze<br/>[current selected model | current selected effort]"]
+  A --> B["Read Python/C# context<br/>[<planned model> | <effort> · code-skill]"]
+  B --> C["Implement Python/C#<br/>[GPT-5.3-Codex-Spark | <effort> · code-skill]"]
+  C --> V["Mini Verify<br/>[<model> | <effort> · verify-skill]"]
+  V -->|fail| C
+  V -->|pass| G{"Main Goal Done Gate<br/>[<model> | <effort>]"}
+  G --> R["Show main result now<br/>[<model> | <effort>]"]
+  R --> E["Dispatch Ending Task<br/>[<model> | <effort>]"]
+  E --> RV["Real code-path Verify<br/>[GPT-5.6-Terra | <effort> · verify-skill]"]
+  E --> D["Docs · logs · memory<br/>[GPT-5.6-Luna | low]"]
 ```
 
-Target map:
-- `Task slices`: read skill, patch focused files, run required pre-push safety checks, push.
-- `Artifacts`: `SKILL.md`, references/scripts/assets, generated validation output, remote skill mirror.
-- `Pass targets`: requested trigger/workflow behavior is present, public-safety sync allows push, push succeeds or a real sync blocker is reported.
-- `Skill route`: `workflow-skill -> management-skill -> code-skill -> verify-skill -> management-skill`.
-- `Main Goal Done Gate`: global skill mirror push succeeds, or a real sync blocker is reported.
-- `Ending Workflow Fan-Out`: validators, post-push remote hash/no-diff proof, and docs/wiki memory run as purpose-specific background workers.
-- `Stop condition`: push result is returned after ending workers are dispatched with visible names/purposes.
+Use a visible allowed fallback when Spark cannot execute. Do not silently keep the entry model.
 
-## Code Change Route
-
-Use when changing executable code or scripts.
+## Global Skill Edit Route
 
 ```mermaid
 flowchart TD
-  A["Read existing code/context"] --> B["Patch minimal behavior"]
-  B --> C["Run real usage test"]
-  C --> D["Verify output against request"]
-  D --> E["Report changed files + evidence"]
+  U["User request"] --> A["Task Analyze<br/>[current selected model | current selected effort]"]
+  A --> B["Audit authoritative skills<br/>[GPT-5.6-Terra | high · management-skill]"]
+  B --> C["Update contracts/docs<br/>[GPT-5.6-Luna or Terra | <effort>]"]
+  C --> P["Update Python validators/helpers<br/>[GPT-5.3-Codex-Spark | <effort> · code-skill]"]
+  P --> V["Mini Verify: syntax + focused contract scenarios<br/>[GPT-5.6-Terra | <effort> · verify-skill]"]
+  V -->|fail| C
+  V -->|pass| G{"Main Goal Done Gate<br/>[GPT-5.6-Terra | medium]"]
+  G --> R["Show main result now<br/>[GPT-5.6-Luna | low]"]
+  R --> E["Dispatch Ending Task<br/>[GPT-5.6-Luna | low]"]
+  E --> RV["Real replay + loader/runtime proof<br/>[GPT-5.6-Terra | high · verify-skill]"]
+  E --> OV["Independent optimization check<br/>[GPT-5.6-Terra | high]"]
+  E --> D["README · report · logs · memory<br/>[GPT-5.6-Luna | low]"]
 ```
 
-Target map:
-- `Task slices`: inspect, edit, run concrete input, verify observed output.
-- `Artifacts`: changed code, test inputs/logs/report if needed.
-- `Pass targets`: real behavior matches request; no import-only or status-only proof.
-- `Skill route`: `workflow-skill -> code-skill -> verify-skill`.
-- `Stop condition`: observed output satisfies every pass target.
+Add publish/sync nodes only when the user explicitly requested them.
+
+## Topology Rules
+
+- Parallel: Mini Verify each independent result branch before merge when a merge check cannot expose its basic failure.
+- Sequential: one consolidated Mini Verify after the last dependent result-bearing step.
+- Mixed: one integration Mini Verify after merge, plus only necessary isolated branch checks.
+- Main Result always follows Mini Verify.
+- Ending Task always follows Main Result.
+- Real Verify and optimization verification never feed the first Main Result.
+
