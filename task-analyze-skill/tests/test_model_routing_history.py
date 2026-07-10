@@ -67,10 +67,10 @@ def arguments(history, receipt, verify_level="mini", verify_status="pass", failu
     )
 
 
-def write_receipt(path, model="gpt-5.6-luna", effort="low", status="pass", turn_completed=None, total_tokens=12, process_elapsed_ms=5, route_attempts=None):
+def write_receipt(path, model="gpt-5.6-luna", effort="low", status="pass", turn_completed=None, total_tokens=12, process_elapsed_ms=5, route_attempts=None, workload_prompt_sha256="a" * 64):
     if turn_completed is None:
         turn_completed = status == "pass"
-    payload = {"requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "status": status, "turn_completed": turn_completed, "model_match": True, "effort_match": True, "tokens": {"total_tokens": total_tokens}, "process_elapsed_ms": process_elapsed_ms}
+    payload = {"requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "status": status, "turn_completed": turn_completed, "model_match": True, "effort_match": True, "tokens": {"total_tokens": total_tokens}, "process_elapsed_ms": process_elapsed_ms, "workload_prompt_sha256": workload_prompt_sha256}
     if route_attempts is not None:
         payload["route_attempts"] = route_attempts
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -317,6 +317,26 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertIsNone(recommendation["failed_model"])
             self.assertFalse(recommendation["trial"])
 
+    def test_cold_start_never_selects_below_hard_floor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt = root / "receipt.json"
+
+            normal = arguments(root / "normal.json", receipt)
+            normal.candidate_ladder = ["gpt-5.6-luna|low", "gpt-5.6-terra|low", "gpt-5.6-terra|medium"]
+            normal.static_suggestion = "gpt-5.6-luna|low"
+            normal.hard_floor = "gpt-5.6-terra|medium"
+            self.assertEqual(module.recommend_route(normal)["selected_pair"], "gpt-5.6-terra|medium")
+
+            tiny = arguments(root / "tiny.json", receipt)
+            tiny.task_family = "tiny_code"
+            tiny.candidate_ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
+            tiny.static_suggestion = "gpt-5.6-luna|low"
+            tiny.hard_floor = "gpt-5.6-luna|low"
+            recommendation = module.recommend_route(tiny)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertNotEqual(recommendation["reason"], "tiny_spark_auto")
+
     def test_performance_evidence_cannot_bypass_weakest_verified_quality_boundary(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -325,8 +345,6 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high"]
             failure = arguments(history, receipt, verify_level="mini", verify_status="fail", failure_class="quality", run_id="run-failure")
             failure.candidate_ladder = ladder
-            write_receipt(receipt, "gpt-5.3-codex-spark", "low", total_tokens=50, process_elapsed_ms=30)
-            module.record_event(failure)
             weak_low_a = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-low-a")
             weak_low_a.candidate_ladder = ladder
             write_receipt(receipt, "gpt-5.6-luna", "low", total_tokens=100, process_elapsed_ms=200)
@@ -339,9 +357,78 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             strong.candidate_ladder = ladder
             write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=150, process_elapsed_ms=50)
             module.record_event(strong)
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", total_tokens=50, process_elapsed_ms=30)
+            module.record_event(failure)
             recommendation = module.recommend_route(weak_low_a)
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|high")
+            self.assertEqual(recommendation["reason"], "receipt_cost_best_verified")
+
+    def test_record_retains_valid_workload_prompt_hash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            expected_hash = "b" * 64
+            args = arguments(history, receipt, verify_level="real", verify_status="pass")
+            write_receipt(receipt, workload_prompt_sha256=expected_hash)
+            result = module.record_event(args)
+            record = next(iter(module.load_history(history)["conditions"].values()))
+            self.assertEqual(record["tasks"][0]["workload_prompt_sha256"], expected_hash)
+            self.assertIn("best_pair", result)
+            self.assertIn("cost_evidence", result)
+
+    def test_different_workload_hashes_fall_back_to_quality_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high"]
+
+            high = arguments(history, receipt, verify_level="real", verify_status="pass", run_id="run-high")
+            high.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=10, process_elapsed_ms=10, workload_prompt_sha256="a" * 64)
+            module.record_event(high)
+            low = arguments(history, receipt, verify_level="real", verify_status="pass", run_id="run-low")
+            low.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "low", total_tokens=100, process_elapsed_ms=100, workload_prompt_sha256="b" * 64)
+            module.record_event(low)
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            failure.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", workload_prompt_sha256="c" * 64)
+            module.record_event(failure)
+
+            recommendation = module.recommend_route(low)
+            record = next(iter(module.load_history(history)["conditions"].values()))
             self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
-            self.assertEqual(recommendation["reason"], "success_and_failure_boundary")
+            self.assertEqual(recommendation["selection_basis"], "quality_boundary")
+            self.assertEqual(record["cost_evidence"]["status"], "no_common_workload")
+
+    def test_incomplete_like_for_like_metrics_fall_back_to_quality_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high"]
+            shared_hash = "d" * 64
+
+            high = arguments(history, receipt, verify_level="real", verify_status="pass", run_id="run-high")
+            high.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=10, process_elapsed_ms=10, workload_prompt_sha256=shared_hash)
+            module.record_event(high)
+            low = arguments(history, receipt, verify_level="real", verify_status="pass", run_id="run-low")
+            low.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "low", total_tokens=None, process_elapsed_ms=100, workload_prompt_sha256=shared_hash)
+            module.record_event(low)
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            failure.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", workload_prompt_sha256=shared_hash)
+            module.record_event(failure)
+
+            recommendation = module.recommend_route(low)
+            record = next(iter(module.load_history(history)["conditions"].values()))
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(recommendation["selection_basis"], "quality_boundary")
+            self.assertEqual(record["cost_evidence"]["status"], "incomplete_metrics")
 
     def test_repeated_recommendations_and_passes_keep_calibrated_adjacent_best(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -360,6 +447,41 @@ class ModelRoutingHistoryTests(unittest.TestCase):
                 recommendation = module.recommend_route(success)
                 self.assertFalse(recommendation["trial"])
 
+    def test_later_cost_samples_do_not_move_frozen_adjacent_best(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "history.json"
+            receipt = root / "receipt.json"
+            ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|high"]
+
+            failure = arguments(history, receipt, verify_level="real", verify_status="fail", failure_class="quality", run_id="run-failure")
+            failure.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.3-codex-spark", "low", total_tokens=20, process_elapsed_ms=10)
+            module.record_event(failure)
+
+            high = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-high-fast")
+            high.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=50, process_elapsed_ms=50)
+            module.record_event(high)
+
+            low = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-low")
+            low.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "low", total_tokens=100, process_elapsed_ms=100)
+            module.record_event(low)
+            frozen = module.recommend_route(low)
+            self.assertEqual(frozen["selected_pair"], "gpt-5.6-luna|high")
+            self.assertEqual(frozen["selection_basis"], "receipt_cost")
+            self.assertFalse(frozen["trial"])
+
+            later = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-high-expensive")
+            later.candidate_ladder = ladder
+            write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=1000, process_elapsed_ms=1000)
+            module.record_event(later)
+            still_frozen = module.recommend_route(later)
+            self.assertEqual(still_frozen["selected_pair"], "gpt-5.6-luna|high")
+            self.assertEqual(still_frozen["selection_basis"], "receipt_cost")
+            self.assertFalse(still_frozen["trial"])
+
     def test_gap_selects_intermediate_then_freezes_after_pass(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -376,7 +498,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             module.record_event(stronger)
             recommendation = module.recommend_route(stronger)
             self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
-            self.assertEqual(recommendation["reason"], "success_and_failure_boundary")
+            self.assertEqual(recommendation["reason"], "quality_boundary_gap_trial")
             self.assertTrue(recommendation["trial"])
             trial = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-trial")
             trial.candidate_ladder = ladder
@@ -444,7 +566,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.3-codex-spark", "low", status="fail", turn_completed=False)
             module.record_event(invalid_quality)
             recommendation = module.recommend_route(baseline)
-            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.3-codex-spark|low")
             self.assertFalse(recommendation["trial"])
 
     def test_same_profile_summary_shares_best_while_complexity_splits(self):
@@ -458,7 +580,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             changed_summary = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-summary")
             changed_summary.task_summary = "A second summary with the same routing profile remains shared."
             shared = module.recommend_route(changed_summary)
-            self.assertEqual(shared["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(shared["selected_pair"], "gpt-5.3-codex-spark|low")
             split = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-complex")
             split.complexity = "complex"
             self.assertEqual(module.recommend_route(split)["selected_pair"], "gpt-5.6-luna|low")
@@ -490,7 +612,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             changed.hard_floor = new_ladder[0]
             recommendation = module.recommend_route(changed)
             self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
-            self.assertEqual(recommendation["reason"], "success_and_failure_boundary")
+            self.assertEqual(recommendation["reason"], "quality_boundary_gap_trial")
             self.assertTrue(recommendation["trial"])
 
     def test_current_ladder_narrowing_cannot_select_removed_historical_pair(self):
@@ -518,7 +640,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             module.record_event(narrowed)
             frozen = module.recommend_route(narrowed)
             self.assertEqual(frozen["selected_pair"], "gpt-5.6-terra|low")
-            self.assertFalse(frozen["trial"])
+            self.assertTrue(frozen["trial"])
             self.assertEqual(frozen["success_model"], "gpt-5.6-luna|low")
 
     def test_removed_historical_success_recalibrates_current_policy(self):
@@ -607,8 +729,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.6-sol", "ultra", "pass")
             module.record_event(args)
             recommendation = module.recommend_route(args)
-            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-sol|max")
-            self.assertNotIn("terra", recommendation["selected_pair"])
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
 
     def test_quality_failures_raise_failed_model_rung_by_rung(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -670,7 +791,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.6-terra", "low", total_tokens=120, process_elapsed_ms=60)
             module.record_event(args)
             recommendation = module.recommend_route(args)
-            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|high")
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|low")
 
     def test_current_ladder_limits_selection_to_current_pairs(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1138,9 +1259,9 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.3-codex-spark", "low", total_tokens=77, process_elapsed_ms=77)
             module.record_event(args)
             recommendation = module.recommend_route(args)
-            self.assertEqual(recommendation["selected_pair"], "gpt-5.3-codex-spark|low")
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
             self.assertEqual(recommendation["trial"], False)
-            self.assertEqual(recommendation["reason"], "verified_floor_retained")
+            self.assertEqual(recommendation["reason"], "no_bounds_use_static")
 
     def test_same_run_valid_mini_pass_survives_operational_and_invalid_updates(self):
         with tempfile.TemporaryDirectory() as temporary:

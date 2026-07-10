@@ -11,7 +11,7 @@ Task Analyze remains the 100 percent entry skill, but an obvious reversible tool
 - Open Chrome: `chrome:control-chrome`, no dispatcher; verify Chrome is open.
 - Open Chrome and open YouTube: `chrome:control-chrome`, no dispatcher; verify `youtube.com` is loaded.
 - Open Chrome, open YouTube, and search CCTV: `chrome:control-chrome`, no dispatcher; verify the CCTV query and visible results.
-- Design a website like YouTube: complex dispatcher route through `build-web-apps:frontend-app-builder`: `gpt-5.6-sol|high` design, `gpt-5.6-terra|high` implementation, `gpt-5.6-terra|medium` Mini, `gpt-5.6-luna|low` result/Ending coordination, and `gpt-5.6-terra|high` Ending Real review. Model nodes are receipt-backed and the producer is adaptively recorded; Ending checks responsive, console, navigation, accessibility, and visual behavior.
+- Design a website like YouTube: complex dispatcher route through `build-web-apps:frontend-app-builder`. Assign every node from the current cold-start hint plus exact-profile dynamic ladder; any pair shown in a fixture is illustrative only, never canonical. Model nodes are receipt-backed and the producer is adaptively recorded; Ending checks responsive, console, navigation, accessibility, and visual behavior.
 
 ## Extension Guide
 
@@ -71,6 +71,8 @@ When a dispatcher is useful, save schema version 1 JSON inside the active task c
 - installed skill, exact model, effort, dependencies, prompt, safe sandbox, and routing profile per node;
 - `main_result_node` and `mini_verify_node`.
 
+The internal main producer must also carry a complete `routing_recommendation` matching its selected `model|effort`, `trial`, and profile fingerprint. At initial dispatch the controller recomputes the current private recommendation and rejects a stale or self-authored plan before any node runs. Every non-tiny model profile carries exactly the full GPT-5.6 Luna/Terra/Sol ladder with no Spark; an eligible tiny profile carries exactly Spark-low plus that full normal fallback ladder.
+
 Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher executes result and Mini nodes first. After the main result is shown, invoke its Ending handoff separately so Real Verify and records remain post-result work.
 
 ## Plan-Lock Invariants
@@ -82,11 +84,11 @@ The graduated complex fixture is a portable template: materialization injects on
 - The entry pair is never inherited by downstream nodes.
 - Every downstream model and effort is supported and receipt-backed when execution proof is required.
 - Every owning skill is installed.
-- Active registry-owned code-domain implementation and authored probes use `code-skill`, the domain's applicable style, and Spark first unless a visible fallback reason applies.
+- Active registry-owned code-domain implementation and authored probes use `code-skill` and the domain's applicable style. Spark-low is permitted only for the obvious bounded low-risk easy low-ambiguity text-only tiny-work exception; every other model route uses the exact full normal ladder, regardless of easy/complex classification.
 - Mini Verify is downstream of all requested result work and upstream of Main Result.
 - Main Result is upstream of Ending Task.
 - Ending Real Verify, optimization verification, reports, logs, docs, and memory do not gate the first result.
-- Record the main result-producer receipt after Mini and update that same attempt after Real. This applies to dispatcher and direct non-dispatch model routes; tool-only routes never record adaptive producer samples, and verifier models are never recorded as result producers.
+- The main producer carries a complete `routing_recommendation` proof matching its selected pair, trial flag, and profile fingerprint. Record its receipt after Mini and update that same attempt after Real. For `mini_real`, Mini is provisional and Ending Real recomputes/persists `best_pair` and returns `routing_learning`. This applies to dispatcher and direct non-dispatch model routes; tool-only routes never record adaptive producer samples, verifier models are never recorded as producers, and deterministic controller recording needs no decorative Luna call.
 - A later correctness failure notifies and reopens.
 - No lifecycle hook or chat-visible machine plan is required.
 - Ending wave scheduling requires dependency-ready batches with a three-node concurrency cap.

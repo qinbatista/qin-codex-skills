@@ -63,28 +63,27 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertTrue(any("bypasses code-skill" in failure for failure in result["failures"]))
 
-    def test_validate_trace_rejects_rust_non_spark(self):
+    def test_validate_trace_accepts_complex_terra(self):
         trace = [
             {"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill", "execution_domain": "general"},
-            {"id": "implement", "model": "gpt-5.6-luna", "effort": "low", "skill": "code-skill", "execution_domain": "rust", "language": "rust"},
+            {"id": "implement", "model": "gpt-5.6-terra", "effort": "low", "skill": "code-skill", "execution_domain": "rust", "language": "rust", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"},
             {"id": "mini-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill", "execution_domain": "general"},
             {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
             {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
         ]
         with self._with_rust_domain(trace) as synthetic_skills_root:
             result = module.validate_trace("synthetic-rust-nonspark", trace, synthetic_skills_root)
-        self.assertEqual(result["status"], "fail")
-        self.assertTrue(any("is not Spark-first" in failure for failure in result["failures"]))
+        self.assertEqual(result["status"], "pass")
 
-    def test_validate_trace_accepts_rust_spark_with_code_skill(self):
+    def test_validate_trace_rejects_complex_spark(self):
         trace = [
             {"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill", "execution_domain": "general"},
-            {"id": "implement", "model": "gpt-5.3-codex-spark", "effort": "low", "skill": "code-skill", "execution_domain": "rust", "language": "rust"},
+            {"id": "implement", "model": "gpt-5.3-codex-spark", "effort": "low", "skill": "code-skill", "execution_domain": "rust", "language": "rust", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"},
             {"id": "mini-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill", "execution_domain": "general"},
             {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
             {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
         ]
         with self._with_rust_domain(trace) as synthetic_skills_root:
             result = module.validate_trace("synthetic-rust-spark", trace, synthetic_skills_root)
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["failures"], [])
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(any("Spark is valid only" in failure for failure in result["failures"]))

@@ -22,6 +22,7 @@ If a refreshed cache omits one of these models while the current Codex UI/runtim
 - `gpt-5.6-sol`: low, medium, high, xhigh, max, ultra.
 - Sol, Terra, and Luna accept image input. Spark is text-only.
 - Spark is unavailable through API-only execution surfaces.
+- Capability support does not equal routing eligibility: adaptive routes may use Spark-low only, and only for an eligible tiny profile; Spark medium/high/xhigh are never adaptive fallbacks.
 - If an effort is unsupported, use the highest supported effort below it and show the normalization.
 
 ## Refresh

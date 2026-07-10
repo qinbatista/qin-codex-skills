@@ -66,7 +66,7 @@ Use every planned executor that matches; do not run unrelated branches.
 | Prompt/instruction behavior | Prompt Task Gate below, plus `code-skill` only when embedded in Python/C# |
 | Other production work | The relevant installed production skill returned by Task Analyze |
 
-Every active registry-owned code-domain node loads `code-skill`. Spark is first for text-only implementation and authored probes; current examples are Python, plain C#, and Unity C#. Use only the visible planned fallback when Spark is unavailable, rejected, over context, image-dependent, or unsupported on the execution surface.
+Every active registry-owned code-domain node loads `code-skill`. Spark-low is first only for obvious bounded low-risk easy low-ambiguity text-only tiny implementation and authored-probe work; its exact candidate route is Spark-low plus the full normal fallback ladder. Every non-tiny model route uses the exact full Luna/Terra/Sol ladder with no Spark, regardless of easy/complex classification. Never raise Spark effort as a fallback.
 
 ### Prompt Task Gate
 
@@ -117,7 +117,7 @@ Ending Task starts after the main result. It owns only planned related closeout:
 - a verifier distinct from the optimization implementer;
 - each optimization node names exactly one Ending `verify-skill` node through `verifies_node`; that verifier runs on a different receipt-backed worker, and an Ending optimization/verifier pair executes in dependency-ready waves;
 - reports, logs, docs, Markdown, DailyLog/wiki/Obsidian memory;
-- sanitized private adaptive-routing outcome records after receipt-backed Mini and then Real Verify, always against the original result producer rather than the verifier;
+- sanitized private adaptive-routing outcome records after receipt-backed Mini and then Real Verify, always against the original result producer rather than the verifier. For `mini_real`, Mini PASS is provisional; Ending Real updates the same producer run, recomputes/persists `best_pair`, and returns `routing_learning` without a decorative Luna controller call;
 - remote/status/hash proof when publishing was explicitly authorized;
 - no-op inventory when a planned branch has nothing relevant to change.
 
@@ -156,7 +156,7 @@ Task routing never broadens permission. Before the affected action, obtain requi
 ## Representative Routes
 
 - Direct answer/read: Task Analyze text route -> Workflow direct node -> lightweight Mini Verify -> Main Result -> relevant Ending Task.
-- Active code-domain change: Task Analyze -> Workflow -> `code-skill` on Spark-first node -> Mini Verify -> Main Result -> Real Verify in Ending Task.
+- Active code-domain change: Task Analyze -> Workflow -> `code-skill` on an exact Spark-low-plus-normal tiny route or an exact full normal no-Spark route -> Mini Verify -> Main Result -> Real Verify in Ending Task.
 - Global skill update: Task Analyze -> Workflow -> `management-skill` for authoritative scope -> `code-skill` for Python helpers -> Mini Verify -> Main Result -> Ending Real Verify/docs/memory. Push only if explicitly requested.
 - Explicit optimization: Task Analyze -> Workflow result-bearing implementation -> Mini Verify -> Main Result -> separate optimization verifier in Ending Task. Report the optimization as independently verified only after that worker passes.
 - UI/image/document: Task Analyze complex Mermaid route -> relevant production skill -> Mini Verify -> Main Result -> rendered/realistic review in Ending Task.
@@ -168,6 +168,6 @@ After editing this skill:
 1. Run `python3 scripts/validate_workflow_skill.py`.
 2. Run the `task-analyze-skill` validator and tests.
 3. Replay one easy text route and one complex Mermaid route.
-4. Replay Python/C# routing through `code-skill` with Spark first.
+4. Replay Python/C# routing through `code-skill`, including exact Spark-low-plus-normal tiny routing and exact full normal no-Spark routing for every non-tiny case.
 5. Confirm the Main Result depends on Mini Verify only and every Real Verify/optimization-verification node is downstream of Main Result.
 6. Capture runtime receipts for major model-routing changes.

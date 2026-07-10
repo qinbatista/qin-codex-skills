@@ -31,10 +31,12 @@ MODEL_EFFORTS = receipt_module.MODEL_EFFORTS
 try:
     from routing_policy import (
         EXECUTION_DOMAINS,
+        adaptive_pair_texts_for_profile,
         execution_domain_is_active,
         expected_owner_skill,
         is_code_execution_domain,
-        requires_spark_first,
+        normal_adaptive_pair_texts,
+        is_tiny_spark_profile,
         resolve_execution_domain,
         reference_path_for,
         validate_execution_domain_registry,
@@ -47,10 +49,12 @@ except ModuleNotFoundError:
     _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
     _routing_policy_spec.loader.exec_module(_routing_policy)
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
+    adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
     is_code_execution_domain = _routing_policy.is_code_execution_domain
-    requires_spark_first = _routing_policy.requires_spark_first
+    normal_adaptive_pair_texts = _routing_policy.normal_adaptive_pair_texts
+    is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
     resolve_execution_domain = _routing_policy.resolve_execution_domain
     reference_path_for = _routing_policy.reference_path_for
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
@@ -161,7 +165,16 @@ def phase_verdict(path, pass_marker, fail_marker):
     return "unknown"
 
 
-def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
+def validate_plan(
+    plan,
+    entry_model,
+    entry_effort,
+    cwd,
+    skills_root=None,
+    *,
+    enforce_current_recommendation=False,
+    history_path=None,
+):
     skills_root = resolve_skills_root(skills_root)
     failures = []
     try:
@@ -255,12 +268,10 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
         if expected_owner is not None and skill != expected_owner:
             failures.append(f"{node_id} bypasses code-skill; implementation owner mismatch for {execution_domain}")
 
-        if _is_code_implementation(node):
-            spark_forced = requires_spark_first(execution_domain)
-            if spark_forced and node.get("model") != "gpt-5.3-codex-spark" and not (
-                spark_exception.strip() or node.get("fallback_reason", "").strip()
-            ):
-                failures.append(f"{node_id} has no fallback reason; implementation must be Spark-first or state spark_exception_reason/fallback_reason")
+        if node.get("model") == "gpt-5.3-codex-spark":
+            condition = node.get("routing_condition") or {}
+            if node.get("effort") != "low" or not is_tiny_spark_profile(condition.get("task_family"), condition.get("modality"), condition.get("risk"), condition.get("complexity"), condition.get("ambiguity")):
+                failures.append(f"{node_id} Spark-low is valid only for low-risk easy low-ambiguity text tiny profiles")
 
         if node_id == plan.get("main_result_node"):
             routing_condition = node.get("routing_condition")
@@ -272,6 +283,8 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
             candidate_ladder = node.get("candidate_ladder")
             static_suggestion = node.get("static_suggestion")
             hard_floor = node.get("hard_floor")
+            static_pair = None
+            hard_pair = None
             if isinstance(routing_condition, dict):
                 condition_domain = routing_condition.get("execution_domain")
                 if condition_domain != execution_domain:
@@ -303,6 +316,8 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
                     ordered_pairs = [routing_history_module.pair_text(*pair) for pair in candidate_pairs]
                     if ordered_pairs != candidate_ladder:
                         failures.append(f"{node_id} candidate_ladder must be canonical")
+                    if routing_history_module.pair_text(model, effort) not in ordered_pairs:
+                        failures.append(f"{node_id} selected pair must be in candidate_ladder")
                 else:
                     ordered_pairs = []
                 main_candidate_pairs = candidate_pairs
@@ -317,10 +332,59 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
                     else:
                         if static_pair not in candidate_pairs or hard_pair not in candidate_pairs:
                             failures.append(f"{node_id} static_suggestion and hard_floor must be in candidate_ladder")
+                        if routing_history_module.parse_pair(routing_history_module.pair_text(model, effort)) in candidate_pairs and routing_history_module.compare_pair((model, effort), hard_pair) < 0:
+                            failures.append(f"{node_id} selected pair must not be below hard_floor")
                         node["static_suggestion"] = routing_history_module.pair_text(*static_pair)
                         node["hard_floor"] = routing_history_module.pair_text(*hard_pair)
                 if not isinstance(node.get("trial"), bool):
                     failures.append(f"{node_id} trial must be a boolean")
+                if all(routing_condition.get(field) for field in CONTROLLED_FIELDS):
+                    expected_ladder = adaptive_pair_texts_for_profile(
+                        routing_condition["task_family"],
+                        routing_condition["modality"],
+                        routing_condition["risk"],
+                        routing_condition["complexity"],
+                        routing_condition["ambiguity"],
+                    )
+                    if ordered_pairs != expected_ladder:
+                        ladder_kind = "Spark-low plus the full GPT-5.6 ladder" if expected_ladder and expected_ladder[0] == "gpt-5.3-codex-spark|low" else "the full GPT-5.6 ladder without Spark"
+                        failures.append(f"{node_id} candidate_ladder must exactly match {ladder_kind}")
+                recommendation = node.get("routing_recommendation")
+                if not isinstance(recommendation, dict):
+                    failures.append(f"{node_id} requires routing_recommendation proof")
+                elif candidate_pairs and static_pair is not None and hard_pair is not None:
+                    required_proof_keys = {"selected_pair", "trial", "reason", "profile_fingerprint", "calibration_state", "best_pair", "selection_basis"}
+                    missing_proof_keys = sorted(required_proof_keys - set(recommendation))
+                    if missing_proof_keys:
+                        failures.append(f"{node_id} routing_recommendation proof missing keys: {', '.join(missing_proof_keys)}")
+                    expected_fingerprint = routing_history_module.profile_fingerprint(routing_condition, candidate_pairs, static_pair, hard_pair)
+                    if recommendation.get("selected_pair") != routing_history_module.pair_text(model, effort) or recommendation.get("trial") is not node.get("trial"):
+                        failures.append(f"{node_id} routing_recommendation must match the selected pair and trial")
+                    if recommendation.get("profile_fingerprint") != expected_fingerprint:
+                        failures.append(f"{node_id} routing_recommendation profile fingerprint is invalid")
+                    if enforce_current_recommendation and not missing_proof_keys:
+                        recommendation_args = SimpleNamespace(
+                            **routing_condition,
+                            task_summary=node.get("task_summary", ""),
+                            candidate_ladder=candidate_ladder,
+                            static_suggestion=node.get("static_suggestion", ""),
+                            hard_floor=node.get("hard_floor", ""),
+                            history=Path(history_path or routing_history_module.DEFAULT_HISTORY_PATH),
+                            enforce_candidate_policy=True,
+                        )
+                        try:
+                            current_recommendation = routing_history_module.recommend_route(recommendation_args)
+                        except (OSError, TypeError, ValueError) as error:
+                            failures.append(f"{node_id} current routing recommendation could not be verified: {type(error).__name__}")
+                        else:
+                            if current_recommendation.get("selected_pair") is None:
+                                failures.append(f"{node_id} current routing recommendation is exhausted")
+                            if current_recommendation.get("selected_pair") != routing_history_module.pair_text(model, effort) or current_recommendation.get("trial") is not node.get("trial"):
+                                failures.append(f"{node_id} selected pair/trial does not match current learner recommendation")
+                            proof_fields = ("selected_pair", "trial", "reason", "profile_fingerprint", "calibration_state", "best_pair", "selection_basis")
+                            stale_fields = [field for field in proof_fields if recommendation.get(field) != current_recommendation.get(field)]
+                            if stale_fields:
+                                failures.append(f"{node_id} routing_recommendation is stale or not learner-derived: {', '.join(stale_fields)}")
 
             for field in CONTROLLED_FIELDS:
                 if field not in node.get("routing_condition", {}):
@@ -414,6 +478,10 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None):
             failures.append(
                 f"optimization-skill node {optimization_node_id} must have exactly one ending verify-skill verifier targeting it"
             )
+    if main_result_node in node_by_id and node_by_id[main_result_node].get("routing_condition", {}).get("verification_shape") == "mini_real":
+        producer_verifiers = [node_id for node_id in ending_ids if node_by_id[node_id].get("skill") == "verify-skill" and not node_by_id[node_id].get("verifies_node")]
+        if len(producer_verifiers) != 1:
+            failures.append("mini_real plans require exactly one non-targeted Ending verify-skill producer verifier")
 
     if main_candidate_pairs:
         candidate_pair_text = {routing_history_module.pair_text(*pair) for pair in main_candidate_pairs}
@@ -703,8 +771,11 @@ def _run_record(result_path, verify_level, verify_status, main_result_receipt_pa
         run_id=route_run_id,
         trial=bool(node.get("trial")),
         history=Path(__file__).resolve().parents[1] / "local" / "adaptive-routing" / "model_experience.json",
+        enforce_candidate_policy=True,
     )
-    return routing_history_module.record_event(args)
+    recorder_result = routing_history_module.record_event(args)
+    recommendation = routing_history_module.recommend_route(args)
+    return {"recorder_result": recorder_result, "recommendation": recommendation}
 
 
 def _release_main_result(handoff):
@@ -758,8 +829,25 @@ def _release_main_result(handoff):
     return {"schema_version": 1, "status": "pass", "route_run_id": route_run_id, "release_path": str(release_path)}
 
 
-def run_plan(plan, entry_model, entry_effort, cwd, state_db=Path.home() / ".codex" / "state_5.sqlite", codex_bin="codex", skills_root=None):
-    failures = validate_plan(plan, entry_model, entry_effort, cwd, skills_root=skills_root)
+def run_plan(
+    plan,
+    entry_model,
+    entry_effort,
+    cwd,
+    state_db=Path.home() / ".codex" / "state_5.sqlite",
+    codex_bin="codex",
+    skills_root=None,
+    history_path=None,
+):
+    failures = validate_plan(
+        plan,
+        entry_model,
+        entry_effort,
+        cwd,
+        skills_root=skills_root,
+        enforce_current_recommendation=True,
+        history_path=history_path or routing_history_module.DEFAULT_HISTORY_PATH,
+    )
     cache_dir = Path(plan["cache_dir"]).expanduser().resolve() if not failures else cwd.resolve() / "work" / "cache" / "invalid-task-route"
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / "dispatch-manifest.json"
@@ -941,7 +1029,16 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         elif release_record.get("main_result_node") != (handoff.get("main_result_node") or plan.get("main_result_node")) or release_record.get("mini_verify_node") != (handoff.get("mini_verify_node") or plan.get("mini_verify_node")):
             failures.append("ending handoff release does not match main or mini node")
     if not failures:
-        failures.extend(validate_plan(plan, entry.get("model"), entry.get("effort"), cwd, skills_root=skills_root))
+        failures.extend(
+            validate_plan(
+                plan,
+                entry.get("model"),
+                entry.get("effort"),
+                cwd,
+                skills_root=skills_root,
+                enforce_current_recommendation=False,
+            )
+        )
     manifest_path = Path(
         handoff.get("ending_manifest_path") or cache_dir / "ending-dispatch-manifest.json"
     ).expanduser().resolve()
@@ -966,6 +1063,8 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         if mini_marker_status != "pass":
             failures.append("ending handoff Mini Verify result is missing an unambiguous MINI_VERIFY=PASS marker")
     ordered = []
+    routing_learning = None
+    real_quality_failure = False
     if not failures:
         while runnable_ids:
             ready = sorted(
@@ -1037,7 +1136,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
             ending_status = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
             if ending_status != "pass":
                 failures.append(f"Non-targeted Ending verify node {ending_record['id']} did not pass ENDING_TASK marker")
-            _run_record(
+            recorded_learning = _run_record(
                 main_record.get("receipt_path"),
                 "real",
                 ending_status if ending_status in {"pass", "fail"} else "unknown",
@@ -1046,6 +1145,9 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
                 main_node,
                 execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
             )
+            routing_learning = recorded_learning if isinstance(recorded_learning, dict) else None
+            if ending_status == "fail":
+                real_quality_failure = True
 
     status = (
         "pass"
@@ -1059,8 +1161,9 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         "failures": failures,
         "entry": entry,
         "nodes": ordered,
-        "reopen_required": status != "pass",
-        "notification_required": status != "pass",
+        "reopen_required": real_quality_failure,
+        "notification_required": real_quality_failure,
+        "routing_learning": routing_learning,
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

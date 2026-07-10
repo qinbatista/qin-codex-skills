@@ -37,7 +37,7 @@ flowchart LR
 |---|---|---|
 | 🧭 [`Task Analyze`](./task-analyze-skill/SKILL.md) | Classify every request and lock its route. | entry resolver · complexity/topology classifier · installed-skill resolver · adaptive pair selector · plan/receipt handoff |
 | 🗺️ [`Workflow`](./workflow-skill/SKILL.md) | Execute the locked graph and protect the first-result boundary. | plan-lock validator · direct-tool/model runners · dependency scheduler · Mini gate/result release · Ending dispatcher |
-| 💻 [`Code`](./code-skill/SKILL.md) | Deliver owned code changes and authored probes. | Python · C# · Unity C# · prompt-in-code · Spark-first small-code route · probes |
+| 💻 [`Code`](./code-skill/SKILL.md) | Deliver owned code changes and authored probes. | Python · C# · Unity C# · prompt-in-code · Spark obvious-only route · probes |
 | 🧪 [`Verify`](./verify-skill/SKILL.md) | Gate the result proportionally, then test deeper. | Mini · Real · visual/UI/artifact review · receipt match · independent optimization verifier |
 | ⚡ [`Optimization`](./optimization-skill/SKILL.md) | Improve repeatable work without changing behavior. | candidate gate · scripts/references/assets/templates · same-behavior comparison · verifier handoff |
 | 🔐 [`Management`](./management-skill/SKILL.md) | Safely manage profiles, records, and the public mirror. | learner records · auth/profiles · README renderer · approved-six snapshot · privacy scan · explicit publish |
@@ -50,7 +50,7 @@ flowchart LR
 </picture>
 
 1. 🧭 Task Analyze reads only enough context to select a skill, dependencies, stop condition, and per-node `model | effort`.
-2. 🔒 Workflow executes the locked route. Active registry-owned code work loads [`code-skill`](./code-skill/SKILL.md); Spark is first where its domain rules apply.
+2. 🔒 Workflow executes the locked route. Active registry-owned code work loads [`code-skill`](./code-skill/SKILL.md); Spark is a separate first route only for obvious bounded low-risk text/code/commands.
 3. 🧪 Mini Verify checks the smallest meaningful observable proof.
 4. ✅ The basically verified result is shown immediately.
 5. 🌙 Ending Task performs relevant Real Verify, optimization proof, reports, logs, documentation, and learning.
@@ -68,16 +68,16 @@ Easy tasks do not need a forced diagram; they show the compact route Task Analyz
   <img src="./management-skill/assets/readme/model-router.svg" alt="Per-node model router separating entry analysis from downstream execution">
 </picture>
 
-| Model | Best role | Full supported effort rung |
+| Model | Cold-start role | Adaptive routing rung |
 |---|---|---|
-| Sol | Ambiguous context, architecture, difficult judgment | `low → medium → high → xhigh → max → ultra` |
-| Terra | Grounded integration, repository evidence, realistic testing | `low → medium → high → xhigh → max → ultra` |
-| Luna | Bounded non-code work, concise delivery, reports/logs | `low → medium → high → xhigh → max` |
-| Spark | Text-only Python/C#/Unity C# implementation and authored probes | `low → medium → high → xhigh` |
+| Sol | Cold-start hint for ambiguous context, architecture, difficult judgment | `low → medium → high → xhigh → max → ultra` |
+| Terra | Cold-start hint for grounded integration, repository evidence, realistic testing | `low → medium → high → xhigh → max → ultra` |
+| Luna | Cold-start hint for normal bounded work and concise delivery | `low → medium → high → xhigh → max` |
+| Spark | Obvious bounded low-risk tiny text/code/commands only | `low` only, then normal fallback |
 
-Routing uses the complete `model | effort` rung on a weak-to-strong quality ladder, not a model name alone. Downgrade exactly one eligible rung—**effort first**, then the next weaker model at its highest eligible effort; upgrade in the exact reverse direction. Once the exact similar-task quality range is known, reuse the calibrated/frozen pair. A safe tiny text/code/command task may start at Spark-low; runtime failure uses the static fallback without a quality penalty. Static floors, safety, domain ownership, and correctness always win; an exhausted top boundary returns no selected pair.
+Task/role tables are cold-start hints, never fixed model mappings. Every non-tiny model route carries exactly `Luna-low → all Luna efforts → Terra → Sol-ultra` with no Spark. Tiny eligible routes carry exactly `Spark-low + full normal fallback`; Spark-medium/high/xhigh remain capabilities, not routing rungs. Downgrade effort then model, upgrade in reverse, and reuse the frozen dynamic learned pair until verified failure or drift.
 
-Optimize response time and token use only among correctness-passing routes. This is correctness-first routing, never a reason to choose an expensive model by default.
+Correctness is the gate. Cost-rank tokens, then process time, then weaker rung only when at least two Real-passing pairs share the same exact workload hash with complete metrics. Cross-workload or incomplete evidence uses the quality boundary and makes no savings claim.
 
 ## 📟 Receipt-backed execution
 
@@ -88,7 +88,7 @@ Optimize response time and token use only among correctness-passing routes. This
 
 A diagram label is a plan—not proof. Each model-executed node emits a sanitized runtime receipt that matches the requested/resolved/effective model and effort, completion status, bounded prompt hash, token totals, and elapsed timing. It is useful operational evidence, not a cryptographic backend attestation.
 
-🪙 Claim token or time savings only against a **like-for-like** baseline: same prompts and inputs, topology, sandbox, output contract, and acceptance criteria. Cached input belongs in input; reasoning output belongs in output; parallel work compares critical-path time. Repeated alternating runs and medians support durable claims.
+🪙 Claim token or time savings only against a **like-for-like** baseline: same prompts and inputs, topology, sandbox, output contract, and acceptance criteria. Cached input belongs in input; reasoning output belongs in output; parallel work compares critical-path process time. Repeated alternating runs and medians support durable claims.
 
 ## 🧠 Private model experience
 
@@ -97,11 +97,11 @@ A diagram label is a plan—not proof. Each model-executed node emits a sanitize
   <img src="./management-skill/assets/readme/model-experience.svg" alt="Condition-keyed learning from receipt-backed Mini Verify and Ending Task outcomes">
 </picture>
 
-The private `local/model_experience.json` ledger is **condition-keyed**, including execution domain, rather than a global model ranking. It stores compact sanitized outcomes and full-pair `success_model` / `failed_model` quality boundaries. Verified Mini and Real outcomes can calibrate a range; neutral operational events—availability, timeout, protocol, telemetry, execution, or unverified-receipt failures—may justify a temporary fallback but never rewrite quality learning.
+The private `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is **condition-keyed**, not a global model ranking. It stores compact sanitized outcomes, prompt-free workload hashes, and full-pair quality boundaries. Ending Real updates the same producer attempt, persists `best_pair`, and freezes unchanged profiles; verified failure reopens them. Operational failures may justify a temporary fallback but never rewrite quality learning.
 
 The entry pair is route metadata, never a learner feature. The local ledger is never mirrored, and it contains no raw prompts, results, paths, identities, or secrets.
 
-| Domain | Kind | Owner | Spark first | Reference |
+| Domain | Kind | Owner | Spark obvious-task eligible | Reference |
 |---|---|---|---|---|
 | `general` (active) | general | `workflow-skill` | no | [`task-analyze-skill/references/model-selection.md`](./task-analyze-skill/references/model-selection.md) |
 | `python` (active) | code | `code-skill` | yes | [`code-skill/references/python-rules.md`](./code-skill/references/python-rules.md) |
@@ -156,7 +156,7 @@ Editing or testing skills never authorizes a push. [`management-skill`](./manage
 
 - [`task-analyze-skill/SKILL.md`](./task-analyze-skill/SKILL.md) — hookless entry, route policy, per-node choice, receipts
 - [`workflow-skill/SKILL.md`](./workflow-skill/SKILL.md) — locked execution, result release, Ending Task
-- [`code-skill/SKILL.md`](./code-skill/SKILL.md) — owned code domains and Spark-first rules
+- [`code-skill/SKILL.md`](./code-skill/SKILL.md) — owned code domains and Spark obvious-only rules
 - [`verify-skill/SKILL.md`](./verify-skill/SKILL.md) — Mini/Real evidence routes
 - [`optimization-skill/SKILL.md`](./optimization-skill/SKILL.md) — behavior-preserving improvements and independent proof
 - [`management-skill/SKILL.md`](./management-skill/SKILL.md) — privacy, profiles, and approved-six mirror management

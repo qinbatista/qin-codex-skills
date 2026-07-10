@@ -17,32 +17,34 @@ The `local/` subtree is personal state. Mirror snapshots, hashes, safety scans, 
 
 Each local condition record has only controlled profile values: task family, artifact, `execution_domain`, scope, ambiguity, modality, risk, complexity, owning skill, project family, and verification shape. The domain is part of identity, so Python, plain C#, Unity C#, and non-code evidence do not share calibration. It also has a canonical candidate ladder, static suggestion, hard floor, one generalized privacy-filtered task summary, and explicit `success_model`/`failed_model` ranges.
 
-Its attempt rows retain only a sanitized route-run ID, producer pair, receipt/proof fields, Mini/Real outcomes, allowlisted failure class, trial flag, token totals, process time, and recording time. Never store raw prompts, raw results, paths, filenames, repository names, thread/session IDs, raw errors, account data, environment, auth data, secrets, or other private task content.
+Its attempt rows retain only a sanitized route-run ID, producer pair, receipt/proof fields, Mini/Real outcomes, allowlisted failure class, trial flag, prompt-free `workload_prompt_sha256`, token totals, process time, and recording time. Never store raw prompts, raw results, paths, filenames, repository names, thread/session IDs, raw errors, account data, environment, auth data, secrets, or other private task content.
 
 ## Event Evidence
 
-A result-producer attempt may contain requested/resolved/effective model and effort, receipt status, Mini/Real verdict, allowlisted failure class, token counts, process time, trial status, and a sanitized route-run ID. Mini creates or updates that producer attempt; Real updates the same attempt and never records the verifier model as the result producer.
+A result-producer attempt may contain requested/resolved/effective model and effort, receipt status, Mini/Real verdict, allowlisted failure class, prompt-free workload hash, token counts, process time, trial status, and a sanitized route-run ID. Mini creates or updates that producer attempt; Real updates the same attempt and never records the verifier model as the result producer.
 
-`receipt_status=pass` requires a completed turn plus matching model and effort. Missing or mismatched receipts cannot earn a successful sample.
+`receipt_status=pass` requires a completed turn plus matching model and effort. Missing or mismatched receipts cannot earn a successful sample. For `mini_real`, a Mini pass is provisional until Ending Real updates the same producer receipt/run.
 
 ## Recommendation Policy
 
 Task Analyze supplies a weak-to-strong quality ladder, static baseline, and hard floor. The entry model is not an input.
+
+For every non-tiny model profile, the supplied ladder is exactly the complete supported GPT-5.6 Luna/Terra/Sol ladder, not a fixed category pair and not truncated by its hard floor. An eligible tiny profile prepends Spark-low to that full normal fallback ladder; no other Spark effort is allowed.
 
 Calibration is a bounded search for the best complete `model|effort` pair for one exact sanitized task profile. Profiles are exact across every controlled condition field, including execution domain; evidence from Python, Unity C#, another project family, or another verification shape does not calibrate this profile.
 
 1. Resolve the owning skill and `execution_domain`, then apply supported-input, supported-effort, safety, authority, project, language, code-style, and owning-skill floors.
 2. With no prior success, use the static suggestion. The sole automatic exception is safe low-risk text-only tiny text/code/command work, which starts at eligible Spark-low.
 3. A runtime Spark failure for that exception uses the static suggestion without a quality penalty. Result execution retries only the exact planned `model|effort` fallback pairs and keeps sanitized attempt evidence; Mini/Ending verdict failures do not model-retry.
-4. After a receipt-matched verification pass, trial exactly one lower eligible rung: lower effort on the same model first; only after that model reaches its minimum eligible effort, trial the next weaker model at that model's highest eligible effort.
-5. Once adjacent receipt-matched pass/fail evidence identifies the selected eligible pair, or a receipt-matched pass proves the current hard floor, derive the calibrated/frozen `selected_pair` from the bounds, reuse it with `trial=false`, and stop searching while trial is closed.
+4. After a receipt-matched pass, trial exactly one lower eligible rung: lower effort on the same model first; only after that model reaches its minimum eligible effort, trial the next weaker model at that model's highest eligible effort. The normal ladder is Luna low (also called “light”) through Luna efforts, Terra efforts, then Sol ultra; Spark-low is only the tiny-work exception.
+5. Ending Real updates the same producer receipt/run, recomputes the recommendation, and persists/freezes `best_pair` once adjacent Real-verified pass/fail evidence identifies the eligible pair or a Real pass proves the hard floor. Reuse the frozen exact-profile `selected_pair` with `trial=false` until verified failure, ladder/hard-floor/profile drift, policy change, or explicit reset.
 6. Reopen the bounded search only for a receipt-matched Mini or Real correctness/quality failure, material profile drift, policy or eligible-ladder/hard-floor change, or explicit reset. On quality failure, upgrade in exact reverse order: raise effort on the same model first, then move to the next stronger eligible model only after the current model's eligible efforts are exhausted. When no stronger candidate exists, return a blocked/exhausted recommendation with no selected pair.
 7. Real Verify failure overrides an earlier Mini pass for the same route-run ID.
 8. Availability, timeout, protocol, telemetry, execution, or receipt failures, plus unverified or mismatched receipts, are temporary diagnostic evidence. They can block pass credit or use an allowed execution fallback, but they never move the learned quality best or either quality boundary.
 9. An attempt-level quality failure cannot be erased by a later pass under the same route-run ID. A genuine retry gets a new route-run ID so both samples remain auditable.
 10. High-risk or irreversible work records evidence but does not auto-downgrade.
 
-Among verified eligible candidates, the recorder uses a correctness boundary and the weakest verified complete pair control anchor. Receipts then provide like-for-like token/time evidence for future optimization. Tokens are a usage proxy, not a dollar-cost claim. `success_model` and `failed_model` are all-history full-pair boundary fields. The recommendation derives `selected_pair` from the active eligible ladder and may differ from historical `success_model` after an eligibility or hard-floor change. Do not claim any field or ranking the recorder does not produce.
+Correctness/quality is the eligibility gate. Cost evidence is comparable only when at least two Real-passing pairs share an exact `workload_prompt_sha256` cohort and every compared pair has complete tokens and time. The recorder equal-weights shared cohorts, then minimizes median total tokens first, median process time second, and weaker rung last. Different workload hashes, missing hashes, incomplete metrics, or one passing pair fall back to the verified quality boundary and cannot support a savings claim. Tokens are a usage proxy, not a dollar-cost claim.
 
 ## Commands
 

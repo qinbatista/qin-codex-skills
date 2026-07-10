@@ -33,10 +33,10 @@ Select only the optimization form returned by Task Analyze: tighter rule, refere
 
 Follow the exact model and effort in the locked plan:
 
-- Terra normally owns grounded optimization design, dependency analysis, before/after review, and independent comparison.
-- Spark first owns Python/C#/Unity C# helper or implementation nodes through `code-skill`.
-- Luna owns direct bounded instruction/reference/template updates and lightweight records.
-- Sol owns unresolved architecture or genuinely difficult cross-system optimization judgment.
+- Luna, Terra, and Sol roles are cold-start hints only; the exact similar-task profile learns across the effort-first Luna-low through Sol-ultra ladder.
+- Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Tiny routes are exactly Spark-low plus the full normal fallback; every non-tiny route uses the exact full normal ladder without Spark.
+- Correctness and quality are eligibility gates. Rank tokens, then process time, then weaker rung only when every compared Real-passing pair shares the same exact workload hash with complete metrics; otherwise use the quality boundary.
+- A frozen exact-profile pair is reused until verified failure or material ladder, hard-floor, profile, or policy drift.
 
 The entry model is not inherited. A label is not execution proof; use runtime receipts when model routing or savings is part of acceptance.
 
@@ -73,6 +73,7 @@ Do not claim savings from shorter text, different prompts, different inputs, or 
 - Keep reasoning output separate; it is already part of output tokens.
 - Compare critical-path elapsed time for parallel workflows.
 - Treat one pair as a smoke result; prefer alternating repeated runs and medians.
+- Never let faster execution override a higher total-token result when the routing objective is token-first, time-second.
 
 ## Generated File Placement
 

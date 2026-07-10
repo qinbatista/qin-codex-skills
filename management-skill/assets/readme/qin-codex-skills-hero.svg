@@ -20,7 +20,7 @@
       <rect x="574" y="330" width="450" height="180" rx="22" fill="#122844" stroke="#60a5fa" stroke-width="2"/>
       <text x="604" y="372" fill="#bfdbfe" font-size="18" font-weight="800" letter-spacing="1.5">02 · DISPATCH</text><text x="604" y="420" fill="#f8fafc" font-size="30" font-weight="750">🗺️ workflow-skill</text><text x="604" y="462" fill="#cbd5e1" font-size="21">Hookless runner launches plan</text>
       <rect x="1074" y="330" width="450" height="180" rx="22" fill="#302716" stroke="#fbbf24" stroke-width="2"/>
-      <text x="1104" y="372" fill="#fde68a" font-size="18" font-weight="800" letter-spacing="1.5">03 · CODE</text><text x="1104" y="420" fill="#f8fafc" font-size="30" font-weight="750">💻 code-skill</text><text x="1104" y="462" fill="#cbd5e1" font-size="21">Python · C# · Unity C# · Spark first</text>
+      <text x="1104" y="372" fill="#fde68a" font-size="18" font-weight="800" letter-spacing="1.5">03 · CODE</text><text x="1104" y="420" fill="#f8fafc" font-size="30" font-weight="750">💻 code-skill</text><text x="1104" y="462" fill="#cbd5e1" font-size="21">Python · C# · Unity C# · Spark obvious-only</text>
 
       <rect x="74" y="550" width="450" height="180" rx="22" fill="#162d28" stroke="#34d399" stroke-width="2"/>
       <text x="104" y="592" fill="#a7f3d0" font-size="18" font-weight="800" letter-spacing="1.5">04 · VERIFY</text><text x="104" y="640" fill="#f8fafc" font-size="30" font-weight="750">🧪 verify-skill</text><text x="104" y="682" fill="#cbd5e1" font-size="21">Mini before · Real after</text>
@@ -32,7 +32,7 @@
 
     <g font-size="18" font-weight="700">
       <rect x="74" y="782" width="330" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="239" y="818" text-anchor="middle" fill="#dbeafe">🧭 Task Analyze every task</text>
-      <rect x="424" y="782" width="330" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="589" y="818" text-anchor="middle" fill="#dbeafe">🤖 model + effort per node</text>
+      <rect x="424" y="782" width="330" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="589" y="818" text-anchor="middle" fill="#dbeafe">🤖 dynamic learned pair</text>
       <rect x="774" y="782" width="330" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="939" y="818" text-anchor="middle" fill="#dbeafe">✅ Mini Verify gates result</text>
       <rect x="1124" y="782" width="400" height="58" rx="29" fill="#0f2136" stroke="#334e6d"/><text x="1324" y="818" text-anchor="middle" fill="#dbeafe">🌙 Ending Task closes deeply</text>
     </g>

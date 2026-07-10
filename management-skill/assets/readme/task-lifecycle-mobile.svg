@@ -9,7 +9,7 @@
     <line x1="300" y1="212" x2="300" y2="252" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
     <rect x="55" y="260" width="490" height="112" rx="24" fill="#1d4ed8"/><text x="300" y="305" fill="#dbeafe" font-size="28" font-weight="700">Hookless route runner</text><text x="300" y="341" fill="#eff6ff" font-size="22">runs after the human route is shown</text>
     <line x1="300" y1="372" x2="300" y2="412" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
-    <rect x="55" y="420" width="490" height="112" rx="24" fill="#9a3412"/><text x="300" y="465" fill="#ffedd5" font-size="28" font-weight="700">Receipt-backed work</text><text x="300" y="501" fill="#fff7ed" font-size="22">exact skill · model · effort per node</text>
+    <rect x="55" y="420" width="490" height="112" rx="24" fill="#9a3412"/><text x="300" y="465" fill="#ffedd5" font-size="28" font-weight="700">Receipt-backed work</text><text x="300" y="501" fill="#fff7ed" font-size="22">exact skill · dynamic learned pair</text>
     <line x1="300" y1="532" x2="300" y2="572" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
     <rect x="55" y="580" width="490" height="112" rx="24" fill="#6d28d9"/><text x="300" y="625" fill="#ede9fe" font-size="28" font-weight="700">Mini Verify</text><text x="300" y="661" fill="#f5f3ff" font-size="22">basic gate · repair on failure</text>
     <line x1="300" y1="692" x2="300" y2="732" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>

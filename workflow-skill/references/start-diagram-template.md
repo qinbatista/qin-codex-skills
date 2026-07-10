@@ -41,37 +41,39 @@ Follow with a numbered `Workflow with models` list. Every item names exact model
 flowchart TD
   U["User request"] --> A["Task Analyze<br/>[current selected model | current selected effort]"]
   A --> B["Read code-domain context<br/>[<planned model> | <effort> · code-skill]"]
-  B --> C["Implement active code domain<br/>[GPT-5.3-Codex-Spark | <effort> · code-skill]"]
+  B --> C["Implement active code domain<br/>[<dynamic selected model> | <effort> · code-skill]"]
   C --> V["Mini Verify<br/>[<model> | <effort> · verify-skill]"]
   V -->|fail| C
   V -->|pass| G{"Main Goal Done Gate<br/>[<model> | <effort>]"}
   G --> R["Show main result now<br/>[<model> | <effort>]"]
   R --> E["Dispatch Ending Task<br/>[<model> | <effort>]"]
-  E --> RV["Real code-path Verify<br/>[GPT-5.6-Terra | <effort> · verify-skill]"]
-  E --> D["Docs · logs · memory<br/>[GPT-5.6-Luna | low]"]
+  E --> RV["Real code-path Verify<br/>[<dynamic selected model> | <effort> · verify-skill]"]
+  E --> D["Docs · logs · memory<br/>[controller or <dynamic selected model> | <effort>]"]
 ```
 
-Use a visible allowed fallback when Spark cannot execute. Do not silently keep the entry model.
+Tiny model routes use exactly Spark-low plus the full normal fallback ladder. Every non-tiny model route uses the exact full Luna-low→Sol-ultra ladder with no Spark. Never raise Spark effort; use the learned normal fallback when Spark cannot execute.
 
 ## Global Skill Edit Route
 
 ```mermaid
 flowchart TD
   U["User request"] --> A["Task Analyze<br/>[current selected model | current selected effort]"]
-  A --> B["Audit authoritative skills<br/>[GPT-5.6-Terra | high · management-skill]"]
-  B --> C["Update contracts/docs<br/>[GPT-5.6-Luna or Terra | <effort>]"]
-  C --> P["Update Python validators/helpers<br/>[GPT-5.3-Codex-Spark | <effort> · code-skill]"]
-  P --> V["Mini Verify: syntax + focused contract scenarios<br/>[GPT-5.6-Terra | <effort> · verify-skill]"]
+  A --> B["Audit authoritative skills<br/>[<dynamic selected model> | <effort> · management-skill]"]
+  B --> C["Update contracts/docs<br/>[<dynamic selected model> | <effort>]"]
+  C --> P["Update Python validators/helpers<br/>[<dynamic selected model> | <effort> · code-skill]"]
+  P --> V["Mini Verify: syntax + focused contract scenarios<br/>[<dynamic selected model> | <effort> · verify-skill]"]
   V -->|fail| C
-  V -->|pass| G{"Main Goal Done Gate<br/>[GPT-5.6-Terra | medium]"]
-  G --> R["Show main result now<br/>[GPT-5.6-Luna | low]"]
-  R --> E["Dispatch Ending Task<br/>[GPT-5.6-Luna | low]"]
-  E --> RV["Real replay + loader/runtime proof<br/>[GPT-5.6-Terra | high · verify-skill]"]
-  E --> OV["Independent optimization check<br/>[GPT-5.6-Terra | high]"]
-  E --> D["README · report · logs · memory<br/>[GPT-5.6-Luna | low]"]
+  V -->|pass| G{"Main Goal Done Gate<br/>[<dynamic selected model> | <effort>]"]
+  G --> R["Show main result now<br/>[<dynamic selected model> | <effort>]"]
+  R --> E["Dispatch Ending Task<br/>[controller or <dynamic selected model> | <effort>]"]
+  E --> RV["Real replay + loader/runtime proof<br/>[<dynamic selected model> | <effort> · verify-skill]"]
+  E --> OV["Independent optimization check<br/>[<dynamic selected model> | <effort>]"]
+  E --> D["README · report · logs · memory<br/>[controller or <dynamic selected model> | <effort>]"]
 ```
 
 Add publish/sync nodes only when the user explicitly requested them.
+
+All displayed pairs are dynamic selections. Categories/model roles are cold-start hints only. For `mini_real`, Mini PASS is provisional; Ending Real updates the same producer run and returns routing learning before an exact-profile route freezes.
 
 ## Topology Rules
 

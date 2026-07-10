@@ -2,4 +2,4 @@ interface:
   display_name: "Workflow"
   short_description: "Executes the locked per-node route"
   default_prompt: >-
-    $workflow-skill: execute the locked route without inheriting the entry pair. Direct reversible tool actions use the installed skill and observable Mini check without a child model or receipt. Model nodes preserve exact model|effort, owner/domain, dependencies, topology, and receipts. Mini Verify releases the basically verified result first; Ending Task owns deeper proof and reopens on later correctness failure. Route active code domains through code-skill.
+    $workflow-skill: execute the locked route without inheriting the entry pair. Direct reversible tool actions use the installed skill and observable Mini check without a child model or receipt. Model nodes preserve exact model|effort, owner/domain, dependencies, topology, and receipts. Mini Verify releases the basically verified result first; for mini_real, Ending Real updates the same producer run and returns routing learning. Ending Task owns deeper proof and reopens on later correctness failure. Route active code domains through code-skill.

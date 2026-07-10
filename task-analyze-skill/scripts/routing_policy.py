@@ -23,6 +23,10 @@ MODEL_EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max", "ultra"]
 MODEL_EFFORTS = {model: set(data["efforts"]) for model, data in MODEL_DEFINITIONS.items()}
 MODEL_EFFORT_INDEX = {model: {effort: index for index, effort in enumerate(data["efforts"])} for model, data in MODEL_DEFINITIONS.items()}
 MODEL_POSITION = {model: index for index, model in enumerate(MODEL_ORDER)}
+SPARK_BOOTSTRAP_FAMILIES = {"tiny_text", "tiny_code", "command_generation"}
+SPARK_LOW_PAIR = ("gpt-5.3-codex-spark", "low")
+NORMAL_ADAPTIVE_MODELS = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
+NORMAL_ADAPTIVE_LADDER = [(model, effort) for model in NORMAL_ADAPTIVE_MODELS for effort in MODEL_DEFINITIONS[model]["efforts"]]
 
 EXECUTION_DOMAIN_REGISTRY_VERSION = 1
 EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"
@@ -336,6 +340,35 @@ def canonical_pairs(values):
         pairs.append(pair)
         seen.add(pair)
     return _sorted_pairs(pairs)
+
+
+def normal_adaptive_ladder():
+    return list(NORMAL_ADAPTIVE_LADDER)
+
+
+def normal_adaptive_pair_texts():
+    return [pair_text(*pair) for pair in NORMAL_ADAPTIVE_LADDER]
+
+
+def is_tiny_spark_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
+    return (
+        task_family in SPARK_BOOTSTRAP_FAMILIES
+        and modality == "text"
+        and risk == "low"
+        and complexity == "easy"
+        and ambiguity == "low"
+    )
+
+
+def adaptive_ladder_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
+    pairs = normal_adaptive_ladder()
+    if is_tiny_spark_profile(task_family, modality, risk, complexity, ambiguity):
+        return [SPARK_LOW_PAIR] + pairs
+    return pairs
+
+
+def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
+    return [pair_text(*pair) for pair in adaptive_ladder_for_profile(task_family, modality, risk, complexity, ambiguity)]
 
 
 def _eligible_pairs_by_model(pairs, target):

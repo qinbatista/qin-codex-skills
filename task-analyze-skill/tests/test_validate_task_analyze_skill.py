@@ -59,7 +59,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
 
-    def test_plan_rejects_rust_domain_non_spark_without_reason(self):
+    def test_plan_accepts_complex_terra_code_domain(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
         plan = json.loads(json.dumps(complex_plan))
         impl = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
@@ -68,9 +68,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         impl["model"] = "gpt-5.6-luna"
         with self._with_rust_domain() as synthetic_skills_root:
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
-        self.assertTrue(any("must use spark-first" in failure or "has no fallback reason" in failure for failure in failures))
+        self.assertEqual(failures, [])
 
-    def test_plan_accepts_rust_domain_with_spark_when_code_skill(self):
+    def test_plan_rejects_complex_spark_code_domain(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
         plan = json.loads(json.dumps(complex_plan))
         impl = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
@@ -79,7 +79,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         impl["model"] = "gpt-5.3-codex-spark"
         with self._with_rust_domain() as synthetic_skills_root:
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
-        self.assertEqual(failures, [])
+        self.assertTrue(any("Spark is valid only" in failure for failure in failures))
     def make_validation_inputs(self):
         source = Path(__file__).resolve().parents[1]
         temp_dir = Path(tempfile.mkdtemp(prefix="task-analyze-validate-"))
@@ -185,14 +185,14 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         failures = module.validate_plan(plan, APPROVED)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
 
-    def test_plan_rejects_unity_csharp_non_spark_without_fallback(self):
+    def test_plan_accepts_complex_unity_csharp_with_terra(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
         plan = json.loads(json.dumps(complex_plan))
         plan["nodes"][2]["language"] = "unity_csharp"
         plan["nodes"][2]["skill"] = "code-skill"
-        plan["nodes"][2]["model"] = "gpt-5.6-luna"
+        plan["nodes"][2]["model"] = "gpt-5.6-terra"
         failures = module.validate_plan(plan, APPROVED)
-        self.assertTrue(any("has no fallback reason" in failure for failure in failures))
+        self.assertEqual(failures, [])
 
     def test_plan_rejects_real_verify_before_main_result(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")

@@ -19,7 +19,7 @@ try:
         execution_domain_is_active,
         is_code_execution_domain,
         resolve_execution_domain,
-        requires_spark_first,
+        is_tiny_spark_profile,
         validate_execution_domain_registry,
     )
 except ModuleNotFoundError:
@@ -33,7 +33,7 @@ except ModuleNotFoundError:
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     is_code_execution_domain = _routing_policy.is_code_execution_domain
     resolve_execution_domain = _routing_policy.resolve_execution_domain
-    requires_spark_first = _routing_policy.requires_spark_first
+    is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
 
 
@@ -62,7 +62,7 @@ REQUIRED_WORKFLOW = [
 ]
 REQUIRED_TEMPLATE = ["## Easy Task: Text Only", "## Complex Task: Mermaid", "current selected model | current selected effort", "Show main result now", "Dispatch Ending Task", "Real Verify", "Independent optimization verification", "Main Result always follows Mini Verify", "Ending Task always follows Main Result", "Workflow with models"]
 REQUIRED_MATRIX = ["Every route begins with independent `task-analyze-skill`", "Easy tasks use concise text", "complex tasks use Mermaid", "Every active registry-owned code-domain node loads `code-skill`", "Mini Verify is the basic first-result gate", "Main Result precedes Ending Task", "background correctness failure"]
-REQUIRED_CODE = ["task-analyze-skill", "locked", "code-skill", "Spark first", "Mini Verify", "Ending Task", "Real Verify"]
+REQUIRED_CODE = ["task-analyze-skill", "locked", "code-skill", "Spark-low", "Mini Verify", "Ending Task", "Real Verify"]
 REQUIRED_VERIFY = ["task-analyze-skill", "Mini Verify", "main result", "Ending Task", "Real Verify", "reopen"]
 REQUIRED_OPTIMIZATION = ["task-analyze-skill", "Ending Task", "different", "verifier", "before/after"]
 REQUIRED_ENTRY = [
@@ -186,14 +186,14 @@ def validate_trace(name, trace, skills_root=Path(__file__).resolve().parents[2])
         owner = expected_owner_skill(execution_domain)
         if owner is not None and node.get("skill") != owner:
             failures.append(f"{node['id']} bypasses code-skill")
-        if requires_spark_first(execution_domain) and node.get("model") != "gpt-5.3-codex-spark" and not node.get("spark_exception_reason") and not node.get("fallback_reason"):
-            failures.append(f"{node['id']} is not Spark-first and has no fallback reason")
+        if node.get("model") == "gpt-5.3-codex-spark" and not is_tiny_spark_profile(node.get("task_family"), node.get("modality"), node.get("risk"), node.get("complexity"), node.get("ambiguity")):
+            failures.append(f"{node['id']} Spark is valid only for low-risk easy low-ambiguity text tiny profiles")
     return {"name": name, "status": "pass" if not failures else "fail", "failures": failures}
 
 
 def sample_traces():
     easy = [{"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill"}, {"id": "direct", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "mini-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill"}, {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "records", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}]
-    complex_code = [{"id": "task-analyze", "model": "gpt-5.6-sol", "effort": "ultra", "skill": "task-analyze-skill"}, {"id": "audit", "model": "gpt-5.6-terra", "effort": "high", "skill": "workflow-skill"}, {"id": "implement", "model": "gpt-5.3-codex-spark", "effort": "high", "skill": "code-skill", "language": "python", "purpose": "implement"}, {"id": "mini-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "main-result", "model": "gpt-5.6-luna", "effort": "medium", "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "medium", "skill": "workflow-skill"}, {"id": "real-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "optimization-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "records", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}]
+    complex_code = [{"id": "task-analyze", "model": "gpt-5.6-sol", "effort": "ultra", "skill": "task-analyze-skill"}, {"id": "audit", "model": "gpt-5.6-terra", "effort": "high", "skill": "workflow-skill"}, {"id": "implement", "model": "gpt-5.6-terra", "effort": "high", "skill": "code-skill", "language": "python", "purpose": "implement", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"}, {"id": "mini-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "main-result", "model": "gpt-5.6-luna", "effort": "medium", "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "medium", "skill": "workflow-skill"}, {"id": "real-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "optimization-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "records", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}]
     terra_entry = [{"id": "task-analyze", "model": "gpt-5.6-terra", "effort": "medium", "skill": "task-analyze-skill"}, {"id": "direct", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "mini-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill"}, {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}]
     return {"easy-luna-entry": easy, "complex-sol-ultra-entry": complex_code, "easy-terra-entry": terra_entry}
 

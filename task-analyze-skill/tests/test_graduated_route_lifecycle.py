@@ -23,7 +23,7 @@ dispatcher = load_module("task_route_dispatcher")
 
 
 class GraduatedRouteLifecycleTests(unittest.TestCase):
-    def test_run_plan_release_then_ending_dispatches_both_siblings(self):
+    def test_run_plan_release_then_ending_dispatches_the_producer_verifier(self):
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
         template = next(scenario["dispatcher_plan"] for scenario in fixture["scenarios"] if scenario.get("complexity") == "complex")
         with tempfile.TemporaryDirectory() as temporary:
@@ -44,7 +44,7 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
             with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
                 manifest = dispatcher.run_plan(plan, "gpt-5.6-luna", "low", root)
             self.assertEqual(calls, ["design", "implementation", "mini"])
-            self.assertEqual(manifest["ending_nodes_pending"], ["ending-records", "ending-real"])
+            self.assertEqual(manifest["ending_nodes_pending"], ["ending-real"])
             handoff_path = Path(manifest["ending_handoff_path"])
             with patch.object(dispatcher, "run_node", side_effect=AssertionError("Ending ran before release")):
                 unreleased = dispatcher.run_ending_handoff(handoff_path)
@@ -57,8 +57,9 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
             with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
                 ending = dispatcher.run_ending_handoff(handoff_path)
             self.assertEqual(ending["status"], "pass")
+            self.assertEqual(ending["routing_learning"], {"status": "recorded"})
             self.assertEqual(calls[:3], ["design", "implementation", "mini"])
-            self.assertEqual(set(calls[3:]), {"ending-records", "ending-real"})
+            self.assertEqual(calls[3:], ["ending-real"])
 
 
 if __name__ == "__main__":

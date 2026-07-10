@@ -115,7 +115,7 @@ CHINESE_CATEGORY_LABELS = {
 SKILL_SUMMARIES = {
     "task-analyze-skill": "Independent 100%-trigger entry skill. The selected entry model and effort run only bounded Task Analyze routing. It returns a locked per-node graph, with private condition-keyed success_model / failed_model pair bounds and direct-action rules.",
     "workflow-skill": "Executes the locked Task Analyze route per node; direct tool actions stay undispatched, complex work uses topology and receipts, then Mini Verify releases the first result before Ending Task.",
-    "code-skill": "Spark-first executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. Tiny text/code jobs start Spark-low and may use safe static fallback on runtime failure.",
+    "code-skill": "Executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. Spark is an obvious-task-only special first route, not every code task or the normal dynamic ladder.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
     "verify-skill": "Mini Verify before the first result and Real Verify after it in Ending Task; applies both outcomes to the original receipt-backed result attempt.",
     "management-skill": "Handles Codex profile operations and global skill GitHub sync while preserving local private folders, local route history, and model-experience files from public mirrors.",
@@ -123,7 +123,7 @@ SKILL_SUMMARIES = {
 CHINESE_SKILL_SUMMARIES = {
     "task-analyze-skill": "独立且 100% 触发的入口 skill：当前入口模型和 effort 只做 Task Analyze 路由，返回锁定的逐节点图谱，并使用本地 `model_experience.json` 的条件化汇总与 `success_model` / `failed_model` 边界。",
     "workflow-skill": "执行 Task Analyze 锁定的路线，按节点先尝试不同 effort 再切换模型；先运行 Mini Verify 再派发 Ending Task。",
-    "code-skill": "Spark 优先的活动注册代码域执行者；Python、普通 C#、Unity C# 是内置示例。小体量文本/代码先用 Spark-low，Spark 运行失败可安全回退静态方案。",
+    "code-skill": "活动注册代码域执行者；Python、普通 C#、Unity C# 是内置示例。Spark 只适用于明显、低风险、小范围文本/代码/命令的特殊首选路线，不是每个代码任务，也不属于常规动态阶梯。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
     "verify-skill": "Mini Verify 在主结果前做基础检查；Real Verify 在结果后的 Ending Task 中执行，并把两次结果回填到原始的 receipt-backed 结果尝试。",
     "management-skill": "处理 Codex profile 操作和全局 skill GitHub 同步，不暴露私人数据，并保留本地私有路由历史。",
@@ -381,7 +381,7 @@ def load_staged_routing_policy(skill_paths):
 
 
 def execution_domain_table(rows):
-    lines = ["| Domain | Kind | Owner | Spark first | Reference |", "|---|---|---|---|---|"]
+    lines = ["| Domain | Kind | Owner | Spark obvious-task eligible | Reference |", "|---|---|---|---|---|"]
     for row in rows:
         state = "active" if row["active"] else "history-only"
         spark = "yes" if row["spark_first"] else "no"
@@ -617,7 +617,7 @@ def build_overview(skill_paths, language="en"):
     primary_rows = ordered_primary_rows(rows)
 
     if language == "zh":
-        lines = ["# 当前 Codex Skills", "", "英文版: [README.md](./README.md)", "", "## 技能图", "", *build_skill_graph(primary_rows, language="zh"), "", *workflow_lane_section(language="zh"), *build_skill_summary_table(primary_rows, language="zh"), "", *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"), "", "## 运行规则", "", "- 每个任务先进入 `task-analyze-skill`；入口模型和 effort 只做 Task Analyze 的边界分析与路由协调，不可作为全局默认，也不是 profile 字段。", "- 每个活动的注册代码域都进入 `code-skill`；Python、普通 C#、Unity 项目中的 C# 是内置示例。", "- 直接工具路线只有安装的工具 skill 和可观察的 Mini 检查：没有子模型、receipt 或自适应样本；模型路线保留准确 model|effort、receipt 与 Mini/Real 学习。", "- 分发路线必须依序执行：`run-plan` -> 读取 Mini 通过结果 -> 显示完整的基本验证结果 -> `release-main-result <handoff>` -> `run-ending <handoff>`；显示结果前不得释放 Ending。", "- 路由记账输出 `selected_pair`、`reason`、`trial`、`success_model`、`failed_model`；校准/冻结选择从边界推导并以 `trial=false` 复用。先调 effort，再换模型；仅验证失败、实质漂移、策略变化或明确重置才重新打开。", "- 正确性是 gate；token 和耗时只是 receipt 证据，不能覆盖正确性或安全边界。", "- Mini Verify 先记录原始结果尝试；Real Verify 后续更新同一个结果尝试，不会把 verifier 当作结果模型。", "- Auth 和 GitHub 镜像维护进入 `management-skill` 内部路由；私有 ledger 不进入镜像。"]
+        lines = ["# 当前 Codex Skills", "", "英文版: [README.md](./README.md)", "", "## 技能图", "", *build_skill_graph(primary_rows, language="zh"), "", *workflow_lane_section(language="zh"), *build_skill_summary_table(primary_rows, language="zh"), "", *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"), "", "## 运行规则", "", "- 每个任务先进入 `task-analyze-skill`；入口模型和 effort 只做 Task Analyze，不是工作流默认，也不是学习字段。", "- 非 tiny 模型路线必须完整保留 `Luna-low → 全部 Luna effort → Terra → Sol-ultra`，且不含 Spark；tiny 路线必须是 `Spark-low + 完整常规 fallback`，不允许提高 Spark effort。", "- 每个活动的注册代码域都进入 `code-skill`；Python、普通 C#、Unity C# 是内置示例。任务类型不会固定模型。", "- 初次分发前必须用本地私有经验重新计算 recommendation；过期或自写的 plan 在执行前拒绝。", "- 正确性是 gate；只有至少两个 Real 通过 pair 在相同 workload hash cohort 中且 token/time 完整时，才按总 token、process time、较弱 rung 排序；否则使用质量边界，不声明节省。", "- Mini PASS 对 mini_real 只是临时结果；Ending Real 更新同一个 producer attempt，持久化并冻结 `best_pair`，验证失败才重新打开。", "- 私有 ledger 在 `task-analyze-skill/local/adaptive-routing/model_experience.json`，不进入镜像。"]
         return "\n".join(lines) + "\n"
 
 

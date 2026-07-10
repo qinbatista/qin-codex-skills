@@ -16,10 +16,13 @@ try:
         EXECUTION_DOMAIN_REGISTRY_VERSION,
         MODEL_EFFORTS,
         MODEL_ORDER,
+        adaptive_pair_texts_for_profile,
         canonical_pairs,
         compare_pair,
         downgrade_pair,
         infer_execution_domain,
+        is_tiny_spark_profile,
+        normal_adaptive_pair_texts,
         parse_pair,
         pair_text,
         public_execution_domain_rows,
@@ -39,10 +42,13 @@ except ModuleNotFoundError:
     EXECUTION_DOMAIN_REGISTRY_VERSION = _routing_policy.EXECUTION_DOMAIN_REGISTRY_VERSION
     MODEL_EFFORTS = _routing_policy.MODEL_EFFORTS
     MODEL_ORDER = _routing_policy.MODEL_ORDER
+    adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
     canonical_pairs = _routing_policy.canonical_pairs
     compare_pair = _routing_policy.compare_pair
     downgrade_pair = _routing_policy.downgrade_pair
     infer_execution_domain = _routing_policy.infer_execution_domain
+    is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
+    normal_adaptive_pair_texts = _routing_policy.normal_adaptive_pair_texts
     parse_pair = _routing_policy.parse_pair
     pair_text = _routing_policy.pair_text
     public_execution_domain_rows = _routing_policy.public_execution_domain_rows
@@ -68,6 +74,7 @@ RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "executi
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 PLUGIN_SKILL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}:[a-z0-9][a-z0-9-]{0,63}$")
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 FORBIDDEN_SUMMARY = [re.compile(r"```"), re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://"), re.compile(r"(?:^|\s)/[^\s]+"), re.compile(r"\b(?:api|auth|secret|password|token)[_-]?(?:key|token|secret|password)?\s*[:=]", re.I)]
 
 
@@ -151,6 +158,12 @@ def _safe_text(value, fallback=None):
     if isinstance(value, str) and value.strip():
         return value.strip()
     return fallback
+
+
+def _safe_sha256(value):
+    if isinstance(value, str) and SHA256_PATTERN.fullmatch(value):
+        return value
+    return None
 
 
 def _dedupe_pairs(values):
@@ -238,6 +251,7 @@ def _normalize_task(raw_task, pair_fallback):
         "model_match": bool(raw_task.get("model_match") is True),
         "effort_match": bool(raw_task.get("effort_match") is True),
         "trial": bool(raw_task.get("trial")),
+        "workload_prompt_sha256": _safe_sha256(raw_task.get("workload_prompt_sha256")),
         "token_totals": {
             "input": _safe_int((raw_task.get("token_totals") or {}).get("input")),
             "cached_input": _safe_int((raw_task.get("token_totals") or {}).get("cached_input")),
@@ -254,6 +268,16 @@ def canonical_pair_texts(pairs):
     return [pair_text(*pair) for pair in canonical_pairs(pairs)]
 
 
+def profile_fingerprint(condition, pairs, static_pair, hard_pair):
+    payload = {"condition": {field: condition[field] for field in CONTROL_FIELDS}, "candidate_ladder": canonical_pair_texts(pairs), "static_suggestion": pair_text(*static_pair), "hard_floor": pair_text(*hard_pair)}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def ladder_fingerprint(pairs, hard_pair):
+    payload = {"candidate_ladder": canonical_pair_texts(pairs), "hard_floor": pair_text(*hard_pair)}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def _record_for(history, condition, summary, pairs, static_pair, hard_pair):
     key = condition_key(condition)
     record = history["conditions"].setdefault(
@@ -266,6 +290,12 @@ def _record_for(history, condition, summary, pairs, static_pair, hard_pair):
             "hard_floor": pair_text(*hard_pair),
             "success_model": None,
             "failed_model": None,
+            "active_ladder_fingerprint": ladder_fingerprint(pairs, hard_pair),
+            "profile_fingerprint": profile_fingerprint(condition, pairs, static_pair, hard_pair),
+            "calibration_state": "cold_start",
+            "best_pair": None,
+            "selection_basis": "cold_start",
+            "cost_evidence": {"status": "not_evaluated", "compared_pairs": [], "shared_cohort_count": 0, "shared_cohort_digest": None, "scores": {}},
             "tasks": [],
         },
     )
@@ -275,6 +305,18 @@ def _record_for(history, condition, summary, pairs, static_pair, hard_pair):
     record["candidate_ladder"] = canonical_pair_texts(merged_pairs)
     record["static_suggestion"] = pair_text(*static_pair)
     record["hard_floor"] = pair_text(*hard_pair)
+    active_fingerprint = ladder_fingerprint(pairs, hard_pair)
+    if record.get("active_ladder_fingerprint") != active_fingerprint:
+        record["calibration_state"] = "cold_start"
+        record["best_pair"] = None
+        record["selection_basis"] = "ladder_changed"
+        record["cost_evidence"] = {"status": "not_evaluated", "compared_pairs": [], "shared_cohort_count": 0, "shared_cohort_digest": None, "scores": {}}
+    record["active_ladder_fingerprint"] = active_fingerprint
+    record["profile_fingerprint"] = profile_fingerprint(condition, pairs, static_pair, hard_pair)
+    record.setdefault("calibration_state", "cold_start")
+    record.setdefault("best_pair", None)
+    record.setdefault("selection_basis", "cold_start")
+    record.setdefault("cost_evidence", {"status": "not_evaluated", "compared_pairs": [], "shared_cohort_count": 0, "shared_cohort_digest": None, "scores": {}})
     return record
 
 
@@ -376,6 +418,7 @@ def _legacy_history(legacy_path):
             "model_match": True,
             "effort_match": True,
             "trial": bool(event.get("trial")),
+            "workload_prompt_sha256": None,
             "token_totals": {"input": None, "cached_input": None, "output": None, "reasoning_output": None, "total": None},
             "process_ms": None,
             "recorded_at": event.get("recorded_at") or datetime.now(timezone.utc).isoformat(),
@@ -459,7 +502,7 @@ def load_history(path):
     return _history_locked(path, lambda history: history)[0]
 
 
-def task_verdict(task):
+def task_verdict(task, *, provisional=False):
     if task.get("receipt_status") != "pass" or task.get("turn_completed") is not True or task.get("model_match") is not True or task.get("effort_match") is not True:
         return None
     failure_class = task.get("allowlisted_failure_class")
@@ -471,7 +514,7 @@ def task_verdict(task):
         return None
     if task.get("real_status") == "pass":
         return "pass"
-    if task.get("mini_status") == "pass":
+    if task.get("mini_status") == "pass" and provisional:
         return "pass"
     return None
 
@@ -492,7 +535,7 @@ def _weakest_pair(values):
     return selected
 
 
-def recompute_bounds(record):
+def recompute_bounds(record, active_pairs=None):
     pairs = canonical_pairs(record["candidate_ladder"])
     run_pair_verdicts = {}
     for task in record["tasks"]:
@@ -502,7 +545,7 @@ def recompute_bounds(record):
             continue
         if pair not in pairs:
             continue
-        verdict = task_verdict(task)
+        verdict = task_verdict(task, provisional=record.get("condition", {}).get("verification_shape") != "mini_real")
         task["effective_verdict"] = verdict
         key = (pair, task.get("run_id"))
         if verdict == "fail":
@@ -523,6 +566,52 @@ def recompute_bounds(record):
     ]
     record["failed_model"] = pair_text(*strongest_failure) if strongest_failure is not None else None
     record["success_model"] = pair_text(*_weakest_pair(success_candidates)) if success_candidates else None
+    candidate_pairs = active_pairs or pairs
+    hard_pair = parse_pair(record["hard_floor"])
+    hard_floor_real_pass = hard_pair in _passes_within(candidate_pairs, record)
+    boundary_complete = strongest_failure is not None and record["success_model"] is not None and not _has_untested_between(strongest_failure, parse_pair(record["success_model"]), record, pairs)
+    if record.get("calibration_state") == "frozen" and record.get("best_pair"):
+        frozen_pair = parse_pair(record["best_pair"])
+        frozen_pair_still_valid = (
+            frozen_pair in candidate_pairs
+            and compare_pair(frozen_pair, hard_pair) >= 0
+            and _pair_verdict(record, frozen_pair) == "pass"
+            and (strongest_failure is None or compare_pair(frozen_pair, strongest_failure) > 0)
+        )
+        if frozen_pair_still_valid:
+            return
+    if (hard_floor_real_pass and strongest_failure is None) or boundary_complete:
+        eligible_pairs = _pairs_between_bounds(candidate_pairs, hard_pair, strongest_failure)
+        real_passing = _passes_within(eligible_pairs, record)
+        passing_pairs = [pair for pair in eligible_pairs if pair in real_passing]
+        cost_scores, cost_evidence = _like_for_like_cost_scores(record, passing_pairs)
+        record["cost_evidence"] = cost_evidence
+        if cost_scores is not None:
+            best_pair = min(
+                passing_pairs,
+                key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], candidate_pairs.index(pair)),
+            )
+            record["selection_basis"] = "receipt_cost"
+        else:
+            best_pair = _pick_weakest_passing_above_failure(candidate_pairs, strongest_failure, hard_pair, record)
+            record["selection_basis"] = "quality_boundary"
+        record["calibration_state"] = "frozen"
+        record["best_pair"] = pair_text(*best_pair) if best_pair is not None else None
+    elif strongest_failure is not None:
+        record["calibration_state"] = "quality_boundary"
+        record["best_pair"] = record["success_model"]
+        record["selection_basis"] = "quality_boundary"
+        record["cost_evidence"] = _cost_evidence("not_evaluated", [])
+    elif record.get("success_model"):
+        record["calibration_state"] = "provisional"
+        record["best_pair"] = record["success_model"]
+        record["selection_basis"] = "real_pass"
+        record["cost_evidence"] = _cost_evidence("not_evaluated", [])
+    else:
+        record["calibration_state"] = "cold_start"
+        record["best_pair"] = None
+        record["selection_basis"] = "cold_start"
+        record["cost_evidence"] = _cost_evidence("not_evaluated", [])
 
 
 def _pairs_between_bounds(pairs, hard_floor, failure_pair):
@@ -539,7 +628,7 @@ def _pairs_between_bounds(pairs, hard_floor, failure_pair):
 def _passes_within(pairs, record):
     passing = set()
     for task in record["tasks"]:
-        if task_verdict(task) != "pass":
+        if task_verdict(task) != "pass" or task.get("real_status") != "pass":
             continue
         try:
             pair = parse_pair(task.get("executed_pair"))
@@ -569,6 +658,90 @@ def _pair_verdict(record, target_pair):
 
 def _has_unverified_quality_failure(record):
     return any(task.get("allowlisted_failure_class") in QUALITY_FAILURES and task.get("receipt_status") != "pass" for task in record["tasks"])
+
+
+def _median(values):
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def _cost_evidence(status, pairs, *, shared_hashes=None, scores=None):
+    shared_hashes = sorted(shared_hashes or [])
+    digest = None
+    if shared_hashes:
+        digest = hashlib.sha256("\n".join(shared_hashes).encode()).hexdigest()
+    serialized_scores = {}
+    for pair, score in (scores or {}).items():
+        serialized_scores[pair_text(*pair)] = {
+            "median_total_tokens": score[0],
+            "median_process_ms": score[1],
+        }
+    return {
+        "status": status,
+        "compared_pairs": [pair_text(*pair) for pair in pairs],
+        "shared_cohort_count": len(shared_hashes),
+        "shared_cohort_digest": digest,
+        "scores": serialized_scores,
+    }
+
+
+def _like_for_like_cost_scores(record, passing_pairs):
+    pairs = list(passing_pairs)
+    if len(pairs) < 2:
+        return None, _cost_evidence("insufficient_pairs", pairs)
+
+    grouped = {pair: {} for pair in pairs}
+    for task in record["tasks"]:
+        if task_verdict(task) != "pass" or task.get("real_status") != "pass":
+            continue
+        try:
+            executed_pair = parse_pair(task.get("executed_pair"))
+        except (TypeError, ValueError):
+            continue
+        workload_hash = _safe_sha256(task.get("workload_prompt_sha256"))
+        if executed_pair not in grouped or workload_hash is None:
+            continue
+        sample = (
+            _safe_int((task.get("token_totals") or {}).get("total")),
+            _safe_int(task.get("process_ms")),
+        )
+        grouped[executed_pair].setdefault(workload_hash, []).append(sample)
+
+    common_hashes = set(grouped[pairs[0]])
+    for pair in pairs[1:]:
+        common_hashes.intersection_update(grouped[pair])
+    if not common_hashes:
+        return None, _cost_evidence("no_common_workload", pairs)
+
+    per_pair_cohort_scores = {pair: [] for pair in pairs}
+    for workload_hash in sorted(common_hashes):
+        for pair in pairs:
+            samples = grouped[pair][workload_hash]
+            if any(total_tokens is None or process_ms is None for total_tokens, process_ms in samples):
+                return None, _cost_evidence("incomplete_metrics", pairs, shared_hashes=common_hashes)
+            per_pair_cohort_scores[pair].append(
+                (
+                    _median([total_tokens for total_tokens, _ in samples]),
+                    _median([process_ms for _, process_ms in samples]),
+                )
+            )
+
+    scores = {
+        pair: (
+            _median([cohort_score[0] for cohort_score in cohort_scores]),
+            _median([cohort_score[1] for cohort_score in cohort_scores]),
+        )
+        for pair, cohort_scores in per_pair_cohort_scores.items()
+    }
+    return scores, _cost_evidence("like_for_like", pairs, shared_hashes=common_hashes, scores=scores)
+
+
+def _recommendation(condition, record, pairs, static_pair, hard_pair, selected, reason, trial, selection_basis):
+    selected_text = pair_text(*selected) if selected is not None else None
+    return {"schema_version": SCHEMA_VERSION, "condition": condition, "selected_model": selected[0] if selected else None, "selected_effort": selected[1] if selected else None, "selected_pair": selected_text, "trial": trial, "reason": reason, "profile_fingerprint": record["profile_fingerprint"], "calibration_state": record["calibration_state"], "best_pair": record["best_pair"], "selection_basis": selection_basis, "static_suggestion": pair_text(*static_pair), "hard_floor": pair_text(*hard_pair), "success_model": record["success_model"], "failed_model": record["failed_model"], "samples": len(record["tasks"])}
 
 
 def _first_eligible_after_failure(failure_pair, eligible_pairs):
@@ -617,23 +790,26 @@ def recommend_route(args):
     condition, summary, pairs, static_pair, hard_pair = _profile(args)
     def recommend(history):
         record = _record_for(history, condition, summary, pairs, static_pair, hard_pair)
-        recompute_bounds(record)
+        recompute_bounds(record, pairs)
         failure_pair = parse_pair(record["failed_model"]) if record["failed_model"] else None
         success_pair = parse_pair(record["success_model"]) if record["success_model"] else None
 
         eligible_pairs = _pairs_between_bounds(pairs, hard_pair, failure_pair)
         if not eligible_pairs:
             reason = "quality_failure_boundary_exhausted" if failure_pair is not None else "no_bounds_use_static"
-            return {"schema_version": SCHEMA_VERSION, "condition": condition, "selected_model": None, "selected_effort": None, "selected_pair": None, "reason": reason, "trial": False, "static_suggestion": pair_text(*static_pair), "hard_floor": pair_text(*hard_pair), "success_model": record["success_model"], "failed_model": record["failed_model"], "samples": len(record["tasks"])}
+            return _recommendation(condition, record, pairs, static_pair, hard_pair, None, reason, False, "quality_boundary")
 
         static_eligible = static_pair in eligible_pairs
-        tiny = ("gpt-5.3-codex-spark", "low") if condition["risk"] == "low" and condition["modality"] == "text" and condition["task_family"] in {"tiny_text", "tiny_code", "command_generation"} and ("gpt-5.3-codex-spark", "low") in pairs else None
+        tiny = ("gpt-5.3-codex-spark", "low") if is_tiny_spark_profile(condition["task_family"], condition["modality"], condition["risk"], condition["complexity"], condition["ambiguity"]) and ("gpt-5.3-codex-spark", "low") in eligible_pairs else None
         tiny_runtime_failure = bool(tiny and any(task.get("operational_failure_pairs") for task in record["tasks"]))
 
         selected = None
         reason = "no_bounds_use_static"
         trial = False
 
+        if record["calibration_state"] == "frozen" and record.get("best_pair"):
+            reason = "receipt_cost_best_verified" if record["selection_basis"] == "receipt_cost" else "verified_quality_boundary"
+            return _recommendation(condition, record, pairs, static_pair, hard_pair, parse_pair(record["best_pair"]), reason, False, record["selection_basis"])
         if failure_pair is None and success_pair is None:
             if condition["risk"] == "high":
                 selected = static_pair if static_eligible else pairs[-1]
@@ -642,7 +818,7 @@ def recommend_route(args):
                 selected = tiny
                 reason = "tiny_spark_auto"
             else:
-                selected = static_pair if static_eligible else pairs[0]
+                selected = static_pair if static_eligible else eligible_pairs[0]
                 reason = "no_bounds_use_static"
         elif failure_pair is None and success_pair is not None:
             if tiny_runtime_failure or _has_unverified_quality_failure(record):
@@ -652,14 +828,8 @@ def recommend_route(args):
                 selected = static_pair if static_eligible else pairs[-1]
                 reason = "high_risk_no_autodowngrade"
             elif success_pair == hard_pair:
-                floor_has_real_evidence = any(
-                    task_verdict(task) == "pass"
-                    and task.get("real_status") == "pass"
-                    and task.get("executed_pair") == pair_text(*hard_pair)
-                    for task in record["tasks"]
-                )
-                selected = static_pair if floor_has_real_evidence and static_eligible else success_pair
-                reason = "no_bounds_use_static" if selected != success_pair else "verified_floor_retained"
+                selected = success_pair
+                reason = "verified_floor_retained"
             else:
                 selected = _first_eligible_below_pair(success_pair, eligible_pairs, hard_pair)
                 if selected is None:
@@ -676,27 +846,28 @@ def recommend_route(args):
                 reason = "failure_and_success_boundary"
                 trial = True
         else:
-            selected = _pick_weakest_passing_above_failure(pairs, failure_pair, hard_pair, record)
+            gap_pair = _weakest_untested_between(failure_pair, success_pair, record, pairs)
+            if gap_pair is not None:
+                return _recommendation(condition, record, pairs, static_pair, hard_pair, gap_pair, "quality_boundary_gap_trial", True, record["selection_basis"])
+            passing_pairs = [pair for pair in eligible_pairs if pair in _passes_within(eligible_pairs, record)]
+            cost_scores, cost_evidence = _like_for_like_cost_scores(record, passing_pairs)
+            record["cost_evidence"] = cost_evidence
+            if cost_scores is not None:
+                selected = min(
+                    passing_pairs,
+                    key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair)),
+                )
+                reason = "receipt_cost_best_verified"
+                trial = False
+            else:
+                selected = _pick_weakest_passing_above_failure(pairs, failure_pair, hard_pair, record)
+                reason = "verified_quality_boundary"
+                trial = False
             if selected is None:
                 selected = _first_eligible_after_failure(failure_pair, eligible_pairs)
-                if selected is None:
-                    reason = "quality_failure_boundary_exhausted"
-                    selected = None
-                else:
-                    reason = "failure_and_success_boundary"
-                    trial = True
-            else:
-                intermediate = _weakest_untested_between(failure_pair, selected, record, pairs)
-                if intermediate is not None:
-                    selected = intermediate
-                    reason = "success_and_failure_boundary"
-                    trial = True
-                else:
-                    reason = "success_and_failure_boundary"
-                    trial = False
-            if selected is None:
-                return {"schema_version": SCHEMA_VERSION, "condition": condition, "selected_model": None, "selected_effort": None, "selected_pair": None, "reason": reason, "trial": False, "static_suggestion": pair_text(*static_pair), "hard_floor": pair_text(*hard_pair), "success_model": record["success_model"], "failed_model": record["failed_model"], "samples": len(record["tasks"])}
-        return {"schema_version": SCHEMA_VERSION, "condition": condition, "selected_model": selected[0], "selected_effort": selected[1], "selected_pair": pair_text(*selected), "reason": reason, "trial": trial, "static_suggestion": pair_text(*static_pair), "hard_floor": pair_text(*hard_pair), "success_model": record["success_model"], "failed_model": record["failed_model"], "samples": len(record["tasks"])}
+                reason = "quality_failure_boundary_exhausted" if selected is None else "failure_and_success_boundary"
+                trial = selected is not None
+        return _recommendation(condition, record, pairs, static_pair, hard_pair, selected, reason, trial, "receipt_cost" if reason == "receipt_cost_best_verified" else record["selection_basis"])
     return _history_locked(args.history, recommend)[1]
 
 
@@ -747,7 +918,7 @@ def record_event(args):
     def record(history):
         record = _record_for(history, condition, summary, pairs, static_pair, hard_pair)
         existing = next((task for task in record["tasks"] if task["run_id"] == run_id), None)
-        task = existing or {"run_id": run_id, "summary": summary, "requested_pair": pair_text(*requested), "resolved_pair": pair_text(*resolved), "effective_pair": pair_text(*effective), "executed_pair": pair_text(*executed), "operational_failure_pairs": [], "receipt_status": "fail", "mini_status": "unknown", "real_status": "unknown", "effective_verdict": None, "allowlisted_failure_class": "none", "turn_completed": False, "model_match": False, "effort_match": False, "trial": bool(args.trial), "token_totals": {}, "process_ms": None, "recorded_at": datetime.now(timezone.utc).isoformat()}
+        task = existing or {"run_id": run_id, "summary": summary, "requested_pair": pair_text(*requested), "resolved_pair": pair_text(*resolved), "effective_pair": pair_text(*effective), "executed_pair": pair_text(*executed), "operational_failure_pairs": [], "receipt_status": "fail", "mini_status": "unknown", "real_status": "unknown", "effective_verdict": None, "allowlisted_failure_class": "none", "turn_completed": False, "model_match": False, "effort_match": False, "trial": bool(args.trial), "workload_prompt_sha256": None, "token_totals": {}, "process_ms": None, "recorded_at": datetime.now(timezone.utc).isoformat()}
         operational_pairs = _operational_failure_pairs(receipt)
         if args.failure_class in RUNTIME_FAILURES and args.verify_status == "fail":
             operational_pairs.append(pair_text(*executed))
@@ -798,12 +969,25 @@ def record_event(args):
             task["allowlisted_failure_class"] = args.failure_class
         if update_metrics:
             tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
+            task["workload_prompt_sha256"] = _safe_sha256(receipt.get("workload_prompt_sha256"))
             task["token_totals"] = {"input": _safe_int(tokens.get("input_tokens")), "cached_input": _safe_int(tokens.get("cached_input_tokens")), "output": _safe_int(tokens.get("output_tokens")), "reasoning_output": _safe_int(tokens.get("reasoning_output_tokens")), "total": _safe_int(tokens.get("total_tokens"))}
             task["process_ms"] = _safe_int(receipt.get("process_elapsed_ms"))
         if not existing:
             record["tasks"].append(task)
         recompute_bounds(record)
-        return {"status": "recorded", "route_run_id": run_id, "receipt_status": task["receipt_status"], "verify_level": args.verify_level, "verify_status": args.verify_status}
+        return {
+            "status": "recorded",
+            "route_run_id": run_id,
+            "receipt_status": task["receipt_status"],
+            "verify_level": args.verify_level,
+            "verify_status": args.verify_status,
+            "calibration_state": record.get("calibration_state"),
+            "best_pair": record.get("best_pair"),
+            "selection_basis": record.get("selection_basis"),
+            "success_model": record.get("success_model"),
+            "failed_model": record.get("failed_model"),
+            "cost_evidence": record.get("cost_evidence"),
+        }
     return _history_locked(args.history, record)[1]
 
 
@@ -819,6 +1003,16 @@ def _profile(args):
     condition = validate_condition(vars(args), allow_history_only=False)
     summary = validate_summary(args.task_summary)
     pairs = canonical_pairs(args.candidate_ladder)
+    if getattr(args, "enforce_candidate_policy", False):
+        expected_pairs = adaptive_pair_texts_for_profile(
+            condition["task_family"],
+            condition["modality"],
+            condition["risk"],
+            condition["complexity"],
+            condition["ambiguity"],
+        )
+        if canonical_pair_texts(pairs) != expected_pairs:
+            raise ValueError("candidate_ladder does not match the profile's exact adaptive ladder")
     static_pair, hard_pair = parse_pair(args.static_suggestion), parse_pair(args.hard_floor)
     if static_pair not in pairs or hard_pair not in pairs:
         raise ValueError("static_suggestion and hard_floor must be in candidate_ladder")
@@ -873,8 +1067,10 @@ def parse_args():
 def main():
     args = parse_args()
     if args.command == "recommend":
+        args.enforce_candidate_policy = True
         value = recommend_route(args)
     elif args.command == "record":
+        args.enforce_candidate_policy = True
         value = record_event(args)
     elif args.command == "domains":
         value = execution_domain_rows()

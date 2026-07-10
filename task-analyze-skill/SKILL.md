@@ -62,7 +62,7 @@ Create the route before side effects. It contains:
 
 Show only the human route. When machine execution needs a structured plan, save schema-1 JSON privately inside the active task cache and pass its file path to `scripts/task_route_dispatcher.py run-plan`. Never paste that JSON into the conversation.
 
-Use only installed skills. Every active registry-owned code-domain implementation or authored probe loads `code-skill`, follows its rules, and uses Spark first unless a visible supported fallback is triggered.
+Use only installed skills. Every active registry-owned code-domain implementation or authored probe loads `code-skill` and follows its rules. Spark-low is a separate cold-start exception only for obvious bounded, low-risk, easy, low-ambiguity text-only tiny text/code/command work; it is never the permanent route for all code.
 
 ## Model And Effort Choice
 
@@ -73,9 +73,9 @@ Static role floors:
 - Sol: missing context, open-ended synthesis, ambiguous architecture, or genuinely difficult judgment.
 - Terra: grounded source-rich work, integration, repository archaeology, realistic testing, or evidence-heavy review.
 - Luna: direct bounded non-code work, concise results, Mini Verify judgment, and lightweight records.
-- Spark first: text-only work in any active registry-owned code domain through `code-skill`; current examples are Python, plain C#, and Unity C#. `code_unspecified` is migration/history-only.
+- Spark-low exception: only obvious bounded, low-risk, easy, low-ambiguity text-only tiny text/code/command work through `code-skill`; current code examples are Python, plain C#, and Unity C#. `code_unspecified` is migration/history-only. Tiny routes carry exactly Spark-low plus the full normal fallback ladder—never Spark-medium/high/xhigh.
 
-Choose the lowest effort that can reliably satisfy the node. Then consult the private routing history for the same sanitized task profile. Static safety, authority, modality, project, and skill floors always override learned cost reductions.
+Task category and model roles are cold-start hints, not permanent assignments: coding and writing can each be easy or complex. Every non-tiny model route carries the exact full normal ladder from Luna low (the user may say “light”) through all Luna efforts, Terra efforts, and Sol ultra, with no Spark rung; hard floors restrict selection without truncating that recorded ladder. Tiny routes prepend Spark-low only. Choose effort before model in both directions. Static safety, authority, modality, project, and skill floors always override learned cost reductions.
 
 ## First Result Principle
 
@@ -85,19 +85,19 @@ Finish the user requested task, run the smallest meaningful Mini Verify, and sho
 
 Personal routing evidence lives under `task-analyze-skill/local/adaptive-routing/` and never enters the public skill mirror.
 
-`scripts/model_routing_history.py` creates `local/adaptive-routing/model_experience.json` locally when absent. It records controlled task-profile enums, a generalized one-line task summary, requested/resolved/effective model and effort, receipt status, Mini/Real verdict, failure class, tokens, timing, and explicit `success_model`/`failed_model` ranges. It is never mirrored. Raw prompts, results, paths, secrets, thread/session IDs, and private task content are forbidden.
+`scripts/model_routing_history.py` creates `local/adaptive-routing/model_experience.json` locally when absent. It records controlled task-profile enums, a generalized one-line task summary, requested/resolved/effective model and effort, receipt status, Mini/Real verdict, failure class, the prompt-free `workload_prompt_sha256`, tokens, timing, and explicit `success_model`/`failed_model` ranges. It is never mirrored. Raw prompts, results, paths, secrets, thread/session IDs, and private task content are forbidden.
 
 For the same task profile, including `execution_domain`:
 
 1. With no prior success, use the static suggestion; the sole automatic exception is safe, low-risk, text-only `tiny_text`, `tiny_code`, or `command_generation` work, which starts at Spark-low when eligible.
 2. A runtime Spark failure for that exception uses the static suggestion and does not become a quality penalty. A result node retries only its explicit `model|effort` fallback pairs, in order; Mini/Ending verdict failures never trigger a model retry.
-3. Treat calibration as a bounded search for the best complete `model|effort` pair for this exact sanitized task profile. After a receipt-matched verification pass, trial exactly one lower effort on the same model. Only after that model's eligible efforts are exhausted, trial the next weaker eligible model.
-4. When adjacent pass/fail evidence establishes the selected eligible pair, or a receipt-matched pass proves the current hard floor, derive that calibrated/frozen selection from the bounds and reuse it with `trial=false`; do not keep searching while trial is closed.
+3. Treat calibration as a bounded search for the best complete `model|effort` pair for this exact sanitized task profile. After a receipt-matched pass, trial exactly one lower effort on the same model. Only after that model's eligible efforts are exhausted, trial the next weaker eligible model.
+4. For `mini_real`, a Mini pass is provisional. Ending Task Real Verify updates the same producer receipt/run, recomputes the recommendation, and persists/freezes `best_pair`; reuse the resulting `selected_pair` with `trial=false` while the exact profile remains frozen.
 5. Reopen calibration only when a receipt-matched Mini or Real correctness/quality failure invalidates the calibrated pair, or when the eligible candidate ladder or hard floor changes. Upgrade in reverse order: raise effort on the same model first, then move to the next stronger eligible model only after that model's efforts are exhausted. If no stronger current candidate exists, return an exhausted result with no selected pair. Never overwrite a failed attempt with a later pass under the same route-run ID; a genuine retry uses a new ID.
 6. Runtime availability, timeout, telemetry, execution, or receipt failures and unverified/mismatched receipts are temporary diagnostic evidence. They may trigger an allowed execution fallback, but they never change the learned quality best, success boundary, or failed boundary.
-7. Record the result-producer receipt after Mini Verify, then update the same route-run attempt after Real Verify; Real Verify failure overrides an earlier Mini pass. Direct non-dispatch model routes use the same recorder; tool-only routes never record adaptive producer samples.
+7. Record the result-producer receipt after Mini Verify, then update the same route-run attempt after Real Verify; Real Verify failure overrides an earlier Mini pass. The controller returns `routing_learning` from that updated recommendation and does not need a decorative Luna model call. Direct non-dispatch model routes use the same recorder; tool-only routes never record adaptive producer samples.
 
-Correctness boundaries control selection first: the weakest verified complete pair is the boundary floor to move above on failure, and a stronger or faster pair can never bypass that boundary. Receipts are used for like-for-like optimization evidence after correctness gates are met. The recorder does not run active median-ranking across all candidates. Its recommendation output is `selected_pair`, `reason`, `trial`, `success_model`, and `failed_model`; the calibrated/frozen selection is derived from those bounds and reused with `trial=false`. Never claim a field or ranking that the recorder does not produce. Do not assume that crossing models means cheaper.
+Correctness/quality is the eligibility gate: no token/time result can bypass a verified failure boundary. Cost ranking is allowed only when every compared Real-passing pair has complete tokens and time for the same exact `workload_prompt_sha256` cohort. Within that like-for-like cohort, minimize median total tokens first, then median process time, then weaker rung. Different workloads, missing hashes, incomplete metrics, or a single passing pair fall back to the verified quality boundary and cannot support a savings claim. Its recommendation output includes `selected_pair`, `trial`, profile fingerprint, `best_pair`, quality bounds, and sanitized cost-evidence status; the calibrated/frozen selection is reused with `trial=false`.
 
 ## Easy Direct-Action Boundary
 

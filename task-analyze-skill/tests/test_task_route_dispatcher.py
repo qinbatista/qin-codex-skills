@@ -16,6 +16,11 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class TaskRouteDispatcherTests(unittest.TestCase):
+    def refresh_recommendation(self, node):
+        pairs = module.routing_history_module.canonical_pairs(node["candidate_ladder"])
+        fingerprint = module.routing_history_module.profile_fingerprint(node["routing_condition"], pairs, module.routing_history_module.parse_pair(node["static_suggestion"]), module.routing_history_module.parse_pair(node["hard_floor"]))
+        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"}
+
     def plan(self, cache_dir):
         condition = {
             "task_family": "direct",
@@ -30,8 +35,14 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             "verification_shape": "mini_real",
             "execution_domain": "general",
         }
-        ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
-        return {"schema_version": 1, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a verified direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low", "trial": False}, {"id": "mini-verify", "phase": "mini", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Verify the dependency result equals 12", "sandbox": "read-only"}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["mini-verify"], "prompt": "Run the bounded post-result verification inventory.", "sandbox": "read-only"}], "main_result_node": "direct", "mini_verify_node": "mini-verify"}
+        ladder = module.normal_adaptive_pair_texts()
+        fingerprint = module.routing_history_module.profile_fingerprint(
+            condition,
+            module.routing_history_module.canonical_pairs(ladder),
+            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
+            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
+        )
+        return {"schema_version": 1, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a verified direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low", "trial": False, "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"}}, {"id": "mini-verify", "phase": "mini", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Verify the dependency result equals 12", "sandbox": "read-only"}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["mini-verify"], "prompt": "Run the bounded post-result verification inventory.", "sandbox": "read-only"}], "main_result_node": "direct", "mini_verify_node": "mini-verify"}
 
     def plan_with_ending_optimization(self, cache_dir):
         condition = {
@@ -47,7 +58,13 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             "verification_shape": "mini_real",
             "execution_domain": "general",
         }
-        ladder = ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-terra|low"]
+        ladder = module.normal_adaptive_pair_texts()
+        fingerprint = module.routing_history_module.profile_fingerprint(
+            condition,
+            module.routing_history_module.canonical_pairs(ladder),
+            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
+            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
+        )
         return {
             "schema_version": 1,
             "complexity": "easy",
@@ -68,8 +85,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                     "task_summary": "Return a validated result for this task.",
                     "candidate_ladder": ladder,
                     "static_suggestion": "gpt-5.6-luna|low",
-                    "hard_floor": "gpt-5.3-codex-spark|low",
+                    "hard_floor": "gpt-5.6-luna|low",
                     "trial": False,
+                    "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"},
                 },
                 {"id": "optimization", "phase": "ending", "skill": "optimization-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["mini-verify"], "prompt": "Optimize this result independently.", "sandbox": "read-only"},
                 {"id": "mini-verify", "phase": "mini", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Verify the dependency result is valid.", "sandbox": "read-only"},
@@ -108,6 +126,140 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
         self.assertEqual(plan["nodes"][0]["model"], "gpt-5.6-luna")
+
+    def test_plan_rejects_routing_recommendation_proof_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["routing_recommendation"]["selected_pair"] = "gpt-5.6-terra|low"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("routing_recommendation must match" in failure for failure in failures))
+
+    def test_plan_rejects_incomplete_routing_recommendation_proof(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            del plan["nodes"][0]["routing_recommendation"]["selection_basis"]
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("proof missing keys: selection_basis" in failure for failure in failures))
+
+    def test_initial_dispatch_accepts_current_learner_recommendation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            failures = module.validate_plan(
+                plan,
+                "gpt-5.6-terra",
+                "low",
+                root,
+                enforce_current_recommendation=True,
+                history_path=root / "history.json",
+            )
+        self.assertEqual(failures, [])
+
+    def test_initial_dispatch_rejects_plan_and_proof_forged_together(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            node = plan["nodes"][0]
+            node["model"] = "gpt-5.6-terra"
+            node["effort"] = "low"
+            node["routing_recommendation"]["selected_pair"] = "gpt-5.6-terra|low"
+            failures = module.validate_plan(
+                plan,
+                "gpt-5.6-terra",
+                "low",
+                root,
+                enforce_current_recommendation=True,
+                history_path=root / "history.json",
+            )
+        self.assertTrue(any("does not match current learner recommendation" in failure for failure in failures))
+        self.assertTrue(any("stale or not learner-derived" in failure for failure in failures))
+
+    def test_initial_dispatch_rejects_forged_recommendation_reason(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["routing_recommendation"]["reason"] = "forged_reason_not_from_learner"
+            failures = module.validate_plan(
+                plan,
+                "gpt-5.6-terra",
+                "low",
+                root,
+                enforce_current_recommendation=True,
+                history_path=root / "history.json",
+            )
+        self.assertTrue(any("stale or not learner-derived: reason" in failure for failure in failures))
+
+    def test_plan_rejects_selected_pair_below_hard_floor(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            node = plan["nodes"][0]
+            node["hard_floor"] = "gpt-5.6-terra|medium"
+            node["static_suggestion"] = "gpt-5.6-terra|medium"
+            self.refresh_recommendation(node)
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("selected pair must not be below hard_floor" in failure for failure in failures))
+
+    def test_run_plan_does_not_execute_forged_recommendation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            node = plan["nodes"][0]
+            node["model"] = "gpt-5.6-terra"
+            node["effort"] = "low"
+            node["routing_recommendation"]["selected_pair"] = "gpt-5.6-terra|low"
+            with patch.object(module, "run_node") as run_node:
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
+        self.assertEqual(manifest["status"], "fail")
+        run_node.assert_not_called()
+
+    def test_tiny_profile_requires_spark_low_plus_normal_fallback(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            node = plan["nodes"][0]
+            node["routing_condition"]["task_family"] = "tiny_text"
+            node["candidate_ladder"] = ["gpt-5.3-codex-spark|low"] + module.normal_adaptive_pair_texts()
+            node["hard_floor"] = "gpt-5.3-codex-spark|low"
+            node["model"] = "gpt-5.3-codex-spark"
+            node["effort"] = "low"
+            self.refresh_recommendation(node)
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
+    def test_tiny_profile_rejects_spark_medium(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            node = plan["nodes"][0]
+            node["routing_condition"]["task_family"] = "tiny_text"
+            node["candidate_ladder"] = ["gpt-5.3-codex-spark|low"] + module.normal_adaptive_pair_texts()
+            node["hard_floor"] = "gpt-5.3-codex-spark|low"
+            node["model"] = "gpt-5.3-codex-spark"
+            node["effort"] = "medium"
+            self.refresh_recommendation(node)
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("Spark-low is valid only" in failure for failure in failures))
+        self.assertTrue(any("selected pair must be in candidate_ladder" in failure for failure in failures))
+
+    def test_mini_real_rejects_management_only_ending(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][-1]["skill"] = "management-skill"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("exactly one non-targeted Ending verify-skill" in failure for failure in failures))
+
+    def test_non_tiny_profile_requires_the_complete_gpt56_ladder(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0]["candidate_ladder"] = plan["nodes"][0]["candidate_ladder"][:-1]
+            self.refresh_recommendation(plan["nodes"][0])
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("exactly match the full GPT-5.6 ladder" in failure for failure in failures))
 
     def test_plan_rejects_wrong_entry_pair_and_unsafe_sandbox(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -152,14 +304,18 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
 
-    def test_plan_rejects_unity_csharp_non_spark_node_without_fallback(self):
+    def test_plan_accepts_complex_unity_csharp_with_terra(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
             plan["nodes"][0]["language"] = "unity_csharp"
             plan["nodes"][0]["skill"] = "code-skill"
+            plan["nodes"][0]["model"] = "gpt-5.6-terra"
+            plan["nodes"][0]["routing_condition"]["execution_domain"] = "unity_csharp"
+            plan["nodes"][0]["routing_condition"]["owning_skill"] = "code-skill"
+            self.refresh_recommendation(plan["nodes"][0])
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(any("has no fallback reason" in failure for failure in failures))
+        self.assertEqual(failures, [])
 
     def test_qualified_plugin_result_node_resolves_and_uses_its_skill_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -178,6 +334,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             node["purpose"] = "implement"
             node["execution_domain"] = "general"
             node["routing_condition"]["owning_skill"] = "build-web-apps:frontend-app-builder"
+            self.refresh_recommendation(node)
             with patch.object(module, "validate_execution_domain_registry"):
                 self.assertEqual(module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root), [])
             (root / "work" / "cache" / "route").mkdir(parents=True)
@@ -205,7 +362,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 receipt_path.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
                 return {"id": node["id"], "phase": node["phase"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "tokens": {}, "process_elapsed_ms": 1}
             with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}) as record_event:
-                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root)
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
         self.assertEqual(calls, ["direct", "mini-verify"])
         self.assertEqual(manifest["status"], "pass")
         self.assertEqual(manifest["entry"], {"model": "gpt-5.6-terra", "effort": "low"})
@@ -404,7 +561,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 return {"status": "recorded"}
 
             with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
-                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root)
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
         self.assertEqual(manifest["status"], "fail")
         self.assertEqual(calls, ["direct"])
         self.assertEqual(len(recorded_calls), 1)
@@ -440,7 +597,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan["topology"] = "parallel"
             direct = plan["nodes"][0]
             condition = direct["routing_condition"]
-            profile = {"routing_condition": condition, "task_summary": direct["task_summary"], "candidate_ladder": direct["candidate_ladder"], "static_suggestion": direct["static_suggestion"], "hard_floor": direct["hard_floor"], "trial": False}
+            profile = {"routing_condition": condition, "task_summary": direct["task_summary"], "candidate_ladder": direct["candidate_ladder"], "static_suggestion": direct["static_suggestion"], "hard_floor": direct["hard_floor"], "trial": False, "routing_recommendation": direct["routing_recommendation"]}
             plan["nodes"] = [{"id": "branch-a", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return A.", "sandbox": "read-only"}, {"id": "branch-b", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return B.", "sandbox": "read-only"}, {"id": "merge", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["branch-a", "branch-b"], "prompt": "Merge A and B.", "sandbox": "read-only", **profile}, {"id": "mini-verify", "phase": "mini", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["merge"], "prompt": "Verify the merge.", "sandbox": "read-only"}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "low", "dependencies": ["mini-verify"], "prompt": "Run post-result verification.", "sandbox": "read-only"}]
             plan["main_result_node"] = "merge"
             calls = []
@@ -452,7 +609,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 receipt_path.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
                 return {"id": node["id"], "phase": node["phase"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "tokens": {}, "process_elapsed_ms": 1}
             with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}):
-                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root)
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
         self.assertEqual(set(calls[:2]), {"branch-a", "branch-b"})
         self.assertEqual(calls[2:], ["merge", "mini-verify"])
         self.assertEqual(manifest["status"], "pass")
@@ -930,7 +1087,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertTrue(any("execution_domain is unknown" in failure for failure in failures))
         self.assertFalse(any("implementation owner mismatch" in failure for failure in failures))
 
-    def test_plan_rejects_rust_domain_non_spark_without_reason(self):
+    def test_plan_accepts_complex_rust_with_terra(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
@@ -938,9 +1095,12 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan["nodes"][0]["language"] = "rust"
             plan["nodes"][0]["skill"] = "code-skill"
             plan["nodes"][0]["model"] = "gpt-5.6-luna"
+            plan["nodes"][0]["routing_condition"]["execution_domain"] = "rust"
+            plan["nodes"][0]["routing_condition"]["owning_skill"] = "code-skill"
+            self.refresh_recommendation(plan["nodes"][0])
             with self._with_rust_domain() as synthetic_skills_root:
                 failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
-        self.assertTrue(any("has no fallback reason" in failure for failure in failures))
+        self.assertEqual(failures, [])
 
     def test_plan_main_result_rejects_routing_condition_domain_mismatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -978,10 +1138,11 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan["nodes"][0]["skill"] = "management-skill"
             plan["nodes"][0]["routing_condition"]["execution_domain"] = "general"
             plan["nodes"][0]["routing_condition"]["owning_skill"] = "management-skill"
+            self.refresh_recommendation(plan["nodes"][0])
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
 
-    def test_plan_accepts_rust_domain_with_spark(self):
+    def test_plan_rejects_complex_rust_with_spark(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
@@ -991,9 +1152,10 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan["nodes"][0]["model"] = "gpt-5.3-codex-spark"
             plan["nodes"][0]["routing_condition"]["execution_domain"] = "rust"
             plan["nodes"][0]["routing_condition"]["owning_skill"] = "code-skill"
+            self.refresh_recommendation(plan["nodes"][0])
             with self._with_rust_domain() as synthetic_skills_root:
                 failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
-        self.assertEqual(failures, [])
+        self.assertTrue(any("Spark-low is valid only" in failure for failure in failures))
 
     def test_plan_injects_reference_prompt_for_synthetic_domain(self):
         with tempfile.TemporaryDirectory() as temp_dir:

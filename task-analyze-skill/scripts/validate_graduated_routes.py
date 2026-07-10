@@ -15,11 +15,11 @@ COMPLEX_PROMPT = "Design a website like YouTube for me"
 DIRECT_MINI_CONDITIONS = {"Open Chrome": "Chrome is open", "Open Chrome and open YouTube": "youtube.com is loaded", "Open Chrome, open YouTube, and search CCTV": "CCTV query and visible results are present"}
 DIRECT_ROUTE = ["task-analyze-skill", "workflow-skill", "chrome:control-chrome"]
 COMPLEX_ROUTE = ["task-analyze-skill", "workflow-skill", "build-web-apps:frontend-app-builder"]
-REQUIRED_PAIRS = {"design": "gpt-5.6-sol|high", "implementation": "gpt-5.6-terra|high", "mini": "gpt-5.6-terra|medium", "ending_records": "gpt-5.6-luna|low", "ending_real": "gpt-5.6-terra|high"}
+REQUIRED_PAIRS = {"design": "gpt-5.6-sol|high", "implementation": "gpt-5.6-terra|high", "mini": "gpt-5.6-terra|medium", "ending_real": "gpt-5.6-terra|high"}
 SUPPORTED_PAIRS = {"gpt-5.3-codex-spark|low", "gpt-5.3-codex-spark|medium", "gpt-5.3-codex-spark|high", "gpt-5.6-luna|low", "gpt-5.6-luna|medium", "gpt-5.6-luna|high", "gpt-5.6-terra|low", "gpt-5.6-terra|medium", "gpt-5.6-terra|high", "gpt-5.6-sol|low", "gpt-5.6-sol|medium", "gpt-5.6-sol|high", "gpt-5.6-sol|ultra"}
 ENDING_CHECKS = ["responsive", "console", "navigation", "accessibility", "visual"]
 DIRECT_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "controller_skill", "route", "mini_condition", "timing_evidence"}
-COMPLEX_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "controller_skill", "route", "mini_condition", "timing_evidence", "dispatcher_plan", "static_pairs", "adaptive_result_producer", "controller_transitions", "ending_checks"}
+COMPLEX_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "controller_skill", "route", "mini_condition", "timing_evidence", "dispatcher_plan", "illustrative_cold_start_pairs", "adaptive_result_producer", "controller_transitions", "ending_checks"}
 
 
 def materialize_dispatcher_plan(plan_template, cache_dir, entry_model, entry_effort):
@@ -65,12 +65,11 @@ def _validate_dispatcher_plan(scenario, skills_root, failures):
         failures.append("website scenario dispatcher_plan must be an object")
         return
     dispatcher = _dispatcher_module()
-    expected_nodes = ["design", "implementation", "mini", "ending-records", "ending-real"]
+    expected_nodes = ["design", "implementation", "mini", "ending-real"]
     expected_roles = {
         "design": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-sol", "high", [], "general"),
         "implementation": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-terra", "high", ["design"], "general"),
         "mini": ("mini", "verify-skill", "gpt-5.6-terra", "medium", ["implementation"], "general"),
-        "ending-records": ("ending", "management-skill", "gpt-5.6-luna", "low", ["mini"], "general"),
         "ending-real": ("ending", "verify-skill", "gpt-5.6-terra", "high", ["mini"], "general"),
     }
     template_nodes = plan.get("nodes", [])
@@ -86,7 +85,7 @@ def _validate_dispatcher_plan(scenario, skills_root, failures):
         observed = (node.get("phase"), node.get("skill"), node.get("model"), node.get("effort"), node.get("dependencies"), node.get("execution_domain"))
         if observed != expected:
             failures.append(f"website dispatcher plan role is incorrect for {node['id']}")
-        expected_pair = scenario["static_pairs"].get({"design": "design", "implementation": "implementation", "mini": "mini", "ending-records": "ending_records", "ending-real": "ending_real"}[node["id"]])
+        expected_pair = scenario["illustrative_cold_start_pairs"].get({"design": "design", "implementation": "implementation", "mini": "mini", "ending-real": "ending_real"}[node["id"]])
         if f"{node.get('model')}|{node.get('effort')}" != expected_pair:
             failures.append(f"website dispatcher plan pair is incorrect for {node['id']}")
     supported_pairs = sorted(f"{model}|{effort}" for model, efforts in dispatcher.MODEL_EFFORTS.items() for effort in efforts)
@@ -147,10 +146,19 @@ def validate_fixture(path=FIXTURE_PATH, skills_root=None, require_installed=Fals
     unknown_keys = set(scenario) - COMPLEX_ALLOWED_KEYS
     if unknown_keys:
         failures.append("website scenario contains unknown execution fields: " + ", ".join(sorted(unknown_keys)))
-    if scenario.get("static_pairs") != REQUIRED_PAIRS or any(pair not in SUPPORTED_PAIRS for pair in scenario.get("static_pairs", {}).values()):
+    if scenario.get("illustrative_cold_start_pairs") != REQUIRED_PAIRS or any(pair not in SUPPORTED_PAIRS for pair in scenario.get("illustrative_cold_start_pairs", {}).values()):
         failures.append("website scenario static model/effort roles are incorrect or unsupported")
     if scenario.get("adaptive_result_producer") != "implementation":
         failures.append("website scenario adaptive producer must be the implementation receipt")
+    implementation = next((node for node in scenario.get("dispatcher_plan", {}).get("nodes", []) if node.get("id") == "implementation"), {})
+    expected_ladder = [f"gpt-5.6-luna|{effort}" for effort in ["low", "medium", "high", "xhigh", "max"]] + [f"gpt-5.6-terra|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]] + [f"gpt-5.6-sol|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]]
+    if implementation.get("candidate_ladder") != expected_ladder or implementation.get("hard_floor") != "gpt-5.6-luna|low":
+        failures.append("website implementation must use the full GPT-5.6 ladder with Luna-low hard floor")
+    recommendation = implementation.get("routing_recommendation", {})
+    if recommendation.get("selected_pair") != "gpt-5.6-terra|high" or recommendation.get("trial") is not False or not recommendation.get("profile_fingerprint"):
+        failures.append("website implementation recommendation proof is invalid")
+    if any(node.get("id") == "ending-records" for node in scenario.get("dispatcher_plan", {}).get("nodes", [])):
+        failures.append("website dispatcher plan must not include a decorative records node")
     if scenario.get("controller_transitions") != {"main_result_release": "observed_entry_coordinator", "ending_dispatch": "observed_entry_coordinator"}:
         failures.append("website scenario controller transitions must use the observed entry coordinator")
     if scenario.get("ending_checks") != ENDING_CHECKS:

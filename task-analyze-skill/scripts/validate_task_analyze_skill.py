@@ -36,7 +36,7 @@ try:
         execution_domain_is_active,
         is_code_execution_domain,
         resolve_execution_domain,
-        requires_spark_first,
+        is_tiny_spark_profile,
         validate_execution_domain_registry,
     )
 except ModuleNotFoundError:
@@ -54,7 +54,7 @@ except ModuleNotFoundError:
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     is_code_execution_domain = _routing_policy.is_code_execution_domain
     resolve_execution_domain = _routing_policy.resolve_execution_domain
-    requires_spark_first = _routing_policy.requires_spark_first
+    is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
 REQUIRED_FILES = [
     ".gitignore",
@@ -89,7 +89,7 @@ REQUIRED_SKILL_TEXT = [
     "Complex",
     "Mermaid",
     "Personal routing evidence",
-    "Spark first",
+    "Spark-low",
     "Private Adaptive Routing",
     "trial exactly one lower effort on the same model",
     "Mini Verify",
@@ -116,7 +116,7 @@ REQUIRED_ROUTE_TEXT = [
 REQUIRED_SELECTION_TEXT = [
     "selected at task entry",
     "lowest reliable static `model|effort` pair for the node's real work",
-    "Spark first",
+    "Spark-low",
     "Receipt-Backed Personal Learning",
     "Receipt-Backed Personal Learning",
     "one cheaper/faster rung",
@@ -145,7 +145,7 @@ REQUIRED_ADAPTIVE_TEXT = [
     "success_model",
     "failed_model",
     "result-producer attempt",
-    "After a receipt-matched verification pass",
+    "After a receipt-matched pass",
     "Receipt-matched Mini or Real correctness/quality failure",
     "Real Verify failure overrides",
     "Tokens are a usage proxy",
@@ -275,14 +275,8 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
         is_code_node = False if execution_domain not in EXECUTION_DOMAINS else is_code_execution_domain(execution_domain)
         if is_code_node and skill != "code-skill" and expected_owner_skill(execution_domain) is not None:
             failures.append(f"{node_id} bypasses code-skill")
-        if (
-            is_code_node
-            and requires_spark_first(execution_domain)
-            and model != "gpt-5.3-codex-spark"
-            and not node.get("spark_exception_reason")
-            and not node.get("fallback_reason")
-        ):
-            failures.append(f"{node_id} is not Spark-first and has no fallback reason")
+        if is_code_node and model == "gpt-5.3-codex-spark" and not is_tiny_spark_profile(node.get("task_family"), node.get("modality"), node.get("risk"), node.get("complexity"), node.get("ambiguity")):
+            failures.append(f"{node_id} Spark is valid only for low-risk easy low-ambiguity text tiny profiles")
     mini = node_by_id.get("mini-verify")
     main = node_by_id.get("main-result")
     ending = node_by_id.get("ending-dispatch")
@@ -308,7 +302,7 @@ def _complex_followup_node_pair():
 
 
 def _complex_followup_implementation_pair():
-    return "gpt-5.3-codex-spark", "high"
+    return "gpt-5.6-terra", "high"
 
 
 def sample_plans():

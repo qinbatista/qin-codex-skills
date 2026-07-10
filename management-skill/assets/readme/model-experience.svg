@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
   <title id="title">Condition-keyed model experience</title>
-  <desc id="desc">The current entry model and effort run Task Analyze only. A generalized condition selects a receipt-backed workflow. Mini Verify records the producer attempt before the main result, and Background Real Verify updates the same attempt. A pass lowers effort before model; a quality failure raises a sticky failed boundary. Local JSON is never pushed.</desc>
+  <desc id="desc">The current entry pair runs Task Analyze only. Mini records the producer before the main result. Ending Real cost-ranks tokens then time only inside a shared exact workload-hash cohort; otherwise it uses the quality boundary. It freezes best_pair and reopens verified failure.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#17223d"/></linearGradient>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#67e8f9"/></marker>
@@ -29,7 +29,7 @@
 
     <rect x="720" y="175" width="280" height="200" rx="24" fill="#102b3d" stroke="#38bdf8" stroke-width="2"/>
     <text x="860" y="220" text-anchor="middle" fill="#bae6fd" font-size="18" font-weight="800">RECOMMEND</text>
-    <text x="860" y="263" text-anchor="middle" fill="#f8fafc" font-size="24" font-weight="700">candidate ladder</text>
+    <text x="860" y="263" text-anchor="middle" fill="#f8fafc" font-size="24" font-weight="700">dynamic learned pair</text>
     <text x="860" y="304" text-anchor="middle" fill="#cbd5e1" font-size="19">effort first, then model</text>
     <text x="860" y="338" text-anchor="middle" fill="#cbd5e1" font-size="18">hard floors always win</text>
 
@@ -50,22 +50,25 @@
     <text x="1250" y="760" text-anchor="middle" fill="#f8fafc" font-size="19">show after Mini passes</text>
     <text x="1250" y="788" text-anchor="middle" fill="#cbd5e1" font-size="17">earlier result stays honest</text>
     <rect x="1070" y="905" width="360" height="110" rx="24" fill="#302716" stroke="#fbbf24" stroke-width="2"/>
-    <text x="1250" y="950" text-anchor="middle" fill="#fde68a" font-size="22" font-weight="800">Background Real update</text>
-    <text x="1250" y="982" text-anchor="middle" fill="#fef3c7" font-size="17">same attempt · reopen on correctness failure</text>
+    <text x="1250" y="943" text-anchor="middle" fill="#fde68a" font-size="22" font-weight="800">Ending Real update</text>
+    <text x="1250" y="975" text-anchor="middle" fill="#fef3c7" font-size="15">same cohort: correctness → tokens → time</text>
+    <text x="1250" y="1000" text-anchor="middle" fill="#fef3c7" font-size="15">otherwise quality boundary · freeze best_pair</text>
   </g>
 
   <g>
     <rect x="70" y="455" width="880" height="385" rx="26" fill="#111d32" stroke="#475569" stroke-width="2"/>
     <text x="105" y="505" fill="#f8fafc" font-size="24" font-weight="800">Outcome update rules</text>
     <path d="M105 545H915" stroke="#334155" stroke-width="2"/>
-    <text x="105" y="590" fill="#34d399" font-size="21" font-weight="800">PASS</text>
-    <text x="220" y="590" fill="#e2e8f0" font-size="20">same-model effort first → then weaker eligible model</text>
-    <text x="105" y="650" fill="#fb7185" font-size="21" font-weight="800">QUALITY FAIL</text>
-    <text x="300" y="650" fill="#e2e8f0" font-size="20">sticky failed boundary → stronger eligible rung</text>
-    <text x="105" y="710" fill="#fbbf24" font-size="21" font-weight="800">OPERATIONAL FAIL</text>
-    <text x="350" y="710" fill="#e2e8f0" font-size="20">availability/timeout/protocol/receipt ≠ quality</text>
-    <text x="105" y="770" fill="#67e8f9" font-size="21" font-weight="800">SPARK-LOW</text>
-    <text x="260" y="770" fill="#e2e8f0" font-size="20">tiny text/code/command; static fallback if runtime fails</text>
+    <text x="105" y="585" fill="#34d399" font-size="20" font-weight="800">TRIAL PASS</text>
+    <text x="260" y="585" fill="#e2e8f0" font-size="19">one lower effort rung, then one lower model</text>
+    <text x="105" y="635" fill="#a7f3d0" font-size="20" font-weight="800">FROZEN PASS</text>
+    <text x="285" y="635" fill="#e2e8f0" font-size="19">keep best_pair; stop searching</text>
+    <text x="105" y="685" fill="#fb7185" font-size="20" font-weight="800">QUALITY FAIL</text>
+    <text x="290" y="685" fill="#e2e8f0" font-size="19">sticky boundary → stronger eligible rung</text>
+    <text x="105" y="735" fill="#fbbf24" font-size="20" font-weight="800">OPERATIONAL FAIL</text>
+    <text x="340" y="735" fill="#e2e8f0" font-size="19">availability/timeout/protocol ≠ quality</text>
+    <text x="105" y="785" fill="#67e8f9" font-size="20" font-weight="800">SPARK-LOW</text>
+    <text x="260" y="785" fill="#e2e8f0" font-size="19">tiny text/code/command only</text>
   </g>
   <rect x="70" y="930" width="880" height="86" rx="20" fill="#3b1725" stroke="#fb7185" stroke-width="2"/>
   <text x="510" y="967" text-anchor="middle" fill="#fecdd3" font-size="21" font-weight="800">PRIVATE: model_experience.json stays local</text>

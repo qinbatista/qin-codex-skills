@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Registry-owned code-domain executor selected in the locked task-analyze-skill plan and coordinated by workflow-skill. Built-in examples are Python, plain C#, and Unity C#. Spark is first for text-only registered-code work."
+description: "Registry-owned code-domain executor selected in the locked task-analyze-skill plan and coordinated by workflow-skill. Built-in examples are Python, plain C#, and Unity C#. Tiny routes are Spark-low plus the full normal fallback; every non-tiny route uses the exact full normal ladder without Spark."
 ---
 
 # Code Skill
@@ -50,7 +50,8 @@ For prompt-in-code work, show `Prompt idea -> Prompt goal -> Problems -> Solutio
 
 ## Model Contract
 
-- Use Spark first for text-only registered-code implementation, bounded repair/refactor, and authored probes at the effort in the locked plan.
+- Use Spark-low only for obvious bounded, low-risk, easy, low-ambiguity text-only tiny implementation, repair, refactor, command, or probe work. Its candidate route is exactly Spark-low plus the full normal fallback; Spark-medium/high/xhigh are never routing fallbacks.
+- For every non-tiny code task, retain `code-skill` ownership and the exact full Luna-low→Sol-ultra candidate ladder with no Spark. Coding can be easy or complex; task type never fixes the selected pair.
 - Use only a fallback already allowed by Task Analyze, with a visible reason and runtime reroute/receipt when available.
 - Never keep the entry model merely because it is active.
 - Image-dependent, over-context, broad integration, or evidence-heavy work may use planned Terra; bounded Spark-unavailable work may use planned Luna.

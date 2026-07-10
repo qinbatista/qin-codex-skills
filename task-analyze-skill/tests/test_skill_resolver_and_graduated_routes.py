@@ -118,7 +118,7 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
             website = fixture["scenarios"][3]
             website["complexity"] = "easy"
             website.pop("dispatcher_plan")
-            website["static_pairs"]["mini"] = "unsupported-model|high"
+            website["illustrative_cold_start_pairs"]["mini"] = "unsupported-model|high"
             website["skill"] = "frontend-app-builder"
             path = Path(temp_dir) / "fixture.json"
             path.write_text(json.dumps(fixture), encoding="utf-8")

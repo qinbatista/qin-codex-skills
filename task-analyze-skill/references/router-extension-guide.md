@@ -25,7 +25,7 @@ Keep language rules in executor references, not in registry metadata. A domain m
 
 `execution_domain` is part of adaptive-profile identity. New records use the exact registry ID. When reading legacy records with no domain, infer `code_unspecified` for legacy code evidence and `general` otherwise; never reinterpret old evidence as a newly named active domain. `code_unspecified` is not an extension target.
 
-The entry model|effort is route-coordination metadata only and is never a learning feature. Direct tool-only routes use their installed tool skill and an observable Mini Verify, but create no child model, model receipt, or adaptive producer sample. Model-executed routes record the actual producer receipt and verification outcomes.
+The entry model|effort is route-coordination metadata only and is never a learning feature. Direct tool-only routes use their installed tool skill and an observable Mini Verify, but create no child model, model receipt, or adaptive producer sample. Model-executed routes carry complete `routing_recommendation` proof and record the actual producer receipt and verification outcomes; deterministic controller recording needs no decorative Luna call.
 
 ## Canonical policy
 

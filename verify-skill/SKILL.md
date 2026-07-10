@@ -53,7 +53,7 @@ Use it for relevant:
 - model-route replay and token/time baselines;
 - same-behavior optimization comparison.
 
-Real Verify never blocks the first Mini-verified result. Report its worker/model/effort as running. If Real Verify later finds a correctness failure, notify the user, reopen the task, provide the failing evidence, and route any repair through a new Mini Verify before a corrected result is claimed.
+Real Verify never blocks the first Mini-verified result. Report its worker/model/effort as running. For `mini_real`, Mini PASS is provisional: Ending Real updates the same producer receipt/run, recomputes routing, and freezes the exact-profile best pair when eligible. If Real Verify later finds a correctness failure, notify the user, reopen the task, provide the failing evidence, and route any repair through a new Mini Verify before a corrected result is claimed. Operational failures remain neutral routing diagnostics.
 
 Do not relabel compile/import/existence-only evidence as Real Verify when realistic behavior is practical.
 
@@ -61,10 +61,8 @@ Do not relabel compile/import/existence-only evidence as Real Verify when realis
 
 Use the model and effort assigned by Task Analyze:
 
-- Luna normally handles bounded Mini Verify judgment and lightweight records.
-- Terra normally handles grounded Real Verify, source-rich comparisons, realistic tests, and integration evidence.
-- Sol handles ambiguous, open-ended, or high-complexity judgment.
-- Spark may author a probe in an active registry-owned code domain only through `code-skill`; verification judgment remains on the planned verification model.
+- Luna, Terra, and Sol roles are cold-start hints, never permanent task-category assignments; use the locked dynamic effort-first ladder.
+- Spark-low may author only an obvious bounded low-risk easy low-ambiguity text-only tiny probe through `code-skill`; verification judgment remains on the planned verification model.
 
 Runtime model labels are not proof. When routing evidence matters, inspect the sanitized [runtime receipt contract](../task-analyze-skill/references/runtime-receipts.md). Fail a claimed model/effort match when runtime metadata disagrees and no allowed reroute exists.
 
@@ -84,7 +82,7 @@ Runtime model labels are not proof. When routing evidence matters, inspect the s
 
 - Mini: syntax/compile/basic route plus one focused input/output when proportional.
 - Real: realistic edited-path behavior, regression, error semantics, side effects, ordering, performance baseline, or live Unity/runtime evidence.
-- Active code-domain probe authoring uses `code-skill` and the planned Spark-first node.
+- Active code-domain probe authoring uses `code-skill`; tiny routes are exactly Spark-low plus the full normal fallback, while every non-tiny route is the exact full normal ladder without Spark.
 
 ### Skills And Instructions
 

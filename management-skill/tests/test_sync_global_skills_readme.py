@@ -124,19 +124,21 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("(#-hookless-first-result-principle)", readme)
         self.assertNotIn("(#-the-hookless-promise)", readme)
         self.assertIn("per-node `model | effort`", readme)
-        self.assertIn("Downgrade exactly one eligible rung", readme)
-        self.assertIn("effort first", readme)
-        self.assertIn("upgrade in the exact reverse direction", readme)
-        self.assertIn("reuse the calibrated/frozen pair", readme)
-        self.assertIn("Static floors, safety, domain ownership, and correctness always win", readme)
-        self.assertIn("may start at Spark-low; runtime failure uses the static fallback without a quality penalty", readme)
-        self.assertIn("an exhausted top boundary returns no selected pair", readme)
+        self.assertIn("cold-start hints, never fixed model mappings", readme)
+        self.assertIn("`Luna-low → all Luna efforts → Terra → Sol-ultra`", readme)
+        self.assertIn("Downgrade effort then model, upgrade in reverse", readme)
+        self.assertIn("dynamic learned pair", readme)
+        self.assertIn("Every non-tiny model route carries exactly", readme)
+        self.assertIn("Tiny eligible routes carry exactly `Spark-low + full normal fallback`", readme)
+        self.assertIn("Spark-medium/high/xhigh remain capabilities, not routing rungs", readme)
         self.assertIn("sanitized runtime receipt", readme)
         self.assertIn("receipt-backed", readme)
         self.assertIn("like-for-like", readme)
-        self.assertIn("private `local/model_experience.json` ledger is **condition-keyed**", readme)
-        self.assertIn("success_model` / `failed_model`", readme)
-        self.assertIn("neutral operational events", readme)
+        self.assertIn("private `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is **condition-keyed**", readme)
+        self.assertIn("prompt-free workload hashes", readme)
+        self.assertIn("same exact workload hash with complete metrics", readme)
+        self.assertIn("Cross-workload or incomplete evidence uses the quality boundary", readme)
+        self.assertIn("Ending Real updates the same producer attempt, persists `best_pair`, and freezes unchanged profiles", readme)
         self.assertIn("Mini Verify", readme)
         self.assertIn("Before the result", readme)
         self.assertIn("Real Verify runs in background Ending Task", readme)
@@ -156,6 +158,40 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertNotIn("/Users/", readme)
         self.assertNotIn("hooks.json", readme)
         self.assertNotIn("TASK_ANALYZE_PLAN_JSON", readme)
+
+    def test_readme_avoids_fixed_code_model_labels_and_marks_spark_as_obvious_only(self):
+        readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
+        self.assertNotIn("Spark-first executor", readme)
+        self.assertIn("Spark obvious-only route", readme)
+        self.assertIn("Spark obvious-task eligible", readme)
+        self.assertNotIn("| Spark first |", readme)
+
+    def test_chinese_readme_has_token_first_and_ending_freeze_semantics(self):
+        readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="zh")
+        self.assertIn("相同 workload hash cohort", readme)
+        self.assertIn("总 token、process time、较弱 rung 排序", readme)
+        self.assertIn("Ending Real 更新同一个 producer attempt，持久化并冻结 `best_pair`", readme)
+        self.assertIn("tiny 路线必须是 `Spark-low + 完整常规 fallback`", readme)
+
+    def test_learning_visuals_do_not_present_fixed_code_model_pairs(self):
+        visual_names = ("qin-codex-skills-hero", "task-lifecycle", "model-router", "model-experience", "verification-topologies")
+        for visual_name in visual_names:
+            for suffix in ("", "-mobile"):
+                svg_text = (README_ASSET_DIR / f"{visual_name}{suffix}.svg").read_text(encoding="utf-8")
+                self.assertNotRegex(svg_text, r"\[(?:Spark|Luna|Terra|Sol) \| ")
+                self.assertNotIn("Spark first", svg_text)
+        desktop_router = (README_ASSET_DIR / "model-router.svg").read_text(encoding="utf-8")
+        mobile_router = (README_ASSET_DIR / "model-router-mobile.svg").read_text(encoding="utf-8")
+        for svg_text in (desktop_router, mobile_router):
+            self.assertIn("cold-start hint", svg_text)
+            self.assertIn("Spark-low obvious-only", svg_text)
+            self.assertIn("full normal fallback", svg_text)
+        for visual_name in ("model-experience", "model-experience-mobile"):
+            svg_text = (README_ASSET_DIR / f"{visual_name}.svg").read_text(encoding="utf-8")
+            self.assertIn("same cohort", svg_text)
+            self.assertIn("quality boundary", svg_text)
+        for visual_name in ("task-lifecycle", "model-experience", "verification-topologies"):
+            self.assertIn("dynamic learned pair", (README_ASSET_DIR / f"{visual_name}.svg").read_text(encoding="utf-8"))
 
     def test_snapshot_renders_synthetic_registered_rust_domain_without_generator_changes(self):
         with tempfile.TemporaryDirectory() as temp_dir:

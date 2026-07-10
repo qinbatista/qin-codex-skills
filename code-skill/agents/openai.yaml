@@ -1,5 +1,5 @@
 interface:
   display_name: "Code Skill"
-  short_description: "Spark-first registered code-domain executor"
+  short_description: "Registered code executor with a tiny-work Spark exception"
   default_prompt: >-
-    $code-skill: execute every active registry-owned code domain named by the locked plan. Follow its exact model|effort; Spark is first for text-only implementation and probes, with only visible fallbacks. Read the matching coding/language references, preserve local style, keep edits surgical, and return Mini Verify evidence. The basically verified result comes before Ending Task's deeper code-path checks and independent optimization proof.
+    $code-skill: execute every active registry-owned code domain named by the locked plan. A tiny eligible route is exactly Spark-low plus the full normal fallback; every non-tiny route is the exact full Luna-low-to-Sol-ultra ladder without Spark. Follow the learned selected pair, read the matching language rules, preserve local style, keep edits surgical, and return Mini Verify evidence before Ending Task's deeper checks.

@@ -13,6 +13,35 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class RoutingPolicyTests(unittest.TestCase):
+    def test_normal_adaptive_ladder_has_luna_floor_and_sol_ceiling_without_spark(self):
+        ladder = module.normal_adaptive_ladder()
+        self.assertEqual(ladder[0], ("gpt-5.6-luna", "low"))
+        self.assertEqual(ladder[-1], ("gpt-5.6-sol", "ultra"))
+        self.assertNotIn(("gpt-5.3-codex-spark", "low"), ladder)
+        self.assertEqual(module.downgrade_pair(ladder[-1], ladder), ("gpt-5.6-sol", "max"))
+        self.assertEqual(module.upgrade_pair(ladder[-2], ladder), ladder[-1])
+
+    def test_spark_bootstrap_is_limited_to_low_risk_text_tiny_families(self):
+        self.assertTrue(module.is_tiny_spark_profile("tiny_code", "text", "low", "easy", "low"))
+        self.assertFalse(module.is_tiny_spark_profile("code", "text", "low"))
+        self.assertFalse(module.is_tiny_spark_profile("tiny_code", "image", "low"))
+        self.assertFalse(module.is_tiny_spark_profile("tiny_code", "text", "low", "complex", "low"))
+        self.assertFalse(module.is_tiny_spark_profile("tiny_code", "text", "low", "easy", "high"))
+
+    def test_non_tiny_profile_uses_exact_full_normal_ladder(self):
+        self.assertEqual(
+            module.adaptive_pair_texts_for_profile("code", "text", "low", "easy", "low"),
+            module.normal_adaptive_pair_texts(),
+        )
+        self.assertFalse(
+            any(pair.startswith("gpt-5.3-codex-spark|") for pair in module.adaptive_pair_texts_for_profile("code", "text", "low", "easy", "low"))
+        )
+
+    def test_tiny_profile_uses_spark_low_then_full_normal_fallback(self):
+        ladder = module.adaptive_pair_texts_for_profile("tiny_code", "text", "low", "easy", "low")
+        self.assertEqual(ladder, ["gpt-5.3-codex-spark|low"] + module.normal_adaptive_pair_texts())
+        self.assertNotIn("gpt-5.3-codex-spark|medium", ladder)
+
     def test_plugin_frontend_implementation_without_language_is_general(self):
         self.assertEqual(module.resolve_execution_domain(owning_skill="build-web-apps:frontend-app-builder", task_family="integration", purpose="implement"), "general")
 
