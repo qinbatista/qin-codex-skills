@@ -10,7 +10,7 @@
 ### 🧭 Analyze once · 🤖 route per node · 🧪 prove the basic result · 🌙 finish deeply
 
 [![Skills](https://img.shields.io/badge/public_skills-6-38bdf8)](#-six-independent-skills)
-[![Entry](https://img.shields.io/badge/entry-hookless_100%25-2dd4bf)](#-the-hookless-promise)
+[![Entry](https://img.shields.io/badge/entry-hookless_100%25-2dd4bf)](#-hookless-first-result-principle)
 [![Models](https://img.shields.io/badge/models-per_node-f59e0b)](#-model--effort-router)
 [![Verification](https://img.shields.io/badge/verification-Mini_then_Real-a78bfa)](#-verify-then-finish)
 

@@ -121,6 +121,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("hookless, 100% entry", readme)
         self.assertIn("entry model and effort analyze and route only", readme)
         self.assertIn("First Result Principle", readme)
+        self.assertIn("(#-hookless-first-result-principle)", readme)
+        self.assertNotIn("(#-the-hookless-promise)", readme)
         self.assertIn("per-node `model | effort`", readme)
         self.assertIn("Downgrade exactly one eligible rung", readme)
         self.assertIn("effort first", readme)
