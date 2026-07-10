@@ -1,5 +1,4 @@
 # Router extension guide (documentation workflow)
-
 Use this for adding or extending routing domains and evidence-aware execution domains.
 
 ## 1) Add domain metadata
@@ -44,4 +43,3 @@ Use this for adding or extending routing domains and evidence-aware execution do
   - include `condition.execution_domain`
   - only fields that the real writer serializes
   - scenario coverage and direct-route wording aligned with runtime behavior.
-

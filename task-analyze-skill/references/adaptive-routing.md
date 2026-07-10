@@ -43,7 +43,7 @@ Among verified eligible candidates, the recorder uses a correctness boundary and
 
 ## Commands
 
-Use `recommend` and `record` with the complete controlled profile: `--task-family`, `--artifact`, `--execution-domain`, `--scope`, `--ambiguity`, `--modality`, `--risk`, `--complexity`, `--owning-skill`, `--project-family`, `--verification-shape`, generalized `--task-summary`, repeated canonical `--candidate-ladder`, `--static-suggestion`, and `--hard-floor`.  
+Use `recommend` and `record` with the complete controlled profile: `--task-family`, `--artifact`, `--execution-domain`, `--scope`, `--ambiguity`, `--modality`, `--risk`, `--complexity`, `--owning-skill`, `--project-family`, `--verification-shape`, generalized `--task-summary`, repeated canonical `--candidate-ladder`, `--static-suggestion`, and `--hard-floor`.
 `--execution-domain` is optional. Migrate missing values as:
 
 - `code_unspecified` for legacy code evidence.
