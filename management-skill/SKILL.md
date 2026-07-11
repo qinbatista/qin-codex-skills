@@ -53,7 +53,7 @@ The local global skill directory may contain unrelated skills such as `chronicle
 
 ## README Generation
 
-The durable English README source is `assets/readme/github-readme-template.md`. Its 12 local SVG assets (six desktop/mobile diagram pairs) explain the six-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, and private adaptive routing. The README must explain that the portable Task Analyze entry rule is hookless, the selected entrance pair runs Task Analyze only, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
+The durable English README source is `assets/readme/github-readme-template.md`. Its 14 local SVG assets (seven desktop/mobile diagram pairs) explain the six-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, private adaptive routing, and the sanitized same-workload benchmark example. The README must explain that the portable Task Analyze entry rule is hookless, the selected entrance pair runs Task Analyze only, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
 
 The public README must name the First Result Principle, the direct-action boundary, the weak-to-strong complete `model|effort` ladder, the receipt-backed adaptive goal, graduated routing scenarios, the code-domain extension recipe, reasonable response-time/token use, exactly six public skills, and the exclusion of local `model_experience.json`.
 

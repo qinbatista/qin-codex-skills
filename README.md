@@ -7,7 +7,7 @@
 
 # qin-codex-skills
 
-### 🧭 Analyze once · 🤖 route per node · 🧪 prove the basic result · 🌙 finish deeply
+<p><strong>🧭 Analyze once · 🤖 route per node · 🧪 prove the basic result · 🌙 finish deeply</strong></p>
 
 [![Skills](https://img.shields.io/badge/public_skills-6-38bdf8)](#-six-independent-skills)
 [![Entry](https://img.shields.io/badge/entry-hookless_100%25-2dd4bf)](#-hookless-first-result-principle)
