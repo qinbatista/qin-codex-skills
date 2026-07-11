@@ -86,9 +86,9 @@ Correctness is the gate. Cost-rank tokens, then process time, then weaker rung o
   <img src="./management-skill/assets/readme/runtime-receipt.svg" alt="Sanitized runtime receipt comparing planned and actual model, effort, tokens, elapsed time, and status">
 </picture>
 
-A diagram label is a plan—not proof. Each model-executed node emits a sanitized runtime receipt that matches the requested/resolved/effective model and effort, completion status, bounded prompt hash, token totals, and elapsed timing. It is useful operational evidence, not a cryptographic backend attestation.
+A diagram label is a plan—not proof. Each model node emits a sanitized runtime receipt with requested/resolved/effective pair, completion, prompt hash, tokens, and time. This is operational evidence, not cryptographic attestation.
 
-🪙 Claim token or time savings only against a **like-for-like** baseline: same prompts and inputs, topology, sandbox, output contract, and acceptance criteria. Cached input belongs in input; reasoning output belongs in output; parallel work compares critical-path process time. Repeated alternating runs and medians support durable claims.
+🪙 Claim savings only against **like-for-like** prompts, inputs, topology, sandbox, output contract, and acceptance. Count cached input and reasoning output once; compare parallel critical paths. Durable claims need alternating medians.
 
 ### 📊 Same-workload example
 
@@ -99,10 +99,11 @@ A diagram label is a plan—not proof. Each model-executed node emits a sanitize
 
 | Workload | Adaptive route | Fixed baseline | Token result | Process result |
 |---|---|---|---:|---:|
-| Easy deterministic transform | Spark-low | Sol-ultra | `20,903 vs 27,041` · **22.7% less** | `3.724s vs 6.036s` · **38.3% less** |
-| Complex dependency workflow | Terra-xhigh | Sol-ultra | `27,178 vs 27,218` · **0.15% less** | `5.483s vs 6.046s` · **9.3% less** |
+| Simple transform | Spark-low | Sol-ultra | `19,106 vs 25,140` · **24.0% less** | `5.701s vs 6.597s` · **13.6% less** |
+| Medium aggregation | Luna-medium | Sol-ultra | `24,100 vs 25,320` · **4.8% less** | `5.033s vs 7.097s` · **29.1% less** |
+| Complex dependency graph | Terra-xhigh | Sol-ultra | `23,933 vs 25,331` · **5.5% less** | `5.529s vs 6.067s` · **8.9% less** |
 
-Outputs and workload hashes matched. This is a **single-run smoke comparison**; use alternating medians for durable claims. Sanitized evidence is in [`model-routing-benchmark-example.json`](./task-analyze-skill/assets/model-routing-benchmark-example.json); private history and receipts stay local.
+Combined: **67,139 vs 75,791 tokens · 11.4% less**. Outputs and workload hashes matched. This is a single-run smoke comparison; use alternating medians for durable claims. [`Sanitized evidence`](./task-analyze-skill/assets/model-routing-benchmark-example.json) is public; receipts stay local.
 
 ## 🧠 Private model experience
 

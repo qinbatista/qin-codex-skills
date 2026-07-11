@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" role="img" aria-labelledby="title desc">
   <title id="title">Adaptive routing versus fixed Sol ultra token benchmark</title>
-  <desc id="desc">For an easy workload Spark low used 20,903 tokens versus Sol ultra at 27,041. For a complex workload Terra xhigh used 27,178 tokens versus Sol ultra at 27,218. Both outputs matched.</desc>
+  <desc id="desc">Three same-prompt receipt pairs. Adaptive routing used 19,106 tokens versus 25,140 for a simple task, 24,100 versus 25,320 for a medium task, and 23,933 versus 25,331 for a complex task. Combined savings were 8,652 tokens or 11.4 percent. Outputs and workload hashes matched.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#081426"/><stop offset="1" stop-color="#17203a"/></linearGradient>
     <linearGradient id="adaptive" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#38bdf8"/></linearGradient>
@@ -8,31 +8,42 @@
     <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity=".28"/></filter>
   </defs>
   <rect width="1200" height="600" rx="32" fill="url(#bg)"/>
-  <text x="60" y="72" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="34" font-weight="700">📊 Same workload · receipt-backed smoke comparison</text>
-  <text x="60" y="111" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="19">Adaptive global route vs fixed gpt-5.6-sol | ultra · lower is better</text>
+  <text x="60" y="62" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="32" font-weight="700">📊 Same workload · receipt-backed smoke comparison</text>
+  <text x="60" y="98" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="18">Adaptive global route vs fixed gpt-5.6-sol | ultra · lower is better</text>
 
-  <g transform="translate(60 155)" filter="url(#shadow)">
-    <rect width="1080" height="170" rx="22" fill="#111c31" stroke="#29405f"/>
-    <text x="28" y="42" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="24" font-weight="700">Easy deterministic transform</text>
-    <text x="1020" y="42" text-anchor="end" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700">−22.7% tokens · −38.3% time</text>
-    <text x="28" y="86" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Spark-low</text>
-    <rect x="185" y="67" width="463" height="26" rx="13" fill="url(#adaptive)"/>
-    <text x="1040" y="87" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="17">20,903 tokens · 3.724s</text>
-    <text x="28" y="132" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Sol-ultra</text>
-    <rect x="185" y="113" width="600" height="26" rx="13" fill="url(#baseline)"/>
-    <text x="1040" y="133" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="17">27,041 tokens · 6.036s</text>
+  <g transform="translate(60 125)" filter="url(#shadow)">
+    <rect width="1080" height="390" rx="22" fill="#111c31" stroke="#29405f"/>
+
+    <text x="28" y="42" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">Simple transform</text>
+    <text x="1040" y="42" text-anchor="end" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700">−24.0% tokens · −13.6% time</text>
+    <text x="28" y="76" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Spark-low</text>
+    <rect x="190" y="59" width="392" height="23" rx="11.5" fill="url(#adaptive)"/>
+    <text x="1040" y="77" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="16">19,106 tokens · 5.701s</text>
+    <text x="28" y="108" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra</text>
+    <rect x="190" y="91" width="516" height="23" rx="11.5" fill="url(#baseline)"/>
+    <text x="1040" y="109" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="16">25,140 tokens · 6.597s</text>
+
+    <line x1="28" y1="130" x2="1052" y2="130" stroke="#29405f"/>
+    <text x="28" y="166" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">Medium aggregation</text>
+    <text x="1040" y="166" text-anchor="end" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700">−4.8% tokens · −29.1% time</text>
+    <text x="28" y="200" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Luna-medium</text>
+    <rect x="190" y="183" width="495" height="23" rx="11.5" fill="url(#adaptive)"/>
+    <text x="1040" y="201" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="16">24,100 tokens · 5.033s</text>
+    <text x="28" y="232" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra</text>
+    <rect x="190" y="215" width="520" height="23" rx="11.5" fill="url(#baseline)"/>
+    <text x="1040" y="233" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="16">25,320 tokens · 7.097s</text>
+
+    <line x1="28" y1="254" x2="1052" y2="254" stroke="#29405f"/>
+    <text x="28" y="290" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">Complex dependency graph</text>
+    <text x="1040" y="290" text-anchor="end" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700">−5.5% tokens · −8.9% time</text>
+    <text x="28" y="324" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Terra-xhigh</text>
+    <rect x="190" y="307" width="491" height="23" rx="11.5" fill="url(#adaptive)"/>
+    <text x="1040" y="325" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="16">23,933 tokens · 5.529s</text>
+    <text x="28" y="356" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra</text>
+    <rect x="190" y="339" width="520" height="23" rx="11.5" fill="url(#baseline)"/>
+    <text x="1040" y="357" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="16">25,331 tokens · 6.067s</text>
   </g>
 
-  <g transform="translate(60 350)" filter="url(#shadow)">
-    <rect width="1080" height="170" rx="22" fill="#111c31" stroke="#29405f"/>
-    <text x="28" y="42" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="24" font-weight="700">Complex dependency workflow</text>
-    <text x="1020" y="42" text-anchor="end" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700">−0.15% tokens · −9.3% time</text>
-    <text x="28" y="86" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Terra-xhigh</text>
-    <rect x="185" y="67" width="599.1" height="26" rx="13" fill="url(#adaptive)"/>
-    <text x="1040" y="87" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="17">27,178 tokens · 5.483s</text>
-    <text x="28" y="132" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Sol-ultra</text>
-    <rect x="185" y="113" width="600" height="26" rx="13" fill="url(#baseline)"/>
-    <text x="1040" y="133" text-anchor="end" fill="#e2e8f0" font-family="ui-monospace,SFMono-Regular,monospace" font-size="17">27,218 tokens · 6.046s</text>
-  </g>
-  <text x="60" y="566" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="17">✓ identical outputs  ·  ✓ matching workload hashes  ·  ⚠ single run; use alternating medians for durable claims</text>
+  <text x="60" y="553" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700">Total: 67,139 vs 75,791 · 8,652 fewer tokens · 11.4% reduction</text>
+  <text x="60" y="580" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="15">✓ identical outputs · ✓ matching workload hashes · ⚠ single run; use alternating medians for durable claims</text>
 </svg>

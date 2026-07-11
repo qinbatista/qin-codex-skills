@@ -1,32 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="860" viewBox="0 0 720 860" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="900" viewBox="0 0 720 900" role="img" aria-labelledby="title desc">
   <title id="title">Adaptive routing versus fixed Sol ultra token benchmark</title>
-  <desc id="desc">Spark low saved 22.7 percent tokens on the easy workload. Terra xhigh used nearly equal tokens and 9.3 percent less process time on the complex workload. Outputs matched.</desc>
+  <desc id="desc">Three same-prompt receipt pairs from simple to complex. Adaptive routing used 67,139 total tokens versus fixed Sol ultra at 75,791, saving 8,652 tokens or 11.4 percent. Outputs and workload hashes matched.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#081426"/><stop offset="1" stop-color="#17203a"/></linearGradient>
     <linearGradient id="a" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#38bdf8"/></linearGradient>
     <linearGradient id="b" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#f59e0b"/><stop offset="1" stop-color="#fb7185"/></linearGradient>
   </defs>
-  <rect width="720" height="860" rx="30" fill="url(#bg)"/>
-  <text x="40" y="62" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="28" font-weight="700">📊 Receipt-backed smoke test</text>
-  <text x="40" y="98" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="17">Adaptive route vs fixed Sol-ultra</text>
-  <g transform="translate(40 135)">
-    <rect width="640" height="290" rx="22" fill="#111c31" stroke="#29405f"/>
-    <text x="24" y="43" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">Easy transform</text>
-    <text x="24" y="78" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700">−22.7% tokens · −38.3% time</text>
-    <text x="24" y="126" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Spark-low · 20,903</text>
-    <rect x="24" y="141" width="456" height="30" rx="15" fill="url(#a)"/>
-    <text x="24" y="211" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Sol-ultra · 27,041</text>
-    <rect x="24" y="226" width="590" height="30" rx="15" fill="url(#b)"/>
+  <rect width="720" height="900" rx="30" fill="url(#bg)"/>
+  <text x="40" y="55" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="27" font-weight="700">📊 Receipt-backed smoke test</text>
+  <text x="40" y="88" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="16">Adaptive route vs fixed Sol-ultra · lower is better</text>
+
+  <g transform="translate(40 115)">
+    <rect width="640" height="205" rx="20" fill="#111c31" stroke="#29405f"/>
+    <text x="22" y="37" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700">Simple · −24.0% tokens</text>
+    <text x="22" y="70" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Spark-low · 19,106 · 5.701s</text>
+    <rect x="22" y="84" width="447" height="26" rx="13" fill="url(#a)"/>
+    <text x="22" y="143" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra · 25,140 · 6.597s</text>
+    <rect x="22" y="157" width="586" height="26" rx="13" fill="url(#b)"/>
   </g>
-  <g transform="translate(40 450)">
-    <rect width="640" height="290" rx="22" fill="#111c31" stroke="#29405f"/>
-    <text x="24" y="43" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">Complex workflow</text>
-    <text x="24" y="78" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700">−0.15% tokens · −9.3% time</text>
-    <text x="24" y="126" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Terra-xhigh · 27,178</text>
-    <rect x="24" y="141" width="589" height="30" rx="15" fill="url(#a)"/>
-    <text x="24" y="211" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="17">Sol-ultra · 27,218</text>
-    <rect x="24" y="226" width="590" height="30" rx="15" fill="url(#b)"/>
+
+  <g transform="translate(40 335)">
+    <rect width="640" height="205" rx="20" fill="#111c31" stroke="#29405f"/>
+    <text x="22" y="37" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700">Medium · −4.8% tokens</text>
+    <text x="22" y="70" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Luna-medium · 24,100 · 5.033s</text>
+    <rect x="22" y="84" width="561" height="26" rx="13" fill="url(#a)"/>
+    <text x="22" y="143" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra · 25,320 · 7.097s</text>
+    <rect x="22" y="157" width="590" height="26" rx="13" fill="url(#b)"/>
   </g>
-  <text x="40" y="788" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="16">✓ outputs match · ✓ workload hashes match</text>
-  <text x="40" y="820" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="16">⚠ one run; use alternating medians for durable claims</text>
+
+  <g transform="translate(40 555)">
+    <rect width="640" height="205" rx="20" fill="#111c31" stroke="#29405f"/>
+    <text x="22" y="37" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700">Complex · −5.5% tokens</text>
+    <text x="22" y="70" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Terra-xhigh · 23,933 · 5.529s</text>
+    <rect x="22" y="84" width="559" height="26" rx="13" fill="url(#a)"/>
+    <text x="22" y="143" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra · 25,331 · 6.067s</text>
+    <rect x="22" y="157" width="590" height="26" rx="13" fill="url(#b)"/>
+  </g>
+
+  <text x="40" y="805" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700">Total: 67,139 vs 75,791 · 8,652 fewer · 11.4%</text>
+  <text x="40" y="842" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="15">✓ outputs match · ✓ workload hashes match</text>
+  <text x="40" y="872" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="15">⚠ one run; use alternating medians for durable claims</text>
 </svg>
