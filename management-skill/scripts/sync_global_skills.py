@@ -228,7 +228,7 @@ def sensitive_name(relative_path):
 
 def secret_value_issue(path):
     try:
-        text = path.read_text(errors="ignore")
+        text = path.read_text(encoding="utf-8", errors="ignore")
     except UnicodeDecodeError:
         return ""
     for pattern in SECRET_VALUE_PATTERNS:
@@ -319,7 +319,7 @@ def latest_local_timestamp(skill_paths):
 def read_sync_state(state_file):
     if not state_file.exists():
         return {}
-    return json.loads(state_file.read_text())
+    return json.loads(state_file.read_text(encoding="utf-8"))
 
 
 def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
@@ -330,13 +330,13 @@ def write_sync_state(state_file, repository, remote_head, local_hash, remote_has
         "local_hash": local_hash,
         "remote_hash": remote_hash,
         "synced_at": int(time.time())
-    }, indent=2) + "\n")
+    }, indent=2) + "\n", encoding="utf-8")
 
 
 def read_skill_metadata(skill_dir):
     frontmatter_lines = []
     in_frontmatter = False
-    for line in (skill_dir / "SKILL.md").read_text().splitlines():
+    for line in (skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines():
         if line == "---":
             if in_frontmatter:
                 break
@@ -715,10 +715,10 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
             shutil.rmtree(path)
         else:
             path.unlink()
-    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT)
+    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT, encoding="utf-8")
     copied_names = []
-    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"))
-    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"))
+    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
+    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"), encoding="utf-8")
     for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)
@@ -729,16 +729,16 @@ def push(repository, skills_dir, message, dry_run):
     with tempfile.TemporaryDirectory(prefix="qin-codex-skills-") as sandbox_name:
         repository_dir = clone_repository(repository, Path(sandbox_name))
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
-        status_text = run_command(["git", "status", "--short"], cwd=repository_dir).stdout.strip()
+        run_command(["git", "add", "-A"], cwd=repository_dir)
+        staged_text = run_command(["git", "diff", "--cached", "--name-status"], cwd=repository_dir).stdout.strip()
         if dry_run:
             print_lines("Local skills selected for mirror:", copied_names)
-            print(status_text or "No local-to-remote differences.")
+            print(staged_text or "No local-to-remote differences.")
             return
-        if not status_text:
+        if not staged_text:
             write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
             print("No global skill changes to push.")
             return
-        run_command(["git", "add", "-A"], cwd=repository_dir)
         branch_name = run_command(["git", "branch", "--show-current"], cwd=repository_dir).stdout.strip() or "main"
         run_command(["git", "checkout", "-B", branch_name], cwd=repository_dir)
         run_command(["git", "commit", "-m", message], cwd=repository_dir)
