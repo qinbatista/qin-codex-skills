@@ -1,43 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="900" viewBox="0 0 720 900" role="img" aria-labelledby="title desc">
-  <title id="title">Adaptive routing versus fixed Sol ultra token benchmark</title>
-  <desc id="desc">Three same-prompt receipt pairs from simple to complex. Adaptive routing used 67,139 total tokens versus fixed Sol ultra at 75,791, saving 8,652 tokens or 11.4 percent. Outputs and workload hashes matched.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1260" viewBox="0 0 720 1260" role="img" aria-labelledby="title desc">
+  <title id="title">Real global strategy benchmark met the suite token goal but not the speed goal</title>
+  <desc id="desc">Same-user-configuration receipt-backed comparison against direct Sol ultra. All six arms completed with exact deterministic output matches. Global used 14.482 percent fewer logical runtime tokens across the suite but took 39.186 percent more critical-path time.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#081426"/><stop offset="1" stop-color="#17203a"/></linearGradient>
-    <linearGradient id="a" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#38bdf8"/></linearGradient>
-    <linearGradient id="b" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#f59e0b"/><stop offset="1" stop-color="#fb7185"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071526"/><stop offset="1" stop-color="#18223b"/></linearGradient>
+    <linearGradient id="direct" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#38bdf8"/><stop offset="1" stop-color="#60a5fa"/></linearGradient>
+    <linearGradient id="loss" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#f59e0b"/><stop offset="1" stop-color="#fb7185"/></linearGradient>
+    <linearGradient id="win" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#22c55e"/></linearGradient>
   </defs>
-  <rect width="720" height="900" rx="30" fill="url(#bg)"/>
-  <text x="40" y="55" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="27" font-weight="700">📊 Receipt-backed smoke test</text>
-  <text x="40" y="88" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="16">Adaptive route vs fixed Sol-ultra · lower is better</text>
-
-  <g transform="translate(40 115)">
-    <rect width="640" height="205" rx="20" fill="#111c31" stroke="#29405f"/>
-    <text x="22" y="37" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700">Simple · −24.0% tokens</text>
-    <text x="22" y="70" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Spark-low · 19,106 · 5.701s</text>
-    <rect x="22" y="84" width="447" height="26" rx="13" fill="url(#a)"/>
-    <text x="22" y="143" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra · 25,140 · 6.597s</text>
-    <rect x="22" y="157" width="586" height="26" rx="13" fill="url(#b)"/>
+  <rect width="720" height="1260" rx="30" fill="url(#bg)"/>
+  <text x="36" y="54" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="28" font-weight="700">📊 Real A/B · lower is better</text>
+  <text x="36" y="84" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="15">Same workload controls · all unique receipts counted</text>
+  <g transform="translate(36 108)">
+    <rect width="648" height="330" rx="20" fill="#101c31" stroke="#334155"/>
+    <text x="22" y="36" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">SIMPLE · both correct</text>
+    <text x="22" y="65" fill="#fb7185" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700">FAIL · +123.968% tokens · +320.068% time</text>
+    <text x="22" y="92" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="14">Sol-ultra direct vs Global Sol-ultra direct action</text>
+    <text x="22" y="124" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">TOKENS</text>
+    <text x="22" y="151" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Direct 53,781</text><rect x="145" y="137" width="199" height="17" rx="8.5" fill="url(#direct)"/>
+    <text x="22" y="181" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Global 120,452</text><rect x="145" y="167" width="445" height="17" rx="8.5" fill="url(#loss)"/>
+    <text x="22" y="219" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">TIME</text>
+    <text x="22" y="246" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Direct 12.612s</text><rect x="145" y="232" width="106" height="17" rx="8.5" fill="url(#direct)"/>
+    <text x="22" y="276" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Global 52.979s</text><rect x="145" y="262" width="445" height="17" rx="8.5" fill="url(#loss)"/>
+    <text x="22" y="309" fill="#64748b" font-family="Inter,Arial,sans-serif" font-size="13">Global paid controller overhead without a downstream saving.</text>
   </g>
-
-  <g transform="translate(40 335)">
-    <rect width="640" height="205" rx="20" fill="#111c31" stroke="#29405f"/>
-    <text x="22" y="37" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700">Medium · −4.8% tokens</text>
-    <text x="22" y="70" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Luna-medium · 24,100 · 5.033s</text>
-    <rect x="22" y="84" width="561" height="26" rx="13" fill="url(#a)"/>
-    <text x="22" y="143" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra · 25,320 · 7.097s</text>
-    <rect x="22" y="157" width="590" height="26" rx="13" fill="url(#b)"/>
+  <g transform="translate(36 457)">
+    <rect width="648" height="330" rx="20" fill="#101c31" stroke="#7c2d12"/>
+    <text x="22" y="36" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">MEDIUM · both correct</text>
+    <text x="22" y="65" fill="#fb7185" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700">FAIL · +51.319% tokens · +195.494% time</text>
+    <text x="22" y="92" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="14">Sol-ultra direct vs Sol-ultra entry → Terra-high</text>
+    <text x="22" y="124" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">TOKENS</text>
+    <text x="22" y="151" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Direct 117,772</text><rect x="156" y="137" width="294" height="17" rx="8.5" fill="url(#direct)"/>
+    <text x="22" y="181" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Global 178,211</text><rect x="156" y="167" width="445" height="17" rx="8.5" fill="url(#loss)"/>
+    <text x="22" y="219" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">TIME</text>
+    <text x="22" y="246" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Direct 45.499s</text><rect x="156" y="232" width="151" height="17" rx="8.5" fill="url(#direct)"/>
+    <text x="22" y="276" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Global 134.447s</text><rect x="156" y="262" width="445" height="17" rx="8.5" fill="url(#loss)"/>
+    <text x="22" y="309" fill="#64748b" font-family="Inter,Arial,sans-serif" font-size="13">Correct Terra-high producer; controller overhead still lost.</text>
   </g>
-
-  <g transform="translate(40 555)">
-    <rect width="640" height="205" rx="20" fill="#111c31" stroke="#29405f"/>
-    <text x="22" y="37" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700">Complex · −5.5% tokens</text>
-    <text x="22" y="70" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Terra-xhigh · 23,933 · 5.529s</text>
-    <rect x="22" y="84" width="559" height="26" rx="13" fill="url(#a)"/>
-    <text x="22" y="143" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="16">Sol-ultra · 25,331 · 6.067s</text>
-    <rect x="22" y="157" width="590" height="26" rx="13" fill="url(#b)"/>
+  <g transform="translate(36 806)">
+    <rect width="648" height="330" rx="20" fill="#101c31" stroke="#0f766e"/>
+    <text x="22" y="36" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700">COMPLEX · both correct</text>
+    <text x="22" y="65" fill="#fbbf24" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700">PARTIAL · −26.810% tokens · +6.459% time</text>
+    <text x="22" y="92" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="14">Sol-ultra direct vs Sol-ultra entry → learned Sol-max</text>
+    <text x="22" y="124" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">TOKENS</text>
+    <text x="22" y="151" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Direct 1,232,629</text><rect x="169" y="137" width="432" height="17" rx="8.5" fill="url(#direct)"/>
+    <text x="22" y="181" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Global 902,163</text><rect x="169" y="167" width="316" height="17" rx="8.5" fill="url(#win)"/>
+    <text x="22" y="219" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">TIME</text>
+    <text x="22" y="246" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Direct 325.546s</text><rect x="169" y="232" width="406" height="17" rx="8.5" fill="url(#direct)"/>
+    <text x="22" y="276" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="14">Global 346.572s</text><rect x="169" y="262" width="432" height="17" rx="8.5" fill="url(#loss)"/>
+    <text x="22" y="309" fill="#64748b" font-family="Inter,Arial,sans-serif" font-size="13">Learned Sol-max saved 330,466 tokens, not time.</text>
   </g>
-
-  <text x="40" y="805" fill="#f8fafc" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700">Total: 67,139 vs 75,791 · 8,652 fewer · 11.4%</text>
-  <text x="40" y="842" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="15">✓ outputs match · ✓ workload hashes match</text>
-  <text x="40" y="872" fill="#94a3b8" font-family="Inter,Arial,sans-serif" font-size="15">⚠ one run; use alternating medians for durable claims</text>
+  <rect x="36" y="1152" width="648" height="86" rx="16" fill="#10291f" stroke="#0f766e"/>
+  <text x="360" y="1179" text-anchor="middle" fill="#5eead4" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="700">✅ TOKENS 1,404,182 → 1,200,826 (−14.482%)</text>
+  <text x="360" y="1205" text-anchor="middle" fill="#fda4af" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="700">❌ TIME 383.657s → 533.998s (+39.186%)</text>
+  <text x="360" y="1227" text-anchor="middle" fill="#cbd5e1" font-family="Inter,Arial,sans-serif" font-size="13">All six arms correct and complete · single run</text>
 </svg>

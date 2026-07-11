@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from datetime import datetime, timezone
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -84,6 +85,7 @@ CONTROLLED_FIELDS = [
     "verification_shape",
     "execution_domain",
 ]
+RECOMMENDATION_PROOF_FIELDS = ("selected_pair", "trial", "reason", "profile_fingerprint", "calibration_state", "best_pair", "selection_basis")
 
 DISPATCHER_SKILLS_ROOT = Path(__file__).resolve().parents[2]
 
@@ -129,6 +131,33 @@ def _is_code_implementation(node):
         return False
     return is_code_execution_domain(execution_domain)
 
+
+def receipt_node_role(node):
+    if node.get("phase") == "mini":
+        return "verification"
+    if node.get("phase") == "ending":
+        return "ending"
+    if node.get("purpose") == "repair":
+        return "repair"
+    return "result-producer"
+
+
+def validate_dispatcher_adaptive_result(node):
+    try:
+        routing_condition = routing_history_module.validate_condition(node.get("routing_condition"))
+        recommendation_args = SimpleNamespace(**routing_condition, task_summary=routing_history_module.validate_summary(node.get("task_summary")), candidate_ladder=node.get("candidate_ladder"), static_suggestion=node.get("static_suggestion"), hard_floor=node.get("hard_floor"), history=Path(node.get("_history_path") or routing_history_module.DEFAULT_HISTORY_PATH), enforce_candidate_policy=True)
+        current_recommendation = routing_history_module.recommend_route(recommendation_args)
+        if not isinstance(current_recommendation, dict):
+            raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
+        locked_recommendation = node.get("routing_recommendation")
+        selected_pair = f"{node['model']}|{node['effort']}"
+        if not isinstance(locked_recommendation, dict) or current_recommendation.get("selected_pair") != selected_pair or current_recommendation.get("trial") is not node.get("trial") or any(locked_recommendation.get(field) != current_recommendation.get(field) for field in RECOMMENDATION_PROOF_FIELDS):
+            raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
+    except receipt_module.ReceiptAuthorizationError:
+        raise
+    except (KeyError, OSError, TypeError, ValueError):
+        raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
+    return current_recommendation
 
 
 def path_is_within(path, root):
@@ -185,6 +214,11 @@ def validate_plan(
         failures.append("schema_version must be 1")
     if plan.get("complexity") not in {"easy", "complex"}:
         failures.append("complexity must be easy or complex")
+    first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
+    if not isinstance(first_result_timeout_seconds, int) or not 1 <= first_result_timeout_seconds <= 900:
+        failures.append("first_result_timeout_seconds must be 1 to 900 seconds")
+    else:
+        plan["first_result_timeout_seconds"] = first_result_timeout_seconds
     if plan.get("topology") not in {"sequential", "parallel", "mixed"}:
         failures.append("topology must be sequential, parallel, or mixed")
     entry = plan.get("entry") if isinstance(plan.get("entry"), dict) else {}
@@ -224,6 +258,8 @@ def validate_plan(
             failures.append(f"{node_id} has invalid phase")
         if node.get("sandbox", "read-only") not in ALLOWED_SANDBOXES:
             failures.append(f"{node_id} requests an unsafe automatic sandbox")
+        if "load_user_config" in node and not isinstance(node["load_user_config"], bool):
+            failures.append(f"{node_id} load_user_config must be a boolean")
         timeout = node.get("timeout", 180)
         if not isinstance(timeout, int) or not 1 <= timeout <= 300:
             failures.append(f"{node_id} timeout must be 1 to 300 seconds")
@@ -353,7 +389,7 @@ def validate_plan(
                 if not isinstance(recommendation, dict):
                     failures.append(f"{node_id} requires routing_recommendation proof")
                 elif candidate_pairs and static_pair is not None and hard_pair is not None:
-                    required_proof_keys = {"selected_pair", "trial", "reason", "profile_fingerprint", "calibration_state", "best_pair", "selection_basis"}
+                    required_proof_keys = set(RECOMMENDATION_PROOF_FIELDS)
                     missing_proof_keys = sorted(required_proof_keys - set(recommendation))
                     if missing_proof_keys:
                         failures.append(f"{node_id} routing_recommendation proof missing keys: {', '.join(missing_proof_keys)}")
@@ -381,8 +417,7 @@ def validate_plan(
                                 failures.append(f"{node_id} current routing recommendation is exhausted")
                             if current_recommendation.get("selected_pair") != routing_history_module.pair_text(model, effort) or current_recommendation.get("trial") is not node.get("trial"):
                                 failures.append(f"{node_id} selected pair/trial does not match current learner recommendation")
-                            proof_fields = ("selected_pair", "trial", "reason", "profile_fingerprint", "calibration_state", "best_pair", "selection_basis")
-                            stale_fields = [field for field in proof_fields if recommendation.get(field) != current_recommendation.get(field)]
+                            stale_fields = [field for field in RECOMMENDATION_PROOF_FIELDS if recommendation.get(field) != current_recommendation.get(field)]
                             if stale_fields:
                                 failures.append(f"{node_id} routing_recommendation is stale or not learner-derived: {', '.join(stale_fields)}")
 
@@ -426,6 +461,19 @@ def validate_plan(
         )
         if missing_from_main:
             failures.append("main_result_node must depend transitively on every result node: " + ", ".join(missing_from_main))
+        main_routing_condition = node_by_id[main_result_node].get("routing_condition", {})
+        is_grounded_read_only_answer = main_routing_condition.get("task_family") == "grounded" and main_routing_condition.get("artifact") == "answer" and main_routing_condition.get("modality") == "text" and main_routing_condition.get("risk") == "low"
+        if is_grounded_read_only_answer and len(result_ids) > 1:
+            branch_allowlists = [node_by_id[node_id].get("source_allowlist") for node_id in sorted(result_ids - {main_result_node})]
+            branch_allowlists_are_disjoint = all(isinstance(allowlist, list) and allowlist and all(isinstance(source, str) and source for source in allowlist) for allowlist in branch_allowlists)
+            seen_sources = set()
+            for allowlist in branch_allowlists:
+                if not isinstance(allowlist, list) or not allowlist or seen_sources.intersection(allowlist):
+                    branch_allowlists_are_disjoint = False
+                    break
+                seen_sources.update(allowlist)
+            if not branch_allowlists_are_disjoint or node_by_id[main_result_node].get("reads_dependency_results_only") is not True or "source_allowlist" in node_by_id[main_result_node]:
+                failures.append("grounded read-only answers allow multiple result nodes only for disjoint source_allowlist branches merged with reads_dependency_results_only")
 
     ending_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
     optimization_ids = {node_id for node_id, node in node_by_id.items() if node.get("skill") == "optimization-skill"}
@@ -624,23 +672,56 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     for attempt_index, pair_text in enumerate(planned_pairs, start=1):
         attempt_model, attempt_effort = receipt_module.parse_model_effort_pair(pair_text)
         attempt_receipt_path = cache_dir / f"{node_id}-attempt-{attempt_index}-receipt.json"
+        attempt_timeout = node.get("timeout", 180)
+        deadline_monotonic = node.get("_deadline_monotonic")
+        if isinstance(deadline_monotonic, (int, float)):
+            remaining_seconds = deadline_monotonic - time.monotonic()
+            if attempt_index > 1:
+                reserve_seconds = max(0, int(node.get("_fallback_reserve_seconds", 0)))
+                required_seconds = max(1, int(node.get("timeout", 180))) + reserve_seconds
+                if remaining_seconds < required_seconds:
+                    break
+            if remaining_seconds <= 0:
+                receipt = receipt_module.failed_run_receipt(SimpleNamespace(model=attempt_model, effort=attempt_effort, workload_id=f"task-route-{node_id}", entry_task=False, allow_fallback=[]), "timeout")
+                receipt["process_elapsed_ms"] = 0
+                receipt["route_attempts"][0]["process_elapsed_ms"] = 0
+                route_attempts.append(_normalize_route_attempt(receipt, pair_text, "fail", "timeout"))
+                status = "fail"
+                break
+            attempt_timeout = min(attempt_timeout, max(1, int(remaining_seconds)))
         args = SimpleNamespace(
             model=attempt_model,
             effort=attempt_effort,
             codex_bin=codex_bin,
             sandbox=node.get("sandbox", "read-only"),
-            ignore_user_config=False,
+            ignore_user_config=node.get("sandbox", "read-only") == "read-only" and not node.get("load_user_config", False),
             entry_task=False,
+            node_role=receipt_node_role(node),
             route_marker=route_marker,
             result_output=result_path,
-            timeout=node.get("timeout", 180),
+            timeout=attempt_timeout,
             workdir=workdir.resolve(),
             state_db=state_db,
             workload_id=f"task-route-{node_id}",
             allow_fallback=[],
         )
         try:
-            attempt_receipt = receipt_module.run_receipt(args, prompt)
+            if args.node_role == "result-producer":
+                if receipt_module.entry_context_active():
+                    current_recommendation = validate_dispatcher_adaptive_result(node)
+                    if pair_text != current_recommendation["selected_pair"]:
+                        raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
+                    with receipt_module.dispatcher_adaptive_result_authorization():
+                        attempt_receipt = receipt_module.run_receipt(args, prompt)
+                else:
+                    attempt_receipt = receipt_module.run_receipt(args, prompt)
+            else:
+                with receipt_module.dispatcher_node_authorization(args.node_role):
+                    attempt_receipt = receipt_module.run_receipt(args, prompt)
+        except receipt_module.ReceiptAuthorizationError as error:
+            attempt_receipt = receipt_module.rejected_run_receipt(args, error)
+            failure_class = "authorization"
+            status = "fail"
         except (subprocess.TimeoutExpired, OSError, ValueError) as error:
             attempt_receipt = {
                 "schema_version": 1,
@@ -839,6 +920,9 @@ def run_plan(
     skills_root=None,
     history_path=None,
 ):
+    first_result_started = time.monotonic()
+    active_history_path = Path(history_path or routing_history_module.DEFAULT_HISTORY_PATH)
+    first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
     failures = validate_plan(
         plan,
         entry_model,
@@ -863,15 +947,21 @@ def run_plan(
             "entry": {"model": entry_model, "effort": entry_effort},
             "nodes": [],
             "route_run_id": route_run_id,
+            "first_result_timeout_seconds": first_result_timeout_seconds,
+            "first_result_elapsed_ms": round((time.monotonic() - first_result_started) * 1000),
+            "deadline_exhausted": False,
+            "repair_budget_remaining": 0,
         }
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         manifest["manifest_path"] = str(manifest_path)
         return manifest
 
     node_by_id = {node["id"]: node for node in plan["nodes"]}
+    first_result_timeout_seconds = plan["first_result_timeout_seconds"]
     runnable_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") in {"result", "mini"}}
     completed = {}
     ordered = []
+    deadline_exhausted = False
     while runnable_ids:
         ready = sorted(
             node_id for node_id in runnable_ids if all(
@@ -884,18 +974,48 @@ def run_plan(
 
         completed_snapshot = dict(completed)
         if plan["topology"] == "sequential" or len(ready) == 1:
-            ready_records = {
-                node_id: run_node(
-                    node_by_id[node_id], cache_dir, completed_snapshot, state_db, cwd, codex_bin, skills_root
-                )
-                for node_id in ready
-            }
+            ready_records = {}
+            for node_id in ready:
+                remaining_seconds = first_result_timeout_seconds - (time.monotonic() - first_result_started)
+                if remaining_seconds <= 0:
+                    failures.append("first-result deadline exhausted")
+                    deadline_exhausted = True
+                    break
+                ready_node = dict(node_by_id[node_id])
+                ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
+                ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
+                ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
+                ready_node["_history_path"] = str(active_history_path)
+                ready_records[node_id] = run_node(ready_node, cache_dir, completed_snapshot, state_db, cwd, codex_bin, skills_root)
+                record = ready_records[node_id]
+                completed[node_id] = record
+                ordered.append(record)
+                runnable_ids.remove(node_id)
+                if record["status"] != "pass":
+                    failures.append(f"node {node_id} failed")
+                    runnable_ids.clear()
+                    break
         else:
+            ready_nodes = {}
+            for node_id in ready:
+                remaining_seconds = first_result_timeout_seconds - (time.monotonic() - first_result_started)
+                if remaining_seconds <= 0:
+                    failures.append("first-result deadline exhausted")
+                    deadline_exhausted = True
+                    break
+                ready_node = dict(node_by_id[node_id])
+                ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
+                ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
+                ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
+                ready_node["_history_path"] = str(active_history_path)
+                ready_nodes[node_id] = ready_node
+            if deadline_exhausted:
+                break
             with ThreadPoolExecutor(max_workers=min(3, len(ready))) as executor:
                 futures = {
                     node_id: executor.submit(
                         run_node,
-                        node_by_id[node_id],
+                        ready_nodes[node_id],
                         cache_dir,
                         completed_snapshot,
                         state_db,
@@ -907,15 +1027,19 @@ def run_plan(
                 }
                 ready_records = {node_id: futures[node_id].result() for node_id in ready}
 
-        for node_id in ready:
-            record = ready_records[node_id]
-            completed[node_id] = record
-            ordered.append(record)
-            runnable_ids.remove(node_id)
-            if record["status"] != "pass":
-                failures.append(f"node {node_id} failed")
-                runnable_ids.clear()
-                break
+        if deadline_exhausted:
+            break
+
+        if plan["topology"] != "sequential" and len(ready) > 1:
+            for node_id in ready:
+                record = ready_records[node_id]
+                completed[node_id] = record
+                ordered.append(record)
+                runnable_ids.remove(node_id)
+                if record["status"] != "pass":
+                    failures.append(f"node {node_id} failed")
+                    runnable_ids.clear()
+                    break
 
     main_node = node_by_id.get(plan["main_result_node"], {})
     mini_node_id = plan.get("mini_verify_node")
@@ -948,6 +1072,7 @@ def run_plan(
             )
 
     status = "pass" if not failures and main_record.get("status") == "pass" and mini_record.get("status") == "pass" else "fail"
+    first_result_elapsed_ms = round((time.monotonic() - first_result_started) * 1000)
     ending_handoff_path = cache_dir / "ending-handoff.json"
     ending_manifest_path = cache_dir / "ending-dispatch-manifest.json"
     ending_release_path = _ending_release_path(cache_dir, route_run_id)
@@ -993,6 +1118,10 @@ def run_plan(
         "ending_nodes_pending": [node["id"] for node in plan["nodes"] if node.get("phase") == "ending"],
         "ending_handoff_path": str(ending_handoff_path) if status == "pass" else None,
         "ending_manifest_path": str(ending_manifest_path) if status == "pass" else None,
+        "first_result_timeout_seconds": first_result_timeout_seconds,
+        "first_result_elapsed_ms": first_result_elapsed_ms,
+        "deadline_exhausted": deadline_exhausted,
+        "repair_budget_remaining": 1 if status == "fail" and main_record.get("result_path") and mini_record.get("status") == "fail" else 0,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     manifest["manifest_path"] = str(manifest_path)
@@ -1171,6 +1300,10 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     return manifest
 
 
+def compact_run_plan_manifest(manifest):
+    return {"schema_version": manifest.get("schema_version"), "status": manifest.get("status"), "failures": manifest.get("failures", []), "manifest_path": manifest.get("manifest_path"), "main_result_path": manifest.get("main_result_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "route_run_id": manifest.get("route_run_id"), "first_result_elapsed_ms": manifest.get("first_result_elapsed_ms"), "deadline_exhausted": manifest.get("deadline_exhausted", False)}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Execute a validated internal Task Analyze route without lifecycle hooks.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1206,7 +1339,8 @@ def main():
         manifest = _release_main_result(handoff)
     else:
         manifest = run_ending_handoff(args.handoff, args.codex_bin, args.skills_root)
-    print(json.dumps(manifest, separators=(",", ":")))
+    stdout_manifest = compact_run_plan_manifest(manifest) if args.command == "run-plan" else manifest
+    print(json.dumps(stdout_manifest, separators=(",", ":")))
     return 0 if manifest.get("status") == "pass" else 1
 
 

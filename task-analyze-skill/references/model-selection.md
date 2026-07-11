@@ -15,6 +15,8 @@ A routing rung is the complete `model_name|effort` pair. This is a weak-to-stron
 
 Every non-tiny model profile retains the exact complete GPT-5.6 Luna/Terra/Sol candidate ladder in its internal routing proof, even when the task is easy; selected pairs, fallbacks, and hard floors do not erase the recorded alternatives. A tiny eligible profile carries exactly Spark-low followed by that full normal fallback ladder.
 
+Resolve a stable profile preset from the requested artifact before model selection. Inspected source language is not the execution domain: a read-only repository answer stays grounded/general even when its evidence is Python, C#, or Unity C#. Code presets apply only to code creation, changes, execution, or code-path validation.
+
 If a refreshed local cache temporarily omits a model that the current UI/runtime has already executed successfully, preserve the last validated capability snapshot and require a new runtime receipt. Do not silently rewrite the plan from one incomplete cache view.
 
 ## Model Roles
@@ -54,7 +56,7 @@ Every fallback is a planned or observed event with `from`, `to`, reason, and eff
 
 ## Receipt-Backed Personal Learning
 
-Use `scripts/model_routing_history.py recommend` with a controlled task profile and a weak-to-strong candidate ladder. Do not pass the entry model or effort into the recommendation function.
+Use `scripts/model_routing_history.py recommend` with one named profile preset, its required project/owner/domain values, and a sanitized summary. The preset derives the controlled condition and weak-to-strong candidate ladder internally. Do not pass the ladder, static pair, hard floor, entry model, or entry effort into the recommendation command.
 
 The learner performs a bounded calibration search for the selected complete `model|effort` pair per exact sanitized task profile. Effort changes always precede model changes in both directions. A `mini_real` Mini pass is provisional; Ending Real updates that same producer receipt/run, recomputes the recommendation, and freezes `best_pair` when eligible. Reuse a frozen exact-profile `selected_pair` with `trial=false` until verified failure, ladder/hard-floor/profile drift, policy change, or explicit reset.
 
@@ -77,3 +79,5 @@ Correctness/quality is the eligibility gate. Cost-rank only Real-passing pairs t
 ## Efficiency Guard
 
 Model quality does not excuse wasteful context. Give a node an exact file/source allowlist, exclude caches and backups by default, and request a compact output contract. A broad raw dump can consume more time and tokens than the model choice saves.
+
+The entry model never performs the downstream source audit itself. Grounded low-risk read-only text answers default to one producer that reads the complete bounded allowlist. Split only genuinely disjoint source scopes, mark every collaboration child `LOCKED_ROUTE_NODE`, and choose collaboration or dispatcher once per branch. Use a 180-second easy or 600-second complex first-result deadline and one repair maximum; Ending cost never blocks the first result.

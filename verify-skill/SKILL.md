@@ -19,6 +19,8 @@ Finish the requested task, run the smallest meaningful Mini Verify, and show the
 
 Mini Verify is the only verification gate for the first main result. It is the fastest proportional check that can catch a basic broken result.
 
+Use deterministic local evidence instead of another model session when the target is literal and exact: a source value, file existence, JSON parse/schema/key order, exact string, syntax, compile status, or command exit/result. A local Mini has no model receipt and must not be presented as model execution.
+
 Examples:
 
 - reread the changed value or requested answer;
@@ -29,6 +31,8 @@ Examples:
 - validate skill frontmatter, required files, or a focused routing scenario;
 - confirm requested versus resolved model/effort for a model-routing acceptance target.
 
+For receipt-backed grounded read-only JSON, Task Analyze's `../task-analyze-skill/scripts/grounded_result_gate.py` is the required reusable local Mini: declare required keys/order, sorted-array pointers, and optional source-file pointer/root checks. Do not author or retry task-specific source-analysis probes before the result. The gate validates receipt/result binding and structural evidence only; semantic verification remains Ending Real.
+
 For topology:
 
 - parallel independent result branches receive branch Mini Verify when merge cannot expose their basic failure;
@@ -36,6 +40,8 @@ For topology:
 - mixed work receives an integration Mini Verify after merge, with branch checks only when needed.
 
 When Mini Verify fails, return the failure to the affected result-bearing node, repair, and rerun. When it passes and the requested work is complete, return `Mini Verify: pass` to Workflow so Main Goal Done Gate can release the result.
+
+The foreground repair budget is one. Surface the current result and precise Mini failure before repair, stay inside the first-result deadline, and stop rather than silently constructing another repair plan. Literal formatting/schema failures should be checked deterministically before invoking any model repair.
 
 Mini Verify proves basic readiness. It does not claim realistic, exhaustive, regression, or production proof.
 
@@ -54,6 +60,8 @@ Use it for relevant:
 - same-behavior optimization comparison.
 
 Real Verify never blocks the first Mini-verified result. Report its worker/model/effort as running. For `mini_real`, Mini PASS is provisional: Ending Real updates the same producer receipt/run, recomputes routing, and freezes the exact-profile best pair when eligible. If Real Verify later finds a correctness failure, notify the user, reopen the task, provide the failing evidence, and route any repair through a new Mini Verify before a corrected result is claimed. Operational failures remain neutral routing diagnostics.
+
+Do not schedule Real Verify for an easy exact lookup or deterministic transform when Mini already proves the complete observable acceptance target. Use a deferred/no-op Ending inventory. On buffered non-interactive entry surfaces, Real remains pending until after the result has returned.
 
 Do not relabel compile/import/existence-only evidence as Real Verify when realistic behavior is practical.
 

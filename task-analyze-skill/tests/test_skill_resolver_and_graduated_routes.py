@@ -21,6 +21,44 @@ validator = load_module("validate_graduated_routes")
 
 
 class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
+    def test_canonicalizes_unambiguous_plugin_leaf_without_alias_table(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for version in ("1.0.0", "1.1.0"):
+                plugin_path = root / "plugins" / "cache" / "synthetic-source" / "synthetic-package" / version / "skills" / "synthetic-skill" / "SKILL.md"
+                plugin_path.parent.mkdir(parents=True)
+                plugin_path.write_text("plugin", encoding="utf-8")
+            canonical = resolver.canonicalize_installed_skill_id("synthetic-skill", root / "skills", root / "plugins" / "cache")
+            prefixed = resolver.canonicalize_installed_skill_id("synthetic-package:synthetic-skill", root / "skills", root / "plugins" / "cache")
+        self.assertEqual(canonical, "synthetic-package:synthetic-skill")
+        self.assertEqual(prefixed, "synthetic-package:synthetic-skill")
+
+    def test_canonical_global_skill_remains_unprefixed_when_plugin_leaf_matches(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            global_path = root / "skills" / "shared-skill" / "SKILL.md"
+            plugin_path = root / "plugins" / "cache" / "synthetic-source" / "synthetic-package" / "1.0.0" / "skills" / "shared-skill" / "SKILL.md"
+            global_path.parent.mkdir(parents=True)
+            plugin_path.parent.mkdir(parents=True)
+            global_path.write_text("global", encoding="utf-8")
+            plugin_path.write_text("plugin", encoding="utf-8")
+            canonical = resolver.canonicalize_installed_skill_id("shared-skill", root / "skills", root / "plugins" / "cache")
+        self.assertEqual(canonical, "shared-skill")
+
+    def test_canonicalization_fails_closed_for_ambiguous_or_uninstalled_skill(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for package in ("package-one", "package-two"):
+                plugin_path = root / "plugins" / "cache" / "synthetic-source" / package / "1.0.0" / "skills" / "shared-plugin-skill" / "SKILL.md"
+                plugin_path.parent.mkdir(parents=True)
+                plugin_path.write_text("plugin", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "ambiguous"):
+                resolver.canonicalize_installed_skill_id("shared-plugin-skill", root / "skills", root / "plugins" / "cache")
+            with self.assertRaisesRegex(ValueError, "not installed"):
+                resolver.canonicalize_installed_skill_id("missing-skill", root / "skills", root / "plugins" / "cache")
+            with self.assertRaisesRegex(ValueError, "not installed"):
+                resolver.canonicalize_installed_skill_id("missing-package:shared-plugin-skill", root / "skills", root / "plugins" / "cache")
+
     def test_resolves_global_and_synthetic_plugin_skills(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

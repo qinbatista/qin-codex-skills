@@ -4,6 +4,16 @@
 
 Finish the requested task, run the smallest meaningful Mini Verify, and show the basically verified result immediately. Deeper Real Verify, broader regression, optimization proof, reports, logs, documentation, and routing learning belong after that result in Ending Task. A later correctness failure must notify the user, reopen the task, repair, rerun Mini Verify, and present the corrected result. Mini Verify is basic readiness, never exhaustive proof.
 
+## Foreground Budget
+
+The entry model resolves/classifies, shows the route, chooses one execution surface, invokes one compact controller, and reads the Mini-passed result. It does not independently inspect task sources. Every collaboration child starts with `LOCKED_ROUTE_NODE`, and collaboration plus dispatcher must never execute the same branch twice.
+
+- Easy deterministic model work: one producer, local exact Mini, result, deferred/no-op Ending.
+- Grounded low-risk read-only text answer: one result producer by default.
+- Multiple result branches require pairwise-disjoint `source_allowlist` values and a main merge with `reads_dependency_results_only=true` and no source allowlist of its own.
+- Plans set `first_result_timeout_seconds` (normally 180 easy, 600 complex). One repair is allowed before result release. Deadline exhaustion stops execution and preserves partial evidence.
+- A buffered entry process returns after Mini with Ending pending; Real Verify never delays that return.
+
 ## Easy Direct Tool Action
 
 Task Analyze remains the 100 percent entry skill, but an obvious reversible tool action with no graph runs its installed tool skill directly after the concise route. It uses no cached plan, model child, or internal dispatcher, and tool-only work gets no fabricated downstream model receipt. Mini Verify checks only the observable stop condition. Graduated scenarios:
@@ -73,6 +83,8 @@ When a dispatcher is useful, save schema version 1 JSON inside the active task c
 
 The internal main producer must also carry a complete `routing_recommendation` matching its selected `model|effort`, `trial`, and profile fingerprint. At initial dispatch the controller recomputes the current private recommendation and rejects a stale or self-authored plan before any node runs. Every non-tiny model profile carries exactly the full GPT-5.6 Luna/Terra/Sol ladder with no Spark; an eligible tiny profile carries exactly Spark-low plus that full normal fallback ladder.
 
+The plan also carries `first_result_timeout_seconds`. Dispatcher stdout is a compact locator only; the full manifest remains on disk. Read-only locked nodes omit broad user configuration by default because their prompt already includes the exact owning skill path and domain reference; set `load_user_config=true` only when a configured plugin/tool surface is genuinely required.
+
 Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher executes result and Mini nodes first. After the main result is shown, invoke its Ending handoff separately so Real Verify and records remain post-result work.
 
 ## Plan-Lock Invariants
@@ -93,6 +105,8 @@ The graduated complex fixture is a portable template: materialization injects on
 - A later correctness failure notifies and reopens.
 - No lifecycle hook or chat-visible machine plan is required.
 - Ending wave scheduling requires dependency-ready batches with a three-node concurrency cap.
+- Grounded low-risk text-answer plans use one result node unless disjoint source allowlists plus a dependency-results-only merge prove non-duplicated fan-out.
+- First-result deadline and one-repair budget gate every foreground wave and fallback. Deadline exhaustion cannot launch another plan.
 - For Ending Task, each `optimization-skill` node must have exactly one `verify-skill` ending node with `verifies_node` equal to that optimization node ID.
 - A targeted optimization verifier must depend directly on Mini Verify and on its target node; only this verifier may depend on another Ending node.
 - Targeted optimizer verifiers must carry explicit `verifies_node`, use a distinct sanitized worker identity from target, and fail when identities are missing or equal.

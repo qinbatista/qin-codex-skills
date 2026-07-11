@@ -90,6 +90,17 @@ EXECUTION_DOMAINS = {
     },
 }
 
+PROFILE_PRESET_VERSION = 1
+PROFILE_PRESETS = {
+    "grounded-repository-answer-easy": {"task_family": "grounded", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "mini_real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|medium", "hard_floor": "gpt-5.6-luna|low"},
+    "grounded-repository-answer-complex": {"task_family": "grounded", "artifact": "answer", "scope": "multi", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "mini_real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
+    "tiny-text": {"task_family": "tiny_text", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "mini_real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low"},
+    "command-generation": {"task_family": "command_generation", "artifact": "script", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "mini_real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low"},
+    "tiny-code": {"task_family": "tiny_code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "mini_real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low"},
+    "code-easy": {"task_family": "code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "mini_real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-terra|medium", "hard_floor": "gpt-5.6-luna|low"},
+    "code-complex": {"task_family": "code", "artifact": "patch", "scope": "multi", "ambiguity": "medium", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "mini_real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
+}
+
 
 def execution_domain_names():
     return list(EXECUTION_DOMAINS.keys())
@@ -371,6 +382,67 @@ def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="eas
     return [pair_text(*pair) for pair in adaptive_ladder_for_profile(task_family, modality, risk, complexity, ambiguity)]
 
 
+def profile_preset_names():
+    return tuple(PROFILE_PRESETS.keys())
+
+
+def resolve_profile_preset(profile_preset, *, project_family, owning_skill=None, execution_domain=None):
+    if profile_preset not in PROFILE_PRESETS:
+        raise ValueError(f"unknown profile preset: {profile_preset}")
+    if not isinstance(project_family, str) or not project_family.strip():
+        raise ValueError("project_family is required")
+    preset = PROFILE_PRESETS[profile_preset]
+    fixed_owner = preset["owning_skill"]
+    if fixed_owner is None:
+        if not isinstance(owning_skill, str) or not owning_skill.strip():
+            raise ValueError("owning_skill is required for this profile preset")
+        resolved_owner = owning_skill
+    else:
+        if owning_skill is not None and owning_skill != fixed_owner:
+            raise ValueError(f"profile preset requires owning_skill={fixed_owner}")
+        resolved_owner = fixed_owner
+    fixed_domain = preset["execution_domain"]
+    if fixed_domain is None:
+        if execution_domain is None:
+            raise ValueError("an active code execution_domain is required for this profile preset")
+        domain_metadata = execution_domain_metadata(execution_domain)
+        if not domain_metadata["active"] or domain_metadata["history_only"] or domain_metadata["kind"] != "code":
+            raise ValueError("profile preset requires an active code execution_domain")
+        resolved_domain = execution_domain
+    else:
+        if execution_domain is not None and execution_domain != fixed_domain:
+            raise ValueError(f"profile preset requires execution_domain={fixed_domain}")
+        resolved_domain = fixed_domain
+    profile = {field: preset[field] for field in ("task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "verification_shape")}
+    profile.update({"owning_skill": resolved_owner, "project_family": project_family, "execution_domain": resolved_domain})
+    profile["candidate_ladder"] = adaptive_pair_texts_for_profile(profile["task_family"], profile["modality"], profile["risk"], profile["complexity"], profile["ambiguity"])
+    profile["static_suggestion"] = preset["static_suggestion"]
+    profile["hard_floor"] = preset["hard_floor"]
+    return profile
+
+
+def public_profile_preset_rows():
+    rows = []
+    for profile_preset, preset in PROFILE_PRESETS.items():
+        condition = {field: preset[field] for field in ("task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "verification_shape")}
+        rows.append({"id": profile_preset, "condition": condition, "owning_skill": preset["owning_skill"] or "caller_required", "execution_domain": preset["execution_domain"] or "active_code_domain_required", "static_suggestion": preset["static_suggestion"], "hard_floor": preset["hard_floor"]})
+    return rows
+
+
+def validate_profile_preset_registry():
+    required = {"task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "verification_shape", "owning_skill", "execution_domain", "static_suggestion", "hard_floor"}
+    for profile_preset, preset in PROFILE_PRESETS.items():
+        if set(preset) != required:
+            raise ValueError(f"profile preset has invalid fields: {profile_preset}")
+        sample_owner = preset["owning_skill"] or "workflow-skill"
+        sample_domain = preset["execution_domain"] or next(domain for domain in EXECUTION_DOMAINS if execution_domain_metadata(domain)["active"] and execution_domain_metadata(domain)["kind"] == "code")
+        resolved = resolve_profile_preset(profile_preset, project_family="global", owning_skill=sample_owner, execution_domain=sample_domain)
+        pairs = canonical_pairs(resolved["candidate_ladder"])
+        if parse_pair(resolved["static_suggestion"]) not in pairs or parse_pair(resolved["hard_floor"]) not in pairs:
+            raise ValueError(f"profile preset pair is outside its canonical ladder: {profile_preset}")
+    return True
+
+
 def _eligible_pairs_by_model(pairs, target):
     return [pair for pair in pairs if pair[0] == target]
 
@@ -424,3 +496,4 @@ def canonical_pair_texts(pairs):
 
 
 validate_execution_domain_registry()
+validate_profile_preset_registry()

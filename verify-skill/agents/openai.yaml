@@ -2,4 +2,4 @@ interface:
   display_name: "Verify Skill"
   short_description: "Mini gate now, Real proof in Ending Task"
   default_prompt: >-
-    $verify-skill: run Mini before result release. Treat mini_real Mini PASS as provisional; Ending Real updates the producer, routing learning, and only related sanitized memory. Record producer pair, not verifier pair; missing Obsidian is a no-op. Real correctness failure reopens, operational failure stays neutral, and optimization needs a different verifier.
+    $verify-skill: use the smallest Mini before release. Literal source/schema/string/syntax checks are local, not another model session. One repair may run inside the first-result deadline. Return the result before buffered Ending; easy exact work needs no model Real. Later Real failure reopens, operational failure stays neutral, and optimization needs a different verifier.

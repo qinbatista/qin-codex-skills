@@ -69,6 +69,9 @@ If no different verifier is callable, report `independent optimization verificat
 Do not claim savings from shorter text, different prompts, different inputs, or summed parallel branch times.
 
 - Compare identical task scope, prompts, inputs, topology, sandbox, and acceptance criteria.
+- To isolate Task Analyze, keep user/project configuration identical and bypass only routing with a `LOCKED_ROUTE_NODE` baseline on the entry pair. Do not use `--ignore-user-config` as the no-skill arm.
+- Aggregate every unique entry, collaboration, dispatcher, retry, and incomplete worker session exactly once. Never count a canonical receipt and its matching attempt receipt twice.
+- Report Mini-passed first-result tokens/time separately from optional Ending totals. A timeout or missing final result fails the optimization gate and cannot support a savings claim.
 - Keep cached input separate; it is already part of input tokens.
 - Keep reasoning output separate; it is already part of output tokens.
 - Compare critical-path elapsed time for parallel workflows.

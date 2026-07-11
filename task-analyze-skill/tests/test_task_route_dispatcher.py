@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import os
 from copy import deepcopy
 import tempfile
 import unittest
@@ -504,13 +505,59 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                     "process_elapsed_ms": 2,
                 }
 
-        with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
+            with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                (cache_dir / "mini-verify-result.md").write_text("MINI_VERIFY=FAIL\n", encoding="utf-8")
+                completed = module.run_node(node, cache_dir, {"main": {"status": "pass", "result_path": str(cache_dir / "main-result.md")}}, root / "state.sqlite", root)
+            self.assertEqual(calls, [("gpt-5.6-luna", "low")])
+            self.assertEqual(completed["status"], "fail")
+            self.assertEqual(completed["result_path"], str(cache_dir / "mini-verify-result.md"))
+
+    def test_run_node_skips_operational_fallback_when_deadline_cannot_cover_attempt_and_reserve(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
             cache_dir.mkdir(parents=True, exist_ok=True)
-            (cache_dir / "mini-verify-result.md").write_text("MINI_VERIFY=FAIL\n", encoding="utf-8")
-            completed = module.run_node(node, cache_dir, {"main": {"status": "pass", "result_path": str(cache_dir / "main-result.md")}}, root / "state.sqlite", root)
-        self.assertEqual(calls, [("gpt-5.6-luna", "low")])
-        self.assertEqual(completed["status"], "fail")
-        self.assertEqual(completed["result_path"], str(cache_dir / "mini-verify-result.md"))
+            node = {
+                "id": "bounded-result",
+                "phase": "result",
+                "skill": "workflow-skill",
+                "model": "gpt-5.6-terra",
+                "effort": "high",
+                "dependencies": [],
+                "prompt": "Return a bounded result.",
+                "sandbox": "read-only",
+                "allow_fallback": ["gpt-5.6-terra|xhigh"],
+                "timeout": 80,
+                "_deadline_monotonic": 100,
+                "_fallback_reserve_seconds": 30,
+            }
+            calls = []
+
+            def fake_run_receipt(args, _prompt):
+                calls.append((args.model, args.effort))
+                return {
+                    "schema_version": 1,
+                    "requested_model": args.model,
+                    "requested_effort": args.effort,
+                    "requested_pair": f"{args.model}|{args.effort}",
+                    "resolved_model": args.model,
+                    "resolved_effort": args.effort,
+                    "effective_model": args.model,
+                    "effective_pair": f"{args.model}|{args.effort}",
+                    "status": "fail",
+                    "failure_class": "timeout",
+                    "route_attempts": [],
+                    "process_elapsed_ms": 80_000,
+                    "tokens": {"total_tokens": 10},
+                }
+
+            with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt), patch.object(module.time, "monotonic", side_effect=[0, 50]):
+                completed = module.run_node(node, cache_dir, {}, root / "state.sqlite", root)
+            self.assertEqual(calls, [("gpt-5.6-terra", "high")])
+            self.assertEqual(completed["status"], "fail")
+            receipt = json.loads((cache_dir / "bounded-result-receipt.json").read_text(encoding="utf-8"))
+            self.assertEqual([attempt["requested_pair"] for attempt in receipt["route_attempts"]], ["gpt-5.6-terra|high"])
 
     def test_run_plan_records_unknown_execution_failure_before_mini(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1294,6 +1341,130 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             mismatched = module.run_ending_handoff(mismatch_path)
         self.assertEqual(mismatched["status"], "fail")
         self.assertTrue(any("ending handoff release does not match route_run_id" in failure for failure in mismatched["failures"]))
+
+    def test_grounded_read_only_answer_rejects_redundant_result_fanout(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            main_node = plan["nodes"][0]
+            main_node["routing_condition"]["task_family"] = "grounded"
+            main_node["dependencies"] = ["source-branch"]
+            self.refresh_recommendation(main_node)
+            plan["nodes"].insert(0, {"id": "source-branch", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Read the same source again.", "sandbox": "read-only"})
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("grounded read-only answers allow multiple result nodes" in failure for failure in failures))
+
+    def test_grounded_read_only_answer_allows_disjoint_dependency_only_merge(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            main_node = plan["nodes"][0]
+            main_node["routing_condition"]["task_family"] = "grounded"
+            main_node["dependencies"] = ["source-branch"]
+            main_node["reads_dependency_results_only"] = True
+            self.refresh_recommendation(main_node)
+            plan["nodes"].insert(0, {"id": "source-branch", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Read one disjoint source.", "source_allowlist": ["source-a"], "sandbox": "read-only"})
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
+    def test_run_plan_stops_before_node_when_first_result_deadline_is_exhausted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["first_result_timeout_seconds"] = 1
+            with patch.object(module.time, "monotonic", side_effect=[0, 2, 3]), patch.object(module, "run_node", side_effect=AssertionError("deadline must stop execution")):
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
+        self.assertEqual(manifest["status"], "fail")
+        self.assertTrue(manifest["deadline_exhausted"])
+        self.assertIn("first-result deadline exhausted", manifest["failures"])
+        self.assertEqual(manifest["nodes"], [])
+
+    def test_read_only_node_uses_minimal_config_unless_explicitly_requested(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            cache_dir.mkdir(parents=True)
+            node = self.plan(cache_dir)["nodes"][0]
+            observed = []
+
+            def fake_run_receipt(args, _prompt):
+                observed.append(args.ignore_user_config)
+                args.result_output.write_text("RESULT=12\n", encoding="utf-8")
+                return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": f"{args.model}|{args.effort}", "status": "pass", "failure_class": None, "route_attempts": [], "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
+
+            with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
+                module.run_node(node, cache_dir, {}, root / "state.sqlite", root)
+                node["load_user_config"] = True
+                module.run_node(node, cache_dir, {}, root / "state.sqlite", root)
+        self.assertEqual(observed, [True, False])
+
+    def test_compact_run_plan_manifest_omits_nodes_and_embedded_plan(self):
+        compact = module.compact_run_plan_manifest({"schema_version": 1, "status": "pass", "failures": [], "manifest_path": "/tmp/manifest", "main_result_path": "/tmp/result", "ending_handoff_path": "/tmp/handoff", "route_run_id": "route-1", "first_result_elapsed_ms": 12, "deadline_exhausted": False, "nodes": [{"private": "large"}], "plan": {"private": "large"}})
+        self.assertEqual(set(compact), {"schema_version", "status", "failures", "manifest_path", "main_result_path", "ending_handoff_path", "route_run_id", "first_result_elapsed_ms", "deadline_exhausted"})
+        self.assertNotIn("nodes", compact)
+        self.assertNotIn("plan", compact)
+
+    def test_dispatcher_authorizes_verification_repair_and_ending_roles_in_entry_context(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            cache_dir.mkdir(parents=True)
+            nodes = [
+                {"id": "mini-guard", "phase": "mini", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Verify.", "sandbox": "read-only"},
+                {"id": "repair-guard", "phase": "result", "purpose": "repair", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Repair.", "sandbox": "read-only"},
+                {"id": "ending-guard", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "End.", "sandbox": "read-only"},
+            ]
+            observed = []
+
+            def guarded_run(args, _prompt):
+                authorization = module.receipt_module.authorize_receipt_run(args)
+                observed.append((args.node_role, authorization["authorization_source"]))
+                marker = "MINI_VERIFY=PASS\n" if args.node_role == "verification" else "ENDING_TASK=PASS\n" if args.node_role == "ending" else "REPAIRED\n"
+                args.result_output.write_text(marker, encoding="utf-8")
+                return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": f"{args.model}|{args.effort}", "status": "pass", "failure_class": None, "route_attempts": [], "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
+
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module.receipt_module, "run_receipt", side_effect=guarded_run):
+                for node in nodes:
+                    record = module.run_node(node, cache_dir, {}, root / "state.sqlite", root)
+                    self.assertEqual(record["status"], "pass")
+        self.assertEqual(observed, [("verification", "dispatcher"), ("repair", "dispatcher"), ("ending", "dispatcher")])
+
+    def test_dispatcher_entry_context_runs_only_fresh_adaptive_result_recommendation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            valid_cache = root / "work" / "cache" / "valid"
+            valid_cache.mkdir(parents=True)
+            valid_node = self.plan(valid_cache)["nodes"][0]
+            current_recommendation = deepcopy(valid_node["routing_recommendation"])
+            observed_sources = []
+
+            def guarded_model_stub(args, _prompt):
+                authorization = module.receipt_module.authorize_receipt_run(args)
+                observed_sources.append(authorization["authorization_source"])
+                args.result_output.write_text("RESULT=12\n", encoding="utf-8")
+                return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": f"{args.model}|{args.effort}", "status": "pass", "failure_class": None, "route_attempts": [], "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
+
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module.routing_history_module, "recommend_route", return_value=current_recommendation) as recommend_mock, patch.object(module.receipt_module, "run_receipt", side_effect=guarded_model_stub) as model_stub:
+                valid_record = module.run_node(valid_node, valid_cache, {}, root / "state.sqlite", root)
+            self.assertEqual(valid_record["status"], "pass")
+            self.assertEqual(recommend_mock.call_count, 1)
+            self.assertEqual(model_stub.call_count, 1)
+            self.assertEqual(observed_sources, ["dispatcher-adaptive-recommendation"])
+
+            forged_cache = root / "work" / "cache" / "forged"
+            forged_cache.mkdir(parents=True)
+            forged_node = deepcopy(valid_node)
+            forged_node["model"] = "gpt-5.6-terra"
+            forged_node["effort"] = "low"
+            forged_node["routing_recommendation"]["selected_pair"] = "gpt-5.6-terra|low"
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module.routing_history_module, "recommend_route", return_value=current_recommendation), patch.object(module.receipt_module, "run_receipt") as forged_model_stub:
+                forged_record = module.run_node(forged_node, forged_cache, {}, root / "state.sqlite", root)
+            forged_receipt = json.loads((forged_cache / "direct-receipt.json").read_text(encoding="utf-8"))
+        forged_model_stub.assert_not_called()
+        self.assertEqual(forged_record["status"], "fail")
+        self.assertEqual(forged_receipt["failure_class"], "authorization")
+        self.assertEqual(forged_receipt["authorization_reason"], "dispatcher_adaptive_recommendation_invalid")
+        self.assertEqual(len(forged_receipt["route_attempts"]), 1)
 
 
 if __name__ == "__main__":

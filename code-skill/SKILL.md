@@ -36,6 +36,7 @@ Any new active code domain is registry-owned by `routing_policy.py::EXECUTION_DO
 
 Read only what the locked node needs:
 
+- literal read-only source lookups on the one-call easy path: no language or coding reference; the locked child prompt supplies the exact owner path, source allowlist, output contract, and deterministic acceptance target;
 - all non-trivial code: `references/coding-approach.md`;
 - Python: `references/python-rules.md`;
 - plain C#: `references/csharp-rules.md`;

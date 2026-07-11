@@ -228,6 +228,17 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_entry_context_guard_implementation_is_required(self):
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
+        try:
+            receipt_path = temp_dir / "scripts" / "model_execution_receipt.py"
+            receipt_path.write_text(receipt_path.read_text(encoding="utf-8").replace("entry_context_adaptive_runner_required", "removed_guard_code"), encoding="utf-8")
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
+            self.assertFalse(result["valid"])
+            self.assertTrue(any("receipt entry guard" in failure for failure in result["failures"]))
+        finally:
+            shutil.rmtree(temp_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

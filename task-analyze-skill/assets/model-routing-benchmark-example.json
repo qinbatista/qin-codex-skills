@@ -1,102 +1,119 @@
 {
-  "schema_version": 1,
-  "recorded_date": "2026-07-10",
-  "evidence_scope": "single-run same-workload smoke comparison",
-  "automatic_private_ledger_update": {
-    "condition_task_count_before": 2,
-    "condition_task_count_after": 3,
-    "producer_run_id": "benchmark-complex-global-20260710",
-    "executed_pair": "gpt-5.6-terra|xhigh",
-    "mini_verify": "pass",
-    "real_verify": "pass",
-    "calibration_state": "frozen",
-    "best_pair": "gpt-5.6-terra|xhigh",
-    "failed_boundary": "gpt-5.6-terra|high",
-    "private_ledger_published": false
+  "schema_version": 2,
+  "recorded_date": "2026-07-11",
+  "evidence_scope": "real single-run same-workload Codex A/B comparison",
+  "publication_scope": "sanitized summary only; raw runtime receipts remain local",
+  "benchmark_design": {
+    "goal": "Use fewer total tokens and less critical-path time while preserving correctness from simple through complex work.",
+    "direct_arm": "gpt-5.6-sol|ultra under the current user configuration; LOCKED_ROUTE_NODE bypasses only Task Analyze.",
+    "global_arm": "The same gpt-5.6-sol|ultra entry runs Task Analyze and selects any downstream pair.",
+    "controls": [
+      "same workload text and inputs within each A/B pair",
+      "same working directory, sandbox, and user configuration",
+      "same output contract and deterministic acceptance gate"
+    ],
+    "accounting": "Deduplicate local operational receipts, add entry plus unique descendants, and use the arm critical path for time.",
+    "token_definition": "Logical runtime tokens including cached input; not a billing-token claim.",
+    "attestation_boundary": "Acceptance combines deterministic output verification with local operational receipts; receipts are not cryptographic attestation."
   },
-  "controlled_effort_first_search": {
-    "evidence_type": "isolated learner lifecycle with schema-valid synthetic receipts; not model-performance evidence",
-    "steps": [
-      {
-        "evidence": "gpt-5.6-sol|ultra Real pass",
-        "next_pair": "gpt-5.6-sol|max",
-        "trial": true
-      },
-      {
-        "evidence": "gpt-5.6-sol|max Real pass",
-        "next_pair": "gpt-5.6-sol|xhigh",
-        "trial": true
-      },
-      {
-        "evidence": "gpt-5.6-sol|xhigh Real quality fail",
-        "next_pair": "gpt-5.6-sol|max",
-        "trial": false,
-        "calibration_state": "frozen"
-      }
-    ]
+  "summary": {
+    "all_outputs_correct": true,
+    "all_arms_complete": true,
+    "token_goal_met": true,
+    "speed_goal_met": false,
+    "direct_total_tokens": 1404182,
+    "global_total_tokens": 1200826,
+    "tokens_saved": 203356,
+    "token_savings_percent": 14.482,
+    "direct_suite_critical_path_ms": 383657,
+    "global_suite_critical_path_ms": 533998,
+    "critical_path_ms_saved": -150341,
+    "critical_path_time_savings_percent": -39.186,
+    "interpretation": "The suite met the token goal because the complex token saving outweighed simple and medium overhead. It did not meet the speed goal: every Global arm was slower. This single run is repair evidence, not a durable performance claim."
   },
   "comparisons": [
     {
-      "scenario": "simple deterministic text transform",
-      "adaptive_pair": "gpt-5.3-codex-spark|low",
-      "fixed_baseline_pair": "gpt-5.6-sol|ultra",
-      "adaptive_total_tokens": 19106,
-      "baseline_total_tokens": 25140,
-      "tokens_saved": 6034,
-      "token_savings_percent": 24.002,
-      "adaptive_process_ms": 5701,
-      "baseline_process_ms": 6597,
-      "process_ms_saved": 896,
-      "process_savings_percent": 13.582,
-      "output_match": true,
-      "workload_hash_match": true,
-      "adaptive_receipt_status": "pass",
-      "baseline_receipt_status": "pass"
+      "scenario": "simple",
+      "direct_route": "gpt-5.6-sol|ultra with Task Analyze bypassed",
+      "global_route": "gpt-5.6-sol|ultra entry and direct action",
+      "direct": {
+        "completion": "complete",
+        "correctness": "deterministic_pass",
+        "total_tokens": 53781,
+        "critical_path_ms": 12612
+      },
+      "global": {
+        "completion": "complete",
+        "correctness": "deterministic_pass",
+        "total_tokens": 120452,
+        "critical_path_ms": 52979
+      },
+      "comparison": {
+        "comparable": true,
+        "tokens_saved": -66671,
+        "token_savings_percent": -123.968,
+        "critical_path_ms_saved": -40367,
+        "critical_path_time_savings_percent": -320.068
+      },
+      "workload_hash_match": true
     },
     {
-      "scenario": "medium deterministic order aggregation",
-      "adaptive_pair": "gpt-5.6-luna|medium",
-      "fixed_baseline_pair": "gpt-5.6-sol|ultra",
-      "adaptive_total_tokens": 24100,
-      "baseline_total_tokens": 25320,
-      "tokens_saved": 1220,
-      "token_savings_percent": 4.818,
-      "adaptive_process_ms": 5033,
-      "baseline_process_ms": 7097,
-      "process_ms_saved": 2064,
-      "process_savings_percent": 29.083,
-      "output_match": true,
-      "workload_hash_match": true,
-      "adaptive_receipt_status": "pass",
-      "baseline_receipt_status": "pass"
+      "scenario": "medium",
+      "direct_route": "gpt-5.6-sol|ultra with Task Analyze bypassed",
+      "global_route": "gpt-5.6-sol|ultra entry to gpt-5.6-terra|high producer",
+      "direct": {
+        "completion": "complete",
+        "correctness": "deterministic_pass",
+        "total_tokens": 117772,
+        "critical_path_ms": 45499
+      },
+      "global": {
+        "completion": "complete",
+        "correctness": "deterministic_pass",
+        "total_tokens": 178211,
+        "critical_path_ms": 134447,
+        "entry_tokens": 124472,
+        "producer_pair": "gpt-5.6-terra|high",
+        "producer_tokens": 53739
+      },
+      "comparison": {
+        "comparable": true,
+        "tokens_saved": -60439,
+        "token_savings_percent": -51.319,
+        "critical_path_ms_saved": -88948,
+        "critical_path_time_savings_percent": -195.494
+      },
+      "workload_hash_match": true
     },
     {
-      "scenario": "complex deterministic dependency workflow",
-      "adaptive_pair": "gpt-5.6-terra|xhigh",
-      "fixed_baseline_pair": "gpt-5.6-sol|ultra",
-      "adaptive_total_tokens": 23933,
-      "baseline_total_tokens": 25331,
-      "tokens_saved": 1398,
-      "token_savings_percent": 5.519,
-      "adaptive_process_ms": 5529,
-      "baseline_process_ms": 6067,
-      "process_ms_saved": 538,
-      "process_savings_percent": 8.868,
-      "output_match": true,
-      "workload_hash_match": true,
-      "adaptive_receipt_status": "pass",
-      "baseline_receipt_status": "pass"
+      "scenario": "complex",
+      "direct_route": "gpt-5.6-sol|ultra with Task Analyze bypassed",
+      "global_route": "gpt-5.6-sol|ultra entry to learned gpt-5.6-sol|max producer",
+      "direct": {
+        "completion": "complete",
+        "correctness": "deterministic_pass",
+        "total_tokens": 1232629,
+        "critical_path_ms": 325546
+      },
+      "global": {
+        "completion": "complete",
+        "correctness": "deterministic_pass",
+        "total_tokens": 902163,
+        "critical_path_ms": 346572,
+        "entry_tokens": 225050,
+        "producer_pair": "gpt-5.6-sol|max",
+        "producer_tokens": 677113
+      },
+      "comparison": {
+        "comparable": true,
+        "tokens_saved": 330466,
+        "token_savings_percent": 26.81,
+        "critical_path_ms_saved": -21026,
+        "critical_path_time_savings_percent": -6.459
+      },
+      "verified_workflow_shape": "conditional_serial resolve_structure followed by parallel extract_names",
+      "expected_output_match": true,
+      "workload_hash_match": true
     }
-  ],
-  "combined": {
-    "adaptive_total_tokens": 67139,
-    "baseline_total_tokens": 75791,
-    "tokens_saved": 8652,
-    "token_savings_percent": 11.416,
-    "adaptive_process_ms": 16263,
-    "baseline_process_ms": 19761,
-    "process_ms_saved": 3498,
-    "process_savings_percent": 17.702
-  },
-  "interpretation": "Across the three fresh same-prompt pairs, adaptive routing used 11.4 percent fewer tokens and 17.7 percent less sequential process time. Outputs and workload hashes matched. These are single-run smoke measurements; durable claims require repeated alternating runs and medians."
+  ]
 }

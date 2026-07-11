@@ -2,6 +2,7 @@
 import argparse
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -141,8 +142,37 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(receipt["failure_class"], "timeout")
         self.assertIsNone(receipt["effective_model"])
         self.assertFalse(receipt["turn_completed"])
+        self.assertFalse(receipt["metrics_complete"])
+        self.assertFalse(receipt["tokens_lower_bound"])
         self.assertEqual(receipt["route_attempts"][0]["executed_pair"], "gpt-5.6-luna|high")
         self.assertNotIn("error", json.dumps(receipt).lower())
+
+    def test_run_receipt_preserves_sanitized_timeout_telemetry_from_partial_bytes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result_output = Path(temp_dir) / "partial-result.md"
+            partial_stdout = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-timeout"}), json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "secret partial response"}}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 70, "output_tokens": 30, "total_tokens": 100}})])
+            timeout_error = module.subprocess.TimeoutExpired(["codex", "exec"], 30, output=partial_stdout.encode("utf-8"), stderr=b"private stderr")
+            thread_state = {"rollout_path": Path(temp_dir) / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 125, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+            rollout = {"turn_context": {"turn_id": "turn-timeout", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [{"from_model": "gpt-5.6-luna", "to_model": "gpt-5.6-terra", "reason": "capacity"}], "usage": {"input_tokens": 80, "cached_input_tokens": 5, "output_tokens": 45, "reasoning_output_tokens": 12, "total_tokens": 125}, "task_complete": {"duration_ms": 900, "time_to_first_token_ms": 30}}
+            args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=result_output, timeout=30, workdir=Path(temp_dir), state_db=Path(temp_dir) / "state.sqlite", workload_id="timeout-work", allow_fallback=["gpt-5.6-terra|low"])
+            with patch.object(module.subprocess, "run", side_effect=timeout_error), patch.object(module, "read_thread_state", return_value=thread_state) as read_state, patch.object(module, "parse_rollout_allowlist", return_value=rollout):
+                receipt = module.run_receipt(args, "confidential prompt")
+        self.assertEqual(read_state.call_args.args[1], "thread-timeout")
+        self.assertEqual(receipt["status"], "fail")
+        self.assertEqual(receipt["failure_class"], "timeout")
+        self.assertFalse(receipt["turn_completed"])
+        self.assertFalse(receipt["metrics_complete"])
+        self.assertTrue(receipt["tokens_lower_bound"])
+        self.assertEqual(receipt["tokens"]["total_tokens"], 125)
+        self.assertEqual(receipt["resolved_model"], "gpt-5.6-luna")
+        self.assertEqual(receipt["effective_model"], "gpt-5.6-terra")
+        self.assertEqual(receipt["route_attempts"][0]["failure_class"], "timeout")
+        self.assertEqual(receipt["workload_prompt_sha256"], module.sha256_text("confidential prompt"))
+        self.assertGreaterEqual(receipt["process_elapsed_ms"], 0)
+        self.assertFalse(result_output.exists())
+        self.assertNotIn("secret partial response", json.dumps(receipt))
+        self.assertNotIn("private stderr", json.dumps(receipt))
+        self.assertNotIn("confidential prompt", json.dumps(receipt))
 
     def test_compare_receipts_reports_positive_savings_for_routed_run(self):
         routed = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "prompt_sha256": "wrapper-a", "output_sha256": "same-output", "effective_model": "gpt-5.3-codex-spark", "resolved_effort": "high", "process_elapsed_ms": 800, "tokens": {"total_tokens": 120, "uncached_input_tokens": 80}}
@@ -166,6 +196,72 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         comparison = module.compare_receipts(routed, baseline, evidence)
         self.assertTrue(comparison["valid_like_for_like_smoke"])
         self.assertEqual(comparison["acceptance"]["evidence_type"], "external-semantic-verification")
+
+    def test_run_command_summary_emits_result_only_when_explicit_and_passed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result_path = Path(temp_dir) / "result.md"
+            result_path.write_text("bounded result\n", encoding="utf-8")
+            args = argparse.Namespace(output=Path(temp_dir) / "receipt.json", result_output=result_path, emit_result=True)
+            summary = module.run_command_summary(args, {"status": "pass"})
+            self.assertEqual(summary["result"], "bounded result")
+            args.emit_result = False
+            self.assertNotIn("result", module.run_command_summary(args, {"status": "pass"}))
+            args.emit_result = True
+            self.assertNotIn("result", module.run_command_summary(args, {"status": "fail"}))
+
+    def test_entry_launch_installs_inherited_context_marker(self):
+        stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "entry-thread"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0}})])
+        process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
+        thread_state = {"rollout_path": Path("/tmp/entry-rollout"), "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "entry-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+        args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=True, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="entry-marker", allow_fallback=[])
+        with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            receipt = module.run_receipt(args, "entry task")
+        self.assertEqual(run_mock.call_args.kwargs["env"][module.ENTRY_CONTEXT_ENV], "1")
+        self.assertEqual(receipt["node_role"], "entry")
+        self.assertTrue(receipt["entry_context_active"])
+        self.assertEqual(receipt["authorization_source"], "entry-launch")
+
+    def test_direct_result_producer_is_rejected_inside_entry_context(self):
+        args = argparse.Namespace(model="gpt-5.6-terra", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, route_marker="LOCKED_ROUTE_NODE", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="blocked-fixed-result", allow_fallback=[])
+        with patch.dict(os.environ, {module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module.subprocess, "run") as run_mock:
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "entry_context_adaptive_runner_required") as raised:
+                module.run_receipt(args, "private bounded prompt")
+            rejected = module.rejected_run_receipt(args, raised.exception)
+        run_mock.assert_not_called()
+        self.assertEqual(rejected["status"], "fail")
+        self.assertEqual(rejected["failure_class"], "authorization")
+        self.assertEqual(rejected["authorization_status"], "rejected")
+        self.assertEqual(rejected["authorization_reason"], "entry_context_adaptive_runner_required")
+        self.assertNotIn("private bounded prompt", json.dumps(rejected))
+        self.assertNotIn(module.ENTRY_CONTEXT_ENV, json.dumps(rejected))
+
+    def test_recursive_entry_flag_cannot_bypass_entry_context_guard(self):
+        args = argparse.Namespace(entry_task=True, route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {module.ENTRY_CONTEXT_ENV: "1"}, clear=False):
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "recursive_entry_task_forbidden"):
+                module.authorize_receipt_run(args)
+
+    def test_fixed_result_baseline_remains_authorized_outside_entry_context(self):
+        args = argparse.Namespace(entry_task=False, route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            authorization = module.authorize_receipt_run(args)
+        self.assertEqual(authorization["node_role"], "result-producer")
+        self.assertEqual(authorization["authorization_source"], "outside-entry-context")
+        self.assertFalse(authorization["entry_context_active"])
+
+    def test_dispatcher_fixed_roles_require_matching_in_process_authorization(self):
+        with patch.dict(os.environ, {module.ENTRY_CONTEXT_ENV: "1"}, clear=False):
+            for node_role in sorted(module.DISPATCHER_FIXED_ROLES):
+                args = argparse.Namespace(entry_task=False, node_role=node_role, route_marker="LOCKED_ROUTE_NODE")
+                with self.assertRaises(module.ReceiptAuthorizationError):
+                    module.authorize_receipt_run(args)
+                with module.dispatcher_node_authorization(node_role):
+                    authorization = module.authorize_receipt_run(args)
+                self.assertEqual(authorization["authorization_source"], "dispatcher")
+                self.assertEqual(authorization["node_role"], node_role)
 
 
 if __name__ == "__main__":

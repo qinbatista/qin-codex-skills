@@ -947,238 +947,35 @@ class ModelRoutingHistoryTests(unittest.TestCase):
         self.assertNotEqual(module.condition_key(module.validate_condition(python_condition)), module.condition_key(module.validate_condition(unity_condition)))
 
     def test_cli_profile_domain_distinguishes_python_and_unity_keys(self):
-        args_py = parse_profile_args(
-            [
-                "recommend",
-                "--task-family",
-                "code",
-                "--artifact",
-                "script",
-                "--scope",
-                "single",
-                "--ambiguity",
-                "low",
-                "--modality",
-                "text",
-                "--risk",
-                "low",
-                "--complexity",
-                "easy",
-                "--owning-skill",
-                "code-skill",
-                "--project-family",
-                "global",
-                "--verification-shape",
-                "mini_real",
-                "--task-summary",
-                SUMMARY,
-                "--candidate-ladder",
-                "gpt-5.3-codex-spark|low",
-                "--candidate-ladder",
-                "gpt-5.6-luna|low",
-                "--static-suggestion",
-                "gpt-5.6-luna|low",
-                "--hard-floor",
-                "gpt-5.3-codex-spark|low",
-                "--execution-domain",
-                "python",
-            ]
-        )
-        args_unity = parse_profile_args(
-            [
-                "recommend",
-                "--task-family",
-                "code",
-                "--artifact",
-                "script",
-                "--scope",
-                "single",
-                "--ambiguity",
-                "low",
-                "--modality",
-                "text",
-                "--risk",
-                "low",
-                "--complexity",
-                "easy",
-                "--owning-skill",
-                "code-skill",
-                "--project-family",
-                "global",
-                "--verification-shape",
-                "mini_real",
-                "--task-summary",
-                SUMMARY,
-                "--candidate-ladder",
-                "gpt-5.3-codex-spark|low",
-                "--candidate-ladder",
-                "gpt-5.6-luna|low",
-                "--static-suggestion",
-                "gpt-5.6-luna|low",
-                "--hard-floor",
-                "gpt-5.3-codex-spark|low",
-                "--execution-domain",
-                "unity_csharp",
-            ]
-        )
+        args_py = parse_profile_args(["recommend", "--profile-preset", "code-easy", "--project-family", "global", "--task-summary", SUMMARY, "--execution-domain", "python"])
+        args_unity = parse_profile_args(["recommend", "--profile-preset", "code-easy", "--project-family", "global", "--task-summary", SUMMARY, "--execution-domain", "unity_csharp"])
         self.assertNotEqual(module.condition_key(module.validate_condition(vars(args_py))), module.condition_key(module.validate_condition(vars(args_unity))))
 
-    def test_cli_profile_without_execution_domain_rejects_omitted_code_domain(self):
-        args_code = parse_profile_args(
-            [
-                "recommend",
-                "--task-family",
-                "code",
-                "--artifact",
-                "script",
-                "--scope",
-                "single",
-                "--ambiguity",
-                "low",
-                "--modality",
-                "text",
-                "--risk",
-                "low",
-                "--complexity",
-                "easy",
-                "--owning-skill",
-                "code-skill",
-                "--project-family",
-                "global",
-                "--verification-shape",
-                "mini_real",
-                "--task-summary",
-                SUMMARY,
-                "--candidate-ladder",
-                "gpt-5.3-codex-spark|low",
-                "--candidate-ladder",
-                "gpt-5.6-luna|low",
-                "--static-suggestion",
-                "gpt-5.6-luna|low",
-                "--hard-floor",
-                "gpt-5.3-codex-spark|low",
-            ]
-        )
-        with self.assertRaises(ValueError):
-            module.validate_condition(vars(args_code))
+    def test_concise_grounded_complex_preset_preserves_calibrated_identity(self):
+        args = parse_profile_args(["recommend", "--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--task-summary", SUMMARY])
+        condition, _, pairs, static_pair, hard_pair = module._profile(args)
+        self.assertEqual(module.condition_key(condition), "fc20f19053552e814bcbd1bc7027d06dad1e0a8f16bb1887441c7d080eb498e0")
+        self.assertEqual(module.profile_fingerprint(condition, pairs, static_pair, hard_pair), "d94b9d193b612e33350ebdd57e9c706d05fcb4fa41656c3f8be270fb76d5c676")
+        self.assertEqual(args.candidate_ladder, module.normal_adaptive_pair_texts())
 
-        args_general = parse_profile_args(
-            [
-                "recommend",
-                "--task-family",
-                "grounded",
-                "--artifact",
-                "document",
-                "--scope",
-                "single",
-                "--ambiguity",
-                "low",
-                "--modality",
-                "text",
-                "--risk",
-                "low",
-                "--complexity",
-                "easy",
-                "--owning-skill",
-                "workflow-skill",
-                "--project-family",
-                "global",
-                "--verification-shape",
-                "mini_real",
-                "--task-summary",
-                SUMMARY,
-                "--candidate-ladder",
-                "gpt-5.3-codex-spark|low",
-                "--candidate-ladder",
-                "gpt-5.6-luna|low",
-                "--static-suggestion",
-                "gpt-5.6-luna|low",
-                "--hard-floor",
-                "gpt-5.3-codex-spark|low",
-            ]
-        )
+    def test_cli_profile_rejects_manual_candidate_ladder(self):
+        with self.assertRaises(SystemExit):
+            parse_profile_args(["recommend", "--profile-preset", "grounded-repository-answer-easy", "--project-family", "global", "--owning-skill", "workflow-skill", "--task-summary", SUMMARY, "--candidate-ladder", "gpt-5.6-luna|low"])
+
+    def test_cli_profile_without_execution_domain_rejects_omitted_code_domain(self):
+        with self.assertRaises(ValueError):
+            parse_profile_args(["recommend", "--profile-preset", "code-easy", "--project-family", "global", "--task-summary", SUMMARY])
+        args_general = parse_profile_args(["recommend", "--profile-preset", "grounded-repository-answer-easy", "--project-family", "global", "--owning-skill", "workflow-skill", "--task-summary", SUMMARY])
         self.assertEqual(module.validate_condition(vars(args_general))["execution_domain"], "general")
 
     def test_cli_profile_rejects_explicit_code_unspecified(self):
         with self.assertRaises(SystemExit):
-            parse_profile_args(
-                [
-                    "recommend",
-                    "--task-family",
-                    "code",
-                    "--artifact",
-                    "script",
-                    "--scope",
-                    "single",
-                    "--ambiguity",
-                    "low",
-                    "--modality",
-                    "text",
-                    "--risk",
-                    "low",
-                    "--complexity",
-                    "easy",
-                    "--owning-skill",
-                    "code-skill",
-                    "--project-family",
-                    "global",
-                    "--verification-shape",
-                    "mini_real",
-                    "--task-summary",
-                    SUMMARY,
-                    "--candidate-ladder",
-                    "gpt-5.3-codex-spark|low",
-                    "--candidate-ladder",
-                    "gpt-5.6-luna|low",
-                    "--static-suggestion",
-                    "gpt-5.6-luna|low",
-                    "--hard-floor",
-                    "gpt-5.3-codex-spark|low",
-                    "--execution-domain",
-                    "code_unspecified",
-                ]
-            )
+            parse_profile_args(["recommend", "--profile-preset", "code-easy", "--project-family", "global", "--task-summary", SUMMARY, "--execution-domain", "code_unspecified"])
 
     def test_cli_profile_rejects_explicit_inactive_non_history_domain(self):
         with self._with_inactive_domain():
             with self.assertRaises(SystemExit):
-                parse_profile_args(
-                    [
-                        "recommend",
-                        "--task-family",
-                        "code",
-                        "--artifact",
-                        "script",
-                        "--scope",
-                        "single",
-                        "--ambiguity",
-                        "low",
-                        "--modality",
-                        "text",
-                        "--risk",
-                        "low",
-                        "--complexity",
-                        "easy",
-                        "--owning-skill",
-                        "code-skill",
-                        "--project-family",
-                        "global",
-                        "--verification-shape",
-                        "mini_real",
-                        "--task-summary",
-                        SUMMARY,
-                        "--candidate-ladder",
-                        "gpt-5.3-codex-spark|low",
-                        "--candidate-ladder",
-                        "gpt-5.6-luna|low",
-                        "--static-suggestion",
-                        "gpt-5.6-luna|low",
-                        "--hard-floor",
-                        "gpt-5.3-codex-spark|low",
-                        "--execution-domain",
-                        "legacy_inactive",
-                    ]
-                )
+                parse_profile_args(["recommend", "--profile-preset", "code-easy", "--project-family", "global", "--task-summary", SUMMARY, "--execution-domain", "legacy_inactive"])
 
     def test_cli_profile_domains_command_filters_history_only_domains(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1205,6 +1002,18 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertEqual(payload.get("registry_version"), module.EXECUTION_DOMAIN_REGISTRY_VERSION)
             self.assertEqual(payload.get("rows"), module.public_execution_domain_rows())
             self.assertEqual(history.read_text(encoding="utf-8"), before)
+
+    def test_cli_profiles_command_is_read_only_and_reports_stable_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            stdout = io.StringIO()
+            with redirect_stdout(stdout), patch.object(sys, "argv", ["model_routing_history.py", "--history", str(history), "profiles"]):
+                module.main()
+            payload = json.loads(stdout.getvalue())
+        self.assertFalse(history.exists())
+        self.assertEqual(payload["registry_version"], module.PROFILE_PRESET_VERSION)
+        self.assertEqual(payload["rows"], module.public_profile_preset_rows())
 
     def test_cli_domains_command_does_not_create_or_mutate_history_file(self):
         with tempfile.TemporaryDirectory() as temporary:

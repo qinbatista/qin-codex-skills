@@ -2,4 +2,4 @@ interface:
   display_name: "Workflow"
   short_description: "Executes the locked per-node route"
   default_prompt: >-
-    $workflow-skill: execute the locked route without inheriting the entry pair. Preserve only relevant bounded memory context; missing memory is a no-op. Model nodes keep exact pair, owner/domain, topology, and receipts. Mini releases the result first; Ending Real updates the producer, routing learning, and related sanitized memory. Route active code domains through code-skill.
+    $workflow-skill: execute one locked surface without inheriting the entry pair. The Task Analyze core has the complete runner CLI and orchestration: never inspect implementations or search examples. Every adaptive producer uses one named preset through adaptive_model_runner --emit-result so history chooses the canonical owner and exact pair; fixed receipt is never fallback. Launch in the same turn as the route. With functions.exec use outer 60s yield, 30s launch, 55s write_stdin polls, no extra wait. Return result once in final, never duplicated commentary. Grounded reads use one producer plus local Mini; return before Ending.

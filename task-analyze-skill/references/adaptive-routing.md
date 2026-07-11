@@ -29,7 +29,7 @@ A result-producer attempt may contain requested/resolved/effective model and eff
 
 ## Recommendation Policy
 
-Task Analyze supplies a weak-to-strong quality ladder, static baseline, and hard floor. The entry model is not an input.
+Task Analyze supplies one stable profile preset plus only its required project/owner/domain values. The preset registry derives the weak-to-strong quality ladder, static baseline, hard floor, and controlled condition fields. The entry model is not an input, and callers never serialize the ladder.
 
 For every non-tiny model profile, the supplied ladder is exactly the complete supported GPT-5.6 Luna/Terra/Sol ladder, not a fixed category pair and not truncated by its hard floor. An eligible tiny profile prepends Spark-low to that full normal fallback ladder; no other Spark effort is allowed.
 
@@ -48,10 +48,23 @@ Calibration is a bounded search for the best complete `model|effort` pair for on
 
 Correctness/quality is the eligibility gate. Cost evidence is comparable only when at least two Real-passing pairs share an exact `workload_prompt_sha256` cohort and every compared pair has complete tokens and time. The recorder equal-weights shared cohorts, then minimizes median total tokens first, median process time second, and weaker rung last. Different workload hashes, missing hashes, incomplete metrics, or one passing pair fall back to the verified quality boundary and cannot support a savings claim. Tokens are a usage proxy, not a dollar-cost claim.
 
-## Commands
+## Profile Presets
 
-Use `recommend` and `record` with the complete controlled profile: `--task-family`, `--artifact`, `--execution-domain`, `--scope`, `--ambiguity`, `--modality`, `--risk`, `--complexity`, `--owning-skill`, `--project-family`, `--verification-shape`, generalized `--task-summary`, repeated canonical `--candidate-ladder`, `--static-suggestion`, and `--hard-floor`.
-`--execution-domain` is optional. Migrate missing values as:
+Use `model_routing_history.py profiles` to inspect the stable registry. Built-in presets cover grounded repository answers at easy/complex scope, tiny text, command generation, tiny code, and easy/complex code. `tiny-code`, `code-easy`, and `code-complex` require one active code `--execution-domain`; the registry automatically supports Python, C#, Unity C#, and future active code domains without duplicating preset rows.
+
+Classify by requested output. Reading Python or Unity C# to reconstruct and explain a repository workflow is `grounded-repository-answer-easy` or `grounded-repository-answer-complex` with `execution_domain=general` and the owning project skill. It is not a code preset unless the task creates, changes, executes, or validates code as code.
+
+The calibrated MuseAI complex profile is addressed without a ladder:
+
+```bash
+python3 scripts/model_routing_history.py recommend --profile-preset grounded-repository-answer-complex --project-family museai --owning-skill muse-ai-plugin:muse-ai-dev-skill --task-summary "Reconstruct a bounded repository workflow and return verified structured evidence."
+```
+
+This resolves the exact explicit condition `grounded/answer/multi/low/text/low/complex/museai/mini_real/muse-ai-plugin:muse-ai-dev-skill/general`, the full normal ladder, Terra-high static suggestion, and Luna-low hard floor. `adaptive_model_runner.py` accepts the same concise profile arguments and owns selection, receipt execution, optional named grounded Mini, and Mini recording in one invocation. Add `--emit-result` so the same passing summary returns the bounded result; it never writes the result into the ledger or receipt, emits nothing on failure, and removes the need for a second result read. Do not pass `--candidate-ladder`, `--static-suggestion`, or `--hard-floor` from the entry.
+
+For JSON results, `--grounded-gate-preset json-object` checks receipt binding and exact JSON. `grounded-source-json-v1` additionally requires sorted contained `source_files`. `workflow-graph-json-v1` preserves the legacy six-key workflow contract with `public_return_keys`. `workflow-graph-json-v2` uses `always_return_keys` plus `optional_return_keys`, so conditional output and `conditional_serial` stage contracts do not have to be flattened into inaccurate parallel/serial claims. Both workflow presets sort agent/file/field lists while preserving dependency and early-exit order. Source-aware presets also take `--grounded-source-root`. Use the strict config file only for a different declared schema.
+
+Use `recommend` and `record` with `--profile-preset`, `--project-family`, generalized `--task-summary`, and only the owner/domain values required by that preset. Migrate old missing domain values as:
 
 - `code_unspecified` for legacy code evidence.
 - `general` for non-code evidence.

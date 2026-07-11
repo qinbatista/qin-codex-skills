@@ -44,6 +44,7 @@ REQUIRED_WORKFLOW = [
     "100%-trigger individual entry skill",
     "observable entry model and effort belong only to Task Analyze and route coordination",
     "model_routing_history.py record",
+    "adaptive_model_runner.py",
     "it records after Mini and updates after Real",
     "same route-run ID",
     "Continue in the same task",

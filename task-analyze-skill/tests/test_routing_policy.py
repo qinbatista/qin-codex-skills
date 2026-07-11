@@ -13,6 +13,38 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class RoutingPolicyTests(unittest.TestCase):
+    def test_grounded_repository_presets_derive_full_ladder_internally(self):
+        easy = module.resolve_profile_preset("grounded-repository-answer-easy", project_family="global", owning_skill="workflow-skill")
+        complex_profile = module.resolve_profile_preset("grounded-repository-answer-complex", project_family="museai", owning_skill="muse-ai-plugin:muse-ai-dev-skill")
+        self.assertEqual(easy["candidate_ladder"], module.normal_adaptive_pair_texts())
+        self.assertEqual(complex_profile["candidate_ladder"], module.normal_adaptive_pair_texts())
+        self.assertEqual(complex_profile["static_suggestion"], "gpt-5.6-terra|high")
+        self.assertEqual(complex_profile["hard_floor"], "gpt-5.6-luna|low")
+
+    def test_tiny_presets_derive_spark_low_plus_normal_ladder(self):
+        tiny_text = module.resolve_profile_preset("tiny-text", project_family="global")
+        tiny_code = module.resolve_profile_preset("tiny-code", project_family="global", execution_domain="python")
+        expected = ["gpt-5.3-codex-spark|low"] + module.normal_adaptive_pair_texts()
+        self.assertEqual(tiny_text["candidate_ladder"], expected)
+        self.assertEqual(tiny_code["candidate_ladder"], expected)
+
+    def test_code_presets_support_python_csharp_and_unity_without_duplicate_rows(self):
+        domains = ["python", "csharp", "unity_csharp"]
+        profiles = [module.resolve_profile_preset("code-complex", project_family="global", execution_domain=domain) for domain in domains]
+        self.assertEqual([profile["execution_domain"] for profile in profiles], domains)
+        self.assertTrue(all(profile["owning_skill"] == "code-skill" for profile in profiles))
+        self.assertTrue(all(profile["candidate_ladder"] == module.normal_adaptive_pair_texts() for profile in profiles))
+
+    def test_code_preset_automatically_accepts_new_active_code_domain(self):
+        original = deepcopy(module.EXECUTION_DOMAINS)
+        try:
+            module.EXECUTION_DOMAINS["rust"] = {"display_name": "Rust", "kind": "code", "language_aliases": ["rust"], "owner_skill": "code-skill", "owner_enforced": True, "spark_first": True, "reference_path": "code-skill/references/python-rules.md", "active": True, "history_only": False}
+            profile = module.resolve_profile_preset("code-easy", project_family="global", execution_domain="rust")
+            self.assertEqual(profile["execution_domain"], "rust")
+        finally:
+            module.EXECUTION_DOMAINS.clear()
+            module.EXECUTION_DOMAINS.update(original)
+
     def test_normal_adaptive_ladder_has_luna_floor_and_sol_ceiling_without_spark(self):
         ladder = module.normal_adaptive_ladder()
         self.assertEqual(ladder[0], ("gpt-5.6-luna", "low"))

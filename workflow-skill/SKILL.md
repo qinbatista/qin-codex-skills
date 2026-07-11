@@ -1,175 +1,86 @@
 ---
 name: workflow-skill
-description: "Use when independent task-analyze-skill has returned a locked route. Validates and executes the per-node skill/model/effort plan, preserves dependencies and topology, routes active registry-owned code domains through code-skill, runs proportional Mini Verify, releases the main result, then dispatches background Ending Task work such as Real Verify, independent optimization verification, reports, logs, docs, and memory."
+description: "Execute the locked task-analyze-skill route. Preserve each downstream model and effort, run the proportional Mini Verify, release the main result first, then hand related deeper checks and learning to Ending Task."
 ---
 
 # Workflow Skill
 
-Use this skill only after `task-analyze-skill` has shown a visible locked route. `task-analyze-skill` is the 100%-trigger individual entry skill; `workflow-skill` is the downstream controller selected inside that route. Continue in the same task after the route is shown. Do not wait for a lifecycle hook and do not expose an internal machine plan in chat.
+Use this only after `task-analyze-skill`, the 100%-trigger individual entry skill, has shown a locked route. Continue in the same task. Do not wait for a lifecycle hook and never print the private machine plan.
 
-## Authority Boundary
+## Authority
 
-The observable entry model and effort belong only to Task Analyze and route coordination. Workflow receives an explicit model and effort for every downstream node and must not silently inherit the entry selection, choose a new major model, or redraw a different route. The entry pair is resolved during Task Analyze preflight, never assumed from a fixed model.
+The observable entry model and effort belong only to Task Analyze and route coordination. Workflow receives an explicit model and effort for every downstream node and must not silently inherit the entry selection. It executes the shown topology; it does not redraw the route or silently select a different major model.
 
-If a planned model-selectable surface is callable, execute the node with that exact model and effort and keep a sanitized runtime receipt. If selection or metadata is unavailable, mark the node `planned only`; never claim the model ran merely because the diagram names it.
+Every model-executed node needs a matching sanitized receipt. A diagram label is planned only until runtime metadata proves requested, resolved, effective model, effort, and completion. Tool-only actions use observable state instead of a fabricated model receipt.
 
-## Plan-Lock Gate
+## Locked Plan Gate
 
-Before side effects, confirm the returned plan includes:
+Before side effects, confirm the route has installed owning skills, exact model/effort pairs, dependencies, inputs, outputs, stop conditions, Mini Verify, Main Result, and post-result Ending Task. Every active registry-owned code-domain node loads `code-skill`. Reject one time to Task Analyze when the plan invents a skill, breaks dependencies, omits a required model/effort, bypasses `code-skill`, or puts Ending work before Main Result.
 
-- easy/complex classification and visible route;
-- every executable node's purpose, installed owning skill, exact model ID, effort, dependencies, input, output, and stop condition;
-- sequential, parallel, or mixed topology;
-- Mini Verify placement;
-- Main Goal Done Gate followed by the main-result node;
-- post-result Ending Task branches and fallbacks;
-- runtime-receipt requirement when model execution must be proved.
+Task Analyze owns the display:
 
-Reject the plan back to `task-analyze-skill` for one bounded repair if it invents a skill, uses an unsupported model/effort, omits a node label, leaves a dependency unresolved, routes an active registry-owned code domain around `code-skill`, puts Main Result before Mini Verify, or places Real Verify/optimization closeout before the first result. Do not repair route semantics by silently reselecting models inside Workflow.
+- Easy task: concise text explanation.
+- Complex task: task-specific Mermaid plus `Workflow with models`.
 
-## Visible Route Contract
+Workflow reports only an actual fallback or repair; a changed route must be shown before affected work.
 
-Task Analyze owns the first user-facing route display:
+## One-Call Easy Path
 
-- Easy task: concise text explanation with model and effort for every real task. No forced diagram.
-- Complex task: task-specific Mermaid plus a numbered `Workflow with models` list.
+An exact literal local read handled by Task Analyze's direct boundary never enters Workflow. It has one bounded read-only tool command, local exact Mini, no child/receipt/history sample, and no semantic inference.
 
-Workflow may report a model switch or repair, but it does not repeat the whole route unless the plan changed. Any changed plan must return to Task Analyze and be shown before affected side effects.
+For an obvious bounded source lookup, literal transform, exact schema/string check, tiny edit, or command generation:
 
-## Execution Rules
+1. Use the named profile preset locked by Task Analyze; it derives the pair and eligible tiny text/code/command work starts Spark-low.
+2. Run one blocking `../task-analyze-skill/scripts/adaptive_model_runner.py --emit-result` call. It canonicalizes the installed owner, reads private experience itself, invokes the selected pair once with `LOCKED_ROUTE_NODE`, applies any named local gate, and returns the passing bounded result; Workflow and the entry may not override that pair. The stdin prompt contains the exact owning-skill path, bounded source allowlist, output contract, and self-check. A bounded read-only child passes `--ignore-user-config` and reads only that named owner instead of reloading the global entry contract. Use shell `printf '%s'` piping, never a heredoc or `/tmp`, and keep outputs in the deterministic task `cache/` path.
+3. The Task Analyze core contains the complete CLI and orchestration template. Do not call help, inspect runner/history/receipt implementation, search memories/sessions for examples, allocate a PTY, use short polls, dispatch collaborators, create a plan, reread the result, or launch model verifier sessions. With `functions.exec`, set its outer yield to 60 seconds, use a 30-second initial launch, and use 55-second `write_stdin` polls without a second `functions.wait` layer. When the passing result arrives, return it once in final instead of duplicating it in commentary. One transport failure may be corrected once; a second returns the operational failure and never falls back to an unreceipted or fixed-pair child.
+4. Run one local deterministic Mini Verify and show the main result immediately.
+5. Leave Ending Task pending/no-op unless unresolved semantic risk remains.
 
-1. Execute only nodes whose dependencies are satisfied.
-2. Run independent branches in parallel when the callable tool policy and task safety allow it.
-3. Keep ordered, shared-state, irreversible, or output-dependent work sequential.
-4. Load every owning skill named by the plan before that executor node.
-5. Preserve the exact planned model and effort on each node. A fallback must be allowed by the plan, visibly reported, and recorded in runtime metadata.
-6. Use the smallest relevant file/source allowlist. Exclude cache, backup, generated, and stale fixture trees unless they are the target.
-7. Preserve unrelated user work and do not broaden authorization.
-8. Do not push, publish, deploy, message, switch profiles, or perform an irreversible action unless the user explicitly authorized that action.
-9. Preserve a bounded Task Analyze related-memory digest only for nodes that need it. Treat memory as advisory and recheck live sources when freshness matters; missing memory never blocks execution.
+This section is complete for the easy path; no routing/reference document is needed. A literal read-only source lookup also does not load code-language references or `verify-skill`; its local Mini is Workflow-owned. Receipt-backed grounded JSON uses `../task-analyze-skill/scripts/grounded_result_gate.py` and never a custom source-analysis probe before result release. The entry never reads the task source or substitutes itself for the selected producer.
 
-For a direct model node, use `../task-analyze-skill/scripts/model_execution_receipt.py run` with the exact planned pair and call `../task-analyze-skill/scripts/model_routing_history.py record` after Mini using the result-producer receipt; call it again after Real with the same route-run ID and producer receipt. A direct tool-only node uses its installed tool skill and observable Mini check: no child model, receipt, or adaptive sample. For a multi-node sequential, parallel, or mixed route, save the structured plan only in the active task cache and run `../task-analyze-skill/scripts/task_route_dispatcher.py run-plan <plan-file>`; it records after Mini and updates after Real. Enforce `run-plan` -> read Mini-passed result -> show self-contained basically verified result -> `release-main-result <handoff>` -> `run-ending <handoff>`; no Ending node may run before release. Child prompts use `LOCKED_ROUTE_NODE`; no lifecycle hook is involved.
+## Standard Execution
 
-Local commands use the local runner, but the planned model/effort still owns command selection, interpretation, and any authored probe. Labeling a runner `LOCAL` does not remove the node's model/effort requirement.
+Use this path when local deterministic proof is insufficient.
 
-## Internal Route Selection
+1. Execute only dependency-ready nodes. Parallelize safe independent work; keep ordered, shared-state, irreversible, or output-dependent work sequential.
+2. Load each owning skill and only task-relevant references. Preserve user work and the smallest source allowlist.
+3. Use exactly one execution surface for each branch. Collaboration prompts begin `LOCKED_ROUTE_NODE`; a collaboration branch is not repeated in a dispatcher plan. Grounded read-only answers use one producer unless branch allowlists are pairwise disjoint and the merge reads only dependency results.
+4. Direct model nodes use `model_execution_receipt.py run`. A complex label alone does not justify dispatch: one result producer plus local Mini stays direct. Only a real graph with at least two model-executed result/verification nodes saves schema-1 JSON privately and calls `task_route_dispatcher.py run-plan <plan-file>` once. Never inspect dispatcher source or fixtures to construct the plan.
+5. New plans normally set `first_result_timeout_seconds` to 180 for easy and 600 for complex. Deadline exhaustion stops new nodes/fallbacks while preserving partial evidence. Mini failure permits at most one bounded foreground repair.
+6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work unless explicitly authorized.
 
-### Executor Routing
+Every non-dispatched adaptive result producer uses `adaptive_model_runner.py`; it calls recommendation logic before execution so neither Task Analyze nor Workflow can skip experience. A dispatcher result producer recomputes the current learner recommendation immediately before execution and must match the locked pair, trial flag, fingerprint, and proof fields. When its grounded local gate is configured, it calls `model_routing_history.py record` for the same receipt and route-run ID after Mini. Other Mini gates call `model_routing_history.py record` themselves: it records after Mini and updates after Real using the same route-run ID and same producer attempt. Dispatcher routes do this internally. Operational failures are neutral; correctness evidence determines routing eligibility. Direct fixed-pair benchmark baselines still use `model_execution_receipt.py` outside entry context.
 
-Use every planned executor that matches; do not run unrelated branches.
+The entry receipt installs an inherited entry-context marker. Inside it, direct fixed or forged result-producer receipts are rejected; the role requires either adaptive-runner authorization or distinct dispatcher authorization backed by a freshly matched learner recommendation. Dispatcher verification, repair, and ending roles use their own matching in-process authorization. A failed adaptive launch returns an operational failure and may not be replaced by a fixed producer.
 
-| Work | Required route |
-|---|---|
-| Active registry-owned code domain, debugging/refactoring, prompt-in-code, or authored code probe | `code-skill` |
-| Tests, QA, artifact inspection, UI/visual review, Mini Verify, or Real Verify | `verify-skill` |
-| Explicit/repeated reusable workflow improvement | `optimization-skill`, with a different verifier in Ending Task |
-| Global skill scope, auth/profile work, or approved mirror operations | `management-skill` |
-| Prompt/instruction behavior | Prompt Task Gate below, plus `code-skill` only when embedded in Python/C# |
-| Other production work | The relevant installed production skill returned by Task Analyze |
+## Mini Verify And First Result
 
-Every active registry-owned code-domain node loads `code-skill`. Spark-low is first only for obvious bounded low-risk easy low-ambiguity text-only tiny implementation and authored-probe work; its exact candidate route is Spark-low plus the full normal fallback ladder. Every non-tiny model route uses the exact full Luna/Terra/Sol ladder with no Spark, regardless of easy/complex classification. Never raise Spark effort as a fallback.
+Mini Verify is the basic proportional result gate for every task. It is the smallest meaningful check that requested work exists and is basically ready: exact comparison, parse, schema, syntax, compile, existence, focused input/output, or basic render as appropriate.
 
-### Prompt Task Gate
+When requested work and Mini pass:
 
-When the task changes or tests prompt behavior, prompt wording, templates, strings/constants, system/developer/user instructions, model/agent rules, AI output behavior, or trigger behavior:
-
-1. Show `Prompt idea -> Prompt goal -> Problems -> Solution`.
-2. Inspect the current prompt/instruction when it exists.
-3. Fix the smallest complete missing logic instead of stacking case-specific warnings.
-4. Use `code-skill` only when the prompt is embedded in Python/C# executable behavior.
-5. Give the prompt update a representative Mini Verify; planned realistic prompt replay belongs to Ending Task Real Verify.
-
-Read `references/routing-matrix.md` for multi-artifact routes. Read `references/image-generation.md` for image-related work or when a generated visual materially improves the requested result.
-
-## First Result Principle
-
-Finish the requested task, run the smallest meaningful Mini Verify, and show the basically verified result immediately. Afterward, Ending Task owns deeper Real Verify, broader regression, optimization proof, reports, logs, documentation, and routing learning. A later correctness problem must notify the user, reopen the task, repair, rerun Mini Verify, and present the corrected result. Mini Verify is not exhaustive proof.
-
-## Direct Action Boundary
-
-Task Analyze always runs. For one obvious reversible action with no graph, Workflow executes the installed tool skill directly after the visible route, without a cached plan, model child, or internal dispatcher; Mini Verify checks the observable state and no downstream model receipt is fabricated. Complex work uses dispatched model|effort nodes, dependency topology, receipts, Mini Verify, Main Result, then Ending Task.
-
-## Mini Verify And Main Result
-
-Mini Verify is the basic proportional result gate for every task. For a tiny easy task, Mini Verify may be the minimal confirmation that the requested state or answer is present. For complex work, follow the returned topology:
-
-- fully independent result branches receive branch Mini Verify before merge;
-- sequential work receives one consolidated Mini Verify after the final dependent step;
-- mixed work receives an integration Mini Verify after merge, plus branch checks only when integration cannot expose an isolated basic failure.
-
-Mini Verify may use syntax, compile, lint, schema, existence, changed-line, parse, basic render, or one focused input/output check when that evidence matches the task. It proves basic readiness, not realistic or exhaustive correctness.
-
-When Mini Verify fails, repair the affected result-bearing node and rerun the relevant Mini Verify. When every planned Mini Verify passes and the requested work is complete:
-
-1. cross `Main Goal Done Gate`;
+1. cross Main Goal Done Gate;
 2. show the main result immediately;
-3. state that deeper Ending Task proof is running when relevant;
-4. only after the result is actually shown, call `release-main-result <handoff>` and then `run-ending <handoff>`.
+3. only after it is shown, release the Ending handoff.
 
-Do not claim Real Verify, independent optimization verification, report completion, or memory completion before those background branches report.
+For dispatcher work the order is `run-plan` -> read Mini-passed result -> show result -> `release-main-result` -> `run-ending`. A nested surface that buffers output must return the Mini-passed result with Ending pending instead of synchronously hiding it behind Real work. Inside an entry-task receipt process, any Ending worker, Real verifier, or post-Real repair before return is a routing failure. A later correctness failure reopens the task, repairs, reruns Mini, and presents the corrected result.
 
 ## Ending Task
 
-Ending Task starts after the main result. It owns only planned related closeout:
+Ending Task starts after the main result. It owns only related Real Verify, broader regressions, realistic or visual replay, independent optimization verification, reports, logs, docs, and sanitized memory/routing learning. Optimization is certified by a different receipt-backed verifier. Missing memory is a successful no-op.
 
-- Real Verify and realistic behavior replay;
-- broader regression, visual, browser, integration, or source checks;
-- optimization implementation when it is a post-result improvement;
-- a verifier distinct from the optimization implementer;
-- each optimization node names exactly one Ending `verify-skill` node through `verifies_node`; that verifier runs on a different receipt-backed worker, and an Ending optimization/verifier pair executes in dependency-ready waves;
-- reports, logs, docs, Markdown, DailyLog/wiki/Obsidian memory;
-- directly related sanitized memory only; optional `TaskModelExperience/` recording follows Real Verify and never replaces the private routing ledger;
-- sanitized private adaptive-routing outcome records after receipt-backed Mini and then Real Verify, always against the original result producer rather than the verifier. For `mini_real`, Mini PASS is provisional; Ending Real updates the same producer run, recomputes/persists `best_pair`, and returns `routing_learning` without a decorative Luna controller call;
-- remote/status/hash proof when publishing was explicitly authorized;
-- no-op inventory when a planned branch has nothing relevant to change.
-
-Dispatch independent purposes as sibling background workers when callable. Report each worker's name/id, model, effort, bounded purpose, and running/completed state. An Ending worker:
-
-- executes its bounded purpose directly;
-- does not restart `task-analyze-skill` or `workflow-skill`;
-- does not spawn nested Ending workers;
-- does not change the already-delivered core result silently;
-- reports checked sources and remaining items when blocked or no-op.
-
-Prefix bounded downstream model-runner prompts with `LOCKED_ROUTE_NODE`. Explicitly label Ending prompts as direct bounded workers. These markers prevent the always-loaded global entry rule from recursively starting a new Task Analyze inside an already-routed node.
-
-If an Ending correctness check fails, notify the user and reopen the task. The first result remains honestly labeled as Mini-verified; do not conceal the later failure.
-
-When subagent tools are unavailable or higher-priority policy forbids dispatch, report `Ending Task blocked: no background worker` with the concrete reason. Do not fake delegation.
+Bounded Ending workers begin `ENDING_TASK_WORKER` or `LOCKED_ROUTE_NODE`, do not restart Task Analyze/Workflow, do not spawn nested Ending workers, and never silently change the delivered result. If no background surface exists, return the result with an honest pending/block reason.
 
 ## Runtime Receipt Gate
 
-When the plan requires proof of model routing, use the [runtime receipt contract](../task-analyze-skill/references/runtime-receipts.md) owned by `task-analyze-skill`.
+Use the receipt contract in `../task-analyze-skill/references/runtime-receipts.md` only when routing proof or benchmarking is required. A timeout receipt keeps elapsed time and partial token lower bounds and remains a failure.
 
-- Requested model/effort must match resolved/effective runtime metadata or an explicitly allowed recorded reroute.
-- Record tokens and elapsed time without storing raw prompts, responses, auth data, environment, or rate-limit details.
-- Do not add cached input to input tokens again or reasoning output to output tokens again.
-- Do not claim savings without a like-for-like baseline.
-- For parallel work, compare critical-path elapsed time rather than summing branch durations.
+Savings claims require identical prompt, cwd, configuration, output contract, and acceptance. The fair direct baseline keeps user configuration and bypasses only Task Analyze using `LOCKED_ROUTE_NODE` on the entry pair. Count each unique entry, collaboration, dispatcher, retry, and Ending session once. Report Mini-passed first-result tokens/time separately from Ending; use critical-path time for parallel branches.
 
-## Generated File Placement
+## Prompt And Code Rules
 
-Put task scratch data, logs, previews, receipts, and caches in the active task/project `cache/` or `work/` area. Put final user-facing deliverables only in the requested location or active workspace `outputs/`. Do not scatter generated artifacts across Desktop or unrelated home folders.
+Prompt changes show `Prompt idea -> Prompt goal -> Problems -> Solution`, merge the smallest complete rule, and receive representative Mini proof. Code nodes retain `code-skill`; Spark-low is only for eligible tiny work, while every non-tiny route uses the full Luna-to-Sol ladder with no Spark. Local execution does not remove the planned model/effort owner.
 
-## Safety And Authorization
+## Files And Verification
 
-Task routing never broadens permission. Before the affected action, obtain required user input or authorization for credentials, destructive changes, public publishing, external messages, profile switches, payments, private data, production actions, or irreversible operations. These are preconditions, not Ending verification.
-
-## Representative Routes
-
-- Direct answer/read: Task Analyze text route -> Workflow direct node -> lightweight Mini Verify -> Main Result -> relevant Ending Task.
-- Active code-domain change: Task Analyze -> Workflow -> `code-skill` on an exact Spark-low-plus-normal tiny route or an exact full normal no-Spark route -> Mini Verify -> Main Result -> Real Verify in Ending Task.
-- Global skill update: Task Analyze -> Workflow -> `management-skill` for authoritative scope -> `code-skill` for Python helpers -> Mini Verify -> Main Result -> Ending Real Verify/docs/memory. Push only if explicitly requested.
-- Explicit optimization: Task Analyze -> Workflow result-bearing implementation -> Mini Verify -> Main Result -> separate optimization verifier in Ending Task. Report the optimization as independently verified only after that worker passes.
-- UI/image/document: Task Analyze complex Mermaid route -> relevant production skill -> Mini Verify -> Main Result -> rendered/realistic review in Ending Task.
-
-## Verification
-
-After editing this skill:
-
-1. Run `python3 scripts/validate_workflow_skill.py`.
-2. Run the `task-analyze-skill` validator and tests.
-3. Replay one easy text route and one complex Mermaid route.
-4. Replay Python/C# routing through `code-skill`, including exact Spark-low-plus-normal tiny routing and exact full normal no-Spark routing for every non-tiny case.
-5. Confirm the Main Result depends on Mini Verify only and every Real Verify/optimization-verification node is downstream of Main Result.
-6. Capture runtime receipts for major model-routing changes.
+Put plans, receipts, logs, and temporary outputs in the active task `cache/` or `work/`; final deliverables go only to the requested location. After editing this skill, run `scripts/validate_workflow_skill.py`, the Task Analyze validators/tests, one easy route, and one complex route. Confirm Main Result depends only on Mini and all Real/optimization checks follow it.

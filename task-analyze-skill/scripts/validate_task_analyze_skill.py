@@ -29,6 +29,7 @@ SYNC_SPEC.loader.exec_module(sync_model_capabilities)
 try:
     from routing_policy import (
         EXECUTION_DOMAINS,
+        PROFILE_PRESETS,
         MODEL_EFFORTS,
         MODEL_EFFORT_ORDER,
         MODEL_ORDER,
@@ -37,6 +38,7 @@ try:
         is_code_execution_domain,
         resolve_execution_domain,
         is_tiny_spark_profile,
+        validate_profile_preset_registry,
         validate_execution_domain_registry,
     )
 except ModuleNotFoundError:
@@ -47,6 +49,7 @@ except ModuleNotFoundError:
     _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
     _routing_policy_spec.loader.exec_module(_routing_policy)
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
+    PROFILE_PRESETS = _routing_policy.PROFILE_PRESETS
     MODEL_EFFORTS = _routing_policy.MODEL_EFFORTS
     MODEL_EFFORT_ORDER = _routing_policy.MODEL_EFFORT_ORDER
     MODEL_ORDER = _routing_policy.MODEL_ORDER
@@ -55,6 +58,7 @@ except ModuleNotFoundError:
     is_code_execution_domain = _routing_policy.is_code_execution_domain
     resolve_execution_domain = _routing_policy.resolve_execution_domain
     is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
+    validate_profile_preset_registry = _routing_policy.validate_profile_preset_registry
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
 REQUIRED_FILES = [
     ".gitignore",
@@ -71,6 +75,8 @@ REQUIRED_FILES = [
     "scripts/obsidian_memory_bridge.py",
     "scripts/sync_model_capabilities.py",
     "scripts/model_execution_receipt.py",
+    "scripts/adaptive_model_runner.py",
+    "scripts/grounded_result_gate.py",
     "scripts/model_routing_history.py",
     "scripts/task_route_dispatcher.py",
     "scripts/skill_resolver.py",
@@ -99,9 +105,12 @@ REQUIRED_SKILL_TEXT = [
     "show the main result immediately",
     "Ending Task",
     "scripts/model_execution_receipt.py",
+    "scripts/adaptive_model_runner.py",
+    "grounded_result_gate.py",
     "task_route_dispatcher.py run-plan",
     "continue in the same task",
     "quick bounded related-memory lookup",
+    "named profile preset",
     "TaskModelExperience/",
     "Missing memory providers are a successful no-op",
 ]
@@ -146,6 +155,8 @@ REQUIRED_RECEIPT_TEXT = [
     "not a cryptographically signed backend attestation",
     "like-for-like",
     "workload_prompt_sha256",
+    "entry-context marker",
+    "in-process authorization",
 ]
 REQUIRED_ADAPTIVE_TEXT = [
     "local/adaptive-routing/model_experience.json",
@@ -158,6 +169,15 @@ REQUIRED_ADAPTIVE_TEXT = [
     "Real Verify failure overrides",
     "Tokens are a usage proxy",
     "Obsidian `TaskModelExperience/`",
+    "profile preset",
+]
+REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
+    "ENTRY_CONTEXT_ENV",
+    "adaptive_producer_authorization",
+    "dispatcher_node_authorization",
+    "dispatcher_adaptive_result_authorization",
+    "recursive_entry_task_forbidden",
+    "entry_context_adaptive_runner_required",
 ]
 FORBIDDEN_TEXT = [
     "mandatory internal phase of `workflow-skill`",
@@ -377,6 +397,13 @@ def sample_plans():
 
 def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".codex" / "AGENTS.md", global_skills_root=Path.home() / ".codex" / "skills", global_hooks_path=Path.home() / ".codex" / "hooks.json"):
     failures = []
+    try:
+        validate_profile_preset_registry()
+    except ValueError as error:
+        failures.append(f"profile-preset registry is invalid: {error}")
+    required_profile_presets = {"grounded-repository-answer-easy", "grounded-repository-answer-complex", "tiny-text", "tiny-code", "command-generation", "code-easy", "code-complex"}
+    if set(PROFILE_PRESETS) != required_profile_presets:
+        failures.append("profile-preset registry does not expose the complete stable preset set")
     paths = {relative: skill_dir / relative for relative in REQUIRED_FILES}
     for relative, path in paths.items():
         if not path.exists():
@@ -389,6 +416,9 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     selection_text = read_text(paths["references/model-selection.md"])
     receipt_text = read_text(paths["references/runtime-receipts.md"])
     adaptive_text = read_text(paths["references/adaptive-routing.md"])
+    receipt_script_text = read_text(paths["scripts/model_execution_receipt.py"])
+    adaptive_runner_text = read_text(paths["scripts/adaptive_model_runner.py"])
+    dispatcher_text = read_text(paths["scripts/task_route_dispatcher.py"])
     entry_asset_text = read_text(paths["assets/global-agents-entry-rule.md"])
     metadata = parse_frontmatter(skill_text)
     if set(metadata) != {"name", "description"} or metadata.get("name") != "task-analyze-skill":
@@ -398,11 +428,15 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["Pass no source root with json-object", "call no more tools or source checks", "return its result once immediately"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
     failures.extend(missing_terms("runtime-receipts", receipt_text, REQUIRED_RECEIPT_TEXT))
     failures.extend(missing_terms("adaptive-routing", adaptive_text, REQUIRED_ADAPTIVE_TEXT))
+    failures.extend(missing_terms("receipt entry guard", receipt_script_text, REQUIRED_RECEIPT_GUARD_IMPLEMENTATION))
+    failures.extend(missing_terms("adaptive runner authorization", adaptive_runner_text, ["with model_execution_receipt.adaptive_producer_authorization()"]))
+    failures.extend(missing_terms("dispatcher role authorization", dispatcher_text, ["with receipt_module.dispatcher_node_authorization(args.node_role)"]))
     if "/local/" not in read_text(paths[".gitignore"]):
         failures.append("task-analyze-skill .gitignore must exclude /local/")
     for obsolete_path in (skill_dir / "assets" / "hooks.json", skill_dir / "scripts" / "task_entry_hook.py", skill_dir / "tests" / "test_task_entry_hook.py"):

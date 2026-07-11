@@ -25,7 +25,11 @@ try:
         normal_adaptive_pair_texts,
         parse_pair,
         pair_text,
+        PROFILE_PRESET_VERSION,
+        profile_preset_names,
+        public_profile_preset_rows,
         public_execution_domain_rows,
+        resolve_profile_preset,
         upgrade_pair,
     )
 except ModuleNotFoundError:
@@ -51,11 +55,29 @@ except ModuleNotFoundError:
     normal_adaptive_pair_texts = _routing_policy.normal_adaptive_pair_texts
     parse_pair = _routing_policy.parse_pair
     pair_text = _routing_policy.pair_text
+    PROFILE_PRESET_VERSION = _routing_policy.PROFILE_PRESET_VERSION
+    profile_preset_names = _routing_policy.profile_preset_names
+    public_profile_preset_rows = _routing_policy.public_profile_preset_rows
     public_execution_domain_rows = _routing_policy.public_execution_domain_rows
+    resolve_profile_preset = _routing_policy.resolve_profile_preset
     upgrade_pair = _routing_policy.upgrade_pair
+
+try:
+    from skill_resolver import canonicalize_installed_skill_id
+except ModuleNotFoundError:
+    import importlib.util as _skill_importlib_util
+
+    _skill_resolver_path = Path(__file__).with_name("skill_resolver.py")
+    _skill_resolver_spec = _skill_importlib_util.spec_from_file_location("task_analyze_skill_canonicalizer", _skill_resolver_path)
+    _skill_resolver = _skill_importlib_util.module_from_spec(_skill_resolver_spec)
+    _skill_resolver_spec.loader.exec_module(_skill_resolver)
+    canonicalize_installed_skill_id = _skill_resolver.canonicalize_installed_skill_id
 
 
 DEFAULT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "local" / "adaptive-routing" / "model_experience.json"
+DEFAULT_CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+DEFAULT_SKILLS_ROOT = DEFAULT_CODEX_HOME / "skills"
+DEFAULT_PLUGINS_CACHE_ROOT = DEFAULT_CODEX_HOME / "plugins" / "cache"
 SCHEMA_VERSION = 3
 CONTROL_FIELDS = ["task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "owning_skill", "project_family", "verification_shape", "execution_domain"]
 CONTROL_ENUMS = {
@@ -1019,10 +1041,22 @@ def _profile(args):
     return condition, summary, pairs, static_pair, hard_pair
 
 
+def resolve_profile_arguments(args):
+    canonical_owner = canonicalize_installed_skill_id(args.owning_skill, args.skills_root, args.plugins_cache_root) if args.owning_skill is not None else None
+    profile = resolve_profile_preset(args.profile_preset, project_family=args.project_family, owning_skill=canonical_owner, execution_domain=args.execution_domain)
+    if canonical_owner is None:
+        profile["owning_skill"] = canonicalize_installed_skill_id(profile["owning_skill"], args.skills_root, args.plugins_cache_root)
+    for field, value in profile.items():
+        setattr(args, field, value)
+    return args
+
+
 def add_profile_arguments(parser):
-    for option in ("task-family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "project-family", "verification-shape"):
-        parser.add_argument(f"--{option}", required=True)
-    parser.add_argument("--owning-skill", required=True, dest="owning_skill")
+    parser.add_argument("--profile-preset", required=True, choices=profile_preset_names())
+    parser.add_argument("--project-family", required=True)
+    parser.add_argument("--owning-skill")
+    parser.add_argument("--skills-root", type=Path, default=DEFAULT_SKILLS_ROOT)
+    parser.add_argument("--plugins-cache-root", type=Path, default=DEFAULT_PLUGINS_CACHE_ROOT)
     parser.add_argument(
         "--execution-domain",
         choices=tuple(
@@ -1032,9 +1066,6 @@ def add_profile_arguments(parser):
         ),
     )
     parser.add_argument("--task-summary", required=True)
-    parser.add_argument("--candidate-ladder", action="append", required=True)
-    parser.add_argument("--static-suggestion", required=True)
-    parser.add_argument("--hard-floor", required=True)
 
 
 def execution_domain_rows():
@@ -1045,13 +1076,18 @@ def execution_domain_rows():
     }
 
 
-def parse_args():
+def profile_preset_rows():
+    return {"schema_version": 1, "registry_version": PROFILE_PRESET_VERSION, "rows": public_profile_preset_rows()}
+
+
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Maintain privacy-safe adaptive-routing experience")
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY_PATH)
     commands = parser.add_subparsers(dest="command", required=True)
     recommend = commands.add_parser("recommend")
     record = commands.add_parser("record")
     commands.add_parser("domains")
+    commands.add_parser("profiles")
     add_profile_arguments(recommend)
     add_profile_arguments(record)
     record.add_argument("--receipt", required=True)
@@ -1061,7 +1097,8 @@ def parse_args():
     record.add_argument("--run-id")
     record.add_argument("--trial", action="store_true")
     commands.add_parser("status")
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    return resolve_profile_arguments(args) if args.command in {"recommend", "record"} else args
 
 
 def main():
@@ -1074,6 +1111,8 @@ def main():
         value = record_event(args)
     elif args.command == "domains":
         value = execution_domain_rows()
+    elif args.command == "profiles":
+        value = profile_preset_rows()
     else:
         value = status(args.history)
     print(json.dumps(value, separators=(",", ":")))

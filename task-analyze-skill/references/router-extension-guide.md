@@ -13,6 +13,8 @@ The normal seam is:
 3. Add one representative routing scenario and generic registry-driven tests for valid, unknown, and migration-only domains.
 4. Update concise user documentation only where the active domain list or extension seam is explained.
 
+The stable `tiny-code`, `code-easy`, and `code-complex` profile presets are domain-parameterized. A new active code-domain registry row becomes usable through those presets automatically; do not duplicate profile rows per language. Python, C#, and Unity C# are current examples of the same extension seam.
+
 Discover the current non-mutating registry view with:
 
 ```bash
@@ -26,6 +28,8 @@ Keep language rules in executor references, not in registry metadata. A domain m
 `execution_domain` is part of adaptive-profile identity. New records use the exact registry ID. When reading legacy records with no domain, infer `code_unspecified` for legacy code evidence and `general` otherwise; never reinterpret old evidence as a newly named active domain. `code_unspecified` is not an extension target.
 
 The entry model|effort is route-coordination metadata only and is never a learning feature. Direct tool-only routes use their installed tool skill and an observable Mini Verify, but create no child model, model receipt, or adaptive producer sample. Model-executed routes carry complete `routing_recommendation` proof and record the actual producer receipt and verification outcomes; deterministic controller recording needs no decorative Luna call.
+
+Execution domain describes the requested execution work, not every language found in inspected sources. A read-only repository answer can inspect Python, C#, or Unity C# while remaining `execution_domain=general`; use a code domain only for code creation, changes, execution, or code-path validation.
 
 ## Canonical policy
 

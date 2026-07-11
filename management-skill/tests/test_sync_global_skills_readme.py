@@ -183,19 +183,71 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_readme_benchmark_is_sanitized_and_matches_public_evidence(self):
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
-        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence_text = evidence_path.read_text(encoding="utf-8")
+        evidence = json.loads(evidence_text)
         self.assertIn("single-run smoke comparison", readme)
+        self.assertIn("Suite token goal: MET", readme)
+        self.assertIn("Speed goal: NOT MET", readme)
         self.assertIn("model-routing-benchmark-example.json", readme)
-        self.assertEqual([row["tokens_saved"] for row in evidence["comparisons"]], [6034, 1220, 1398])
-        self.assertEqual(evidence["combined"]["tokens_saved"], 8652)
-        self.assertAlmostEqual(evidence["combined"]["token_savings_percent"], 11.416)
-        self.assertTrue(all(row["output_match"] and row["workload_hash_match"] for row in evidence["comparisons"]))
-        self.assertEqual([step["next_pair"] for step in evidence["controlled_effort_first_search"]["steps"]], ["gpt-5.6-sol|max", "gpt-5.6-sol|xhigh", "gpt-5.6-sol|max"])
-        self.assertEqual(evidence["controlled_effort_first_search"]["steps"][-1]["calibration_state"], "frozen")
-        self.assertFalse(evidence["automatic_private_ledger_update"]["private_ledger_published"])
-        self.assertNotIn("/Users/", evidence_path.read_text(encoding="utf-8"))
+        self.assertTrue(evidence["summary"]["all_outputs_correct"])
+        self.assertTrue(evidence["summary"]["all_arms_complete"])
+        self.assertTrue(evidence["summary"]["token_goal_met"])
+        self.assertFalse(evidence["summary"]["speed_goal_met"])
+        self.assertEqual(evidence["summary"]["direct_total_tokens"], 1404182)
+        self.assertEqual(evidence["summary"]["global_total_tokens"], 1200826)
+        self.assertEqual(evidence["summary"]["tokens_saved"], 203356)
+        self.assertAlmostEqual(evidence["summary"]["token_savings_percent"], 14.482)
+        self.assertEqual(evidence["summary"]["critical_path_ms_saved"], -150341)
+        self.assertAlmostEqual(evidence["summary"]["critical_path_time_savings_percent"], -39.186)
+        rows = {row["scenario"]: row for row in evidence["comparisons"]}
+        self.assertEqual(rows["simple"]["comparison"]["tokens_saved"], -66671)
+        self.assertAlmostEqual(rows["simple"]["comparison"]["critical_path_time_savings_percent"], -320.068)
+        self.assertEqual(rows["medium"]["comparison"]["tokens_saved"], -60439)
+        self.assertAlmostEqual(rows["medium"]["comparison"]["critical_path_time_savings_percent"], -195.494)
+        self.assertEqual(rows["medium"]["global"]["producer_pair"], "gpt-5.6-terra|high")
+        self.assertEqual(rows["complex"]["comparison"]["tokens_saved"], 330466)
+        self.assertAlmostEqual(rows["complex"]["comparison"]["token_savings_percent"], 26.81)
+        self.assertAlmostEqual(rows["complex"]["comparison"]["critical_path_time_savings_percent"], -6.459)
+        self.assertTrue(all(row["comparison"]["comparable"] for row in rows.values()))
+        self.assertTrue(all(row[arm]["completion"] == "complete" and row[arm]["correctness"] == "deterministic_pass" for row in rows.values() for arm in ("direct", "global")))
+        self.assertTrue(all(row["workload_hash_match"] for row in rows.values()))
+        self.assertEqual(rows["complex"]["global"]["producer_pair"], "gpt-5.6-sol|max")
+        self.assertEqual(rows["complex"]["verified_workflow_shape"], "conditional_serial resolve_structure followed by parallel extract_names")
+        self.assertTrue(rows["complex"]["expected_output_match"])
+        for forbidden in ("/Users/", "thread_id", "workload_prompt_sha256", "producer_run_id", '"prompt"', '"result"'):
+            self.assertNotIn(forbidden, evidence_text)
+        self.assertNotIn("timeout", evidence_text.lower())
+        self.assertNotIn("timeout", readme.lower())
         for filename in ("model-benchmark-example.svg", "model-benchmark-example-mobile.svg"):
             ElementTree.parse(README_ASSET_DIR / filename)
+            self.assertNotIn("timeout", (README_ASSET_DIR / filename).read_text(encoding="utf-8").lower())
+
+    def test_desktop_benchmark_keeps_right_values_and_verdict_inside_viewbox(self):
+        svg_path = README_ASSET_DIR / "model-benchmark-example.svg"
+        root = ElementTree.parse(svg_path).getroot()
+        namespace = {"svg": "http://www.w3.org/2000/svg"}
+        viewport_width = float(root.attrib["viewBox"].split()[2])
+        bounded_right = []
+        for group in root.findall(".//svg:g", namespace):
+            translate = re.fullmatch(r"translate\(([-\d.]+)(?:\s+[-\d.]+)?\)", group.attrib.get("transform", ""))
+            translate_x = float(translate.group(1)) if translate else 0.0
+            for text in group.findall("svg:text", namespace):
+                if text.attrib.get("data-bound") != "right":
+                    continue
+                self.assertEqual(text.attrib.get("text-anchor"), "end")
+                absolute_right = translate_x + float(text.attrib["x"])
+                self.assertLessEqual(absolute_right, viewport_width - 64)
+                bounded_right.append(text)
+        self.assertEqual(len(bounded_right), 6)
+
+        summary_lines = [text for text in root.findall("svg:text", namespace) if text.attrib.get("data-bound") == "center"]
+        self.assertEqual(len(summary_lines), 3)
+        self.assertTrue(all(text.attrib.get("text-anchor") == "middle" for text in summary_lines))
+        self.assertEqual({float(text.attrib["x"]) for text in summary_lines}, {310.0, 600.0, 890.0})
+        summary_text = " ".join("".join(text.itertext()) for text in summary_lines)
+        self.assertIn("TOKENS 1,404,182", summary_text)
+        self.assertIn("TIME 383.657s", summary_text)
+        self.assertIn("All six arms correct", summary_text)
 
     def test_learning_visuals_do_not_present_fixed_code_model_pairs(self):
         visual_names = ("qin-codex-skills-hero", "task-lifecycle", "model-router", "model-experience", "verification-topologies")

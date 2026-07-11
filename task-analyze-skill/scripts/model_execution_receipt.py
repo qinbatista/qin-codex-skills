@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import contextvars
 import hashlib
 import json
 import os
@@ -7,6 +8,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +27,95 @@ except ModuleNotFoundError:
 
 ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER"}
 RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
+ENTRY_CONTEXT_ENV = "CODEX_TASK_ANALYZE_ENTRY_CONTEXT"
+NODE_ROLES = {"entry", "result-producer", "verification", "repair", "ending", "benchmark-baseline"}
+DISPATCHER_FIXED_ROLES = {"verification", "repair", "ending"}
+_NODE_AUTHORIZATION = contextvars.ContextVar("task_analyze_receipt_node_authorization", default=None)
+
+
+class ReceiptAuthorizationError(ValueError):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def entry_context_active():
+    return ENTRY_CONTEXT_ENV in os.environ
+
+
+def receipt_node_role(args):
+    if getattr(args, "entry_task", False):
+        return "entry"
+    explicit_role = getattr(args, "node_role", None)
+    if explicit_role is not None:
+        if explicit_role not in NODE_ROLES - {"entry"}:
+            raise ReceiptAuthorizationError("node_role_invalid")
+        return explicit_role
+    return "ending" if getattr(args, "route_marker", "LOCKED_ROUTE_NODE") == "ENDING_TASK_WORKER" else "result-producer"
+
+
+@contextmanager
+def adaptive_producer_authorization():
+    token = _NODE_AUTHORIZATION.set(("adaptive-runner", "result-producer"))
+    try:
+        yield
+    finally:
+        _NODE_AUTHORIZATION.reset(token)
+
+
+@contextmanager
+def dispatcher_adaptive_result_authorization():
+    token = _NODE_AUTHORIZATION.set(("dispatcher-adaptive-recommendation", "result-producer"))
+    try:
+        yield
+    finally:
+        _NODE_AUTHORIZATION.reset(token)
+
+
+@contextmanager
+def dispatcher_node_authorization(node_role):
+    if node_role not in DISPATCHER_FIXED_ROLES:
+        raise ReceiptAuthorizationError("dispatcher_node_role_invalid")
+    token = _NODE_AUTHORIZATION.set(("dispatcher", node_role))
+    try:
+        yield
+    finally:
+        _NODE_AUTHORIZATION.reset(token)
+
+
+def authorize_receipt_run(args):
+    node_role = receipt_node_role(args)
+    inherited_context_active = entry_context_active()
+    if getattr(args, "entry_task", False) and inherited_context_active:
+        raise ReceiptAuthorizationError("recursive_entry_task_forbidden")
+    context_active = bool(getattr(args, "entry_task", False) or inherited_context_active)
+    if getattr(args, "entry_task", False):
+        source = "entry-launch"
+    elif not context_active:
+        source = "outside-entry-context"
+    else:
+        authorization = _NODE_AUTHORIZATION.get()
+        if node_role == "result-producer" and authorization == ("adaptive-runner", "result-producer"):
+            source = "adaptive-runner"
+        elif node_role == "result-producer" and authorization == ("dispatcher-adaptive-recommendation", "result-producer"):
+            source = "dispatcher-adaptive-recommendation"
+        elif node_role in DISPATCHER_FIXED_ROLES and authorization == ("dispatcher", node_role):
+            source = "dispatcher"
+        else:
+            raise ReceiptAuthorizationError("entry_context_adaptive_runner_required" if node_role in {"result-producer", "benchmark-baseline"} else "entry_context_dispatcher_authorization_required")
+    args._receipt_node_role = node_role
+    args._receipt_entry_context_active = context_active
+    args._receipt_authorization_source = source
+    return {"node_role": node_role, "entry_context_active": context_active, "authorization_status": "authorized", "authorization_source": source}
+
+
+def receipt_authorization_fields(args, status=None, source=None, reason=None):
+    authorization_source = source if source is not None else getattr(args, "_receipt_authorization_source", None)
+    authorization_status = status if status is not None else "authorized" if authorization_source is not None else "not-evaluated"
+    fields = {"node_role": getattr(args, "_receipt_node_role", receipt_node_role(args)), "entry_context_active": bool(getattr(args, "_receipt_entry_context_active", getattr(args, "entry_task", False) or entry_context_active())), "authorization_status": authorization_status, "authorization_source": authorization_source}
+    if reason is not None:
+        fields["authorization_reason"] = reason
+    return fields
 
 
 def sha256_text(text):
@@ -111,11 +202,11 @@ def failed_run_receipt(args, failure_class):
         "model_turn_duration_ms": None,
         "time_to_first_token_ms": None,
     }
-    return {
+    receipt = {
         "schema_version": 1,
         "proof_level": "local-operational-not-cryptographic",
         "workload_id": args.workload_id,
-        "node_type": "task-analyze-entry" if args.entry_task else "locked-route-node",
+        "node_type": "task-analyze-entry" if getattr(args, "entry_task", False) else "locked-route-node",
         "requested_model": args.model,
         "requested_effort": args.effort,
         "requested_pair": requested_pair,
@@ -128,6 +219,8 @@ def failed_run_receipt(args, failure_class):
         "effort_match": False,
         "pair_match": False,
         "tokens": {},
+        "metrics_complete": False,
+        "tokens_lower_bound": False,
         "process_elapsed_ms": None,
         "turn_completed": False,
         "status": "fail",
@@ -136,6 +229,15 @@ def failed_run_receipt(args, failure_class):
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "limitations": "Execution failed before complete runtime metadata was available; no model execution success is claimed.",
     }
+    receipt.update(receipt_authorization_fields(args))
+    return receipt
+
+
+def rejected_run_receipt(args, error):
+    receipt = failed_run_receipt(args, "authorization")
+    receipt.update(receipt_authorization_fields(args, status="rejected", source=None, reason=error.code))
+    receipt["limitations"] = "Execution was rejected before a model launch because the entry-context node authorization contract was not satisfied."
+    return receipt
 
 
 def parse_stdout_events(stdout_text):
@@ -222,6 +324,7 @@ def normalize_usage(usage):
 
 
 def run_receipt(args, prompt_text):
+    authorization = authorize_receipt_run(args)
     requested_pair_tuple = parse_model_effort_pair(pair_text(args.model, args.effort))
     allowed_fallback_pairs = normalize_fallback_pairs(getattr(args, "allow_fallback", []))
     requested_pair = requested_pair_tuple
@@ -237,9 +340,23 @@ def run_receipt(args, prompt_text):
             raise ValueError(f"unsupported route marker {marker}")
         execution_prompt = f"{marker}\nThis is a bounded node from an already-returned Task Analyze route. Execute the assigned node directly; do not restart Task Analyze or redesign the route.\n\n{prompt_text}"
     started = time.perf_counter_ns()
-    process = subprocess.run(command, input=execution_prompt, text=True, cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout)
+    timed_out = False
+    command_environment = None
+    if args.entry_task:
+        command_environment = os.environ.copy()
+        command_environment[ENTRY_CONTEXT_ENV] = "1"
+    try:
+        process = subprocess.run(command, input=execution_prompt, text=True, cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout, **({"env": command_environment} if command_environment is not None else {}))
+    except subprocess.TimeoutExpired as error:
+        process = None
+        timed_out = True
+        process_stdout = error.stdout.decode("utf-8", errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
+        process_stderr = error.stderr.decode("utf-8", errors="replace") if isinstance(error.stderr, bytes) else error.stderr or ""
+    else:
+        process_stdout = process.stdout.decode("utf-8", errors="replace") if isinstance(process.stdout, bytes) else process.stdout or ""
+        process_stderr = process.stderr.decode("utf-8", errors="replace") if isinstance(process.stderr, bytes) else process.stderr or ""
     elapsed_ms = round((time.perf_counter_ns() - started) / 1_000_000)
-    stdout_summary = parse_stdout_events(process.stdout)
+    stdout_summary = parse_stdout_events(process_stdout)
     thread_state = read_thread_state(args.state_db, stdout_summary["thread_id"])
     rollout = parse_rollout_allowlist(thread_state["rollout_path"] if thread_state else None)
     turn_context = rollout["turn_context"] if rollout.get("turn_context") else {}
@@ -260,37 +377,17 @@ def run_receipt(args, prompt_text):
     effort_match = resolved_effort in allowed_efforts
     pair_match = (effective_model, resolved_effort) in allowed_pairs if effective_model and resolved_effort else False
     token_consistent = thread_state is not None and usage["total_tokens"] == thread_state.get("tokens_used")
-    status = "pass" if process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and pair_match and token_consistent else "fail"
+    status = "pass" if not timed_out and process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and pair_match and token_consistent else "fail"
     task_complete = rollout["task_complete"] or {}
-    failure_class = infer_failure_class(
-        process,
-        status,
-        stdout_summary["turn_completed"],
-        stdout_summary["turn_failed"],
-        model_match,
-        effort_match,
-        pair_match,
-        token_consistent,
-    )
+    failure_class = "timeout" if timed_out else infer_failure_class(process, status, stdout_summary["turn_completed"], stdout_summary["turn_failed"], model_match, effort_match, pair_match, token_consistent)
     requested_pair = f"{args.model}|{args.effort}"
-    attempt = route_attempt_summary(
-        requested_pair=requested_pair,
-        resolved_pair=(resolved_model, resolved_effort) if resolved_model and resolved_effort else None,
-        effective_pair=(effective_model, resolved_effort) if effective_model and resolved_effort else None,
-        status=status,
-        model_match=model_match,
-        effort_match=effort_match,
-        pair_match=pair_match,
-        process_elapsed_ms=elapsed_ms,
-        task_complete=task_complete,
-        execution_failure_class=failure_class,
-    )
+    attempt = route_attempt_summary(requested_pair=requested_pair, resolved_pair=(resolved_model, resolved_effort) if resolved_model and resolved_effort else None, effective_pair=(effective_model, resolved_effort) if effective_model and resolved_effort else None, status=status, model_match=model_match, effort_match=effort_match, pair_match=pair_match, process_elapsed_ms=elapsed_ms, task_complete=task_complete, execution_failure_class=failure_class)
     if status == "pass":
         failure_class = None
-    receipt = {"schema_version": 1, "proof_level": "local-operational-not-cryptographic", "workload_id": args.workload_id, "node_type": "task-analyze-entry" if args.entry_task else "locked-route-node", "workload_prompt_sha256": sha256_text(prompt_text), "prompt_sha256": sha256_text(execution_prompt), "output_sha256": stdout_summary["output_hash"], "thread_id": stdout_summary["thread_id"], "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": resolved_model, "resolved_effort": resolved_effort, "effective_model": effective_model, "effective_pair": f"{effective_model}|{resolved_effort}" if effective_model and resolved_effort else None, "reroutes": reroutes, "allowed_fallback_pairs": allowed_fallback_pairs, "model_match": model_match, "effort_match": effort_match, "pair_match": pair_match, "tokens": usage, "availability": rollout.get("availability"), "state_tokens_used": (thread_state or {}).get("tokens_used"), "token_total_consistent": token_consistent, "model_turn_duration_ms": task_complete.get("duration_ms"), "time_to_first_token_ms": task_complete.get("time_to_first_token_ms"), "process_elapsed_ms": elapsed_ms, "exit_code": process.returncode, "turn_completed": stdout_summary["turn_completed"], "stderr_line_count": len(process.stderr.splitlines()), "cli_version": (thread_state or {}).get("cli_version"), "model_provider": (thread_state or {}).get("model_provider"), "source": (thread_state or {}).get("source"), "status": status, "recorded_at": datetime.now(timezone.utc).isoformat(), "limitations": "Resolved/effective values come from local Codex runtime metadata and reroute events; this is not a cryptographically signed backend attestation."}
+    receipt = {"schema_version": 1, "proof_level": "local-operational-not-cryptographic", "workload_id": args.workload_id, "node_type": "task-analyze-entry" if args.entry_task else "locked-route-node", **authorization, "workload_prompt_sha256": sha256_text(prompt_text), "prompt_sha256": sha256_text(execution_prompt), "output_sha256": stdout_summary["output_hash"], "thread_id": stdout_summary["thread_id"], "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": resolved_model, "resolved_effort": resolved_effort, "effective_model": effective_model, "effective_pair": f"{effective_model}|{resolved_effort}" if effective_model and resolved_effort else None, "reroutes": reroutes, "allowed_fallback_pairs": allowed_fallback_pairs, "model_match": model_match, "effort_match": effort_match, "pair_match": pair_match, "tokens": usage, "metrics_complete": not timed_out and stdout_summary["turn_completed"] and token_consistent, "tokens_lower_bound": timed_out and usage["total_tokens"] is not None, "availability": rollout.get("availability"), "state_tokens_used": (thread_state or {}).get("tokens_used"), "token_total_consistent": token_consistent, "model_turn_duration_ms": task_complete.get("duration_ms"), "time_to_first_token_ms": task_complete.get("time_to_first_token_ms"), "process_elapsed_ms": elapsed_ms, "exit_code": process.returncode if process is not None else None, "turn_completed": False if timed_out else stdout_summary["turn_completed"], "stderr_line_count": len(process_stderr.splitlines()), "cli_version": (thread_state or {}).get("cli_version"), "model_provider": (thread_state or {}).get("model_provider"), "source": (thread_state or {}).get("source"), "status": status, "recorded_at": datetime.now(timezone.utc).isoformat(), "limitations": "Resolved/effective values come from local Codex runtime metadata and reroute events; this is not a cryptographically signed backend attestation."}
     receipt["failure_class"] = failure_class
     receipt["route_attempts"] = [attempt]
-    last_message = extract_last_agent_message(process.stdout) if args.result_output else None
+    last_message = extract_last_agent_message(process_stdout) if args.result_output and not timed_out else None
     if args.result_output and last_message is not None:
         args.result_output.parent.mkdir(parents=True, exist_ok=True)
         args.result_output.write_text(last_message + "\n", encoding="utf-8")
@@ -321,6 +418,13 @@ def compare_receipts(routed, baseline, acceptance_evidence=None):
     return {"schema_version": 1, "valid_like_for_like_smoke": not failures, "failures": failures, "workload_id": routed.get("workload_id"), "workload_prompt_sha256": workload_prompt_sha256, "acceptance": {"output_hash_match": output_hash_match, "external_evidence_pass": external_acceptance_pass, "evidence_type": "exact-output-hash" if output_hash_match else "external-semantic-verification" if external_acceptance_pass else "missing"}, "routed": {"model": routed.get("effective_model"), "effort": routed.get("resolved_effort"), "total_tokens": routed_tokens.get("total_tokens"), "uncached_input_tokens": routed_tokens.get("uncached_input_tokens"), "process_elapsed_ms": routed.get("process_elapsed_ms")}, "entry_model_leakage_baseline": {"model": baseline.get("effective_model"), "effort": baseline.get("resolved_effort"), "total_tokens": baseline_tokens.get("total_tokens"), "uncached_input_tokens": baseline_tokens.get("uncached_input_tokens"), "process_elapsed_ms": baseline.get("process_elapsed_ms")}, "measured_savings": {"total_tokens": token_savings, "total_tokens_percent": token_savings_percent, "uncached_input_tokens": uncached_input_savings, "process_elapsed_ms": elapsed_savings_ms, "process_elapsed_percent": elapsed_savings_percent}, "interpretation": "Positive savings favor the designed route. Tokens are a usage proxy, not a currency claim. One pair is a smoke result; alternate repeated runs and compare medians for a durable claim."}
 
 
+def run_command_summary(args, result):
+    summary = {"output": str(args.output), "status": result.get("status", "fail")}
+    if getattr(args, "emit_result", False) and args.result_output and result.get("status") == "pass" and args.result_output.exists():
+        summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
+    return summary
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Capture sanitized Codex model receipts and compare like-for-like runs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -330,6 +434,7 @@ def parse_args():
     run_parser.add_argument("--workload-id", required=True)
     run_parser.add_argument("--output", type=Path, required=True)
     run_parser.add_argument("--result-output", type=Path, help="Optional task-cache path for the final child result. Raw stdout/stderr are never stored in the receipt.")
+    run_parser.add_argument("--emit-result", action="store_true", help="Return the saved final result in the command summary for a bounded parent fast path; never stores it in the receipt.")
     run_parser.add_argument("--workdir", type=Path, default=Path.cwd())
     run_parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "state_5.sqlite")
     run_parser.add_argument("--codex-bin", default="codex")
@@ -355,6 +460,8 @@ def main():
             raise SystemExit("prompt must be supplied on stdin")
         try:
             result = run_receipt(args, prompt_text)
+        except ReceiptAuthorizationError as error:
+            result = rejected_run_receipt(args, error)
         except subprocess.TimeoutExpired:
             result = failed_run_receipt(args, "timeout")
         except OSError:
@@ -364,7 +471,7 @@ def main():
         result = compare_receipts(json.loads(args.routed.read_text(encoding="utf-8")), json.loads(args.baseline.read_text(encoding="utf-8")), acceptance_evidence)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"output": str(args.output), "status": result.get("status", "pass" if result.get("valid_like_for_like_smoke") else "fail")}))
+    print(json.dumps(run_command_summary(args, result) if args.command == "run" else {"output": str(args.output), "status": "pass" if result.get("valid_like_for_like_smoke") else "fail"}))
     return 0 if result.get("status", "pass" if result.get("valid_like_for_like_smoke") else "fail") == "pass" else 1
 
 
