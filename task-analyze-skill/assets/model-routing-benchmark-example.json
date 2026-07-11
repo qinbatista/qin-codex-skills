@@ -14,6 +14,27 @@
     "failed_boundary": "gpt-5.6-terra|high",
     "private_ledger_published": false
   },
+  "controlled_effort_first_search": {
+    "evidence_type": "isolated learner lifecycle with schema-valid synthetic receipts; not model-performance evidence",
+    "steps": [
+      {
+        "evidence": "gpt-5.6-sol|ultra Real pass",
+        "next_pair": "gpt-5.6-sol|max",
+        "trial": true
+      },
+      {
+        "evidence": "gpt-5.6-sol|max Real pass",
+        "next_pair": "gpt-5.6-sol|xhigh",
+        "trial": true
+      },
+      {
+        "evidence": "gpt-5.6-sol|xhigh Real quality fail",
+        "next_pair": "gpt-5.6-sol|max",
+        "trial": false,
+        "calibration_state": "frozen"
+      }
+    ]
+  },
   "comparisons": [
     {
       "scenario": "easy deterministic JSON transform",

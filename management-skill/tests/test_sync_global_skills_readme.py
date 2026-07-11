@@ -189,6 +189,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(evidence["comparisons"][0]["tokens_saved"], 6138)
         self.assertEqual(evidence["comparisons"][1]["tokens_saved"], 40)
         self.assertTrue(all(row["output_match"] and row["workload_hash_match"] for row in evidence["comparisons"]))
+        self.assertEqual([step["next_pair"] for step in evidence["controlled_effort_first_search"]["steps"]], ["gpt-5.6-sol|max", "gpt-5.6-sol|xhigh", "gpt-5.6-sol|max"])
+        self.assertEqual(evidence["controlled_effort_first_search"]["steps"][-1]["calibration_state"], "frozen")
         self.assertFalse(evidence["automatic_private_ledger_update"]["private_ledger_published"])
         self.assertNotIn("/Users/", evidence_path.read_text(encoding="utf-8"))
         for filename in ("model-benchmark-example.svg", "model-benchmark-example-mobile.svg"):
