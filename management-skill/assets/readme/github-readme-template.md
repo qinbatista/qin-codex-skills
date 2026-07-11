@@ -49,7 +49,7 @@ flowchart LR
   <img src="./management-skill/assets/readme/task-lifecycle.svg" alt="Task lifecycle from hookless Task Analyze through Mini Verify, main result, and Ending Task">
 </picture>
 
-1. 🧭 Task Analyze reads only enough context to select a skill, dependencies, stop condition, and per-node `model | effort`.
+1. 🧭 Task Analyze reads only enough live context plus one optional bounded related-memory digest to select a skill, dependencies, stop condition, and per-node `model | effort`. Missing memory is ignored.
 2. 🔒 Workflow executes the locked route. Active registry-owned code work loads [`code-skill`](./code-skill/SKILL.md); Spark is a separate first route only for obvious bounded low-risk text/code/commands.
 3. 🧪 Mini Verify checks the smallest meaningful observable proof.
 4. ✅ The basically verified result is shown immediately.
@@ -90,6 +90,20 @@ A diagram label is a plan—not proof. Each model-executed node emits a sanitize
 
 🪙 Claim token or time savings only against a **like-for-like** baseline: same prompts and inputs, topology, sandbox, output contract, and acceptance criteria. Cached input belongs in input; reasoning output belongs in output; parallel work compares critical-path process time. Repeated alternating runs and medians support durable claims.
 
+### 📊 Same-workload example
+
+<picture>
+  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg">
+  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Receipt-backed token and process-time comparison of adaptive routes against fixed Sol-ultra">
+</picture>
+
+| Workload | Adaptive route | Fixed baseline | Token result | Process result |
+|---|---|---|---:|---:|
+| Easy deterministic transform | Spark-low | Sol-ultra | `20,903 vs 27,041` · **22.7% less** | `3.724s vs 6.036s` · **38.3% less** |
+| Complex dependency workflow | Terra-xhigh | Sol-ultra | `27,178 vs 27,218` · **0.15% less** | `5.483s vs 6.046s` · **9.3% less** |
+
+Outputs and workload hashes matched. This is a **single-run smoke comparison**; use alternating medians for durable claims. Sanitized evidence is in [`model-routing-benchmark-example.json`](./task-analyze-skill/assets/model-routing-benchmark-example.json); private history and receipts stay local.
+
 ## 🧠 Private model experience
 
 <picture>
@@ -100,6 +114,8 @@ A diagram label is a plan—not proof. Each model-executed node emits a sanitize
 The private `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger is **condition-keyed**, not a global model ranking. It stores compact sanitized outcomes, prompt-free workload hashes, and full-pair quality boundaries. Ending Real updates the same producer attempt, persists `best_pair`, and freezes unchanged profiles; verified failure reopens them. Operational failures may justify a temporary fallback but never rewrite quality learning.
 
 The entry pair is route metadata, never a learner feature. The local ledger is never mirrored, and it contains no raw prompts, results, paths, identities, or secrets.
+
+Optional Obsidian memory is a readable support layer: Task Analyze searches only related requirements, failures, retry lessons, and model experience, then passes a concise digest only to nodes that need it. After the result, Ending Task updates only related sanitized memory. `TaskModelExperience/` records verified model switches for other skills to reference, but the private JSON ledger remains the exact model-selection authority. If no Obsidian or memory provider exists, search and recording are skipped without blocking the task.
 
 <!-- EXECUTION_DOMAIN_TABLE -->
 
@@ -138,7 +154,7 @@ Follow the authoritative [`router extension guide`](./task-analyze-skill/referen
 2. Merge [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) into your `AGENTS.md`.
 3. Start any task normally: the entry skill shows the human route, then workflow continues hooklessly.
 
-Useful contracts: [`task-analyze validator`](./task-analyze-skill/scripts/validate_task_analyze_skill.py), [`workflow validator`](./workflow-skill/scripts/validate_workflow_skill.py), [`route dispatcher`](./task-analyze-skill/scripts/task_route_dispatcher.py), [`receipt runner`](./task-analyze-skill/scripts/model_execution_receipt.py), and [`mirror generator`](./management-skill/scripts/sync_global_skills.py).
+Useful contracts: [`task-analyze validator`](./task-analyze-skill/scripts/validate_task_analyze_skill.py), [`related-memory bridge`](./task-analyze-skill/scripts/obsidian_memory_bridge.py), [`workflow validator`](./workflow-skill/scripts/validate_workflow_skill.py), [`route dispatcher`](./task-analyze-skill/scripts/task_route_dispatcher.py), [`receipt runner`](./task-analyze-skill/scripts/model_execution_receipt.py), and [`mirror generator`](./management-skill/scripts/sync_global_skills.py).
 
 ## 🔐 Privacy + explicit publishing
 
@@ -155,6 +171,7 @@ Editing or testing skills never authorizes a push. [`management-skill`](./manage
 - [`optimization-skill/SKILL.md`](./optimization-skill/SKILL.md) — behavior-preserving improvements and independent proof
 - [`management-skill/SKILL.md`](./management-skill/SKILL.md) — privacy, profiles, and approved-six mirror management
 - [`adaptive-routing.md`](./task-analyze-skill/references/adaptive-routing.md) — private quality-bound learning
+- [`related-memory.md`](./task-analyze-skill/references/related-memory.md) — optional bounded task memory and Ending updates
 
 ---
 

@@ -2,4 +2,4 @@ interface:
   display_name: "Verify Skill"
   short_description: "Mini gate now, Real proof in Ending Task"
   default_prompt: >-
-    $verify-skill: run proportional Mini Verify before releasing the basically verified result, with concrete input, method, output, and reason. For mini_real, treat Mini PASS as provisional; Ending Real updates the same producer run and routing learning. A Real correctness failure notifies and reopens, while operational failures stay neutral. Use the assigned model|effort and receipts for model claims; optimization verification must use a different worker.
+    $verify-skill: run Mini before result release. Treat mini_real Mini PASS as provisional; Ending Real updates the producer, routing learning, and only related sanitized memory. Record producer pair, not verifier pair; missing Obsidian is a no-op. Real correctness failure reopens, operational failure stays neutral, and optimization needs a different verifier.

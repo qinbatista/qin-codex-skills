@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-07-10",
+  "evidence_scope": "single-run same-workload smoke comparison",
+  "automatic_private_ledger_update": {
+    "condition_task_count_before": 2,
+    "condition_task_count_after": 3,
+    "producer_run_id": "benchmark-complex-global-20260710",
+    "executed_pair": "gpt-5.6-terra|xhigh",
+    "mini_verify": "pass",
+    "real_verify": "pass",
+    "calibration_state": "frozen",
+    "best_pair": "gpt-5.6-terra|xhigh",
+    "failed_boundary": "gpt-5.6-terra|high",
+    "private_ledger_published": false
+  },
+  "comparisons": [
+    {
+      "scenario": "easy deterministic JSON transform",
+      "adaptive_pair": "gpt-5.3-codex-spark|low",
+      "fixed_baseline_pair": "gpt-5.6-sol|ultra",
+      "adaptive_total_tokens": 20903,
+      "baseline_total_tokens": 27041,
+      "tokens_saved": 6138,
+      "token_savings_percent": 22.699,
+      "adaptive_process_ms": 3724,
+      "baseline_process_ms": 6036,
+      "process_ms_saved": 2312,
+      "process_savings_percent": 38.304,
+      "output_match": true,
+      "workload_hash_match": true,
+      "adaptive_receipt_status": "pass",
+      "baseline_receipt_status": "pass"
+    },
+    {
+      "scenario": "complex deterministic dependency workflow",
+      "adaptive_pair": "gpt-5.6-terra|xhigh",
+      "fixed_baseline_pair": "gpt-5.6-sol|ultra",
+      "adaptive_total_tokens": 27178,
+      "baseline_total_tokens": 27218,
+      "tokens_saved": 40,
+      "token_savings_percent": 0.147,
+      "adaptive_process_ms": 5483,
+      "baseline_process_ms": 6046,
+      "process_ms_saved": 563,
+      "process_savings_percent": 9.312,
+      "output_match": true,
+      "workload_hash_match": true,
+      "adaptive_receipt_status": "pass",
+      "baseline_receipt_status": "pass"
+    }
+  ],
+  "interpretation": "The easy route materially reduced tokens and time. The complex route reached the same result with similar tokens and lower process time. Repeated alternating runs and medians are required before treating either difference as a durable performance claim."
+}

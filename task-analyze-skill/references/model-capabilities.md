@@ -12,7 +12,7 @@ If a refreshed cache omits one of these models while the current Codex UI/runtim
 | GPT-5.3-Codex-Spark | `gpt-5.3-codex-spark` | text | 128,000 | no | `high` | low, medium, high, xhigh | default |
 | GPT-5.6-Luna | `gpt-5.6-luna` | text, image | 372,000 | yes | `medium` | low, medium, high, xhigh, max | fast |
 | GPT-5.6-Terra | `gpt-5.6-terra` | text, image | 372,000 | yes | `medium` | low, medium, high, xhigh, max, ultra | fast |
-| GPT-5.6-Sol | `gpt-5.6-sol` | text, image | 372,000 | yes | `low` | low, medium, high, xhigh, max, ultra | fast |
+| GPT-5.6-Sol | `gpt-5.6-sol` | text, image | 372,000 | yes | `medium` | low, medium, high, xhigh, max, ultra | fast |
 
 ## Effort Compatibility
 

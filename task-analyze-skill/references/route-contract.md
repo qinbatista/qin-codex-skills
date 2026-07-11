@@ -88,6 +88,7 @@ The graduated complex fixture is a portable template: materialization injects on
 - Mini Verify is downstream of all requested result work and upstream of Main Result.
 - Main Result is upstream of Ending Task.
 - Ending Real Verify, optimization verification, reports, logs, docs, and memory do not gate the first result.
+- Optional related-memory preflight is read-only, bounded, and advisory. An unavailable provider or no matches never blocks routing. Ending updates only related sanitized memory after the result; model-switch memory waits for Real Verify.
 - The main producer carries a complete `routing_recommendation` proof matching its selected pair, trial flag, and profile fingerprint. Record its receipt after Mini and update that same attempt after Real. For `mini_real`, Mini is provisional and Ending Real recomputes/persists `best_pair` and returns `routing_learning`. This applies to dispatcher and direct non-dispatch model routes; tool-only routes never record adaptive producer samples, verifier models are never recorded as producers, and deterministic controller recording needs no decorative Luna call.
 - A later correctness failure notifies and reopens.
 - No lifecycle hook or chat-visible machine plan is required.

@@ -28,6 +28,8 @@ Task Analyze owns selection and storage. Management records the original result-
 - Static safety, authority, modality, project, code-style, and skill floors always win.
 - Never push, sync, snapshot, hash, or overwrite `task-analyze-skill/local/`. Pull must preserve it byte-for-byte.
 
+When a configured Obsidian vault exists, Ending Task may also write a sanitized readable projection to `TaskModelExperience/` through `../task-analyze-skill/scripts/obsidian_memory_bridge.py record-model`. Record only after Real Verify, only for the related task profile, and only controlled summary/pair/verdict/boundary/switch/comparable-metric fields. The private JSON ledger remains authoritative. Missing Obsidian is a successful no-op.
+
 ## Approved Six-Skill Mirror
 
 The public mirror set and order are exactly:

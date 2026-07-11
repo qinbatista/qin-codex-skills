@@ -117,6 +117,7 @@ For connected projects, repeated failures, global skills, UI/visual/generated ar
 3. Test each applicable item with concrete evidence.
 4. A failure notifies and reopens the task.
 5. Save sanitized lessons only; never store secrets or raw private transcripts.
+6. After Real Verify, allow Ending Task to record only the related model-switch/result lesson in optional `TaskModelExperience/`. The verifier verdict informs the record, but the producer pair—not the verifier pair—is recorded. Missing Obsidian is a no-op.
 
 Do not delay the first Mini-verified result for the broader sweep.
 

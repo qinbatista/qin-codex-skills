@@ -173,6 +173,27 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Ending Real 更新同一个 producer attempt，持久化并冻结 `best_pair`", readme)
         self.assertIn("tiny 路线必须是 `Spark-low + 完整常规 fallback`", readme)
 
+    def test_readme_explains_optional_related_memory_and_task_model_experience(self):
+        readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
+        self.assertIn("related-memory", readme)
+        self.assertIn("TaskModelExperience", readme)
+        self.assertIn("missing", readme.lower())
+        self.assertIn("private", readme.lower())
+
+    def test_readme_benchmark_is_sanitized_and_matches_public_evidence(self):
+        readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
+        evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        self.assertIn("single-run smoke comparison", readme)
+        self.assertIn("model-routing-benchmark-example.json", readme)
+        self.assertEqual(evidence["comparisons"][0]["tokens_saved"], 6138)
+        self.assertEqual(evidence["comparisons"][1]["tokens_saved"], 40)
+        self.assertTrue(all(row["output_match"] and row["workload_hash_match"] for row in evidence["comparisons"]))
+        self.assertFalse(evidence["automatic_private_ledger_update"]["private_ledger_published"])
+        self.assertNotIn("/Users/", evidence_path.read_text(encoding="utf-8"))
+        for filename in ("model-benchmark-example.svg", "model-benchmark-example-mobile.svg"):
+            ElementTree.parse(README_ASSET_DIR / filename)
+
     def test_learning_visuals_do_not_present_fixed_code_model_pairs(self):
         visual_names = ("qin-codex-skills-hero", "task-lifecycle", "model-router", "model-experience", "verification-topologies")
         for visual_name in visual_names:
@@ -240,14 +261,14 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(copied_names, sync_global_skills.PRIMARY_SKILL_ORDER)
             local_references = set(re.findall(r'(?:src="|srcset="|\]\()(\./[^\"#)]+)', readme))
             svg_references = {reference for reference in local_references if reference.lower().endswith(".svg")}
-            self.assertEqual(len(svg_references), 12)
+            self.assertEqual(len(svg_references), 14)
             for reference in local_references:
                 referenced_path = repository_dir / reference.removeprefix("./")
                 self.assertTrue(referenced_path.exists(), f"Missing generated README reference: {reference}")
 
     def test_readme_svgs_are_parseable_accessible_and_self_contained(self):
         svg_paths = sorted(README_ASSET_DIR.glob("*.svg"))
-        self.assertEqual(len(svg_paths), 12)
+        self.assertEqual(len(svg_paths), 14)
 
         for svg_path in svg_paths:
             root = ElementTree.parse(svg_path).getroot()

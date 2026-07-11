@@ -34,6 +34,8 @@ The entry model may coordinate tools needed to launch and collect downstream nod
 
 Perform only the smallest read-only preflight needed to classify the task and select a safe route. Supplied artifacts, directly related instructions, active source root, relevant history, and installed-skill names are allowed.
 
+When an Obsidian vault or another configured memory provider is available, run one quick bounded related-memory lookup using `scripts/obsidian_memory_bridge.py search`. Search for the individual task's project/skill nouns, prior requirements, verified failures, retry lessons, and relevant model experience. Use only a concise useful digest in the route and affected downstream nodes; never dump broad memory or treat stale memory as live source truth. If the provider is unavailable or no related result exists, skip memory silently and continue normally. Read `references/related-memory.md` for the contract.
+
 Do not edit, generate, push, deploy, send, or start result-bearing executor work before the route is visible. Stop gathering when the route is knowable.
 
 After the route is visible, continue the same task through `workflow-skill`; do not end the response at the route.
@@ -115,6 +117,8 @@ Complex work uses locked dispatched model|effort nodes, dependency topology, rec
 
 Ending Task must not delay the first Mini-verified result. A later correctness failure notifies the user and reopens the task.
 
+After the result, Ending Task updates only directly related sanitized memory when a provider exists. Model/effort switching lessons are written to Obsidian `TaskModelExperience/` only after Real Verify, while the private `model_experience.json` ledger remains the machine authority for exact pair selection. Missing memory providers are a successful no-op.
+
 ## Runtime Proof And Savings
 
 Use `scripts/model_execution_receipt.py run` for every downstream model node when a selectable surface is callable. The receipt must match requested versus resolved/effective model and effort before claiming that node ran as planned.
@@ -150,3 +154,4 @@ After editing this skill:
 5. Replay one easy and one complex route.
 6. Capture a receipt proving a downstream pair differs from the verified entry pair when the route plans a different pair.
 7. Run a like-for-like receipt comparison using `workload_prompt_sha256` and verified acceptance evidence.
+8. Test related-memory search for relevant ranking, bounded output, missing-provider no-op behavior, and sanitized Ending model-experience recording.

@@ -46,6 +46,7 @@ Workflow may report a model switch or repair, but it does not repeat the whole r
 6. Use the smallest relevant file/source allowlist. Exclude cache, backup, generated, and stale fixture trees unless they are the target.
 7. Preserve unrelated user work and do not broaden authorization.
 8. Do not push, publish, deploy, message, switch profiles, or perform an irreversible action unless the user explicitly authorized that action.
+9. Preserve a bounded Task Analyze related-memory digest only for nodes that need it. Treat memory as advisory and recheck live sources when freshness matters; missing memory never blocks execution.
 
 For a direct model node, use `../task-analyze-skill/scripts/model_execution_receipt.py run` with the exact planned pair and call `../task-analyze-skill/scripts/model_routing_history.py record` after Mini using the result-producer receipt; call it again after Real with the same route-run ID and producer receipt. A direct tool-only node uses its installed tool skill and observable Mini check: no child model, receipt, or adaptive sample. For a multi-node sequential, parallel, or mixed route, save the structured plan only in the active task cache and run `../task-analyze-skill/scripts/task_route_dispatcher.py run-plan <plan-file>`; it records after Mini and updates after Real. Enforce `run-plan` -> read Mini-passed result -> show self-contained basically verified result -> `release-main-result <handoff>` -> `run-ending <handoff>`; no Ending node may run before release. Child prompts use `LOCKED_ROUTE_NODE`; no lifecycle hook is involved.
 
@@ -117,6 +118,7 @@ Ending Task starts after the main result. It owns only planned related closeout:
 - a verifier distinct from the optimization implementer;
 - each optimization node names exactly one Ending `verify-skill` node through `verifies_node`; that verifier runs on a different receipt-backed worker, and an Ending optimization/verifier pair executes in dependency-ready waves;
 - reports, logs, docs, Markdown, DailyLog/wiki/Obsidian memory;
+- directly related sanitized memory only; optional `TaskModelExperience/` recording follows Real Verify and never replaces the private routing ledger;
 - sanitized private adaptive-routing outcome records after receipt-backed Mini and then Real Verify, always against the original result producer rather than the verifier. For `mini_real`, Mini PASS is provisional; Ending Real updates the same producer run, recomputes/persists `best_pair`, and returns `routing_learning` without a decorative Luna controller call;
 - remote/status/hash proof when publishing was explicitly authorized;
 - no-op inventory when a planned branch has nothing relevant to change.

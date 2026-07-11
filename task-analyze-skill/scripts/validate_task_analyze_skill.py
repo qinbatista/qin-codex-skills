@@ -66,7 +66,9 @@ REQUIRED_FILES = [
     "references/model-capabilities.md",
     "references/runtime-receipts.md",
     "references/adaptive-routing.md",
+    "references/related-memory.md",
     "scripts/resolve_entry_model.py",
+    "scripts/obsidian_memory_bridge.py",
     "scripts/sync_model_capabilities.py",
     "scripts/model_execution_receipt.py",
     "scripts/model_routing_history.py",
@@ -74,6 +76,7 @@ REQUIRED_FILES = [
     "scripts/skill_resolver.py",
     "scripts/validate_graduated_routes.py",
     "assets/graduated-route-fixtures.json",
+    "assets/model-routing-benchmark-example.json",
     "scripts/validate_task_analyze_skill.py",
 ]
 REQUIRED_SKILL_TEXT = [
@@ -98,6 +101,9 @@ REQUIRED_SKILL_TEXT = [
     "scripts/model_execution_receipt.py",
     "task_route_dispatcher.py run-plan",
     "continue in the same task",
+    "quick bounded related-memory lookup",
+    "TaskModelExperience/",
+    "Missing memory providers are a successful no-op",
 ]
 REQUIRED_ROUTE_TEXT = [
     "## Easy Task: Text Route",
@@ -112,6 +118,7 @@ REQUIRED_ROUTE_TEXT = [
     "Independent optimization verification",
     "## Internal Plan",
     "never conversation output",
+    "Optional related-memory preflight",
 ]
 REQUIRED_SELECTION_TEXT = [
     "selected at task entry",
@@ -127,6 +134,7 @@ REQUIRED_SELECTION_TEXT = [
     "command_generation",
     "Spark-low",
     "currently selected",
+    "TaskModelExperience/",
 ]
 REQUIRED_RECEIPT_TEXT = [
     "requested model and effort",
@@ -149,6 +157,7 @@ REQUIRED_ADAPTIVE_TEXT = [
     "Receipt-matched Mini or Real correctness/quality failure",
     "Real Verify failure overrides",
     "Tokens are a usage proxy",
+    "Obsidian `TaskModelExperience/`",
 ]
 FORBIDDEN_TEXT = [
     "mandatory internal phase of `workflow-skill`",

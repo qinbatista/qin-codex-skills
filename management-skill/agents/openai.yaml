@@ -2,4 +2,4 @@ interface:
   display_name: "Management Skill"
   short_description: "Routing records, profiles, and six-skill mirror"
   default_prompt: >-
-    $management-skill: manage local routing evidence and the approved mirror without exposing private state. Keep only sanitized profiles, producer proof, prompt-free workload hash, Mini/Real outcomes, boundaries, tokens, and timing. Ending Real updates the same producer and freezes best_pair. Cost-rank tokens then time only across complete Real-passing pairs sharing one exact workload-hash cohort; otherwise retain the verified quality boundary. Never publish private state.
+    $management-skill: manage private routing evidence and the approved mirror without exposing private state. Ending Real updates the producer and freezes best_pair. If Obsidian exists, also write a sanitized related TaskModelExperience projection; missing memory is a no-op and the private ledger remains authoritative. Cost-rank only same-hash Real passes. Never publish private state.

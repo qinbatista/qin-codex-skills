@@ -58,6 +58,8 @@ Use `scripts/model_routing_history.py recommend` with a controlled task profile 
 
 The learner performs a bounded calibration search for the selected complete `model|effort` pair per exact sanitized task profile. Effort changes always precede model changes in both directions. A `mini_real` Mini pass is provisional; Ending Real updates that same producer receipt/run, recomputes the recommendation, and freezes `best_pair` when eligible. Reuse a frozen exact-profile `selected_pair` with `trial=false` until verified failure, ladder/hard-floor/profile drift, policy change, or explicit reset.
 
+Optional Obsidian `TaskModelExperience/` is a readable related-memory projection for Task Analyze and other skills after Ending Real. It may explain past switches, but it never replaces the private learner as exact pair authority. If Obsidian is unavailable, skip it without changing selection.
+
 The older shorthand "one cheaper/faster rung" means one lower eligible pair to measure; it is never a price or speed assumption and cannot bypass quality evidence.
 
 - No prior success: use the static suggestion, except safe low-risk text-only `tiny_text`, `tiny_code`, or `command_generation` work starts at eligible Spark-low.

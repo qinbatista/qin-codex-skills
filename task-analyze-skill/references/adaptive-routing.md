@@ -13,6 +13,8 @@ Learn Qin's best downstream model and effort per sanitized task profile from rea
 
 The `local/` subtree is personal state. Mirror snapshots, hashes, safety scans, diffs, sync, and push exclude it. Pull preserves it byte-for-byte.
 
+Obsidian `TaskModelExperience/` is an optional sanitized readable projection for Task Analyze and other skills. It never replaces this private ledger as the machine selection authority. Write it only in Ending Task after Real Verify; if Obsidian is unavailable, skip the projection without affecting routing.
+
 ## Sanitized Profile
 
 Each local condition record has only controlled profile values: task family, artifact, `execution_domain`, scope, ambiguity, modality, risk, complexity, owning skill, project family, and verification shape. The domain is part of identity, so Python, plain C#, Unity C#, and non-code evidence do not share calibration. It also has a canonical candidate ladder, static suggestion, hard floor, one generalized privacy-filtered task summary, and explicit `success_model`/`failed_model` ranges.

@@ -215,6 +215,19 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_related_memory_contract_is_required_and_hookless(self):
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
+        try:
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
+            self.assertTrue(result["valid"])
+            skill_path = temp_dir / "SKILL.md"
+            skill_path.write_text(skill_path.read_text(encoding="utf-8").replace("quick bounded related-memory lookup", "broad mandatory memory dump"), encoding="utf-8")
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
+            self.assertFalse(result["valid"])
+            self.assertTrue(any("quick bounded related-memory lookup" in failure for failure in result["failures"]))
+        finally:
+            shutil.rmtree(temp_dir)
+
 
 if __name__ == "__main__":
     unittest.main()
