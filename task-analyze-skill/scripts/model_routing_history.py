@@ -80,6 +80,8 @@ DEFAULT_SKILLS_ROOT = DEFAULT_CODEX_HOME / "skills"
 DEFAULT_PLUGINS_CACHE_ROOT = DEFAULT_CODEX_HOME / "plugins" / "cache"
 SCHEMA_VERSION = 3
 CONTROL_FIELDS = ["task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "owning_skill", "project_family", "verification_shape", "execution_domain"]
+ACTIVE_VERIFICATION_SHAPES = {"real"}
+HISTORY_ONLY_VERIFICATION_SHAPES = {"mini", "mini_real", "result"}
 CONTROL_ENUMS = {
     "task_family": {"code", "direct", "grounded", "integration", "visual", "management", "prompt", "document", "data", "safety", "legacy", "tiny_text", "tiny_code", "command_generation", "other"},
     "artifact": {"answer", "script", "note", "report", "evidence", "document", "patch", "log", "legacy"},
@@ -88,7 +90,7 @@ CONTROL_ENUMS = {
     "modality": {"text", "image", "mixed"},
     "risk": {"low", "medium", "high"},
     "complexity": {"easy", "complex"},
-    "verification_shape": {"mini_real", "mini", "real", "result"},
+    "verification_shape": ACTIVE_VERIFICATION_SHAPES | HISTORY_ONLY_VERIFICATION_SHAPES,
     "execution_domain": set(EXECUTION_DOMAINS),
 }
 QUALITY_FAILURES = {"quality", "correctness"}
@@ -143,6 +145,8 @@ def validate_condition(values, *, allow_history_only=False):
     for field, allowed in CONTROL_ENUMS.items():
         if condition[field] not in allowed:
             raise ValueError(f"{field} is invalid")
+    if not allow_history_only and condition["verification_shape"] not in ACTIVE_VERIFICATION_SHAPES:
+        raise ValueError("active profiles require verification_shape=real")
     return condition
 
 
@@ -300,6 +304,56 @@ def ladder_fingerprint(pairs, hard_pair):
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _durable_real_verdict(task):
+    if task.get("receipt_status") != "pass" or task.get("turn_completed") is not True or task.get("model_match") is not True or task.get("effort_match") is not True:
+        return None
+    failure_class = task.get("allowlisted_failure_class")
+    if failure_class in QUALITY_FAILURES and task.get("real_status") == "fail":
+        return "fail"
+    operational_pairs = task.get("operational_failure_pairs") if isinstance(task.get("operational_failure_pairs"), list) else []
+    if failure_class in RUNTIME_FAILURES or task.get("executed_pair") in operational_pairs:
+        return None
+    if task.get("real_status") == "pass":
+        return "pass"
+    return None
+
+
+def _seed_legacy_real_evidence(history, record, condition, summary, pairs):
+    existing_run_ids = {task.get("run_id") for task in record.get("tasks", []) if isinstance(task, dict)}
+    for _, legacy_record in list(history["conditions"].items()):
+        if legacy_record is record or not isinstance(legacy_record, dict):
+            continue
+        try:
+            legacy_condition = validate_condition(legacy_record.get("condition"), allow_history_only=True)
+        except ValueError:
+            continue
+        if legacy_condition["verification_shape"] not in HISTORY_ONLY_VERIFICATION_SHAPES:
+            continue
+        if any(legacy_condition[field] != condition[field] for field in CONTROL_FIELDS if field != "verification_shape"):
+            continue
+        legacy_pairs = canonical_pairs(legacy_record.get("candidate_ladder", []))
+        fallback_pair = legacy_pairs[0] if legacy_pairs else pairs[0]
+        source_key = condition_key(legacy_condition, allow_history_only=True)
+        for raw_task in legacy_record.get("tasks", []):
+            raw_run_id = _safe_text(raw_task.get("run_id")) if isinstance(raw_task, dict) else None
+            if not raw_run_id or not RUN_ID_PATTERN.fullmatch(raw_run_id) or not _parse_optional_pairs([raw_task.get("requested_pair")]) or not _parse_optional_pairs([raw_task.get("executed_pair")]):
+                continue
+            task = _normalize_task(raw_task, fallback_pair)
+            verdict = _durable_real_verdict(task)
+            if verdict is None:
+                continue
+            executed_pair = parse_pair(task["executed_pair"])
+            if executed_pair not in pairs:
+                continue
+            identity = json.dumps({"source": source_key, "run_id": task["run_id"], "executed_pair": task["executed_pair"], "real_verdict": verdict}, sort_keys=True, separators=(",", ":"))
+            run_id = f"legacy_real_{hashlib.sha256(identity.encode()).hexdigest()[:40]}"
+            if run_id in existing_run_ids:
+                continue
+            migrated_task = {"run_id": run_id, "summary": summary, "requested_pair": task["requested_pair"], "resolved_pair": task["resolved_pair"], "effective_pair": task["effective_pair"], "executed_pair": task["executed_pair"], "operational_failure_pairs": [], "receipt_status": "pass", "real_status": task["real_status"], "effective_verdict": verdict, "allowlisted_failure_class": task["allowlisted_failure_class"], "turn_completed": True, "model_match": True, "effort_match": True, "trial": task["trial"], "workload_prompt_sha256": None, "token_totals": {"input": None, "cached_input": None, "output": None, "reasoning_output": None, "total": None}, "process_ms": None, "recorded_at": task["recorded_at"], "evidence_origin": "legacy_real_boundary", "source_verification_shape": legacy_condition["verification_shape"]}
+            record["tasks"].append(migrated_task)
+            existing_run_ids.add(run_id)
+
+
 def _record_for(history, condition, summary, pairs, static_pair, hard_pair):
     key = condition_key(condition)
     record = history["conditions"].setdefault(
@@ -339,6 +393,7 @@ def _record_for(history, condition, summary, pairs, static_pair, hard_pair):
     record.setdefault("best_pair", None)
     record.setdefault("selection_basis", "cold_start")
     record.setdefault("cost_evidence", {"status": "not_evaluated", "compared_pairs": [], "shared_cohort_count": 0, "shared_cohort_digest": None, "scores": {}})
+    _seed_legacy_real_evidence(history, record, condition, summary, pairs)
     return record
 
 
@@ -567,7 +622,8 @@ def recompute_bounds(record, active_pairs=None):
             continue
         if pair not in pairs:
             continue
-        verdict = task_verdict(task, provisional=record.get("condition", {}).get("verification_shape") != "mini_real")
+        verification_shape = record.get("condition", {}).get("verification_shape")
+        verdict = task_verdict(task, provisional=verification_shape == "mini")
         task["effective_verdict"] = verdict
         key = (pair, task.get("run_id"))
         if verdict == "fail":
@@ -925,7 +981,9 @@ def _operational_failure_pairs(receipt):
 
 def record_event(args):
     condition, summary, pairs, static_pair, hard_pair = _profile(args)
-    if args.verify_level not in {"mini", "real"} or args.verify_status not in {"pass", "fail", "unknown"} or args.failure_class not in QUALITY_FAILURES | RUNTIME_FAILURES | {"none"}:
+    if args.verify_level != "real":
+        raise ValueError("active writes require verify_level=real")
+    if args.verify_status not in {"pass", "fail", "unknown"} or args.failure_class not in QUALITY_FAILURES | RUNTIME_FAILURES | {"none"}:
         raise ValueError("verification evidence is invalid")
     receipt = json.loads(Path(args.receipt).expanduser().resolve().read_text(encoding="utf-8"))
     requested = _receipt_pair(receipt, "requested")
@@ -940,7 +998,8 @@ def record_event(args):
     def record(history):
         record = _record_for(history, condition, summary, pairs, static_pair, hard_pair)
         existing = next((task for task in record["tasks"] if task["run_id"] == run_id), None)
-        task = existing or {"run_id": run_id, "summary": summary, "requested_pair": pair_text(*requested), "resolved_pair": pair_text(*resolved), "effective_pair": pair_text(*effective), "executed_pair": pair_text(*executed), "operational_failure_pairs": [], "receipt_status": "fail", "mini_status": "unknown", "real_status": "unknown", "effective_verdict": None, "allowlisted_failure_class": "none", "turn_completed": False, "model_match": False, "effort_match": False, "trial": bool(args.trial), "workload_prompt_sha256": None, "token_totals": {}, "process_ms": None, "recorded_at": datetime.now(timezone.utc).isoformat()}
+        task = existing or {"run_id": run_id, "summary": summary, "requested_pair": pair_text(*requested), "resolved_pair": pair_text(*resolved), "effective_pair": pair_text(*effective), "executed_pair": pair_text(*executed), "operational_failure_pairs": [], "receipt_status": "fail", "real_status": "unknown", "effective_verdict": None, "allowlisted_failure_class": "none", "turn_completed": False, "model_match": False, "effort_match": False, "trial": bool(args.trial), "workload_prompt_sha256": None, "token_totals": {}, "process_ms": None, "recorded_at": datetime.now(timezone.utc).isoformat()}
+        task.pop("mini_status", None)
         operational_pairs = _operational_failure_pairs(receipt)
         if args.failure_class in RUNTIME_FAILURES and args.verify_status == "fail":
             operational_pairs.append(pair_text(*executed))
@@ -948,7 +1007,7 @@ def record_event(args):
         task["operational_failure_pairs"] = canonical_pair_texts(_dedupe_pairs(existing_pairs + operational_pairs))
         previous_verdict = task_verdict(task) if existing is not None else None
         previous_receipt_status = task.get("receipt_status") if existing is not None else None
-        previous_mini_pass = existing is not None and task.get("mini_status") == "pass"
+        previous_real_pass = existing is not None and task.get("real_status") == "pass"
         task["turn_completed"] = bool(receipt.get("turn_completed") is True)
         task["model_match"] = bool(receipt.get("model_match") is True)
         task["effort_match"] = bool(receipt.get("effort_match") is True)
@@ -974,7 +1033,7 @@ def record_event(args):
                 args.failure_class in QUALITY_FAILURES
                 and args.verify_status == "fail"
                 and not receipt_is_valid
-                and (previous_verdict == "pass" or previous_mini_pass)
+                and (previous_verdict == "pass" or previous_real_pass)
                 and previous_receipt_status == "pass"
             )
         )
@@ -984,9 +1043,8 @@ def record_event(args):
             task["resolved_pair"] = pair_text(*resolved)
             task["effective_pair"] = pair_text(*effective)
             task["executed_pair"] = pair_text(*executed)
-        status_field = f"{args.verify_level}_status"
-        if task.get(status_field) != "fail" or task.get("allowlisted_failure_class") not in QUALITY_FAILURES:
-            task[status_field] = args.verify_status
+        if args.failure_class not in RUNTIME_FAILURES and (task.get("real_status") != "fail" or task.get("allowlisted_failure_class") not in QUALITY_FAILURES):
+            task["real_status"] = args.verify_status
         if args.failure_class in QUALITY_FAILURES or task["allowlisted_failure_class"] not in QUALITY_FAILURES:
             task["allowlisted_failure_class"] = args.failure_class
         if update_metrics:

@@ -5,7 +5,10 @@ import json
 import os
 import stat
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -26,7 +29,7 @@ CONDITION = {
     "risk": "low",
     "complexity": "easy",
     "project_family": "global",
-    "verification_shape": "mini_real",
+    "verification_shape": "real",
     "owning_skill": "workflow-skill",
     "execution_domain": "general",
 }
@@ -43,10 +46,11 @@ def recommendation(pair="gpt-5.6-terra|max", reason="verified_quality_boundary",
         "trial": trial,
         "reason": reason,
         "profile_fingerprint": FINGERPRINT,
+        "calibration_state": "frozen",
     }
 
 
-def arguments(root, ladder=None, static="gpt-5.6-terra|medium", hard="gpt-5.6-luna|low", gate=False):
+def arguments(root, ladder=None, static="gpt-5.6-terra|medium", hard="gpt-5.6-luna|low"):
     ladder = ladder or ["gpt-5.6-luna|low", "gpt-5.6-terra|medium", "gpt-5.6-terra|max", "gpt-5.6-sol|max"]
     values = dict(
         **CONDITION,
@@ -65,12 +69,15 @@ def arguments(root, ladder=None, static="gpt-5.6-terra|medium", hard="gpt-5.6-lu
         timeout=30,
         ignore_user_config=True,
         allow_fallback=[],
-        grounded_gate_config=None,
+        performance_history=root / "strategy-performance.json",
+        entry_pair=None,
+        config_cohort=None,
+        strategy_version=None,
+        producer_contract_version=None,
+        minimum_paired_samples=6,
+        minimum_savings_percent=5.0,
+        benchmark_calibration=True,
     )
-    if gate:
-        gate_path = root / "gate.json"
-        gate_path.write_text(json.dumps({"schema_version": 1, "json_required_keys": ["answer"]}), encoding="utf-8")
-        values["grounded_gate_config"] = gate_path
     return SimpleNamespace(**values)
 
 
@@ -99,12 +106,42 @@ def fake_receipt_run(secret_result='{"answer":"ok"}', thread_id="private-session
             "workload_prompt_sha256": hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
             "tokens": {"total_tokens": 123},
             "process_elapsed_ms": 456,
+            "result_published": True,
+            "result_ready_monotonic_ns": time.monotonic_ns(),
+            "result_output_path": str(receipt_args.result_output),
             "thread_id": thread_id,
         }
     return run
 
 
 class AdaptiveModelRunnerTests(unittest.TestCase):
+    def test_missing_performance_admission_returns_inline_without_model_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            args = arguments(root)
+            args.benchmark_calibration = False
+            with patch.object(module, "_validated_recommendation", return_value=(recommendation(), ("gpt-5.6-terra", "max"))), patch.object(module.model_execution_receipt, "run_receipt") as execute:
+                summary = module.run_adaptive(args, "bounded prompt")
+        self.assertEqual(summary["status"], "inline")
+        self.assertEqual(summary["execution_mode"], "inline_entry")
+        execute.assert_not_called()
+
+    def test_admitted_frozen_pair_launches_one_model(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            args = arguments(root)
+            args.benchmark_calibration = False
+            args.entry_pair = "gpt-5.6-sol|ultra"
+            args.config_cohort = "c" * 64
+            args.strategy_version = "inline-v1"
+            args.producer_contract_version = "producer-v1"
+            admission = {"schema_version": 1, "execution_mode": "delegated_adaptive", "reason": "repeated_end_to_end_pareto_win", "admitted": True}
+            with patch.object(module, "_validated_recommendation", return_value=(recommendation(), ("gpt-5.6-terra", "max"))), patch.object(module.strategy_performance, "recommend_mode", return_value=admission), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()) as execute:
+                summary = module.run_adaptive(args, "bounded prompt")
+        self.assertEqual(summary["status"], "pass")
+        self.assertEqual(summary["execution_mode"], "delegated_adaptive")
+        execute.assert_called_once()
+
     def test_concise_complex_preset_resolves_exact_calibrated_profile(self):
         args = module.parse_args(["--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--task-summary", SUMMARY, "--workload-id", "preset-test", "--receipt-output", "cache/preset-receipt.json", "--result-output", "cache/preset-result.json"])
         self.assertEqual(args.task_family, "grounded")
@@ -114,44 +151,6 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
         self.assertEqual(args.static_suggestion, "gpt-5.6-terra|high")
         self.assertEqual(args.hard_floor, "gpt-5.6-luna|low")
         self.assertEqual(args.candidate_ladder, module.model_routing_history.normal_adaptive_pair_texts())
-
-    def test_workflow_graph_gate_preset_is_one_call_contract(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            gate = module.load_gate_preset("workflow-graph-json-v1", root)
-        self.assertEqual(gate["source_root"], root)
-        self.assertEqual(gate["source_files_pointer"], "/source_files")
-        self.assertEqual(gate["expected_key_order"], ["entry", "early_exit_conditions", "stages", "final_merge_fields", "public_return_keys", "source_files"])
-        self.assertIn("/stages/*/agents", gate["sorted_json_pointers"])
-        self.assertNotIn("/stages/*/depends_on", gate["sorted_json_pointers"])
-
-    def test_workflow_graph_gate_preset_requires_source_root(self):
-        with self.assertRaisesRegex(module.RunnerFailure, "grounded_gate_source_root_required"):
-            module.load_gate_preset("workflow-graph-json-v1")
-
-    def test_workflow_graph_v2_gate_separates_always_and_optional_return_keys(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            gate = module.load_gate_preset("workflow-graph-json-v2", root)
-        expected_keys = ["entry", "early_exit_conditions", "stages", "final_merge_fields", "always_return_keys", "optional_return_keys", "source_files"]
-        self.assertEqual(gate["required_keys"], expected_keys)
-        self.assertEqual(gate["expected_key_order"], expected_keys)
-        self.assertEqual(gate["sorted_json_pointers"], ["/stages/*/agents", "/final_merge_fields", "/always_return_keys", "/optional_return_keys", "/source_files"])
-        self.assertEqual(gate["source_files_pointer"], "/source_files")
-
-    def test_workflow_graph_gate_executes_and_records_inside_runner(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root / "workflow.py").write_text("pass\n", encoding="utf-8")
-            result = json.dumps({"entry": "Example.run", "early_exit_conditions": ["empty"], "stages": [{"id": "read", "mode": "parallel", "agents": ["AgentA", "AgentB"], "depends_on": []}], "final_merge_fields": ["id", "name"], "public_return_keys": ["Measurement", "sample_size"], "source_files": ["workflow.py"]}, separators=(",", ":"))
-            args = arguments(root)
-            args.grounded_gate_preset = "workflow-graph-json-v1"
-            args.grounded_source_root = root
-            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run(result)), patch.object(module.model_routing_history, "record_event", return_value={"status": "recorded"}) as record:
-                summary = module.run_adaptive(args, "bounded prompt")
-        self.assertEqual(summary["status"], "pass")
-        self.assertEqual(summary["mini_status"], "pass")
-        self.assertEqual(record.call_count, 1)
 
     def test_frozen_sol_max_is_executed_instead_of_terra_static(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -189,7 +188,6 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
                     "executed_pair": "gpt-5.6-sol|max",
                     "operational_failure_pairs": [],
                     "receipt_status": "pass",
-                    "mini_status": "unknown",
                     "real_status": "pass",
                     "effective_verdict": "pass",
                     "allowlisted_failure_class": "none",
@@ -245,29 +243,80 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
                     module.run_adaptive(args, "bounded prompt")
         execute.assert_not_called()
 
-    def test_grounded_gate_pass_records_same_producer_receipt(self):
+    def test_success_publishes_result_without_foreground_verification_or_learning(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            args = arguments(root, gate=True)
-            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()), patch.object(module.grounded_result_gate, "validate_grounded_result", return_value={"status": "pass"}), patch.object(module.model_routing_history, "record_event", return_value={"status": "recorded"}) as record:
+            args = arguments(root)
+            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()) as execute, patch.object(module.model_routing_history, "record_event") as record:
                 summary = module.run_adaptive(args, "bounded prompt")
-        self.assertEqual(summary["mini_status"], "pass")
-        record_args = record.call_args.args[0]
-        self.assertEqual(record_args.receipt, str(args.receipt_output))
-        self.assertEqual(record_args.verify_level, "mini")
-        self.assertEqual(record_args.verify_status, "pass")
-        self.assertTrue(record_args.run_id.startswith("run_"))
+            published_result = args.result_output.read_text(encoding="utf-8")
+            receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
+        self.assertEqual(summary["status"], "pass")
+        self.assertEqual(summary["real_verify_status"], "pending")
+        self.assertEqual(published_result, '{"answer":"ok"}\n')
+        self.assertNotIn("mini_status", receipt)
+        execute.assert_called_once()
+        record.assert_not_called()
 
-    def test_grounded_gate_failure_records_quality_and_never_repairs(self):
+    def test_public_result_is_ready_before_delayed_receipt_finishes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            args = arguments(root, gate=True)
-            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()) as execute, patch.object(module.grounded_result_gate, "validate_grounded_result", side_effect=module.grounded_result_gate.GateFailure("json_required_key_missing")), patch.object(module.model_routing_history, "record_event", return_value={"status": "recorded"}) as record:
+            args = arguments(root)
+            ready_event = threading.Event()
+            ready_records = []
+
+            def controller_ready(result_path, ready_ns):
+                ready_records.append((str(result_path), ready_ns))
+                ready_event.set()
+
+            args.result_ready_callback = controller_ready
+
+            def delayed_receipt(receipt_args, prompt_text):
+                receipt = fake_receipt_run()(receipt_args, prompt_text)
+                receipt_args.result_ready_callback(receipt_args.result_output, receipt["result_ready_monotonic_ns"])
+                time.sleep(0.15)
+                return receipt
+
+            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=delayed_receipt), ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(module.run_adaptive, args, "bounded prompt")
+                self.assertTrue(ready_event.wait(timeout=1))
+                published_result = args.result_output.read_text(encoding="utf-8")
+                self.assertFalse(future.done())
+                summary = future.result(timeout=2)
+        self.assertEqual(published_result, '{"answer":"ok"}\n')
+        self.assertEqual(summary["status"], "pass")
+        self.assertTrue(summary["result_published"])
+        self.assertEqual(ready_records[0][0], str(args.result_output))
+        self.assertIsInstance(summary["first_result_elapsed_ms"], int)
+        self.assertLess(summary["first_result_elapsed_ms"], 100)
+
+    def test_receipt_failure_after_presentation_requires_notification_and_reopen(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            args = arguments(root)
+
+            def failed_after_result(receipt_args, _prompt_text):
+                receipt_args.result_output.write_text('{"answer":"presented"}\n', encoding="utf-8")
+                return {"status": "fail", "requested_pair": f"{receipt_args.model}|{receipt_args.effort}", "failure_class": "protocol", "tokens": {"total_tokens": 9}, "process_elapsed_ms": 150, "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "result_output_path": str(receipt_args.result_output), "duplicate_result_detected": True}
+
+            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=failed_after_result):
                 summary = module.run_adaptive(args, "bounded prompt")
+            presented_result = args.result_output.read_text(encoding="utf-8")
+        self.assertEqual(presented_result, '{"answer":"presented"}\n')
         self.assertEqual(summary["status"], "fail")
-        self.assertEqual(summary["mini_status"], "fail")
-        self.assertEqual(execute.call_count, 1)
-        self.assertEqual(record.call_args.args[0].failure_class, "correctness")
+        self.assertEqual(summary["reason"], "producer_receipt_failure_after_result")
+        self.assertTrue(summary["result_published"])
+        self.assertTrue(summary["notification_required"])
+        self.assertTrue(summary["reopen_required"])
+
+    def test_adaptive_run_id_is_stable_without_a_gate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            args = arguments(root)
+            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()):
+                summary = module.run_adaptive(args, "bounded prompt")
+        self.assertTrue(summary["adaptive_run_id"].startswith("run_"))
+        self.assertEqual(summary["adaptive_run_id"], args.adaptive_run_id)
 
     def test_emit_result_returns_only_passing_result_and_never_adds_it_to_receipt(self):
         secret_result = '{"answer":"bounded-parent-result"}'
@@ -281,25 +330,17 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
         self.assertEqual(summary["result"], secret_result)
         self.assertNotIn("bounded-parent-result", receipt_text)
 
-    def test_emit_result_is_absent_when_grounded_gate_fails(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            args = arguments(root, gate=True)
-            args.emit_result = True
-            with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()), patch.object(module.grounded_result_gate, "validate_grounded_result", side_effect=module.grounded_result_gate.GateFailure("json_required_key_missing")), patch.object(module.model_routing_history, "record_event", return_value={"status": "recorded"}):
-                summary = module.run_adaptive(args, "bounded prompt")
-        self.assertEqual(summary["status"], "fail")
-        self.assertNotIn("result", summary)
-
     def test_operational_failure_is_not_recorded_as_quality(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            args = arguments(root, gate=True)
+            args = arguments(root)
+            args.result_output.write_text("stale result\n", encoding="utf-8")
             failed = {"status": "fail", "requested_pair": "gpt-5.6-terra|max", "failure_class": "timeout", "tokens": {"total_tokens": 9}, "process_elapsed_ms": 30}
             with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", return_value=failed), patch.object(module.model_routing_history, "record_event") as record:
                 summary = module.run_adaptive(args, "bounded prompt")
         self.assertEqual(summary["reason"], "producer_operational_failure")
         record.assert_not_called()
+        self.assertFalse(args.result_output.exists())
 
     def test_prompt_absence_fails_before_recommendation_or_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -326,17 +367,6 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             self.assertNotIn("result", summary)
             self.assertEqual(stat.S_IMODE(args.receipt_output.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE(args.result_output.stat().st_mode), 0o600)
-
-    def test_gate_config_rejects_unknown_fields_before_execution(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            args = arguments(root)
-            args.grounded_gate_config = root / "gate.json"
-            args.grounded_gate_config.write_text(json.dumps({"schema_version": 1, "source_contents": "secret"}), encoding="utf-8")
-            with patch.object(module.model_execution_receipt, "run_receipt") as execute:
-                with self.assertRaisesRegex(module.RunnerFailure, "grounded_gate_config_invalid"):
-                    module.run_adaptive(args, "bounded prompt")
-        execute.assert_not_called()
 
     def test_entry_context_authorizes_only_the_adaptive_in_process_producer(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,5 +1,5 @@
 interface:
   display_name: "Code Skill"
-  short_description: "Registered code executor with a tiny-work Spark exception"
+  short_description: "Code mutation or execution; exact read-only work stays skill-free"
   default_prompt: >-
-    $code-skill: execute every active registry-owned code domain named by the locked plan. A tiny eligible route is exactly Spark-low plus the full normal fallback; every non-tiny route is the exact full Luna-low-to-Sol-ultra ladder without Spark. Follow the learned selected pair, read the matching language rules, preserve local style, keep edits surgical, and return Mini Verify evidence before Ending Task's deeper checks.
+    $code-skill: do not load for any exact-scoped read-only lookup, audit, transform, or workflow reconstruction, even over Python/C#/Unity sources. Use directly for implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond the supplied scope, or execute a positively admitted node. Inline work uses matching language rules, completes and presents the result immediately with no foreground Mini/Fast Verify, then hands proportional Real Verify to Ending Task. Ending time is excluded from first-result time. Never reselect an admitted pair.

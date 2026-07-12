@@ -1,31 +1,31 @@
 ---
 name: management-skill
-description: "Management executor selected by the locked task-analyze-skill plan. Use for local adaptive-routing performance records, Codex auth/profile inspection or confirmed switching, and privacy-safe global skill mirror status, pull, snapshot, sync, or push. Personal routing history stays under task-analyze-skill/local and is excluded from every mirror. The approved public mirror contains the six workflow skills; unrelated local skills are preserved."
+description: "Do not use for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms. Use only when the user explicitly requests routing-record, profile, or mirror management, or for an exact positively admitted management node. Private routing history remains local and excluded from mirrors."
 ---
 
 # Management Skill
 
-Use this executor after `task-analyze-skill` and `workflow-skill` route a management node. It owns local Codex profile operations and the approved global-skill GitHub mirror. It does not choose the workflow model or effort and never inherits the entry model silently.
+Do not load this skill for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms. Use it directly only for an explicit routing-record, Codex profile, or approved mirror-management request. When Task Analyze has explicitly activated and admitted a delegated route, Workflow may instead deliver a locked management node. It does not choose or silently replace a delegated model/effort pair.
 
 ## Internal Route Selection
 
-Select only what the locked plan requires:
+Select only what the inline request or admitted locked plan requires:
 
 - **Routing performance route**: record or inspect sanitized receipt-backed model/effort accuracy, verification, token, and timing evidence through `../task-analyze-skill/scripts/model_routing_history.py`.
 - **Profile route**: inspect saved profiles, refresh login state, import/backup a profile, show sanitized status, or switch the active profile after explicit confirmation.
 - **Global skill mirror route**: inspect authoritative local skills, generate a privacy-safe snapshot, compare local/remote state, pull, or explicitly sync/push.
-- Use multiple routes only when the locked plan requires them.
+- Use multiple routes only when the inline request or admitted locked plan requires them.
 
 ## Personal Routing Performance
 
-Task Analyze owns selection and storage. Management records the original result-producer attempt after receipt-backed Mini and updates that same attempt after Real Verify; direct non-dispatch model routes invoke the same recorder, while tool-only routes never record adaptive producer samples.
+Task Analyze owns selection and storage. Management records a completed result-producer attempt only from its post-presentation Ending Real handoff; direct non-dispatch model routes use the same Ending recorder, while tool-only routes never record adaptive producer samples.
 
 - Store only the generated local `task-analyze-skill/local/adaptive-routing/model_experience.json` ledger; never mirror it.
-- Record controlled task-profile enums, a generalized privacy-filtered task summary, requested/resolved/effective producer model and effort, Mini/Real status, explicit success/failed model ranges, failure class, prompt-free workload hash, tokens, and timing only.
+- Record controlled task-profile enums, a generalized privacy-filtered task summary, requested/resolved/effective producer model and effort, execution/Real status, explicit success/failed model ranges, failure class, prompt-free workload hash, tokens, and timing only.
 - Never store raw prompts, raw results, paths, thread/session IDs, account data, receipt bodies, secrets, or private task content.
 - Categories/model roles are cold-start hints only. Every non-tiny model route carries the exact full Luna-low→Sol-ultra ladder without Spark; an eligible tiny route carries exactly Spark-low plus that full normal fallback. Search only while calibration trial is open, moving effort before model, then reuse the frozen pair with `trial=false`. Ending Real updates the same producer receipt/run and returns `routing_learning`; verified quality failure or profile/policy drift reopens it, while operational failures stay neutral.
 - Correctness/quality is the eligibility gate. Rank tokens, then process time, then weaker rung only across complete Real-passing pairs in the same exact `workload_prompt_sha256` cohort. Cross-workload or incomplete evidence falls back to the verified quality boundary and cannot support a savings claim. Deterministic controller recording does not require a decorative Luna model call.
-- Benchmark accounting includes each unique entry, collaboration, dispatcher, retry, and incomplete worker once; attempt/canonical receipt aliases are not double-counted. Compare Mini-passed first-result cost separately from Ending cost. A fair no-routing baseline retains the same user/project configuration and uses `LOCKED_ROUTE_NODE` on the entry pair instead of `--ignore-user-config`.
+- Benchmark accounting includes each unique entry, collaboration, dispatcher, retry, and incomplete worker once; attempt/canonical receipt aliases are not double-counted. First-result cost stops when the completed result is presented and excludes every Ending Real action. A fair no-routing baseline retains the same user/project configuration and executes the exact raw prompt through `model_execution_receipt.py run --direct-task --benchmark-run-id benchmark-...`; it does not add `LOCKED_ROUTE_NODE` and does not use `--ignore-user-config`.
 - Static safety, authority, modality, project, code-style, and skill floors always win.
 - Never push, sync, snapshot, hash, or overwrite `task-analyze-skill/local/`. Pull must preserve it byte-for-byte.
 
@@ -54,7 +54,7 @@ The local global skill directory may contain unrelated skills such as `chronicle
 
 ## README Generation
 
-The durable English README source is `assets/readme/github-readme-template.md`. Its 14 local SVG assets (seven desktop/mobile diagram pairs) explain the six-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, private adaptive routing, and the sanitized same-workload benchmark example. The README must explain that the portable Task Analyze entry rule is hookless, the selected entrance pair runs Task Analyze only, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
+The durable English README source is `assets/readme/github-readme-template.md`. Its 14 local SVG assets (seven desktop/mobile diagram pairs) explain the six-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, private adaptive routing, and the sanitized same-workload benchmark example. The README must explain that the portable hookless inline bootstrap keeps ordinary work on the current model, the full Task Analyze skill loads only for explicit routing/benchmark/maintenance or admitted delegation, Workflow runs only after positive end-to-end admission, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
 
 The public README must name the First Result Principle, the direct-action boundary, the weak-to-strong complete `model|effort` ladder, the receipt-backed adaptive goal, graduated routing scenarios, the code-domain extension recipe, reasonable response-time/token use, exactly six public skills, and the exclusion of local `model_experience.json`.
 
@@ -67,7 +67,7 @@ For README changes:
 
 ## Main Result And Ending Task
 
-For management work, Mini Verify confirms sanitized scope/state before the first result. After the result, Ending Task may run deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. A background mismatch/failure notifies and reopens the task.
+For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. First-result time ends at that presentation. Ending Task then owns Real Verify, including deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. A background mismatch/failure notifies and reopens the task.
 
 ## Commands
 

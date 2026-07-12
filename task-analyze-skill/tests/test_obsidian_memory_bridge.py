@@ -16,7 +16,7 @@ class ObsidianMemoryBridgeTests(unittest.TestCase):
     def test_missing_vault_is_non_blocking(self):
         missing = Path(tempfile.gettempdir()) / "missing-obsidian-memory-bridge-vault"
         self.assertEqual(module.search_memory("routing failure", missing)["status"], "unavailable")
-        self.assertEqual(module.record_model_experience("bounded task", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|high", "pass", "pass", "frozen", vault=missing)["status"], "unavailable")
+        self.assertEqual(module.record_model_experience("bounded task", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|high", "pass", "frozen", vault=missing)["status"], "unavailable")
 
     def test_search_prefers_task_model_experience_and_bounds_digest(self):
         with tempfile.TemporaryDirectory(prefix="obsidian-memory-search-") as temporary:
@@ -44,17 +44,24 @@ class ObsidianMemoryBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="obsidian-model-record-") as temporary:
             vault = Path(temporary)
             recorded_at = datetime(2026, 7, 10, 20, 0, tzinfo=timezone.utc)
-            result = module.record_model_experience("update bounded memory routing", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|xhigh", "pass", "pass", "frozen", best_pair="gpt-5.6-terra|xhigh", failed_pair="gpt-5.6-terra|high", previous_pair="gpt-5.6-terra|high", switch_direction="upgrade_effort", switch_reason="Real quality failure", total_tokens=123, process_ms=456, comparison_status="same_workload", vault=vault, recorded_at=recorded_at)
+            result = module.record_model_experience("update bounded memory routing", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|xhigh", "pass", "frozen", best_pair="gpt-5.6-terra|xhigh", failed_pair="gpt-5.6-terra|high", previous_pair="gpt-5.6-terra|high", switch_direction="upgrade_effort", switch_reason="Real quality failure", total_tokens=123, process_ms=456, comparison_status="same_workload", vault=vault, recorded_at=recorded_at)
             self.assertEqual(result["status"], "written")
             record_text = (vault / "TaskModelExperience" / "2026" / "2026-07.md").read_text(encoding="utf-8")
             self.assertIn("gpt-5.6-terra|high -> gpt-5.6-terra|xhigh", record_text)
             self.assertIn("tokens=123; process_ms=456", record_text)
+            self.assertIn("Real=pass", record_text)
+            self.assertNotIn("Mini=", record_text)
             self.assertIn("[[TaskModelExperience/2026/2026-07]]", (vault / "TaskModelExperience" / "index.md").read_text(encoding="utf-8"))
+
+    def test_record_rejects_non_durable_real_status(self):
+        with tempfile.TemporaryDirectory(prefix="obsidian-model-verdict-") as temporary:
+            with self.assertRaisesRegex(ValueError, "real_status must be pass or fail"):
+                module.record_model_experience("update bounded memory routing", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|high", "unknown", "cold_start", vault=Path(temporary))
 
     def test_record_rejects_sensitive_or_path_like_summary(self):
         with tempfile.TemporaryDirectory(prefix="obsidian-model-secret-") as temporary:
             with self.assertRaises(ValueError):
-                module.record_model_experience("read /Users/qin/private", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|high", "pass", "pass", "frozen", vault=Path(temporary))
+                module.record_model_experience("read /Users/qin/private", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|high", "pass", "frozen", vault=Path(temporary))
 
 
 if __name__ == "__main__":

@@ -148,32 +148,38 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "fixture.json"
             path.write_text("[]", encoding="utf-8")
-            self.assertEqual(validator.validate_fixture(path), ["graduated fixture must contain exactly four scenarios"])
+            self.assertEqual(validator.validate_fixture(path), ["graduated fixture must contain schema 2 and exactly four scenarios"])
 
-    def test_complex_fixture_rejects_wrong_shape_pair_and_skill(self):
+    def test_complex_fixture_rejects_dispatch_leak_and_wrong_skill(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = json.loads(validator.FIXTURE_PATH.read_text(encoding="utf-8"))
             website = fixture["scenarios"][3]
-            website["complexity"] = "easy"
-            website.pop("dispatcher_plan")
-            website["illustrative_cold_start_pairs"]["mini"] = "unsupported-model|high"
+            website["dispatcher_plan"] = {}
             website["skill"] = "frontend-app-builder"
             path = Path(temp_dir) / "fixture.json"
             path.write_text(json.dumps(fixture), encoding="utf-8")
             failures = validator.validate_fixture(path)
-            self.assertTrue(any("complex model_dispatch" in failure for failure in failures))
-            self.assertTrue(any("static model/effort" in failure for failure in failures))
-            self.assertTrue(any("dispatcher_plan" in failure for failure in failures))
+            self.assertTrue(any("complex inline_production" in failure for failure in failures))
+            self.assertTrue(any("leaks dispatch" in failure for failure in failures))
 
     def test_complex_fixture_rejects_wrong_node_dependency(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = json.loads(validator.FIXTURE_PATH.read_text(encoding="utf-8"))
-            website = fixture["scenarios"][3]
-            website["dispatcher_plan"]["nodes"][1]["dependencies"] = ["mini"]
+            template = fixture["admitted_dispatcher_template"]
+            template["dispatcher_plan"]["nodes"][1]["dependencies"] = ["mini"]
             path = Path(temp_dir) / "fixture.json"
             path.write_text(json.dumps(fixture), encoding="utf-8")
             failures = validator.validate_fixture(path)
         self.assertTrue(any("role is incorrect for implementation" in failure for failure in failures))
+
+    def test_ordinary_website_stays_inline_while_admitted_template_is_separate(self):
+        fixture = json.loads(validator.FIXTURE_PATH.read_text(encoding="utf-8"))
+        website = fixture["scenarios"][3]
+        template = fixture["admitted_dispatcher_template"]
+        self.assertEqual(website["route"], validator.COMPLEX_ROUTE)
+        self.assertNotIn("dispatcher_plan", website)
+        self.assertEqual(template["route"], validator.ADMITTED_ROUTE)
+        self.assertEqual(template["admission_precondition"], "positive_end_to_end_evidence_required")
 
 
 if __name__ == "__main__":

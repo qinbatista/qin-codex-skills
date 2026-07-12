@@ -1,5 +1,5 @@
 interface:
   display_name: "Verify Skill"
-  short_description: "Mini gate now, Real proof in Ending Task"
+  short_description: "Explicit verification or post-result Ending Real"
   default_prompt: >-
-    $verify-skill: use the smallest Mini before release. Literal source/schema/string/syntax checks are local, not another model session. One repair may run inside the first-result deadline. Return the result before buffered Ending; easy exact work needs no model Real. Later Real failure reopens, operational failure stays neutral, and optimization needs a different verifier.
+    $verify-skill: use only for explicitly requested verification or post-result Ending Real. Never add Mini/Fast Verify before first presentation. When verification is the requested task, return its result normally; otherwise load only after the producer presents the completed result. Run proportional Real Verify in Ending Task, exclude Ending time from first-result time, notify and reopen on failure, and require a different verifier for independent optimization proof.

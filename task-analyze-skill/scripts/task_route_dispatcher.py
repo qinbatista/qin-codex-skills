@@ -3,8 +3,10 @@ import argparse
 import importlib.util
 import json
 import os
+import queue
 import re
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 import uuid
@@ -68,7 +70,8 @@ routing_history_module = importlib.util.module_from_spec(HISTORY_SPEC)
 HISTORY_SPEC.loader.exec_module(routing_history_module)
 
 NODE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
-ALLOWED_PHASES = {"result", "mini", "ending"}
+DISPATCH_SCHEMA_VERSION = 2
+ALLOWED_PHASES = {"result", "ending"}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 ENDING_SKILLS = {"verify-skill", "optimization-skill", "management-skill"}
 
@@ -133,8 +136,6 @@ def _is_code_implementation(node):
 
 
 def receipt_node_role(node):
-    if node.get("phase") == "mini":
-        return "verification"
     if node.get("phase") == "ending":
         return "ending"
     if node.get("purpose") == "repair":
@@ -210,8 +211,8 @@ def validate_plan(
         validate_execution_domain_registry(skills_root)
     except ValueError as error:
         failures.append(f"execution_domain registry is invalid: {error}")
-    if plan.get("schema_version") != 1:
-        failures.append("schema_version must be 1")
+    if plan.get("schema_version") != DISPATCH_SCHEMA_VERSION:
+        failures.append(f"schema_version must be {DISPATCH_SCHEMA_VERSION}")
     if plan.get("complexity") not in {"easy", "complex"}:
         failures.append("complexity must be easy or complex")
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
@@ -254,8 +255,15 @@ def validate_plan(
         skill = node.get("skill")
         if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
-        if node.get("phase") not in ALLOWED_PHASES:
+        phase = node.get("phase")
+        if phase not in ALLOWED_PHASES:
             failures.append(f"{node_id} has invalid phase")
+        requested_verification_result = node.get("user_requested_verification_result")
+        if phase == "result" and skill == "verify-skill":
+            if requested_verification_result is not True:
+                failures.append(f"{node_id} verify-skill result nodes require user_requested_verification_result=true")
+        elif "user_requested_verification_result" in node:
+            failures.append(f"{node_id} user_requested_verification_result is valid only on a result-phase verify-skill node")
         if node.get("sandbox", "read-only") not in ALLOWED_SANDBOXES:
             failures.append(f"{node_id} requests an unsafe automatic sandbox")
         if "load_user_config" in node and not isinstance(node["load_user_config"], bool):
@@ -431,30 +439,24 @@ def validate_plan(
                 failures.append(f"{node_id} has missing dependency {dependency}")
 
     main_result_node = plan.get("main_result_node")
-    mini_verify_node = plan.get("mini_verify_node")
     if main_result_node not in node_by_id or node_by_id.get(main_result_node, {}).get("phase") != "result":
         failures.append("main_result_node must name a result-phase node")
-    if mini_verify_node not in node_by_id or node_by_id.get(mini_verify_node, {}).get("phase") != "mini":
-        failures.append("mini_verify_node must name a mini-phase node")
-    elif main_result_node not in node_by_id[mini_verify_node].get("dependencies", []):
-        failures.append("Mini Verify must depend directly on the main result node")
-    elif node_by_id[mini_verify_node].get("skill") != "verify-skill":
-        failures.append("Mini Verify must be owned by verify-skill")
+    if "mini_verify_node" in plan:
+        failures.append("mini_verify_node is not valid in schema 2")
 
-    result_mini_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") in {"result", "mini"}}
+    result_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
     visited = set()
-    while len(visited) < len(result_mini_ids):
+    while len(visited) < len(result_ids):
         ready = [
             node_id
-            for node_id in result_mini_ids - visited
+            for node_id in result_ids - visited
             if all(dependency in visited for dependency in node_by_id[node_id].get("dependencies", []))
         ]
         if not ready:
-            failures.append("result/Mini dependencies contain a cycle or depend on Ending Task")
+            failures.append("result dependencies contain a cycle or depend on Ending Task")
             break
         visited.update(ready)
 
-    result_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
     if main_result_node in node_by_id:
         missing_from_main = sorted(
             result_ids - dependency_closure(main_result_node, node_by_id) - {main_result_node}
@@ -485,8 +487,8 @@ def validate_plan(
         ending_dependencies = node_by_id[node_id].get("dependencies", [])
         ending_node = node_by_id[node_id]
         ending_skill = ending_node.get("skill")
-        if mini_verify_node not in ending_dependencies:
-            failures.append(f"{node_id} must depend directly on Mini Verify")
+        if main_result_node not in ending_dependencies:
+            failures.append(f"{node_id} must depend directly on the main result node")
         if ending_skill == "verify-skill":
             verifies_node = ending_node.get("verifies_node")
             if verifies_node is not None:
@@ -526,10 +528,9 @@ def validate_plan(
             failures.append(
                 f"optimization-skill node {optimization_node_id} must have exactly one ending verify-skill verifier targeting it"
             )
-    if main_result_node in node_by_id and node_by_id[main_result_node].get("routing_condition", {}).get("verification_shape") == "mini_real":
-        producer_verifiers = [node_id for node_id in ending_ids if node_by_id[node_id].get("skill") == "verify-skill" and not node_by_id[node_id].get("verifies_node")]
-        if len(producer_verifiers) != 1:
-            failures.append("mini_real plans require exactly one non-targeted Ending verify-skill producer verifier")
+    producer_verifiers = [node_id for node_id in ending_ids if node_by_id[node_id].get("skill") == "verify-skill" and not node_by_id[node_id].get("verifies_node")]
+    if len(producer_verifiers) != 1:
+        failures.append("plans require exactly one non-targeted Ending verify-skill producer verifier")
 
     if main_candidate_pairs:
         candidate_pair_text = {routing_history_module.pair_text(*pair) for pair in main_candidate_pairs}
@@ -570,6 +571,10 @@ def _normalize_route_attempt(attempt_receipt, fallback_pair, status, phase_failu
     resolved_pair = candidate_attempt.get("resolved_pair") if isinstance(candidate_attempt, dict) else None
     effective_pair = candidate_attempt.get("effective_pair") if isinstance(candidate_attempt, dict) else None
     executed_pair = candidate_attempt.get("executed_pair") if isinstance(candidate_attempt, dict) else None
+    tokens = candidate_attempt.get("tokens") if isinstance(candidate_attempt, dict) and isinstance(candidate_attempt.get("tokens"), dict) else attempt_receipt.get("tokens") if isinstance(attempt_receipt.get("tokens"), dict) else {}
+    process_elapsed_ms = candidate_attempt.get("process_elapsed_ms") if isinstance(candidate_attempt, dict) else attempt_receipt.get("process_elapsed_ms")
+    pre_execution_failure = candidate_attempt.get("pre_execution_failure") if isinstance(candidate_attempt, dict) and "pre_execution_failure" in candidate_attempt else attempt_receipt.get("pre_execution_failure")
+    thread_id = candidate_attempt.get("thread_id") if isinstance(candidate_attempt, dict) and candidate_attempt.get("thread_id") is not None else attempt_receipt.get("thread_id")
 
     if status != "pass" and phase_failure_class == "execution" and not resolved_pair and not effective_pair:
         executed_pair = fallback_pair
@@ -584,10 +589,20 @@ def _normalize_route_attempt(attempt_receipt, fallback_pair, status, phase_failu
         "model_match": bool(candidate_attempt.get("model_match") is True) if isinstance(candidate_attempt, dict) else False,
         "effort_match": bool(candidate_attempt.get("effort_match") is True) if isinstance(candidate_attempt, dict) else False,
         "pair_match": bool(candidate_attempt.get("pair_match") is True) if isinstance(candidate_attempt, dict) else False,
-        "process_elapsed_ms": candidate_attempt.get("process_elapsed_ms") if isinstance(candidate_attempt, dict) else None,
+        "process_elapsed_ms": process_elapsed_ms,
         "model_turn_duration_ms": candidate_attempt.get("model_turn_duration_ms") if isinstance(candidate_attempt, dict) else None,
         "time_to_first_token_ms": candidate_attempt.get("time_to_first_token_ms") if isinstance(candidate_attempt, dict) else None,
+        "tokens": dict(tokens),
+        "thread_id": thread_id,
+        "pre_execution_failure": bool(pre_execution_failure is True),
     }
+
+
+def _aggregate_attempt_metrics(route_attempts):
+    strategy_tokens = receipt_module.aggregate_token_maps([attempt.get("tokens", {}) for attempt in route_attempts])
+    elapsed_values = [attempt.get("process_elapsed_ms") for attempt in route_attempts]
+    strategy_elapsed_ms = sum(elapsed_values) if elapsed_values and all(isinstance(value, int) and value >= 0 for value in elapsed_values) else None
+    return {"strategy_tokens": strategy_tokens, "strategy_elapsed_ms": strategy_elapsed_ms, "metrics_complete": strategy_tokens.get("total_tokens") is not None and strategy_elapsed_ms is not None}
 
 
 def _ending_release_path(cache_dir, route_run_id):
@@ -597,15 +612,13 @@ def _ending_release_path(cache_dir, route_run_id):
 
 def _release_record(route_run_id, completed, cache_dir):
     return {
-        "schema_version": 1,
+        "schema_version": DISPATCH_SCHEMA_VERSION,
         "route_run_id": route_run_id,
         "released_at": datetime.now(timezone.utc).isoformat(),
-        "released_by": "run-plan",
+        "released_by": "release-main-result",
         "main_result_node": completed.get("main_result_node"),
-        "mini_verify_node": completed.get("mini_verify_node"),
         "main_result_receipt_path": completed.get("main_result_receipt_path"),
-        "mini_verify_receipt_path": completed.get("mini_verify_receipt_path"),
-        "mini_verify_result_path": completed.get("mini_verify_result_path"),
+        "main_result_path": completed.get("main_result_path"),
         "cache_dir": str(cache_dir),
     }
 
@@ -657,9 +670,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         if reference_path:
             prompt += f"\n\nReference rules for this execution domain: {skills_root / reference_path}"
     if dependency_text:
-        prompt += f"\n\nVerified dependency handoff:\n{dependency_text}"
-    if node["phase"] == "mini":
-        prompt += "\n\nReturn a concise verdict and include the exact line MINI_VERIFY=PASS only when the supplied result satisfies this node's acceptance target. Otherwise include MINI_VERIFY=FAIL."
+        prompt += f"\n\nCompleted dependency handoff:\n{dependency_text}"
     if node["phase"] == "ending":
         prompt += "\n\nThis is a direct post-result Ending Task worker. Include the exact line ENDING_TASK=PASS only when the bounded verification/optimization purpose passes. Otherwise include ENDING_TASK=FAIL."
 
@@ -698,6 +709,8 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
             entry_task=False,
             node_role=receipt_node_role(node),
             route_marker=route_marker,
+            stream_result_ready=receipt_node_role(node) == "result-producer",
+            result_ready_callback=node.get("_result_ready_callback"),
             result_output=result_path,
             timeout=attempt_timeout,
             workdir=workdir.resolve(),
@@ -722,7 +735,12 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
             attempt_receipt = receipt_module.rejected_run_receipt(args, error)
             failure_class = "authorization"
             status = "fail"
-        except (subprocess.TimeoutExpired, OSError, ValueError) as error:
+        except subprocess.TimeoutExpired:
+            attempt_receipt = receipt_module.failed_run_receipt(args, "timeout")
+            attempt_receipt["pre_execution_failure"] = False
+            failure_class = "timeout"
+            status = "fail"
+        except (OSError, ValueError):
             attempt_receipt = {
                 "schema_version": 1,
                 "node_type": "locked-route-node",
@@ -740,6 +758,9 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
                 "pair_match": False,
                 "turn_completed": False,
                 "status": "fail",
+                "process_elapsed_ms": 0,
+                "tokens": {"input_tokens": 0, "cached_input_tokens": 0, "uncached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0, "total_tokens": 0},
+                "pre_execution_failure": True,
                 "route_attempts": [{
                     "requested_pair": pair_text,
                     "resolved_pair": None,
@@ -750,9 +771,12 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
                     "model_match": False,
                     "effort_match": False,
                     "pair_match": False,
-                    "process_elapsed_ms": None,
+                    "process_elapsed_ms": 0,
                     "model_turn_duration_ms": None,
                     "time_to_first_token_ms": None,
+                    "tokens": {"input_tokens": 0, "cached_input_tokens": 0, "uncached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0, "total_tokens": 0},
+                    "thread_id": None,
+                    "pre_execution_failure": True,
                 }],
             }
             failure_class = "execution"
@@ -761,39 +785,43 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
             failure_class = attempt_receipt.get("failure_class")
             status = attempt_receipt.get("status") or "fail"
 
-        if status == "pass" and node["phase"] == "mini":
-            status = phase_verdict(result_path, "MINI_VERIFY=PASS", "MINI_VERIFY=FAIL")
-            if status != "pass":
-                status = "fail"
-                failure_class = "protocol"
-                attempt_receipt["status"] = "fail"
         if status == "pass" and node["phase"] == "ending":
             status = phase_verdict(result_path, "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
             if status != "pass":
                 status = "fail"
                 failure_class = "protocol"
                 attempt_receipt["status"] = "fail"
+        if status == "pass" and node["phase"] == "result" and (not result_path.is_file() or result_path.stat().st_size == 0):
+            status = "fail"
+            failure_class = "protocol"
+            attempt_receipt["status"] = "fail"
 
         if status == "pass":
             failure_class = None
         attempt_receipt_path.write_text(json.dumps(attempt_receipt, indent=2) + "\n", encoding="utf-8")
-        route_attempts.append(
-            _normalize_route_attempt(
-                attempt_receipt,
-                pair_text,
-                status,
-                failure_class,
-            )
-        )
+        route_attempts.append(_normalize_route_attempt(attempt_receipt, pair_text, status, failure_class))
         receipt = attempt_receipt
         if status == "pass":
             break
-        if node["phase"] != "result" or failure_class not in receipt_module.RUNTIME_FAILURES:
+        normalized_attempt = route_attempts[-1]
+        if node["phase"] != "result" or failure_class not in receipt_module.RUNTIME_FAILURES or normalized_attempt.get("pre_execution_failure") is not True or normalized_attempt.get("tokens", {}).get("total_tokens") != 0:
             break
 
+    attempt_metrics = _aggregate_attempt_metrics(route_attempts)
     receipt["route_attempts"] = route_attempts
     receipt["allowed_fallback_pairs"] = fallback_pairs
+    receipt["last_attempt_tokens"] = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
+    receipt["last_attempt_process_elapsed_ms"] = receipt.get("process_elapsed_ms")
+    receipt["strategy_tokens"] = attempt_metrics["strategy_tokens"]
+    receipt["strategy_elapsed_ms"] = attempt_metrics["strategy_elapsed_ms"]
+    receipt["attempt_metrics_complete"] = attempt_metrics["metrics_complete"]
+    receipt["tokens"] = attempt_metrics["strategy_tokens"]
+    receipt["process_elapsed_ms"] = attempt_metrics["strategy_elapsed_ms"]
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    result_published = bool(node["phase"] == "result" and result_path.is_file() and result_path.stat().st_size > 0)
+    result_ready_monotonic_ns = receipt.get("result_ready_monotonic_ns")
+    if result_published and not isinstance(result_ready_monotonic_ns, int):
+        result_ready_monotonic_ns = time.monotonic_ns()
     return {
         "id": node_id,
         "phase": node["phase"],
@@ -806,6 +834,9 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         "status": status,
         "receipt_path": str(receipt_path),
         "result_path": str(result_path) if result_path.exists() else None,
+        "result_published": result_published,
+        "result_ready_monotonic_ns": result_ready_monotonic_ns,
+        "receipt_failure_after_result": bool(result_published and status != "pass"),
         "worker_identity": worker_identity(receipt),
         "tokens": receipt.get("tokens"),
         "process_elapsed_ms": receipt.get("process_elapsed_ms"),
@@ -863,42 +894,32 @@ def _release_main_result(handoff):
     handoff_data = dict(handoff)
     route_run_id = handoff_data.get("route_run_id")
     if not isinstance(route_run_id, str) or not route_run_id:
-        return {"schema_version": 1, "status": "fail", "route_run_id": None, "failures": ["ending handoff is missing route_run_id"]}
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": None, "failures": ["ending handoff is missing route_run_id"]}
 
     cache_dir = Path(handoff_data.get("cache_dir") or "/").expanduser().resolve()
     plan = handoff_data.get("plan") if isinstance(handoff_data.get("plan"), dict) else {}
-    node_by_id = {node.get("id"): node for node in plan.get("nodes", []) if isinstance(node, dict) and isinstance(node.get("id"), str)}
     completed = {
         record.get("id"): record
         for record in handoff_data.get("completed", [])
         if isinstance(record, dict) and isinstance(record.get("id"), str)
     }
     main_node_id = handoff_data.get("main_result_node") or plan.get("main_result_node")
-    mini_node_id = handoff_data.get("mini_verify_node") or plan.get("mini_verify_node")
     main_record = completed.get(main_node_id) if isinstance(main_node_id, str) else None
-    mini_record = completed.get(mini_node_id) if isinstance(mini_node_id, str) else None
-    if main_record is None or mini_record is None:
-        return {"schema_version": 1, "status": "fail", "route_run_id": route_run_id, "failures": ["ending handoff is missing main or mini record"]}
-    if main_record.get("status") != "pass" or mini_record.get("status") != "pass":
-        return {"schema_version": 1, "status": "fail", "route_run_id": route_run_id, "failures": ["main result and mini verify must both pass before release"]}
-    mini_marker_status = phase_verdict(mini_record.get("result_path"), "MINI_VERIFY=PASS", "MINI_VERIFY=FAIL")
-    if mini_marker_status != "pass":
-        return {
-            "schema_version": 1,
-            "status": "fail",
-            "route_run_id": route_run_id,
-            "failures": ["Mini Verify result must contain an unambiguous MINI_VERIFY=PASS marker before release"],
-        }
+    if main_record is None:
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["ending handoff is missing the main result record"]}
+    if main_record.get("status") != "pass":
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["main result must complete before release"]}
+    main_result_path = Path(main_record.get("result_path") or "")
+    if not main_result_path.is_file() or main_result_path.stat().st_size == 0:
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["main result output must exist and be non-empty before release"]}
 
     release_path = _ending_release_path(cache_dir, route_run_id)
     release_record = _release_record(
         route_run_id,
         {
             "main_result_node": main_node_id,
-            "mini_verify_node": mini_node_id,
             "main_result_receipt_path": main_record.get("receipt_path"),
-            "mini_verify_receipt_path": mini_record.get("receipt_path"),
-            "mini_verify_result_path": mini_record.get("result_path"),
+            "main_result_path": main_record.get("result_path"),
         },
         cache_dir,
     )
@@ -907,7 +928,7 @@ def _release_main_result(handoff):
     handoff_data["release_path"] = str(release_path)
     handoff_path = Path(handoff_data.get("ending_handoff_path") or cache_dir / "ending-handoff.json")
     handoff_path.write_text(json.dumps(handoff_data, indent=2) + "\n", encoding="utf-8")
-    return {"schema_version": 1, "status": "pass", "route_run_id": route_run_id, "release_path": str(release_path)}
+    return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "pass", "route_run_id": route_run_id, "release_path": str(release_path)}
 
 
 def run_plan(
@@ -919,8 +940,10 @@ def run_plan(
     codex_bin="codex",
     skills_root=None,
     history_path=None,
+    result_ready_callback=None,
 ):
     first_result_started = time.monotonic()
+    first_result_started_ns = time.monotonic_ns()
     active_history_path = Path(history_path or routing_history_module.DEFAULT_HISTORY_PATH)
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
     failures = validate_plan(
@@ -940,7 +963,7 @@ def run_plan(
 
     if failures:
         manifest = {
-            "schema_version": 1,
+            "schema_version": DISPATCH_SCHEMA_VERSION,
             "stage": "validation",
             "status": "fail",
             "failures": failures,
@@ -951,6 +974,9 @@ def run_plan(
             "first_result_elapsed_ms": round((time.monotonic() - first_result_started) * 1000),
             "deadline_exhausted": False,
             "repair_budget_remaining": 0,
+            "result_published": False,
+            "notification_required": False,
+            "reopen_required": False,
         }
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         manifest["manifest_path"] = str(manifest_path)
@@ -958,24 +984,53 @@ def run_plan(
 
     node_by_id = {node["id"]: node for node in plan["nodes"]}
     first_result_timeout_seconds = plan["first_result_timeout_seconds"]
-    runnable_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") in {"result", "mini"}}
+    runnable_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
     completed = {}
-    ordered = []
+    ready_records = {}
+    ready_metadata = {}
+    published_ids = set()
+    publication_lock = threading.Lock()
+    result_events = queue.Queue()
+    running = {}
+    active_producers = set()
+    launch_order = []
     deadline_exhausted = False
-    while runnable_ids:
-        ready = sorted(
-            node_id for node_id in runnable_ids if all(
-                dependency in completed for dependency in node_by_id[node_id].get("dependencies", [])
-            )
-        )
-        if not ready:
-            failures.append("dispatcher could not satisfy node dependencies")
-            break
+    result_execution_failed = False
+    main_result_node = plan["main_result_node"]
+    maximum_active_producers = 1 if plan["topology"] == "sequential" else 3
 
-        completed_snapshot = dict(completed)
-        if plan["topology"] == "sequential" or len(ready) == 1:
-            ready_records = {}
-            for node_id in ready:
+    def result_ready_callback_for(node_id):
+        expected_path = (cache_dir / f"{node_id}-result.md").resolve()
+
+        def accept_result_ready(result_path, ready_monotonic_ns):
+            try:
+                actual_path = Path(result_path).resolve()
+                valid_result = actual_path == expected_path and actual_path.is_file() and actual_path.stat().st_size > 0
+            except OSError:
+                valid_result = False
+            if not valid_result:
+                return
+            if isinstance(ready_monotonic_ns, bool) or not isinstance(ready_monotonic_ns, int) or ready_monotonic_ns < 0:
+                ready_monotonic_ns = time.monotonic_ns()
+            with publication_lock:
+                if node_id in published_ids:
+                    return
+                published_ids.add(node_id)
+            provisional_record = {"id": node_id, "phase": "result", "skill": node_by_id[node_id]["skill"], "status": "result-ready", "result_path": str(actual_path), "result_published": True, "result_ready_monotonic_ns": ready_monotonic_ns}
+            result_events.put(("result-ready", node_id, provisional_record))
+            if node_id == main_result_node and callable(result_ready_callback):
+                result_ready_callback(actual_path, ready_monotonic_ns)
+
+        return accept_result_ready
+
+    result_node_count = len(runnable_ids)
+    with ThreadPoolExecutor(max_workers=max(1, result_node_count)) as executor:
+        while runnable_ids or running:
+            while not result_execution_failed and not deadline_exhausted and len(active_producers) < maximum_active_producers:
+                dependency_ready = sorted(node_id for node_id in runnable_ids if all(dependency in ready_records for dependency in node_by_id[node_id].get("dependencies", [])))
+                if not dependency_ready:
+                    break
+                node_id = dependency_ready[0]
                 remaining_seconds = first_result_timeout_seconds - (time.monotonic() - first_result_started)
                 if remaining_seconds <= 0:
                     failures.append("first-result deadline exhausted")
@@ -986,100 +1041,88 @@ def run_plan(
                 ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
                 ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
                 ready_node["_history_path"] = str(active_history_path)
-                ready_records[node_id] = run_node(ready_node, cache_dir, completed_snapshot, state_db, cwd, codex_bin, skills_root)
-                record = ready_records[node_id]
-                completed[node_id] = record
-                ordered.append(record)
+                ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)
+                future = executor.submit(run_node, ready_node, cache_dir, dict(ready_records), state_db, cwd, codex_bin, skills_root)
+                future.add_done_callback(lambda settled_future, settled_node_id=node_id: result_events.put(("settled", settled_node_id, settled_future)))
+                running[node_id] = future
+                active_producers.add(node_id)
+                launch_order.append(node_id)
                 runnable_ids.remove(node_id)
-                if record["status"] != "pass":
-                    failures.append(f"node {node_id} failed")
-                    runnable_ids.clear()
-                    break
-        else:
-            ready_nodes = {}
-            for node_id in ready:
-                remaining_seconds = first_result_timeout_seconds - (time.monotonic() - first_result_started)
-                if remaining_seconds <= 0:
-                    failures.append("first-result deadline exhausted")
-                    deadline_exhausted = True
-                    break
-                ready_node = dict(node_by_id[node_id])
-                ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
-                ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
-                ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
-                ready_node["_history_path"] = str(active_history_path)
-                ready_nodes[node_id] = ready_node
-            if deadline_exhausted:
+
+            if not running:
+                if runnable_ids and not result_execution_failed and not deadline_exhausted:
+                    failures.append("dispatcher could not satisfy node dependencies")
                 break
-            with ThreadPoolExecutor(max_workers=min(3, len(ready))) as executor:
-                futures = {
-                    node_id: executor.submit(
-                        run_node,
-                        ready_nodes[node_id],
-                        cache_dir,
-                        completed_snapshot,
-                        state_db,
-                        cwd,
-                        codex_bin,
-                        skills_root,
-                    )
-                    for node_id in ready
-                }
-                ready_records = {node_id: futures[node_id].result() for node_id in ready}
 
-        if deadline_exhausted:
-            break
+            event_timeout = None
+            if main_result_node not in ready_metadata and not deadline_exhausted:
+                remaining_seconds = first_result_timeout_seconds - (time.monotonic() - first_result_started)
+                if remaining_seconds <= 0:
+                    failures.append("first-result deadline exhausted")
+                    deadline_exhausted = True
+                    result_execution_failed = True
+                    continue
+                event_timeout = remaining_seconds
+            try:
+                event_kind, node_id, payload = result_events.get(timeout=event_timeout)
+            except queue.Empty:
+                failures.append("first-result deadline exhausted")
+                deadline_exhausted = True
+                result_execution_failed = True
+                continue
 
-        if plan["topology"] != "sequential" and len(ready) > 1:
-            for node_id in ready:
-                record = ready_records[node_id]
-                completed[node_id] = record
-                ordered.append(record)
-                runnable_ids.remove(node_id)
-                if record["status"] != "pass":
-                    failures.append(f"node {node_id} failed")
-                    runnable_ids.clear()
-                    break
+            if event_kind == "result-ready":
+                if node_id not in ready_records:
+                    ready_records[node_id] = payload
+                    ready_metadata[node_id] = payload
+                active_producers.discard(node_id)
+                continue
 
-    main_node = node_by_id.get(plan["main_result_node"], {})
-    mini_node_id = plan.get("mini_verify_node")
+            future = payload
+            running.pop(node_id, None)
+            active_producers.discard(node_id)
+            record = future.result()
+            completed[node_id] = record
+            if record.get("status") != "pass":
+                failures.append(f"node {node_id} failed")
+                result_execution_failed = True
+                continue
+            result_path = Path(record.get("result_path") or "")
+            try:
+                result_is_ready = result_path.is_file() and result_path.stat().st_size > 0
+            except OSError:
+                result_is_ready = False
+            if node_id not in ready_records and result_is_ready:
+                ready_monotonic_ns = record.get("result_ready_monotonic_ns")
+                if isinstance(ready_monotonic_ns, bool) or not isinstance(ready_monotonic_ns, int) or ready_monotonic_ns < 0:
+                    ready_monotonic_ns = time.monotonic_ns()
+                with publication_lock:
+                    published_ids.add(node_id)
+                ready_records[node_id] = record
+                ready_metadata[node_id] = {"result_ready_monotonic_ns": ready_monotonic_ns}
+                if node_id == main_result_node and callable(result_ready_callback):
+                    result_ready_callback(result_path, ready_monotonic_ns)
+            elif node_id in ready_records:
+                ready_records[node_id] = record
+
+    ordered = [completed[node_id] for node_id in launch_order if node_id in completed]
+
     main_record = completed.get(plan["main_result_node"], {})
-    mini_record = completed.get(mini_node_id, {})
 
-    if main_record:
-        if mini_record:
-            mini_status = phase_verdict(
-                mini_record.get("result_path"), "MINI_VERIFY=PASS", "MINI_VERIFY=FAIL"
-            )
-            _run_record(
-                main_record.get("receipt_path"),
-                verify_level="mini",
-                verify_status=mini_status if mini_status in {"pass", "fail"} else "unknown",
-                main_result_receipt_path=main_record.get("receipt_path"),
-                route_run_id=route_run_id,
-                main_node=main_node,
-                execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
-            )
-        elif main_record.get("status") != "pass":
-            _run_record(
-                main_record.get("receipt_path"),
-                verify_level="mini",
-                verify_status="unknown",
-                main_result_receipt_path=main_record.get("receipt_path"),
-                route_run_id=route_run_id,
-                main_node=main_node,
-                execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
-            )
-
-    status = "pass" if not failures and main_record.get("status") == "pass" and mini_record.get("status") == "pass" else "fail"
-    first_result_elapsed_ms = round((time.monotonic() - first_result_started) * 1000)
+    status = "pass" if not failures and main_record.get("status") == "pass" else "fail"
+    main_result_ready_ns = ready_metadata.get(plan["main_result_node"], {}).get("result_ready_monotonic_ns")
+    if isinstance(main_result_ready_ns, bool) or not isinstance(main_result_ready_ns, int):
+        main_result_ready_ns = main_record.get("result_ready_monotonic_ns")
+    first_result_elapsed_ms = round((main_result_ready_ns - first_result_started_ns) / 1_000_000) if isinstance(main_result_ready_ns, int) and main_result_ready_ns >= first_result_started_ns else round((time.monotonic() - first_result_started) * 1000)
+    result_published = bool(main_record.get("result_published") is True or plan["main_result_node"] in published_ids)
+    receipt_failure_after_result = any(bool(record.get("result_published") is True or record.get("id") in published_ids) and record.get("status") != "pass" for record in ordered)
     ending_handoff_path = cache_dir / "ending-handoff.json"
     ending_manifest_path = cache_dir / "ending-dispatch-manifest.json"
     ending_release_path = _ending_release_path(cache_dir, route_run_id)
 
     if status == "pass":
         ending_handoff = {
-            "schema_version": 1,
+            "schema_version": DISPATCH_SCHEMA_VERSION,
             "cwd": str(cwd.resolve()),
             "state_db": str(state_db.expanduser().resolve()),
             "entry": {"model": entry_model, "effort": entry_effort},
@@ -1087,7 +1130,6 @@ def run_plan(
             "plan": plan,
             "completed": ordered,
             "main_result_node": plan.get("main_result_node"),
-            "mini_verify_node": mini_node_id,
             "cache_dir": str(cache_dir),
             "released": False,
             "release_path": str(ending_release_path),
@@ -1100,7 +1142,7 @@ def run_plan(
             pass
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": DISPATCH_SCHEMA_VERSION,
         "stage": "execution",
         "status": status,
         "failures": failures,
@@ -1111,17 +1153,18 @@ def run_plan(
         "nodes": ordered,
         "route_run_id": route_run_id,
         "main_result_node": plan["main_result_node"],
-        "mini_verify_node": mini_node_id,
         "main_result_path": main_record.get("result_path"),
         "downstream_receipt_path": main_record.get("receipt_path"),
-        "mini_receipt_path": mini_record.get("receipt_path"),
         "ending_nodes_pending": [node["id"] for node in plan["nodes"] if node.get("phase") == "ending"],
         "ending_handoff_path": str(ending_handoff_path) if status == "pass" else None,
         "ending_manifest_path": str(ending_manifest_path) if status == "pass" else None,
         "first_result_timeout_seconds": first_result_timeout_seconds,
         "first_result_elapsed_ms": first_result_elapsed_ms,
         "deadline_exhausted": deadline_exhausted,
-        "repair_budget_remaining": 1 if status == "fail" and main_record.get("result_path") and mini_record.get("status") == "fail" else 0,
+        "repair_budget_remaining": 0,
+        "result_published": result_published,
+        "notification_required": receipt_failure_after_result,
+        "reopen_required": receipt_failure_after_result,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     manifest["manifest_path"] = str(manifest_path)
@@ -1132,7 +1175,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     try:
         handoff = json.loads(handoff_path.expanduser().resolve().read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        return {"schema_version": 1, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"]}
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"]}
 
     plan = handoff.get("plan") if isinstance(handoff.get("plan"), dict) else {}
     cwd = Path(handoff.get("cwd") or "/").expanduser().resolve()
@@ -1155,8 +1198,8 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
             failures.append("ending handoff release does not match route_run_id")
         elif handoff.get("released") is not True:
             failures.append("ending handoff is not marked released")
-        elif release_record.get("main_result_node") != (handoff.get("main_result_node") or plan.get("main_result_node")) or release_record.get("mini_verify_node") != (handoff.get("mini_verify_node") or plan.get("mini_verify_node")):
-            failures.append("ending handoff release does not match main or mini node")
+        elif release_record.get("main_result_node") != (handoff.get("main_result_node") or plan.get("main_result_node")):
+            failures.append("ending handoff release does not match the main result node")
     if not failures:
         failures.extend(
             validate_plan(
@@ -1186,11 +1229,6 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     runnable_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
     main_node = node_by_id.get(plan.get("main_result_node"), {})
     main_record = completed.get(plan.get("main_result_node"), {})
-    mini_record = completed.get(plan.get("mini_verify_node"), {})
-    if not failures:
-        mini_marker_status = phase_verdict(mini_record.get("result_path"), "MINI_VERIFY=PASS", "MINI_VERIFY=FAIL")
-        if mini_marker_status != "pass":
-            failures.append("ending handoff Mini Verify result is missing an unambiguous MINI_VERIFY=PASS marker")
     ordered = []
     routing_learning = None
     real_quality_failure = False
@@ -1284,7 +1322,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         else "fail"
     )
     manifest = {
-        "schema_version": 1,
+        "schema_version": DISPATCH_SCHEMA_VERSION,
         "stage": "ending",
         "status": status,
         "failures": failures,
@@ -1301,7 +1339,12 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
 
 
 def compact_run_plan_manifest(manifest):
-    return {"schema_version": manifest.get("schema_version"), "status": manifest.get("status"), "failures": manifest.get("failures", []), "manifest_path": manifest.get("manifest_path"), "main_result_path": manifest.get("main_result_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "route_run_id": manifest.get("route_run_id"), "first_result_elapsed_ms": manifest.get("first_result_elapsed_ms"), "deadline_exhausted": manifest.get("deadline_exhausted", False)}
+    return {"schema_version": manifest.get("schema_version"), "status": manifest.get("status"), "failures": manifest.get("failures", []), "manifest_path": manifest.get("manifest_path"), "main_result_path": manifest.get("main_result_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "route_run_id": manifest.get("route_run_id"), "first_result_elapsed_ms": manifest.get("first_result_elapsed_ms"), "deadline_exhausted": manifest.get("deadline_exhausted", False), "result_published": manifest.get("result_published", False), "notification_required": manifest.get("notification_required", False), "reopen_required": manifest.get("reopen_required", False)}
+
+
+def _emit_result_ready_event(result_path, ready_monotonic_ns):
+    event = {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "result-ready", "result_path": str(result_path), "result_ready_monotonic_ns": ready_monotonic_ns}
+    print(json.dumps(event, separators=(",", ":")), flush=True)
 
 
 def main():
@@ -1333,6 +1376,7 @@ def main():
             args.state_db.expanduser().resolve(),
             args.codex_bin,
             args.skills_root,
+            result_ready_callback=_emit_result_ready_event,
         )
     elif args.command == "release-main-result":
         handoff = json.loads(args.handoff.expanduser().resolve().read_text(encoding="utf-8"))

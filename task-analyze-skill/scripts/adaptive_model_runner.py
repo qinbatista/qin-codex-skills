@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from tempfile import mkstemp
 from types import SimpleNamespace
@@ -27,23 +28,9 @@ def _load_sibling(module_name):
 
 model_routing_history = _load_sibling("model_routing_history")
 model_execution_receipt = _load_sibling("model_execution_receipt")
-grounded_result_gate = _load_sibling("grounded_result_gate")
+strategy_performance = _load_sibling("strategy_performance")
 
 
-GATE_KEYS = {
-    "schema_version",
-    "json_required_keys",
-    "json_key_order",
-    "sorted_json_pointers",
-    "source_root",
-    "source_files_pointer",
-}
-GROUNDED_GATE_PRESETS = {
-    "json-object": {"required_keys": [], "expected_key_order": None, "sorted_json_pointers": [], "source_files_pointer": None},
-    "grounded-source-json-v1": {"required_keys": ["source_files"], "expected_key_order": None, "sorted_json_pointers": ["/source_files"], "source_files_pointer": "/source_files"},
-    "workflow-graph-json-v1": {"required_keys": ["entry", "early_exit_conditions", "stages", "final_merge_fields", "public_return_keys", "source_files"], "expected_key_order": ["entry", "early_exit_conditions", "stages", "final_merge_fields", "public_return_keys", "source_files"], "sorted_json_pointers": ["/stages/*/agents", "/final_merge_fields", "/public_return_keys", "/source_files"], "source_files_pointer": "/source_files"},
-    "workflow-graph-json-v2": {"required_keys": ["entry", "early_exit_conditions", "stages", "final_merge_fields", "always_return_keys", "optional_return_keys", "source_files"], "expected_key_order": ["entry", "early_exit_conditions", "stages", "final_merge_fields", "always_return_keys", "optional_return_keys", "source_files"], "sorted_json_pointers": ["/stages/*/agents", "/final_merge_fields", "/always_return_keys", "/optional_return_keys", "/source_files"], "source_files_pointer": "/source_files"},
-}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 REASON_PATTERN = re.compile(r"^[a-z0-9_]{1,80}$")
 
@@ -69,63 +56,6 @@ def _atomic_write_json(path, value):
     finally:
         if os.path.exists(temporary_path):
             os.unlink(temporary_path)
-
-
-def _private_result_temp(path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_path = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    os.close(descriptor)
-    os.chmod(temporary_path, 0o600)
-    return Path(temporary_path)
-
-
-def _string_list(value, field, *, optional=False):
-    if value is None and optional:
-        return None
-    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
-        raise RunnerFailure("grounded_gate_config_invalid")
-    if len(value) != len(set(value)):
-        raise RunnerFailure("grounded_gate_config_invalid")
-    return value
-
-
-def load_gate_config(path):
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        raise RunnerFailure("grounded_gate_config_invalid")
-    if not isinstance(value, dict) or set(value) - GATE_KEYS or value.get("schema_version") != 1:
-        raise RunnerFailure("grounded_gate_config_invalid")
-    required_keys = _string_list(value.get("json_required_keys", []), "json_required_keys")
-    key_order = _string_list(value.get("json_key_order"), "json_key_order", optional=True)
-    sorted_pointers = _string_list(value.get("sorted_json_pointers", []), "sorted_json_pointers")
-    source_root = value.get("source_root")
-    source_pointer = value.get("source_files_pointer")
-    if (source_root is None) != (source_pointer is None):
-        raise RunnerFailure("grounded_gate_config_invalid")
-    if source_root is not None and (not isinstance(source_root, str) or not source_root):
-        raise RunnerFailure("grounded_gate_config_invalid")
-    if source_pointer is not None and (not isinstance(source_pointer, str) or not source_pointer):
-        raise RunnerFailure("grounded_gate_config_invalid")
-    return {
-        "required_keys": required_keys,
-        "expected_key_order": key_order,
-        "sorted_json_pointers": sorted_pointers,
-        "source_root": Path(source_root) if source_root is not None else None,
-        "source_files_pointer": source_pointer,
-    }
-
-
-def load_gate_preset(profile_preset, source_root=None):
-    if profile_preset not in GROUNDED_GATE_PRESETS:
-        raise RunnerFailure("grounded_gate_preset_invalid")
-    preset = GROUNDED_GATE_PRESETS[profile_preset]
-    source_pointer = preset["source_files_pointer"]
-    if source_pointer is not None and source_root is None:
-        raise RunnerFailure("grounded_gate_source_root_required")
-    if source_pointer is None and source_root is not None:
-        raise RunnerFailure("grounded_gate_source_root_unused")
-    return {"required_keys": list(preset["required_keys"]), "expected_key_order": list(preset["expected_key_order"]) if preset["expected_key_order"] is not None else None, "sorted_json_pointers": list(preset["sorted_json_pointers"]), "source_root": source_root, "source_files_pointer": source_pointer}
 
 
 def _profile_arguments(args):
@@ -181,13 +111,13 @@ def _validated_recommendation(args):
     return recommendation, selected
 
 
-def _receipt_arguments(args, selected, temporary_result):
+def _receipt_arguments(args, selected):
     return SimpleNamespace(
         model=selected[0],
         effort=selected[1],
         workload_id=args.workload_id,
         output=args.receipt_output,
-        result_output=temporary_result,
+        result_output=args.result_output,
         workdir=args.workdir,
         state_db=args.state_db,
         codex_bin=args.codex_bin,
@@ -197,28 +127,36 @@ def _receipt_arguments(args, selected, temporary_result):
         entry_task=False,
         node_role="result-producer",
         route_marker="LOCKED_ROUTE_NODE",
+        stream_result_ready=True,
+        result_ready_callback=getattr(args, "result_ready_callback", None),
         timeout=args.timeout,
         emit_result=False,
     )
 
 
-def _record_arguments(args, receipt_path, recommendation, run_id, mini_status, failure_class):
-    values = vars(_profile_arguments(args)).copy()
-    values.update(
-        receipt=str(receipt_path),
-        verify_level="mini",
-        verify_status=mini_status,
-        failure_class=failure_class,
-        run_id=run_id,
-        trial=recommendation["trial"],
-    )
-    return SimpleNamespace(**values)
+def _adaptive_run_id(args):
+    run_id = getattr(args, "adaptive_run_id", None)
+    if not isinstance(run_id, str) or not run_id:
+        run_id = f"run_{os.urandom(8).hex()}"
+        args.adaptive_run_id = run_id
+    return run_id
 
 
-def _summary(args, *, status, selected_pair=None, trial=False, reason, profile_fingerprint=None, mini_status="not_run", receipt=None):
+def _emit_result_ready_event(result_path, ready_monotonic_ns):
+    event = {"schema_version": 1, "stage": "result-ready", "result_path": str(result_path), "result_ready_monotonic_ns": ready_monotonic_ns}
+    print(json.dumps(event, sort_keys=True, separators=(",", ":")), flush=True)
+
+
+def _summary(args, *, status, selected_pair=None, trial=False, reason, profile_fingerprint=None, receipt=None, execution_mode=None, performance_admission=None):
     tokens = receipt.get("tokens") if isinstance(receipt, dict) and isinstance(receipt.get("tokens"), dict) else {}
+    result_published = bool(isinstance(receipt, dict) and receipt.get("result_published") is True and args.result_output.is_file())
+    result_ready_monotonic_ns = receipt.get("result_ready_monotonic_ns") if isinstance(receipt, dict) else None
+    first_result_started_ns = getattr(args, "_first_result_started_ns", None)
+    first_result_elapsed_ms = round((result_ready_monotonic_ns - first_result_started_ns) / 1_000_000) if isinstance(result_ready_monotonic_ns, int) and isinstance(first_result_started_ns, int) and result_ready_monotonic_ns >= first_result_started_ns else None
+    failed_after_presentation = status == "fail" and result_published
     summary = {
         "status": status,
+        "adaptive_run_id": _adaptive_run_id(args),
         "profile_preset": getattr(args, "profile_preset", None),
         "selected_pair": selected_pair,
         "trial": bool(trial),
@@ -227,104 +165,76 @@ def _summary(args, *, status, selected_pair=None, trial=False, reason, profile_f
         "receipt_path": str(args.receipt_output),
         "result_path": str(args.result_output),
         "elapsed_ms": receipt.get("process_elapsed_ms") if isinstance(receipt, dict) else None,
+        "first_result_elapsed_ms": first_result_elapsed_ms,
         "total_tokens": tokens.get("total_tokens"),
-        "mini_status": mini_status,
+        "real_verify_status": "pending" if status == "pass" else "not_started",
+        "result_published": result_published,
+        "notification_required": failed_after_presentation,
+        "reopen_required": failed_after_presentation,
+        "execution_mode": execution_mode or "delegated_adaptive" if status == "pass" else execution_mode,
     }
+    if isinstance(performance_admission, dict):
+        summary["performance_admission"] = performance_admission
     if getattr(args, "emit_result", False) and status == "pass" and args.result_output.exists():
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary
 
 
+def _performance_arguments(args, recommendation, prompt_text):
+    required = (getattr(args, "entry_pair", None), getattr(args, "config_cohort", None), getattr(args, "strategy_version", None), getattr(args, "producer_contract_version", None))
+    if any(value is None for value in required):
+        return None
+    return SimpleNamespace(history=args.performance_history, profile_fingerprint=recommendation["profile_fingerprint"], entry_pair=args.entry_pair, config_cohort=args.config_cohort, sandbox_label=args.sandbox, strategy_version=args.strategy_version, producer_contract_version=args.producer_contract_version, workload_prompt_sha256=model_execution_receipt.sha256_text(prompt_text), minimum_paired_samples=args.minimum_paired_samples, minimum_savings_percent=args.minimum_savings_percent)
+
+
+def _performance_admission(args, recommendation, prompt_text):
+    if getattr(args, "benchmark_calibration", False):
+        return {"schema_version": 1, "execution_mode": "delegated_adaptive", "reason": "explicit_benchmark_calibration", "admitted": False, "calibration": True}
+    performance_args = _performance_arguments(args, recommendation, prompt_text)
+    if performance_args is None:
+        return {"schema_version": 1, "execution_mode": "inline_entry", "reason": "performance_admission_arguments_missing", "admitted": False}
+    if recommendation.get("trial") is not False or recommendation.get("calibration_state") != "frozen":
+        return {"schema_version": 1, "execution_mode": "inline_entry", "reason": "quality_pair_not_frozen", "admitted": False}
+    return strategy_performance.recommend_mode(performance_args)
+
+
 def run_adaptive(args, prompt_text):
+    args._first_result_started_ns = time.monotonic_ns()
     if not isinstance(prompt_text, str) or not prompt_text.strip():
         raise RunnerFailure("prompt_required")
     if args.timeout <= 0 or args.receipt_output == args.result_output:
         raise RunnerFailure("runner_arguments_invalid")
-    gate_config_path = getattr(args, "grounded_gate_config", None)
-    gate_preset = getattr(args, "grounded_gate_preset", None)
-    if gate_config_path is not None and gate_preset is not None:
-        raise RunnerFailure("grounded_gate_selector_conflict")
-    gate_config = load_gate_config(gate_config_path) if gate_config_path is not None else load_gate_preset(gate_preset, getattr(args, "grounded_source_root", None)) if gate_preset is not None else None
     recommendation, selected = _validated_recommendation(args)
-    temporary_result = _private_result_temp(args.result_output)
+    performance_admission = _performance_admission(args, recommendation, prompt_text)
+    if performance_admission.get("execution_mode") != "delegated_adaptive":
+        if args.result_output.exists():
+            args.result_output.unlink()
+        return _summary(args, status="inline", selected_pair=recommendation["selected_pair"], trial=recommendation["trial"], reason=performance_admission.get("reason", "delegation_not_admitted"), profile_fingerprint=recommendation["profile_fingerprint"], execution_mode="inline_entry", performance_admission=performance_admission)
+    if args.result_output.exists():
+        args.result_output.unlink()
     receipt = None
-    result_saved = False
+    receipt_args = _receipt_arguments(args, selected)
     try:
-        receipt_args = _receipt_arguments(args, selected, temporary_result)
-        try:
-            with model_execution_receipt.adaptive_producer_authorization():
-                receipt = model_execution_receipt.run_receipt(receipt_args, prompt_text)
-        except OSError:
-            receipt = model_execution_receipt.failed_run_receipt(receipt_args, "execution")
-        if receipt.get("requested_pair") != recommendation["selected_pair"]:
-            raise RunnerFailure("receipt_pair_override")
-        if receipt.get("status") == "pass" and temporary_result.stat().st_size > 0:
-            os.replace(temporary_result, args.result_output)
-            os.chmod(args.result_output, 0o600)
-            receipt["result_output_path"] = str(args.result_output)
-            result_saved = True
-        _atomic_write_json(args.receipt_output, receipt)
-        if receipt.get("status") != "pass":
-            return _summary(
-                args,
-                status="fail",
-                selected_pair=recommendation["selected_pair"],
-                trial=recommendation["trial"],
-                reason="producer_operational_failure",
-                profile_fingerprint=recommendation["profile_fingerprint"],
-                receipt=receipt,
-            )
-        if not result_saved:
-            return _summary(
-                args,
-                status="fail",
-                selected_pair=recommendation["selected_pair"],
-                trial=recommendation["trial"],
-                reason="result_missing",
-                profile_fingerprint=recommendation["profile_fingerprint"],
-                receipt=receipt,
-            )
-        mini_status = "not_run"
-        if gate_config is not None:
-            run_id = f"run_{os.urandom(8).hex()}"
-            try:
-                grounded_result_gate.validate_grounded_result(
-                    receipt_path=args.receipt_output,
-                    result_path=args.result_output,
-                    **gate_config,
-                )
-            except grounded_result_gate.GateFailure:
-                mini_status = "fail"
-                model_routing_history.record_event(
-                    _record_arguments(args, args.receipt_output, recommendation, run_id, "fail", "correctness")
-                )
-                return _summary(
-                    args,
-                    status="fail",
-                    selected_pair=recommendation["selected_pair"],
-                    trial=recommendation["trial"],
-                    reason="grounded_gate_failed",
-                    profile_fingerprint=recommendation["profile_fingerprint"],
-                    mini_status=mini_status,
-                    receipt=receipt,
-                )
-            mini_status = "pass"
-            model_routing_history.record_event(
-                _record_arguments(args, args.receipt_output, recommendation, run_id, "pass", "none")
-            )
-        return _summary(
-            args,
-            status="pass",
-            selected_pair=recommendation["selected_pair"],
-            trial=recommendation["trial"],
-            reason=recommendation["reason"],
-            profile_fingerprint=recommendation["profile_fingerprint"],
-            mini_status=mini_status,
-            receipt=receipt,
-        )
-    finally:
-        if temporary_result.exists():
-            temporary_result.unlink()
+        with model_execution_receipt.adaptive_producer_authorization():
+            receipt = model_execution_receipt.run_receipt(receipt_args, prompt_text)
+    except (OSError, ValueError):
+        receipt = model_execution_receipt.failed_run_receipt(receipt_args, "execution")
+        if args.result_output.is_file() and args.result_output.stat().st_size > 0:
+            receipt.update({"result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "result_output_path": str(args.result_output)})
+    if receipt.get("requested_pair") != recommendation["selected_pair"]:
+        raise RunnerFailure("receipt_pair_override")
+    result_published = bool(receipt.get("result_published") is True and args.result_output.is_file() and args.result_output.stat().st_size > 0)
+    receipt["result_published"] = result_published
+    if not result_published:
+        receipt.pop("result_output_path", None)
+    _atomic_write_json(args.receipt_output, receipt)
+    if receipt.get("status") != "pass":
+        failure_reason = "producer_receipt_failure_after_result" if result_published else "producer_operational_failure"
+        return _summary(args, status="fail", selected_pair=recommendation["selected_pair"], trial=recommendation["trial"], reason=failure_reason, profile_fingerprint=recommendation["profile_fingerprint"], receipt=receipt, execution_mode="delegated_adaptive", performance_admission=performance_admission)
+    if not result_published:
+        return _summary(args, status="fail", selected_pair=recommendation["selected_pair"], trial=recommendation["trial"], reason="result_missing", profile_fingerprint=recommendation["profile_fingerprint"], receipt=receipt, execution_mode="delegated_adaptive", performance_admission=performance_admission)
+    os.chmod(args.result_output, 0o600)
+    return _summary(args, status="pass", selected_pair=recommendation["selected_pair"], trial=recommendation["trial"], reason=recommendation["reason"], profile_fingerprint=recommendation["profile_fingerprint"], receipt=receipt, execution_mode="delegated_adaptive", performance_admission=performance_admission)
 
 
 def parse_args(argv=None):
@@ -342,14 +252,20 @@ def parse_args(argv=None):
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--ignore-user-config", action="store_true")
     parser.add_argument("--allow-fallback", action="append", default=[])
-    parser.add_argument("--grounded-gate-config", type=Path)
-    parser.add_argument("--grounded-gate-preset", choices=tuple(GROUNDED_GATE_PRESETS))
-    parser.add_argument("--grounded-source-root", type=Path)
+    parser.add_argument("--performance-history", type=Path, default=strategy_performance.DEFAULT_HISTORY_PATH)
+    parser.add_argument("--entry-pair")
+    parser.add_argument("--config-cohort")
+    parser.add_argument("--strategy-version")
+    parser.add_argument("--producer-contract-version")
+    parser.add_argument("--minimum-paired-samples", type=int, default=strategy_performance.DEFAULT_MINIMUM_PAIRED_SAMPLES)
+    parser.add_argument("--minimum-savings-percent", type=float, default=strategy_performance.DEFAULT_MINIMUM_SAVINGS_PERCENT)
+    parser.add_argument("--benchmark-calibration", action="store_true", help="Explicit benchmark-only bypass used to collect admission evidence; never use for ordinary foreground routing.")
     return model_routing_history.resolve_profile_arguments(parser.parse_args(argv))
 
 
 def main(argv=None):
     args = parse_args(argv)
+    args.result_ready_callback = _emit_result_ready_event
     try:
         summary = run_adaptive(args, sys.stdin.read())
     except RunnerFailure as failure:
@@ -357,7 +273,7 @@ def main(argv=None):
     except (OSError, ValueError):
         summary = _summary(args, status="fail", reason="runner_validation_failed")
     print(json.dumps(summary, sort_keys=True, separators=(",", ":")))
-    return 0 if summary["status"] == "pass" else 1
+    return 0 if summary["status"] in {"pass", "inline"} else 1
 
 
 if __name__ == "__main__":

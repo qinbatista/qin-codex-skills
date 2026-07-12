@@ -9,4 +9,4 @@ Use `execution_domain=csharp` for non-Unity C#. These rules apply to ordinary li
 - Keep calls and log calls on one line unless the project style explicitly requires wrapping.
 - Avoid one-use helpers and new abstractions unless they make the requested behavior clearer or are required by the existing design.
 - Preserve exception behavior, ordering, side effects, async/threading semantics, and public contracts unless the request changes them.
-- Keep changes surgical and test the edited path with the smallest proportional check before the main result.
+- Keep changes surgical and present the completed edit immediately. Run the smallest proportional test afterward in Ending Task Real Verify; do not gate the first presentation with that test.

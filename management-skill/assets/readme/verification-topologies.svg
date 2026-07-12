@@ -1,48 +1,48 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1150" viewBox="0 0 1600 1150" role="img" aria-labelledby="title desc">
-  <title id="title">Mini Verify topologies and Ending Task</title>
-  <desc id="desc">Parallel, sequential, and mixed Mini Verify placement leads to the main result. Real Verify and optimization verification run afterward in Ending Task.</desc>
+  <title id="title">Result-first topologies and Ending Real</title>
+  <desc id="desc">Parallel, sequential, and mixed work produces a completed result that is presented immediately. Real Verify and optimization verification run afterward in Ending Task.</desc>
   <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#17223d"/></linearGradient><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
   <rect width="1600" height="1150" rx="30" fill="url(#bg)"/>
   <g font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
-    <text x="70" y="88" fill="#f8fafc" font-size="46" font-weight="800">🧪 Mini Verify gates the main result</text>
-    <text x="70" y="130" fill="#94a3b8" font-size="23">Place the fastest proportional check where the dependency shape can expose a basic break.</text>
+    <text x="70" y="88" fill="#f8fafc" font-size="46" font-weight="800">📣 Complete work, then present the result</text>
+    <text x="70" y="130" fill="#94a3b8" font-size="23">No foreground verifier delays presentation; verification belongs to Ending Real afterward.</text>
 
     <g>
-      <rect x="60" y="180" width="470" height="455" rx="24" fill="#0f1d32" stroke="#334155" stroke-width="2"/>
-      <text x="95" y="226" fill="#bfdbfe" font-size="21" font-weight="800">🔀 PARALLEL</text><text x="95" y="258" fill="#94a3b8" font-size="18">Independent basic checks before merge</text>
+      <rect x="80" y="180" width="430" height="455" rx="24" fill="#0f1d32" stroke="#334155" stroke-width="2"/>
+      <text x="95" y="226" fill="#bfdbfe" font-size="21" font-weight="800">🔀 PARALLEL</text><text x="95" y="258" fill="#94a3b8" font-size="18">Independent branch outputs before merge</text>
       <rect x="95" y="300" width="180" height="72" rx="16" fill="#102b3d" stroke="#38bdf8"/><text x="185" y="330" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">Branch A</text><text x="185" y="354" text-anchor="middle" fill="#bae6fd" font-size="15">[dynamic learned pair]</text>
       <rect x="315" y="300" width="180" height="72" rx="16" fill="#302716" stroke="#fbbf24"/><text x="405" y="330" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">Branch B</text><text x="405" y="354" text-anchor="middle" fill="#fde68a" font-size="15">[Spark obvious-only]</text>
-      <rect x="95" y="420" width="180" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="185" y="452" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Mini Verify A</text><text x="185" y="478" text-anchor="middle" fill="#a7f3d0" font-size="15">[dynamic learned pair]</text>
-      <rect x="315" y="420" width="180" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="405" y="452" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Mini Verify B</text><text x="405" y="478" text-anchor="middle" fill="#a7f3d0" font-size="15">[dynamic learned pair]</text>
+      <rect x="95" y="420" width="180" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="185" y="452" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Branch output A</text><text x="185" y="478" text-anchor="middle" fill="#a7f3d0" font-size="15">complete</text>
+      <rect x="315" y="420" width="180" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="405" y="452" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Branch output B</text><text x="405" y="478" text-anchor="middle" fill="#a7f3d0" font-size="15">complete</text>
       <rect x="185" y="548" width="220" height="60" rx="16" fill="#172554" stroke="#818cf8"/><text x="295" y="584" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">Merge [dynamic learned pair]</text>
       <path d="M185 372 V420 M405 372 V420 M185 502 V526 H295 V548 M405 502 V526 H295" stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
 
-      <rect x="565" y="180" width="470" height="455" rx="24" fill="#0f1d32" stroke="#334155" stroke-width="2"/>
-      <text x="600" y="226" fill="#bfdbfe" font-size="21" font-weight="800">➡️ SEQUENTIAL</text><text x="600" y="258" fill="#94a3b8" font-size="18">One consolidated Mini after dependencies</text>
+      <rect x="585" y="180" width="430" height="455" rx="24" fill="#0f1d32" stroke="#334155" stroke-width="2"/>
+      <text x="600" y="226" fill="#bfdbfe" font-size="21" font-weight="800">➡️ SEQUENTIAL</text><text x="600" y="258" fill="#94a3b8" font-size="18">Finish dependencies, then present once</text>
       <rect x="650" y="300" width="300" height="62" rx="16" fill="#102b3d" stroke="#38bdf8"/><text x="800" y="338" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">Inspect [dynamic learned pair]</text>
       <rect x="650" y="395" width="300" height="62" rx="16" fill="#302716" stroke="#fbbf24"/><text x="800" y="433" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">Implement [Spark obvious-only]</text>
       <rect x="650" y="490" width="300" height="62" rx="16" fill="#122844" stroke="#60a5fa"/><text x="800" y="528" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">Integrate [dynamic learned pair]</text>
-      <rect x="650" y="578" width="300" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="800" y="610" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Consolidated Mini Verify</text><text x="800" y="638" text-anchor="middle" fill="#a7f3d0" font-size="15">[dynamic learned pair]</text>
+      <rect x="650" y="578" width="300" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="800" y="610" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Completed result</text><text x="800" y="638" text-anchor="middle" fill="#a7f3d0" font-size="15">ready to present</text>
       <path d="M800 362 V395 M800 457 V490 M800 552 V578" stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
 
-      <rect x="1070" y="180" width="470" height="455" rx="24" fill="#0f1d32" stroke="#334155" stroke-width="2"/>
-      <text x="1105" y="226" fill="#bfdbfe" font-size="21" font-weight="800">🧬 MIXED</text><text x="1105" y="258" fill="#94a3b8" font-size="18">Integrate branches, then Mini Verify</text>
-      <rect x="1105" y="300" width="180" height="72" rx="16" fill="#102b3d" stroke="#38bdf8"/><text x="1195" y="330" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Source branch</text><text x="1195" y="354" text-anchor="middle" fill="#bae6fd" font-size="15">[dynamic learned pair]</text>
-      <rect x="1325" y="300" width="180" height="72" rx="16" fill="#302716" stroke="#fbbf24"/><text x="1415" y="330" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Code branch</text><text x="1415" y="354" text-anchor="middle" fill="#fde68a" font-size="15">[Spark obvious-only]</text>
-      <rect x="1195" y="438" width="220" height="62" rx="16" fill="#172554" stroke="#818cf8"/><text x="1305" y="476" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">Merge [dynamic learned pair]</text>
-      <rect x="1175" y="548" width="260" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="1305" y="580" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Integration Mini Verify</text><text x="1305" y="608" text-anchor="middle" fill="#a7f3d0" font-size="15">[dynamic learned pair]</text>
-      <path d="M1195 372 V410 H1305 V438 M1415 372 V410 H1305 M1305 500 V548" stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+      <rect x="1090" y="180" width="430" height="455" rx="24" fill="#0f1d32" stroke="#334155" stroke-width="2"/>
+      <text x="1105" y="226" fill="#bfdbfe" font-size="21" font-weight="800">🧬 MIXED</text><text x="1105" y="258" fill="#94a3b8" font-size="18">Integrate branches, then present once</text>
+      <rect x="1120" y="300" width="160" height="72" rx="16" fill="#102b3d" stroke="#38bdf8"/><text x="1200" y="330" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="700">Source branch</text><text x="1200" y="354" text-anchor="middle" fill="#bae6fd" font-size="14">[learned pair]</text>
+      <rect x="1320" y="300" width="160" height="72" rx="16" fill="#302716" stroke="#fbbf24"/><text x="1400" y="330" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="700">Code branch</text><text x="1400" y="354" text-anchor="middle" fill="#fde68a" font-size="14">[Spark-only]</text>
+      <rect x="1210" y="438" width="200" height="62" rx="16" fill="#172554" stroke="#818cf8"/><text x="1310" y="476" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="700">Merge [learned pair]</text>
+      <rect x="1190" y="548" width="240" height="82" rx="16" fill="#123227" stroke="#34d399"/><text x="1310" y="580" text-anchor="middle" fill="#f8fafc" font-size="17" font-weight="700">Completed result</text><text x="1310" y="608" text-anchor="middle" fill="#a7f3d0" font-size="15">ready to present</text>
+      <path d="M1200 372 V410 H1310 V438 M1400 372 V410 H1310 M1310 500 V548" stroke="#64748b" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
     </g>
 
     <rect x="180" y="705" width="1240" height="120" rx="24" fill="#172554" stroke="#818cf8" stroke-width="2"/>
-    <text x="220" y="750" fill="#c7d2fe" font-size="19" font-weight="800">✅ MINI VERIFY PASSED</text><text x="220" y="792" fill="#f8fafc" font-size="28" font-weight="750">Main Goal Done Gate → 📣 Show main result</text><text x="1000" y="792" fill="#cbd5e1" font-size="20">[dynamic learned pair]</text>
+    <text x="220" y="750" fill="#c7d2fe" font-size="19" font-weight="800">✅ REQUESTED WORK COMPLETE</text><text x="220" y="792" fill="#f8fafc" font-size="28" font-weight="750">📣 Present result now · first-result clock stops</text><text x="1120" y="792" fill="#cbd5e1" font-size="20">no foreground verifier</text>
     <path d="M800 825 V875" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
 
     <rect x="70" y="875" width="1460" height="210" rx="24" fill="#24173c" stroke="#c084fc" stroke-width="2"/>
     <text x="105" y="922" fill="#e9d5ff" font-size="20" font-weight="800">🌙 AFTER THE RESULT · ENDING TASK</text>
     <rect x="105" y="960" width="390" height="84" rx="16" fill="#102b3d" stroke="#38bdf8"/><text x="300" y="994" text-anchor="middle" fill="#f8fafc" font-size="19" font-weight="700">🔬 Real Verify</text><text x="300" y="1022" text-anchor="middle" fill="#bae6fd" font-size="16">[dynamic learned pair]</text>
     <rect x="605" y="960" width="390" height="84" rx="16" fill="#2b1c42" stroke="#c084fc"/><text x="800" y="994" text-anchor="middle" fill="#f8fafc" font-size="19" font-weight="700">⚡ Distinct optimization verifier</text><text x="800" y="1022" text-anchor="middle" fill="#e9d5ff" font-size="16">[dynamic learned pair]</text>
-    <rect x="1105" y="960" width="390" height="84" rx="16" fill="#123227" stroke="#34d399"/><text x="1300" y="994" text-anchor="middle" fill="#f8fafc" font-size="19" font-weight="700">📝 Reports · logs · docs · memory</text><text x="1300" y="1022" text-anchor="middle" fill="#a7f3d0" font-size="16">[dynamic learned pair]</text>
+    <rect x="1110" y="960" width="380" height="84" rx="16" fill="#123227" stroke="#34d399"/><text x="1300" y="994" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">📝 Reports · logs · docs · memory</text><text x="1300" y="1022" text-anchor="middle" fill="#a7f3d0" font-size="16">[dynamic learned pair]</text>
     <text x="800" y="1122" text-anchor="middle" fill="#fca5a5" font-size="20" font-weight="700">Background failure → 🚨 notify the user + reopen the task</text>
   </g>
 </svg>

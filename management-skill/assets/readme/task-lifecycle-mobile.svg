@@ -1,20 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 600 1040">
-  <title id="title">Task lifecycle mobile diagram</title>
-  <desc id="desc">A vertical hookless lifecycle from any selected entrance model through Workflow, Mini Verify, the main result, and Ending Task.</desc>
-  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker></defs>
-  <rect width="600" height="1040" rx="36" fill="#07111f"/>
-  <text x="300" y="62" text-anchor="middle" fill="#f8fafc" font-family="Arial, sans-serif" font-size="38" font-weight="700">Every task lifecycle</text>
-  <g font-family="Arial, sans-serif" text-anchor="middle">
-    <rect x="55" y="100" width="490" height="112" rx="24" fill="#0f766e"/><text x="300" y="145" fill="#ccfbf1" font-size="28" font-weight="700">Task Analyze + routing</text><text x="300" y="181" fill="#f0fdfa" font-size="22">current selected model + effort</text>
-    <line x1="300" y1="212" x2="300" y2="252" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
-    <rect x="55" y="260" width="490" height="112" rx="24" fill="#1d4ed8"/><text x="300" y="305" fill="#dbeafe" font-size="28" font-weight="700">Hookless route runner</text><text x="300" y="341" fill="#eff6ff" font-size="22">runs after the human route is shown</text>
-    <line x1="300" y1="372" x2="300" y2="412" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
-    <rect x="55" y="420" width="490" height="112" rx="24" fill="#9a3412"/><text x="300" y="465" fill="#ffedd5" font-size="28" font-weight="700">Receipt-backed work</text><text x="300" y="501" fill="#fff7ed" font-size="22">exact skill · dynamic learned pair</text>
-    <line x1="300" y1="532" x2="300" y2="572" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
-    <rect x="55" y="580" width="490" height="112" rx="24" fill="#6d28d9"/><text x="300" y="625" fill="#ede9fe" font-size="28" font-weight="700">Mini Verify</text><text x="300" y="661" fill="#f5f3ff" font-size="22">basic gate · repair on failure</text>
-    <line x1="300" y1="692" x2="300" y2="732" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
-    <rect x="55" y="740" width="490" height="112" rx="24" fill="#166534"/><text x="300" y="785" fill="#dcfce7" font-size="28" font-weight="700">Show main result</text><text x="300" y="821" fill="#f0fdf4" font-size="22">immediately after Mini passes</text>
-    <line x1="300" y1="852" x2="300" y2="892" stroke="#64748b" stroke-width="5" marker-end="url(#arrow)"/>
-    <rect x="55" y="900" width="490" height="96" rx="24" fill="#334155"/><text x="300" y="940" fill="#e2e8f0" font-size="28" font-weight="700">Background Ending Task</text><text x="300" y="972" fill="#f8fafc" font-size="21">Real Verify · optimize proof · docs · memory</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="1050" viewBox="0 0 640 1050" role="img" aria-labelledby="title desc">
+  <title id="title">Hookless first-result lifecycle mobile</title>
+  <desc id="desc">Micro bootstrap, inline default path, admitted routing path, immediate result presentation, and post-result Ending Real.</desc>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker></defs>
+  <rect width="640" height="1050" rx="36" fill="#07111f"/>
+  <g font-family="Arial,sans-serif" text-anchor="middle">
+    <text x="320" y="62" fill="#f8fafc" font-size="38" font-weight="700">First-result lifecycle</text>
+    <rect x="60" y="96" width="520" height="86" rx="23" fill="#0f766e"/><text x="320" y="130" fill="#ccfbf1" font-size="25" font-weight="700">100% micro bootstrap</text><text x="320" y="160" fill="#f0fdfa" font-size="20">fewest rounds · result first · hookless</text>
+    <line x1="320" y1="182" x2="320" y2="222" stroke="#64748b" stroke-width="5" marker-end="url(#a)"/>
+    <rect x="60" y="230" width="520" height="126" rx="23" fill="#166534"/><text x="320" y="269" fill="#dcfce7" font-size="25" font-weight="700">Default: execute inline</text><text x="320" y="302" fill="#f0fdf4" font-size="20">current model · one batched action</text><text x="320" y="331" fill="#bbf7d0" font-size="18">no route / child / receipt · Ending follows</text>
+    <text x="320" y="399" fill="#94a3b8" font-size="19">or, only for explicit routing / dependency work</text>
+    <rect x="60" y="425" width="520" height="126" rx="23" fill="#6d28d9"/><text x="320" y="464" fill="#ede9fe" font-size="25" font-weight="700">Load Task Analyze</text><text x="320" y="497" fill="#f5f3ff" font-size="20">quality + private experience</text><text x="320" y="526" fill="#ddd6fe" font-size="18">negative evidence returns inline</text>
+    <line x1="320" y1="551" x2="320" y2="591" stroke="#64748b" stroke-width="5" marker-end="url(#a)"/>
+    <rect x="60" y="599" width="520" height="112" rx="23" fill="#1d4ed8"/><text x="320" y="639" fill="#dbeafe" font-size="25" font-weight="700">Admitted Workflow</text><text x="320" y="673" fill="#eff6ff" font-size="20">only after total token + time proof</text>
+    <line x1="320" y1="711" x2="320" y2="751" stroke="#64748b" stroke-width="5" marker-end="url(#a)"/>
+    <rect x="60" y="759" width="520" height="104" rx="23" fill="#0f766e"/><text x="320" y="799" fill="#ccfbf1" font-size="25" font-weight="700">📣 Present completed result</text><text x="320" y="833" fill="#f0fdfa" font-size="19">immediately when requested work is done</text>
+    <line x1="320" y1="863" x2="320" y2="903" stroke="#64748b" stroke-width="5" marker-end="url(#a)"/>
+    <rect x="60" y="911" width="520" height="72" rx="23" fill="#172554"/><text x="320" y="956" fill="#dbeafe" font-size="23" font-weight="700">⏱ First-result clock stops here</text>
+    <text x="320" y="1022" fill="#e9d5ff" font-size="19" font-weight="700">🌙 Ending Real + learning follows</text>
   </g>
 </svg>

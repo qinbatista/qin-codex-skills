@@ -2,4 +2,4 @@ interface:
   display_name: "Optimization Skill"
   short_description: "Reusable improvements with independent Ending proof"
   default_prompt: >-
-    Use optimization-skill only when the locked plan includes it. Preserve behavior, order, side effects, errors, ownership, and scope. Code nodes follow the exact tiny Spark-low-plus-normal or non-tiny full-normal route. A different Ending verifier checks correctness. Token/time ranking requires complete Real-passing evidence for the same workload hash; cross-workload evidence falls back to the quality boundary. Freeze the verified exact-profile pair and report when independent proof is unavailable.
+    $optimization-skill: do not load from benchmark repetition alone or for exact-scoped read-only work. Use directly only for user-requested optimization or an explicitly authorized reusable improvement, or execute a positively admitted node. Preserve behavior, complete and present the optimized result immediately with no foreground Mini/Fast Verify, then hand before/after evidence to a different Ending Real verifier. Ending time is excluded from first-result time; never self-certify savings.

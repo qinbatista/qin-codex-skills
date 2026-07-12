@@ -1,16 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 600 920">
-  <title id="title">Six independent Codex workflow skills on mobile</title>
-  <desc id="desc">A vertically stacked mobile overview of Task Analyze, Workflow, Code, Verify, Optimization, and Management.</desc>
-  <rect width="600" height="920" rx="36" fill="#07111f"/>
-  <text x="300" y="72" text-anchor="middle" fill="#f8fafc" font-family="Arial, sans-serif" font-size="44" font-weight="700">qin-codex-skills</text>
-  <text x="300" y="116" text-anchor="middle" fill="#94a3b8" font-family="Arial, sans-serif" font-size="22">One entrance analysis. Per-node models.</text>
-  <g font-family="Arial, sans-serif">
-    <rect x="48" y="156" width="504" height="94" rx="22" fill="#0f766e"/><text x="76" y="194" fill="#ccfbf1" font-size="28" font-weight="700">1  Task Analyze</text><text x="76" y="226" fill="#f0fdfa" font-size="21">Any selected entrance pair · human route</text>
-    <rect x="48" y="270" width="504" height="94" rx="22" fill="#075985"/><text x="76" y="308" fill="#e0f2fe" font-size="28" font-weight="700">2  Workflow</text><text x="76" y="340" fill="#f0f9ff" font-size="21">Execute the locked dependency plan</text>
-    <rect x="48" y="384" width="504" height="94" rx="22" fill="#9a3412"/><text x="76" y="422" fill="#ffedd5" font-size="28" font-weight="700">3  Code</text><text x="76" y="454" fill="#fff7ed" font-size="21">Python / C# · Spark obvious-only</text>
-    <rect x="48" y="498" width="504" height="94" rx="22" fill="#6d28d9"/><text x="76" y="536" fill="#ede9fe" font-size="28" font-weight="700">4  Verify</text><text x="76" y="568" fill="#f5f3ff" font-size="21">Mini before result · Real in Ending</text>
-    <rect x="48" y="612" width="504" height="94" rx="22" fill="#a16207"/><text x="76" y="650" fill="#fef3c7" font-size="28" font-weight="700">5  Optimization</text><text x="76" y="682" fill="#fffbeb" font-size="21">Improve once · prove with another verifier</text>
-    <rect x="48" y="726" width="504" height="94" rx="22" fill="#334155"/><text x="76" y="764" fill="#e2e8f0" font-size="28" font-weight="700">6  Management</text><text x="76" y="796" fill="#f8fafc" font-size="21">Route records · profiles · private mirror</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="960" viewBox="0 0 640 960" role="img" aria-labelledby="title desc">
+  <title id="title">qin-codex-skills mobile overview</title>
+  <desc id="desc">Tiny hookless bootstrap, inline ordinary work, admitted routing, and six independent skills.</desc>
+  <rect width="640" height="960" rx="36" fill="#07111f"/>
+  <g font-family="Arial,sans-serif">
+    <text x="320" y="68" text-anchor="middle" fill="#f8fafc" font-size="44" font-weight="700">qin-codex-skills</text>
+    <text x="320" y="108" text-anchor="middle" fill="#94a3b8" font-size="21">Tiny bootstrap · proof before routing</text>
+    <rect x="46" y="136" width="548" height="72" rx="22" fill="#0d2e35" stroke="#2dd4bf"/><text x="320" y="165" text-anchor="middle" fill="#99f6e4" font-size="21" font-weight="700">⚡ Inline ordinary work · completed result first</text><text x="320" y="193" text-anchor="middle" fill="#ccfbf1" font-size="18">Full graph only after token + time evidence</text>
+    <rect x="46" y="240" width="548" height="94" rx="22" fill="#0f766e"/><text x="76" y="278" fill="#ccfbf1" font-size="28" font-weight="700">1 · Task Analyze</text><text x="76" y="310" fill="#f0fdfa" font-size="20">admission · routing · model experience</text>
+    <rect x="46" y="354" width="548" height="94" rx="22" fill="#075985"/><text x="76" y="392" fill="#e0f2fe" font-size="28" font-weight="700">2 · Workflow</text><text x="76" y="424" fill="#f0f9ff" font-size="20">locked dependencies · first-result handoff</text>
+    <rect x="46" y="468" width="548" height="94" rx="22" fill="#9a3412"/><text x="76" y="506" fill="#ffedd5" font-size="28" font-weight="700">3 · Code</text><text x="76" y="538" fill="#fff7ed" font-size="20">Python · C# · Unity C# · extensible</text>
+    <rect x="46" y="582" width="548" height="94" rx="22" fill="#166534"/><text x="76" y="620" fill="#dcfce7" font-size="28" font-weight="700">4 · Verify</text><text x="76" y="652" fill="#f0fdf4" font-size="20">Ending Real after presentation</text>
+    <rect x="46" y="696" width="548" height="94" rx="22" fill="#6d28d9"/><text x="76" y="734" fill="#ede9fe" font-size="28" font-weight="700">5 · Optimization</text><text x="76" y="766" fill="#f5f3ff" font-size="20">scripts · references · assets · templates</text>
+    <rect x="46" y="810" width="548" height="94" rx="22" fill="#334155"/><text x="76" y="848" fill="#e2e8f0" font-size="28" font-weight="700">6 · Management</text><text x="76" y="880" fill="#f8fafc" font-size="20">private learning · profiles · safe mirror</text>
+    <text x="320" y="938" text-anchor="middle" fill="#5eead4" font-size="21" font-weight="700">🪝 Hookless · completed result first</text>
   </g>
-  <text x="300" y="872" text-anchor="middle" fill="#5eead4" font-family="Arial, sans-serif" font-size="24" font-weight="700">Mini proof first · deep proof after result</text>
 </svg>

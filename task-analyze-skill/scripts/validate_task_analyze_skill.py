@@ -76,6 +76,9 @@ REQUIRED_FILES = [
     "scripts/sync_model_capabilities.py",
     "scripts/model_execution_receipt.py",
     "scripts/adaptive_model_runner.py",
+    "scripts/strategy_performance.py",
+    "scripts/benchmark_suite_gate.py",
+    "scripts/benchmark_suite_runner.py",
     "scripts/grounded_result_gate.py",
     "scripts/model_routing_history.py",
     "scripts/task_route_dispatcher.py",
@@ -86,38 +89,77 @@ REQUIRED_FILES = [
     "scripts/validate_task_analyze_skill.py",
 ]
 REQUIRED_SKILL_TEXT = [
-    "Use this skill first for every user task",
+    "full routing and model-strategy skill",
     "individual global skill",
-    "hookless global entry mechanism",
+    "not the ordinary task bootstrap",
+    "hookless 100% inline policy",
     "nested cache/fixture `SKILL.md`",
-    "entry can be any supported pair",
+    "Activation Boundary",
+    "Ordinary Inline Bootstrap",
+    "must not read this full `SKILL.md`",
+    "one direct task action",
+    "Exact-scoped read-only work stays on the current model inline with no subagent",
+    "one bounded `rg` per authoritative file",
+    "every exact user-named target and direct definition",
+    "Anchor named members directly",
+    "never add enclosing-class or call-site anchors",
+    "guess identifier prefixes or families",
+    "then answer once",
+    "exact allowlist",
+    "current model",
+    "regardless of apparent complexity",
+    "no separate planning, self-review, Mini, or verification pass",
+    "Present the completed result immediately",
+    "Do not run Mini/Fast Verify before first presentation",
+    "End-to-End Performance Admission",
+    "complete foreground path",
+    "frozen model-visible catalogs and memory snapshot",
+    "lower cohort total and raw median",
+    "individual regressions remain visible diagnostics",
+    "median-absolute-deviation noise envelope",
+    "no correctness-preserving change remains",
+    "Missing, stale, cross-workload, incomplete, or negative evidence means inline",
+    "Foreground downgrade or upgrade trials are forbidden",
+    "frozen, receipt-backed, Real-passing, and `trial=false`",
     "resolve_entry_model.py",
-    "every downstream node uses its planned model and effort",
-    "Easy",
-    "concise text",
-    "Complex",
+    "quick bounded related-memory lookup",
+    "There is no controller-only entry invariant",
     "Mermaid",
     "Personal routing evidence",
     "Spark-low",
     "Private Adaptive Routing",
     "trial exactly one lower effort on the same model",
-    "Mini Verify",
-    "show the main result immediately",
+    "There is no Mini/Fast Verify gate before first presentation",
+    "show it immediately",
     "Ending Task",
     "scripts/model_execution_receipt.py",
     "scripts/adaptive_model_runner.py",
     "grounded_result_gate.py",
     "task_route_dispatcher.py run-plan",
-    "continue in the same task",
-    "quick bounded related-memory lookup",
     "named profile preset",
     "TaskModelExperience/",
     "Missing memory providers are a successful no-op",
+    "receipt finalization, telemetry, and post-result Ending Real are excluded",
+    "controller-stamped sanitized `result-ready` event",
+    "runner-owned receipt and evidence timestamps to match exactly",
+    "schema-version-2 JSON with only `result` and `ending` phases",
+    "scripts/strategy_performance.py",
+    "scripts/benchmark_suite_gate.py",
 ]
 REQUIRED_ROUTE_TEXT = [
-    "## Easy Task: Text Route",
-    "Do not draw Mermaid for an easy task",
-    "## Complex Task: Mermaid Route",
+    "## First Result Principle",
+    "show the completed result immediately",
+    "Do not run Mini/Fast Verify before first presentation",
+    "## Ordinary Inline Contract",
+    "current model performs the task directly regardless of apparent complexity",
+    "does not show a route",
+    "Design a website like YouTube",
+    "Apparent complexity alone does not create a dispatcher",
+    "## Explicit Or Admitted Foreground Budget",
+    "Full activation still defaults back to inline execution",
+    "## Admitted Single Node: Text Route",
+    "Do not draw Mermaid for one admitted node",
+    "## Admitted Complex Graph: Mermaid Route",
     "```mermaid",
     "Workflow with models",
     "Main Goal Done Gate",
@@ -126,6 +168,10 @@ REQUIRED_ROUTE_TEXT = [
     "Real Verify",
     "Independent optimization verification",
     "## Internal Plan",
+    "schema version 2 JSON",
+    "bounded result and Ending nodes",
+    "executes only result nodes before release",
+    "After the main result is shown",
     "never conversation output",
     "Optional related-memory preflight",
 ]
@@ -157,6 +203,21 @@ REQUIRED_RECEIPT_TEXT = [
     "workload_prompt_sha256",
     "entry-context marker",
     "in-process authorization",
+    "--direct-task --benchmark-run-id",
+    "intentionally add no `LOCKED_ROUTE_NODE`",
+    "--entry-task",
+    "--bootstrap-task --benchmark-run-id",
+    "run outside Task Analyze entry context",
+    "wrong node type",
+    "same raw prompt",
+    "real suite-local `skills/` and `plugins/` directories",
+    "copied model/memory snapshots",
+    "Never symlink a benchmark catalog to live `~/.codex`",
+    "validate the environment immediately before every arm",
+    "config/memory drift invalidates the cohort",
+    "cannot be resumed or learned as model quality",
+    "flushes one sanitized `result-ready` event",
+    "runner-owned timestamp exactly across evidence and receipt",
 ]
 REQUIRED_ADAPTIVE_TEXT = [
     "local/adaptive-routing/model_experience.json",
@@ -165,21 +226,41 @@ REQUIRED_ADAPTIVE_TEXT = [
     "failed_model",
     "result-producer attempt",
     "After a receipt-matched pass",
-    "Receipt-matched Mini or Real correctness/quality failure",
-    "Real Verify failure overrides",
+    "No foreground provisional verdict is recorded",
+    "receipt-matched Ending Real correctness/quality failure",
+    "Ending Real updates the same producer receipt/run",
     "Tokens are a usage proxy",
     "Obsidian `TaskModelExperience/`",
     "profile preset",
 ]
 REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "ENTRY_CONTEXT_ENV",
+    "bootstrap-task",
+    "benchmark-global-inline",
+    "bootstrap_task_entry_context_forbidden",
+    "benchmark_run_id_workload_mismatch",
     "adaptive_producer_authorization",
     "dispatcher_node_authorization",
     "dispatcher_adaptive_result_authorization",
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Analyze", "Ordinary work stays inline", "obvious actions run once", "Exact read-only", "one bounded `rg`", "per authoritative file", "exact user targets and direct definitions", "Anchor members, not classes/call sites", "No plan, guessed names, skills, subagents, broad search, reread, full-file read, or pre-result check", "Present completed work immediately", "verify only afterward with proportional Ending Real", "Failures reopen, repair, and re-present"]
+REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
+REQUIRED_PYTHON_REFERENCE_TEXT = ["## Post-Result Ending Simplicity Review", "Present the completed Python edit immediately", "After that first presentation, Ending Task", "correctness failure"]
+REQUIRED_CSHARP_REFERENCE_TEXT = ["present the completed edit immediately", "afterward in Ending Task Real Verify", "do not gate the first presentation"]
+REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
+FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "LOCKED_ROUTE_NODE", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook"]
+GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
+MAX_GLOBAL_BOOTSTRAP_BYTES = 512
 FORBIDDEN_TEXT = [
+    "Use this skill first for every user task",
+    "The entry is a bounded controller",
+    "Easy adaptive model fast path is one blocking",
+    "Easy tasks must use this exact visible shape before the answer",
+    "Task Analyze always runs",
+    "Task Analyze remains the 100 percent entry skill",
+    "Show this compact route before execution",
     "mandatory internal phase of `workflow-skill`",
     "not a sixth top-level skill",
     "Run Task Analyze with `GPT-5.6-Sol`",
@@ -191,6 +272,8 @@ FORBIDDEN_TEXT = [
     "trusted `Stop` hook",
     "TASK_ANALYZE_PLAN_JSON",
     "ends Task Analyze with the visible route and JSON handoff",
+    "private schema-1 JSON",
+    "applies a proportional local gate",
 ]
 
 
@@ -249,19 +332,37 @@ def _is_code_implementation(node):
     return is_code_execution_domain(execution_domain)
 
 
+def _dependency_closure(node_id, node_by_id):
+    closure = set()
+    pending = list(node_by_id.get(node_id, {}).get("dependencies", []))
+    while pending:
+        dependency = pending.pop()
+        if dependency in closure:
+            continue
+        closure.add(dependency)
+        pending.extend(node_by_id.get(dependency, {}).get("dependencies", []))
+    return closure
+
+
 def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[2]):
     failures = []
     try:
         validate_execution_domain_registry(skills_root)
     except ValueError as error:
         failures.append(f"execution-domain registry is invalid: {error}")
+    if plan.get("schema_version") != 2:
+        failures.append("schema_version must be 2")
     nodes = plan.get("nodes", [])
-    entry = nodes[0] if nodes else {}
+    entry = plan.get("entry") if isinstance(plan.get("entry"), dict) else {}
     entry_model = entry.get("model")
     entry_effort = entry.get("effort")
     node_by_id = {node.get("id"): node for node in nodes}
-    if not nodes or nodes[0].get("skill") != "task-analyze-skill":
-        failures.append("Task Analyze must be the first node")
+    if entry_model not in MODEL_EFFORTS or entry_effort not in MODEL_EFFORTS.get(entry_model, set()):
+        failures.append("entry has unsupported model/effort")
+    if any(node.get("skill") == "task-analyze-skill" for node in nodes):
+        failures.append("schema 2 dispatcher nodes must not contain Task Analyze")
+    if plan.get("route_scope") != "admitted":
+        failures.append("full route plans must be explicitly admitted")
     if plan.get("complexity") == "easy" and plan.get("display") != "text":
         failures.append("easy plans must use text display")
     if plan.get("complexity") == "complex" and plan.get("display") != "mermaid":
@@ -271,10 +372,18 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
         model = node.get("model")
         effort = node.get("effort")
         skill = node.get("skill")
+        if node.get("phase") not in {"result", "ending"}:
+            failures.append(f"{node_id} phase must be result or ending")
         if model not in MODEL_EFFORTS or effort not in MODEL_EFFORTS.get(model, set()):
             failures.append(f"{node_id} has unsupported model/effort")
         if skill not in installed and resolve_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
+        requested_verification_result = node.get("user_requested_verification_result")
+        if node.get("phase") == "result" and skill == "verify-skill":
+            if requested_verification_result is not True:
+                failures.append(f"{node_id} verify-skill result nodes require user_requested_verification_result=true")
+        elif "user_requested_verification_result" in node:
+            failures.append(f"{node_id} user_requested_verification_result is valid only on a result-phase verify-skill node")
         for dependency in node.get("dependencies", []):
             if dependency not in node_by_id:
                 failures.append(f"{node_id} has missing dependency {dependency}")
@@ -306,21 +415,35 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
             failures.append(f"{node_id} bypasses code-skill")
         if is_code_node and model == "gpt-5.3-codex-spark" and not is_tiny_spark_profile(node.get("task_family"), node.get("modality"), node.get("risk"), node.get("complexity"), node.get("ambiguity")):
             failures.append(f"{node_id} Spark is valid only for low-risk easy low-ambiguity text tiny profiles")
-    mini = node_by_id.get("mini-verify")
-    main = node_by_id.get("main-result")
-    ending = node_by_id.get("ending-dispatch")
-    if not mini or not main or not ending:
-        failures.append("plan must contain Mini Verify, Main Result, and Ending dispatch")
+    if "mini_verify_node" in plan:
+        failures.append("mini_verify_node is not valid in schema 2")
+    result_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
+    ending_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
+    main_result_node = plan.get("main_result_node")
+    main = node_by_id.get(main_result_node)
+    if not result_ids:
+        failures.append("plan must contain at least one result node")
+    if not ending_ids:
+        failures.append("plan must contain post-result Ending work")
+    if not main or main.get("phase") != "result":
+        failures.append("main_result_node must name a result node")
     else:
-        if "mini-verify" not in main.get("dependencies", []):
-            failures.append("Main Result must depend on Mini Verify")
-        if "main-result" not in ending.get("dependencies", []):
-            failures.append("Ending dispatch must depend on Main Result")
-        if any(dependency in {"real-verify", "optimization-verify", "records"} for dependency in main.get("dependencies", [])):
-            failures.append("Main Result must not depend on Ending Task work")
-    for ending_id in ("real-verify", "optimization-verify", "records"):
-        if ending_id in node_by_id and "ending-dispatch" not in node_by_id[ending_id].get("dependencies", []):
-            failures.append(f"{ending_id} must depend on Ending dispatch")
+        missing_result_dependencies = result_ids - _dependency_closure(main_result_node, node_by_id) - {main_result_node}
+        if missing_result_dependencies:
+            failures.append("main_result_node must depend on every other result node")
+    for result_id in sorted(result_ids):
+        if any(dependency in ending_ids for dependency in node_by_id[result_id].get("dependencies", [])):
+            failures.append(f"{result_id} must not depend on Ending work")
+    for ending_id in sorted(ending_ids):
+        if main_result_node not in node_by_id[ending_id].get("dependencies", []):
+            failures.append(f"{ending_id} must depend directly on main_result_node")
+    producer_real_verifiers = [
+        node_id
+        for node_id in ending_ids
+        if node_by_id[node_id].get("skill") == "verify-skill" and not node_by_id[node_id].get("verifies_node")
+    ]
+    if len(producer_real_verifiers) != 1:
+        failures.append("plan must contain exactly one post-result Real verifier for the main result")
     return failures
 def _easy_followup_node_pair():
     return "gpt-5.6-luna", "low"
@@ -342,40 +465,46 @@ def sample_plans():
     plans = {}
     for model in ordered_models:
         for effort in MODEL_EFFORTS[model]:
-            plans[f"easy-{model}-{effort}"] = {
+            plans[f"admitted-single-{model}-{effort}"] = {
+                "schema_version": 2,
+                "route_scope": "admitted",
                 "complexity": "easy",
                 "display": "text",
+                "entry": {"model": model, "effort": effort},
                 "nodes": [
-                    {"id": "task-analyze", "skill": "task-analyze-skill", "model": model, "effort": effort, "dependencies": []},
                     {
                         "id": "direct",
+                        "phase": "result",
                         "skill": "workflow-skill",
                         "model": easy_followup_model,
                         "effort": easy_followup_effort,
-                        "dependencies": ["task-analyze"],
+                        "dependencies": [],
                         "execution_domain": "general",
                     },
-                    {"id": "mini-verify", "skill": "verify-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["direct"], "execution_domain": "general"},
-                    {"id": "main-result", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
-                    {"id": "ending-dispatch", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["main-result"], "execution_domain": "general"},
-                    {"id": "records", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                    {"id": "ending-real", "phase": "ending", "skill": "verify-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["direct"], "execution_domain": "general"},
+                    {"id": "records", "phase": "ending", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["direct"], "execution_domain": "general"},
                 ],
+                "main_result_node": "direct",
             }
-            plans[f"complex-{model}-{effort}"] = {
+            plans[f"admitted-complex-{model}-{effort}"] = {
+                "schema_version": 2,
+                "route_scope": "admitted",
                 "complexity": "complex",
                 "display": "mermaid",
+                "entry": {"model": model, "effort": effort},
                 "nodes": [
-                    {"id": "task-analyze", "skill": "task-analyze-skill", "model": model, "effort": effort, "dependencies": []},
                     {
                         "id": "audit",
+                        "phase": "result",
                         "skill": "workflow-skill",
                         "model": complex_followup_model,
                         "effort": complex_followup_effort,
-                        "dependencies": ["task-analyze"],
+                        "dependencies": [],
                         "execution_domain": "general",
                     },
                     {
                         "id": "implement",
+                        "phase": "result",
                         "skill": "code-skill",
                         "model": implementation_model,
                         "effort": implementation_effort,
@@ -384,13 +513,10 @@ def sample_plans():
                         "language": "python",
                         "purpose": "implement",
                     },
-                    {"id": "mini-verify", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["implement"], "execution_domain": "general"},
-                    {"id": "main-result", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["mini-verify"], "execution_domain": "general"},
-                    {"id": "ending-dispatch", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["main-result"], "execution_domain": "general"},
-                    {"id": "real-verify", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
-                    {"id": "optimization-verify", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
-                    {"id": "records", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["ending-dispatch"], "execution_domain": "general"},
+                    {"id": "ending-real", "phase": "ending", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["implement"], "execution_domain": "general"},
+                    {"id": "records", "phase": "ending", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["implement"], "execution_domain": "general"},
                 ],
+                "main_result_node": "implement",
             }
     return plans
 
@@ -417,7 +543,10 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     receipt_text = read_text(paths["references/runtime-receipts.md"])
     adaptive_text = read_text(paths["references/adaptive-routing.md"])
     receipt_script_text = read_text(paths["scripts/model_execution_receipt.py"])
+    benchmark_gate_text = read_text(paths["scripts/benchmark_suite_gate.py"])
+    benchmark_runner_text = read_text(paths["scripts/benchmark_suite_runner.py"])
     adaptive_runner_text = read_text(paths["scripts/adaptive_model_runner.py"])
+    strategy_performance_text = read_text(paths["scripts/strategy_performance.py"])
     dispatcher_text = read_text(paths["scripts/task_route_dispatcher.py"])
     entry_asset_text = read_text(paths["assets/global-agents-entry-rule.md"])
     metadata = parse_frontmatter(skill_text)
@@ -428,14 +557,18 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["Pass no source root with json-object", "call no more tools or source checks", "return its result once immediately"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["Ordinary work stays inline", "Exact-scoped read-only work stays on the current model", "no subagent/route", "exact named-source audit", "one bounded rg per authoritative file", "every exact user-named target and direct definition", "anchors named members directly", "never adds enclosing-class/call-site anchors", "guesses identifier families", "answers once", "no plan/skill load/broad search/reread/full-file/pre-result check", "presents now", "full-skill load", "Ending Real Verify", "end-to-end evidence", "beating Direct in tokens and first-result time", "frozen Real-pass trial=false", "hide plans"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
     failures.extend(missing_terms("runtime-receipts", receipt_text, REQUIRED_RECEIPT_TEXT))
     failures.extend(missing_terms("adaptive-routing", adaptive_text, REQUIRED_ADAPTIVE_TEXT))
     failures.extend(missing_terms("receipt entry guard", receipt_script_text, REQUIRED_RECEIPT_GUARD_IMPLEMENTATION))
-    failures.extend(missing_terms("adaptive runner authorization", adaptive_runner_text, ["with model_execution_receipt.adaptive_producer_authorization()"]))
+    failures.extend(missing_terms("benchmark mode gate", benchmark_gate_text, ["receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_raw_prompt_mismatch", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "benchmark-global-inline", "bootstrap-task", "MAXIMUM_PAIRED_TIME_REGRESSION_MS = 2_000", "material_pair_regression_count"]))
+    failures.extend(missing_terms("benchmark runner mode", benchmark_runner_text, ["--direct-task", "--bootstrap-task", "benchmark-{run_plan['run_id']}", "role = \"result-producer\"", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_invalid", "result_ready_monotonic_ns", "benchmark-runner-monotonic", "time.monotonic_ns()"]))
+    failures.extend(missing_terms("adaptive runner authorization", adaptive_runner_text, ["with model_execution_receipt.adaptive_producer_authorization()", "_performance_admission", "inline_entry", "benchmark_calibration"]))
+    failures.extend(missing_terms("dispatcher result verifier boundary", dispatcher_text, ["verify-skill result nodes require user_requested_verification_result=true", "user_requested_verification_result is valid only on a result-phase verify-skill node", "Completed dependency handoff"]))
+    failures.extend(missing_terms("strategy performance admission", strategy_performance_text, ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]))
     failures.extend(missing_terms("dispatcher role authorization", dispatcher_text, ["with receipt_module.dispatcher_node_authorization(args.node_role)"]))
     if "/local/" not in read_text(paths[".gitignore"]):
         failures.append("task-analyze-skill .gitignore must exclude /local/")
@@ -450,39 +583,33 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
         failures.append(f"always-loaded global AGENTS.md is missing: {global_agents_path}")
     else:
         global_agents_text = read_text(global_agents_path)
-        failures.extend(
-            missing_terms(
-                "global AGENTS",
-                global_agents_text,
-                [
-                    "Global Codex Task Entry Rule",
-                    "100% task-start contract",
-                    "hookless",
-                    "exact visible shape",
-                    "LOCKED_ROUTE_NODE",
-                    "task_route_dispatcher.py run-plan",
-                    "same task through `workflow-skill`",
-                    "adaptive-routing",
-                ],
-            )
-        )
-    failures.extend(
-        missing_terms(
-            "global entry asset",
-            entry_asset_text,
-            [
-                "hookless workflow",
-                "100% task-start contract",
-                "LOCKED_ROUTE_NODE",
-                "same task through `workflow-skill`",
-                "adaptive-routing history",
-                "resolve_entry_model.py",
-                "preserve its exact verified pair",
-            ],
-        )
-    )
+        failures.extend(missing_terms("global AGENTS", global_agents_text, REQUIRED_GLOBAL_BOOTSTRAP_TEXT))
+        if len(global_agents_text.encode("utf-8")) > MAX_GLOBAL_BOOTSTRAP_BYTES:
+            failures.append(f"global AGENTS exceeds compact bootstrap limit: {len(global_agents_text.encode('utf-8'))} > {MAX_GLOBAL_BOOTSTRAP_BYTES} bytes")
+        for forbidden in FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT:
+            if normalize(forbidden) in normalize(global_agents_text):
+                failures.append(f"global AGENTS contains forbidden hook or machine-plan contract: {forbidden}")
+    failures.extend(missing_terms("global entry asset", entry_asset_text, REQUIRED_GLOBAL_ENTRY_ASSET_TEXT))
+    if global_agents_path.exists() and entry_asset_text.replace(GLOBAL_ENTRY_ASSET_DIRECTIVE, "", 1) != global_agents_text:
+        failures.append("global entry asset does not exactly match global AGENTS after removing its merge directive")
+    for forbidden in FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT:
+        if normalize(forbidden) in normalize(entry_asset_text):
+            failures.append(f"global entry asset contains forbidden hook or machine-plan contract: {forbidden}")
     if global_hooks_path.exists() and "task_entry_hook.py" in read_text(global_hooks_path):
         failures.append(f"obsolete Task Analyze lifecycle hook is still installed: {global_hooks_path}")
+    code_reference_contracts = {
+        "Python code rules": (global_skills_root / "code-skill" / "references" / "python-rules.md", REQUIRED_PYTHON_REFERENCE_TEXT),
+        "C# code rules": (global_skills_root / "code-skill" / "references" / "csharp-rules.md", REQUIRED_CSHARP_REFERENCE_TEXT),
+        "Unity C# code rules": (global_skills_root / "code-skill" / "references" / "unity-csharp-rules.md", REQUIRED_UNITY_REFERENCE_TEXT),
+    }
+    for label, (reference_path, required_terms) in code_reference_contracts.items():
+        if not reference_path.exists():
+            failures.append(f"{label} missing: {reference_path}")
+            continue
+        reference_text = read_text(reference_path)
+        failures.extend(missing_terms(label, reference_text, required_terms))
+        if "check before the main result" in normalize(reference_text) or "test the edited path with the smallest proportional check before the main result" in normalize(reference_text):
+            failures.append(f"{label} still gates first presentation with a foreground check")
     nested_skill_files = [path for path in global_skills_root.rglob("SKILL.md") if ".system" not in path.relative_to(global_skills_root).parts and path.parent.parent != global_skills_root]
     if nested_skill_files:
         failures.append(f"loader-visible nested SKILL.md files remain under global skills: {len(nested_skill_files)}")
@@ -494,8 +621,8 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     expected_plan_count = sum(len(efforts) for efforts in MODEL_EFFORTS.values())
     expected_route_plan_count = expected_plan_count * 2
     if len(plans) != expected_route_plan_count:
-        failures.append(f"sample plans do not cover easy+complex entry pairs (expected {expected_route_plan_count}, got {len(plans)})")
-    if len({(plan["nodes"][0]["model"], plan["nodes"][0]["effort"]) for plan in plans.values()}) != expected_plan_count:
+        failures.append(f"sample plans do not cover admitted single+complex entry pairs (expected {expected_route_plan_count}, got {len(plans)})")
+    if len({(plan["entry"]["model"], plan["entry"]["effort"]) for plan in plans.values()}) != expected_plan_count:
         failures.append("sample plans do not cover arbitrary supported entry model + effort")
     if not any(plan["complexity"] == "complex" for plan in plans.values()):
         failures.append("sample plans must include at least one complex route")

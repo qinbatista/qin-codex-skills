@@ -23,27 +23,40 @@ dispatcher = load_module("task_route_dispatcher")
 
 
 class GraduatedRouteLifecycleTests(unittest.TestCase):
+    def test_fixture_uses_result_first_timing_and_schema_two_phases(self):
+        fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        for scenario in fixture["scenarios"]:
+            self.assertEqual(scenario["timing_evidence"], "wall_clock_to_first_result_excluding_ending")
+        plan = fixture["admitted_dispatcher_template"]["dispatcher_plan"]
+        self.assertEqual(plan["schema_version"], 2)
+        self.assertEqual({node["phase"] for node in plan["nodes"]}, {"result", "ending"})
+        self.assertNotIn("mini_verify_node", plan)
+
     def test_run_plan_release_then_ending_dispatches_the_producer_verifier(self):
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-        template = next(scenario["dispatcher_plan"] for scenario in fixture["scenarios"] if scenario.get("complexity") == "complex")
+        template = fixture["admitted_dispatcher_template"]["dispatcher_plan"]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             cache_dir = root / "work" / "cache" / "route"
             plan = validator.materialize_dispatcher_plan(template, cache_dir, "gpt-5.6-luna", "low")
+            implementation = next(node for node in plan["nodes"] if node["id"] == "implementation")
+            pairs = dispatcher.routing_history_module.canonical_pairs(implementation["candidate_ladder"])
+            fingerprint = dispatcher.routing_history_module.profile_fingerprint(implementation["routing_condition"], pairs, dispatcher.routing_history_module.parse_pair(implementation["static_suggestion"]), dispatcher.routing_history_module.parse_pair(implementation["hard_floor"]))
+            implementation["routing_recommendation"] = {"selected_pair": f"{implementation['model']}|{implementation['effort']}", "trial": False, "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"}
             calls = []
 
             def fake_run_node(node, node_cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
                 calls.append(node["id"])
                 result_path = node_cache_dir / f"{node['id']}-result.md"
                 receipt_path = node_cache_dir / f"{node['id']}-receipt.json"
-                marker = "MINI_VERIFY=PASS\n" if node["phase"] == "mini" else "ENDING_TASK=PASS\n" if node["phase"] == "ending" else "RESULT=approved\n"
+                marker = "ENDING_TASK=PASS\n" if node["phase"] == "ending" else "RESULT=approved\n"
                 result_path.write_text(marker, encoding="utf-8")
                 receipt_path.write_text(json.dumps({"status": "pass", "thread_id": node["id"]}), encoding="utf-8")
                 return {"id": node["id"], "phase": node["phase"], "skill": node["skill"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "worker_identity": node["id"]}
 
             with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
-                manifest = dispatcher.run_plan(plan, "gpt-5.6-luna", "low", root)
-            self.assertEqual(calls, ["design", "implementation", "mini"])
+                manifest = dispatcher.run_plan(plan, "gpt-5.6-luna", "low", root, history_path=root / "history.json")
+            self.assertEqual(calls, ["design", "implementation"])
             self.assertEqual(manifest["ending_nodes_pending"], ["ending-real"])
             handoff_path = Path(manifest["ending_handoff_path"])
             with patch.object(dispatcher, "run_node", side_effect=AssertionError("Ending ran before release")):
@@ -58,8 +71,8 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
                 ending = dispatcher.run_ending_handoff(handoff_path)
             self.assertEqual(ending["status"], "pass")
             self.assertEqual(ending["routing_learning"], {"status": "recorded"})
-            self.assertEqual(calls[:3], ["design", "implementation", "mini"])
-            self.assertEqual(calls[3:], ["ending-real"])
+            self.assertEqual(calls[:2], ["design", "implementation"])
+            self.assertEqual(calls[2:], ["ending-real"])
 
 
 if __name__ == "__main__":

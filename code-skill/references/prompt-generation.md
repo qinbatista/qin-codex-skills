@@ -18,8 +18,10 @@ const string prompt = """
 
 ## Workflow
 
+Apply the global `prompt-skill` first. This reference specializes that contract for prompts stored in executable Python or C#; it does not replace the objective, context/input roles, output contract, measurable success/failure conditions, and verification gates required there.
+
 1. Start by showing the prompt-purpose workflow: `Prompt idea -> Prompt goal -> Problems -> Solution`.
-2. Identify purpose, input variables, target audience, and desired output shape.
+2. Identify objective, context/input roles, variables, target audience, output contract, measurable success criteria, and observable failure conditions.
 3. For an existing prompt, read it seriously and identify the failing or missing behavior before changing wording.
 4. Choose a function prompt for direct AI operations such as get, extract, change, check, fix, convert, compare, or return structured output.
 5. Choose a content prompt for text humans will read, such as descriptions, summaries, explanations, factory notes, doctor-facing notes, customer copy, or reviewer notes.
@@ -27,7 +29,7 @@ const string prompt = """
 7. Keep the prompt complete and concise. Add missing logic when the prompt does not cover the task goal; merge overlapping rules instead of appending repeated warnings.
 8. State durable rules at the highest useful level. Do not add obvious prohibitions, near-duplicate warnings, or case-by-case exclusions.
 9. Treat examples, bad outputs, and edge cases as test evidence. Do not paste them into the prompt unless the example is the reusable requirement.
-10. Test the prompt with a representative input/output scenario when practical; otherwise inspect the prompt against the output contract and note why that is enough.
+10. Test the prompt with representative input/output scenarios. Use repeated fresh runs for stochastic production prompts: default 3 and 5 for critical image, structured-data, or reliability claims. Report artifact creation separately from semantic/file/visual acceptance.
 11. For Python f-strings, escape literal JSON braces as `{{` and `}}`; real interpolation placeholders stay single-braced, such as `{image_width}`.
 
 ## Function Prompt Shape

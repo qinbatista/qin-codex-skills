@@ -27,10 +27,10 @@ Keep language rules in executor references, not in registry metadata. A domain m
 
 `execution_domain` is part of adaptive-profile identity. New records use the exact registry ID. When reading legacy records with no domain, infer `code_unspecified` for legacy code evidence and `general` otherwise; never reinterpret old evidence as a newly named active domain. `code_unspecified` is not an extension target.
 
-The entry model|effort is route-coordination metadata only and is never a learning feature. Direct tool-only routes use their installed tool skill and an observable Mini Verify, but create no child model, model receipt, or adaptive producer sample. Model-executed routes carry complete `routing_recommendation` proof and record the actual producer receipt and verification outcomes; deterministic controller recording needs no decorative Luna call.
+The current model|effort executes ordinary inline work and is not a model-quality learning feature. Only after full Task Analyze is explicitly activated does that pair also become route-coordination metadata. Inline tool/model work presents its completed result with no foreground verifier, child receipt, or adaptive producer sample. Admitted delegated routes carry complete `routing_recommendation` and end-to-end performance-admission proof, then record the producer receipt and Ending Real outcome; deterministic controller recording needs no decorative Luna call.
 
 Execution domain describes the requested execution work, not every language found in inspected sources. A read-only repository answer can inspect Python, C#, or Unity C# while remaining `execution_domain=general`; use a code domain only for code creation, changes, execution, or code-path validation.
 
 ## Canonical policy
 
-Correctness is the gate. Among routes that satisfy it, prefer direct execution for one reversible action, the frozen calibrated pair for similar model work, bounded context, and dependency-safe parallelism. Tokens and elapsed time are receipt evidence for like-for-like optimization; they never override quality or safety boundaries.
+Correctness is the gate. Ordinary work defaults to inline current-model execution regardless of apparent complexity. Consider a frozen calibrated child only after the complete Global path has positive current admission for the same entry/configuration/workload cohort; otherwise remain inline. Tokens and elapsed time are receipt evidence for like-for-like optimization and never override quality, safety, or authority boundaries.

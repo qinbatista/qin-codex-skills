@@ -4,7 +4,10 @@ import importlib.util
 import json
 import os
 import tempfile
+import textwrap
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -24,7 +27,15 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertTrue(summary["turn_completed"])
         self.assertEqual(summary["usage"]["input_tokens"], 100)
         self.assertEqual(summary["output_hash"], module.sha256_text("secret response text"))
+        self.assertFalse(summary["availability_failure"])
         self.assertNotIn("secret response text", json.dumps(summary))
+
+    def test_parse_stdout_classifies_usage_limit_without_storing_raw_message(self):
+        stdout_text = json.dumps({"type": "turn.failed", "error": {"message": "You've hit your usage limit. Purchase more credits or try again later."}})
+        summary = module.parse_stdout_events(stdout_text)
+        self.assertTrue(summary["turn_failed"])
+        self.assertTrue(summary["availability_failure"])
+        self.assertNotIn("purchase more credits", json.dumps(summary).lower())
 
     def test_raw_result_extraction_is_separate_from_sanitized_summary(self):
         stdout_text = json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "result kept only when requested"}})
@@ -44,6 +55,84 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(observed["availability"]["limit_id"], "premium")
         self.assertTrue(observed["availability"]["has_credits"])
         self.assertNotIn("base_instructions", json.dumps(observed))
+
+    def test_read_thread_state_retries_transient_operational_error_and_closes_connections(self):
+        class FakeConnection:
+            def __init__(self, row=None, error=None):
+                self.row = row
+                self.error = error
+                self.closed = False
+
+            def execute(self, _query, _parameters):
+                if self.error is not None:
+                    raise self.error
+                return SimpleNamespace(fetchone=lambda: self.row)
+
+            def close(self):
+                self.closed = True
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_db = Path(temp_dir) / "state.sqlite"
+            state_db.touch()
+            Path(f"{state_db}-wal").touch()
+            failed_connection = FakeConnection(error=module.sqlite3.OperationalError("temporarily unavailable"))
+            row = (str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 42, "test", "openai", "exec")
+            successful_connection = FakeConnection(row=row)
+            with patch.object(module.sqlite3, "connect", side_effect=[failed_connection, successful_connection]) as connect, patch.object(module.time, "sleep") as sleep:
+                observed = module.read_thread_state(state_db, "thread-1")
+        self.assertEqual(connect.call_count, 2)
+        sleep.assert_called_once_with(0.1)
+        self.assertTrue(failed_connection.closed)
+        self.assertTrue(successful_connection.closed)
+        self.assertEqual(observed["model"], "gpt-5.6-sol")
+        self.assertEqual(observed["effort"], "ultra")
+        self.assertEqual(observed["tokens_used"], 42)
+
+    def test_read_thread_state_uses_immutable_read_only_fallback_without_wal_sidecars(self):
+        class FakeConnection:
+            def __init__(self, row=None, error=None):
+                self.row = row
+                self.error = error
+                self.closed = False
+
+            def execute(self, _query, _parameters):
+                if self.error is not None:
+                    raise self.error
+                return SimpleNamespace(fetchone=lambda: self.row)
+
+            def close(self):
+                self.closed = True
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_db = Path(temp_dir) / "state.sqlite"
+            state_db.touch()
+            primary_connection = FakeConnection(error=module.sqlite3.OperationalError("readonly shm unavailable"))
+            row = (str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 77, "test", "openai", "exec")
+            immutable_connection = FakeConnection(row=row)
+            with patch.object(module.sqlite3, "connect", side_effect=[primary_connection, immutable_connection]) as connect, patch.object(module.time, "sleep") as sleep:
+                observed = module.read_thread_state(state_db, "thread-immutable")
+        self.assertEqual(connect.call_count, 2)
+        self.assertEqual(connect.call_args_list[0].args[0], f"file:{state_db}?mode=ro")
+        self.assertEqual(connect.call_args_list[1].args[0], f"file:{state_db}?mode=ro&immutable=1")
+        self.assertTrue(connect.call_args_list[0].kwargs["uri"])
+        self.assertTrue(connect.call_args_list[1].kwargs["uri"])
+        sleep.assert_not_called()
+        self.assertTrue(primary_connection.closed)
+        self.assertTrue(immutable_connection.closed)
+        self.assertEqual(observed["model"], "gpt-5.6-sol")
+        self.assertEqual(observed["tokens_used"], 77)
+
+    def test_read_thread_state_raises_persistent_operational_error_after_bound(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_db = Path(temp_dir) / "state.sqlite"
+            state_db.touch()
+            Path(f"{state_db}-wal").touch()
+            failures = [module.sqlite3.OperationalError("still unavailable") for _ in range(20)]
+            with patch.object(module.sqlite3, "connect", side_effect=failures) as connect, patch.object(module.time, "sleep") as sleep:
+                with self.assertRaisesRegex(module.sqlite3.OperationalError, "still unavailable"):
+                    module.read_thread_state(state_db, "thread-1")
+        self.assertEqual(connect.call_count, 20)
+        self.assertEqual(sleep.call_count, 19)
 
     def test_run_receipt_requests_exact_model_and_effort_over_stdin(self):
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-1"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2}})])
@@ -88,6 +177,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertTrue(attempt["model_match"])
         self.assertTrue(attempt["effort_match"])
         self.assertEqual(attempt["pair_match"], True)
+        self.assertEqual(attempt["tokens"]["total_tokens"], 110)
+        self.assertEqual(attempt["thread_id"], "thread-1")
         self.assertNotIn("secret response text", json.dumps(attempt))
 
     def test_run_receipt_marks_execution_failure_class_when_runtime_fails_before_resolution(self):
@@ -179,8 +270,32 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         baseline = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "prompt_sha256": "wrapper-b", "output_sha256": "same-output", "effective_model": "gpt-5.6-sol", "resolved_effort": "ultra", "process_elapsed_ms": 1400, "tokens": {"total_tokens": 200, "uncached_input_tokens": 130}}
         comparison = module.compare_receipts(routed, baseline)
         self.assertTrue(comparison["valid_like_for_like_smoke"])
+        self.assertTrue(comparison["performance_eligible"])
         self.assertEqual(comparison["measured_savings"]["total_tokens"], 80)
         self.assertEqual(comparison["measured_savings"]["process_elapsed_ms"], 600)
+
+    def test_strategy_bundle_counts_unique_entry_and_descendant_receipts(self):
+        entry = {"receipt_id": "entry", "tokens": {"total_tokens": 30, "uncached_input_tokens": 20}, "process_elapsed_ms": 30}
+        child = {"receipt_id": "child", "tokens": {"total_tokens": 40, "uncached_input_tokens": 25}, "process_elapsed_ms": 40}
+        routed = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "output_sha256": "same-output", "receipts": [entry, child, dict(child)]}
+        baseline = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "output_sha256": "same-output", "tokens": {"total_tokens": 100, "uncached_input_tokens": 70}, "process_elapsed_ms": 80}
+        comparison = module.compare_receipts(routed, baseline)
+        self.assertEqual(comparison["routed"]["receipt_count"], 2)
+        self.assertEqual(comparison["routed"]["total_tokens"], 70)
+        self.assertEqual(comparison["routed"]["process_elapsed_ms"], 70)
+        self.assertTrue(comparison["performance_eligible"])
+
+    def test_token_cheaper_but_slower_strategy_is_not_performance_eligible(self):
+        entry = {"receipt_id": "entry", "tokens": {"total_tokens": 30}, "process_elapsed_ms": 50}
+        child = {"receipt_id": "child", "tokens": {"total_tokens": 40}, "process_elapsed_ms": 40}
+        routed = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "output_sha256": "same-output", "receipts": [entry, child]}
+        baseline = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "output_sha256": "same-output", "tokens": {"total_tokens": 100}, "process_elapsed_ms": 80}
+        comparison = module.compare_receipts(routed, baseline)
+        self.assertTrue(comparison["valid_like_for_like_smoke"])
+        self.assertEqual(comparison["measured_savings"]["total_tokens"], 30)
+        self.assertEqual(comparison["measured_savings"]["process_elapsed_ms"], -10)
+        self.assertFalse(comparison["performance_eligible"])
+        self.assertIn("strategy must have lower complete critical-path time", comparison["performance_failures"])
 
     def test_compare_receipts_rejects_different_workload_prompt_hashes(self):
         routed = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "a", "output_sha256": "same-output", "tokens": {}}
@@ -222,6 +337,194 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(receipt["node_role"], "entry")
         self.assertTrue(receipt["entry_context_active"])
         self.assertEqual(receipt["authorization_source"], "entry-launch")
+
+    def test_direct_task_benchmark_runs_exact_raw_prompt_with_explicit_metadata(self):
+        raw_prompt = "exact raw benchmark prompt\nwithout a locked marker"
+        stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "direct-thread"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0}})])
+        process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
+        thread_state = {"rollout_path": Path("/tmp/direct-rollout"), "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "direct-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+        args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, benchmark_run_id="benchmark-direct-benchmark", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="direct-benchmark", allow_fallback=[])
+        with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            receipt = module.run_receipt(args, raw_prompt)
+        self.assertEqual(run_mock.call_args.kwargs["input"], raw_prompt)
+        self.assertNotIn(module.ENTRY_CONTEXT_ENV, run_mock.call_args.kwargs["env"])
+        self.assertEqual(receipt["node_type"], "direct-task")
+        self.assertEqual(receipt["node_role"], "result-producer")
+        self.assertFalse(receipt["entry_context_active"])
+        self.assertEqual(receipt["authorization_source"], "benchmark-direct")
+        self.assertEqual(receipt["benchmark_run_id"], "benchmark-direct-benchmark")
+        self.assertEqual(receipt["prompt_sha256"], receipt["workload_prompt_sha256"])
+
+    def test_benchmark_stream_freezes_first_strict_json_before_receipt_telemetry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result_path = root / "result.json"
+            fake_codex = root / "fake-codex"
+            fake_codex.write_text(textwrap.dedent("""\
+                #!/usr/bin/env python3
+                import json
+                import sys
+                import time
+
+                sys.stdin.read()
+                def emit(value):
+                    print(json.dumps(value), flush=True)
+
+                emit({"type": "thread.started", "thread_id": "benchmark-stream-thread"})
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "commentary before result"}})
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{\\"answer\\":"}})
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{\\"answer\\":1,\\"answer\\":1}"}})
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{\\"answer\\":NaN}"}})
+                sys.stderr.write("x" * 200000 + "\\n")
+                sys.stderr.flush()
+                time.sleep(0.1)
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{ \\"answer\\": 0 }"}})
+                time.sleep(0.2)
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{\\n  \\"answer\\": 1\\n}"}})
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "commentary after result"}})
+                emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
+            """), encoding="utf-8")
+            fake_codex.chmod(0o755)
+            thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+            rollout = {"turn_context": {"turn_id": "benchmark-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
+            args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, bootstrap_task=False, benchmark_run_id="benchmark-stream-result", result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="stream-result", allow_fallback=[])
+            with patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), patch("builtins.print") as print_mock, ThreadPoolExecutor(max_workers=1) as executor:
+                started = time.monotonic()
+                future = executor.submit(module.run_receipt, args, "exact raw prompt")
+                time.sleep(0.05)
+                self.assertFalse(result_path.exists())
+                deadline = time.monotonic() + 1
+                while not result_path.is_file() and time.monotonic() < deadline:
+                    time.sleep(0.005)
+                first_result_elapsed = time.monotonic() - started
+                first_published_result = result_path.read_text(encoding="utf-8")
+                self.assertFalse(future.done())
+                receipt = future.result(timeout=2)
+                result_ready_event = json.loads(print_mock.call_args.args[0])
+            final_result = result_path.read_text(encoding="utf-8")
+        self.assertEqual(first_published_result, '{ "answer": 0 }\n')
+        self.assertGreaterEqual(first_result_elapsed, 0.08)
+        self.assertEqual(final_result, '{ "answer": 0 }\n')
+        self.assertEqual(receipt["output_sha256"], module.sha256_text('{ "answer": 0 }'))
+        self.assertEqual(receipt["status"], "fail")
+        self.assertEqual(receipt["failure_class"], "protocol")
+        self.assertTrue(receipt["duplicate_result_detected"])
+        self.assertEqual(result_ready_event, {"schema_version": 1, "stage": "result-ready", "workload_id": "stream-result", "benchmark_run_id": "benchmark-stream-result", "result_path": str(result_path), "child_result_ready_monotonic_ns": receipt["result_ready_monotonic_ns"]})
+        self.assertEqual(receipt["stderr_line_count"], 1)
+        self.assertNotIn("commentary before result", json.dumps(receipt))
+        self.assertNotIn("commentary after result", json.dumps(receipt))
+
+    def test_production_stream_ignores_partial_or_commentary_and_freezes_first_ready_result(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result_path = root / "result.md"
+            fake_codex = root / "fake-codex"
+            fake_codex.write_text(textwrap.dedent("""\
+                #!/usr/bin/env python3
+                import json
+                import sys
+                import time
+
+                sys.stdin.read()
+                def emit(value):
+                    print(json.dumps(value), flush=True)
+
+                emit({"type": "thread.started", "thread_id": "production-stream-thread"})
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "plain commentary"}})
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "RESULT_READY_BEGIN\\npartial only"}})
+                time.sleep(0.1)
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "RESULT_READY_BEGIN\\nFIRST RESULT\\nRESULT_READY_END"}})
+                time.sleep(0.2)
+                emit({"type": "item.completed", "item": {"type": "agent_message", "text": "RESULT_READY_BEGIN\\nLATER RESULT\\nRESULT_READY_END"}})
+                emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
+            """), encoding="utf-8")
+            fake_codex.chmod(0o755)
+            thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+            rollout = {"turn_context": {"turn_id": "production-turn", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
+            args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=False, benchmark_run_id=None, node_role="result-producer", route_marker="LOCKED_ROUTE_NODE", stream_result_ready=True, result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="production-stream", allow_fallback=[])
+            with patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(module.run_receipt, args, "bounded production task")
+                time.sleep(0.05)
+                self.assertFalse(result_path.exists())
+                deadline = time.monotonic() + 1
+                while not result_path.is_file() and time.monotonic() < deadline:
+                    time.sleep(0.005)
+                first_published_result = result_path.read_text(encoding="utf-8")
+                self.assertFalse(future.done())
+                receipt = future.result(timeout=2)
+            final_result = result_path.read_text(encoding="utf-8")
+        self.assertEqual(first_published_result, "FIRST RESULT\n")
+        self.assertEqual(final_result, "FIRST RESULT\n")
+        self.assertEqual(receipt["output_sha256"], module.sha256_text("FIRST RESULT"))
+        self.assertTrue(receipt["result_published"])
+        self.assertIsInstance(receipt["result_ready_monotonic_ns"], int)
+        self.assertEqual(receipt["status"], "fail")
+        self.assertEqual(receipt["failure_class"], "protocol")
+        self.assertTrue(receipt["duplicate_result_detected"])
+
+    def test_bootstrap_task_runs_raw_prompt_without_entry_context(self):
+        raw_prompt = "exact Global inline-bootstrap benchmark prompt"
+        stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "bootstrap-thread"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0}})])
+        process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
+        thread_state = {"rollout_path": Path("/tmp/bootstrap-rollout"), "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "bootstrap-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+        args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-benchmark", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="bootstrap-benchmark", allow_fallback=[])
+        with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            receipt = module.run_receipt(args, raw_prompt)
+        self.assertEqual(run_mock.call_args.kwargs["input"], raw_prompt)
+        self.assertNotIn(module.ENTRY_CONTEXT_ENV, run_mock.call_args.kwargs["env"])
+        self.assertEqual(receipt["node_type"], "bootstrap-task")
+        self.assertEqual(receipt["node_role"], "result-producer")
+        self.assertFalse(receipt["entry_context_active"])
+        self.assertEqual(receipt["authorization_source"], "benchmark-global-inline")
+        self.assertEqual(receipt["benchmark_run_id"], "benchmark-bootstrap-benchmark")
+        self.assertEqual(receipt["prompt_sha256"], receipt["workload_prompt_sha256"])
+
+    def test_direct_task_requires_benchmark_id_and_is_forbidden_in_entry_context(self):
+        missing_id = argparse.Namespace(entry_task=False, direct_task=True, benchmark_run_id=None, workload_id="direct-missing", route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "direct_task_benchmark_run_id_required"):
+                module.authorize_receipt_run(missing_id)
+        direct = argparse.Namespace(entry_task=False, direct_task=True, benchmark_run_id="benchmark-direct-001", workload_id="direct-001", route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {module.ENTRY_CONTEXT_ENV: "1"}, clear=False):
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "direct_task_entry_context_forbidden"):
+                module.authorize_receipt_run(direct)
+        bootstrap_missing_id = argparse.Namespace(entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id=None, workload_id="global-missing", route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "bootstrap_task_benchmark_run_id_required"):
+                module.authorize_receipt_run(bootstrap_missing_id)
+        bootstrap = argparse.Namespace(entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-global-001", workload_id="global-001", route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {module.ENTRY_CONTEXT_ENV: "1"}, clear=False):
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "bootstrap_task_entry_context_forbidden"):
+                module.authorize_receipt_run(bootstrap)
+        wrong_id = argparse.Namespace(entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-other", workload_id="global-001", route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "benchmark_run_id_workload_mismatch"):
+                module.authorize_receipt_run(wrong_id)
+
+    def test_direct_task_and_entry_task_are_cli_mutually_exclusive(self):
+        argv = ["run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", "conflict", "--output", "/tmp/conflict.json", "--entry-task", "--direct-task", "--benchmark-run-id", "benchmark-conflict"]
+        with self.assertRaises(SystemExit):
+            module.parse_args(argv)
+
+    def test_benchmark_run_id_cannot_change_an_ordinary_downstream_node(self):
+        args = argparse.Namespace(entry_task=False, direct_task=False, benchmark_run_id="benchmark-forged", route_marker="LOCKED_ROUTE_NODE")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "benchmark_run_id_requires_benchmark_task"):
+                module.authorize_receipt_run(args)
+            stream_without_output = argparse.Namespace(entry_task=False, direct_task=False, bootstrap_task=False, benchmark_run_id=None, stream_result_ready=True, node_role="result-producer", result_output=None, route_marker="LOCKED_ROUTE_NODE")
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "stream_result_ready_requires_result_output"):
+                module.authorize_receipt_run(stream_without_output)
+            stream_verifier = argparse.Namespace(entry_task=False, direct_task=False, bootstrap_task=False, benchmark_run_id=None, stream_result_ready=True, node_role="verification", result_output=Path("/tmp/result.md"), route_marker="LOCKED_ROUTE_NODE")
+            with self.assertRaisesRegex(module.ReceiptAuthorizationError, "stream_result_ready_requires_result_producer"):
+                module.authorize_receipt_run(stream_verifier)
 
     def test_direct_result_producer_is_rejected_inside_entry_context(self):
         args = argparse.Namespace(model="gpt-5.6-terra", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, route_marker="LOCKED_ROUTE_NODE", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="blocked-fixed-result", allow_fallback=[])

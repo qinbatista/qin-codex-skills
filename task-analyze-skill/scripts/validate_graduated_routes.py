@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Portable static validation for the graduated raw-prompt routing fixture."""
+"""Validate ordinary inline graduated prompts and one separate admitted plan template."""
 
 import argparse
 from copy import deepcopy
@@ -12,14 +12,16 @@ from pathlib import Path
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "assets" / "graduated-route-fixtures.json"
 DIRECT_PROMPTS = ["Open Chrome", "Open Chrome and open YouTube", "Open Chrome, open YouTube, and search CCTV"]
 COMPLEX_PROMPT = "Design a website like YouTube for me"
-DIRECT_MINI_CONDITIONS = {"Open Chrome": "Chrome is open", "Open Chrome and open YouTube": "youtube.com is loaded", "Open Chrome, open YouTube, and search CCTV": "CCTV query and visible results are present"}
-DIRECT_ROUTE = ["task-analyze-skill", "workflow-skill", "chrome:control-chrome"]
-COMPLEX_ROUTE = ["task-analyze-skill", "workflow-skill", "build-web-apps:frontend-app-builder"]
-REQUIRED_PAIRS = {"design": "gpt-5.6-sol|high", "implementation": "gpt-5.6-terra|high", "mini": "gpt-5.6-terra|medium", "ending_real": "gpt-5.6-terra|high"}
+DIRECT_REAL_CONDITIONS = {"Open Chrome": "Chrome is open", "Open Chrome and open YouTube": "youtube.com is loaded", "Open Chrome, open YouTube, and search CCTV": "CCTV query and visible results are present"}
+DIRECT_ROUTE = ["inline-current-model", "chrome:control-chrome"]
+COMPLEX_ROUTE = ["inline-current-model", "build-web-apps:frontend-app-builder"]
+ADMITTED_ROUTE = ["task-analyze-skill", "workflow-skill", "build-web-apps:frontend-app-builder"]
+REQUIRED_PAIRS = {"design": "gpt-5.6-sol|high", "implementation": "gpt-5.6-terra|high", "ending_real": "gpt-5.6-terra|high"}
 SUPPORTED_PAIRS = {"gpt-5.3-codex-spark|low", "gpt-5.3-codex-spark|medium", "gpt-5.3-codex-spark|high", "gpt-5.6-luna|low", "gpt-5.6-luna|medium", "gpt-5.6-luna|high", "gpt-5.6-terra|low", "gpt-5.6-terra|medium", "gpt-5.6-terra|high", "gpt-5.6-sol|low", "gpt-5.6-sol|medium", "gpt-5.6-sol|high", "gpt-5.6-sol|ultra"}
 ENDING_CHECKS = ["responsive", "console", "navigation", "accessibility", "visual"]
-DIRECT_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "controller_skill", "route", "mini_condition", "timing_evidence"}
-COMPLEX_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "controller_skill", "route", "mini_condition", "timing_evidence", "dispatcher_plan", "illustrative_cold_start_pairs", "adaptive_result_producer", "controller_transitions", "ending_checks"}
+SCENARIO_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "execution_surface", "route", "ending_real_condition", "timing_evidence"}
+PSEUDO_ROUTE_IDS = {"inline-current-model"}
+FIRST_RESULT_TIMING_EVIDENCE = "wall_clock_to_first_result_excluding_ending"
 
 
 def materialize_dispatcher_plan(plan_template, cache_dir, entry_model, entry_effort):
@@ -29,13 +31,18 @@ def materialize_dispatcher_plan(plan_template, cache_dir, entry_model, entry_eff
     return plan
 
 
-def required_skill_ids(scenario):
-    skill_ids = {scenario.get("skill"), scenario.get("controller_skill")}
-    skill_ids.update(scenario.get("route", []))
-    plan = scenario.get("dispatcher_plan")
+def admitted_dispatcher_template(path=FIXTURE_PATH):
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return payload["admitted_dispatcher_template"]
+
+
+def required_skill_ids(container):
+    skill_ids = {container.get("skill")}
+    skill_ids.update(container.get("route", []))
+    plan = container.get("dispatcher_plan")
     if isinstance(plan, dict):
         skill_ids.update(node.get("skill") for node in plan.get("nodes", []) if isinstance(node, dict))
-    return sorted(skill_id for skill_id in skill_ids if isinstance(skill_id, str) and skill_id)
+    return sorted(skill_id for skill_id in skill_ids if isinstance(skill_id, str) and skill_id and skill_id not in PSEUDO_ROUTE_IDS)
 
 
 def _check_installed(skill_id, skills_root, failures):
@@ -59,45 +66,62 @@ def _dispatcher_module():
     return dispatcher
 
 
-def _validate_dispatcher_plan(scenario, skills_root, failures):
-    plan = scenario.get("dispatcher_plan")
+def _validate_dispatcher_template(template, skills_root, failures):
+    if not isinstance(template, dict):
+        failures.append("admitted_dispatcher_template must be an object")
+        return
+    if template.get("activation") != "explicit_and_performance_admitted" or template.get("admission_precondition") != "positive_end_to_end_evidence_required":
+        failures.append("admitted dispatcher template lacks explicit positive performance-admission precondition")
+    if template.get("authorization") != "topology_only_not_execution_proof":
+        failures.append("admitted dispatcher template must not claim execution authorization")
+    if template.get("route") != ADMITTED_ROUTE:
+        failures.append(f"admitted dispatcher route ordering must be {ADMITTED_ROUTE}")
+    if template.get("illustrative_cold_start_pairs") != REQUIRED_PAIRS or any(pair not in SUPPORTED_PAIRS for pair in template.get("illustrative_cold_start_pairs", {}).values()):
+        failures.append("admitted dispatcher static model/effort roles are incorrect or unsupported")
+    if template.get("adaptive_result_producer") != "implementation":
+        failures.append("admitted dispatcher adaptive producer must be implementation")
+    if template.get("controller_transitions") != {"main_result_release": "observed_entry_coordinator", "ending_dispatch": "observed_entry_coordinator"}:
+        failures.append("admitted dispatcher controller transitions are incorrect")
+    if template.get("ending_checks") != ENDING_CHECKS:
+        failures.append("admitted dispatcher Ending checks are incomplete")
+    plan = template.get("dispatcher_plan")
     if not isinstance(plan, dict):
-        failures.append("website scenario dispatcher_plan must be an object")
+        failures.append("admitted dispatcher template dispatcher_plan must be an object")
         return
     dispatcher = _dispatcher_module()
-    expected_nodes = ["design", "implementation", "mini", "ending-real"]
-    expected_roles = {
-        "design": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-sol", "high", [], "general"),
-        "implementation": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-terra", "high", ["design"], "general"),
-        "mini": ("mini", "verify-skill", "gpt-5.6-terra", "medium", ["implementation"], "general"),
-        "ending-real": ("ending", "verify-skill", "gpt-5.6-terra", "high", ["mini"], "general"),
-    }
+    expected_nodes = ["design", "implementation", "ending-real"]
+    expected_roles = {"design": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-sol", "high", [], "general"), "implementation": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-terra", "high", ["design"], "general"), "ending-real": ("ending", "verify-skill", "gpt-5.6-terra", "high", ["implementation"], "general")}
     template_nodes = plan.get("nodes", [])
     if [node.get("id") for node in template_nodes if isinstance(node, dict)] != expected_nodes:
-        failures.append("website dispatcher plan node topology is incorrect")
+        failures.append("admitted dispatcher plan node topology is incorrect")
         return
-    if plan.get("main_result_node") != "implementation" or plan.get("mini_verify_node") != "mini":
-        failures.append("website dispatcher plan main and Mini nodes are incorrect")
-    if scenario.get("adaptive_result_producer") != "implementation":
-        failures.append("website dispatcher plan adaptive producer is incorrect")
+    if plan.get("schema_version") != 2 or plan.get("main_result_node") != "implementation" or "mini_verify_node" in plan:
+        failures.append("admitted dispatcher plan main/result-first contract is incorrect")
+    if {node.get("phase") for node in template_nodes} != {"result", "ending"}:
+        failures.append("admitted dispatcher plan must contain only result and ending phases")
     for node in template_nodes:
-        expected = expected_roles[node["id"]]
         observed = (node.get("phase"), node.get("skill"), node.get("model"), node.get("effort"), node.get("dependencies"), node.get("execution_domain"))
-        if observed != expected:
-            failures.append(f"website dispatcher plan role is incorrect for {node['id']}")
-        expected_pair = scenario["illustrative_cold_start_pairs"].get({"design": "design", "implementation": "implementation", "mini": "mini", "ending-real": "ending_real"}[node["id"]])
-        if f"{node.get('model')}|{node.get('effort')}" != expected_pair:
-            failures.append(f"website dispatcher plan pair is incorrect for {node['id']}")
-    supported_pairs = sorted(f"{model}|{effort}" for model, efforts in dispatcher.MODEL_EFFORTS.items() for effort in efforts)
-    with tempfile.TemporaryDirectory(prefix="graduated-route-plan-") as temporary:
-        for pair in supported_pairs:
-            entry_model, entry_effort = pair.split("|", 1)
-            materialized = materialize_dispatcher_plan(plan, Path(temporary) / pair.replace("|", "-"), entry_model, entry_effort)
-            plan_failures = dispatcher.validate_plan(materialized, entry_model, entry_effort, Path(temporary), skills_root)
-            failures.extend([f"website dispatcher plan {pair}: {failure}" for failure in plan_failures])
-            for template_node, materialized_node in zip(template_nodes, materialized["nodes"]):
-                if (template_node.get("model"), template_node.get("effort")) != (materialized_node.get("model"), materialized_node.get("effort")):
-                    failures.append(f"website dispatcher plan downstream pair inherited entry pair for {materialized_node['id']}")
+        if observed != expected_roles[node["id"]]:
+            failures.append(f"admitted dispatcher plan role is incorrect for {node['id']}")
+        pair_key = {"design": "design", "implementation": "implementation", "ending-real": "ending_real"}[node["id"]]
+        if f"{node.get('model')}|{node.get('effort')}" != template["illustrative_cold_start_pairs"].get(pair_key):
+            failures.append(f"admitted dispatcher plan pair is incorrect for {node['id']}")
+    implementation = next(node for node in template_nodes if node.get("id") == "implementation")
+    expected_ladder = [f"gpt-5.6-luna|{effort}" for effort in ["low", "medium", "high", "xhigh", "max"]] + [f"gpt-5.6-terra|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]] + [f"gpt-5.6-sol|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]]
+    if implementation.get("candidate_ladder") != expected_ladder or implementation.get("hard_floor") != "gpt-5.6-luna|low":
+        failures.append("admitted implementation must use the full GPT-5.6 ladder with Luna-low hard floor")
+    recommendation = implementation.get("routing_recommendation", {})
+    if recommendation.get("selected_pair") != "gpt-5.6-terra|high" or recommendation.get("trial") is not False or not recommendation.get("profile_fingerprint"):
+        failures.append("admitted implementation recommendation proof is invalid")
+    with tempfile.TemporaryDirectory(prefix="graduated-admitted-plan-") as temporary:
+        for model, efforts in dispatcher.MODEL_EFFORTS.items():
+            for effort in efforts:
+                materialized = materialize_dispatcher_plan(plan, Path(temporary) / f"{model}-{effort}", model, effort)
+                plan_failures = dispatcher.validate_plan(materialized, model, effort, Path(temporary), skills_root)
+                failures.extend([f"admitted dispatcher plan {model}|{effort}: {failure}" for failure in plan_failures])
+                for template_node, materialized_node in zip(template_nodes, materialized["nodes"]):
+                    if (template_node.get("model"), template_node.get("effort")) != (materialized_node.get("model"), materialized_node.get("effort")):
+                        failures.append(f"admitted dispatcher downstream pair inherited entry pair for {materialized_node['id']}")
 
 
 def validate_fixture(path=FIXTURE_PATH, skills_root=None, require_installed=False):
@@ -107,68 +131,49 @@ def validate_fixture(path=FIXTURE_PATH, skills_root=None, require_installed=Fals
         return [f"graduated fixture cannot be read: {error}"]
     failures = []
     scenarios = payload.get("scenarios") if isinstance(payload, dict) else None
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1 or not isinstance(scenarios, list) or len(scenarios) != 4:
-        return ["graduated fixture must contain exactly four scenarios"]
+    if not isinstance(payload, dict) or payload.get("schema_version") != 2 or not isinstance(scenarios, list) or len(scenarios) != 4:
+        return ["graduated fixture must contain schema 2 and exactly four scenarios"]
     by_prompt = {scenario.get("prompt"): scenario for scenario in scenarios if isinstance(scenario, dict)}
     if set(by_prompt) != set(DIRECT_PROMPTS + [COMPLEX_PROMPT]):
         failures.append("graduated fixture raw prompts do not match the required set")
+    template = payload.get("admitted_dispatcher_template")
     if require_installed:
         resolved_root = Path(skills_root or Path(__file__).resolve().parents[2])
-        for scenario in scenarios:
-            for skill_id in required_skill_ids(scenario):
+        for container in [*scenarios, template if isinstance(template, dict) else {}]:
+            for skill_id in required_skill_ids(container):
                 _check_installed(skill_id, resolved_root, failures)
     for prompt in DIRECT_PROMPTS:
         scenario = by_prompt.get(prompt, {})
-        if scenario.get("complexity") != "easy" or scenario.get("route_type") != "direct_tool" or scenario.get("skill") != "chrome:control-chrome":
-            failures.append(f"{prompt}: must be an easy chrome direct_tool route")
-        if scenario.get("controller_skill") != "workflow-skill":
-            failures.append(f"{prompt}: controller skill must be workflow-skill")
-        if scenario.get("route") != DIRECT_ROUTE:
-            failures.append(f"{prompt}: route ordering must be {DIRECT_ROUTE}")
-        if scenario.get("mini_condition") != DIRECT_MINI_CONDITIONS[prompt]:
-            failures.append(f"{prompt}: Mini condition is incorrect")
-        if scenario.get("timing_evidence") != "wall_clock_to_observable_stop":
-            failures.append(f"{prompt}: timing evidence must be wall_clock_to_observable_stop")
-        unknown_keys = set(scenario) - DIRECT_ALLOWED_KEYS
-        if unknown_keys:
-            failures.append(f"{prompt}: direct route leaks dispatch or model execution: {', '.join(sorted(unknown_keys))}")
+        if scenario.get("complexity") != "easy" or scenario.get("route_type") != "inline_tool" or scenario.get("skill") != "chrome:control-chrome":
+            failures.append(f"{prompt}: must be an easy inline_tool route")
+        if scenario.get("execution_surface") != "current_model_inline" or scenario.get("route") != DIRECT_ROUTE:
+            failures.append(f"{prompt}: must stay on {DIRECT_ROUTE}")
+        if scenario.get("ending_real_condition") != DIRECT_REAL_CONDITIONS[prompt]:
+            failures.append(f"{prompt}: Ending Real condition is incorrect")
+        if scenario.get("timing_evidence") != FIRST_RESULT_TIMING_EVIDENCE:
+            failures.append(f"{prompt}: timing evidence must exclude post-result Ending work")
+        if set(scenario) - SCENARIO_ALLOWED_KEYS:
+            failures.append(f"{prompt}: inline route leaks dispatch or model execution")
     scenario = by_prompt.get(COMPLEX_PROMPT, {})
-    if scenario.get("complexity") != "complex" or scenario.get("route_type") != "model_dispatch" or scenario.get("skill") != "build-web-apps:frontend-app-builder":
-        failures.append("website scenario must be complex model_dispatch with canonical frontend skill")
-    if scenario.get("controller_skill") != "workflow-skill":
-        failures.append("website scenario controller skill must be workflow-skill")
-    if scenario.get("route") != COMPLEX_ROUTE:
-        failures.append(f"website scenario route ordering must be {COMPLEX_ROUTE}")
-    if scenario.get("mini_condition") != "A rendered draft exists and core interaction paths render":
-        failures.append("website scenario Mini condition must say a rendered draft exists and core interaction paths render")
-    if scenario.get("timing_evidence") != "passing_runtime_receipts":
-        failures.append("website scenario timing evidence is incorrect")
-    unknown_keys = set(scenario) - COMPLEX_ALLOWED_KEYS
-    if unknown_keys:
-        failures.append("website scenario contains unknown execution fields: " + ", ".join(sorted(unknown_keys)))
-    if scenario.get("illustrative_cold_start_pairs") != REQUIRED_PAIRS or any(pair not in SUPPORTED_PAIRS for pair in scenario.get("illustrative_cold_start_pairs", {}).values()):
-        failures.append("website scenario static model/effort roles are incorrect or unsupported")
-    if scenario.get("adaptive_result_producer") != "implementation":
-        failures.append("website scenario adaptive producer must be the implementation receipt")
-    implementation = next((node for node in scenario.get("dispatcher_plan", {}).get("nodes", []) if node.get("id") == "implementation"), {})
-    expected_ladder = [f"gpt-5.6-luna|{effort}" for effort in ["low", "medium", "high", "xhigh", "max"]] + [f"gpt-5.6-terra|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]] + [f"gpt-5.6-sol|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]]
-    if implementation.get("candidate_ladder") != expected_ladder or implementation.get("hard_floor") != "gpt-5.6-luna|low":
-        failures.append("website implementation must use the full GPT-5.6 ladder with Luna-low hard floor")
-    recommendation = implementation.get("routing_recommendation", {})
-    if recommendation.get("selected_pair") != "gpt-5.6-terra|high" or recommendation.get("trial") is not False or not recommendation.get("profile_fingerprint"):
-        failures.append("website implementation recommendation proof is invalid")
-    if any(node.get("id") == "ending-records" for node in scenario.get("dispatcher_plan", {}).get("nodes", [])):
-        failures.append("website dispatcher plan must not include a decorative records node")
-    if scenario.get("controller_transitions") != {"main_result_release": "observed_entry_coordinator", "ending_dispatch": "observed_entry_coordinator"}:
-        failures.append("website scenario controller transitions must use the observed entry coordinator")
-    if scenario.get("ending_checks") != ENDING_CHECKS:
-        failures.append("website scenario Ending checks are incomplete")
-    _validate_dispatcher_plan(scenario, Path(skills_root or Path(__file__).resolve().parents[2]), failures)
+    if scenario.get("complexity") != "complex" or scenario.get("route_type") != "inline_production" or scenario.get("skill") != "build-web-apps:frontend-app-builder":
+        failures.append("website scenario must be complex inline_production with canonical frontend skill")
+    if scenario.get("execution_surface") != "current_model_inline" or scenario.get("route") != COMPLEX_ROUTE:
+        failures.append(f"website scenario must stay on {COMPLEX_ROUTE}")
+    if scenario.get("ending_real_condition") != "A rendered draft exists and core interaction paths render":
+        failures.append("website scenario Ending Real condition is incorrect")
+    if scenario.get("timing_evidence") != FIRST_RESULT_TIMING_EVIDENCE:
+        failures.append("website scenario timing evidence must exclude post-result Ending work")
+    if set(scenario) - SCENARIO_ALLOWED_KEYS:
+        failures.append("website inline scenario leaks dispatch or model execution")
+    for scenario in scenarios:
+        if any(route_id in {"task-analyze-skill", "workflow-skill"} for route_id in scenario.get("route", [])):
+            failures.append(f"{scenario.get('prompt')}: ordinary route invokes full routing skills")
+    _validate_dispatcher_template(template, Path(skills_root or Path(__file__).resolve().parents[2]), failures)
     return failures
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate graduated raw-prompt routes.")
+    parser = argparse.ArgumentParser(description="Validate graduated raw-prompt inline routes and admitted plan separation.")
     parser.add_argument("--fixture", type=Path, default=FIXTURE_PATH)
     parser.add_argument("--skills-root", type=Path)
     parser.add_argument("--require-installed", action="store_true")

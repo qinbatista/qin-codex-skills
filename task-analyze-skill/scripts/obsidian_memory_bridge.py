@@ -127,27 +127,30 @@ def initialize_task_model_experience(vault=None):
     instruction_path = root / "instruction.md"
     index_path = root / "index.md"
     if not instruction_path.exists():
-        instruction_path.write_text("# TaskModelExperience Instruction\n\nUse this folder for sanitized, human-readable model and effort switching lessons written after Ending Real Verify. Search it during Task Analyze only when relevant. The private `model_experience.json` ledger remains the machine authority. Never store raw prompts, results, paths, thread IDs, receipt bodies, credentials, or secrets. If Obsidian is unavailable, skip search and recording without blocking the task.\n", encoding="utf-8")
+        instruction_path.write_text("# TaskModelExperience Instruction\n\nUse this folder for sanitized, human-readable model and effort switching lessons written after Ending Real Verify. New records contain only the durable Real pass/fail verdict; legacy Mini fields are read-only migration history. Search it during Task Analyze only when relevant. The private `model_experience.json` ledger remains the machine authority. Never store raw prompts, results, paths, thread IDs, receipt bodies, credentials, or secrets. If Obsidian is unavailable, skip search and recording without blocking the task.\n", encoding="utf-8")
     if not index_path.exists():
         index_path.write_text("# Task Model Experience\n\n## Purpose\n\nShare concise verified model-switch lessons with Task Analyze and other skills. Exact pair selection remains in the private adaptive-routing ledger.\n\n## Records\n\n", encoding="utf-8")
     return {"status": "ready", "provider": "obsidian", "root": "TaskModelExperience"}
 
 
-def record_model_experience(task_summary, task_family, complexity, execution_domain, owning_skill, selected_pair, mini_status, real_status, calibration_state, best_pair="", failed_pair="", previous_pair="", switch_direction="none", switch_reason="", total_tokens=None, process_ms=None, comparison_status="not_evaluated", vault=None, recorded_at=None):
+def record_model_experience(task_summary, task_family, complexity, execution_domain, owning_skill, selected_pair, real_status, calibration_state, best_pair="", failed_pair="", previous_pair="", switch_direction="none", switch_reason="", total_tokens=None, process_ms=None, comparison_status="not_evaluated", vault=None, recorded_at=None):
     initialization = initialize_task_model_experience(vault)
     if initialization["status"] == "unavailable":
         return {"status": "unavailable", "provider": "none", "written": False}
     vault_path = resolve_vault(vault)
     timestamp = recorded_at or datetime.now(timezone.utc)
     summary = _sanitize_field(task_summary, "task_summary")
-    fields = {"task_family": _sanitize_field(task_family, "task_family", 80), "complexity": _sanitize_field(complexity, "complexity", 40), "execution_domain": _sanitize_field(execution_domain, "execution_domain", 80), "owning_skill": _sanitize_field(owning_skill, "owning_skill", 80), "selected_pair": _validate_pair(selected_pair, "selected_pair", False), "mini_status": _sanitize_field(mini_status, "mini_status", 20), "real_status": _sanitize_field(real_status, "real_status", 20), "calibration_state": _sanitize_field(calibration_state, "calibration_state", 40), "best_pair": _validate_pair(best_pair, "best_pair"), "failed_pair": _validate_pair(failed_pair, "failed_pair"), "previous_pair": _validate_pair(previous_pair, "previous_pair"), "switch_direction": _sanitize_field(switch_direction, "switch_direction", 40), "switch_reason": _sanitize_field(switch_reason, "switch_reason", 160), "comparison_status": _sanitize_field(comparison_status, "comparison_status", 60)}
+    real_verdict = _sanitize_field(real_status, "real_status", 20)
+    if real_verdict not in {"pass", "fail"}:
+        raise ValueError("real_status must be pass or fail")
+    fields = {"task_family": _sanitize_field(task_family, "task_family", 80), "complexity": _sanitize_field(complexity, "complexity", 40), "execution_domain": _sanitize_field(execution_domain, "execution_domain", 80), "owning_skill": _sanitize_field(owning_skill, "owning_skill", 80), "selected_pair": _validate_pair(selected_pair, "selected_pair", False), "real_status": real_verdict, "calibration_state": _sanitize_field(calibration_state, "calibration_state", 40), "best_pair": _validate_pair(best_pair, "best_pair"), "failed_pair": _validate_pair(failed_pair, "failed_pair"), "previous_pair": _validate_pair(previous_pair, "previous_pair"), "switch_direction": _sanitize_field(switch_direction, "switch_direction", 40), "switch_reason": _sanitize_field(switch_reason, "switch_reason", 160), "comparison_status": _sanitize_field(comparison_status, "comparison_status", 60)}
     year_dir = vault_path / "TaskModelExperience" / timestamp.strftime("%Y")
     year_dir.mkdir(parents=True, exist_ok=True)
     record_path = year_dir / f"{timestamp.strftime('%Y-%m')}.md"
     if not record_path.exists():
         record_path.write_text(f"# Task Model Experience {timestamp.strftime('%Y-%m')}\n\n", encoding="utf-8")
     metric_text = f"tokens={int(total_tokens)}; process_ms={int(process_ms)}" if total_tokens is not None and process_ms is not None else "metrics=not-comparable-or-unavailable"
-    entry = f"## {timestamp.strftime('%Y-%m-%d %H:%M UTC')}\n\n- Task profile: {fields['task_family']} | {fields['complexity']} | {fields['execution_domain']} | {fields['owning_skill']}\n- Summary: {summary}\n- Producer: {fields['selected_pair']} | Mini={fields['mini_status']} | Real={fields['real_status']}\n- Switch: {fields['previous_pair'] or 'none'} -> {fields['selected_pair']} | {fields['switch_direction']} | {fields['switch_reason'] or 'no switch'}\n- Learned boundary: best={fields['best_pair'] or 'unverified'} | failed={fields['failed_pair'] or 'none'} | state={fields['calibration_state']}\n- Cost evidence: {fields['comparison_status']} | {metric_text}\n\n"
+    entry = f"## {timestamp.strftime('%Y-%m-%d %H:%M UTC')}\n\n- Task profile: {fields['task_family']} | {fields['complexity']} | {fields['execution_domain']} | {fields['owning_skill']}\n- Summary: {summary}\n- Producer: {fields['selected_pair']} | Real={fields['real_status']}\n- Switch: {fields['previous_pair'] or 'none'} -> {fields['selected_pair']} | {fields['switch_direction']} | {fields['switch_reason'] or 'no switch'}\n- Learned boundary: best={fields['best_pair'] or 'unverified'} | failed={fields['failed_pair'] or 'none'} | state={fields['calibration_state']}\n- Cost evidence: {fields['comparison_status']} | {metric_text}\n\n"
     with record_path.open("a", encoding="utf-8") as handle:
         handle.write(entry)
     index_path = vault_path / "TaskModelExperience" / "index.md"
@@ -170,7 +173,7 @@ def main():
     search_parser.add_argument("--max-chars", type=int, default=3500)
     subparsers.add_parser("init")
     record_parser = subparsers.add_parser("record-model")
-    for name in ("task-summary", "task-family", "complexity", "execution-domain", "owning-skill", "selected-pair", "mini-status", "real-status", "calibration-state"):
+    for name in ("task-summary", "task-family", "complexity", "execution-domain", "owning-skill", "selected-pair", "real-status", "calibration-state"):
         record_parser.add_argument(f"--{name}", required=True)
     for name in ("best-pair", "failed-pair", "previous-pair", "switch-direction", "switch-reason", "comparison-status"):
         record_parser.add_argument(f"--{name}", default="")
@@ -182,7 +185,7 @@ def main():
     elif args.command == "init":
         output = initialize_task_model_experience(args.vault)
     else:
-        output = record_model_experience(args.task_summary, args.task_family, args.complexity, args.execution_domain, args.owning_skill, args.selected_pair, args.mini_status, args.real_status, args.calibration_state, args.best_pair, args.failed_pair, args.previous_pair, args.switch_direction or "none", args.switch_reason, args.total_tokens, args.process_ms, args.comparison_status or "not_evaluated", args.vault)
+        output = record_model_experience(args.task_summary, args.task_family, args.complexity, args.execution_domain, args.owning_skill, args.selected_pair, args.real_status, args.calibration_state, args.best_pair, args.failed_pair, args.previous_pair, args.switch_direction or "none", args.switch_reason, args.total_tokens, args.process_ms, args.comparison_status or "not_evaluated", args.vault)
     print(json.dumps(output, separators=(",", ":")))
 
 

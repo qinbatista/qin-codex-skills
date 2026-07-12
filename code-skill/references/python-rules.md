@@ -48,11 +48,11 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 - If an AI helper guarantees parsed JSON through `json_root="object"` or `json_root="array"`, use the returned `dict` or `list` directly with no `json.loads`, `ast.literal_eval`, string fallback, or duplicate parse check.
 - For AI extraction, naming, or review flows, put semantic rules in the prompt and keep local code limited to minimal schema normalization.
 
-## Post-Write Simplicity Review
+## Post-Result Ending Simplicity Review
 
-- After writing or editing Python code, review the touched code for unnecessary wrappers, nested helpers, defensive aliases, repeated type checks, fallback branches, and single-use variables before running final tests.
-- If the simplest value path is unclear, re-read the source function, prompt contract, schema, or nearby pattern to confirm the actual input and return shape, then simplify the code to use that confirmed source directly.
-- Treat this review as the first optimization pass: remove complexity that does not change the confirmed behavior, then run the real code test and verification.
+- Present the completed Python edit immediately. After that first presentation, Ending Task may inspect the touched code for unnecessary wrappers, nested helpers, defensive aliases, repeated type checks, fallback branches, and single-use variables, then run the real tests and verification.
+- Ending inspection never silently changes the artifact already presented. If a simpler value path or any correctness failure requires an edit, notify the user, reopen the task, repair it, rerun the relevant checks, and present the corrected result.
+- Record an optional simplification idea without editing only when the delivered behavior is already correct and no repair is required.
 
 ## Error Handling
 

@@ -1,41 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1280" viewBox="0 0 1600 1280" role="img" aria-labelledby="title desc">
-  <title id="title">Complex task lifecycle</title>
-  <desc id="desc">The selected entry model runs Task Analyze and selects a human route. Hookless Workflow executes per-node models, Mini Verify gates the main result, and background Ending Task follows afterward.</desc>
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#15233d"/></linearGradient><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
-  <rect width="1600" height="1280" rx="30" fill="url(#bg)"/>
-  <g font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
-    <text x="70" y="92" fill="#f8fafc" font-size="48" font-weight="800">🚀 How a complex task runs</text>
-    <text x="70" y="136" fill="#94a3b8" font-size="24">The selected entry model does not become the workflow model. Hookless Workflow controls every later node.</text>
-
-    <g stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#arrow)">
-      <path d="M800 218 V270"/><path d="M800 390 V442"/><path d="M800 562 V614"/><path d="M800 734 V786"/><path d="M800 906 V958"/>
-    </g>
-
-    <g>
-      <rect x="540" y="166" width="520" height="52" rx="26" fill="#172554" stroke="#60a5fa"/><text x="800" y="200" text-anchor="middle" fill="#dbeafe" font-size="23" font-weight="700">User request</text>
-
-      <rect x="315" y="270" width="970" height="120" rx="22" fill="#0d2e35" stroke="#2dd4bf" stroke-width="2"/>
-      <text x="350" y="312" fill="#99f6e4" font-size="18" font-weight="800">🧭 task-analyze-skill · 100% ENTRY</text><text x="350" y="348" fill="#f8fafc" font-size="25" font-weight="700">[Selected entry model | selected effort]</text><text x="850" y="348" fill="#cbd5e1" font-size="21">Choose skill + model + effort per node</text>
-
-      <rect x="315" y="442" width="970" height="120" rx="22" fill="#122844" stroke="#60a5fa" stroke-width="2"/>
-      <text x="350" y="484" fill="#bfdbfe" font-size="18" font-weight="800">🗺️ SHOW HUMAN ROUTE</text><text x="350" y="520" fill="#f8fafc" font-size="25" font-weight="700">[Entry pair ends here]</text><text x="770" y="520" fill="#cbd5e1" font-size="21">Hookless Workflow starts after the visible route</text>
-
-      <rect x="115" y="614" width="430" height="120" rx="22" fill="#302716" stroke="#fbbf24" stroke-width="2"/><text x="145" y="656" fill="#fde68a" font-size="18" font-weight="800">💻 CODE BRANCH</text><text x="145" y="694" fill="#f8fafc" font-size="22" font-weight="700">code-skill</text><text x="315" y="694" fill="#cbd5e1" font-size="19">[Spark obvious-only]</text>
-      <rect x="585" y="614" width="430" height="120" rx="22" fill="#162d28" stroke="#34d399" stroke-width="2"/><text x="615" y="656" fill="#a7f3d0" font-size="18" font-weight="800">🗺️ WORKFLOW BRANCH</text><text x="615" y="694" fill="#f8fafc" font-size="22" font-weight="700">workflow-skill</text><text x="805" y="694" fill="#cbd5e1" font-size="19">[dynamic learned pair]</text>
-      <rect x="1055" y="614" width="430" height="120" rx="22" fill="#3b1c2a" stroke="#fb7185" stroke-width="2"/><text x="1085" y="656" fill="#fecdd3" font-size="18" font-weight="800">🔐 MANAGEMENT BRANCH</text><text x="1085" y="694" fill="#f8fafc" font-size="22" font-weight="700">management-skill</text><text x="1320" y="694" fill="#cbd5e1" font-size="19">[dynamic learned pair]</text>
-      <path d="M800 562 V586 H330 V614 M800 586 V614 M800 586 H1270 V614" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
-      <path d="M330 734 V760 H800 V786 M800 734 V786 M1270 734 V760 H800" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
-
-      <rect x="315" y="786" width="970" height="120" rx="22" fill="#162d28" stroke="#34d399" stroke-width="2"/>
-      <text x="350" y="828" fill="#a7f3d0" font-size="18" font-weight="800">🧪 MINI VERIFY · FIRST-RESULT GATE</text><text x="350" y="866" fill="#f8fafc" font-size="25" font-weight="700">[planned model | planned effort]</text><text x="850" y="866" fill="#cbd5e1" font-size="21">Basic check · repair before result</text>
-
-      <rect x="315" y="958" width="970" height="120" rx="22" fill="#172554" stroke="#818cf8" stroke-width="2"/>
-      <text x="350" y="1000" fill="#c7d2fe" font-size="18" font-weight="800">✅ MAIN GOAL DONE GATE</text><text x="350" y="1038" fill="#f8fafc" font-size="27" font-weight="750">📣 Show the main result now</text><text x="850" y="1038" fill="#cbd5e1" font-size="21">Requested work + Mini Verify passed</text>
-
-      <rect x="70" y="1128" width="1460" height="100" rx="22" fill="#24173c" stroke="#c084fc" stroke-width="2"/>
-      <text x="105" y="1170" fill="#e9d5ff" font-size="18" font-weight="800">🌙 AFTER THE RESULT · ENDING TASK</text><text x="105" y="1205" fill="#f8fafc" font-size="22">🔬 Real Verify [dynamic learned pair]</text><text x="540" y="1205" fill="#f8fafc" font-size="22">⚡ Independent verifier [dynamic learned pair]</text><text x="1110" y="1205" fill="#f8fafc" font-size="22">📝 Records [dynamic learned pair]</text>
-      <path d="M800 1078 V1128" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
-    </g>
-    <text x="800" y="1260" text-anchor="middle" fill="#fca5a5" font-size="20" font-weight="700">Background correctness failure → 🚨 notify the user + reopen the task</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1060" viewBox="0 0 1600 1060" role="img" aria-labelledby="title desc">
+  <title id="title">Hookless first-result lifecycle</title>
+  <desc id="desc">Every task receives a tiny inline bootstrap. Ordinary tasks execute once on the current model. Explicit routing or real dependency work loads Task Analyze, but Workflow delegation is allowed only after frozen end-to-end evidence proves lower tokens and time. Both paths present the completed result immediately; Ending Real verification follows afterward.</desc>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#15233d"/></linearGradient><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker></defs>
+  <rect width="1600" height="1060" rx="30" fill="url(#bg)"/>
+  <g font-family="Inter,Arial,sans-serif">
+    <text x="70" y="84" fill="#f8fafc" font-size="46" font-weight="800">🚀 First result, without controller tax</text>
+    <text x="70" y="126" fill="#94a3b8" font-size="23">The user's selected model does ordinary work inline. Full routing is exceptional and evidence-gated.</text>
+    <rect x="560" y="162" width="480" height="64" rx="30" fill="#172554" stroke="#60a5fa"/><text x="800" y="202" text-anchor="middle" fill="#dbeafe" font-size="24" font-weight="700">User request</text>
+    <path d="M800 226V272" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
+    <rect x="350" y="276" width="900" height="106" rx="22" fill="#0d2e35" stroke="#2dd4bf" stroke-width="2"/><text x="390" y="318" fill="#99f6e4" font-size="18" font-weight="800">⚡ 100% MICRO BOOTSTRAP · HOOKLESS</text><text x="390" y="355" fill="#f8fafc" font-size="25" font-weight="700">fewest rounds/output · present immediately</text>
+    <path d="M800 382V430H525V466 M800 430H1075V466" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#a)"/>
+    <rect x="250" y="466" width="550" height="176" rx="24" fill="#123227" stroke="#34d399" stroke-width="2"/>
+    <text x="290" y="510" fill="#a7f3d0" font-size="19" font-weight="800">DEFAULT · ORDINARY TASK</text><text x="290" y="552" fill="#f8fafc" font-size="28" font-weight="750">Current model executes inline</text><text x="290" y="590" fill="#cbd5e1" font-size="21">one batched action · no route · no child</text><text x="290" y="620" fill="#cbd5e1" font-size="20">no receipt · Ending Real after presentation</text>
+    <rect x="800" y="466" width="550" height="176" rx="24" fill="#201a3a" stroke="#a78bfa" stroke-width="2"/>
+    <text x="840" y="510" fill="#ddd6fe" font-size="18" font-weight="800">EXPLICIT ROUTING / DEPENDENCY GRAPH</text><text x="840" y="552" fill="#f8fafc" font-size="28" font-weight="750">Load Task Analyze</text><text x="840" y="590" fill="#cbd5e1" font-size="20">quality floors → experience → performance gate</text><text x="840" y="620" fill="#cbd5e1" font-size="20">missing or negative evidence → inline</text>
+    <path d="M1075 642V692" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
+    <rect x="800" y="696" width="550" height="116" rx="22" fill="#122844" stroke="#60a5fa" stroke-width="2"/><text x="840" y="739" fill="#bfdbfe" font-size="17" font-weight="800">ONLY AFTER VERIFIED TOKEN + TIME WIN</text><text x="1075" y="779" text-anchor="middle" fill="#f8fafc" font-size="24" font-weight="700">Workflow runs frozen model | effort nodes</text>
+    <path d="M525 642V844H800 M1075 812V844H800V870" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#a)"/>
+    <rect x="350" y="872" width="900" height="80" rx="22" fill="#162d28" stroke="#34d399" stroke-width="2"/><text x="800" y="922" text-anchor="middle" fill="#f8fafc" font-size="27" font-weight="750">📣 Present the completed result immediately</text>
+    <path d="M800 952V980" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
+    <rect x="220" y="984" width="1160" height="54" rx="27" fill="#2b1c42" stroke="#c084fc"/><text x="800" y="1018" text-anchor="middle" fill="#e9d5ff" font-size="21" font-weight="700">🌙 Ending Real after presentation · regression · optimization proof · sanitized learning</text>
   </g>
 </svg>

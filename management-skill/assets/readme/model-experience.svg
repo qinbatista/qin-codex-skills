@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
   <title id="title">Condition-keyed model experience</title>
-  <desc id="desc">The current entry pair runs Task Analyze only. Mini records the producer before the main result. Ending Real cost-ranks tokens then time only inside a shared exact workload-hash cohort; otherwise it uses the quality boundary. It freezes best_pair and reopens verified failure.</desc>
+  <desc id="desc">For an admitted route, the completed result is presented before verification. Ending Real verifies the retained producer attempt, then cost-ranks tokens and time only inside a shared exact workload-hash cohort. It freezes best_pair and reopens verified failure.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#17223d"/></linearGradient>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#67e8f9"/></marker>
@@ -18,7 +18,7 @@
     <rect x="70" y="175" width="230" height="200" rx="24" fill="#0d2e35" stroke="#2dd4bf" stroke-width="2"/>
     <text x="185" y="220" text-anchor="middle" fill="#99f6e4" font-size="18" font-weight="800">CURRENT PAIR</text>
     <text x="185" y="265" text-anchor="middle" fill="#f8fafc" font-size="25" font-weight="700">model | effort</text>
-    <text x="185" y="306" text-anchor="middle" fill="#cbd5e1" font-size="19">Task Analyze only</text>
+    <text x="185" y="306" text-anchor="middle" fill="#cbd5e1" font-size="19">admitted route entry</text>
     <text x="185" y="338" text-anchor="middle" fill="#fbbf24" font-size="18" font-weight="700">not workflow-wide</text>
 
     <rect x="370" y="175" width="280" height="200" rx="24" fill="#201a3a" stroke="#a78bfa" stroke-width="2"/>
@@ -42,15 +42,15 @@
 
   <g>
     <rect x="1070" y="445" width="360" height="140" rx="24" fill="#312e58" stroke="#a78bfa" stroke-width="2"/>
-    <text x="1250" y="492" text-anchor="middle" fill="#ede9fe" font-size="24" font-weight="800">Mini record</text>
-    <text x="1250" y="530" text-anchor="middle" fill="#f8fafc" font-size="19">first gate · success or failure</text>
-    <text x="1250" y="558" text-anchor="middle" fill="#cbd5e1" font-size="17">quality/correctness boundary starts here</text>
+    <text x="1250" y="492" text-anchor="middle" fill="#ede9fe" font-size="24" font-weight="800">Result presented</text>
+    <text x="1250" y="530" text-anchor="middle" fill="#f8fafc" font-size="19">immediately after requested work</text>
+    <text x="1250" y="558" text-anchor="middle" fill="#cbd5e1" font-size="17">first-result clock stops here</text>
     <rect x="1070" y="675" width="360" height="140" rx="24" fill="#123227" stroke="#34d399" stroke-width="2"/>
-    <text x="1250" y="722" text-anchor="middle" fill="#a7f3d0" font-size="24" font-weight="800">Main result</text>
-    <text x="1250" y="760" text-anchor="middle" fill="#f8fafc" font-size="19">show after Mini passes</text>
-    <text x="1250" y="788" text-anchor="middle" fill="#cbd5e1" font-size="17">earlier result stays honest</text>
+    <text x="1250" y="722" text-anchor="middle" fill="#a7f3d0" font-size="24" font-weight="800">Ending Real Verify</text>
+    <text x="1250" y="760" text-anchor="middle" fill="#f8fafc" font-size="19">same producer · after presentation</text>
+    <text x="1250" y="788" text-anchor="middle" fill="#cbd5e1" font-size="17">failure notifies and reopens</text>
     <rect x="1070" y="905" width="360" height="110" rx="24" fill="#302716" stroke="#fbbf24" stroke-width="2"/>
-    <text x="1250" y="943" text-anchor="middle" fill="#fde68a" font-size="22" font-weight="800">Ending Real update</text>
+    <text x="1250" y="943" text-anchor="middle" fill="#fde68a" font-size="22" font-weight="800">Learning update</text>
     <text x="1250" y="975" text-anchor="middle" fill="#fef3c7" font-size="15">same cohort: correctness → tokens → time</text>
     <text x="1250" y="1000" text-anchor="middle" fill="#fef3c7" font-size="15">otherwise quality boundary · freeze best_pair</text>
   </g>

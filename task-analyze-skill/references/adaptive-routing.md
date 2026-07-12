@@ -13,19 +13,21 @@ Learn Qin's best downstream model and effort per sanitized task profile from rea
 
 The `local/` subtree is personal state. Mirror snapshots, hashes, safety scans, diffs, sync, and push exclude it. Pull preserves it byte-for-byte.
 
+End-to-end delegation performance is stored separately in `local/adaptive-routing/strategy_performance.json` through `scripts/strategy_performance.py`. Quality/capability learning remains entry-independent; performance admission is keyed by profile fingerprint, current entry pair, configuration cohort, sandbox, strategy version, producer-contract version, and exact workload hash because controller overhead changes with those values.
+
 Obsidian `TaskModelExperience/` is an optional sanitized readable projection for Task Analyze and other skills. It never replaces this private ledger as the machine selection authority. Write it only in Ending Task after Real Verify; if Obsidian is unavailable, skip the projection without affecting routing.
 
 ## Sanitized Profile
 
 Each local condition record has only controlled profile values: task family, artifact, `execution_domain`, scope, ambiguity, modality, risk, complexity, owning skill, project family, and verification shape. The domain is part of identity, so Python, plain C#, Unity C#, and non-code evidence do not share calibration. It also has a canonical candidate ladder, static suggestion, hard floor, one generalized privacy-filtered task summary, and explicit `success_model`/`failed_model` ranges.
 
-Its attempt rows retain only a sanitized route-run ID, producer pair, receipt/proof fields, Mini/Real outcomes, allowlisted failure class, trial flag, prompt-free `workload_prompt_sha256`, token totals, process time, and recording time. Never store raw prompts, raw results, paths, filenames, repository names, thread/session IDs, raw errors, account data, environment, auth data, secrets, or other private task content.
+Its attempt rows retain only a sanitized route-run ID, producer pair, receipt/proof fields, Ending Real outcome, allowlisted failure class, trial flag, prompt-free `workload_prompt_sha256`, token totals, process time, and recording time. Never store raw prompts, raw results, paths, filenames, repository names, thread/session IDs, raw errors, account data, environment, auth data, secrets, or other private task content.
 
 ## Event Evidence
 
-A result-producer attempt may contain requested/resolved/effective model and effort, receipt status, Mini/Real verdict, allowlisted failure class, prompt-free workload hash, token counts, process time, trial status, and a sanitized route-run ID. Mini creates or updates that producer attempt; Real updates the same attempt and never records the verifier model as the result producer.
+A result-producer attempt may contain requested/resolved/effective model and effort, receipt status, Ending Real verdict, allowlisted failure class, prompt-free workload hash, token counts, process time, trial status, and a sanitized route-run ID. Ending Real creates or updates that producer attempt and never records the verifier model as the result producer.
 
-`receipt_status=pass` requires a completed turn plus matching model and effort. Missing or mismatched receipts cannot earn a successful sample. For `mini_real`, a Mini pass is provisional until Ending Real updates the same producer receipt/run.
+`receipt_status=pass` requires a completed turn plus matching model and effort. Missing or mismatched receipts cannot earn a successful sample. No foreground provisional verdict is recorded.
 
 ## Recommendation Policy
 
@@ -37,16 +39,17 @@ Calibration is a bounded search for the best complete `model|effort` pair for on
 
 1. Resolve the owning skill and `execution_domain`, then apply supported-input, supported-effort, safety, authority, project, language, code-style, and owning-skill floors.
 2. With no prior success, use the static suggestion. The sole automatic exception is safe low-risk text-only tiny text/code/command work, which starts at eligible Spark-low.
-3. A runtime Spark failure for that exception uses the static suggestion without a quality penalty. Result execution retries only the exact planned `model|effort` fallback pairs and keeps sanitized attempt evidence; Mini/Ending verdict failures do not model-retry.
+3. A runtime Spark failure for that exception uses the static suggestion without a quality penalty. Result execution retries only the exact planned `model|effort` fallback pairs and keeps sanitized attempt evidence; Ending verdict failures do not model-retry.
 4. After a receipt-matched pass, trial exactly one lower eligible rung: lower effort on the same model first; only after that model reaches its minimum eligible effort, trial the next weaker model at that model's highest eligible effort. The normal ladder is Luna low (also called “light”) through Luna efforts, Terra efforts, then Sol ultra; Spark-low is only the tiny-work exception.
 5. Ending Real updates the same producer receipt/run, recomputes the recommendation, and persists/freezes `best_pair` once adjacent Real-verified pass/fail evidence identifies the eligible pair or a Real pass proves the hard floor. Reuse the frozen exact-profile `selected_pair` with `trial=false` until verified failure, ladder/hard-floor/profile drift, policy change, or explicit reset.
-6. Reopen the bounded search only for a receipt-matched Mini or Real correctness/quality failure, material profile drift, policy or eligible-ladder/hard-floor change, or explicit reset. On quality failure, upgrade in exact reverse order: raise effort on the same model first, then move to the next stronger eligible model only after the current model's eligible efforts are exhausted. When no stronger candidate exists, return a blocked/exhausted recommendation with no selected pair.
-7. Real Verify failure overrides an earlier Mini pass for the same route-run ID.
+6. Reopen the bounded search only for a receipt-matched Ending Real correctness/quality failure, material profile drift, policy or eligible-ladder/hard-floor change, or explicit reset. On quality failure, upgrade in exact reverse order: raise effort on the same model first, then move to the next stronger eligible model only after the current model's eligible efforts are exhausted. When no stronger candidate exists, return a blocked/exhausted recommendation with no selected pair.
 8. Availability, timeout, protocol, telemetry, execution, or receipt failures, plus unverified or mismatched receipts, are temporary diagnostic evidence. They can block pass credit or use an allowed execution fallback, but they never move the learned quality best or either quality boundary.
 9. An attempt-level quality failure cannot be erased by a later pass under the same route-run ID. A genuine retry gets a new route-run ID so both samples remain auditable.
 10. High-risk or irreversible work records evidence but does not auto-downgrade.
 
 Correctness/quality is the eligibility gate. Cost evidence is comparable only when at least two Real-passing pairs share an exact `workload_prompt_sha256` cohort and every compared pair has complete tokens and time. The recorder equal-weights shared cohorts, then minimizes median total tokens first, median process time second, and weaker rung last. Different workload hashes, missing hashes, incomplete metrics, or one passing pair fall back to the verified quality boundary and cannot support a savings claim. Tokens are a usage proxy, not a dollar-cost claim.
+
+Producer cost ranking never admits delegation by itself. The separate strategy gate requires at least six end-to-end Direct/Global pairs for the exact workload and entry/configuration cohort. Every arm must pass correctness with complete metrics and no retry/fallback/repair/unreceipted session. Logical tokens require lower Global cohort totals/raw medians and non-negative paired-median savings; pairwise wins and individual regressions are diagnostics. First-result latency requires lower Global cohort totals/raw medians, non-negative paired-median savings, and a strict majority of faster pairs. Ending/total-wall time is diagnostic and excluded from user-visible latency. Optimization continues only while repeated evidence identifies a deterministic correctness-preserving improvement; noise-bound comparisons stop the search. Foreground calibration is forbidden; explicit benchmark calibration is the only bypass.
 
 ## Profile Presets
 
@@ -60,7 +63,7 @@ The calibrated MuseAI complex profile is addressed without a ladder:
 python3 scripts/model_routing_history.py recommend --profile-preset grounded-repository-answer-complex --project-family museai --owning-skill muse-ai-plugin:muse-ai-dev-skill --task-summary "Reconstruct a bounded repository workflow and return verified structured evidence."
 ```
 
-This resolves the exact explicit condition `grounded/answer/multi/low/text/low/complex/museai/mini_real/muse-ai-plugin:muse-ai-dev-skill/general`, the full normal ladder, Terra-high static suggestion, and Luna-low hard floor. `adaptive_model_runner.py` accepts the same concise profile arguments and owns selection, receipt execution, optional named grounded Mini, and Mini recording in one invocation. Add `--emit-result` so the same passing summary returns the bounded result; it never writes the result into the ledger or receipt, emits nothing on failure, and removes the need for a second result read. Do not pass `--candidate-ladder`, `--static-suggestion`, or `--hard-floor` from the entry.
+This resolves the exact explicit condition `grounded/answer/multi/low/text/low/complex/museai/real/muse-ai-plugin:muse-ai-dev-skill/general`, the full normal ladder, Terra-high static suggestion, and Luna-low hard floor. `adaptive_model_runner.py` accepts the same concise profile arguments and owns selection plus receipt execution, then emits the completed result without foreground verification. Ending Real owns the grounded gate and quality recording. Do not pass `--candidate-ladder`, `--static-suggestion`, or `--hard-floor` from the entry.
 
 For JSON results, `--grounded-gate-preset json-object` checks receipt binding and exact JSON. `grounded-source-json-v1` additionally requires sorted contained `source_files`. `workflow-graph-json-v1` preserves the legacy six-key workflow contract with `public_return_keys`. `workflow-graph-json-v2` uses `always_return_keys` plus `optional_return_keys`, so conditional output and `conditional_serial` stage contracts do not have to be flattened into inaccurate parallel/serial claims. Both workflow presets sort agent/file/field lists while preserving dependency and early-exit order. Source-aware presets also take `--grounded-source-root`. Use the strict config file only for a different declared schema.
 
@@ -69,4 +72,4 @@ Use `recommend` and `record` with `--profile-preset`, `--project-family`, genera
 - `code_unspecified` for legacy code evidence.
 - `general` for non-code evidence.
 
-`record` also takes the main producer `--receipt`, `--verify-level`, `--verify-status`, and the same sanitized `--run-id` for Mini then Real. Direct non-dispatch model routes invoke it too; tool-only routes never record adaptive producer samples.
+`record` takes the main producer `--receipt`, `--verify-level real`, `--verify-status`, and the same sanitized `--run-id` after Ending Real. Direct non-dispatch model routes invoke it too; tool-only routes never record adaptive producer samples.
