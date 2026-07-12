@@ -91,12 +91,11 @@ REQUIRED_ENTRY = [
     "Exact read-only",
     "one bounded `rg`",
     "per authoritative file",
-    "user-named targets and direct definitions",
-    "answer once",
+    "exact user targets and direct definitions",
     "Anchor members, not classes/call sites",
-    "No plan, guessed names, skill load, subagent, broad search, reread, full-file read, or pre-result check",
-    "Then run proportional Ending Real",
-    "A later failure notifies, reopens, repairs, and re-presents",
+    "No plan, guessed names, skills, subagents, broad search, reread, full-file read, or pre-result check",
+    "verify only afterward with proportional Ending Real",
+    "Failures reopen, repair, and re-present",
 ]
 REQUIRED_TINY = ["tiny_text", "tiny_code", "command_generation", "Spark-low"]
 REQUIRED_ADAPTIVE = ["local/adaptive-routing/model_experience.json", "generalized privacy-filtered task summary", "result-producer attempt", "same producer receipt/run", "success_model", "failed_model", "raw prompts", "raw results", "model_experience.json"]
