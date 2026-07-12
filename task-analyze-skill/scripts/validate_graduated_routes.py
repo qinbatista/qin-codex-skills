@@ -66,7 +66,7 @@ def _dispatcher_module():
     return dispatcher
 
 
-def _validate_dispatcher_template(template, skills_root, failures):
+def _validate_dispatcher_template(template, skills_root, failures, require_installed=False):
     if not isinstance(template, dict):
         failures.append("admitted_dispatcher_template must be an object")
         return
@@ -117,7 +117,7 @@ def _validate_dispatcher_template(template, skills_root, failures):
         for model, efforts in dispatcher.MODEL_EFFORTS.items():
             for effort in efforts:
                 materialized = materialize_dispatcher_plan(plan, Path(temporary) / f"{model}-{effort}", model, effort)
-                plan_failures = dispatcher.validate_plan(materialized, model, effort, Path(temporary), skills_root)
+                plan_failures = dispatcher.validate_plan(materialized, model, effort, Path(temporary), skills_root, validate_skill_availability=require_installed)
                 failures.extend([f"admitted dispatcher plan {model}|{effort}: {failure}" for failure in plan_failures])
                 for template_node, materialized_node in zip(template_nodes, materialized["nodes"]):
                     if (template_node.get("model"), template_node.get("effort")) != (materialized_node.get("model"), materialized_node.get("effort")):
@@ -168,7 +168,7 @@ def validate_fixture(path=FIXTURE_PATH, skills_root=None, require_installed=Fals
     for scenario in scenarios:
         if any(route_id in {"task-analyze-skill", "workflow-skill"} for route_id in scenario.get("route", [])):
             failures.append(f"{scenario.get('prompt')}: ordinary route invokes full routing skills")
-    _validate_dispatcher_template(template, Path(skills_root or Path(__file__).resolve().parents[2]), failures)
+    _validate_dispatcher_template(template, Path(skills_root or Path(__file__).resolve().parents[2]), failures, require_installed)
     return failures
 
 

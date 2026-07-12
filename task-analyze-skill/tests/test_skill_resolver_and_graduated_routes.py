@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -113,6 +114,8 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
         self.assertTrue(any("skill is not installed: chrome:control-chrome" in failure for failure in failures))
 
     def test_plugin_symlink_outside_cache_is_rejected(self):
+        if os.name == "nt":
+            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             outside = root / "outside" / "SKILL.md"
@@ -124,6 +127,8 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
             self.assertIsNone(resolver.resolve_skill_path("vendor:skill", root / "skills"))
 
     def test_global_symlink_outside_skills_root_is_rejected(self):
+        if os.name == "nt":
+            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             outside = root / "outside" / "SKILL.md"

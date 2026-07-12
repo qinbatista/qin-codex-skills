@@ -156,7 +156,7 @@ def atomic_write_svg(path, svg_text):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_path = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(svg_text)
             handle.flush()
             os.fsync(handle.fileno())

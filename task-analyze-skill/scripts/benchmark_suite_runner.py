@@ -6,11 +6,13 @@ import hashlib
 import importlib.util
 import json
 import os
+import queue
 import selectors
 import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -116,7 +118,7 @@ def read_quota_status(args, codex_home):
     command_environment = os.environ.copy()
     command_environment["CODEX_HOME"] = str(codex_home)
     process = None
-    selector = selectors.DefaultSelector()
+    selector = None if os.name == "nt" else selectors.DefaultSelector()
     try:
         process = subprocess.Popen(
             [args.codex_bin, "app-server", "--listen", "stdio://"],
@@ -136,32 +138,63 @@ def read_quota_status(args, codex_home):
         for request in requests:
             process.stdin.write((json.dumps(request, separators=(",", ":")) + "\n").encode("utf-8"))
         process.stdin.flush()
-        selector.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + args.quota_app_server_timeout
-        response_buffer = b""
-        while time.monotonic() < deadline:
-            ready = selector.select(timeout=max(0, deadline - time.monotonic()))
-            if not ready:
-                break
-            response_chunk = os.read(process.stdout.fileno(), 65536)
-            if not response_chunk:
-                break
-            response_buffer += response_chunk
-            while b"\n" in response_buffer:
-                raw_line, response_buffer = response_buffer.split(b"\n", 1)
+
+        def parse_response_line(raw_line):
+            try:
+                response = json.loads(raw_line)
+            except (UnicodeError, json.JSONDecodeError):
+                return None
+            if isinstance(response, dict) and response.get("id") == QUOTA_RESPONSE_ID:
+                if response.get("error") is not None:
+                    raise QuotaStatusError("quota_app_server_error")
+                return parse_quota_response(response)
+            return None
+
+        if os.name == "nt":
+            response_queue = queue.Queue()
+
+            def read_response_lines():
                 try:
-                    response = json.loads(raw_line)
-                except (UnicodeError, json.JSONDecodeError):
-                    continue
-                if isinstance(response, dict) and response.get("id") == QUOTA_RESPONSE_ID:
-                    if response.get("error") is not None:
-                        raise QuotaStatusError("quota_app_server_error")
-                    return parse_quota_response(response)
+                    for response_line in process.stdout:
+                        response_queue.put(response_line)
+                finally:
+                    response_queue.put(None)
+
+            response_thread = threading.Thread(target=read_response_lines, daemon=True)
+            response_thread.start()
+            while time.monotonic() < deadline:
+                try:
+                    raw_line = response_queue.get(timeout=max(0, deadline - time.monotonic()))
+                except queue.Empty:
+                    break
+                if raw_line is None:
+                    break
+                parsed_status = parse_response_line(raw_line)
+                if parsed_status is not None:
+                    return parsed_status
+        else:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            response_buffer = b""
+            while time.monotonic() < deadline:
+                ready = selector.select(timeout=max(0, deadline - time.monotonic()))
+                if not ready:
+                    break
+                response_chunk = os.read(process.stdout.fileno(), 65536)
+                if not response_chunk:
+                    break
+                response_buffer += response_chunk
+                while b"\n" in response_buffer:
+                    raw_line, response_buffer = response_buffer.split(b"\n", 1)
+                    parsed_status = parse_response_line(raw_line)
+                    if parsed_status is not None:
+                        return parsed_status
         raise QuotaStatusError("quota_app_server_timeout")
     except OSError as error:
         raise QuotaStatusError("quota_app_server_unavailable") from error
     finally:
-        selector.close()
+        if selector is not None:
+            selector.close()
         if process is not None:
             if process.stdin is not None:
                 try:
@@ -512,7 +545,7 @@ def build_frozen_plan(args, require_fresh=True):
         expected_path = require_file(expected_root / f"{tier}.json", f"expected_missing_{tier}")
         try:
             prompt_bytes = prompt_path.read_bytes()
-            prompt_text = prompt_bytes.decode("utf-8")
+            prompt_text = prompt_bytes.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
             expected_document = benchmark_suite_gate.strict_json_loads(expected_path.read_bytes())
         except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
             raise BenchmarkRunnerError(f"input_invalid_{tier}")
@@ -523,7 +556,7 @@ def build_frozen_plan(args, require_fresh=True):
             benchmark_suite_gate.validate_source_files(expected_document, snapshot_root, source_pointer)
         except benchmark_suite_gate.BenchmarkGateError as error:
             raise BenchmarkRunnerError(f"expected_source_invalid_{tier}_{error.code}")
-        tier_inputs[tier] = {"prompt_path": prompt_path, "prompt_text": prompt_text, "prompt_sha256": sha256_bytes(prompt_bytes), "expected_path": expected_path, "expected_sha256": sha256_bytes(expected_path.read_bytes()), "source_files_pointer": source_pointer}
+        tier_inputs[tier] = {"prompt_path": prompt_path, "prompt_text": prompt_text, "prompt_sha256": sha256_bytes(prompt_text.encode("utf-8")), "expected_path": expected_path, "expected_sha256": sha256_bytes(expected_path.read_bytes()), "source_files_pointer": source_pointer}
     runs = []
     order_index = 1
     for repeat_index in range(1, max(tier_repeat_counts.values()) + 1):
@@ -551,6 +584,14 @@ def build_frozen_plan(args, require_fresh=True):
 
 
 def resolve_executable(command):
+    direct_path = Path(command).expanduser()
+    if direct_path.is_file():
+        return require_file(direct_path.resolve(), "codex_bin_missing")
+    if os.name == "nt" and command == "codex":
+        desktop_bin = Path(os.environ.get("LOCALAPPDATA", "")) / "OpenAI" / "Codex" / "bin"
+        desktop_candidates = [path for path in desktop_bin.glob("**/codex.exe") if path.is_file()]
+        if desktop_candidates:
+            return require_file(max(desktop_candidates, key=lambda path: path.stat().st_mtime_ns).resolve(), "codex_bin_missing")
     resolved = shutil.which(command)
     if resolved is None:
         raise BenchmarkRunnerError("codex_bin_missing")
@@ -720,18 +761,17 @@ def execute_run(args, run_plan, prompt_text):
     process = None
     try:
         with stdout_path.open("w", encoding="utf-8") as stdout_handle, stderr_path.open("w", encoding="utf-8") as stderr_handle:
-            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr_handle, text=True, cwd=environment["workdir"], env=command_environment, shell=False, bufsize=1)
-            process.stdin.write(prompt_text)
+            windows_binary_pipes = os.name == "nt"
+            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr_handle, text=not windows_binary_pipes, cwd=environment["workdir"], env=command_environment, shell=False, bufsize=0 if windows_binary_pipes else 1)
+            process.stdin.write(prompt_text.encode("utf-8") if windows_binary_pipes else prompt_text)
             process.stdin.close()
             deadline_ns = started_ns + (args.timeout + args.outer_timeout_grace) * 1_000_000_000
-            output_selector = selectors.DefaultSelector()
-            output_selector.register(process.stdout, selectors.EVENT_READ)
-            while output_selector.get_map():
-                for selected_key, _selected_mask in output_selector.select(timeout=args.poll_interval_ms / 1000):
-                    raw_line = selected_key.fileobj.readline()
-                    if not raw_line:
-                        output_selector.unregister(selected_key.fileobj)
-                        continue
+            output_selector = None
+
+            def consume_output_line(raw_line):
+                if raw_line:
+                    if isinstance(raw_line, bytes):
+                        raw_line = raw_line.decode("utf-8", errors="replace")
                     stdout_handle.write(raw_line)
                     stdout_handle.flush()
                     event = parse_result_ready_event_line(raw_line)
@@ -742,12 +782,48 @@ def execute_run(args, run_plan, prompt_text):
                             result_ready_event_failures.append("result_ready_event_invalid")
                         else:
                             result_ready_events.append({"event": event, "runner_monotonic_ns": time.monotonic_ns()})
-                if time.monotonic_ns() >= deadline_ns and process.poll() is None:
-                    outer_timed_out = True
-                    process.kill()
+
+            if os.name == "nt":
+                output_queue = queue.Queue()
+
+                def read_output_lines():
+                    try:
+                        for output_line in process.stdout:
+                            output_queue.put(output_line)
+                    finally:
+                        output_queue.put(None)
+
+                output_thread = threading.Thread(target=read_output_lines, daemon=True)
+                output_thread.start()
+                while True:
+                    try:
+                        raw_line = output_queue.get(timeout=args.poll_interval_ms / 1000)
+                    except queue.Empty:
+                        raw_line = ""
+                    if raw_line is None:
+                        break
+                    consume_output_line(raw_line)
+                    if time.monotonic_ns() >= deadline_ns and process.poll() is None:
+                        outer_timed_out = True
+                        process.kill()
+                output_thread.join(timeout=1)
+            else:
+                output_selector = selectors.DefaultSelector()
+                output_selector.register(process.stdout, selectors.EVENT_READ)
+                while output_selector.get_map():
+                    for selected_key, _selected_mask in output_selector.select(timeout=args.poll_interval_ms / 1000):
+                        raw_line = selected_key.fileobj.readline()
+                        if not raw_line:
+                            output_selector.unregister(selected_key.fileobj)
+                            continue
+                        consume_output_line(raw_line)
+                    if time.monotonic_ns() >= deadline_ns and process.poll() is None:
+                        outer_timed_out = True
+                        process.kill()
             process.wait()
             process_exit_code = process.returncode if process.returncode is not None else 124
-            output_selector.close()
+            if output_selector is not None:
+                output_selector.close()
             process.stdout.close()
     except OSError:
         process_exit_code = 127

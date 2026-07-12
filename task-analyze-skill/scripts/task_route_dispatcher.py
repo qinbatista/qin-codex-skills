@@ -204,6 +204,7 @@ def validate_plan(
     *,
     enforce_current_recommendation=False,
     history_path=None,
+    validate_skill_availability=True,
 ):
     skills_root = resolve_skills_root(skills_root)
     failures = []
@@ -253,7 +254,7 @@ def validate_plan(
         if model not in MODEL_EFFORTS or effort not in MODEL_EFFORTS.get(model, set()):
             failures.append(f"{node_id} has unsupported model/effort")
         skill = node.get("skill")
-        if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
+        if not isinstance(skill, str) or (validate_skill_availability and resolve_node_skill_path(skill, skills_root) is None):
             failures.append(f"{node_id} names unavailable skill {skill}")
         phase = node.get("phase")
         if phase not in ALLOWED_PHASES:

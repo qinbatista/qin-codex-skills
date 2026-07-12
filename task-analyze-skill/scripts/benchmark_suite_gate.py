@@ -258,7 +258,7 @@ def atomic_write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_path = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(value, handle, sort_keys=True, separators=(",", ":"))
             handle.write("\n")
             handle.flush()
@@ -824,8 +824,8 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
         try:
             prompt_path = resolve_plan_path(plan_root, run_plan["prompt_path"], "prompt_path")
             prompt_bytes = prompt_path.read_bytes()
-            prompt_file_sha256 = sha256_bytes(prompt_bytes)
-            prompt_bytes.decode("utf-8")
+            prompt_text = prompt_bytes.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+            prompt_file_sha256 = sha256_bytes(prompt_text.encode("utf-8"))
             if prompt_file_sha256 != run_plan["prompt_sha256"]:
                 fail("prompt_hash_mismatch", True)
         except (OSError, UnicodeError, BenchmarkGateError):
@@ -842,7 +842,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
         result_document, result_bytes = read_exact_json_result(result_path, "result_invalid")
         presented_result_sha256 = sha256_bytes(result_bytes)
         presented_result_object_sha256 = sha256_text(canonical_json(result_document))
-        result_text = result_bytes.decode("utf-8")
+        result_text = result_bytes.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
         result_message = result_text[:-1] if result_text.endswith("\n") else result_text
     except BenchmarkGateError as error:
         result_document = None

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -93,6 +94,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         return skills_dir
 
     def test_external_file_symlink_is_rejected_even_when_excluded(self):
+        if os.name == "nt":
+            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             skill_dir = root / "skill"
@@ -106,6 +109,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 sync_global_skills.included_files(skill_dir)
 
     def test_external_directory_symlink_is_rejected_even_when_excluded(self):
+        if os.name == "nt":
+            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             skill_dir = root / "skill"
@@ -119,6 +124,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 sync_global_skills.snapshot_hash([skill_dir])
 
     def test_symlink_rejection_does_not_copy_outside_bytes(self):
+        if os.name == "nt":
+            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "source"
@@ -137,6 +144,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertFalse((target / "linked.txt").exists())
 
     def test_target_and_repository_sentinels_survive_symlink_rejection(self):
+        if os.name == "nt":
+            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             staged_skills = self.staged_skill_copy(root)

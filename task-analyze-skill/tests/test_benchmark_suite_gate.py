@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -528,6 +529,8 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertEqual(environment_sha256, module.sha256_text(module.canonical_json(environment)))
 
     def test_catalog_snapshot_rejects_unreadable_duplicate_and_escaping_sources(self):
+        if os.name == "nt":
+            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / "missing-catalog-home"
