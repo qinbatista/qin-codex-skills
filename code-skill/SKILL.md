@@ -43,13 +43,13 @@ Read only what the inline request or admitted node needs:
 - Python: `references/python-rules.md`;
 - plain C#: `references/csharp-rules.md`;
 - Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`;
-- prompt-in-code: first apply the global `prompt-skill` contract, then use `references/prompt-generation.md` for executable-string and language-specific details;
+- prompt-in-code: always load the global `prompt-skill` first, then use `references/prompt-generation.md` for executable-string and language-specific details; a missing or skipped `prompt-skill` is a prompt-task routing failure, not a fallback condition;
 - safe repeated/parallel registered-code work: `references/parallelization.md`;
 - Spark and fallback behavior: `references/spark-small-code.md`.
 
 Active registry-owned code domains share this executor while retaining separate evidence keys and references. Current examples are `python`, `csharp`, and `unity_csharp`; `code_unspecified` is migration/history-only. Registry metadata identifies the domain; language rules are documented in this skill's `references` directory (for example, `python-rules.md`, `csharp-rules.md`, and `unity-csharp-rules.md`).
 
-For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems -> smallest complete solution` as an internal reasoning checklist, inspect the existing prompt and validators, and apply `prompt-skill` success/failure/output/verification contracts before the language-specific reference. Do not show a planning preamble; present the completed change before Ending Real verifies it.
+For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems -> smallest complete solution` as an internal reasoning checklist, inspect the existing prompt and validators, and apply the complete `prompt-skill` contract plus only the conditional controls that materially improve behavior before the language-specific reference. Do not show a planning preamble; present the completed change before Ending Real verifies it.
 
 ## Model Contract
 

@@ -14,7 +14,7 @@ SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "validate_task_a
 MODULE_SPEC = importlib.util.spec_from_file_location("validate_task_analyze_skill", SCRIPT_PATH)
 module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
-APPROVED = {"task-analyze-skill", "workflow-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"}
+APPROVED = {"task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"}
 
 
 class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
@@ -99,8 +99,14 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         global_skills = temp_dir / "skills"
         for skill_name in APPROVED:
             skill_dir = global_skills / skill_name
-            skill_dir.mkdir(parents=True)
-            (skill_dir / "SKILL.md").write_text(f"{skill_name}\n", encoding="utf-8")
+            if skill_name == "prompt-skill":
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "agents").mkdir()
+                (skill_dir / "SKILL.md").write_text((source.parent / "prompt-skill" / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
+                (skill_dir / "agents" / "openai.yaml").write_text((source.parent / "prompt-skill" / "agents" / "openai.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+            else:
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text(f"{skill_name}\n", encoding="utf-8")
         for relative in ("task-analyze-skill/references/model-selection.md", "code-skill/references/python-rules.md", "code-skill/references/csharp-rules.md", "code-skill/references/unity-csharp-rules.md", "code-skill/references/spark-small-code.md"):
             reference = global_skills / relative
             reference.parent.mkdir(parents=True, exist_ok=True)
@@ -332,12 +338,17 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             self.assertIn("verify only afterward", bootstrap_text)
             self.assertIn("Ordinary work stays inline", bootstrap_text)
             self.assertIn("obvious actions run once", bootstrap_text)
+            self.assertIn("Prompt work is the no-skill exception", bootstrap_text)
+            self.assertIn("always load `prompt-skill`", bootstrap_text)
+            self.assertIn("Ordinary text does not trigger it", bootstrap_text)
+            self.assertIn("prompt-in-code also loads its code owner", bootstrap_text)
+            self.assertIn("present the completed prompt before Ending Real", bootstrap_text)
             self.assertIn("Exact read-only", bootstrap_text)
             self.assertIn("one bounded `rg`", bootstrap_text)
             self.assertIn("per authoritative file", bootstrap_text)
             self.assertIn("exact user targets and direct definitions", bootstrap_text)
             self.assertIn("Anchor members, not classes/call sites", bootstrap_text)
-            self.assertIn("No plan, guessed names, skills, subagents, broad search, reread, full-file read, or pre-result check", bootstrap_text)
+            self.assertIn("No plan, guessed names, unrelated skills, subagents, broad search, reread, full-file read, or pre-result check", bootstrap_text)
             self.assertIn("verify only afterward with proportional Ending Real", bootstrap_text)
             self.assertIn("Failures reopen, repair, and re-present", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)

@@ -179,8 +179,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             loaded = module.load_history(history)
             self.assertEqual(legacy.read_text(encoding="utf-8"), source)
             self.assertEqual(loaded["schema_version"], 3)
-            if os.name != "nt":
-                self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
             with self.assertRaises(ValueError):
                 module.validate_summary("Read /private/token.txt and api_key=secret now.")
 
@@ -196,8 +195,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertEqual(status["tasks"], 0)
             loaded = module.load_history(history)
             self.assertEqual(loaded["schema_version"], module.SCHEMA_VERSION)
-            if os.name != "nt":
-                self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
 
     def test_validate_condition_rejects_inactive_domain_in_new_profiles(self):
         with self._with_inactive_domain():
@@ -962,12 +960,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
         self.assertNotEqual(module.condition_key(module.validate_condition(vars(args_py))), module.condition_key(module.validate_condition(vars(args_unity))))
 
     def test_concise_grounded_complex_preset_uses_real_identity_and_keeps_legacy_key_readable(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            skill_path = root / "plugins" / "cache" / "source" / "muse-ai-plugin" / "1.0.0" / "skills" / "muse-ai-dev-skill" / "SKILL.md"
-            skill_path.parent.mkdir(parents=True)
-            skill_path.write_text("# Test skill\n", encoding="utf-8")
-            args = parse_profile_args(["recommend", "--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--skills-root", str(root / "skills"), "--plugins-cache-root", str(root / "plugins" / "cache"), "--task-summary", SUMMARY])
+        args = parse_profile_args(["recommend", "--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--task-summary", SUMMARY])
         condition, _, pairs, static_pair, hard_pair = module._profile(args)
         self.assertEqual(condition["verification_shape"], "real")
         self.assertEqual(module.condition_key(condition), "dc7d1ed94cf7a1c5aec354248f843f25ea98187903cd9ce60bd44957d5fa06ff")

@@ -9,15 +9,17 @@
 
 **⚡ Inline by default · 🧭 route only when proven · 📣 present the result immediately · 🌙 verify and learn afterward**
 
-[![Skills](https://img.shields.io/badge/public_skills-6-38bdf8)](#-six-independent-skills)
+[![Skills](https://img.shields.io/badge/public_skills-7-38bdf8)](#-seven-independent-skills)
 [![Entry](https://img.shields.io/badge/entry-hookless_inline-2dd4bf)](#-hookless-first-result)
-[![Proof](https://img.shields.io/badge/benchmark_v5-confirmed-22c55e)](#-generated-real-ab)
+[![Proof](https://img.shields.io/badge/benchmark_v5-historical-f59e0b)](#-generated-real-ab)
 
 </div>
 
 ## ✨ Hookless first result
 
 The tiny policy in `AGENTS.md` applies to every task. Ordinary work stays on the **current user model**: use the fewest tool rounds and narrowest sufficient evidence, finish the requested work, and present the completed result immediately. No hook, route preamble, Task Analyze load, Workflow load, child model, receipt, memory search, foreground verifier, or model verifier is added by default.
+
+Every reusable prompt or durable AI-instruction task loads [`Prompt`](./prompt-skill/SKILL.md) inline on the current model; ordinary non-prompt prose does not trigger it.
 
 Load full [`Task Analyze`](./task-analyze-skill/SKILL.md) and [`Workflow`](./workflow-skill/SKILL.md) only for an explicit routing/model request, routing maintenance, or a complex dependency graph whose complete strategy has passed performance admission. Missing evidence means inline.
 
@@ -28,16 +30,17 @@ Load full [`Task Analyze`](./task-analyze-skill/SKILL.md) and [`Workflow`](./wor
   <img src="./management-skill/assets/readme/task-lifecycle.svg" alt="Inline task or admitted route presenting the completed result before Ending Real">
 </picture>
 
-## 🧩 Six independent skills
+## 🧩 Seven independent skills
 
 | Skill | Responsibility |
 |---|---|
 | 🧭 [`Task Analyze`](./task-analyze-skill/SKILL.md) | Explicit/admitted model strategy, topology, and performance decision. |
 | 🗺️ [`Workflow`](./workflow-skill/SKILL.md) | Execute an admitted locked graph and release its first result. |
+| ✍️ [`Prompt`](./prompt-skill/SKILL.md) | 100% global gate for reusable prompts and durable AI instructions; ordinary prose is excluded. |
 | 💻 [`Code`](./code-skill/SKILL.md) | Python, C#, Unity C#, probes, expandable domains, and the Spark obvious-only route. |
 | 🧪 [`Verify`](./verify-skill/SKILL.md) | Post-result Real, visual, UI, artifact, and regression proof. |
 | ⚡ [`Optimization`](./optimization-skill/SKILL.md) | Turn stable repeated work into smaller scripts, references, assets, or templates. |
-| 🔐 [`Management`](./management-skill/SKILL.md) | Private learning, profiles, README generation, privacy checks, and the six-skill mirror. |
+| 🔐 [`Management`](./management-skill/SKILL.md) | Private learning, profiles, README generation, privacy checks, and the seven-skill mirror. |
 
 ## 🤖 Dynamic model + effort
 
@@ -72,10 +75,10 @@ Benchmark manifests and summaries come from the generated receipt/source/expecte
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg">
-  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Generated benchmark v5 confirming simple, medium, and complex Global strategy behavior">
+  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Historical benchmark v5 for simple, medium, and complex Global strategy behavior">
 </picture>
 
-Benchmark v5 used the same frozen source, workload, sandbox, `config.toml`, model cache, memory snapshot, acceptance, and `gpt-5.6-sol | ultra` in both arms; only the Direct-versus-Global `AGENTS.md` treatment differed. Direct used raw `--direct-task`; Global used raw `--bootstrap-task`. Twelve runs formed six A/B pairs, two per tier. Generated gates verified every selected result and receipt with **0 retries, 0 fallbacks, and 0 repairs**. This is an optimization-confirmation cohort; the separate delegation gate still requires six pairs for one exact condition.
+Benchmark v5 predates the 2026-07-12 global Prompt gate, so it is historical evidence—not proof of the current exact configuration. It used the same frozen source, workload, sandbox, `config.toml`, model cache, memory snapshot, acceptance, and `gpt-5.6-sol | ultra` in both arms; only the Direct-versus-Global `AGENTS.md` treatment differed. Direct used raw `--direct-task`; Global used raw `--bootstrap-task`. Twelve runs formed six A/B pairs, two per tier. Generated gates verified every selected result and receipt with **0 retries, 0 fallbacks, and 0 repairs**. This is an optimization-confirmation cohort; the separate delegation gate still requires six pairs for one exact condition.
 
 | Tier | Pairs | Task tokens, Direct → Global | Total saving · wins | First-result time, Direct → Global | Total saving · wins | Result |
 |---|---:|---:|---:|---:|---:|---|
@@ -83,9 +86,9 @@ Benchmark v5 used the same frozen source, workload, sandbox, `config.toml`, mode
 | Medium | 2 | `281,493 → 98,341` | **65.064% · 2/2** | `58.012s → 39.010s` | **32.755% · 2/2** | ✅ improved |
 | Complex | 2 | `1,133,713 → 154,543` | **86.368% · 2/2** | `298.277s → 203.265s` | **31.854% · 2/2** | ✅ improved |
 
-> **Overall confirmation: Global used 77.292% fewer task tokens and reached first results 29.464% faster across the six selected pairs.** Medium now wins both pairs after member-anchored reads replaced class/call-site overread. Simple saved tokens and its time difference stayed inside measured Direct variance; Complex time remained diagnostic but also improved.
+> **Historical cohort: Global used 77.292% fewer task tokens and reached first results 29.464% faster across the six selected pairs.** Medium won both pairs after member-anchored reads replaced class/call-site overread. Simple saved tokens and its time difference stayed inside measured Direct variance; Complex time remained diagnostic but also improved.
 
-This confirms one controlled empirical cohort, not universal per-task dominance or six-pair delegation admission. Runtime varies, and a task already executed optimally may have nothing left to remove. “Task tokens” include cached input, exclude Ending/verification sessions, and are an operational usage measure—not billing tokens, price, or cryptographic attestation. [`Sanitized evidence`](./task-analyze-skill/assets/model-routing-benchmark-example.json) contains the publishable gate summary; raw prompts, paths, session IDs, and receipts stay local.
+This records one controlled historical cohort, not the current exact configuration, universal per-task dominance, or six-pair delegation admission. Runtime varies, and a task already executed optimally may have nothing left to remove. “Task tokens” include cached input, exclude Ending/verification sessions, and are an operational usage measure—not billing tokens, price, or cryptographic attestation. [`Sanitized evidence`](./task-analyze-skill/assets/model-routing-benchmark-example.json) contains the publishable gate summary; raw prompts, paths, session IDs, and receipts stay local.
 
 ## 🧪 Verify after the result
 
@@ -107,7 +110,7 @@ Add Python, C#, Unity C#, or another domain through the [`router extension guide
 
 ## 🛠️ Install + privacy
 
-1. Put exactly the six public skill folders under `~/.codex/skills/`.
+1. Put exactly the seven public skill folders under `~/.codex/skills/`.
 2. Merge [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) into `~/.codex/AGENTS.md`.
 3. Start tasks normally—no lifecycle hook is installed.
 

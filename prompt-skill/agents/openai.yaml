@@ -1,0 +1,5 @@
+interface:
+  display_name: "Prompt Skill"
+  short_description: "100% global gate for reusable prompt and durable-instruction work"
+  default_prompt: >-
+    Always use $prompt-skill whenever the requested work creates, reviews, edits, repairs, standardizes, tests, summarizes, optimizes, or changes a reusable prompt or durable AI instruction, including system/developer/agent/Custom GPT instructions, image-generation prompts, templates, and prompts embedded in code, config, or workflows. This is the 100% global prompt-task gate across projects. Ordinary prose does not trigger it merely because it is text. Stay inline on the current model, load the owning code executor for prompt-in-code edits, present the completed prompt first, and run trials or Real Verify afterward in Ending Task.

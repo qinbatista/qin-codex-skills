@@ -409,7 +409,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
                 record = module.run_node(node, root / "work" / "cache" / "route", {}, root / "state.sqlite", root, skills_root=synthetic_skills_root)
             self.assertEqual(record["status"], "pass")
-            self.assertIn("skills/frontend-app-builder/SKILL.md", captured[0].replace("\\", "/"))
+            self.assertIn("skills/frontend-app-builder/SKILL.md", captured[0])
 
     def test_run_plan_returns_after_result_without_foreground_verify(self):
         with tempfile.TemporaryDirectory() as temp_dir:

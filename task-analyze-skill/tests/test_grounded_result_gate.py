@@ -4,7 +4,6 @@ import hashlib
 import importlib.util
 import io
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -95,8 +94,6 @@ class GroundedResultGateTests(unittest.TestCase):
             self.assertEqual(verdict["failure"], "json_array_unsorted")
 
     def test_source_traversal_absolute_missing_and_symlink_escape_fail_without_path_leakage(self):
-        if os.name == "nt":
-            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
             source_root = directory / "source"

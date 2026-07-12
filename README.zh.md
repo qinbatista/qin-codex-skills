@@ -9,14 +9,15 @@
 flowchart LR
   skill_task_analyze_skill["task-analyze-skill"] --> inside_task_analyze_skill["显式路由与准入策略<br/>可多选模块<br/>无 hook inline bootstrap<br/>显式激活边界<br/>性能准入<br/>已准入路线显示<br/>运行时证明"]
   skill_workflow_skill["workflow-skill"] --> inside_workflow_skill["已准入路线执行控制器<br/>可多选模块<br/>已准入路线执行<br/>Inline 回退<br/>Main Goal / Ending Task 分流<br/>依赖拓扑<br/>运行时计数"]
-  skill_code_skill["code-skill"] --> inside_code_skill["Inline 或已准入路线执行者<br/>可多选模块<br/>Prompt Creating<br/>Karpathy Coding Guidelines<br/>Python Code Checker<br/>C# Minimal Style<br/>Easy Python/C# Spark"]
+  skill_prompt_skill["prompt-skill"] --> inside_prompt_skill["Inline 或已准入路线执行者<br/>可多选模块<br/>全局 100% Prompt 入口<br/>普通文案排除<br/>条件化 Prompt 控制<br/>无冲突契约<br/>结果优先测试"]
+  skill_code_skill["code-skill"] --> inside_code_skill["Inline 或已准入路线执行者<br/>可多选模块<br/>Prompt-in-code 集成<br/>Karpathy Coding Guidelines<br/>Python Code Checker<br/>C# Minimal Style<br/>Easy Python/C# Spark"]
   skill_verify_skill["verify-skill"] --> inside_verify_skill["Inline 或已准入路线执行者<br/>可多选模块<br/>UI Review<br/>本地脚本验证<br/>Skill 验证<br/>生成物验证<br/>真实证据和报告"]
   skill_optimization_skill["optimization-skill"] --> inside_optimization_skill["Inline 或已准入路线执行者<br/>可多选模块<br/>Skill Optimization<br/>官方 skill 合规检查<br/>本地脚本转换<br/>引用资料抽取<br/>资产和模板"]
   skill_management_skill["management-skill"] --> inside_management_skill["Inline 或已准入路线执行者<br/>可多选模块<br/>Codex Switch<br/>GitHub Sync<br/>隐私安全管理"]
   classDef skill fill:#111,color:#fff,stroke:#eee;
   classDef content fill:#2f2f2f,color:#fff,stroke:#666;
-  class skill_task_analyze_skill,skill_workflow_skill,skill_code_skill,skill_verify_skill,skill_optimization_skill,skill_management_skill skill;
-  class inside_task_analyze_skill,inside_workflow_skill,inside_code_skill,inside_verify_skill,inside_optimization_skill,inside_management_skill content;
+  class skill_task_analyze_skill,skill_workflow_skill,skill_prompt_skill,skill_code_skill,skill_verify_skill,skill_optimization_skill,skill_management_skill skill;
+  class inside_task_analyze_skill,inside_workflow_skill,inside_prompt_skill,inside_code_skill,inside_verify_skill,inside_optimization_skill,inside_management_skill content;
 ```
 
 ## Main Goal 和 Ending Task
@@ -56,11 +57,18 @@ flowchart TD
 - **可多选模块：** 已准入路线执行; Inline 回退; Main Goal / Ending Task 分流; 依赖拓扑; 运行时计数
 - **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。
 
+#### [`prompt-skill`](./prompt-skill/) · 优化类 / Optimization
+
+- **角色：** Inline 或已准入路线执行者
+- **大功能：** 可复用 prompt 与持久 AI 指令创建、审查、编辑、修复、标准化、测试、总结和优化的全局 100% 入口。它在当前模型 inline 执行，普通文案不会误触发。
+- **可多选模块：** 全局 100% Prompt 入口; 普通文案排除; 条件化 Prompt 控制; 无冲突契约; 结果优先测试
+- **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。
+
 #### [`code-skill`](./code-skill/) · 代码类 / Code
 
 - **角色：** Inline 或已准入路线执行者
 - **大功能：** 活动注册代码域的 direct-inline 或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务保留当前模型；Spark 只用于已准入的明显小任务路线。
-- **可多选模块：** Prompt Creating; Karpathy Coding Guidelines; Python Code Checker; C# Minimal Style; Easy Python/C# Spark
+- **可多选模块：** Prompt-in-code 集成; Karpathy Coding Guidelines; Python Code Checker; C# Minimal Style; Easy Python/C# Spark
 - **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。
 
 #### [`verify-skill`](./verify-skill/) · 验证类 / Verification

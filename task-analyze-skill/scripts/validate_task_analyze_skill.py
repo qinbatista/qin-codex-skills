@@ -245,14 +245,16 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Analyze", "Ordinary work stays inline", "obvious actions run once", "Exact read-only", "one bounded `rg`", "per authoritative file", "exact user targets and direct definitions", "Anchor members, not classes/call sites", "No plan, guessed names, skills, subagents, broad search, reread, full-file read, or pre-result check", "Present completed work immediately", "verify only afterward with proportional Ending Real", "Failures reopen, repair, and re-present"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Analyze", "Ordinary work stays inline", "obvious actions run once", "Prompt work is the no-skill exception", "always load `prompt-skill`", "creates, reviews, edits, repairs, standardizes, tests, summarizes, optimizes, or changes", "reusable prompt or durable AI instruction", "Ordinary text does not trigger it", "Stay inline", "prompt-in-code also loads its code owner", "present the completed prompt before Ending Real", "Exact read-only", "one bounded `rg`", "per authoritative file", "exact user targets and direct definitions", "Anchor members, not classes/call sites", "No plan, guessed names, unrelated skills, subagents, broad search, reread, full-file read, or pre-result check", "Present completed work immediately", "verify only afterward with proportional Ending Real", "Failures reopen, repair, and re-present"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Post-Result Ending Simplicity Review", "Present the completed Python edit immediately", "After that first presentation, Ending Task", "correctness failure"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["present the completed edit immediately", "afterward in Ending Task Real Verify", "do not gate the first presentation"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
+REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "In Ending Real, test with representative cases"]
+REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "present the completed prompt first"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "LOCKED_ROUTE_NODE", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
-MAX_GLOBAL_BOOTSTRAP_BYTES = 512
+MAX_GLOBAL_BOOTSTRAP_BYTES = 896
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
     "The entry is a bounded controller",
@@ -557,7 +559,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["Ordinary work stays inline", "Exact-scoped read-only work stays on the current model", "no subagent/route", "exact named-source audit", "one bounded rg per authoritative file", "every exact user-named target and direct definition", "anchors named members directly", "never adds enclosing-class/call-site anchors", "guesses identifier families", "answers once", "no plan/skill load/broad search/reread/full-file/pre-result check", "presents now", "full-skill load", "Ending Real Verify", "end-to-end evidence", "beating Direct in tokens and first-result time", "frozen Real-pass trial=false", "hide plans"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["Ordinary work stays inline", "Prompt-artifact work is the one ordinary skill exception", "always load prompt-skill", "ordinary prose does not trigger it", "present the completed prompt before Ending Real", "Exact-scoped read-only work stays on the current model", "no subagent/route", "exact named-source audit", "one bounded rg per authoritative file", "every exact user-named target and direct definition", "anchors named members directly", "never adds enclosing-class/call-site anchors", "guesses identifier families", "answers once", "no plan/unrelated-skill load/broad search/reread/full-file/pre-result check", "presents now", "full-skill load", "Ending Real Verify", "end-to-end evidence", "beating Direct in tokens and first-result time", "frozen Real-pass trial=false", "hide plans"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
@@ -610,6 +612,12 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
         failures.extend(missing_terms(label, reference_text, required_terms))
         if "check before the main result" in normalize(reference_text) or "test the edited path with the smallest proportional check before the main result" in normalize(reference_text):
             failures.append(f"{label} still gates first presentation with a foreground check")
+    prompt_contracts = {"Prompt skill": (global_skills_root / "prompt-skill" / "SKILL.md", REQUIRED_PROMPT_SKILL_TEXT), "Prompt skill agent": (global_skills_root / "prompt-skill" / "agents" / "openai.yaml", REQUIRED_PROMPT_AGENT_TEXT)}
+    for label, (prompt_path, required_terms) in prompt_contracts.items():
+        if not prompt_path.exists():
+            failures.append(f"{label} missing: {prompt_path}")
+            continue
+        failures.extend(missing_terms(label, read_text(prompt_path), required_terms))
     nested_skill_files = [path for path in global_skills_root.rglob("SKILL.md") if ".system" not in path.relative_to(global_skills_root).parts and path.parent.parent != global_skills_root]
     if nested_skill_files:
         failures.append(f"loader-visible nested SKILL.md files remain under global skills: {len(nested_skill_files)}")

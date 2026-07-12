@@ -24,7 +24,7 @@ RENDERER_SPEC.loader.exec_module(renderer)
 class BenchmarkPublicExportTests(unittest.TestCase):
     def write_json(self, path, value):
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes((json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+        path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
     def relative(self, root, path):
         return path.relative_to(root).as_posix()
@@ -87,7 +87,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
                 expected_path = root / "expected" / f"{tier}.json"
                 expected_document = {"tier": tier, "answer": "ok", "source_files": ["source.py"]}
                 prompt_path.parent.mkdir(parents=True, exist_ok=True)
-                prompt_path.write_bytes(f"{tier} prompt\n".encode("utf-8"))
+                prompt_path.write_text(f"{tier} prompt\n", encoding="utf-8")
                 self.write_json(expected_path, expected_document)
                 pair_id = f"{tier}-r{repeat_index:02d}"
                 prompt_sha256 = hashlib.sha256(prompt_path.read_bytes()).hexdigest()
@@ -152,8 +152,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertNotIn("receipt_session_ids", public_text)
         self.assertNotIn("skills_catalog_root", public_text)
         self.assertNotIn("plugins_catalog_root", public_text)
-        if os.name != "nt":
-            self.assertEqual(output_mode, 0o644)
+        self.assertEqual(output_mode, 0o644)
 
     def test_two_pair_confirmation_suite_is_publicly_exportable(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -86,7 +85,7 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             skills_root = root / "skills"
-            for skill_name in ("task-analyze-skill", "workflow-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"):
+            for skill_name in ("task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"):
                 skill_path = skills_root / skill_name / "SKILL.md"
                 skill_path.parent.mkdir(parents=True, exist_ok=True)
                 skill_path.write_text(f"{skill_name}\n", encoding="utf-8")
@@ -114,8 +113,6 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
         self.assertTrue(any("skill is not installed: chrome:control-chrome" in failure for failure in failures))
 
     def test_plugin_symlink_outside_cache_is_rejected(self):
-        if os.name == "nt":
-            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             outside = root / "outside" / "SKILL.md"
@@ -127,8 +124,6 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
             self.assertIsNone(resolver.resolve_skill_path("vendor:skill", root / "skills"))
 
     def test_global_symlink_outside_skills_root_is_rejected(self):
-        if os.name == "nt":
-            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             outside = root / "outside" / "SKILL.md"

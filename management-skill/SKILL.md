@@ -31,18 +31,19 @@ Task Analyze owns selection and storage. Management records a completed result-p
 
 When a configured Obsidian vault exists, Ending Task may also write a sanitized readable projection to `TaskModelExperience/` through `../task-analyze-skill/scripts/obsidian_memory_bridge.py record-model`. Record only after Real Verify, only for the related task profile, and only controlled summary/pair/verdict/boundary/switch/comparable-metric fields. The private JSON ledger remains authoritative. Missing Obsidian is a successful no-op.
 
-## Approved Six-Skill Mirror
+## Approved Seven-Skill Mirror
 
 The public mirror set and order are exactly:
 
 1. `task-analyze-skill`
 2. `workflow-skill`
-3. `code-skill`
-4. `verify-skill`
-5. `optimization-skill`
-6. `management-skill`
+3. `prompt-skill`
+4. `code-skill`
+5. `verify-skill`
+6. `optimization-skill`
+7. `management-skill`
 
-The local global skill directory may contain unrelated skills such as `chronicle`. Mirror selection, hashing, status, pull, and deletion logic must ignore and preserve those unrelated local folders. The remote mirror itself must contain exactly the approved six.
+The local global skill directory may contain unrelated skills such as `chronicle`. Mirror selection, hashing, status, pull, and deletion logic must ignore and preserve those unrelated local folders. The remote mirror itself must contain exactly the approved seven.
 
 ## Privacy And Authorization
 
@@ -54,15 +55,15 @@ The local global skill directory may contain unrelated skills such as `chronicle
 
 ## README Generation
 
-The durable English README source is `assets/readme/github-readme-template.md`. Its 14 local SVG assets (seven desktop/mobile diagram pairs) explain the six-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, private adaptive routing, and the sanitized same-workload benchmark example. The README must explain that the portable hookless inline bootstrap keeps ordinary work on the current model, the full Task Analyze skill loads only for explicit routing/benchmark/maintenance or admitted delegation, Workflow runs only after positive end-to-end admission, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
+The durable English README source is `assets/readme/github-readme-template.md`. Its 14 local SVG assets (seven desktop/mobile diagram pairs) explain the seven-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, private adaptive routing, and the sanitized same-workload benchmark example. The README must explain that the portable hookless inline bootstrap keeps ordinary work on the current model, every reusable prompt/durable-instruction task loads Prompt inline, the full Task Analyze skill loads only for explicit routing/benchmark/maintenance or admitted delegation, Workflow runs only after positive end-to-end admission, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
 
-The public README must name the First Result Principle, the direct-action boundary, the weak-to-strong complete `model|effort` ladder, the receipt-backed adaptive goal, graduated routing scenarios, the code-domain extension recipe, reasonable response-time/token use, exactly six public skills, and the exclusion of local `model_experience.json`.
+The public README must name the First Result Principle, the 100% global Prompt gate and ordinary-prose exclusion, the direct-action boundary, the weak-to-strong complete `model|effort` ladder, the receipt-backed adaptive goal, graduated routing scenarios, the code-domain extension recipe, reasonable response-time/token use, exactly seven public skills, and the exclusion of local `model_experience.json`.
 
 For README changes:
 
 1. Edit the durable template and adjacent SVGs.
 2. Generate a local repository snapshot only.
-3. Verify internal links, SVG parsing/accessibility, desktop/narrow rendering, and six-skill selection.
+3. Verify internal links, SVG parsing/accessibility, desktop/narrow rendering, and seven-skill selection.
 4. Do not publish without a separate explicit request.
 
 ## Main Result And Ending Task

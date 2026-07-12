@@ -166,7 +166,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="route-attempt", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
-        self.assertEqual(run_mock.call_args.args[0], [module.resolve_codex_command("codex"), "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
+        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
         attempt = receipt["route_attempts"][0]
         self.assertEqual(attempt["requested_pair"], "gpt-5.6-luna|low")
         self.assertEqual(attempt["resolved_pair"], "gpt-5.6-luna|low")
@@ -189,7 +189,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         args = argparse.Namespace(model="gpt-5.3-codex-spark", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="runtime-fail", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
-        self.assertEqual(run_mock.call_args.args[0][0], module.resolve_codex_command("codex"))
+        self.assertEqual(run_mock.call_args.args[0][0], "codex")
         attempt = receipt["route_attempts"][0]
         self.assertEqual(attempt["status"], "fail")
         self.assertEqual(attempt["failure_class"], "execution")

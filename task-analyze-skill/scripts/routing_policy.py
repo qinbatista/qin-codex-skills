@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Single source of truth for model routing metadata used by task-analyze-skill."""
 
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path
 
 MODEL_DEFINITIONS = {
     "gpt-5.3-codex-spark": {
@@ -195,7 +195,7 @@ def validate_execution_domain_registry(skills_root=None):
         if not normalized:
             raise ValueError(f"execution domain {domain} has invalid reference_path")
         reference = Path(normalized)
-        if reference.is_absolute() or PurePosixPath(normalized).is_absolute() or PureWindowsPath(normalized).is_absolute():
+        if reference.is_absolute():
             raise ValueError(f"execution domain {domain} reference_path must be relative to the skills root: {normalized}")
         if any(part == ".." for part in reference.parts):
             raise ValueError(f"execution domain {domain} reference_path must not use parent traversal: {normalized}")

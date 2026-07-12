@@ -54,7 +54,7 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
                 receipt_path.write_text(json.dumps({"status": "pass", "thread_id": node["id"]}), encoding="utf-8")
                 return {"id": node["id"], "phase": node["phase"], "skill": node["skill"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "worker_identity": node["id"]}
 
-            with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}), patch.object(dispatcher, "resolve_node_skill_path", return_value=root / "SKILL.md"):
+            with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
                 manifest = dispatcher.run_plan(plan, "gpt-5.6-luna", "low", root, history_path=root / "history.json")
             self.assertEqual(calls, ["design", "implementation"])
             self.assertEqual(manifest["ending_nodes_pending"], ["ending-real"])
@@ -67,7 +67,7 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
             handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
             release = dispatcher._release_main_result(handoff)
             self.assertEqual(release["status"], "pass")
-            with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}), patch.object(dispatcher, "resolve_node_skill_path", return_value=root / "SKILL.md"):
+            with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
                 ending = dispatcher.run_ending_handoff(handoff_path)
             self.assertEqual(ending["status"], "pass")
             self.assertEqual(ending["routing_learning"], {"status": "recorded"})

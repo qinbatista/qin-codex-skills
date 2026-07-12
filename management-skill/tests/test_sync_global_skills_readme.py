@@ -1,6 +1,5 @@
 import importlib.util
 import json
-import os
 import re
 import tempfile
 import unittest
@@ -86,6 +85,21 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def primary_skill_paths(self):
         return [SKILLS_DIR / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]
 
+    def test_approved_public_mirror_is_exactly_seven_including_prompt(self):
+        expected_order = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"]
+
+        self.assertEqual(sync_global_skills.PRIMARY_SKILL_ORDER, expected_order)
+        self.assertEqual(sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES, set(expected_order))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository_dir = Path(temp_dir)
+            for skill_name in expected_order:
+                (repository_dir / skill_name).mkdir()
+                (repository_dir / skill_name / "SKILL.md").write_text("---\nname: test\ndescription: test\n---\n", encoding="utf-8")
+            sync_global_skills.assert_repository_skill_set(repository_dir)
+            (repository_dir / "prompt-skill" / "SKILL.md").unlink()
+            with self.assertRaisesRegex(RuntimeError, "prompt-skill"):
+                sync_global_skills.assert_repository_skill_set(repository_dir)
+
     def staged_skill_copy(self, root):
         skills_dir = root / "skills"
         skills_dir.mkdir()
@@ -94,8 +108,6 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         return skills_dir
 
     def test_external_file_symlink_is_rejected_even_when_excluded(self):
-        if os.name == "nt":
-            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             skill_dir = root / "skill"
@@ -109,8 +121,6 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 sync_global_skills.included_files(skill_dir)
 
     def test_external_directory_symlink_is_rejected_even_when_excluded(self):
-        if os.name == "nt":
-            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             skill_dir = root / "skill"
@@ -124,8 +134,6 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 sync_global_skills.snapshot_hash([skill_dir])
 
     def test_symlink_rejection_does_not_copy_outside_bytes(self):
-        if os.name == "nt":
-            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "source"
@@ -144,8 +152,6 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertFalse((target / "linked.txt").exists())
 
     def test_target_and_repository_sentinels_survive_symlink_rejection(self):
-        if os.name == "nt":
-            self.skipTest("Windows symlink privilege is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             staged_skills = self.staged_skill_copy(root)
@@ -175,10 +181,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(readme, expected)
         self.assertLessEqual(len(template.splitlines()), 230)
         self.assertLessEqual(len(template.split()), 1700)
-        skills_section = readme.split("## 🧩 Six independent skills", 1)[1].split("\n## ", 1)[0]
+        skills_section = readme.split("## 🧩 Seven independent skills", 1)[1].split("\n## ", 1)[0]
         skill_rows = re.findall(r"^\| .*?\[`([^`]+)`\]\(\./([^/]+)/SKILL\.md\)", skills_section, re.M)
-        expected_skill_rows = {"Task Analyze": "task-analyze-skill", "Workflow": "workflow-skill", "Code": "code-skill", "Verify": "verify-skill", "Optimization": "optimization-skill", "Management": "management-skill"}
-        self.assertEqual(len(skill_rows), 6)
+        expected_skill_rows = {"Task Analyze": "task-analyze-skill", "Workflow": "workflow-skill", "Prompt": "prompt-skill", "Code": "code-skill", "Verify": "verify-skill", "Optimization": "optimization-skill", "Management": "management-skill"}
+        self.assertEqual(len(skill_rows), 7)
         self.assertEqual(dict(skill_rows), expected_skill_rows)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
@@ -230,8 +236,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
         self.assertIn("Publishing requires an explicit current user request", readme)
-        self.assertIn("## 🧩 Six independent skills", readme)
-        self.assertIn("public_skills-6", readme)
+        self.assertIn("## 🧩 Seven independent skills", readme)
+        self.assertIn("public_skills-7", readme)
+        self.assertIn("Every reusable prompt or durable AI-instruction task loads", readme)
+        self.assertIn("ordinary non-prompt prose does not trigger it", readme)
+        self.assertIn("100% global gate for reusable prompts and durable AI instructions", readme)
+        self.assertIn("exactly the seven public skill folders", readme)
         self.assertNotIn("hookless, 100% entry", readme)
         self.assertNotIn("entry model and effort analyze and route only", readme)
         self.assertNotIn('"schema_version":', readme)
@@ -359,8 +369,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 if metric_gate["strict_majority_required"]:
                     self.assertGreater(task["paired_wins"][metric], task["pair_count"] / 2)
 
-        self.assertIn("benchmark_v5-confirmed", readme)
+        self.assertIn("benchmark_v5-historical", readme)
         self.assertIn("Benchmark v5", readme)
+        self.assertIn("predates the 2026-07-12 global Prompt gate", readme)
         self.assertIn("raw `--direct-task`", readme)
         self.assertIn("raw `--bootstrap-task`", readme)
         self.assertIn("same frozen source, workload, sandbox, `config.toml`, model cache, memory snapshot, acceptance", readme)
@@ -382,7 +393,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 f"{task['paired_wins']['first_result_elapsed_ms']}/{task['pair_count']}** | {'✅ noise-bound' if task['tier'] == 'simple' else '✅ improved'} |"
             )
             self.assertIn(expected_row, readme)
-        self.assertIn("Overall confirmation", readme)
+        self.assertIn("Historical cohort", readme)
         self.assertIn("Global used 77.292% fewer task tokens", readme)
         self.assertIn("model-routing-benchmark-example.json", readme)
         self.assertNotIn("single-run smoke comparison", readme)

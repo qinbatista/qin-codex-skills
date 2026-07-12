@@ -1,5 +1,5 @@
 interface:
   display_name: "Management Skill"
-  short_description: "Routing records, profiles, and six-skill mirror"
+  short_description: "Routing records, profiles, and seven-skill mirror"
   default_prompt: >-
     $management-skill: do not load for ordinary exact-scoped read-only work or benchmark worker arms. Manage routing records, profiles, or the approved mirror only for an explicit management request or admitted node. Present the completed result before verification; no foreground Mini or Fast Verify. Ending Real owns verification and first-result time excludes it. Update producer learning or TaskModelExperience only when an admitted Ending Real handoff explicitly requests it; never search or write Obsidian otherwise. Cost-rank only same-hash Real passes and never publish private state.

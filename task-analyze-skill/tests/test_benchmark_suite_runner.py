@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
-import os
 import shutil
 import sqlite3
 import tempfile
@@ -234,9 +233,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertGreaterEqual(elapsed, 2.0)
         self.assertTrue(snapshot["complete"])
         self.assertEqual(snapshot["threads"]["root-thread"]["tokens_used"], 71100)
-        if os.name != "nt":
-            self.assertGreaterEqual(diagnostics["sqlite_error_count"], 1)
-            self.assertEqual(diagnostics["last_sqlite_error_name"], "SQLITE_BUSY_OR_LOCKED")
+        self.assertGreaterEqual(diagnostics["sqlite_error_count"], 1)
+        self.assertEqual(diagnostics["last_sqlite_error_name"], "SQLITE_BUSY_OR_LOCKED")
 
     def test_post_run_census_fails_closed_when_required_thread_never_appears(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -313,8 +311,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             connection.close()
             self.assertTrue(module.sqlite_main_database_is_wal(state_db_path))
-            wal_path = Path(f"{state_db_path}-wal")
-            self.assertTrue(not wal_path.exists() or wal_path.stat().st_size == 0)
+            self.assertEqual(Path(f"{state_db_path}-wal").stat().st_size, 0)
             real_connect = sqlite3.connect
             normal_connect_count = 0
             immutable_connect_count = 0
@@ -421,12 +418,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             shutil.rmtree(direct_plugins)
             external_plugins = Path(external_temporary) / "plugins"
             external_plugins.mkdir()
-            try:
-                direct_plugins.symlink_to(external_plugins, target_is_directory=True)
-            except OSError as error:
-                if os.name == "nt" and getattr(error, "winerror", None) == 1314:
-                    self.skipTest("Windows symlink privilege is unavailable")
-                raise
+            direct_plugins.symlink_to(external_plugins, target_is_directory=True)
             with self.assertRaisesRegex(module.BenchmarkRunnerError, "plugins_catalog_symlink_forbidden"):
                 module.run_suite(args)
             self.assertFalse((root / "suite-plan.json").exists())
@@ -440,7 +432,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             marketplace_root = Path(external_temporary) / "marketplace"
             marketplace_root.mkdir()
             (marketplace_root / "marketplace.json").write_text('{"name":"external"}\n', encoding="utf-8")
-            marketplace_config = f'\n[marketplaces.external]\nsource_type = "local"\nsource = {json.dumps(str(marketplace_root))}\n'
+            marketplace_config = f'\n[marketplaces.external]\nsource_type = "local"\nsource = "{marketplace_root}"\n'
             for home_name in ("direct-home", "global-home"):
                 with (root / home_name / "config.toml").open("a", encoding="utf-8") as config_handle:
                     config_handle.write(marketplace_config)

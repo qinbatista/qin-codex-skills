@@ -143,12 +143,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
         execute.assert_called_once()
 
     def test_concise_complex_preset_resolves_exact_calibrated_profile(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            skill_path = root / "plugins" / "cache" / "source" / "muse-ai-plugin" / "1.0.0" / "skills" / "muse-ai-dev-skill" / "SKILL.md"
-            skill_path.parent.mkdir(parents=True)
-            skill_path.write_text("# Test skill\n", encoding="utf-8")
-            args = module.parse_args(["--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--skills-root", str(root / "skills"), "--plugins-cache-root", str(root / "plugins" / "cache"), "--task-summary", SUMMARY, "--workload-id", "preset-test", "--receipt-output", "cache/preset-receipt.json", "--result-output", "cache/preset-result.json"])
+        args = module.parse_args(["--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--task-summary", SUMMARY, "--workload-id", "preset-test", "--receipt-output", "cache/preset-receipt.json", "--result-output", "cache/preset-result.json"])
         self.assertEqual(args.task_family, "grounded")
         self.assertEqual(args.artifact, "answer")
         self.assertEqual(args.scope, "multi")
@@ -370,9 +365,8 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             self.assertNotIn("private-session-do-not-print", encoded)
             self.assertEqual(summary["total_tokens"], 123)
             self.assertNotIn("result", summary)
-            if os.name != "nt":
-                self.assertEqual(stat.S_IMODE(args.receipt_output.stat().st_mode), 0o600)
-                self.assertEqual(stat.S_IMODE(args.result_output.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(args.receipt_output.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(args.result_output.stat().st_mode), 0o600)
 
     def test_entry_context_authorizes_only_the_adaptive_in_process_producer(self):
         with tempfile.TemporaryDirectory() as temporary:

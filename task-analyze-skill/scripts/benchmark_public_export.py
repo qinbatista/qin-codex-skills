@@ -61,7 +61,7 @@ def atomic_write_public_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_path = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(value, handle, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             handle.write("\n")
             handle.flush()

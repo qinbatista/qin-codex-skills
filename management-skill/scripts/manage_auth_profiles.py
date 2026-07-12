@@ -31,11 +31,6 @@ BASE_TABLE_MIN_WIDTHS = [22, 22, 18, 10, 27, 27, 34]
 TABLE_SEPARATOR = "  |  "
 
 
-def pretty_local_datetime(parsed):
-    hour = parsed.strftime("%I").lstrip("0") or "0"
-    return f"{parsed.strftime('%B')} {parsed.day}, {parsed.year} {hour}:{parsed.strftime('%M %p %Z')}"
-
-
 def load_json(path):
     with path.open() as handle:
         return json.load(handle)
@@ -70,7 +65,7 @@ def iso_to_pretty_local_text(value):
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return value
-    return pretty_local_datetime(parsed.astimezone())
+    return parsed.astimezone().strftime("%B %-d, %Y %-I:%M %p %Z")
 
 
 def parse_iso_datetime(value):
@@ -99,7 +94,7 @@ def unix_to_pretty_local_text(value):
         parsed = datetime.fromtimestamp(int(value), tz=timezone.utc).astimezone()
     except Exception:
         return None
-    return pretty_local_datetime(parsed)
+    return parsed.strftime("%B %-d, %Y %-I:%M %p %Z")
 
 
 def human_time_to_pretty_local_text(value):
@@ -112,7 +107,7 @@ def human_time_to_pretty_local_text(value):
             parsed = datetime.strptime(cleaned, fmt).replace(tzinfo=local_tz)
         except ValueError:
             continue
-        return pretty_local_datetime(parsed)
+        return parsed.strftime("%B %-d, %Y %-I:%M %p %Z")
     return cleaned
 
 

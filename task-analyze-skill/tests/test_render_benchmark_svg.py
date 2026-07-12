@@ -2,7 +2,6 @@
 import html
 import importlib.util
 import json
-import os
 import stat
 import tempfile
 import unittest
@@ -99,9 +98,8 @@ class RenderBenchmarkSvgTests(unittest.TestCase):
             encoded_value = html.escape(json.dumps(value, ensure_ascii=False)[1:-1] if isinstance(value, str) else json.dumps(value), quote=True)
             self.assertIn(encoded_value, desktop_text)
             self.assertIn(encoded_value, mobile_text)
-        if os.name != "nt":
-            self.assertEqual(desktop_mode, 0o644)
-            self.assertEqual(mobile_mode, 0o644)
+        self.assertEqual(desktop_mode, 0o644)
+        self.assertEqual(mobile_mode, 0o644)
 
     def test_strict_v4_public_contract_rejects_schema_gate_and_integrity_drift(self):
         cases = (("top_level_extra", "public_json_schema"), ("rules_missing_minimum", "public_rule_contract"), ("rules_wrong_minimum", "public_rule_contract"), ("rules_wrong_token", "public_rule_contract"), ("rules_wrong_time", "public_rule_contract"), ("rules_wrong_overall", "public_rule_contract"), ("tier_pair_count", "public_pair_count_contract"), ("task_pair_count", "public_task_contract"), ("expected_run_count", "public_run_count_contract"), ("integrity_missing_field", "public_execution_integrity"), ("integrity_incomplete", "public_execution_integrity"), ("integrity_retry", "public_execution_integrity"), ("metric_gate_legacy", "public_metric_gate_contract"), ("metric_gate_threshold", "public_metric_gate_contract"), ("metric_gate_threshold_status", "public_metric_gate_contract"), ("metric_gate_majority_status", "public_metric_gate_contract"), ("time_floor_missing", "public_metric_gate_contract"), ("time_floor_wrong", "public_metric_gate_contract"), ("time_tail_required", "public_metric_gate_contract"), ("time_material_invalid", "public_metric_gate_contract"), ("time_tail_inconsistent", "public_metric_gate_contract"), ("time_material_exceeds_losses", "public_metric_gate_contract"), ("time_wins_tie", "public_metric_gate_contract"), ("raw_time_loss", "public_metric_gate_contract"), ("total_token_loss", "public_metric_gate_contract"), ("configuration_extra", "public_configuration_contract"), ("catalog_hash_false", "public_configuration_contract"), ("catalog_hash_invalid", "public_configuration_contract"), ("catalog_count_invalid", "public_configuration_contract"), ("caveat_missing", "public_caveat_contract"))
