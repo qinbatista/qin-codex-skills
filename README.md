@@ -6,7 +6,7 @@
 
 [中文说明](./README.zh.md)
 
-This is one Codex project mirrored identically to `qin-codex-skills` and `AutoBestModel`. The primary adaptive ladder was first tested and used with **GPT-5.6** and is aligned with the latest registered Codex models: `gpt-5.6-luna`, `gpt-5.6-terra`, and `gpt-5.6-sol`.
+This is one Codex project mirrored identically to `qin-codex-skills` and `auto-best-model`. The primary adaptive ladder was first tested and used with **GPT-5.6** and is aligned with the latest registered Codex models: `gpt-5.6-luna`, `gpt-5.6-terra`, and `gpt-5.6-sol`.
 
 </div>
 

@@ -6,7 +6,7 @@
 
 [English](./README.md)
 
-这是同一个 Codex 项目，同时完整镜像到 `qin-codex-skills` 和 `AutoBestModel` 两个仓库。主要自适应模型阶梯从 **GPT-5.6** 开始测试和使用，当前适配的最新注册模型为 `gpt-5.6-luna`、`gpt-5.6-terra`、`gpt-5.6-sol`。
+这是同一个 Codex 项目，同时完整镜像到 `qin-codex-skills` 和 `auto-best-model` 两个仓库。主要自适应模型阶梯从 **GPT-5.6** 开始测试和使用，当前适配的最新注册模型为 `gpt-5.6-luna`、`gpt-5.6-terra`、`gpt-5.6-sol`。
 
 </div>
 

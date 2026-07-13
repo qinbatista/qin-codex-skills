@@ -191,7 +191,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
         self.assertIn("# AutoBestModel for Codex", readme)
-        self.assertIn("mirrored identically to `qin-codex-skills` and `AutoBestModel`", readme)
+        self.assertIn("mirrored identically to `qin-codex-skills` and `auto-best-model`", readme)
         self.assertIn("first tested and used with **GPT-5.6**", readme)
         self.assertIn("latest registered Codex models", readme)
         self.assertIn("Ordinary work stays inline on the current Codex model", readme)
