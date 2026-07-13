@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="1660" viewBox="0 0 600 1660" role="img" aria-labelledby="title desc">
   <title id="title">Condition-keyed model experience mobile diagram</title>
-  <desc id="desc">A mobile flow from Task Analyze through a learned pair, immediate result presentation, Ending Real verification, and learning. Cost ranking uses tokens then time only for a shared exact workload-hash cohort; otherwise it uses the quality boundary.</desc>
+  <desc id="desc">Private Obsidian model experience uses exact project, task, module, file, symbol, code, and operation context. Ending records matched Spark or GPT-5.6 producer outcomes after presentation.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#17223d"/></linearGradient>
     <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9z" fill="#67e8f9"/></marker>
@@ -18,10 +18,10 @@
     <text x="300" y="211" text-anchor="middle" fill="#f8fafc" font-size="18">model | effort is not workflow-wide</text>
     <rect x="45" y="315" width="510" height="110" rx="22" fill="#201a3a" stroke="#a78bfa" stroke-width="2"/>
     <text x="300" y="357" text-anchor="middle" fill="#ddd6fe" font-size="20" font-weight="800">GENERALIZED CONDITION</text>
-    <text x="300" y="391" text-anchor="middle" fill="#f8fafc" font-size="18">exact controlled fields, not model-keyed</text>
+    <text x="300" y="391" text-anchor="middle" fill="#f8fafc" font-size="17">project/task/module/file/symbol/code</text>
     <rect x="45" y="495" width="510" height="110" rx="22" fill="#102b3d" stroke="#38bdf8" stroke-width="2"/>
-    <text x="300" y="537" text-anchor="middle" fill="#bae6fd" font-size="20" font-weight="800">DYNAMIC LEARNED PAIR</text>
-    <text x="300" y="571" text-anchor="middle" fill="#f8fafc" font-size="18">effort first → then model; floors win</text>
+    <text x="300" y="537" text-anchor="middle" fill="#bae6fd" font-size="20" font-weight="800">SPARK ATTEMPT + 5.6 FALLBACK</text>
+    <text x="300" y="571" text-anchor="middle" fill="#f8fafc" font-size="18">exact context learns verified outcomes</text>
     <rect x="45" y="675" width="510" height="110" rx="22" fill="#123227" stroke="#34d399" stroke-width="2"/>
     <text x="300" y="717" text-anchor="middle" fill="#a7f3d0" font-size="20" font-weight="800">RECEIPT-BACKED WORKFLOW</text>
     <text x="300" y="751" text-anchor="middle" fill="#f8fafc" font-size="18">attribute the original producer attempt</text>
@@ -30,17 +30,17 @@
     <text x="300" y="931" text-anchor="middle" fill="#f8fafc" font-size="18">immediately; first-result clock stops</text>
     <rect x="45" y="1035" width="510" height="110" rx="22" fill="#123227" stroke="#34d399" stroke-width="2"/>
     <text x="300" y="1077" text-anchor="middle" fill="#a7f3d0" font-size="20" font-weight="800">ENDING REAL VERIFY</text>
-    <text x="300" y="1111" text-anchor="middle" fill="#f8fafc" font-size="18">same producer; after presentation</text>
+    <text x="300" y="1111" text-anchor="middle" fill="#f8fafc" font-size="18">PASS records; quality failure repairs</text>
     <rect x="45" y="1215" width="510" height="110" rx="22" fill="#302716" stroke="#fbbf24" stroke-width="2"/>
     <text x="300" y="1252" text-anchor="middle" fill="#fde68a" font-size="20" font-weight="800">LEARNING UPDATE</text>
-    <text x="300" y="1282" text-anchor="middle" fill="#fef3c7" font-size="15">same cohort: correctness → tokens → time</text>
-    <text x="300" y="1308" text-anchor="middle" fill="#fef3c7" font-size="15">otherwise quality boundary → freeze</text>
+    <text x="300" y="1282" text-anchor="middle" fill="#fef3c7" font-size="15">Spark PASS retained · operational neutral</text>
+    <text x="300" y="1308" text-anchor="middle" fill="#fef3c7" font-size="15">quality failure → new 5.6 repair</text>
   </g>
   <rect x="45" y="1385" width="510" height="230" rx="22" fill="#111d32" stroke="#475569" stroke-width="2"/>
-  <text x="70" y="1423" fill="#34d399" font-size="16" font-weight="800">TRIAL PASS</text><text x="205" y="1423" fill="#e2e8f0" font-size="16">one lower effort, then model</text>
-  <text x="70" y="1458" fill="#a7f3d0" font-size="16" font-weight="800">FROZEN</text><text x="205" y="1458" fill="#e2e8f0" font-size="16">keep best_pair; stop search</text>
-  <text x="70" y="1493" fill="#fb7185" font-size="16" font-weight="800">QUALITY FAIL</text><text x="215" y="1493" fill="#e2e8f0" font-size="16">raise sticky boundary</text>
-  <text x="70" y="1528" fill="#fde68a" font-size="16" font-weight="800">ENDING</text><text x="205" y="1528" fill="#e2e8f0" font-size="16">same cohort: tokens → time</text>
-  <text x="70" y="1563" fill="#67e8f9" font-size="16" font-weight="800">SPARK-LOW</text><text x="205" y="1563" fill="#e2e8f0" font-size="16">tiny text/code/command only</text>
-  <text x="70" y="1598" fill="#fbbf24" font-size="16" font-weight="800">PRIVATE</text><text x="185" y="1598" fill="#fef3c7" font-size="16">local JSON never pushed</text>
+  <text x="70" y="1423" fill="#34d399" font-size="16" font-weight="800">TRIAL PASS</text><text x="205" y="1423" fill="#e2e8f0" font-size="16">lower 5.6 effort, then model</text>
+  <text x="70" y="1458" fill="#a7f3d0" font-size="16" font-weight="800">FROZEN</text><text x="205" y="1458" fill="#e2e8f0" font-size="16">keep verified context pair</text>
+  <text x="70" y="1493" fill="#fb7185" font-size="16" font-weight="800">QUALITY FAIL</text><text x="215" y="1493" fill="#e2e8f0" font-size="16">new 5.6 repair lifecycle</text>
+  <text x="70" y="1528" fill="#fde68a" font-size="16" font-weight="800">OP FAIL</text><text x="205" y="1528" fill="#e2e8f0" font-size="16">zero output → current 5.6</text>
+  <text x="70" y="1563" fill="#67e8f9" font-size="16" font-weight="800">SPARK</text><text x="205" y="1563" fill="#e2e8f0" font-size="16">easy low · complex high</text>
+  <text x="70" y="1598" fill="#fbbf24" font-size="16" font-weight="800">PRIVATE</text><text x="185" y="1598" fill="#fef3c7" font-size="16">Obsidian only · old JSON read-only</text>
 </svg>

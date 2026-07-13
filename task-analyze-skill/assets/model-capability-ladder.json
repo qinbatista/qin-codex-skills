@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "registry_id": "spark-first-shared-capability-ladder",
+  "scope": "shared_non_personal",
+  "checked_at": "2026-07-13",
+  "ladder_direction": "weakest_to_strongest",
+  "policy": {
+    "enabled": true,
+    "quality_first": true,
+    "downgrade_after_real_pass": true,
+    "upgrade_after_quality_failure": true,
+    "operational_failures_are_neutral": true,
+    "freeze_lowest_verified_pair": true,
+    "spark_first_text_code": true,
+    "spark_operational_fallback": true,
+    "spark_quality_failure_starts_5_6_repair": true,
+    "minimum_pair": "gpt-5.6-luna|low"
+  },
+  "spark_first": {
+    "enabled": true,
+    "id": "gpt-5.3-codex-spark",
+    "routing_role": "first_attempt_text_code_producer",
+    "capability_tier": "specialized_fast",
+    "codex_positioning": "Ultra-fast coding model; text-only in the local Codex catalog.",
+    "supported_in_api": false,
+    "input_modalities": [
+      "text"
+    ],
+    "codex_efforts": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ],
+    "adaptive_efforts": [
+      "low",
+      "high"
+    ],
+    "effort_by_complexity": {
+      "easy": "low",
+      "complex": "high"
+    },
+    "eligible_task_types": [
+      "question",
+      "summary",
+      "document",
+      "prompt",
+      "code",
+      "debug",
+      "integration"
+    ],
+    "eligible_modalities": [
+      "text"
+    ],
+    "excluded_operations": [
+      "audit",
+      "lookup",
+      "read",
+      "review",
+      "status",
+      "verify"
+    ],
+    "operational_fallback": "current_obsidian_5_6_pair",
+    "quality_failure": "record_to_obsidian_then_new_5_6_repair_lifecycle"
+  },
+  "private_learning_contract": {
+    "authority": "obsidian_project_memory",
+    "path_template": "Projects/<project-key>/ModelExperience",
+    "specificity_order": [
+      "project_task",
+      "module",
+      "file",
+      "symbol"
+    ],
+    "legacy_local_json": "read_only_inactive"
+  },
+  "default_cold_start": "gpt-5.6-terra|medium",
+  "cold_start_defaults": {
+    "question": {
+      "easy": "gpt-5.6-luna|low",
+      "complex": "gpt-5.6-terra|medium"
+    },
+    "summary": {
+      "easy": "gpt-5.6-luna|low",
+      "complex": "gpt-5.6-terra|medium"
+    },
+    "spreadsheet": {
+      "easy": "gpt-5.6-terra|low",
+      "complex": "gpt-5.6-terra|high"
+    },
+    "document": {
+      "easy": "gpt-5.6-luna|medium",
+      "complex": "gpt-5.6-terra|high"
+    },
+    "code": {
+      "easy": "gpt-5.6-terra|medium",
+      "complex": "gpt-5.6-terra|high"
+    },
+    "debug": {
+      "easy": "gpt-5.6-terra|medium",
+      "complex": "gpt-5.6-sol|high"
+    },
+    "integration": {
+      "easy": "gpt-5.6-terra|high",
+      "complex": "gpt-5.6-terra|high"
+    },
+    "prompt": {
+      "easy": "gpt-5.6-terra|medium",
+      "complex": "gpt-5.6-sol|high"
+    },
+    "visual": {
+      "easy": "gpt-5.6-terra|medium",
+      "complex": "gpt-5.6-sol|high"
+    }
+  },
+  "sources": {
+    "official_models": "https://developers.openai.com/api/docs/models",
+    "official_gpt_5_6_guidance": "https://developers.openai.com/api/docs/guides/latest-model",
+    "local_codex_catalog": "~/.codex/models_cache.json"
+  },
+  "official_api_reasoning_efforts": [
+    "none",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max"
+  ],
+  "effort_order": [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+    "ultra"
+  ],
+  "effort_guidance": {
+    "low": "Latency-sensitive, bounded, well-specified work.",
+    "medium": "Balanced default for ordinary work.",
+    "high": "Complex work with a measured benefit from deeper reasoning.",
+    "xhigh": "Very difficult reasoning, debugging, review, or integration work.",
+    "max": "Hardest quality-first work that benefits beyond xhigh.",
+    "ultra": "Codex automatic delegation for several substantial independent branches; available only on Terra and Sol."
+  },
+  "models": [
+    {
+      "id": "gpt-5.6-luna",
+      "capability_rank": 1,
+      "capability_tier": "efficient",
+      "official_positioning": "Cost-sensitive, high-volume workloads; roughly the earlier nano tier.",
+      "codex_positioning": "Fast and affordable agentic coding model.",
+      "best_for": [
+        "simple questions and concise summaries",
+        "routine document or spreadsheet transforms",
+        "small well-specified code edits",
+        "high-volume repetitive work"
+      ],
+      "avoid_as_cold_start_for": [
+        "ambiguous architecture decisions",
+        "deep multi-system debugging",
+        "high-risk changes without prior passing evidence"
+      ],
+      "codex_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "medium"
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "capability_rank": 2,
+      "capability_tier": "balanced",
+      "official_positioning": "Balances intelligence and cost; roughly the earlier mini tier.",
+      "codex_positioning": "Balanced agentic coding model for everyday work.",
+      "best_for": [
+        "ordinary coding and repository-grounded answers",
+        "debugging and moderate multi-file changes",
+        "structured analysis, documents, and spreadsheets",
+        "tool-using work that needs dependable judgment"
+      ],
+      "avoid_as_cold_start_for": [
+        "frontier-level ambiguous professional work when failure is expensive"
+      ],
+      "codex_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "default_effort": "medium"
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "capability_rank": 3,
+      "capability_tier": "frontier",
+      "official_positioning": "Flagship frontier model for complex professional work, reasoning, and coding.",
+      "codex_positioning": "Latest frontier agentic coding model.",
+      "best_for": [
+        "ambiguous architecture and integration decisions",
+        "hard debugging, code review, and correctness analysis",
+        "complex professional research and synthesis",
+        "high-risk or long-horizon work with clear verification"
+      ],
+      "avoid_as_cold_start_for": [
+        "routine high-volume work already proven on a lower pair"
+      ],
+      "codex_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "default_effort": "medium"
+    }
+  ]
+}

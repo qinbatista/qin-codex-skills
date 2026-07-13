@@ -178,6 +178,44 @@ def normalize_fallback_pairs(values):
     return [pair_text(model, effort) for model, effort in pairs]
 
 
+def immediate_operational_fallback(receipt):
+    if not isinstance(receipt, dict) or receipt.get("status") == "pass" or receipt.get("result_published") is True or receipt.get("turn_completed") is True:
+        return False
+    tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
+    if tokens.get("total_tokens") != 0 or receipt.get("failure_class") not in RUNTIME_FAILURES:
+        return False
+    if receipt.get("pre_execution_failure") is True:
+        return True
+    return not any(receipt.get(field) for field in ("resolved_model", "resolved_pair", "effective_model", "effective_pair"))
+
+
+def annotate_operational_fallback(receipt):
+    if not isinstance(receipt, dict):
+        return receipt
+    tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
+    no_runtime_identity = not any(receipt.get(field) for field in ("resolved_model", "resolved_pair", "effective_model", "effective_pair"))
+    if (
+        receipt.get("status") != "pass"
+        and receipt.get("turn_completed") is not True
+        and no_runtime_identity
+        and receipt.get("failure_class") in RUNTIME_FAILURES
+        and tokens.get("total_tokens") is None
+        and not any(isinstance(tokens.get(field), int) and tokens.get(field) > 0 for field in TOKEN_FIELDS)
+    ):
+        tokens = {field: 0 for field in TOKEN_FIELDS}
+        receipt["tokens"] = tokens
+    if receipt.get("status") != "pass" and receipt.get("turn_completed") is not True and tokens.get("total_tokens") == 0 and no_runtime_identity:
+        receipt["pre_execution_failure"] = True
+    receipt["failure_stage"] = "pre_execution" if receipt.get("pre_execution_failure") is True else "completed" if receipt.get("turn_completed") is True else "runtime"
+    receipt["fallback_eligible"] = immediate_operational_fallback(receipt)
+    attempts = receipt.get("route_attempts")
+    if isinstance(attempts, list) and attempts:
+        attempts[-1]["pre_execution_failure"] = bool(receipt.get("pre_execution_failure") is True)
+        attempts[-1]["fallback_eligible"] = receipt["fallback_eligible"]
+        attempts[-1]["failure_stage"] = receipt["failure_stage"]
+    return receipt
+
+
 def infer_failure_class(process, status, turn_completed, turn_failed, availability_failure, model_match, effort_match, pair_match, token_consistent):
     if status == "pass":
         return None
@@ -287,7 +325,7 @@ def failed_run_receipt(args, failure_class):
     receipt.update(receipt_authorization_fields(args))
     if getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):
         receipt["benchmark_run_id"] = getattr(args, "benchmark_run_id", None)
-    return receipt
+    return annotate_operational_fallback(receipt)
 
 
 def rejected_run_receipt(args, error):
@@ -667,7 +705,7 @@ def run_receipt(args, prompt_text):
         args.result_output.parent.mkdir(parents=True, exist_ok=True)
         args.result_output.write_text(last_message + "\n", encoding="utf-8")
         receipt["result_output_path"] = str(args.result_output)
-    return receipt
+    return annotate_operational_fallback(receipt)
 
 
 def aggregate_token_maps(token_maps):

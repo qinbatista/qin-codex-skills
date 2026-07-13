@@ -30,16 +30,15 @@ RECEIPT_SPEC = importlib.util.spec_from_file_location(
 )
 receipt_module = importlib.util.module_from_spec(RECEIPT_SPEC)
 RECEIPT_SPEC.loader.exec_module(receipt_module)
-MODEL_EFFORTS = receipt_module.MODEL_EFFORTS
 try:
     from routing_policy import (
+        ACTIVE_MODEL_EFFORTS,
         EXECUTION_DOMAINS,
         adaptive_pair_texts_for_profile,
         execution_domain_is_active,
         expected_owner_skill,
         is_code_execution_domain,
         normal_adaptive_pair_texts,
-        is_tiny_spark_profile,
         resolve_execution_domain,
         reference_path_for,
         validate_execution_domain_registry,
@@ -51,13 +50,13 @@ except ModuleNotFoundError:
     _routing_policy_spec = _importlib_util.spec_from_file_location("task_analyze_routing_policy", _routing_policy_path)
     _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
     _routing_policy_spec.loader.exec_module(_routing_policy)
+    ACTIVE_MODEL_EFFORTS = _routing_policy.ACTIVE_MODEL_EFFORTS
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
     is_code_execution_domain = _routing_policy.is_code_execution_domain
     normal_adaptive_pair_texts = _routing_policy.normal_adaptive_pair_texts
-    is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
     resolve_execution_domain = _routing_policy.resolve_execution_domain
     reference_path_for = _routing_policy.reference_path_for
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
@@ -68,6 +67,11 @@ HISTORY_SPEC = importlib.util.spec_from_file_location(
 )
 routing_history_module = importlib.util.module_from_spec(HISTORY_SPEC)
 HISTORY_SPEC.loader.exec_module(routing_history_module)
+
+OBSIDIAN_MEMORY_PATH = Path(__file__).resolve().parents[2] / "project-memory-skill" / "scripts" / "obsidian_model_memory.py"
+OBSIDIAN_MEMORY_SPEC = importlib.util.spec_from_file_location("task_route_obsidian_model_memory", OBSIDIAN_MEMORY_PATH)
+obsidian_model_memory = importlib.util.module_from_spec(OBSIDIAN_MEMORY_SPEC)
+OBSIDIAN_MEMORY_SPEC.loader.exec_module(obsidian_model_memory)
 
 NODE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 DISPATCH_SCHEMA_VERSION = 2
@@ -143,16 +147,77 @@ def receipt_node_role(node):
     return "result-producer"
 
 
+def _model_memory_task_type(node):
+    condition = node.get("routing_condition") or {}
+    family = str(condition.get("task_family") or "").lower()
+    artifact = str(condition.get("artifact") or "").lower()
+    execution_domain = str(condition.get("execution_domain") or "general").lower()
+    if execution_domain != "general" or artifact in {"code", "script"}:
+        return "debug" if family == "debug" else "code"
+    if family in {"summary", "debug", "integration", "prompt", "visual"}:
+        return family
+    if artifact in {"spreadsheet", "workbook", "sheet"}:
+        return "spreadsheet"
+    if artifact in {"document", "report", "pdf"}:
+        return "document"
+    if artifact in {"image", "visual"}:
+        return "visual"
+    if artifact == "prompt":
+        return "prompt"
+    return "question"
+
+
+def _model_memory_arguments(node, project_root):
+    condition = node.get("routing_condition") or {}
+    scope = node.get("model_memory_scope") if isinstance(node.get("model_memory_scope"), dict) else {}
+    return {
+        "project_root": Path(project_root).expanduser().resolve(),
+        "task_type": scope.get("task_type") or _model_memory_task_type(node),
+        "module": scope.get("module") or node.get("skill") or "project-wide",
+        "file_value": scope.get("file") or "",
+        "symbol": scope.get("symbol") or "",
+        "code_kind": scope.get("code_kind") or condition.get("execution_domain") or "general",
+        "operation": scope.get("operation") or condition.get("task_family") or "work",
+        "modality": condition.get("modality") or "text",
+        "complexity": condition.get("complexity") or "easy",
+        "risk": condition.get("risk") or "low",
+        "ambiguity": condition.get("ambiguity") or "low",
+        "task_summary": node.get("task_summary") or "",
+    }
+
+
+def _obsidian_recommendation_and_proof(node, project_root):
+    recommendation = obsidian_model_memory.recommend_model(**_model_memory_arguments(node, project_root))
+    if recommendation.get("memory_available") is not True:
+        raise ValueError("obsidian model memory is unavailable")
+    condition = routing_history_module.validate_condition(node.get("routing_condition"))
+    candidate_pairs = routing_history_module.canonical_pairs(node.get("candidate_ladder"))
+    static_pair = routing_history_module.parse_pair(node.get("static_suggestion"))
+    hard_pair = routing_history_module.parse_pair(node.get("hard_floor"))
+    fingerprint = routing_history_module.profile_fingerprint(condition, candidate_pairs, static_pair, hard_pair)
+    proof = {
+        "selected_pair": recommendation.get("selected_pair"),
+        "attempt_pair": recommendation.get("attempt_pair"),
+        "active_fallback_pair": recommendation.get("active_fallback_pair"),
+        "trial": recommendation.get("trial"),
+        "reason": recommendation.get("reason"),
+        "profile_fingerprint": fingerprint,
+        "calibration_state": recommendation.get("calibration_state"),
+        "best_pair": recommendation.get("success_model"),
+        "selection_basis": "obsidian_project_memory",
+    }
+    return recommendation, proof
+
+
 def validate_dispatcher_adaptive_result(node):
     try:
-        routing_condition = routing_history_module.validate_condition(node.get("routing_condition"))
-        recommendation_args = SimpleNamespace(**routing_condition, task_summary=routing_history_module.validate_summary(node.get("task_summary")), candidate_ladder=node.get("candidate_ladder"), static_suggestion=node.get("static_suggestion"), hard_floor=node.get("hard_floor"), history=Path(node.get("_history_path") or routing_history_module.DEFAULT_HISTORY_PATH), enforce_candidate_policy=True)
-        current_recommendation = routing_history_module.recommend_route(recommendation_args)
-        if not isinstance(current_recommendation, dict):
+        routing_history_module.validate_summary(node.get("task_summary"))
+        current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, node.get("_project_root"))
+        if not isinstance(current_recommendation, dict) or current_recommendation.get("selected_pair") is None:
             raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
         locked_recommendation = node.get("routing_recommendation")
         selected_pair = f"{node['model']}|{node['effort']}"
-        if not isinstance(locked_recommendation, dict) or current_recommendation.get("selected_pair") != selected_pair or current_recommendation.get("trial") is not node.get("trial") or any(locked_recommendation.get(field) != current_recommendation.get(field) for field in RECOMMENDATION_PROOF_FIELDS):
+        if not isinstance(locked_recommendation, dict) or current_proof.get("selected_pair") != selected_pair or current_proof.get("trial") is not node.get("trial") or any(locked_recommendation.get(field) != current_proof.get(field) for field in RECOMMENDATION_PROOF_FIELDS):
             raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
     except receipt_module.ReceiptAuthorizationError:
         raise
@@ -250,8 +315,8 @@ def validate_plan(
 
         model = node.get("model")
         effort = node.get("effort")
-        if model not in MODEL_EFFORTS or effort not in MODEL_EFFORTS.get(model, set()):
-            failures.append(f"{node_id} has unsupported model/effort")
+        if model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set()):
+            failures.append(f"{node_id} must use a model/effort from the shared active GPT-5.6 ladder")
         skill = node.get("skill")
         if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
@@ -286,6 +351,8 @@ def validate_plan(
         else:
             try:
                 node["allow_fallback"] = receipt_module.normalize_fallback_pairs(allow_fallbacks)
+                if any(model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS[model] for model, effort in node["allow_fallback"]):
+                    failures.append(f"{node_id} allow_fallback must stay inside the shared active GPT-5.6 ladder")
             except (TypeError, ValueError):
                 failures.append(f"{node_id} allow_fallback contains unsupported model|effort pairs")
 
@@ -311,11 +378,6 @@ def validate_plan(
             expected_owner = None
         if expected_owner is not None and skill != expected_owner:
             failures.append(f"{node_id} bypasses code-skill; implementation owner mismatch for {execution_domain}")
-
-        if node.get("model") == "gpt-5.3-codex-spark":
-            condition = node.get("routing_condition") or {}
-            if node.get("effort") != "low" or not is_tiny_spark_profile(condition.get("task_family"), condition.get("modality"), condition.get("risk"), condition.get("complexity"), condition.get("ambiguity")):
-                failures.append(f"{node_id} Spark-low is valid only for low-risk easy low-ambiguity text tiny profiles")
 
         if node_id == plan.get("main_result_node"):
             routing_condition = node.get("routing_condition")
@@ -391,8 +453,7 @@ def validate_plan(
                         routing_condition["ambiguity"],
                     )
                     if ordered_pairs != expected_ladder:
-                        ladder_kind = "Spark-low plus the full GPT-5.6 ladder" if expected_ladder and expected_ladder[0] == "gpt-5.3-codex-spark|low" else "the full GPT-5.6 ladder without Spark"
-                        failures.append(f"{node_id} candidate_ladder must exactly match {ladder_kind}")
+                        failures.append(f"{node_id} candidate_ladder must exactly match the shared full GPT-5.6 ladder")
                 recommendation = node.get("routing_recommendation")
                 if not isinstance(recommendation, dict):
                     failures.append(f"{node_id} requires routing_recommendation proof")
@@ -407,27 +468,18 @@ def validate_plan(
                     if recommendation.get("profile_fingerprint") != expected_fingerprint:
                         failures.append(f"{node_id} routing_recommendation profile fingerprint is invalid")
                     if enforce_current_recommendation and not missing_proof_keys:
-                        recommendation_args = SimpleNamespace(
-                            **routing_condition,
-                            task_summary=node.get("task_summary", ""),
-                            candidate_ladder=candidate_ladder,
-                            static_suggestion=node.get("static_suggestion", ""),
-                            hard_floor=node.get("hard_floor", ""),
-                            history=Path(history_path or routing_history_module.DEFAULT_HISTORY_PATH),
-                            enforce_candidate_policy=True,
-                        )
                         try:
-                            current_recommendation = routing_history_module.recommend_route(recommendation_args)
+                            current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, cwd)
                         except (OSError, TypeError, ValueError) as error:
-                            failures.append(f"{node_id} current routing recommendation could not be verified: {type(error).__name__}")
+                            failures.append(f"{node_id} current Obsidian recommendation could not be verified: {type(error).__name__}")
                         else:
                             if current_recommendation.get("selected_pair") is None:
-                                failures.append(f"{node_id} current routing recommendation is exhausted")
-                            if current_recommendation.get("selected_pair") != routing_history_module.pair_text(model, effort) or current_recommendation.get("trial") is not node.get("trial"):
-                                failures.append(f"{node_id} selected pair/trial does not match current learner recommendation")
-                            stale_fields = [field for field in RECOMMENDATION_PROOF_FIELDS if recommendation.get(field) != current_recommendation.get(field)]
+                                failures.append(f"{node_id} current Obsidian recommendation is exhausted")
+                            if current_proof.get("selected_pair") != routing_history_module.pair_text(model, effort) or current_proof.get("trial") is not node.get("trial"):
+                                failures.append(f"{node_id} selected pair/trial does not match current Obsidian recommendation")
+                            stale_fields = [field for field in RECOMMENDATION_PROOF_FIELDS if recommendation.get(field) != current_proof.get(field)]
                             if stale_fields:
-                                failures.append(f"{node_id} routing_recommendation is stale or not learner-derived: {', '.join(stale_fields)}")
+                                failures.append(f"{node_id} routing_recommendation is stale or not Obsidian-derived: {', '.join(stale_fields)}")
 
             for field in CONTROLLED_FIELDS:
                 if field not in node.get("routing_condition", {}):
@@ -595,6 +647,8 @@ def _normalize_route_attempt(attempt_receipt, fallback_pair, status, phase_failu
         "tokens": dict(tokens),
         "thread_id": thread_id,
         "pre_execution_failure": bool(pre_execution_failure is True),
+        "failure_stage": attempt_receipt.get("failure_stage"),
+        "fallback_eligible": bool(attempt_receipt.get("fallback_eligible") is True),
     }
 
 
@@ -676,7 +730,18 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
 
     route_marker = "ENDING_TASK_WORKER" if node["phase"] == "ending" else "LOCKED_ROUTE_NODE"
     fallback_pairs = receipt_module.normalize_fallback_pairs(node.get("allow_fallback", []))
-    planned_pairs = [f"{node['model']}|{node['effort']}"] + fallback_pairs
+    selected_pair = f"{node['model']}|{node['effort']}"
+    adaptive_recommendation = None
+    if node["phase"] == "result" and isinstance(node.get("routing_recommendation"), dict) and node.get("_project_root") and receipt_module.entry_context_active():
+        try:
+            adaptive_recommendation = validate_dispatcher_adaptive_result(node)
+        except receipt_module.ReceiptAuthorizationError:
+            adaptive_recommendation = None
+    priority_attempt_pair = adaptive_recommendation.get("attempt_pair") if adaptive_recommendation else selected_pair
+    planned_pairs = []
+    for candidate in [priority_attempt_pair, selected_pair, *fallback_pairs]:
+        if candidate and candidate not in planned_pairs:
+            planned_pairs.append(candidate)
     route_attempts = []
     receipt = None
     status = "fail"
@@ -721,8 +786,9 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         try:
             if args.node_role == "result-producer":
                 if receipt_module.entry_context_active():
-                    current_recommendation = validate_dispatcher_adaptive_result(node)
-                    if pair_text != current_recommendation["selected_pair"]:
+                    current_recommendation = adaptive_recommendation or validate_dispatcher_adaptive_result(node)
+                    authorized_pairs = {current_recommendation.get("attempt_pair"), current_recommendation.get("selected_pair"), *fallback_pairs}
+                    if pair_text not in authorized_pairs:
                         raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
                     with receipt_module.dispatcher_adaptive_result_authorization():
                         attempt_receipt = receipt_module.run_receipt(args, prompt)
@@ -798,18 +864,26 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
 
         if status == "pass":
             failure_class = None
+        attempt_receipt["result_published"] = bool(result_path.is_file() and result_path.stat().st_size > 0)
+        attempt_receipt = receipt_module.annotate_operational_fallback(attempt_receipt)
         attempt_receipt_path.write_text(json.dumps(attempt_receipt, indent=2) + "\n", encoding="utf-8")
         route_attempts.append(_normalize_route_attempt(attempt_receipt, pair_text, status, failure_class))
         receipt = attempt_receipt
         if status == "pass":
             break
-        normalized_attempt = route_attempts[-1]
-        if node["phase"] != "result" or failure_class not in receipt_module.RUNTIME_FAILURES or normalized_attempt.get("pre_execution_failure") is not True or normalized_attempt.get("tokens", {}).get("total_tokens") != 0:
+        if node["phase"] != "result" or not receipt_module.immediate_operational_fallback(attempt_receipt):
             break
 
     attempt_metrics = _aggregate_attempt_metrics(route_attempts)
     receipt["route_attempts"] = route_attempts
-    receipt["allowed_fallback_pairs"] = fallback_pairs
+    receipt["priority_attempt_pair"] = priority_attempt_pair
+    receipt["active_fallback_pair"] = selected_pair if priority_attempt_pair != selected_pair else None
+    receipt["allowed_fallback_pairs"] = planned_pairs[1:]
+    receipt["operational_failure_pairs"] = [
+        attempted_pair
+        for attempted_pair, attempted_receipt in zip(planned_pairs, route_attempts)
+        if attempted_receipt.get("fallback_eligible") is True
+    ]
     receipt["last_attempt_tokens"] = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     receipt["last_attempt_process_elapsed_ms"] = receipt.get("process_elapsed_ms")
     receipt["strategy_tokens"] = attempt_metrics["strategy_tokens"]
@@ -847,47 +921,41 @@ def _route_run_id():
     return f"route-{uuid.uuid4().hex}"
 
 
-def _run_record(result_path, verify_level, verify_status, main_result_receipt_path, route_run_id, main_node, execution_domain=None):
+def _run_record(result_path, verify_level, verify_status, main_result_receipt_path, route_run_id, main_node, project_root, execution_domain=None):
     if not main_result_receipt_path:
         return {"status": "skipped", "reason": "missing-main-result-receipt"}
     node = main_node
     condition = dict(node.get("routing_condition", {}))
     if execution_domain is not None:
         condition["execution_domain"] = execution_domain
-    verify_status = verify_status if verify_status in {"pass", "fail", "unknown"} else "unknown"
-    failure_class = "none"
-    if verify_status == "fail":
-        failure_class = "quality"
-    if verify_status == "unknown":
-        failure_class = "execution"
-    args = SimpleNamespace(
-        task_family=condition.get("task_family"),
-        artifact=condition.get("artifact"),
-        scope=condition.get("scope"),
-        ambiguity=condition.get("ambiguity"),
-        modality=condition.get("modality"),
-        risk=condition.get("risk"),
-        complexity=condition.get("complexity"),
-        owning_skill=condition.get("owning_skill"),
-        project_family=condition.get("project_family"),
-        verification_shape=condition.get("verification_shape"),
-        task_summary=node.get("task_summary", ""),
-        candidate_ladder=node.get("candidate_ladder", []),
-        static_suggestion=node.get("static_suggestion", ""),
-        hard_floor=node.get("hard_floor", ""),
-        execution_domain=condition.get("execution_domain") or None,
-        receipt=main_result_receipt_path,
-        verify_level=verify_level,
-        verify_status=verify_status,
-        failure_class=failure_class,
-        run_id=route_run_id,
-        trial=bool(node.get("trial")),
-        history=Path(__file__).resolve().parents[1] / "local" / "adaptive-routing" / "model_experience.json",
-        enforce_candidate_policy=True,
-    )
-    recorder_result = routing_history_module.record_event(args)
-    recommendation = routing_history_module.recommend_route(args)
-    return {"recorder_result": recorder_result, "recommendation": recommendation}
+    node = dict(node)
+    node["routing_condition"] = condition
+    verified_status = verify_status if verify_status in {"pass", "fail"} else "fail"
+    failure_class = "none" if verified_status == "pass" else ("quality" if verify_status == "fail" else "execution")
+    memory_args = _model_memory_arguments(node, project_root)
+    memory_project_root = memory_args.pop("project_root")
+    memory_task_type = memory_args.pop("task_type")
+    memory_module = memory_args.pop("module")
+    try:
+        recorder_result = obsidian_model_memory.record_model_result(
+            memory_project_root,
+            memory_task_type,
+            memory_module,
+            main_result_receipt_path,
+            verified_status,
+            failure_class,
+            trial=bool(node.get("trial")),
+            **memory_args,
+        )
+        recommendation = obsidian_model_memory.recommend_model(
+            memory_project_root,
+            memory_task_type,
+            memory_module,
+            **memory_args,
+        )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        return {"status": "fail", "reason": f"obsidian_model_memory_record_failed:{type(error).__name__}"}
+    return {"status": recorder_result.get("status"), "recorder_result": recorder_result, "recommendation": recommendation}
 
 
 def _release_main_result(handoff):
@@ -944,7 +1012,6 @@ def run_plan(
 ):
     first_result_started = time.monotonic()
     first_result_started_ns = time.monotonic_ns()
-    active_history_path = Path(history_path or routing_history_module.DEFAULT_HISTORY_PATH)
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
     failures = validate_plan(
         plan,
@@ -953,7 +1020,7 @@ def run_plan(
         cwd,
         skills_root=skills_root,
         enforce_current_recommendation=True,
-        history_path=history_path or routing_history_module.DEFAULT_HISTORY_PATH,
+        history_path=history_path,
     )
     cache_dir = Path(plan["cache_dir"]).expanduser().resolve() if not failures else cwd.resolve() / "work" / "cache" / "invalid-task-route"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1040,7 +1107,7 @@ def run_plan(
                 ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
                 ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
                 ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
-                ready_node["_history_path"] = str(active_history_path)
+                ready_node["_project_root"] = str(cwd.resolve())
                 ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)
                 future = executor.submit(run_node, ready_node, cache_dir, dict(ready_records), state_db, cwd, codex_bin, skills_root)
                 future.add_done_callback(lambda settled_future, settled_node_id=node_id: result_events.put(("settled", settled_node_id, settled_future)))
@@ -1175,7 +1242,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     try:
         handoff = json.loads(handoff_path.expanduser().resolve().read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"]}
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"], "reopen_required": True, "notification_required": True}
 
     plan = handoff.get("plan") if isinstance(handoff.get("plan"), dict) else {}
     cwd = Path(handoff.get("cwd") or "/").expanduser().resolve()
@@ -1231,7 +1298,6 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     main_record = completed.get(plan.get("main_result_node"), {})
     ordered = []
     routing_learning = None
-    real_quality_failure = False
     if not failures:
         while runnable_ids:
             ready = sorted(
@@ -1310,11 +1376,10 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
                 main_record.get("receipt_path"),
                 route_run_id,
                 main_node,
+                cwd,
                 execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
             )
             routing_learning = recorded_learning if isinstance(recorded_learning, dict) else None
-            if ending_status == "fail":
-                real_quality_failure = True
 
     status = (
         "pass"
@@ -1328,8 +1393,8 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         "failures": failures,
         "entry": entry,
         "nodes": ordered,
-        "reopen_required": real_quality_failure,
-        "notification_required": real_quality_failure,
+        "reopen_required": status != "pass",
+        "notification_required": status != "pass",
         "routing_learning": routing_learning,
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)

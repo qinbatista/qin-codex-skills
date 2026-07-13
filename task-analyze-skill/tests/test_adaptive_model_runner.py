@@ -115,6 +115,18 @@ def fake_receipt_run(secret_result='{"answer":"ok"}', thread_id="private-session
 
 
 class AdaptiveModelRunnerTests(unittest.TestCase):
+    def test_default_legacy_local_history_is_inactive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            args = arguments(root)
+            args.history = module.model_routing_history.DEFAULT_HISTORY_PATH
+            with patch.object(module, "_validated_recommendation") as recommend, patch.object(module.model_execution_receipt, "run_receipt") as execute:
+                summary = module.run_adaptive(args, "bounded prompt")
+        self.assertEqual(summary["status"], "inline")
+        self.assertEqual(summary["reason"], "legacy_local_model_history_inactive")
+        recommend.assert_not_called()
+        execute.assert_not_called()
+
     def test_missing_performance_admission_returns_inline_without_model_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -1,15 +1,15 @@
 ---
 name: workflow-skill
-description: "Execute only a Task Analyze route that was explicitly activated and passed end-to-end performance admission. Ordinary requests stay inline regardless of apparent complexity and must not load Workflow."
+description: "Execute one Obsidian-context Spark-first producer or a performance-admitted multi-node route. Every task still launches the mandatory post-result Ending lifecycle."
 ---
 
 # Workflow Skill
 
-Use this only after full `task-analyze-skill` has been explicitly activated and returned an admitted locked route. Ordinary inline work never enters Workflow. Continue in the same task. Do not wait for a lifecycle hook, and never print the private machine plan.
+Use result-producing Workflow for one Obsidian-context Spark-first producer with a selected 5.6 fallback, or after full `task-analyze-skill` returns a performance-admitted locked multi-node route. Ineligible ordinary work remains inline, and every task uses the universal Ending lifecycle after presentation. Continue in the same task; no hook is used; never print the private machine plan.
 
 ## Admission Gate
 
-Before any child launch, confirm that Task Analyze supplied comparable end-to-end admission evidence:
+Before a multi-node route or savings claim, confirm that Task Analyze supplied comparable end-to-end admission evidence:
 
 - direct and Global cohorts share prompt/inputs, cwd, sandbox, user/project configuration, output contract, and acceptance;
 - the complete Global foreground path includes entry/controller plus child costs;
@@ -17,7 +17,7 @@ Before any child launch, confirm that Task Analyze supplied comparable end-to-en
 - the selected pair is frozen, receipt-backed, Real-passing, and `trial=false`;
 - evidence is current, complete, and workload-comparable.
 
-If any item is missing, stale, cross-workload, incomplete, or negative, reject delegation and return to inline execution. Producer-only savings are insufficient. Workflow never runs a foreground downgrade/upgrade trial.
+If any item is missing, stale, cross-workload, incomplete, or negative, reject the multi-node route and its savings claim. Separately, the shared ladder plus matching Obsidian `Projects/<project-key>/ModelExperience` context may admit exactly one ordinary 5.6 producer at cold start, one-rung downgrade/upgrade trial, or frozen reuse; this route does not claim strategy savings.
 
 ## Authority
 
@@ -29,7 +29,7 @@ Every delegated model node needs a matching sanitized receipt. A route label is 
 
 Before side effects, confirm installed owning skills, exact pairs, dependencies, inputs, outputs, stop conditions, Main Result, and post-result Real Verify. Every active registry-owned code-domain node loads `code-skill` when delegated.
 
-Reject once to inline execution when the route invents a skill, breaks dependencies, omits a pair, bypasses `code-skill`, puts Ending work before Main Result, or lacks end-to-end performance admission.
+Reject once to inline execution when the route invents a skill, breaks dependencies, omits a pair, bypasses `code-skill`, puts Ending work before Main Result, or lacks the required quality or multi-node performance admission.
 
 Task Analyze owns route display only for admitted work:
 
@@ -40,7 +40,7 @@ Workflow reports only an actual fallback or post-result repair. It never adds a 
 
 ## Inline Boundary
 
-Ordinary tasks of any apparent complexity, uncalibrated profiles, and any task without positive admission remain inline on the current model. The always-loaded bootstrap does not load Workflow, call `adaptive_model_runner.py`, create a child receipt, or launch foreground verification.
+Eligible ordinary tasks get one project/task/module/file/symbol/code lookup. The bootstrap may call `obsidian_adaptive_model_runner.py` once and create one route receipt: Spark first for text/code, with one selected 5.6 fallback only after zero-result operational failure. It never launches foreground verification.
 
 Inline work uses one direct task action or direct execution surface, then shows the completed main result immediately. Ending Real Verify starts only afterward.
 
@@ -49,11 +49,11 @@ Inline work uses one direct task action or direct execution surface, then shows 
 1. Execute only dependency-ready nodes. Parallelize safe independent branches; keep ordered, shared-state, irreversible, or output-dependent work sequential.
 2. Load each owning skill and only task-relevant references. Preserve user work and the smallest source allowlist.
 3. Use one execution surface per branch. Collaboration prompts start `LOCKED_ROUTE_NODE`; do not repeat that branch in a dispatcher.
-4. One admitted producer runs once through `adaptive_model_runner.py --emit-result` with its frozen pair and emits the completed result without a foreground gate.
+4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; eligible text/code starts on Spark (`easy=low`, `complex=high`) and otherwise uses the contextual 5.6 pair. It emits the first completed result without a foreground verification gate.
 5. Only a real graph with at least two model-executed nodes saves private schema-2 JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once.
 6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work without user authorization.
 
-The adaptive producer rechecks the frozen recommendation before execution. A failed launch is operational evidence and may not be replaced by an unreceipted or fixed-pair child. Explicit benchmark baselines remain outside entry context.
+The adaptive producer rechecks the shared contract and matching Obsidian project context before execution. It never writes learning. Spark launch/access/transport failure can use the selected 5.6 pair only before any published result and with zero tokens; all attempts stay in one route receipt. Explicit benchmark baselines remain outside entry context.
 
 ## First Result Before Verification
 
@@ -67,23 +67,25 @@ For adaptive or dispatched execution, launch the CLI as an ongoing session and r
 
 For a dispatcher use ongoing `run-plan` session -> `result-ready` event -> show the public result file -> collect final run manifest -> `release-main-result` -> `run-ending`. Never wait for the final receipt manifest before showing an emitted result. Never call `release-main-result` until the result has actually been shown and the final run manifest passes. A later Real correctness failure notifies the user, reopens, repairs, and explicitly presents the corrected result without inserting a new foreground Mini.
 
-## Ending Task
+## Mandatory Ending Task
 
-Ending Task begins only after the main result. It owns the single proportional Real Verify plus any genuinely needed broader regression, visual replay, independent optimization verification, reports, logs, docs, and sanitized learning. Missing memory is a successful no-op.
+Ending Task begins only after the main result and is mandatory for read-only/write and simple/complex work. It owns the independent proportional Real Verify plus any genuinely needed broader regression, visual replay, independent optimization verification, reports, logs, docs, and sanitized learning. Ending Real alone records receipt-backed pass/fail to Obsidian `Projects/<project-key>/ModelExperience`. It bypasses result-producing performance admission. Missing memory is a successful no-op.
 
-An Ending worker starts `ENDING_TASK_WORKER` or `LOCKED_ROUTE_NODE`, never restarts Task Analyze/Workflow, and never silently changes the delivered result. Do not run Ending merely to fill one final response.
+An Ending worker starts with `ENDING_TASK_WORKER`; any locked-route metadata follows that marker. It never restarts Task Analyze/Workflow or silently changes the delivered result. Safe isolated log/doc branches run in parallel with verification; final project memory and Obsidian writes remain ordered. Before final, the lifecycle ledger must report `PASS` or explicit `BLOCKED`.
+
+On failure, persist lifecycle error evidence and any failed durable project record before repair. Launch repair as a new child lifecycle under the owning skill, present the corrected result, and launch a different Ending verifier. The repair producer never verifies itself; repeated identical failures stop at a bounded blocker instead of looping silently.
 
 ## Runtime Receipt And Learning
 
 Use runtime receipts only for delegated model nodes, explicit routing proof, or benchmarking. A timeout remains a failure with elapsed time and partial token lower bounds.
 
-`model_routing_history.py record` handles quality/model learning only after Ending Real on the same route-run ID and producer attempt. Operational failures are neutral. End-to-end admission is separate: it must compare the complete Global path against current-model direct execution for the same cohort before future delegation.
+`obsidian_adaptive_model_runner.py` reads the shared contract and matching project/task/module/file/symbol/code experience but never writes learning. Ending Real alone writes the receipt-backed effective producer result and Spark attempt evidence to Obsidian. Old local `model_experience.json` and legacy `model_routing_history.py` remain read-only compatibility only. Operational failures are quality-neutral. End-to-end performance admission remains separate.
 
 Savings claims count every session once and test simple, medium, and complex separately. User-visible latency ends at the first completed result; Ending Real time is separate. A suite total never converts a losing class into a pass.
 
 ## Prompt And Code Rules
 
-Delegated code nodes retain `code-skill`; Spark-low is only for eligible tiny profiles in an explicit benchmark or admitted route. Local execution does not fabricate model metadata.
+Delegated code nodes retain `code-skill`. Eligible text/code result producers try the shared Spark effort first, while entry/controller, verifier, Ending, image/mixed, and exact read-only work remain on their active 5.6 or inline route. Local execution does not fabricate model metadata.
 
 ## Files And Verification
 

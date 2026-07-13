@@ -574,8 +574,10 @@ def _history_locked(path, mutate=None):
 
 
 def load_history(path):
-    # Loading is the explicit bootstrap operation; read-only public commands
-    # must use their own path and never create the private ledger.
+    if Path(path).expanduser().resolve() == DEFAULT_HISTORY_PATH.resolve():
+        return _history_locked(path)[0]
+    # Explicit non-default paths remain available to compatibility tests and
+    # one-off legacy migration tools.
     return _history_locked(path, lambda history: history)[0]
 
 
@@ -865,6 +867,8 @@ def _has_untested_between(failure_pair, success_pair, record, pairs):
 
 
 def recommend_route(args):
+    if Path(args.history).expanduser().resolve() == DEFAULT_HISTORY_PATH.resolve():
+        raise ValueError("legacy local model_experience.json is read-only")
     condition, summary, pairs, static_pair, hard_pair = _profile(args)
     def recommend(history):
         record = _record_for(history, condition, summary, pairs, static_pair, hard_pair)
@@ -980,6 +984,8 @@ def _operational_failure_pairs(receipt):
 
 
 def record_event(args):
+    if Path(args.history).expanduser().resolve() == DEFAULT_HISTORY_PATH.resolve():
+        raise ValueError("legacy local model_experience.json is read-only")
     condition, summary, pairs, static_pair, hard_pair = _profile(args)
     if args.verify_level != "real":
         raise ValueError("active writes require verify_level=real")
@@ -1074,6 +1080,8 @@ def record_event(args):
 def status(history_path):
     history_path = Path(history_path).expanduser().resolve()
     if not history_path.exists():
+        if history_path == DEFAULT_HISTORY_PATH.resolve():
+            return {"schema_version": SCHEMA_VERSION, "conditions": 0, "tasks": 0}
         _write_locked(history_path, empty_history())
     history = _history_locked(history_path)[0]
     return {"schema_version": SCHEMA_VERSION, "conditions": len(history["conditions"]), "tasks": sum(len(record["tasks"]) for record in history["conditions"].values())}

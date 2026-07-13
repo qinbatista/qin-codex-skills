@@ -65,7 +65,7 @@ def build_snapshot(models_cache_path):
         api_support = "yes" if model["supported_in_api"] else "no"
         speed_tiers = ", ".join(model.get("additional_speed_tiers", [])) or "default"
         lines.append(f"| {model['display_name']} | `{slug}` | {inputs} | {model['context_window']:,} | {api_support} | `{model['default_reasoning_level']}` | {efforts} | {speed_tiers} |")
-    lines.extend(["", "## Effort Compatibility", "", *effort_markdown_lines(), "- Sol, Terra, and Luna accept image input. Spark is text-only.", "- Spark is unavailable through API-only execution surfaces.", "- Capability support does not equal routing eligibility: adaptive routes may use Spark-low only, and only for an eligible tiny profile; Spark medium/high/xhigh are never adaptive fallbacks.", "- If an effort is unsupported, use the highest supported effort below it and show the normalization.", "", "## Refresh", "", "```bash", "python3 scripts/sync_model_capabilities.py", "python3 scripts/sync_model_capabilities.py --check", "```", ""])
+    lines.extend(["", "## Effort Compatibility", "", *effort_markdown_lines(), "- Sol, Terra, and Luna accept image input. Spark is text-only.", "- Spark is unavailable through API-only execution surfaces.", "- Spark is an active text/code first attempt (`easy=low`, `complex=high`) but never an entry, verifier, Ending, image/mixed, or schema-version-2 plan node. The plan's active quality pair remains in the 5.6 Luna/Terra/Sol ladder.", "- If an effort is unsupported, use the highest supported effort below it and show the normalization.", "", "## Refresh", "", "```bash", "python3 scripts/sync_model_capabilities.py", "python3 scripts/sync_model_capabilities.py --check", "```", ""])
     return "\n".join(lines)
 
 

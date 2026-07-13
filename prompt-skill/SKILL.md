@@ -61,9 +61,9 @@ Negative instructions are appropriate for critical, plausible failures such as f
 8. For complex work, plan dependencies internally before execution and use `plan -> execute -> review -> finalize` only when those phases improve the result. Do not expose a planning preamble or private reasoning unless the user explicitly requests an appropriate planning artifact.
 9. Put tool order in the prompt only when order affects correctness or side effects. Name the tool purpose, required evidence, fallback, and stop condition when tools are part of the contract.
 10. Present the completed prompt or instruction artifact immediately. Do not put an external trial run, validator, report, or closeout step before that first presentation.
-11. In Ending Real, test with representative cases. For stochastic production prompts, use repeated fresh runs: default 3; use 5 for critical image, structured-data, or reliability claims.
+11. Start the mandatory independent Ending lifecycle. In Ending Real, test with representative cases. For stochastic production prompts, use repeated fresh runs: default 3; use 5 for critical image, structured-data, or reliability claims.
 12. Grade artifact production separately from acceptance. A downloaded image, valid JSON container, or completed model response is not a pass when semantic, file, structure, or visual gates fail.
-13. If Ending Real fails, notify, repair the weakest reusable rule or validator, rerun the failed cohort, and present the corrected artifact. Stop only when the stated acceptance threshold passes or the remaining blocker is reported precisely.
+13. If Ending Real fails, record the failure before repair, launch repair as a new child lifecycle, rerun the failed cohort, present the corrected artifact, and use a different Ending verifier. Stop only when the stated acceptance threshold passes or the remaining blocker is reported precisely.
 
 ## Recommended Prompt Shape
 

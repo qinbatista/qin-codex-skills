@@ -34,7 +34,7 @@ Select only the optimization form required by the inline request or admitted nod
 Ordinary inline optimization intentionally uses the current user-selected model and performs no foreground downgrade/upgrade trial. An admitted optimization node follows the exact model and effort in the locked plan:
 
 - Luna, Terra, and Sol roles are cold-start hints only; the exact similar-task profile learns across the effort-first Luna-low through Sol-ultra ladder.
-- Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Explicit benchmark/admitted tiny routes are exactly Spark-low plus the full normal fallback; admitted non-tiny routes retain the exact full normal ladder without Spark, while ordinary inline implementation uses the current model.
+- Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Eligible text/code result producers try Spark first at low effort for easy work and high effort for complex work; the shared GPT-5.6 Luna/Terra/Sol ladder remains the active quality/fallback ladder. A zero-result operational Spark failure uses the current 5.6 pair, while a verified Spark correctness/quality failure starts a new 5.6 repair lifecycle. Ordinary non-routed inline implementation uses the current model.
 - Correctness and quality are eligibility gates. Rank tokens, then process time, then weaker rung only when every compared Real-passing pair shares the same exact workload hash with complete metrics; otherwise use the quality boundary.
 - A frozen exact-profile pair is reused until verified failure or material ladder, hard-floor, profile, or policy drift.
 

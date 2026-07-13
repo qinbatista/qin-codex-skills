@@ -102,6 +102,30 @@ def parse_profile_args(argv):
 
 
 class ModelRoutingHistoryTests(unittest.TestCase):
+    def test_default_local_model_experience_is_read_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            history = root / "model_experience.json"
+            history.write_text('{"sentinel":true}', encoding="utf-8")
+            receipt = root / "receipt.json"
+            write_receipt(receipt)
+            original_default = module.DEFAULT_HISTORY_PATH
+            module.DEFAULT_HISTORY_PATH = history
+            try:
+                before = history.read_bytes()
+                with self.assertRaisesRegex(ValueError, "read-only"):
+                    module.recommend_route(arguments(history, receipt))
+                with self.assertRaisesRegex(ValueError, "read-only"):
+                    module.record_event(arguments(history, receipt))
+                module.load_history(history)
+                module.status(history)
+                self.assertEqual(history.read_bytes(), before)
+                history.unlink()
+                self.assertEqual(module.status(history), {"schema_version": 3, "conditions": 0, "tasks": 0})
+                self.assertFalse(history.exists())
+            finally:
+                module.DEFAULT_HISTORY_PATH = original_default
+
     @contextmanager
     def _with_rust_domain(self, owner="code-skill", spark_first=True, language_alias="rust"):
         original_domains = deepcopy(module.EXECUTION_DOMAINS)

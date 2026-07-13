@@ -14,11 +14,11 @@ Run `scripts/obsidian_memory_bridge.py search --query <generalized task summary>
 - Recheck live source when memory may be stale.
 - If the bridge returns `unavailable` or `no_matches`, continue normally without warning, setup work, or a blocked route.
 
-The private `local/adaptive-routing/model_experience.json` ledger remains the only machine authority for exact model/effort selection. Obsidian `TaskModelExperience/` is a sanitized human-readable reference for Task Analyze and other skills.
+Exact model/effort learning is separate from this broad advisory search. Its only active private authority is Obsidian `Projects/<project-key>/ModelExperience`, read through `project-memory-skill/scripts/obsidian_model_memory.py`; the shared ladder supplies cold starts. Central `TaskModelExperience/` and local `model_experience.json` are legacy read-only history and never select or record an active pair.
 
 ## Obsidian Vault Routing
 
-Use `/Users/qin/Library/Mobile Documents/iCloud~md~obsidian/Documents/MyAILLM` only when the task depends on connected-project history, a repeated failure, a durable user rule, visual/UI verification, project routing, global skills, or a past-work lesson.
+Use the configured `CODEX_OBSIDIAN_VAULT`, or the default `MyAILLM` vault when available, only when the task depends on connected-project history, a repeated failure, a durable user rule, visual/UI verification, project routing, global skills, or a past-work lesson.
 
 - Read vault `AGENTS.md`, root `instruction.md`, `DailyLog/index.md`, today's log when present, `wiki/index.md`, and recent `wiki/log.md` only as needed.
 - Before a structured folder, read its `instruction.md`. Main folders are `DailyLog/`, `Skills/`, `AestheticTaste/`, `Projects/`, and `KnowledgeAreas/`.
@@ -33,7 +33,7 @@ For Mac Notes sync, read `KnowledgeAreas/Mac Notes Sync.md` and `raw/MacNotes/sy
 
 ## Ending Update
 
-After the completed result is shown, Ending Task may update only memory related to the work. Write model-switch experience only after Real Verify has produced a durable `pass` or `fail` verdict. Use `scripts/obsidian_memory_bridge.py record-model` with controlled profile fields, producer pair, Real status, boundary state, switch reason, and comparable metrics when available. New records never accept or write a Mini status; legacy Mini fields remain searchable only as migration history.
+After the completed result is shown, Ending Task may update only memory related to the work. Write model-switch experience only after Real Verify has produced a durable `pass` or `fail` verdict, using `project-memory-skill/scripts/obsidian_model_memory.py record` with the same project/task/module/file/symbol/code context and matched producer receipt. New records never accept or write a Mini status; central legacy entries remain read-only and are not migrated.
 
 For meaningful completed work, append a concise entry to today's DailyLog. Reusable lessons, corrections, failure/retry patterns, workarounds, verified results, project/global-skill conflicts, and durable preferences go to the matching structured folder; append `wiki/log.md` for major durable updates.
 

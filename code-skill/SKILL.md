@@ -5,7 +5,7 @@ description: "Do not use for an exact-scoped read-only lookup, audit, transform,
 
 # Code Skill
 
-Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. Ordinary implementation work enters directly from the hookless inline bootstrap on the current model. A self-contained bounded read-only lookup or audit with exact source/output scope stays on the bootstrap and does not load this skill. If Task Analyze has explicitly activated and positively admitted delegation, Workflow may instead deliver an exact locked code node. Inline execution needs no Workflow, child receipt, or model verifier; admitted execution must not reselect its pair or dependencies.
+Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. Ordinary implementation may run inline or as one Obsidian-context Spark-first producer with a selected 5.6 fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. No path adds a pre-result verifier; the mandatory post-result Ending lifecycle still runs.
 
 ## Internal Route Selection
 
@@ -45,7 +45,7 @@ Read only what the inline request or admitted node needs:
 - Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`;
 - prompt-in-code: always load the global `prompt-skill` first, then use `references/prompt-generation.md` for executable-string and language-specific details; a missing or skipped `prompt-skill` is a prompt-task routing failure, not a fallback condition;
 - safe repeated/parallel registered-code work: `references/parallelization.md`;
-- Spark and fallback behavior: `references/spark-small-code.md`.
+- active Spark-first code boundary and legacy parsing notes: `references/spark-small-code.md`.
 
 Active registry-owned code domains share this executor while retaining separate evidence keys and references. Current examples are `python`, `csharp`, and `unity_csharp`; `code_unspecified` is migration/history-only. Registry metadata identifies the domain; language rules are documented in this skill's `references` directory (for example, `python-rules.md`, `csharp-rules.md`, and `unity-csharp-rules.md`).
 
@@ -53,11 +53,11 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 
 ## Model Contract
 
-- Ordinary inline code work intentionally uses the current user-selected model and performs no foreground downgrade/upgrade or verification trial.
-- For an explicit benchmark or admitted tiny code route, use Spark-low only for obvious bounded, low-risk, easy, low-ambiguity text-only tiny implementation, repair, refactor, command, or probe work. Its candidate route is exactly Spark-low plus the full normal fallback; Spark-medium/high/xhigh are never routing fallbacks.
-- Every admitted non-tiny code profile retains `code-skill` ownership and the exact full Luna-low→Sol-ultra candidate ladder with no Spark. Coding can be easy or complex; task type never fixes the selected pair.
+- Adaptive code work reads the shared Spark-first contract and matching Obsidian `Projects/<project-key>/ModelExperience` by project/task/module/file/symbol/code context. Easy text code tries Spark-low; complex text code tries Spark-high. Exact read-only, image/mixed, verifier, and Ending work skip Spark.
+- A zero-result, zero-token operational Spark failure may immediately use the contextual 5.6 pair. A published Spark result returns first; Ending correctness/quality failure is recorded before a new 5.6 repair lifecycle with a different verifier.
+- Old local `model_experience.json` remains legacy read-only. Every adaptive code profile retains `code-skill` ownership; Obsidian selects the active Luna-to-Sol fallback and learns its verified boundary.
 - An admitted fallback must already be allowed by Task Analyze and must carry its runtime reroute/receipt evidence. Inline execution does not invent fallback metadata.
-- In an explicit benchmark or admitted route, image-dependent, over-context, broad integration, or evidence-heavy work may use planned Terra; bounded Spark-unavailable work may use planned Luna.
+- Image-dependent, broad integration, or evidence-heavy work may cold-start on Terra or Sol; verified bounded work may descend to Luna.
 - A planned label is not execution proof. Return receipt evidence only when an admitted route, explicit benchmark, or routing acceptance target requires it.
 
 ## Workflow
@@ -69,7 +69,7 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 5. Keep Python signatures, calls, and literals on one line when the project/global rules require that style.
 6. Implement only the requested behavior; avoid unrequested abstractions, features, fallbacks, or compatibility layers.
 7. Show the changed path and concrete behavior immediately; do not launch a child receipt or verifier before presentation.
-8. After presentation, Ending Task runs proportional Real Verify such as syntax, compile, focused execution, or relevant regression. A failure notifies, reopens, repairs, and presents the correction.
+8. After presentation, always start the independent Ending lifecycle. It runs proportional Real Verify such as syntax, compile, focused execution, or relevant regression. Ending Real alone records receipt-backed producer pass/fail to Obsidian. A failure is logged before a repair child starts; the correction is presented and verified by a different Ending worker.
 
 Compile, import, lint, schema, build, existence, and focused execution checks belong to post-result Real Verify unless they are themselves the user's requested task.
 

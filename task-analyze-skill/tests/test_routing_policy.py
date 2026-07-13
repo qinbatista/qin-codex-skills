@@ -21,12 +21,13 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(complex_profile["static_suggestion"], "gpt-5.6-terra|high")
         self.assertEqual(complex_profile["hard_floor"], "gpt-5.6-luna|low")
 
-    def test_tiny_presets_derive_spark_low_plus_normal_ladder(self):
+    def test_tiny_presets_use_shared_gpt56_ladder(self):
         tiny_text = module.resolve_profile_preset("tiny-text", project_family="global")
         tiny_code = module.resolve_profile_preset("tiny-code", project_family="global", execution_domain="python")
-        expected = ["gpt-5.3-codex-spark|low"] + module.normal_adaptive_pair_texts()
+        expected = module.normal_adaptive_pair_texts()
         self.assertEqual(tiny_text["candidate_ladder"], expected)
         self.assertEqual(tiny_code["candidate_ladder"], expected)
+        self.assertEqual(tiny_text["hard_floor"], "gpt-5.6-luna|low")
 
     def test_code_presets_support_python_csharp_and_unity_without_duplicate_rows(self):
         domains = ["python", "csharp", "unity_csharp"]
@@ -53,7 +54,27 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(module.downgrade_pair(ladder[-1], ladder), ("gpt-5.6-sol", "max"))
         self.assertEqual(module.upgrade_pair(ladder[-2], ladder), ladder[-1])
 
-    def test_spark_bootstrap_is_limited_to_low_risk_text_tiny_families(self):
+    def test_shared_registry_drives_active_rank_efforts_and_policy(self):
+        rows = module.public_model_capability_rows()
+        self.assertEqual([row["id"] for row in rows["models"]], ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"])
+        self.assertEqual([row["capability_rank"] for row in rows["models"]], [1, 2, 3])
+        self.assertEqual(rows["policy"]["minimum_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(rows["private_learning_contract"]["authority"], "obsidian_project_memory")
+        self.assertEqual(rows["private_learning_contract"]["specificity_order"], ["project_task", "module", "file", "symbol"])
+        self.assertEqual(rows["private_learning_contract"]["legacy_local_json"], "read_only_inactive")
+        self.assertNotIn("ultra", module.ACTIVE_MODEL_EFFORTS["gpt-5.6-luna"])
+        self.assertIn("ultra", module.ACTIVE_MODEL_EFFORTS["gpt-5.6-terra"])
+
+    def test_spark_priority_is_separate_from_5_6_ladder_and_contextual(self):
+        rows = module.public_model_capability_rows()
+        self.assertEqual(rows["spark_first"]["adaptive_efforts"], ["low", "high"])
+        self.assertEqual(module.spark_first_pair("code", "text", "edit", "easy"), ("gpt-5.3-codex-spark", "low"))
+        self.assertEqual(module.spark_first_pair("code", "text", "edit", "complex"), ("gpt-5.3-codex-spark", "high"))
+        self.assertEqual(module.spark_first_pair("document", "text", "write", "easy"), ("gpt-5.3-codex-spark", "low"))
+        self.assertIsNone(module.spark_first_pair("code", "mixed", "edit", "easy"))
+        self.assertIsNone(module.spark_first_pair("code", "text", "review", "easy"))
+
+    def test_legacy_spark_profile_recognizer_is_history_only_and_bounded(self):
         self.assertTrue(module.is_tiny_spark_profile("tiny_code", "text", "low", "easy", "low"))
         self.assertFalse(module.is_tiny_spark_profile("code", "text", "low"))
         self.assertFalse(module.is_tiny_spark_profile("tiny_code", "image", "low"))
@@ -69,10 +90,10 @@ class RoutingPolicyTests(unittest.TestCase):
             any(pair.startswith("gpt-5.3-codex-spark|") for pair in module.adaptive_pair_texts_for_profile("code", "text", "low", "easy", "low"))
         )
 
-    def test_tiny_profile_uses_spark_low_then_full_normal_fallback(self):
+    def test_tiny_profile_excludes_history_only_spark(self):
         ladder = module.adaptive_pair_texts_for_profile("tiny_code", "text", "low", "easy", "low")
-        self.assertEqual(ladder, ["gpt-5.3-codex-spark|low"] + module.normal_adaptive_pair_texts())
-        self.assertNotIn("gpt-5.3-codex-spark|medium", ladder)
+        self.assertEqual(ladder, module.normal_adaptive_pair_texts())
+        self.assertFalse(any(pair.startswith("gpt-5.3-codex-spark|") for pair in ladder))
 
     def test_plugin_frontend_implementation_without_language_is_general(self):
         self.assertEqual(module.resolve_execution_domain(owning_skill="build-web-apps:frontend-app-builder", task_family="integration", purpose="implement"), "general")

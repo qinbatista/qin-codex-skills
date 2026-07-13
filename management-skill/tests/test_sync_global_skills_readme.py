@@ -133,6 +133,15 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "symlink"):
                 sync_global_skills.snapshot_hash([skill_dir])
 
+    def test_public_safety_rejects_absolute_user_home_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skill_dir = Path(temp_dir) / "example-skill"
+            skill_dir.mkdir()
+            (skill_dir / "SKILL.md").write_text(f"private path: {Path('/', 'Users', 'example', 'private', 'file.txt')}\n", encoding="utf-8")
+            issues = sync_global_skills.public_safety_issues([skill_dir])
+        self.assertEqual(len(issues), 1)
+        self.assertIn("secret-like content", issues[0])
+
     def test_symlink_rejection_does_not_copy_outside_bytes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -204,7 +213,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Ordinary work stays on the current Codex model", readme)
         self.assertIn("Delegate only on explicit request or current end-to-end proof", readme)
         self.assertIn("Recall project/module/file history before editing", readme)
-        self.assertIn("Local JSONL is authoritative; Obsidian is optional", readme)
+        self.assertIn("Change history uses local JSONL + optional Obsidian; model learning uses private Obsidian only", readme)
+        self.assertIn("## ⚡ Models & private learning", readme)
+        self.assertIn("Eligible text/code tries Spark: easy `low`, complex `high`", readme)
+        self.assertIn("zero result and zero tokens", readme)
+        self.assertIn("new GPT-5.6 repair with a different verifier", readme)
         self.assertIn("Present completed result", readme)
         self.assertIn("Ending Real verifies the result", readme)
         self.assertIn("## Rules", readme)
@@ -217,6 +230,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example-mobile.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-mobile.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-router.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-router-mobile.svg"), 1)
         self.assertNotIn('"schema_version":', readme)
         self.assertNotIn('"conditions":', readme)
         self.assertNotIn('"producer":', readme)
@@ -229,13 +244,15 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
     def test_readme_names_gpt_56_primary_ladder_and_latest_codex_registry(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
-        self.assertNotIn("Spark-first executor", readme)
+        self.assertIn("Spark-first text/code producer", readme)
+        self.assertIn("`gpt-5.3-codex-spark`", readme)
         self.assertIn("GPT-5.6 Luna → Terra → Sol", readme)
         self.assertIn("latest registered Codex models", readme)
         self.assertIn("`gpt-5.6-luna`", readme)
         self.assertIn("`gpt-5.6-terra`", readme)
         self.assertIn("`gpt-5.6-sol`", readme)
-        self.assertIn("Spark only for admitted tiny tasks", readme)
+        self.assertIn("Text/code tries Spark", readme)
+        self.assertIn("GPT-5.6 Luna → Terra → Sol remains the quality/fallback ladder", readme)
         self.assertIn("- `python` · code · `code-skill` · active · Spark: yes", readme)
         self.assertNotIn("| Spark first |", readme)
 
@@ -255,19 +272,26 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("专用于 Codex", readme)
         self.assertIn("从 **GPT-5.6** 开始测试", readme)
         self.assertIn("修改前回溯项目/模块/文件历史", readme)
-        self.assertIn("本地 JSONL 是权威来源；Obsidian 可选", readme)
+        self.assertIn("修改历史用本地 JSONL（可投影 Obsidian）；模型学习只写私有 Obsidian", readme)
+        self.assertIn("## ⚡ 模型与私有学习", readme)
+        self.assertIn("合格文字/代码先用 Spark：简单 `low`，复杂 `high`", readme)
+        self.assertIn("新的 GPT-5.6 修复", readme)
         self.assertIn("## 规则", readme)
         self.assertIn("## 📊 历史 Benchmark", readme)
         self.assertIn("## 🧩 八个公开 Skill", readme)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh-mobile.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-router.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-router-mobile.svg"), 1)
 
-    def test_readme_explains_project_module_file_memory_and_optional_obsidian(self):
+    def test_readme_separates_change_memory_from_private_model_learning(self):
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
         self.assertIn("project/module/file history", readme)
         self.assertIn("record the verified change", readme)
         self.assertIn("Obsidian", readme)
-        self.assertIn("Local JSONL is authoritative", readme)
+        self.assertIn("Change history uses local JSONL + optional Obsidian", readme)
+        self.assertIn("model learning uses private Obsidian only", readme)
+        self.assertIn("project/task/module/file/symbol/code model experience", readme)
 
     def test_public_benchmark_asset_satisfies_current_strict_contract(self):
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
@@ -449,7 +473,6 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             for suffix in ("", "-mobile"):
                 svg_text = (README_ASSET_DIR / f"{visual_name}{suffix}.svg").read_text(encoding="utf-8")
                 self.assertNotRegex(svg_text, r"\[(?:Spark|Luna|Terra|Sol) \| ")
-                self.assertNotIn("Spark first", svg_text)
         for suffix in ("", "-mobile"):
             hero_text = (README_ASSET_DIR / f"qin-codex-skills-hero{suffix}.svg").read_text(encoding="utf-8").lower()
             lifecycle_text = (README_ASSET_DIR / f"task-lifecycle{suffix}.svg").read_text(encoding="utf-8").lower()
@@ -464,13 +487,16 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         mobile_router = (README_ASSET_DIR / "model-router-mobile.svg").read_text(encoding="utf-8")
         for svg_text in (desktop_router, mobile_router):
             self.assertIn("cold-start hint", svg_text)
-            self.assertIn("Spark-low obvious-only", svg_text)
-            self.assertIn("full normal fallback", svg_text)
+            self.assertIn("easy", svg_text)
+            self.assertIn("complex", svg_text)
+            self.assertIn("Obsidian", svg_text)
+            self.assertIn("5.6", svg_text)
         for visual_name in ("model-experience", "model-experience-mobile"):
             svg_text = (README_ASSET_DIR / f"{visual_name}.svg").read_text(encoding="utf-8").lower()
-            self.assertIn("dynamic learned pair", svg_text)
-            self.assertIn("same cohort", svg_text)
-            self.assertIn("quality boundary", svg_text)
+            self.assertIn("spark", svg_text)
+            self.assertIn("5.6", svg_text)
+            self.assertIn("obsidian", svg_text)
+            self.assertIn("quality failure", svg_text)
             self.assertIn("private", svg_text)
         desktop_verification = (README_ASSET_DIR / "verification-topologies.svg").read_text(encoding="utf-8")
         mobile_verification = (README_ASSET_DIR / "verification-topologies-mobile.svg").read_text(encoding="utf-8")
@@ -522,7 +548,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             repository_dir.mkdir()
             copied_names = sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
             self.assertEqual(copied_names, sync_global_skills.PRIMARY_SKILL_ORDER)
-            expected_svg_references = {"README.md": {"./management-skill/assets/readme/core-flow.svg", "./management-skill/assets/readme/core-flow-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}, "README.zh.md": {"./management-skill/assets/readme/core-flow-zh.svg", "./management-skill/assets/readme/core-flow-zh-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}}
+            expected_svg_references = {"README.md": {"./management-skill/assets/readme/core-flow.svg", "./management-skill/assets/readme/core-flow-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}, "README.zh.md": {"./management-skill/assets/readme/core-flow-zh.svg", "./management-skill/assets/readme/core-flow-zh-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}}
             for readme_name, expected_references in expected_svg_references.items():
                 readme = (repository_dir / readme_name).read_text(encoding="utf-8")
                 local_references = set(re.findall(r'(?:src="|srcset="|\]\()(\./[^\"#)]+)', readme))

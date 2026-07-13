@@ -110,6 +110,11 @@
           "sandbox": "workspace-write",
           "execution_domain": "general",
           "purpose": "implement",
+          "model_memory_scope": {
+            "module": "frontend-implementation",
+            "code_kind": "frontend",
+            "operation": "integration"
+          },
           "routing_condition": {
             "task_family": "integration",
             "artifact": "patch",
@@ -149,11 +154,11 @@
           "routing_recommendation": {
             "selected_pair": "gpt-5.6-terra|high",
             "trial": false,
-            "reason": "no_bounds_use_static",
+            "reason": "shared_cold_start",
             "profile_fingerprint": "af4400a8824bfe69cf34260f196bc429139b6e232e4b390fc855cde921744589",
             "calibration_state": "cold_start",
             "best_pair": null,
-            "selection_basis": "cold_start"
+            "selection_basis": "obsidian_project_memory"
           }
         },
         {

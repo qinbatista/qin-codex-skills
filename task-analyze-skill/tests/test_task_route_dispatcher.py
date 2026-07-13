@@ -10,6 +10,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -23,7 +24,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
     def refresh_recommendation(self, node):
         pairs = module.routing_history_module.canonical_pairs(node["candidate_ladder"])
         fingerprint = module.routing_history_module.profile_fingerprint(node["routing_condition"], pairs, module.routing_history_module.parse_pair(node["static_suggestion"]), module.routing_history_module.parse_pair(node["hard_floor"]))
-        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"}
+        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_project_memory"}
 
     def plan(self, cache_dir):
         condition = {
@@ -46,7 +47,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
             module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
         )
-        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low", "trial": False, "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "sandbox": "read-only"}], "main_result_node": "direct"}
+        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low", "trial": False, "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_project_memory"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "sandbox": "read-only"}], "main_result_node": "direct"}
 
     def dependent_plan(self, cache_dir):
         plan = self.plan(cache_dir)
@@ -105,7 +106,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                     "static_suggestion": "gpt-5.6-luna|low",
                     "hard_floor": "gpt-5.6-luna|low",
                     "trial": False,
-                    "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"},
+                    "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_project_memory"},
                 },
                 {"id": "optimization", "phase": "ending", "skill": "optimization-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Optimize this result independently.", "sandbox": "read-only"},
                 {
@@ -206,19 +207,33 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("proof missing keys: selection_basis" in failure for failure in failures))
 
-    def test_initial_dispatch_accepts_current_learner_recommendation(self):
+    def test_initial_dispatch_accepts_current_obsidian_recommendation_without_legacy_json(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
-            failures = module.validate_plan(
-                plan,
-                "gpt-5.6-terra",
-                "low",
-                root,
-                enforce_current_recommendation=True,
-                history_path=root / "history.json",
-            )
+            with patch.object(module.routing_history_module, "recommend_route", side_effect=AssertionError("legacy JSON recommendation used")) as legacy:
+                failures = module.validate_plan(
+                    plan,
+                    "gpt-5.6-terra",
+                    "low",
+                    root,
+                    enforce_current_recommendation=True,
+                    history_path=root / "history.json",
+                )
         self.assertEqual(failures, [])
+        legacy.assert_not_called()
+
+    def test_ending_record_uses_obsidian_model_memory_without_legacy_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            node = self.plan(root / "work" / "cache" / "route")["nodes"][0]
+            next_recommendation = {"selected_pair": "gpt-5.6-luna|low"}
+            with patch.object(module.obsidian_model_memory, "record_model_result", return_value={"status": "written"}) as record, patch.object(module.obsidian_model_memory, "recommend_model", return_value=next_recommendation) as recommend, patch.object(module.routing_history_module, "record_event", side_effect=AssertionError("legacy JSON write used")) as legacy:
+                result = module._run_record("unused", "real", "pass", root / "producer-receipt.json", "route-1", node, root)
+        self.assertEqual(result["status"], "written")
+        record.assert_called_once()
+        recommend.assert_called_once()
+        legacy.assert_not_called()
 
     def test_initial_dispatch_rejects_plan_and_proof_forged_together(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -236,8 +251,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 enforce_current_recommendation=True,
                 history_path=root / "history.json",
             )
-        self.assertTrue(any("does not match current learner recommendation" in failure for failure in failures))
-        self.assertTrue(any("stale or not learner-derived" in failure for failure in failures))
+        self.assertTrue(any("does not match current Obsidian recommendation" in failure for failure in failures))
+        self.assertTrue(any("stale or not Obsidian-derived" in failure for failure in failures))
 
     def test_initial_dispatch_rejects_forged_recommendation_reason(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -252,7 +267,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 enforce_current_recommendation=True,
                 history_path=root / "history.json",
             )
-        self.assertTrue(any("stale or not learner-derived: reason" in failure for failure in failures))
+        self.assertTrue(any("stale or not Obsidian-derived: reason" in failure for failure in failures))
 
     def test_plan_rejects_selected_pair_below_hard_floor(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -278,21 +293,17 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "fail")
         run_node.assert_not_called()
 
-    def test_tiny_profile_requires_spark_low_plus_normal_fallback(self):
+    def test_tiny_profile_uses_the_same_full_gpt56_ladder(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
             node = plan["nodes"][0]
             node["routing_condition"]["task_family"] = "tiny_text"
-            node["candidate_ladder"] = ["gpt-5.3-codex-spark|low"] + module.normal_adaptive_pair_texts()
-            node["hard_floor"] = "gpt-5.3-codex-spark|low"
-            node["model"] = "gpt-5.3-codex-spark"
-            node["effort"] = "low"
             self.refresh_recommendation(node)
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
 
-    def test_tiny_profile_rejects_spark_medium(self):
+    def test_tiny_profile_rejects_spark(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
@@ -304,7 +315,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             node["effort"] = "medium"
             self.refresh_recommendation(node)
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(any("Spark-low is valid only" in failure for failure in failures))
+        self.assertTrue(any("shared active GPT-5.6 ladder" in failure for failure in failures))
         self.assertTrue(any("selected pair must be in candidate_ladder" in failure for failure in failures))
 
     def test_real_verify_rejects_management_only_ending(self):
@@ -322,7 +333,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan["nodes"][0]["candidate_ladder"] = plan["nodes"][0]["candidate_ladder"][:-1]
             self.refresh_recommendation(plan["nodes"][0])
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(any("exactly match the full GPT-5.6 ladder" in failure for failure in failures))
+        self.assertTrue(any("exactly match the shared full GPT-5.6 ladder" in failure for failure in failures))
 
     def test_plan_rejects_wrong_entry_pair_and_unsafe_sandbox(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -859,11 +870,11 @@ class TaskRouteDispatcherTests(unittest.TestCase):
 
             recorded_calls = []
 
-            def fake_record_event(args):
-                recorded_calls.append(args)
+            def fake_record_event(result_path, verify_level, verify_status, receipt, run_id, main_node, project_root, execution_domain=None):
+                recorded_calls.append(SimpleNamespace(verify_level=verify_level, verify_status=verify_status, failure_class="none" if verify_status == "pass" else ("quality" if verify_status == "fail" else "execution"), run_id=run_id, receipt=receipt))
                 return {"status": "recorded"}
 
-            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
+            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", side_effect=fake_record_event):
                 manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
         self.assertEqual(manifest["status"], "fail")
         self.assertEqual(calls, ["direct"])
@@ -1003,10 +1014,10 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 }
 
             recorded_calls = []
-            def fake_record_event(args):
-                recorded_calls.append(args)
+            def fake_record_event(result_path, verify_level, verify_status, receipt, run_id, main_node, project_root, execution_domain=None):
+                recorded_calls.append(SimpleNamespace(verify_level=verify_level, verify_status=verify_status, failure_class="none" if verify_status == "pass" else ("quality" if verify_status == "fail" else "execution"), run_id=run_id, receipt=receipt))
                 return {"status": "recorded"}
-            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
+            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", side_effect=fake_record_event):
                 manifest = module.run_ending_handoff(handoff_path)
         self.assertEqual(manifest["status"], "fail")
         self.assertEqual(len(recorded_calls), 1)
@@ -1058,10 +1069,10 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 }
 
             recorded_calls = []
-            def fake_record_event(args):
-                recorded_calls.append(args)
+            def fake_record_event(result_path, verify_level, verify_status, receipt, run_id, main_node, project_root, execution_domain=None):
+                recorded_calls.append(SimpleNamespace(verify_level=verify_level, verify_status=verify_status, failure_class="none" if verify_status == "pass" else ("quality" if verify_status == "fail" else "execution"), run_id=run_id, receipt=receipt))
                 return {"status": "recorded"}
-            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
+            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", side_effect=fake_record_event):
                 manifest = module.run_ending_handoff(handoff_path)
         self.assertEqual(manifest["status"], "pass")
         self.assertEqual(len(recorded_calls), 1)
@@ -1156,11 +1167,11 @@ class TaskRouteDispatcherTests(unittest.TestCase):
 
             recorded_calls = []
 
-            def fake_record_event(args):
-                recorded_calls.append(args)
+            def fake_record_event(result_path, verify_level, verify_status, receipt, run_id, main_node, project_root, execution_domain=None):
+                recorded_calls.append(SimpleNamespace(verify_level=verify_level, verify_status=verify_status, failure_class="none" if verify_status == "pass" else ("quality" if verify_status == "fail" else "execution"), run_id=run_id, receipt=receipt))
                 return {"status": "recorded"}
 
-            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
+            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", side_effect=fake_record_event):
                 manifest = module.run_ending_handoff(handoff_path)
         self.assertEqual(manifest["status"], "fail")
         self.assertEqual(len(recorded_calls), 1)
@@ -1169,6 +1180,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(recorded_calls[0].failure_class, "quality")
         self.assertEqual(recorded_calls[0].run_id, route_run_id)
         self.assertEqual(recorded_calls[0].receipt, str(cache_dir / "direct-receipt.json"))
+        self.assertTrue(manifest["reopen_required"])
+        self.assertTrue(manifest["notification_required"])
 
     def test_ending_handoff_records_unknown_status_when_non_targeted_marker_missing_or_malformed(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1209,8 +1222,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
 
             recorded_calls = []
 
-            def fake_record_event(args):
-                recorded_calls.append(args)
+            def fake_record_event(result_path, verify_level, verify_status, receipt, run_id, main_node, project_root, execution_domain=None):
+                recorded_calls.append(SimpleNamespace(verify_level=verify_level, verify_status=verify_status, failure_class="none" if verify_status == "pass" else ("quality" if verify_status == "fail" else "execution"), run_id=run_id, receipt=receipt))
                 return {"status": "recorded"}
 
             def run_no_marker(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
@@ -1228,12 +1241,14 @@ class TaskRouteDispatcherTests(unittest.TestCase):
 
             with patch.object(module, "run_node", side_effect=lambda *args, **kwargs: (
                 fake_run_node(*args, **kwargs) if args[0]["id"] != "ending-verify" else run_no_marker(*args, **kwargs)
-            )), patch.object(module.routing_history_module, "record_event", side_effect=fake_record_event):
+            )), patch.object(module, "_run_record", side_effect=fake_record_event):
                 manifest = module.run_ending_handoff(handoff_path)
         self.assertEqual(manifest["status"], "fail")
         self.assertEqual(len(recorded_calls), 1)
         self.assertEqual(recorded_calls[0].verify_status, "unknown")
         self.assertEqual(recorded_calls[0].failure_class, "execution")
+        self.assertTrue(manifest["reopen_required"])
+        self.assertTrue(manifest["notification_required"])
 
     def test_plan_rejects_explicit_history_only_domain(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1439,7 +1454,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             self.refresh_recommendation(plan["nodes"][0])
             with self._with_rust_domain() as synthetic_skills_root:
                 failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
-        self.assertTrue(any("Spark-low is valid only" in failure for failure in failures))
+        self.assertTrue(any("shared active GPT-5.6 ladder" in failure for failure in failures))
 
     def test_plan_injects_reference_prompt_for_synthetic_domain(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1668,6 +1683,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             valid_cache = root / "work" / "cache" / "valid"
             valid_cache.mkdir(parents=True)
             valid_node = self.plan(valid_cache)["nodes"][0]
+            valid_node["_project_root"] = str(root)
             current_recommendation = deepcopy(valid_node["routing_recommendation"])
             observed_sources = []
 
@@ -1677,7 +1693,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 args.result_output.write_text("RESULT=12\n", encoding="utf-8")
                 return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": f"{args.model}|{args.effort}", "status": "pass", "failure_class": None, "route_attempts": [], "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
 
-            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module.routing_history_module, "recommend_route", return_value=current_recommendation) as recommend_mock, patch.object(module.receipt_module, "run_receipt", side_effect=guarded_model_stub) as model_stub:
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": "gpt-5.6-luna|low"}, current_recommendation)) as recommend_mock, patch.object(module.receipt_module, "run_receipt", side_effect=guarded_model_stub) as model_stub:
                 valid_record = module.run_node(valid_node, valid_cache, {}, root / "state.sqlite", root)
             self.assertEqual(valid_record["status"], "pass")
             self.assertEqual(recommend_mock.call_count, 1)
@@ -1690,7 +1706,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             forged_node["model"] = "gpt-5.6-terra"
             forged_node["effort"] = "low"
             forged_node["routing_recommendation"]["selected_pair"] = "gpt-5.6-terra|low"
-            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module.routing_history_module, "recommend_route", return_value=current_recommendation), patch.object(module.receipt_module, "run_receipt") as forged_model_stub:
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": "gpt-5.6-luna|low"}, current_recommendation)), patch.object(module.receipt_module, "run_receipt") as forged_model_stub:
                 forged_record = module.run_node(forged_node, forged_cache, {}, root / "state.sqlite", root)
             forged_receipt = json.loads((forged_cache / "direct-receipt.json").read_text(encoding="utf-8"))
         forged_model_stub.assert_not_called()
@@ -1698,6 +1714,34 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(forged_receipt["failure_class"], "authorization")
         self.assertEqual(forged_receipt["authorization_reason"], "dispatcher_adaptive_recommendation_invalid")
         self.assertEqual(len(forged_receipt["route_attempts"]), 1)
+
+    def test_dispatcher_injects_spark_then_uses_selected_5_6_on_zero_result_failure(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "spark"
+            cache_dir.mkdir(parents=True)
+            node = self.plan(cache_dir)["nodes"][0]
+            node["_project_root"] = str(root)
+            proof = deepcopy(node["routing_recommendation"])
+            recommendation = {"selected_pair": "gpt-5.6-luna|low", "attempt_pair": "gpt-5.3-codex-spark|low", "active_fallback_pair": "gpt-5.6-luna|low"}
+            calls = []
+
+            def routed_stub(args, _prompt):
+                pair = f"{args.model}|{args.effort}"
+                calls.append(pair)
+                if pair.startswith("gpt-5.3-codex-spark|"):
+                    return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": pair, "status": "fail", "failure_class": "availability", "turn_completed": False, "pre_execution_failure": True, "route_attempts": [{"requested_pair": pair, "tokens": {"total_tokens": 0}, "pre_execution_failure": True}], "process_elapsed_ms": 1, "tokens": {"total_tokens": 0}}
+                args.result_output.write_text("FALLBACK RESULT\n", encoding="utf-8")
+                return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": pair, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": pair, "status": "pass", "failure_class": None, "turn_completed": True, "model_match": True, "effort_match": True, "route_attempts": [{"requested_pair": pair, "effective_pair": pair, "tokens": {"total_tokens": 4}}], "process_elapsed_ms": 2, "tokens": {"total_tokens": 4}}
+
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=(recommendation, proof)), patch.object(module.receipt_module, "run_receipt", side_effect=routed_stub):
+                record = module.run_node(node, cache_dir, {}, root / "state.sqlite", root)
+            receipt = json.loads((cache_dir / "direct-receipt.json").read_text(encoding="utf-8"))
+        self.assertEqual(calls, ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low"])
+        self.assertEqual(record["status"], "pass")
+        self.assertEqual(receipt["priority_attempt_pair"], "gpt-5.3-codex-spark|low")
+        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.3-codex-spark|low"])
+        self.assertEqual(len(receipt["route_attempts"]), 2)
 
 
 if __name__ == "__main__":

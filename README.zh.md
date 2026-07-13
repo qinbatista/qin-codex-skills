@@ -8,6 +8,8 @@
 
 从 **GPT-5.6** 开始测试 · 最新注册 Codex 模型：`gpt-5.6-luna` · `gpt-5.6-terra` · `gpt-5.6-sol`
 
+文字/代码优先使用 Spark：`gpt-5.3-codex-spark` · 简单=`low` · 复杂=`high`
+
 </div>
 
 ## 🔄 核心流程
@@ -17,16 +19,28 @@
   <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先展示完成结果，再由 Ending Real 验证结果">
 </picture>
 
+## ⚡ 模型与私有学习
+
+<picture>
+  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
+  <img src="./management-skill/assets/readme/model-router.svg" alt="文字和代码优先使用 Spark，按上下文回退 GPT-5.6，并在私有 Obsidian 中学习">
+</picture>
+
+- **优先：** 合格文字/代码先用 Spark：简单 `low`，复杂 `high`。
+- **操作故障：** 零结果、零 token 时，使用 Obsidian 当前选择的 GPT-5.6。
+- **质量故障：** 已产出就先返回；Ending 记录失败，再用不同验证者开启新的 GPT-5.6 修复。
+- **学习：** 只有匹配回执的 Ending 结果，才更新私有项目/任务/模块/文件/方法/代码模型经验。
+
 ## 规则
 
 - **Inline：** 普通任务使用当前 Codex 模型。
 - **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
 - **路由：** 只有明确要求或当前端到端证据成立时才委派。
 - **交付：** 先展示完成结果，再运行 Ending Real。
-- **验证：** Ending Real 失败就修复；first-result 不包含它。
+- **验证：** Ending Real 在交付后运行；first-result 不包含它。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
-- **记忆：** 本地 JSONL 是权威来源；Obsidian 可选。
-- **模型：** GPT-5.6 Luna → Terra → Sol；先调 effort；Spark 只用于已准入 tiny 任务。
+- **记忆：** 修改历史用本地 JSONL（可投影 Obsidian）；模型学习只写私有 Obsidian。
+- **模型：** 文字/代码优先 Spark；GPT-5.6 Luna → Terra → Sol 仍是质量/回退梯级。
 - **隐私：** secret、原始 Prompt/结果、receipt、ledger、cache 和临时文件留在本地。
 
 ## 📊 历史 Benchmark

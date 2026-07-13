@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
   <title id="title">Condition-keyed model experience</title>
-  <desc id="desc">For an admitted route, the completed result is presented before verification. Ending Real verifies the retained producer attempt, then cost-ranks tokens and time only inside a shared exact workload-hash cohort. It freezes best_pair and reopens verified failure.</desc>
+  <desc id="desc">Private Obsidian model experience is keyed by project, task, module, file, symbol, code, and operation. Ending Real records a matched Spark or GPT-5.6 producer outcome after presentation; operational failure is neutral and quality failure opens repair.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#17223d"/></linearGradient>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#67e8f9"/></marker>
@@ -8,7 +8,7 @@
   </defs>
   <rect width="1600" height="1080" rx="32" fill="url(#bg)"/>
   <text x="70" y="76" fill="#f8fafc" font-size="44" font-weight="800">Model experience: learn by condition</text>
-  <text x="70" y="116" fill="#94a3b8" font-size="22">Receipt-backed producer history stays private and never replaces hard safety, project, or skill floors.</text>
+  <text x="70" y="116" fill="#94a3b8" font-size="22">Receipt-backed producer history stays in private Obsidian and never replaces safety, project, or skill floors.</text>
 
   <g stroke="#67e8f9" stroke-width="4" fill="none" marker-end="url(#arrow)">
     <path d="M300 275H370"/><path d="M650 275H720"/><path d="M1000 275H1070"/>
@@ -24,13 +24,13 @@
     <rect x="370" y="175" width="280" height="200" rx="24" fill="#201a3a" stroke="#a78bfa" stroke-width="2"/>
     <text x="510" y="220" text-anchor="middle" fill="#ddd6fe" font-size="18" font-weight="800">CONDITION KEY</text>
     <text x="510" y="263" text-anchor="middle" fill="#f8fafc" font-size="24" font-weight="700">exact controlled fields</text>
-    <text x="510" y="304" text-anchor="middle" fill="#cbd5e1" font-size="19">task · modality · risk</text>
-    <text x="510" y="338" text-anchor="middle" fill="#cbd5e1" font-size="18">generalized summary</text>
+    <text x="510" y="304" text-anchor="middle" fill="#cbd5e1" font-size="18">project · task · module</text>
+    <text x="510" y="338" text-anchor="middle" fill="#cbd5e1" font-size="16">file · symbol · code · operation</text>
 
     <rect x="720" y="175" width="280" height="200" rx="24" fill="#102b3d" stroke="#38bdf8" stroke-width="2"/>
     <text x="860" y="220" text-anchor="middle" fill="#bae6fd" font-size="18" font-weight="800">RECOMMEND</text>
-    <text x="860" y="263" text-anchor="middle" fill="#f8fafc" font-size="24" font-weight="700">dynamic learned pair</text>
-    <text x="860" y="304" text-anchor="middle" fill="#cbd5e1" font-size="19">effort first, then model</text>
+    <text x="860" y="263" text-anchor="middle" fill="#f8fafc" font-size="22" font-weight="700">Spark attempt + 5.6 fallback</text>
+    <text x="860" y="304" text-anchor="middle" fill="#cbd5e1" font-size="18">exact context learns both</text>
     <text x="860" y="338" text-anchor="middle" fill="#cbd5e1" font-size="18">hard floors always win</text>
 
     <rect x="1070" y="175" width="360" height="200" rx="24" fill="#123227" stroke="#34d399" stroke-width="2"/>
@@ -48,7 +48,7 @@
     <rect x="1070" y="675" width="360" height="140" rx="24" fill="#123227" stroke="#34d399" stroke-width="2"/>
     <text x="1250" y="722" text-anchor="middle" fill="#a7f3d0" font-size="24" font-weight="800">Ending Real Verify</text>
     <text x="1250" y="760" text-anchor="middle" fill="#f8fafc" font-size="19">same producer · after presentation</text>
-    <text x="1250" y="788" text-anchor="middle" fill="#cbd5e1" font-size="17">failure notifies and reopens</text>
+    <text x="1250" y="788" text-anchor="middle" fill="#cbd5e1" font-size="17">quality failure opens 5.6 repair</text>
     <rect x="1070" y="905" width="360" height="110" rx="24" fill="#302716" stroke="#fbbf24" stroke-width="2"/>
     <text x="1250" y="943" text-anchor="middle" fill="#fde68a" font-size="22" font-weight="800">Learning update</text>
     <text x="1250" y="975" text-anchor="middle" fill="#fef3c7" font-size="15">same cohort: correctness → tokens → time</text>
@@ -64,13 +64,13 @@
     <text x="105" y="635" fill="#a7f3d0" font-size="20" font-weight="800">FROZEN PASS</text>
     <text x="285" y="635" fill="#e2e8f0" font-size="19">keep best_pair; stop searching</text>
     <text x="105" y="685" fill="#fb7185" font-size="20" font-weight="800">QUALITY FAIL</text>
-    <text x="290" y="685" fill="#e2e8f0" font-size="19">sticky boundary → stronger eligible rung</text>
+    <text x="290" y="685" fill="#e2e8f0" font-size="19">Spark → new 5.6 repair; 5.6 → stronger rung</text>
     <text x="105" y="735" fill="#fbbf24" font-size="20" font-weight="800">OPERATIONAL FAIL</text>
-    <text x="340" y="735" fill="#e2e8f0" font-size="19">availability/timeout/protocol ≠ quality</text>
-    <text x="105" y="785" fill="#67e8f9" font-size="20" font-weight="800">SPARK-LOW</text>
-    <text x="260" y="785" fill="#e2e8f0" font-size="19">tiny text/code/command only</text>
+    <text x="340" y="735" fill="#e2e8f0" font-size="19">zero result/token → current 5.6 · quality-neutral</text>
+    <text x="105" y="785" fill="#67e8f9" font-size="20" font-weight="800">SPARK</text>
+    <text x="220" y="785" fill="#e2e8f0" font-size="19">easy low · complex high · verified PASS retains</text>
   </g>
   <rect x="70" y="930" width="880" height="86" rx="20" fill="#3b1725" stroke="#fb7185" stroke-width="2"/>
-  <text x="510" y="967" text-anchor="middle" fill="#fecdd3" font-size="21" font-weight="800">PRIVATE: model_experience.json stays local</text>
-  <text x="510" y="995" text-anchor="middle" fill="#ffe4e6" font-size="18">never snapshot · sync · push · or mirror</text>
+  <text x="510" y="967" text-anchor="middle" fill="#fecdd3" font-size="21" font-weight="800">PRIVATE: Obsidian ModelExperience only</text>
+  <text x="510" y="995" text-anchor="middle" fill="#ffe4e6" font-size="18">old local JSON is read-only · never mirrored</text>
 </svg>

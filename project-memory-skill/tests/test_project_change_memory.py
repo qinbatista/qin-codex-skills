@@ -41,6 +41,31 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 MEMORY.record_change(project, "project-wide", "project", "edit", "Changed settings", "Match the requested behavior", "Settings updated", "not-run", [root / "outside.txt"], store=root / "store", vault=root / "missing-vault")
 
+    def test_failed_record_is_written_before_repair_supersedes_it(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            failed = MEMORY.record_change(project, "runtime", "file", "edit", "Changed runtime value", "Implement the requested behavior", "Ending Real found an incorrect value", "failed", ["script.py"], ["Expected 2 but observed 1"], ["Repair is a new lifecycle"], ["Incorrect durable edit remains"], store=store, vault=root / "missing-vault")
+            repaired = MEMORY.record_change(project, "runtime", "file", "edit", "Repaired runtime value", "Correct the verified failure", "Independent Ending Real passed", "passed", ["script.py"], ["Focused regression passed"], ["Preserve the verified value"], ["none"], supersedes=failed["record_id"], store=store, vault=root / "missing-vault")
+            records = MEMORY._read_records(store / "index.jsonl")
+            self.assertEqual(failed["status"], "written")
+            self.assertEqual(repaired["status"], "written")
+            self.assertEqual(records[1]["supersedes"], failed["record_id"])
+            self.assertEqual([record["verification_status"] for record in records], ["failed", "passed"])
+
+    def test_supersedes_rejects_unknown_or_unrelated_record(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "existing record"):
+                MEMORY.record_change(project, "runtime", "file", "edit", "Repair", "Correct failure", "Passed", "passed", ["script.py"], ["test passed"], supersedes="missing-record", store=store, vault=root / "missing-vault")
+
 
 if __name__ == "__main__":
     unittest.main()

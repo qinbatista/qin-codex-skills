@@ -5,9 +5,9 @@ description: "Use only for explicit model-routing or strategy requests, admitted
 
 # Task Analyze Skill
 
-This is the full routing and model-strategy skill. It is an individual global skill, but it is not the ordinary task bootstrap. The hookless 100% inline policy already loaded from `~/.codex/AGENTS.md` handles ordinary work without paying a separate controller turn or a foreground verification turn.
+This is the full routing and model-strategy skill. The hookless bootstrap in `~/.codex/AGENTS.md` combines the shared Spark-first producer contract and GPT-5.6 ladder with matching project-scoped Obsidian `Projects/<project-key>/ModelExperience`; full visible routing still requires explicit activation. The mandatory post-result Ending lifecycle always applies.
 
-Prompts beginning with `LOCKED_ROUTE_NODE` or `ENDING_TASK_WORKER` already belong to an admitted route and must not restart Task Analyze. Remove or relocate nested cache/fixture `SKILL.md` files under user skill folders; preserve the official `.system` subtree.
+Prompts beginning with `LOCKED_ROUTE_NODE` or `ENDING_TASK_WORKER` already belong to an active lifecycle and must not restart Task Analyze. An `ENDING_TASK_WORKER` does not recursively launch Ending for verification bookkeeping; if it repairs or produces a corrected artifact, that repair becomes a new result task with its own lifecycle and a different Ending verifier. Remove or relocate nested cache/fixture `SKILL.md` files under user skill folders; preserve the official `.system` subtree.
 
 ## Activation Boundary
 
@@ -23,24 +23,26 @@ For anything else, stop loading routing material and use the inline bootstrap co
 
 The always-loaded policy applies inline before this file would be selected:
 
-1. Execute the ordinary task on the user's current model, regardless of apparent complexity; the current model may perform the actual work and is not a route-only controller.
+1. Classify eligible ordinary work once from its project/task/module/file/symbol/code context. Text/code production tries Spark (`low` for easy, `high` for complex); a zero-result operational failure immediately tries the Obsidian-selected 5.6 pair. Image/mixed and exact read-only work skip Spark. Run `scripts/obsidian_adaptive_model_runner.py`; unavailable memory stays inline.
 2. Use one direct task action or one direct execution surface. Batch bounded reads, edits, or commands when safe.
 3. Present the completed result immediately. Do not run Mini/Fast Verify before first presentation.
-4. After presentation, let Ending Task run one proportional Real Verify. A failure notifies the user, reopens the task, repairs, and presents the correction.
+4. Immediately after presentation, write a lifecycle start receipt with `verify-skill/scripts/ending_task_ledger.py` and launch an independent Ending subagent for every task level. This post-result worker is mandatory and bypasses result-producer performance admission.
+5. Run isolated non-result logs, reports, and documentation alongside Real Verify when safe. Keep final project memory, shared-state writes, and verdict-dependent work ordered.
+6. Final requires lifecycle `PASS` or explicit `BLOCKED`. A failure is logged before repair; repair is a new child lifecycle, its corrected result is presented, and a different Ending verifier runs again.
 
 Prompt work is the one ordinary skill-load exception and still runs inline on the current user model. Every task that creates, reviews, edits, repairs, standardizes, tests, summarizes, optimizes, or changes a reusable prompt or durable AI instruction must load `prompt-skill` before prompt work. Ordinary prose does not trigger it merely because it is text. Prompt-in-code also loads the owning code executor. Present the completed prompt first; trials and Real Verify follow in Ending Task.
 
-Exact-scoped read-only work stays on the current model inline with no subagent, route, or plan pass. For an exact named-source audit, first run one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answer once. Anchor named members directly; never add enclosing-class or call-site anchors or guess identifier prefixes or families. Do not add pre-tool planning, a broad search, whole-file read, reread, or pre-result check. Present immediately; any check follows presentation in Ending Real.
+Exact-scoped read-only result work stays on the current model inline with no foreground producer subagent, route, or plan pass. For an exact named-source audit, first run one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answer once. Anchor named members directly; never add enclosing-class or call-site anchors or guess identifier prefixes or families. Do not add pre-tool planning, a broad search, whole-file read, reread, or pre-result check. Present immediately, then always launch the independent Ending subagent.
 
 When bounded multi-file evidence has an exact allowlist, make that one broad search a boundary-labelled batch across the allowed files and overread enough context to include complete target blocks and direct dependencies. If the evidence cannot be safely bounded in one output, use the smallest correctness-preserving batched chunk plan inline; never start with complete files or parallel subagents merely to avoid choosing the needed ranges.
 
-Ordinary work must not read this full `SKILL.md`, show a pre-result route, resolve the entry model, search memory, load `workflow-skill`, launch a child model, create a receipt, or launch `verify-skill` before presenting the result merely to complete the response. Apparent complexity does not add a foreground controller, child, or verification pass.
+Ordinary work must not read this full `SKILL.md`, show a pre-result route, or deliberate broadly. The compact bootstrap may invoke one receipt-backed Spark-first producer route through `scripts/obsidian_adaptive_model_runner.py`; only a zero-result operational Spark failure may start its selected 5.6 fallback. It never launches `verify-skill` before presentation. After presentation, the lifecycle ledger and independent Ending subagent are required regardless of complexity.
 
-Ordinary requests remain inline regardless of apparent complexity. Unless the request explicitly asks for routing/benchmarking and includes a concrete performance-admission check, do not deliberate about routing. After the final source read, use one reasoning pass to emit the requested output immediately. The output-producing pass is the only foreground reasoning pass, with no separate planning, self-review, Mini, or verification pass.
+Eligible ordinary requests use one project-scoped Obsidian context lookup with no visible plan; exact read-only and ineligible work remain inline. After the final source read, emit the requested output immediately with no separate foreground self-review, Mini, or verification pass.
 
-## End-to-End Performance Admission
+## Result-Producer Performance Admission
 
-Full Task Analyze still defaults to inline. A different-pair child or dispatcher is allowed only when comparable end-to-end evidence admits delegation.
+There are two distinct admissions. User-enabled adaptive quality learning may launch one 5.6 producer from the shared ladder even while its project/context boundary is cold or provisional. Multi-node strategy JSON routing and any claim that Global is faster or smaller still require comparable end-to-end performance evidence. Mandatory post-result Ending subagents are outside both gates.
 
 Admission requires all of the following:
 
@@ -54,7 +56,7 @@ The admitted cohort must prove fewer foreground logical tokens under those gover
 
 `scripts/strategy_performance.py` is the private authority for this separate decision. Its key includes the quality-profile fingerprint, current entry `model|effort`, configuration cohort, sandbox, strategy version, producer-contract version, and exact workload hash. Delegation needs at least six comparable paired samples. Every arm must have passing correctness and complete metrics. Logical tokens require a lower Global cohort total and raw median with non-negative paired-median savings. First-result latency requires lower Global cohort total/raw median, non-negative paired-median savings, and a strict majority of faster pairs; individual regressions remain diagnostics. Total-wall/Ending latency is retained only as a diagnostic. Otherwise it returns `inline_entry`.
 
-Missing, stale, cross-workload, incomplete, or negative evidence means inline. Producer-only savings never authorize a child. Foreground downgrade or upgrade trials are forbidden; exploration belongs only to an explicit benchmark or authorized post-result work. A suite aggregate cannot hide a simple, medium, or complex class that loses either metric.
+Missing or negative performance evidence forbids a savings claim or multi-node strategy route, but it does not disable Obsidian-backed contextual quality selection. One foreground 5.6 pair may be the current cold start, one-rung downgrade, one-rung upgrade, or frozen reuse; Ending Real supplies its verdict. A suite aggregate cannot hide a losing class. None of these conditions may suppress the mandatory Ending lifecycle.
 
 ## Full Routing Preflight
 
@@ -63,7 +65,7 @@ Only after activation and before an admitted delegated route:
 1. Call `scripts/resolve_entry_model.py` if exact observable entry metadata is needed. Preserve the verified pair or use `unverified`; never guess.
 2. Perform at most one quick bounded related-memory lookup only when prior requirements or failures materially affect this explicit route, following `references/related-memory.md`. Missing memory providers are a successful no-op.
 3. Classify owner/domain, safety, authority, modality, project, language, dependencies, and acceptance.
-4. Apply performance admission. If it does not pass, execute inline and do not load Workflow.
+4. Apply adaptive quality admission for one producer, or performance admission for a multi-node strategy/savings claim. If neither applies, execute inline.
 
 The entry model may either execute inline or coordinate an admitted route. There is no controller-only entry invariant.
 
@@ -81,42 +83,40 @@ Apply owner/domain and safety floors before private experience:
 - Sol: missing context, open-ended architecture, or difficult cross-system judgment.
 - Terra: grounded repository, integration, testing, and evidence work.
 - Luna: bounded non-code work and concise verification judgment.
-- Spark-low: only obvious bounded low-risk easy low-ambiguity `tiny_text`, `tiny_code`, or `command_generation` work through `code-skill`.
+Every adaptive profile reads `assets/model-capability-ladder.json`. Eligible text/code result producers try Spark first; easy uses `low`, complex uses `high`. The active quality ladder remains Luna-to-Sol. Old local `model_experience.json` stays legacy read-only. Move effort before model while downgrading and reverse that order while upgrading.
 
-Every non-tiny delegated profile retains the Luna-to-Sol ladder without Spark. Tiny eligible profiles prepend Spark-low. Move effort before model while downgrading and reverse that order while upgrading.
+## Obsidian Adaptive Routing
 
-## Private Adaptive Routing
+The mechanism has two distinct authorities. `assets/model-capability-ladder.json` is shared and mirrorable: model ranks, supported Codex efforts, strengths, and movement policy only. Obsidian `Projects/<project-key>/ModelExperience` is the contextual experience authority, keyed by project/task/module/file/symbol/code context. Old local `model_experience.json` remains legacy read-only only and is never used for active selection or writes.
 
-Personal routing evidence lives only in `local/adaptive-routing/model_experience.json` and is never mirrored. It stores controlled conditions, generalized summaries, receipt-matched producer pairs, prompt-free workload hashes, post-result Real verdicts, quality boundaries, tokens, and time—never raw prompts, results, paths, IDs, secrets, or private content.
-
-Model-quality learning remains task/profile keyed. End-to-end performance admission is a separate decision keyed by the quality profile plus current entry pair and comparable execution conditions, because controller cost changes with the selected entry model and effort.
+Model-quality learning is keyed by exact project/task/module/file/symbol/code context, with artifact, scope, ambiguity, modality, risk, complexity, execution domain, owning skill, and verification shape retained as supporting context. End-to-end performance admission remains a separate evidence system for strategy-level multi-node JSON and speed/token claims.
 
 - No prior quality success: keep the route inline unless an explicit benchmark is running.
-- Explicit benchmark exploration may trial exactly one lower effort on the same model before moving to a weaker model.
-- Receipt-matched post-result Real correctness failure upgrades in reverse; operational failures remain neutral.
-- A frozen exact profile reuses its Real-passing pair with `trial=false` until verified failure or profile drift.
+- A receipt-matched Real pass trials exactly one lower effort on the same model before moving to a weaker model; a quality failure reverses that order.
+- A receipt-matched Spark quality/correctness failure is written first, then the next recommendation starts a new repair lifecycle on the contextual 5.6 pair. Operational Spark failure is quality-neutral and may fallback only before any result with zero tokens.
+- A frozen matching project/code-context profile reuses its lowest Real-passing pair with `trial=false` until verified failure or material profile/policy drift.
 - Cost ranking between child pairs still requires complete Real-passing evidence in the same workload cohort, but that ranking does not itself admit delegation.
 
-Optional Obsidian `TaskModelExperience/` remains a sanitized readable projection after Real Verify. The private ledger remains model-quality authority.
+Ending Real alone records receipt-backed producer pass/fail evidence to Obsidian `Projects/<project-key>/ModelExperience`; producers and ordinary runners never write learning. Operational failures remain neutral and inline execution never fabricates a receipt.
 
 ## Delegated Execution
 
 After admission, continue through `workflow-skill` in the same task.
 
-- One result producer uses one named profile preset through `scripts/adaptive_model_runner.py`; it selects the frozen pair, invokes `scripts/model_execution_receipt.py` once, and emits the completed result immediately without a foreground verification gate.
-- `adaptive_model_runner.py` checks `strategy_performance.py` before launching a child. Missing admission returns `inline_entry` without a model launch. `--benchmark-calibration` is an explicit benchmark-only evidence-collection bypass and is forbidden for ordinary foreground routing.
+- One result producer uses its resolved Obsidian context through `scripts/obsidian_adaptive_model_runner.py` and `scripts/model_execution_receipt.py`; eligible text/code work tries Spark, then at most its authorized 5.6 operational fallback, and emits the first completed result without a foreground verification gate.
+- `obsidian_adaptive_model_runner.py` reads learning but never writes it. Spark quality failure never triggers foreground fallback; Ending records it before a new 5.6 repair lifecycle. `strategy_performance.py` separately gates multi-node strategy JSON routing and Global-versus-Direct claims.
 - A true multi-node dependency graph may save private schema-version-2 JSON with only `result` and `ending` phases, then call `scripts/task_route_dispatcher.py run-plan <plan-file>` once.
 - Use exactly one execution surface per branch. Do not combine collaboration and dispatcher execution for the same work.
 - Registry-owned delegated Python, C#, and Unity C# implementation or authored probes load `code-skill` and their domain rules.
-- A launch or transport failure is operational evidence, not permission for an unreceipted fixed-pair fallback.
+- A launch/access/transport failure may use only the receipt-backed 5.6 fallback when no result was published and total tokens are zero; otherwise it stops and reopens rather than duplicating work.
 
 For grounded JSON, present the producer result first. Ending Task may then use the matching `grounded_result_gate.py` preset for Real Verify. Pass no source root with `json-object`; source roots belong only to source-aware presets. The Real gate never delays first presentation.
 
-## First Result And Ending
+## First Result And Mandatory Ending
 
-There is no Mini/Fast Verify gate before first presentation. When the requested result is complete, show it immediately.
+There is no Mini/Fast Verify gate before first presentation. When the requested result is complete, show it immediately in commentary so the user can continue while Ending runs.
 
-For a dispatched graph, enforce `run-plan` -> completed result -> show result -> `release-main-result` -> `run-ending`. Ending Task owns Real Verify, broader regression, optimization proof, reports, logs, and related memory after the result. A later correctness failure notifies the user, reopens, repairs, and presents the corrected result; do not add a new foreground Mini.
+For a dispatched graph, enforce `run-plan` -> completed result -> show result -> `release-main-result` -> `run-ending`. For ordinary inline work, enforce result presentation -> lifecycle `start` receipt -> independent Ending subagent. Ending owns Real Verify, broader regression, optimization proof, reports, logs, related memory, and the only receipt-backed pass/fail write to Obsidian after the result. Safe isolated branches run concurrently. A correctness failure first records lifecycle error evidence and any failed durable project state, then launches a repair child with a new lifecycle. Present the corrected result and launch a different Ending verifier; never let a repair self-certify.
 
 ## Runtime Proof And A/B Policy
 
@@ -130,7 +130,7 @@ Benchmark first-result authority is the controller-stamped sanitized `result-rea
 
 ## Generated Files
 
-Put plans, prompts, receipts, logs, and benchmarks in active task/project `cache/` or `work/`. Keep adaptive history under `local/`. Put final deliverables only in the requested output location.
+Put plans, prompts, receipts, logs, and benchmarks in active task/project `cache/` or `work/`. Legacy compatibility history under `local/` is read-only; active model experience belongs only in Obsidian `Projects/<project-key>/ModelExperience`. Put final deliverables only in the requested output location.
 
 ## Verification
 

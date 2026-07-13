@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 600 940">
   <title id="title">Per-node model router mobile diagram</title>
-  <desc id="desc">Ordinary work stays on the selected model. Admitted routing uses static floors plus private verified experience, moving effort before model.</desc>
+  <desc id="desc">Eligible text and code tries Spark at low effort for easy work and high effort for complex work, with a contextual Obsidian-selected GPT-5.6 fallback after zero-result operational failure.</desc>
   <rect width="600" height="940" rx="36" fill="#07111f"/>
   <text x="300" y="62" text-anchor="middle" fill="#f8fafc" font-family="Arial, sans-serif" font-size="38" font-weight="700">Model + effort router</text>
   <g font-family="Arial, sans-serif">
-    <rect x="45" y="100" width="510" height="126" rx="24" fill="#0f766e"/><text x="70" y="144" fill="#ccfbf1" font-size="27" font-weight="700">Default: selected pair inline</text><text x="70" y="181" fill="#f0fdfa" font-size="22">Full router loads only after proof</text><text x="70" y="210" fill="#99f6e4" font-size="20">Sol-ultra is an example, never a default</text>
-    <text x="300" y="276" text-anchor="middle" fill="#f59e0b" font-size="23" font-weight="700">↓ admitted nodes use verified experience ↓</text>
-    <rect x="45" y="310" width="510" height="112" rx="22" fill="#7f1d1d"/><text x="70" y="352" fill="#fee2e2" font-size="29" font-weight="700">Sol · cold-start hint</text><text x="70" y="390" fill="#fef2f2" font-size="21">normal ladder ends at Sol-ultra</text>
-    <rect x="45" y="440" width="510" height="112" rx="22" fill="#1e3a8a"/><text x="70" y="482" fill="#dbeafe" font-size="29" font-weight="700">Terra · cold-start hint</text><text x="70" y="520" fill="#eff6ff" font-size="21">after all Luna efforts · before Sol</text>
-    <rect x="45" y="570" width="510" height="112" rx="22" fill="#4c1d95"/><text x="70" y="612" fill="#ede9fe" font-size="29" font-weight="700">Luna · cold-start hint</text><text x="70" y="650" fill="#f5f3ff" font-size="21">Luna-low → all Luna efforts</text>
-    <rect x="45" y="700" width="510" height="112" rx="22" fill="#9a3412"/><text x="70" y="742" fill="#ffedd5" font-size="29" font-weight="700">Spark-low obvious-only</text><text x="70" y="780" fill="#fff7ed" font-size="20">tiny + full normal fallback · never raise Spark</text>
-    <rect x="45" y="842" width="510" height="58" rx="18" fill="#172554"/><text x="300" y="879" text-anchor="middle" fill="#bfdbfe" font-size="22" font-weight="700">Effort first → model · receipt proves it</text>
+    <rect x="45" y="100" width="510" height="126" rx="24" fill="#0f766e"/><text x="70" y="144" fill="#ccfbf1" font-size="27" font-weight="700">Text/code → Spark first</text><text x="70" y="181" fill="#f0fdfa" font-size="22">Easy low · complex high</text><text x="70" y="210" fill="#99f6e4" font-size="20">No result → Obsidian-selected 5.6</text>
+    <text x="300" y="276" text-anchor="middle" fill="#f59e0b" font-size="23" font-weight="700">↓ priority attempt → quality ladder ↓</text>
+    <rect x="45" y="310" width="510" height="112" rx="22" fill="#9a3412"/><text x="70" y="352" fill="#ffedd5" font-size="29" font-weight="700">Spark · easy low · complex high</text><text x="70" y="390" fill="#fff7ed" font-size="20">priority attempt · outside 5.6 ladder</text>
+    <rect x="45" y="440" width="510" height="112" rx="22" fill="#4c1d95"/><text x="70" y="482" fill="#ede9fe" font-size="29" font-weight="700">Luna · 5.6 ladder starts</text><text x="70" y="520" fill="#f5f3ff" font-size="21">cold-start hint · Luna-low → Luna-ultra</text>
+    <rect x="45" y="570" width="510" height="112" rx="22" fill="#1e3a8a"/><text x="70" y="612" fill="#dbeafe" font-size="29" font-weight="700">Terra · grounded integration</text><text x="70" y="650" fill="#eff6ff" font-size="21">cold-start hint · after Luna · before Sol</text>
+    <rect x="45" y="700" width="510" height="112" rx="22" fill="#7f1d1d"/><text x="70" y="742" fill="#fee2e2" font-size="29" font-weight="700">Sol · open-ended reasoning</text><text x="70" y="780" fill="#fef2f2" font-size="21">cold-start hint · ends at Sol-ultra</text>
+    <rect x="45" y="842" width="510" height="58" rx="18" fill="#172554"/><text x="300" y="879" text-anchor="middle" fill="#bfdbfe" font-size="22" font-weight="700">Obsidian context · receipt proves it</text>
   </g>
 </svg>

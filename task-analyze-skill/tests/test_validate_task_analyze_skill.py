@@ -7,14 +7,13 @@ import tempfile
 import unittest
 from pathlib import Path
 from contextlib import contextmanager
-from unittest.mock import patch
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "validate_task_analyze_skill.py"
 MODULE_SPEC = importlib.util.spec_from_file_location("validate_task_analyze_skill", SCRIPT_PATH)
 module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
-APPROVED = {"task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"}
+APPROVED = {"task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill", "project-memory-skill"}
 
 
 class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
@@ -83,7 +82,14 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         impl["model"] = "gpt-5.3-codex-spark"
         with self._with_rust_domain() as synthetic_skills_root:
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
-        self.assertTrue(any("Spark is valid only" in failure for failure in failures))
+        self.assertTrue(any("Spark is injected only as a result-producer attempt" in failure for failure in failures))
+
+    def test_plan_rejects_spark_entry(self):
+        plan = json.loads(json.dumps(next(iter(module.sample_plans().values()))))
+        plan["entry"] = {"model": module.LEGACY_SPARK_MODEL, "effort": "low"}
+        failures = module.validate_plan(plan, APPROVED)
+        self.assertTrue(any("entry Spark is a result-producer priority attempt only" in failure for failure in failures))
+
     def make_validation_inputs(self):
         source = Path(__file__).resolve().parents[1]
         temp_dir = Path(tempfile.mkdtemp(prefix="task-analyze-validate-"))
@@ -92,7 +98,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text((source / relative).read_text(encoding="utf-8"), encoding="utf-8")
         models_cache = temp_dir / "models_cache.json"
-        models_cache.write_text(json.dumps({"models": []}) + "\n", encoding="utf-8")
+        ladder = json.loads((source / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8"))
+        cache_models = [{"slug": model["id"], "supported_reasoning_levels": [{"effort": effort} for effort in model["codex_efforts"]]} for model in ladder["models"]]
+        models_cache.write_text(json.dumps({"models": cache_models}) + "\n", encoding="utf-8")
         global_agents = temp_dir / "AGENTS.md"
         entry_asset_text = (source / "assets" / "global-agents-entry-rule.md").read_text(encoding="utf-8")
         global_agents.write_text(entry_asset_text.replace("Merge this section into `~/.codex/AGENTS.md`.\n\n", ""), encoding="utf-8")
@@ -104,6 +112,11 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                 (skill_dir / "agents").mkdir()
                 (skill_dir / "SKILL.md").write_text((source.parent / "prompt-skill" / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
                 (skill_dir / "agents" / "openai.yaml").write_text((source.parent / "prompt-skill" / "agents" / "openai.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+            elif skill_name == "project-memory-skill":
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text("project-memory-skill\n", encoding="utf-8")
+                (skill_dir / "scripts").mkdir()
+                (skill_dir / "scripts" / "obsidian_model_memory.py").write_text((source.parent / "project-memory-skill" / "scripts" / "obsidian_model_memory.py").read_text(encoding="utf-8"), encoding="utf-8")
             else:
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "SKILL.md").write_text(f"{skill_name}\n", encoding="utf-8")
@@ -124,7 +137,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertTrue(result["valid"], result["failures"])
             self.assertEqual(sum(plan["status"] == "pass" for plan in result["plans"]), len(module.sample_plans()))
-            self.assertEqual(len(module.sample_plans()), sum(len(efforts) for efforts in module.MODEL_EFFORTS.values()) * 2)
+            self.assertEqual(len(module.sample_plans()), sum(len(efforts) for efforts in module.ACTIVE_MODEL_EFFORTS.values()) * 2)
         finally:
             shutil.rmtree(temp_dir)
 
@@ -142,10 +155,26 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
 
     def test_sample_plans_cover_all_supported_entry_pairs(self):
         sample_plans = module.sample_plans()
-        expected_plan_count = sum(len(efforts) for efforts in module.MODEL_EFFORTS.values()) * 2
+        expected_plan_count = sum(len(efforts) for efforts in module.ACTIVE_MODEL_EFFORTS.values()) * 2
         entry_pairs = {(plan["entry"]["model"], plan["entry"]["effort"]) for plan in sample_plans.values()}
         self.assertEqual(len(sample_plans), expected_plan_count)
-        self.assertEqual(len(entry_pairs), sum(len(efforts) for efforts in module.MODEL_EFFORTS.values()))
+        self.assertEqual(len(entry_pairs), sum(len(efforts) for efforts in module.ACTIVE_MODEL_EFFORTS.values()))
+        self.assertNotIn(module.LEGACY_SPARK_MODEL, {model for model, _ in entry_pairs})
+
+    def test_adaptive_contract_uses_shared_ladder_and_obsidian_authority(self):
+        self.assertIn("assets/model-capability-ladder.json", module.REQUIRED_FILES)
+        self.assertIn("scripts/obsidian_adaptive_model_runner.py", module.REQUIRED_FILES)
+        self.assertNotIn("scripts/adaptive_model_runner.py", module.REQUIRED_FILES)
+        self.assertIn("Obsidian `Projects/<project-key>/ModelExperience`", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("Old local `model_experience.json` is legacy read-only only", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertEqual(tuple(module.ACTIVE_MODEL_EFFORTS), module.ACTIVE_MODEL_ORDER)
+
+    def test_shared_ladder_rejects_active_spark(self):
+        source = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        payload["models"].append({"id": module.LEGACY_SPARK_MODEL, "codex_efforts": ["low"]})
+        failures = module.validate_shared_ladder(json.dumps(payload))
+        self.assertTrue(any("Spark" in failure or "Luna, Terra, and Sol" in failure for failure in failures))
 
     def test_sample_plans_are_schema_two_result_then_ending(self):
         for name, plan in module.sample_plans().items():
@@ -295,17 +324,16 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
     def test_stale_model_snapshot_is_rejected(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
-            snapshot = temp_dir / "references" / "model-capabilities.md"
-            snapshot.write_text(snapshot.read_text(encoding="utf-8") + "stale", encoding="utf-8")
-            invalid_status = {"valid": False, "status": "stale", "missing_cache_models": []}
-            with patch.object(module.sync_model_capabilities, "check_snapshot", return_value=invalid_status):
-                result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
+            cache = json.loads(models_cache.read_text(encoding="utf-8"))
+            cache["models"] = [model for model in cache["models"] if model["slug"] != "gpt-5.6-terra"]
+            models_cache.write_text(json.dumps(cache) + "\n", encoding="utf-8")
+            result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])
-            self.assertTrue(any("capability check" in failure for failure in result["failures"]))
+            self.assertTrue(any("shared model-capability ladder failed local cache check" in failure for failure in result["failures"]))
         finally:
             shutil.rmtree(temp_dir)
 
-    def test_inline_bootstrap_contract_is_required_and_hookless(self):
+    def test_inline_bootstrap_contract_requires_no_hook(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             original_text = global_agents.read_text(encoding="utf-8")
@@ -330,33 +358,35 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
-    def test_inline_bootstrap_requires_one_target_scoped_source_call_and_no_pre_result_verify(self):
+    def test_inline_bootstrap_requires_universal_post_result_ending_and_no_pre_result_verify(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             bootstrap_text = global_agents.read_text(encoding="utf-8")
-            self.assertIn("Present completed work immediately", bootstrap_text)
-            self.assertIn("verify afterward", bootstrap_text)
-            self.assertIn("Ordinary work stays inline", bootstrap_text)
-            self.assertIn("obvious actions run once", bootstrap_text)
-            self.assertIn("Global gates", bootstrap_text)
-            self.assertIn("reusable prompt or durable AI-instruction work always loads `prompt-skill`", bootstrap_text)
-            self.assertIn("ordinary text does not", bootstrap_text)
-            self.assertIn("Any durable project-file change always loads `project-memory-skill`", bootstrap_text)
-            self.assertIn("recall related project/module/file history before editing", bootstrap_text)
-            self.assertIn("record what changed, why, result, verification, and every touched file", bootstrap_text)
-            self.assertIn("missing Obsidian never blocks", bootstrap_text)
-            self.assertIn("Prompt-in-code also loads its code owner", bootstrap_text)
-            self.assertIn("present the completed prompt before Ending Real", bootstrap_text)
-            self.assertIn("Exact read-only uses one bounded `rg` per authoritative file", bootstrap_text)
-            self.assertIn("anchored to exact members", bootstrap_text)
-            self.assertIn("No plan, guessed names, unrelated skills, subagents, broad search, reread, full-file read, or pre-result check", bootstrap_text)
-            self.assertIn("verify afterward", bootstrap_text)
-            self.assertIn("failures reopen, repair, and re-present", bootstrap_text)
+            self.assertIn("Eligible text/code producers read the shared ladder", bootstrap_text)
+            self.assertIn("Obsidian `Projects/<key>/ModelExperience`", bootstrap_text)
+            self.assertIn("local model JSON stays read-only", bootstrap_text)
+            self.assertIn("Try Spark first: easy=low, complex=high", bootstrap_text)
+            self.assertIn("zero-result operational failure uses the current 5.6 pair", bootstrap_text)
+            self.assertIn("published output returns now", bootstrap_text)
+            self.assertIn("Prompt/AI-instruction work loads `prompt-skill`", bootstrap_text)
+            self.assertIn("durable edits load `project-memory-skill`", bootstrap_text)
+            self.assertIn("Every non-ENDING_TASK_WORKER task", bootstrap_text)
+            self.assertIn("Ending start receipt", bootstrap_text)
+            self.assertIn("independent Ending subagent", bootstrap_text)
+            self.assertIn("Ending Real writes the receipt-backed outcome to Obsidian", bootstrap_text)
+            self.assertIn("Parallelize isolated logs/docs", bootstrap_text)
+            self.assertIn("Final requires PASS or BLOCKED", bootstrap_text)
+            self.assertIn("log failed project/module/file state before a new 5.6 repair lifecycle", bootstrap_text)
+            self.assertIn("re-present and use a different verifier", bootstrap_text)
+            self.assertIn("use a different verifier", bootstrap_text)
+            self.assertIn("No hook", bootstrap_text)
+            self.assertIn("Exact read-only uses one bounded rg per authoritative file", bootstrap_text)
+            self.assertIn("anchored to members", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)
-            global_agents.write_text(bootstrap_text.replace("one bounded `rg`", "one search", 1), encoding="utf-8")
+            global_agents.write_text(bootstrap_text.replace("one bounded rg", "one search", 1), encoding="utf-8")
             validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(validation["valid"])
-            self.assertTrue(any("bounded `rg`" in failure.lower() for failure in validation["failures"]))
+            self.assertTrue(any("bounded rg" in failure.lower() for failure in validation["failures"]))
         finally:
             shutil.rmtree(temp_dir)
 
@@ -412,14 +442,15 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             self.assertNotIn(benchmark_fixture_term, module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT)
             self.assertNotIn(benchmark_fixture_term, module.REQUIRED_GLOBAL_ENTRY_ASSET_TEXT)
 
-    def test_agent_prompt_rejects_ordinary_full_skill_load(self):
+    def test_agent_prompt_requires_ordinary_result_inline_contract(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             agent_path = temp_dir / "agents" / "openai.yaml"
-            agent_path.write_text(agent_path.read_text(encoding="utf-8").replace("full-skill load", "mandatory full skill"), encoding="utf-8")
+            required_term = "trying Spark first"
+            agent_path.write_text(agent_path.read_text(encoding="utf-8").replace(required_term, "removed priority attempt"), encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])
-            self.assertTrue(any("full-skill load" in failure for failure in result["failures"]))
+            self.assertIn(f"agents/openai.yaml missing required contract: {required_term}", result["failures"])
         finally:
             shutil.rmtree(temp_dir)
 

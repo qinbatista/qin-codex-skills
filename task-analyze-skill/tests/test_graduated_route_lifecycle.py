@@ -40,9 +40,7 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
             cache_dir = root / "work" / "cache" / "route"
             plan = validator.materialize_dispatcher_plan(template, cache_dir, "gpt-5.6-luna", "low")
             implementation = next(node for node in plan["nodes"] if node["id"] == "implementation")
-            pairs = dispatcher.routing_history_module.canonical_pairs(implementation["candidate_ladder"])
-            fingerprint = dispatcher.routing_history_module.profile_fingerprint(implementation["routing_condition"], pairs, dispatcher.routing_history_module.parse_pair(implementation["static_suggestion"]), dispatcher.routing_history_module.parse_pair(implementation["hard_floor"]))
-            implementation["routing_recommendation"] = {"selected_pair": f"{implementation['model']}|{implementation['effort']}", "trial": False, "reason": "no_bounds_use_static", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "cold_start"}
+            self.assertEqual(implementation["routing_recommendation"]["selection_basis"], "obsidian_project_memory")
             calls = []
 
             def fake_run_node(node, node_cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
@@ -54,8 +52,8 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
                 receipt_path.write_text(json.dumps({"status": "pass", "thread_id": node["id"]}), encoding="utf-8")
                 return {"id": node["id"], "phase": node["phase"], "skill": node["skill"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "worker_identity": node["id"]}
 
-            with patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
-                manifest = dispatcher.run_plan(plan, "gpt-5.6-luna", "low", root, history_path=root / "history.json")
+            with patch.object(dispatcher.routing_history_module, "recommend_route", side_effect=AssertionError("legacy local recommendation used")), patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
+                manifest = dispatcher.run_plan(plan, "gpt-5.6-luna", "low", root)
             self.assertEqual(calls, ["design", "implementation"])
             self.assertEqual(manifest["ending_nodes_pending"], ["ending-real"])
             handoff_path = Path(manifest["ending_handoff_path"])

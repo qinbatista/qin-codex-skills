@@ -61,7 +61,7 @@ class ObsidianMemoryBridgeTests(unittest.TestCase):
     def test_record_rejects_sensitive_or_path_like_summary(self):
         with tempfile.TemporaryDirectory(prefix="obsidian-model-secret-") as temporary:
             with self.assertRaises(ValueError):
-                module.record_model_experience("read /Users/qin/private", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|high", "pass", "frozen", vault=Path(temporary))
+                module.record_model_experience(f"read {Path.home() / 'private'}", "integration", "complex", "python", "code-skill", "gpt-5.6-terra|high", "pass", "frozen", vault=Path(temporary))
 
 
 if __name__ == "__main__":

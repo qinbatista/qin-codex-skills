@@ -8,6 +8,8 @@
 
 Tested from **GPT-5.6** · latest registered Codex models: `gpt-5.6-luna` · `gpt-5.6-terra` · `gpt-5.6-sol`
 
+Spark-first text/code producer: `gpt-5.3-codex-spark` · easy=`low` · complex=`high`
+
 </div>
 
 ## 🔄 Core flow
@@ -17,16 +19,28 @@ Tested from **GPT-5.6** · latest registered Codex models: `gpt-5.6-luna` · `gp
   <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: Present completed result, then Ending Real verifies the result">
 </picture>
 
+## ⚡ Models & private learning
+
+<picture>
+  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
+  <img src="./management-skill/assets/readme/model-router.svg" alt="Spark-first text and code with a contextual GPT-5.6 fallback and private Obsidian learning">
+</picture>
+
+- **Priority:** Eligible text/code tries Spark: easy `low`, complex `high`.
+- **Operational:** With zero result and zero tokens, use the current Obsidian-selected GPT-5.6 pair.
+- **Quality:** A published result returns now; Ending logs failure before a new GPT-5.6 repair with a different verifier.
+- **Learning:** Only matched Ending outcomes update private project/task/module/file/symbol/code model experience.
+
 ## Rules
 
 - **Inline:** Ordinary work stays on the current Codex model.
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Show the completed result before Ending Real.
-- **Verify:** Ending Real repairs failures; first-result time excludes it.
+- **Verify:** Ending Real runs after delivery; first-result time excludes it.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
-- **Memory:** Local JSONL is authoritative; Obsidian is optional.
-- **Models:** GPT-5.6 Luna → Terra → Sol; adjust effort first; Spark only for admitted tiny tasks.
+- **Memory:** Change history uses local JSONL + optional Obsidian; model learning uses private Obsidian only.
+- **Models:** Text/code tries Spark; GPT-5.6 Luna → Terra → Sol remains the quality/fallback ladder.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
 ## 📊 Historical benchmark

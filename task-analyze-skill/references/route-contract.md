@@ -86,9 +86,10 @@ When a dispatcher is useful, save schema version 2 JSON inside the active task c
 - observable entry metadata;
 - bounded result and Ending nodes;
 - installed skill, exact model, effort, dependencies, prompt, safe sandbox, and routing profile per node;
+- main-producer `model_memory_scope` with module plus file/symbol/code/operation when known; omitted file/symbol values intentionally fall back to module-level project evidence;
 - `main_result_node` and one post-result Real verifier.
 
-The internal main producer must also carry a complete `routing_recommendation` matching its selected `model|effort`, `trial`, and profile fingerprint. At initial dispatch the controller recomputes the current private recommendation and rejects a stale or self-authored plan before any node runs. Every non-tiny model profile carries exactly the full GPT-5.6 Luna/Terra/Sol ladder with no Spark; an eligible tiny profile carries exactly Spark-low plus that full normal fallback ladder.
+The internal main producer carries a complete `routing_recommendation` matching its selected 5.6 `model|effort`, `trial`, and profile fingerprint. The controller recomputes it and rejects stale or self-authored plans. Spark is never a schema-version-2 plan node; for eligible text/code the dispatcher injects the current Spark attempt ahead of the plan's selected 5.6 pair and records both attempts in one receipt.
 
 The plan also carries `first_result_timeout_seconds`. Dispatcher stdout is a compact locator only; the full manifest remains on disk. Read-only locked nodes omit broad user configuration by default because their prompt already includes the exact owning skill path and domain reference; set `load_user_config=true` only when a configured plugin/tool surface is genuinely required.
 
@@ -103,11 +104,11 @@ Admitted dispatcher fixtures are topology-only portable templates, not execution
 - The current pair performs ordinary inline work. In an admitted route, downstream nodes use their locked pairs rather than silently inheriting the entry pair.
 - Every downstream model and effort is supported and receipt-backed when execution proof is required.
 - Every owning skill is installed.
-- Active registry-owned code-domain implementation and authored probes use `code-skill` and the domain's applicable style. Spark-low is permitted only for the obvious bounded low-risk easy low-ambiguity text-only tiny-work exception; every other model route uses the exact full normal ladder, regardless of easy/complex classification.
+- Active registry-owned code-domain implementation and authored probes use `code-skill`. Plan nodes and ordinary fallbacks use the shared 5.6 ladder; eligible text/code result producers may receive the hidden receipt-backed Spark first attempt.
 - Main Result is upstream of Ending Task.
 - Ending Real Verify, optimization verification, reports, logs, docs, and memory do not gate the first result.
 - Optional related-memory preflight is read-only, bounded, and advisory. An unavailable provider or no matches never blocks routing. Ending updates only related sanitized memory after the result; model-switch memory waits for Real Verify.
-- The main producer carries a complete `routing_recommendation` proof matching its selected pair, trial flag, and profile fingerprint. Record model-quality learning only after Ending Real. This applies to dispatcher and direct non-dispatch model routes; tool-only routes never record adaptive producer samples, verifier models are never recorded as producers, and deterministic controller recording needs no decorative Luna call.
+- The main producer carries a complete Obsidian-derived `routing_recommendation` proof matching its selected pair, trial flag, and profile fingerprint. Record model-quality learning only after Ending Real through `project-memory-skill/scripts/obsidian_model_memory.py`; tool-only routes never record adaptive producer samples, verifier models are never recorded as producers, and deterministic controller recording needs no decorative Luna call.
 - A later correctness failure notifies and reopens.
 - No lifecycle hook or chat-visible machine plan is required.
 - Ending wave scheduling requires dependency-ready batches with a three-node concurrency cap.

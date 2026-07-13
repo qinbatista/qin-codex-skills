@@ -136,6 +136,16 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     with lock_path.open("a", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         existing_records = _read_records(store_path / "index.jsonl")
+        if record["supersedes"]:
+            superseded = next((existing for existing in existing_records if existing.get("id") == record["supersedes"]), None)
+            if not superseded:
+                raise ValueError("supersedes must reference an existing record")
+            if superseded.get("project", {}).get("key") != project["key"]:
+                raise ValueError("supersedes must reference the same project")
+            if superseded.get("module") != record["module"]:
+                raise ValueError("supersedes must reference the same module")
+            if not set(superseded.get("files", [])) & set(record["files"]):
+                raise ValueError("supersedes must overlap at least one touched file")
         duplicate = next((existing for existing in reversed(existing_records) if existing.get("fingerprint") == record["fingerprint"]), None)
         if duplicate:
             return {"status": "duplicate", "record_id": duplicate["id"], "project": duplicate["project"], "files": duplicate["files"], "local": {"written": True, "store": str(store_path)}, "obsidian": {"status": "not-rewritten", "written": False}}

@@ -1,32 +1,117 @@
 #!/usr/bin/env python3
-"""Single source of truth for model routing metadata used by task-analyze-skill."""
+"""Load the shared model ladder and expose deterministic routing helpers."""
 
+import json
 from pathlib import Path
 
-MODEL_DEFINITIONS = {
-    "gpt-5.3-codex-spark": {
-        "efforts": ["low", "medium", "high", "xhigh"],
-    },
-    "gpt-5.6-luna": {
-        "efforts": ["low", "medium", "high", "xhigh", "max"],
-    },
-    "gpt-5.6-terra": {
-        "efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
-    },
-    "gpt-5.6-sol": {
-        "efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
-    },
-}
+MODEL_CAPABILITY_CONFIG_PATH = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
+
+
+def _load_model_capability_config(path=MODEL_CAPABILITY_CONFIG_PATH):
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"shared model capability registry is unreadable: {error}") from error
+    required = {"schema_version", "registry_id", "scope", "ladder_direction", "policy", "spark_first", "effort_order", "effort_guidance", "models"}
+    if not isinstance(payload, dict) or not required.issubset(payload):
+        raise ValueError("shared model capability registry is incomplete")
+    if payload["schema_version"] != 1 or payload["scope"] != "shared_non_personal" or payload["ladder_direction"] != "weakest_to_strongest":
+        raise ValueError("shared model capability registry contract is invalid")
+    models = payload.get("models")
+    if not isinstance(models, list) or not models:
+        raise ValueError("shared model capability registry has no active models")
+    ranks = [row.get("capability_rank") for row in models if isinstance(row, dict)]
+    if ranks != list(range(1, len(models) + 1)):
+        raise ValueError("shared model capability ranks must be contiguous weakest-to-strongest")
+    effort_order = payload.get("effort_order")
+    if not isinstance(effort_order, list) or len(effort_order) != len(set(effort_order)):
+        raise ValueError("shared effort order must be a unique list")
+    seen = set()
+    for row in models:
+        model = row.get("id")
+        efforts = row.get("codex_efforts")
+        if not isinstance(model, str) or not model.startswith("gpt-5.6-") or model in seen:
+            raise ValueError("shared model ids must be unique GPT-5.6 ids")
+        if not isinstance(efforts, list) or not efforts or any(effort not in effort_order for effort in efforts):
+            raise ValueError(f"shared model {model} has invalid Codex efforts")
+        if efforts != [effort for effort in effort_order if effort in efforts]:
+            raise ValueError(f"shared model {model} efforts are not canonical")
+        seen.add(model)
+    policy = payload.get("policy")
+    required_policy = {"enabled", "quality_first", "downgrade_after_real_pass", "upgrade_after_quality_failure", "operational_failures_are_neutral", "freeze_lowest_verified_pair", "minimum_pair"}
+    if not isinstance(policy, dict) or not required_policy.issubset(policy) or policy.get("enabled") is not True:
+        raise ValueError("shared adaptive policy is disabled or incomplete")
+    valid_pairs = {f"{row['id']}|{effort}" for row in models for effort in row["codex_efforts"]}
+    if policy.get("minimum_pair") not in valid_pairs:
+        raise ValueError("shared minimum pair is not active")
+    if payload.get("default_cold_start") not in valid_pairs:
+        raise ValueError("shared default cold start is not active")
+    cold_starts = payload.get("cold_start_defaults")
+    if not isinstance(cold_starts, dict) or not cold_starts:
+        raise ValueError("shared cold-start defaults are missing")
+    for task_type, levels in cold_starts.items():
+        if not isinstance(task_type, str) or not isinstance(levels, dict) or set(levels) != {"easy", "complex"}:
+            raise ValueError("shared cold-start defaults are malformed")
+        if any(pair not in valid_pairs for pair in levels.values()):
+            raise ValueError("shared cold-start pair is not active")
+    spark = payload.get("spark_first")
+    if (
+        not isinstance(spark, dict)
+        or spark.get("enabled") is not True
+        or spark.get("id") != "gpt-5.3-codex-spark"
+        or spark.get("routing_role") != "first_attempt_text_code_producer"
+        or spark.get("input_modalities") != ["text"]
+        or spark.get("eligible_modalities") != ["text"]
+        or spark.get("operational_fallback") != "current_obsidian_5_6_pair"
+        or spark.get("quality_failure") != "record_to_obsidian_then_new_5_6_repair_lifecycle"
+    ):
+        raise ValueError("shared Spark-first contract is invalid")
+    spark_efforts = spark.get("codex_efforts")
+    adaptive_efforts = spark.get("adaptive_efforts")
+    effort_by_complexity = spark.get("effort_by_complexity")
+    if (
+        not isinstance(spark_efforts, list)
+        or spark_efforts != [effort for effort in effort_order if effort in spark_efforts]
+        or not isinstance(adaptive_efforts, list)
+        or any(effort not in spark_efforts for effort in adaptive_efforts)
+        or set(effort_by_complexity or {}) != {"easy", "complex"}
+        or any(effort not in adaptive_efforts for effort in effort_by_complexity.values())
+    ):
+        raise ValueError("shared Spark effort contract is invalid")
+    private_contract = payload.get("private_learning_contract")
+    if (
+        not isinstance(private_contract, dict)
+        or private_contract.get("authority") != "obsidian_project_memory"
+        or private_contract.get("path_template") != "Projects/<project-key>/ModelExperience"
+        or private_contract.get("specificity_order") != ["project_task", "module", "file", "symbol"]
+        or private_contract.get("legacy_local_json") != "read_only_inactive"
+    ):
+        raise ValueError("shared private-learning boundary is invalid")
+    return payload
+
+
+MODEL_CAPABILITY_CONFIG = _load_model_capability_config()
+ADAPTIVE_POLICY = dict(MODEL_CAPABILITY_CONFIG["policy"])
+ACTIVE_MODEL_ROWS = tuple(dict(row) for row in MODEL_CAPABILITY_CONFIG["models"])
+ACTIVE_MODEL_ORDER = [row["id"] for row in ACTIVE_MODEL_ROWS]
+ACTIVE_MODEL_DEFINITIONS = {row["id"]: {"efforts": list(row["codex_efforts"])} for row in ACTIVE_MODEL_ROWS}
+SPARK_FIRST_CONFIG = dict(MODEL_CAPABILITY_CONFIG["spark_first"])
+SPARK_MODEL = SPARK_FIRST_CONFIG["id"]
+SPARK_MODEL_DEFINITIONS = {SPARK_MODEL: {"efforts": list(SPARK_FIRST_CONFIG["codex_efforts"])}}
+MODEL_DEFINITIONS = {**SPARK_MODEL_DEFINITIONS, **ACTIVE_MODEL_DEFINITIONS}
 
 MODEL_ORDER = list(MODEL_DEFINITIONS.keys())
-MODEL_EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max", "ultra"]
+MODEL_EFFORT_ORDER = list(MODEL_CAPABILITY_CONFIG["effort_order"])
 MODEL_EFFORTS = {model: set(data["efforts"]) for model, data in MODEL_DEFINITIONS.items()}
+ACTIVE_MODEL_EFFORTS = {model: set(data["efforts"]) for model, data in ACTIVE_MODEL_DEFINITIONS.items()}
 MODEL_EFFORT_INDEX = {model: {effort: index for index, effort in enumerate(data["efforts"])} for model, data in MODEL_DEFINITIONS.items()}
 MODEL_POSITION = {model: index for index, model in enumerate(MODEL_ORDER)}
 SPARK_BOOTSTRAP_FAMILIES = {"tiny_text", "tiny_code", "command_generation"}
-SPARK_LOW_PAIR = ("gpt-5.3-codex-spark", "low")
-NORMAL_ADAPTIVE_MODELS = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
+SPARK_LOW_PAIR = (SPARK_MODEL, "low")
+NORMAL_ADAPTIVE_MODELS = list(ACTIVE_MODEL_ORDER)
 NORMAL_ADAPTIVE_LADDER = [(model, effort) for model in NORMAL_ADAPTIVE_MODELS for effort in MODEL_DEFINITIONS[model]["efforts"]]
+# Retained only so the legacy local-history reader can parse old records.
+LEARNING_FIELDS = ("task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "execution_domain")
 
 EXECUTION_DOMAIN_REGISTRY_VERSION = 1
 EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"
@@ -90,13 +175,21 @@ EXECUTION_DOMAINS = {
     },
 }
 
-PROFILE_PRESET_VERSION = 1
+PROFILE_PRESET_VERSION = 2
 PROFILE_PRESETS = {
+    "general-answer-easy": {"task_family": "direct", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|medium", "hard_floor": "gpt-5.6-luna|low"},
+    "summary-easy": {"task_family": "document", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
+    "analysis-complex": {"task_family": "grounded", "artifact": "report", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
+    "spreadsheet-easy": {"task_family": "data", "artifact": "document", "scope": "single", "ambiguity": "low", "modality": "mixed", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|low", "hard_floor": "gpt-5.6-luna|low"},
+    "spreadsheet-complex": {"task_family": "data", "artifact": "document", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
+    "document-easy": {"task_family": "document", "artifact": "document", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|medium", "hard_floor": "gpt-5.6-luna|low"},
+    "document-complex": {"task_family": "document", "artifact": "document", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
+    "integration-complex": {"task_family": "integration", "artifact": "patch", "scope": "project", "ambiguity": "high", "modality": "mixed", "risk": "medium", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-sol|high", "hard_floor": "gpt-5.6-luna|low"},
     "grounded-repository-answer-easy": {"task_family": "grounded", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|medium", "hard_floor": "gpt-5.6-luna|low"},
     "grounded-repository-answer-complex": {"task_family": "grounded", "artifact": "answer", "scope": "multi", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
-    "tiny-text": {"task_family": "tiny_text", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low"},
-    "command-generation": {"task_family": "command_generation", "artifact": "script", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low"},
-    "tiny-code": {"task_family": "tiny_code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.3-codex-spark|low"},
+    "tiny-text": {"task_family": "tiny_text", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
+    "command-generation": {"task_family": "command_generation", "artifact": "script", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
+    "tiny-code": {"task_family": "tiny_code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
     "code-easy": {"task_family": "code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-terra|medium", "hard_floor": "gpt-5.6-luna|low"},
     "code-complex": {"task_family": "code", "artifact": "patch", "scope": "multi", "ambiguity": "medium", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
 }
@@ -362,6 +455,7 @@ def normal_adaptive_pair_texts():
 
 
 def is_tiny_spark_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
+    """Recognize the former narrow Spark profile for legacy history parsing."""
     return (
         task_family in SPARK_BOOTSTRAP_FAMILIES
         and modality == "text"
@@ -372,10 +466,20 @@ def is_tiny_spark_profile(task_family, modality, risk, complexity="easy", ambigu
 
 
 def adaptive_ladder_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
-    pairs = normal_adaptive_ladder()
-    if is_tiny_spark_profile(task_family, modality, risk, complexity, ambiguity):
-        return [SPARK_LOW_PAIR] + pairs
-    return pairs
+    return normal_adaptive_ladder()
+
+
+def spark_first_pair(task_type, modality="text", operation="work", complexity="easy"):
+    if not SPARK_FIRST_CONFIG.get("enabled"):
+        return None
+    if task_type not in set(SPARK_FIRST_CONFIG["eligible_task_types"]):
+        return None
+    if modality not in set(SPARK_FIRST_CONFIG["eligible_modalities"]):
+        return None
+    if operation in set(SPARK_FIRST_CONFIG["excluded_operations"]):
+        return None
+    effort = SPARK_FIRST_CONFIG["effort_by_complexity"].get(complexity)
+    return (SPARK_MODEL, effort) if effort in SPARK_FIRST_CONFIG["adaptive_efforts"] else None
 
 
 def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
@@ -429,6 +533,23 @@ def public_profile_preset_rows():
     return rows
 
 
+def public_model_capability_rows():
+    return {
+        "schema_version": MODEL_CAPABILITY_CONFIG["schema_version"],
+        "registry_id": MODEL_CAPABILITY_CONFIG["registry_id"],
+        "scope": MODEL_CAPABILITY_CONFIG["scope"],
+        "ladder_direction": MODEL_CAPABILITY_CONFIG["ladder_direction"],
+        "policy": dict(ADAPTIVE_POLICY),
+        "spark_first": dict(SPARK_FIRST_CONFIG),
+        "private_learning_contract": dict(MODEL_CAPABILITY_CONFIG["private_learning_contract"]),
+        "default_cold_start": MODEL_CAPABILITY_CONFIG["default_cold_start"],
+        "cold_start_defaults": {key: dict(value) for key, value in MODEL_CAPABILITY_CONFIG["cold_start_defaults"].items()},
+        "effort_order": list(MODEL_EFFORT_ORDER),
+        "effort_guidance": dict(MODEL_CAPABILITY_CONFIG["effort_guidance"]),
+        "models": [dict(row) for row in ACTIVE_MODEL_ROWS],
+    }
+
+
 def validate_profile_preset_registry():
     required = {"task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "verification_shape", "owning_skill", "execution_domain", "static_suggestion", "hard_floor"}
     for profile_preset, preset in PROFILE_PRESETS.items():
@@ -440,6 +561,17 @@ def validate_profile_preset_registry():
         pairs = canonical_pairs(resolved["candidate_ladder"])
         if parse_pair(resolved["static_suggestion"]) not in pairs or parse_pair(resolved["hard_floor"]) not in pairs:
             raise ValueError(f"profile preset pair is outside its canonical ladder: {profile_preset}")
+    return True
+
+
+def validate_model_capability_registry():
+    if set(ACTIVE_MODEL_ORDER) != set(ACTIVE_MODEL_EFFORTS):
+        raise ValueError("shared active model registry is inconsistent")
+    minimum_pair = parse_pair(ADAPTIVE_POLICY["minimum_pair"])
+    if minimum_pair != NORMAL_ADAPTIVE_LADDER[0]:
+        raise ValueError("shared minimum pair must be the weakest active ladder pair")
+    if any(not model.startswith("gpt-5.6-") for model, _ in NORMAL_ADAPTIVE_LADDER):
+        raise ValueError("active adaptive ladder must contain only GPT-5.6 models")
     return True
 
 
@@ -496,4 +628,5 @@ def canonical_pair_texts(pairs):
 
 
 validate_execution_domain_registry()
+validate_model_capability_registry()
 validate_profile_preset_registry()

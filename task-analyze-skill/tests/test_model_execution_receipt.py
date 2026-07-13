@@ -20,6 +20,19 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class ModelExecutionReceiptTests(unittest.TestCase):
+    def test_immediate_operational_fallback_requires_zero_token_unpublished_failure(self):
+        eligible = module.annotate_operational_fallback({"status": "fail", "failure_class": "availability", "turn_completed": False, "tokens": {"total_tokens": 0}, "result_published": False, "route_attempts": [{}]})
+        published = dict(eligible, result_published=True)
+        consumed = dict(eligible, tokens={"total_tokens": 1})
+        completed = dict(eligible, turn_completed=True)
+        unauthorized = dict(eligible, failure_class="authorization")
+        self.assertTrue(module.immediate_operational_fallback(eligible))
+        self.assertEqual(eligible["failure_stage"], "pre_execution")
+        self.assertFalse(module.immediate_operational_fallback(published))
+        self.assertFalse(module.immediate_operational_fallback(consumed))
+        self.assertFalse(module.immediate_operational_fallback(completed))
+        self.assertFalse(module.immediate_operational_fallback(unauthorized))
+
     def test_parse_stdout_uses_only_safe_summary_fields(self):
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-1"}), json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "secret response text"}}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2}})])
         summary = module.parse_stdout_events(stdout_text)

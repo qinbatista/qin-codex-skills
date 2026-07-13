@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import json
 import tempfile
 import unittest
 from copy import deepcopy
@@ -109,14 +110,21 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         with self._with_rust_domain(trace) as synthetic_skills_root:
             result = module.validate_trace("synthetic-rust-spark", trace, synthetic_skills_root)
         self.assertEqual(result["status"], "fail")
-        self.assertTrue(any("Spark is valid only" in failure for failure in result["failures"]))
+        self.assertTrue(any("Spark is injected only as a result-producer attempt" in failure for failure in result["failures"]))
+
+    def test_validate_trace_rejects_model_outside_shared_gpt56_ladder(self):
+        trace = json.loads(json.dumps(module.sample_traces()["admitted-single-luna-entry"]))
+        trace[1]["model"] = "gpt-4.1"
+        result = module.validate_trace("outside-shared-ladder", trace)
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(any("outside the active shared GPT-5.6 ladder" in failure for failure in result["failures"]))
 
     def test_workflow_contract_keeps_ordinary_tasks_inline(self):
         workflow_path = Path(__file__).resolve().parents[2] / "workflow-skill" / "SKILL.md"
         text = workflow_path.read_text(encoding="utf-8")
-        self.assertIn("Ordinary inline work never enters Workflow", text)
+        self.assertIn("Ineligible ordinary work remains inline", text)
         self.assertIn("complete Global foreground path includes entry/controller plus child costs", text)
-        self.assertIn("Producer-only savings are insufficient", text)
+        self.assertIn("End-to-end performance admission remains separate", text)
         self.assertIn("frozen, receipt-backed, Real-passing, and `trial=false`", text)
         self.assertNotIn("observable entry model and effort belong only to Task Analyze", text)
 
@@ -135,8 +143,8 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         verify_text = (skills_root / "verify-skill" / "SKILL.md").read_text(encoding="utf-8")
         optimization_text = (skills_root / "optimization-skill" / "SKILL.md").read_text(encoding="utf-8")
         management_text = (skills_root / "management-skill" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("Ordinary implementation work enters directly from the hookless inline bootstrap", code_text)
-        self.assertIn("bounded read-only lookup or audit with exact source/output scope stays on the bootstrap", code_text)
+        self.assertIn("Ordinary implementation may run inline or as one Obsidian-context Spark-first producer with a selected 5.6 fallback", code_text)
+        self.assertIn("bounded read-only lookup or audit stays on the bootstrap", code_text)
         self.assertIn("Ordinary inline Real Verify uses the current user-selected model and needs no fabricated child receipt", verify_text)
         self.assertIn("Inline optimization uses the current model and no foreground verifier, Workflow, or child receipt", optimization_text)
         self.assertIn("Do not load this skill for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms", management_text)
@@ -148,10 +156,10 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
 
     def test_executor_descriptions_and_loader_prompts_begin_with_negative_preselection_boundary(self):
         skills_root = Path(__file__).resolve().parents[2]
-        cases = {"code-skill": ("Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction", "$code-skill: do not load for any exact-scoped read-only lookup, audit, transform, or workflow reconstruction"), "verify-skill": ("Use only for explicitly requested verification as the task itself, or for post-result Ending Task Real Verify", "$verify-skill: use only for explicitly requested verification or post-result Ending Real"), "optimization-skill": ("Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "$optimization-skill: do not load from benchmark repetition alone or for exact-scoped read-only work"), "management-skill": ("Do not use for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms", "$management-skill: do not load for ordinary exact-scoped read-only work or benchmark worker arms")}
-        for skill_name, (description_prefix, prompt_prefix) in cases.items():
+        cases = {"code-skill": ("code", "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction"), "verify-skill": ("verify", "Use only for explicitly requested verification as the task itself, or for post-result Ending Task Real Verify"), "optimization-skill": ("optimization", "Do not infer optimization from repeated benchmark arms or exact-scoped read-only work"), "management-skill": ("management", "Do not use for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms")}
+        for skill_name, (label, description_prefix) in cases.items():
             skill_text = (skills_root / skill_name / "SKILL.md").read_text(encoding="utf-8")
             agent_text = (skills_root / skill_name / "agents" / "openai.yaml").read_text(encoding="utf-8")
             self.assertTrue(module.parse_frontmatter(skill_text)["description"].startswith(description_prefix), skill_name)
-            self.assertTrue(module.folded_prompt_text(agent_text).startswith(prompt_prefix), skill_name)
+            self.assertTrue(module.folded_prompt_text(agent_text).startswith(module.NEGATIVE_AGENT_PREFIXES[f"{label}_agent"]), skill_name)
             self.assertLessEqual(module.folded_prompt_length(agent_text), 1024, skill_name)

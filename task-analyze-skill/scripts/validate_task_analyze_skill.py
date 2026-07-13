@@ -21,11 +21,6 @@ except ModuleNotFoundError:
     validate_fixture = _graduated.validate_fixture
 
 
-SYNC_PATH = Path(__file__).resolve().parent / "sync_model_capabilities.py"
-SYNC_SPEC = importlib.util.spec_from_file_location("task_analyze_sync_model_capabilities", SYNC_PATH)
-sync_model_capabilities = importlib.util.module_from_spec(SYNC_SPEC)
-SYNC_SPEC.loader.exec_module(sync_model_capabilities)
-
 try:
     from routing_policy import (
         EXECUTION_DOMAINS,
@@ -60,22 +55,24 @@ except ModuleNotFoundError:
     is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
     validate_profile_preset_registry = _routing_policy.validate_profile_preset_registry
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
+
+ACTIVE_MODEL_ORDER = ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol")
+ACTIVE_MODEL_EFFORTS = {model: MODEL_EFFORTS[model] for model in ACTIVE_MODEL_ORDER}
+LEGACY_SPARK_MODEL = "gpt-5.3-codex-spark"
 REQUIRED_FILES = [
     ".gitignore",
     "SKILL.md",
     "agents/openai.yaml",
     "assets/global-agents-entry-rule.md",
+    "assets/model-capability-ladder.json",
     "references/route-contract.md",
     "references/model-selection.md",
-    "references/model-capabilities.md",
     "references/runtime-receipts.md",
     "references/adaptive-routing.md",
     "references/related-memory.md",
     "scripts/resolve_entry_model.py",
-    "scripts/obsidian_memory_bridge.py",
-    "scripts/sync_model_capabilities.py",
     "scripts/model_execution_receipt.py",
-    "scripts/adaptive_model_runner.py",
+    "scripts/obsidian_adaptive_model_runner.py",
     "scripts/strategy_performance.py",
     "scripts/benchmark_suite_gate.py",
     "scripts/benchmark_suite_runner.py",
@@ -90,15 +87,15 @@ REQUIRED_FILES = [
 ]
 REQUIRED_SKILL_TEXT = [
     "full routing and model-strategy skill",
-    "individual global skill",
-    "not the ordinary task bootstrap",
-    "hookless 100% inline policy",
+    "hookless bootstrap",
+    "matching project-scoped Obsidian `Projects/<project-key>/ModelExperience`",
+    "mandatory post-result Ending lifecycle",
     "nested cache/fixture `SKILL.md`",
     "Activation Boundary",
     "Ordinary Inline Bootstrap",
     "must not read this full `SKILL.md`",
     "one direct task action",
-    "Exact-scoped read-only work stays on the current model inline with no subagent",
+    "Exact-scoped read-only result work stays on the current model inline with no foreground producer subagent",
     "one bounded `rg` per authoritative file",
     "every exact user-named target and direct definition",
     "Anchor named members directly",
@@ -108,9 +105,11 @@ REQUIRED_SKILL_TEXT = [
     "exact allowlist",
     "current model",
     "regardless of apparent complexity",
-    "no separate planning, self-review, Mini, or verification pass",
+    "no separate foreground self-review, Mini, or verification pass",
     "Present the completed result immediately",
     "Do not run Mini/Fast Verify before first presentation",
+    "launch an independent Ending subagent for every task level",
+    "Final requires lifecycle `PASS` or explicit `BLOCKED`",
     "End-to-End Performance Admission",
     "complete foreground path",
     "frozen model-visible catalogs and memory snapshot",
@@ -118,26 +117,25 @@ REQUIRED_SKILL_TEXT = [
     "individual regressions remain visible diagnostics",
     "median-absolute-deviation noise envelope",
     "no correctness-preserving change remains",
-    "Missing, stale, cross-workload, incomplete, or negative evidence means inline",
-    "Foreground downgrade or upgrade trials are forbidden",
     "frozen, receipt-backed, Real-passing, and `trial=false`",
     "resolve_entry_model.py",
     "quick bounded related-memory lookup",
     "There is no controller-only entry invariant",
     "Mermaid",
-    "Personal routing evidence",
-    "Spark-low",
-    "Private Adaptive Routing",
-    "trial exactly one lower effort on the same model",
+    "assets/model-capability-ladder.json",
+    "Obsidian Adaptive Routing",
+    "exact project/task/module/file/symbol/code context",
+    "Eligible text/code result producers try Spark first",
+    "new 5.6 repair lifecycle",
+    "Ending Real alone records receipt-backed producer pass/fail evidence",
+    "producers and ordinary runners never write learning",
     "There is no Mini/Fast Verify gate before first presentation",
     "show it immediately",
     "Ending Task",
     "scripts/model_execution_receipt.py",
-    "scripts/adaptive_model_runner.py",
+    "scripts/obsidian_adaptive_model_runner.py",
     "grounded_result_gate.py",
     "task_route_dispatcher.py run-plan",
-    "named profile preset",
-    "TaskModelExperience/",
     "Missing memory providers are a successful no-op",
     "receipt finalization, telemetry, and post-result Ending Real are excluded",
     "controller-stamped sanitized `result-ready` event",
@@ -176,20 +174,22 @@ REQUIRED_ROUTE_TEXT = [
     "Optional related-memory preflight",
 ]
 REQUIRED_SELECTION_TEXT = [
-    "selected at task entry",
-    "lowest reliable static `model|effort` pair for the node's real work",
-    "Spark-low",
-    "Receipt-Backed Personal Learning",
-    "Receipt-Backed Personal Learning",
-    "one cheaper/faster rung",
-    "Efficiency Guard",
-    "No prior success",
-    "tiny_text",
-    "tiny_code",
-    "command_generation",
-    "Spark-low",
-    "currently selected",
-    "TaskModelExperience/",
+    "# Spark-First Model Selection",
+    "assets/model-capability-ladder.json",
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+    "## Effort Order",
+    "## Selection Rules",
+    "Obsidian `Projects/<project-key>/ModelExperience`",
+    "project/task/module/file/symbol/code context",
+    "receipt-backed Ending Real pass",
+    "Ending Real alone writes the verdict",
+    "eligible text/code result producers try Spark-low for easy work or Spark-high for complex work",
+    "old local `model_experience.json` stays legacy read-only",
+    "Exact read-only stays inline",
+    "obsidian_adaptive_model_runner.py",
+    "Multi-node strategy remains separately performance-admitted",
 ]
 REQUIRED_RECEIPT_TEXT = [
     "requested model and effort",
@@ -220,19 +220,25 @@ REQUIRED_RECEIPT_TEXT = [
     "runner-owned timestamp exactly across evidence and receipt",
 ]
 REQUIRED_ADAPTIVE_TEXT = [
-    "local/adaptive-routing/model_experience.json",
-    "generalized privacy-filtered task summary",
-    "success_model",
-    "failed_model",
-    "result-producer attempt",
-    "After a receipt-matched pass",
-    "No foreground provisional verdict is recorded",
-    "receipt-matched Ending Real correctness/quality failure",
-    "Ending Real updates the same producer receipt/run",
-    "Tokens are a usage proxy",
-    "Obsidian `TaskModelExperience/`",
-    "profile preset",
+    "project/task/module/file/symbol/code context",
+    "## Two Routing Authorities",
+    "assets/model-capability-ladder.json",
+    "Obsidian `Projects/<project-key>/ModelExperience`",
+    "Ending Real alone stores sanitized producer receipts",
+    "Old local `model_experience.json` is legacy read-only only",
+    "Spark is a priority attempt, not a rung in the 5.6 quality ladder",
+    "zero-result, zero-token operational failure",
+    "## Project Context Identity",
+    "Evidence does not cross project keys",
+    "receipt-matched Ending Real pass",
+    "obsidian_adaptive_model_runner.py",
+    "`strategy_performance.py` remains separate",
+    "Ending Real alone records the matching producer pass/fail to Obsidian",
+    "read-only compatibility surfaces only",
 ]
+REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status", "pending"]
+REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "model-capability-ladder.json", "Projects", "ModelExperience", "task_type", "module", "file", "symbol", "code_kind", "modality", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"]
+REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
 REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "ENTRY_CONTEXT_ENV",
     "bootstrap-task",
@@ -245,16 +251,16 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Analyze", "Ordinary work stays inline", "obvious actions run once", "Global gates", "reusable prompt or durable AI-instruction work always loads `prompt-skill`", "ordinary text does not", "Any durable project-file change always loads `project-memory-skill`", "recall related project/module/file history before editing", "record what changed, why, result, verification, and every touched file", "missing Obsidian never blocks", "Prompt-in-code also loads its code owner", "present the completed prompt before Ending Real", "Exact read-only uses one bounded `rg` per authoritative file", "anchored to exact members", "No plan, guessed names, unrelated skills, subagents, broad search, reread, full-file read, or pre-result check", "Present completed work immediately", "verify afterward", "failures reopen, repair, and re-present"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Eligible text/code producers read the shared ladder", "Obsidian `Projects/<key>/ModelExperience`", "local model JSON stays read-only", "Try Spark first: easy=low, complex=high", "zero-result operational failure uses the current 5.6 pair", "published output returns now", "Prompt/AI-instruction work loads `prompt-skill`", "durable edits load `project-memory-skill`", "recall first", "record reason/result/verification/files after Ending", "Every non-ENDING_TASK_WORKER task", "Ending start receipt", "independent Ending subagent", "Ending Real writes the receipt-backed outcome to Obsidian", "Parallelize isolated logs/docs", "Final requires PASS or BLOCKED", "quality/correctness failure", "new 5.6 repair lifecycle", "re-present", "different verifier", "No hook", "Exact read-only uses one bounded rg per authoritative file", "no route, plan, guessed names, unrelated skills, broad search, reread, full-file read, or pre-result check"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Post-Result Ending Simplicity Review", "Present the completed Python edit immediately", "After that first presentation, Ending Task", "correctness failure"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["present the completed edit immediately", "afterward in Ending Task Real Verify", "do not gate the first presentation"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
 REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "In Ending Real, test with representative cases"]
 REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "present the completed prompt first"]
-FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "LOCKED_ROUTE_NODE", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook"]
+FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "LOCKED_ROUTE_NODE", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
-MAX_GLOBAL_BOOTSTRAP_BYTES = 896
+MAX_GLOBAL_BOOTSTRAP_BYTES = 1024
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
     "The entry is a bounded controller",
@@ -276,6 +282,15 @@ FORBIDDEN_TEXT = [
     "ends Task Analyze with the visible route and JSON handoff",
     "private schema-1 JSON",
     "applies a proportional local gate",
+    "Private Adaptive Routing",
+    "private ledger remains model-quality authority",
+    "Learning is shared across projects",
+    "generalized task-type conditions",
+    "broad task-type profile reuses",
+    "Keep adaptive history under `local/`",
+    "scripts/adaptive_model_runner.py",
+    "TaskModelExperience/",
+    "local/adaptive-routing/model_experience.json",
 ]
 
 
@@ -311,6 +326,82 @@ def folded_prompt_length(text):
 def missing_terms(label, text, required):
     normalized = normalize(text)
     return [f"{label} missing required contract: {term}" for term in required if normalize(term) not in normalized]
+
+
+def legacy_only_failures(label, text):
+    failures = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        lowered = line.lower()
+        marker = "model_experience.json"
+        if marker in lowered and not ("legacy" in lowered and "read-only" in lowered):
+            failures.append(f"{label}:{line_number} references {marker} without legacy read-only scope")
+    return failures
+
+
+def validate_shared_ladder(text):
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return ["shared model-capability ladder is invalid JSON"]
+    models = payload.get("models") if isinstance(payload.get("models"), list) else []
+    model_ids = [model.get("id") for model in models if isinstance(model, dict)]
+    failures = []
+    if payload.get("scope") != "shared_non_personal":
+        failures.append("shared model-capability ladder must remain non-personal")
+    if model_ids != list(ACTIVE_MODEL_ORDER):
+        failures.append("shared model-capability ladder must contain only ordered Luna, Terra, and Sol")
+    if LEGACY_SPARK_MODEL in model_ids:
+        failures.append("Spark must not be an active shared-ladder rung")
+    spark = payload.get("spark_first")
+    if not isinstance(spark, dict) or spark.get("id") != LEGACY_SPARK_MODEL or spark.get("adaptive_efforts") != ["low", "high"]:
+        failures.append("shared model-capability ladder must define Spark low/high priority attempts")
+    elif spark.get("effort_by_complexity") != {"easy": "low", "complex": "high"} or spark.get("eligible_modalities") != ["text"]:
+        failures.append("shared Spark priority eligibility is invalid")
+    if isinstance(spark, dict) and (spark.get("operational_fallback") != "current_obsidian_5_6_pair" or spark.get("quality_failure") != "record_to_obsidian_then_new_5_6_repair_lifecycle"):
+        failures.append("shared Spark failure contract is invalid")
+    for model in models:
+        if not isinstance(model, dict) or not model.get("codex_efforts"):
+            failures.append("every shared-ladder model must declare Codex efforts")
+        elif model.get("id") in ACTIVE_MODEL_EFFORTS and set(model["codex_efforts"]) != set(ACTIVE_MODEL_EFFORTS[model["id"]]):
+            failures.append(f"shared model-capability ladder efforts drifted for {model.get('id')}")
+    return failures
+
+
+def check_model_cache_ladder(models_cache_path, ladder_text):
+    try:
+        cache = json.loads(Path(models_cache_path).read_text(encoding="utf-8"))
+        ladder = json.loads(ladder_text)
+    except (OSError, json.JSONDecodeError):
+        return {"valid": False, "status": "unreadable", "missing_cache_models": list(ACTIVE_MODEL_ORDER), "effort_mismatches": []}
+    cache_models = {model.get("slug"): model for model in cache.get("models", []) if isinstance(model, dict)}
+    expected = {model["id"]: set(model.get("codex_efforts", [])) for model in ladder.get("models", []) if isinstance(model, dict) and model.get("id") in ACTIVE_MODEL_ORDER}
+    missing = [model for model in ACTIVE_MODEL_ORDER if model not in cache_models]
+    effort_mismatches = []
+    for model, efforts in expected.items():
+        observed = {level.get("effort") for level in cache_models.get(model, {}).get("supported_reasoning_levels", []) if isinstance(level, dict)}
+        if model in cache_models and observed != efforts:
+            effort_mismatches.append(model)
+    valid = not missing and not effort_mismatches and set(expected) == set(ACTIVE_MODEL_ORDER)
+    return {"valid": valid, "status": "pass" if valid else "stale", "missing_cache_models": missing, "effort_mismatches": effort_mismatches}
+
+
+def validate_graduated_fixture(path, skills_root, require_installed):
+    fixture_globals = validate_fixture.__globals__
+    dispatcher_factory = fixture_globals.get("_dispatcher_module")
+    if dispatcher_factory is None:
+        return validate_fixture(path, skills_root, require_installed)
+
+    def active_dispatcher_factory():
+        dispatcher = dispatcher_factory()
+        if not hasattr(dispatcher, "MODEL_EFFORTS"):
+            dispatcher.MODEL_EFFORTS = ACTIVE_MODEL_EFFORTS
+        return dispatcher
+
+    fixture_globals["_dispatcher_module"] = active_dispatcher_factory
+    try:
+        return validate_fixture(path, skills_root, require_installed)
+    finally:
+        fixture_globals["_dispatcher_module"] = dispatcher_factory
 
 
 def installed_skills(skills_root):
@@ -359,7 +450,9 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
     entry_model = entry.get("model")
     entry_effort = entry.get("effort")
     node_by_id = {node.get("id"): node for node in nodes}
-    if entry_model not in MODEL_EFFORTS or entry_effort not in MODEL_EFFORTS.get(entry_model, set()):
+    if entry_model == LEGACY_SPARK_MODEL:
+        failures.append("entry Spark is a result-producer priority attempt only and cannot enter a schema-2 plan")
+    elif entry_model not in ACTIVE_MODEL_EFFORTS or entry_effort not in ACTIVE_MODEL_EFFORTS.get(entry_model, set()):
         failures.append("entry has unsupported model/effort")
     if any(node.get("skill") == "task-analyze-skill" for node in nodes):
         failures.append("schema 2 dispatcher nodes must not contain Task Analyze")
@@ -376,7 +469,9 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
         skill = node.get("skill")
         if node.get("phase") not in {"result", "ending"}:
             failures.append(f"{node_id} phase must be result or ending")
-        if model not in MODEL_EFFORTS or effort not in MODEL_EFFORTS.get(model, set()):
+        if model == LEGACY_SPARK_MODEL:
+            failures.append(f"{node_id} Spark is injected only as a result-producer attempt and cannot be a schema-2 node")
+        elif model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set()):
             failures.append(f"{node_id} has unsupported model/effort")
         if skill not in installed and resolve_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
@@ -415,8 +510,6 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
         is_code_node = False if execution_domain not in EXECUTION_DOMAINS else is_code_execution_domain(execution_domain)
         if is_code_node and skill != "code-skill" and expected_owner_skill(execution_domain) is not None:
             failures.append(f"{node_id} bypasses code-skill")
-        if is_code_node and model == "gpt-5.3-codex-spark" and not is_tiny_spark_profile(node.get("task_family"), node.get("modality"), node.get("risk"), node.get("complexity"), node.get("ambiguity")):
-            failures.append(f"{node_id} Spark is valid only for low-risk easy low-ambiguity text tiny profiles")
     if "mini_verify_node" in plan:
         failures.append("mini_verify_node is not valid in schema 2")
     result_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
@@ -460,13 +553,13 @@ def _complex_followup_implementation_pair():
 
 
 def sample_plans():
-    ordered_models = list(MODEL_ORDER)
+    ordered_models = list(ACTIVE_MODEL_ORDER)
     easy_followup_model, easy_followup_effort = _easy_followup_node_pair()
     complex_followup_model, complex_followup_effort = _complex_followup_node_pair()
     implementation_model, implementation_effort = _complex_followup_implementation_pair()
     plans = {}
     for model in ordered_models:
-        for effort in MODEL_EFFORTS[model]:
+        for effort in ACTIVE_MODEL_EFFORTS[model]:
             plans[f"admitted-single-{model}-{effort}"] = {
                 "schema_version": 2,
                 "route_scope": "admitted",
@@ -529,25 +622,32 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
         validate_profile_preset_registry()
     except ValueError as error:
         failures.append(f"profile-preset registry is invalid: {error}")
-    required_profile_presets = {"grounded-repository-answer-easy", "grounded-repository-answer-complex", "tiny-text", "tiny-code", "command-generation", "code-easy", "code-complex"}
+    required_profile_presets = {"analysis-complex", "code-complex", "code-easy", "command-generation", "document-complex", "document-easy", "general-answer-easy", "grounded-repository-answer-complex", "grounded-repository-answer-easy", "integration-complex", "spreadsheet-complex", "spreadsheet-easy", "summary-easy", "tiny-code", "tiny-text"}
     if set(PROFILE_PRESETS) != required_profile_presets:
         failures.append("profile-preset registry does not expose the complete stable preset set")
     paths = {relative: skill_dir / relative for relative in REQUIRED_FILES}
+    obsidian_memory_path = global_skills_root / "project-memory-skill" / "scripts" / "obsidian_model_memory.py"
+    missing_files = []
     for relative, path in paths.items():
         if not path.exists():
-            failures.append(f"missing required file: {relative}")
-    if failures:
-        return {"valid": False, "failures": failures, "plans": []}
+            missing_files.append(f"missing required file: {relative}")
+    if not obsidian_memory_path.exists():
+        missing_files.append("missing required file: project-memory-skill/scripts/obsidian_model_memory.py")
+    failures.extend(missing_files)
+    if missing_files:
+        return {"valid": False, "failures": failures, "plans": [], "graduated": []}
     skill_text = read_text(paths["SKILL.md"])
     agent_text = read_text(paths["agents/openai.yaml"])
     route_text = read_text(paths["references/route-contract.md"])
     selection_text = read_text(paths["references/model-selection.md"])
     receipt_text = read_text(paths["references/runtime-receipts.md"])
     adaptive_text = read_text(paths["references/adaptive-routing.md"])
+    shared_ladder_text = read_text(paths["assets/model-capability-ladder.json"])
     receipt_script_text = read_text(paths["scripts/model_execution_receipt.py"])
     benchmark_gate_text = read_text(paths["scripts/benchmark_suite_gate.py"])
     benchmark_runner_text = read_text(paths["scripts/benchmark_suite_runner.py"])
-    adaptive_runner_text = read_text(paths["scripts/adaptive_model_runner.py"])
+    adaptive_runner_text = read_text(paths["scripts/obsidian_adaptive_model_runner.py"])
+    obsidian_memory_text = read_text(obsidian_memory_path)
     strategy_performance_text = read_text(paths["scripts/strategy_performance.py"])
     dispatcher_text = read_text(paths["scripts/task_route_dispatcher.py"])
     entry_asset_text = read_text(paths["assets/global-agents-entry-rule.md"])
@@ -559,25 +659,33 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["Ordinary work stays inline", "Prompt-artifact work is the one ordinary skill exception", "always load prompt-skill", "ordinary prose does not trigger it", "present the completed prompt before Ending Real", "Exact-scoped read-only work stays on the current model", "no subagent/route", "exact named-source audit", "one bounded rg per authoritative file", "every exact user-named target and direct definition", "anchors named members directly", "never adds enclosing-class/call-site anchors", "guesses identifier families", "answers once", "no plan/unrelated-skill load/broad search/reread/full-file/pre-result check", "presents now", "full-skill load", "Ending Real Verify", "end-to-end evidence", "beating Direct in tokens and first-result time", "frozen Real-pass trial=false", "hide plans"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["eligible text/code producers", "trying Spark first", "easy low; complex high", "Zero-result operational Spark failure uses the selected 5.6 pair", "Ending Real alone writes", "quality/correctness failure", "new 5.6 repair lifecycle", "Local model_experience.json stays legacy read-only", "Multi-node strategy and savings need end-to-end proof", "Load prompt-skill", "Exact read-only uses one bounded rg", "Every non-ENDING_TASK_WORKER task", "independent Ending subagent", "Final needs PASS or BLOCKED", "different verifier", "No hook", "hide machine plans"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
     failures.extend(missing_terms("runtime-receipts", receipt_text, REQUIRED_RECEIPT_TEXT))
     failures.extend(missing_terms("adaptive-routing", adaptive_text, REQUIRED_ADAPTIVE_TEXT))
+    failures.extend(validate_shared_ladder(shared_ladder_text))
+    failures.extend(missing_terms("Obsidian adaptive runner", adaptive_runner_text, REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION))
+    failures.extend(missing_terms("Obsidian model memory", obsidian_memory_text, REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION))
+    for label, implementation_text in (("Obsidian adaptive runner", adaptive_runner_text), ("Obsidian model memory", obsidian_memory_text)):
+        if "model_experience.json" in implementation_text or "local/adaptive-routing" in implementation_text:
+            failures.append(f"{label} must not fall back to local model_experience.json")
     failures.extend(missing_terms("receipt entry guard", receipt_script_text, REQUIRED_RECEIPT_GUARD_IMPLEMENTATION))
     failures.extend(missing_terms("benchmark mode gate", benchmark_gate_text, ["receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_raw_prompt_mismatch", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "benchmark-global-inline", "bootstrap-task", "MAXIMUM_PAIRED_TIME_REGRESSION_MS = 2_000", "material_pair_regression_count"]))
     failures.extend(missing_terms("benchmark runner mode", benchmark_runner_text, ["--direct-task", "--bootstrap-task", "benchmark-{run_plan['run_id']}", "role = \"result-producer\"", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_invalid", "result_ready_monotonic_ns", "benchmark-runner-monotonic", "time.monotonic_ns()"]))
-    failures.extend(missing_terms("adaptive runner authorization", adaptive_runner_text, ["with model_execution_receipt.adaptive_producer_authorization()", "_performance_admission", "inline_entry", "benchmark_calibration"]))
+    failures.extend(missing_terms("adaptive runner authorization", adaptive_runner_text, ["with model_execution_receipt.adaptive_producer_authorization()", "obsidian_model_memory.recommend_model", "node_role=\"result-producer\""]))
     failures.extend(missing_terms("dispatcher result verifier boundary", dispatcher_text, ["verify-skill result nodes require user_requested_verification_result=true", "user_requested_verification_result is valid only on a result-phase verify-skill node", "Completed dependency handoff"]))
-    failures.extend(missing_terms("strategy performance admission", strategy_performance_text, ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]))
+    failures.extend(missing_terms("strategy performance admission", strategy_performance_text, REQUIRED_STRATEGY_PERFORMANCE))
     failures.extend(missing_terms("dispatcher role authorization", dispatcher_text, ["with receipt_module.dispatcher_node_authorization(args.node_role)"]))
     if "/local/" not in read_text(paths[".gitignore"]):
         failures.append("task-analyze-skill .gitignore must exclude /local/")
     for obsolete_path in (skill_dir / "assets" / "hooks.json", skill_dir / "scripts" / "task_entry_hook.py", skill_dir / "tests" / "test_task_entry_hook.py"):
         if obsolete_path.exists():
             failures.append(f"obsolete hook artifact remains: {obsolete_path.relative_to(skill_dir)}")
-    live_text = "\n".join([skill_text, agent_text, route_text, selection_text, receipt_text])
+    for label, contract_text in (("SKILL.md", skill_text), ("model-selection", selection_text), ("adaptive-routing", adaptive_text)):
+        failures.extend(legacy_only_failures(label, contract_text))
+    live_text = "\n".join([skill_text, agent_text, route_text, selection_text, receipt_text, adaptive_text])
     for forbidden in FORBIDDEN_TEXT:
         if normalize(forbidden) in normalize(live_text):
             failures.append(f"live contract contains obsolete text: {forbidden}")
@@ -621,12 +729,12 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     nested_skill_files = [path for path in global_skills_root.rglob("SKILL.md") if ".system" not in path.relative_to(global_skills_root).parts and path.parent.parent != global_skills_root]
     if nested_skill_files:
         failures.append(f"loader-visible nested SKILL.md files remain under global skills: {len(nested_skill_files)}")
-    capability_status = sync_model_capabilities.check_snapshot(models_cache_path.expanduser().resolve(), read_text(paths["references/model-capabilities.md"]))
+    capability_status = check_model_cache_ladder(models_cache_path.expanduser().resolve(), shared_ladder_text)
     if not capability_status["valid"]:
-        failures.append(f"model-capabilities.md failed capability check: {capability_status['status']}")
+        failures.append(f"shared model-capability ladder failed local cache check: {capability_status['status']}")
     installed = installed_skills(global_skills_root)
     plans = sample_plans()
-    expected_plan_count = sum(len(efforts) for efforts in MODEL_EFFORTS.values())
+    expected_plan_count = sum(len(efforts) for efforts in ACTIVE_MODEL_EFFORTS.values())
     expected_route_plan_count = expected_plan_count * 2
     if len(plans) != expected_route_plan_count:
         failures.append(f"sample plans do not cover admitted single+complex entry pairs (expected {expected_route_plan_count}, got {len(plans)})")
@@ -640,7 +748,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
         plan_results.append({"name": name, "status": "pass" if not plan_failures else "fail", "failures": plan_failures})
         failures.extend([f"plan {name}: {failure}" for failure in plan_failures])
     fixture_path = skill_dir / "assets" / "graduated-route-fixtures.json"
-    graduated_failures = validate_fixture(fixture_path, global_skills_root, True)
+    graduated_failures = validate_graduated_fixture(fixture_path, global_skills_root, True)
     try:
         graduated_count = len(json.loads(fixture_path.read_text(encoding="utf-8")).get("scenarios", []))
     except (OSError, json.JSONDecodeError):

@@ -17,7 +17,6 @@ DIRECT_ROUTE = ["inline-current-model", "chrome:control-chrome"]
 COMPLEX_ROUTE = ["inline-current-model", "build-web-apps:frontend-app-builder"]
 ADMITTED_ROUTE = ["task-analyze-skill", "workflow-skill", "build-web-apps:frontend-app-builder"]
 REQUIRED_PAIRS = {"design": "gpt-5.6-sol|high", "implementation": "gpt-5.6-terra|high", "ending_real": "gpt-5.6-terra|high"}
-SUPPORTED_PAIRS = {"gpt-5.3-codex-spark|low", "gpt-5.3-codex-spark|medium", "gpt-5.3-codex-spark|high", "gpt-5.6-luna|low", "gpt-5.6-luna|medium", "gpt-5.6-luna|high", "gpt-5.6-terra|low", "gpt-5.6-terra|medium", "gpt-5.6-terra|high", "gpt-5.6-sol|low", "gpt-5.6-sol|medium", "gpt-5.6-sol|high", "gpt-5.6-sol|ultra"}
 ENDING_CHECKS = ["responsive", "console", "navigation", "accessibility", "visual"]
 SCENARIO_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "execution_surface", "route", "ending_real_condition", "timing_evidence"}
 PSEUDO_ROUTE_IDS = {"inline-current-model"}
@@ -70,13 +69,19 @@ def _validate_dispatcher_template(template, skills_root, failures):
     if not isinstance(template, dict):
         failures.append("admitted_dispatcher_template must be an object")
         return
+    dispatcher = _dispatcher_module()
+    supported_pairs = {
+        f"{model}|{effort}"
+        for model, efforts in dispatcher.ACTIVE_MODEL_EFFORTS.items()
+        for effort in efforts
+    }
     if template.get("activation") != "explicit_and_performance_admitted" or template.get("admission_precondition") != "positive_end_to_end_evidence_required":
         failures.append("admitted dispatcher template lacks explicit positive performance-admission precondition")
     if template.get("authorization") != "topology_only_not_execution_proof":
         failures.append("admitted dispatcher template must not claim execution authorization")
     if template.get("route") != ADMITTED_ROUTE:
         failures.append(f"admitted dispatcher route ordering must be {ADMITTED_ROUTE}")
-    if template.get("illustrative_cold_start_pairs") != REQUIRED_PAIRS or any(pair not in SUPPORTED_PAIRS for pair in template.get("illustrative_cold_start_pairs", {}).values()):
+    if template.get("illustrative_cold_start_pairs") != REQUIRED_PAIRS or any(pair not in supported_pairs for pair in template.get("illustrative_cold_start_pairs", {}).values()):
         failures.append("admitted dispatcher static model/effort roles are incorrect or unsupported")
     if template.get("adaptive_result_producer") != "implementation":
         failures.append("admitted dispatcher adaptive producer must be implementation")
@@ -88,7 +93,6 @@ def _validate_dispatcher_template(template, skills_root, failures):
     if not isinstance(plan, dict):
         failures.append("admitted dispatcher template dispatcher_plan must be an object")
         return
-    dispatcher = _dispatcher_module()
     expected_nodes = ["design", "implementation", "ending-real"]
     expected_roles = {"design": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-sol", "high", [], "general"), "implementation": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-terra", "high", ["design"], "general"), "ending-real": ("ending", "verify-skill", "gpt-5.6-terra", "high", ["implementation"], "general")}
     template_nodes = plan.get("nodes", [])
@@ -114,7 +118,7 @@ def _validate_dispatcher_template(template, skills_root, failures):
     if recommendation.get("selected_pair") != "gpt-5.6-terra|high" or recommendation.get("trial") is not False or not recommendation.get("profile_fingerprint"):
         failures.append("admitted implementation recommendation proof is invalid")
     with tempfile.TemporaryDirectory(prefix="graduated-admitted-plan-") as temporary:
-        for model, efforts in dispatcher.MODEL_EFFORTS.items():
+        for model, efforts in dispatcher.ACTIVE_MODEL_EFFORTS.items():
             for effort in efforts:
                 materialized = materialize_dispatcher_plan(plan, Path(temporary) / f"{model}-{effort}", model, effort)
                 plan_failures = dispatcher.validate_plan(materialized, model, effort, Path(temporary), skills_root)

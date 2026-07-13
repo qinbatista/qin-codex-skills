@@ -204,6 +204,10 @@ def run_adaptive(args, prompt_text):
         raise RunnerFailure("prompt_required")
     if args.timeout <= 0 or args.receipt_output == args.result_output:
         raise RunnerFailure("runner_arguments_invalid")
+    if Path(args.history).expanduser().resolve() == model_routing_history.DEFAULT_HISTORY_PATH.resolve():
+        if args.result_output.exists():
+            args.result_output.unlink()
+        return _summary(args, status="inline", reason="legacy_local_model_history_inactive", execution_mode="inline_entry")
     recommendation, selected = _validated_recommendation(args)
     performance_admission = _performance_admission(args, recommendation, prompt_text)
     if performance_admission.get("execution_mode") != "delegated_adaptive":
