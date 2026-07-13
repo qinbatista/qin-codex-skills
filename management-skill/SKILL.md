@@ -31,7 +31,7 @@ Task Analyze owns selection and storage. Management records a completed result-p
 
 When a configured Obsidian vault exists, Ending Task may also write a sanitized readable projection to `TaskModelExperience/` through `../task-analyze-skill/scripts/obsidian_memory_bridge.py record-model`. Record only after Real Verify, only for the related task profile, and only controlled summary/pair/verdict/boundary/switch/comparable-metric fields. The private JSON ledger remains authoritative. Missing Obsidian is a successful no-op.
 
-## Approved Seven-Skill Mirror
+## Approved Eight-Skill Mirror
 
 The public mirror set and order are exactly:
 
@@ -39,11 +39,12 @@ The public mirror set and order are exactly:
 2. `workflow-skill`
 3. `prompt-skill`
 4. `code-skill`
-5. `verify-skill`
-6. `optimization-skill`
-7. `management-skill`
+5. `project-memory-skill`
+6. `verify-skill`
+7. `optimization-skill`
+8. `management-skill`
 
-The local global skill directory may contain unrelated skills such as `chronicle`. Mirror selection, hashing, status, pull, and deletion logic must ignore and preserve those unrelated local folders. The remote mirror itself must contain exactly the approved seven.
+The local global skill directory may contain unrelated skills such as `chronicle`. Mirror selection, hashing, status, pull, and deletion logic must ignore and preserve those unrelated local folders. The remote mirror itself must contain exactly the approved eight.
 
 ## Privacy And Authorization
 
@@ -55,15 +56,13 @@ The local global skill directory may contain unrelated skills such as `chronicle
 
 ## README Generation
 
-The durable English README source is `assets/readme/github-readme-template.md`. Its 14 local SVG assets (seven desktop/mobile diagram pairs) explain the seven-skill system, lifecycle, model router, model-experience learning, verification topology, runtime receipts, private adaptive routing, and the sanitized same-workload benchmark example. The README must explain that the portable hookless inline bootstrap keeps ordinary work on the current model, every reusable prompt/durable-instruction task loads Prompt inline, the full Task Analyze skill loads only for explicit routing/benchmark/maintenance or admitted delegation, Workflow runs only after positive end-to-end admission, and personal routing history is never mirrored. `scripts/sync_global_skills.py` reads that template when generating root `README.md`.
-
-The public README must name the First Result Principle, the 100% global Prompt gate and ordinary-prose exclusion, the direct-action boundary, the weak-to-strong complete `model|effort` ladder, the receipt-backed adaptive goal, graduated routing scenarios, the code-domain extension recipe, reasonable response-time/token use, exactly seven public skills, and the exclusion of local `model_experience.json`.
+The durable README sources are `assets/readme/github-readme-template.md` and `assets/readme/github-readme-template.zh.md`. Keep both compact and diagram-first. They must identify the project as Codex-only, state that the primary ladder was tested and used from GPT-5.6 and is aligned with the latest registered Codex models, show the inline/routed/verification flow, show project/module/file memory, list exactly eight public Skills, and explain privacy without embedding benchmark dumps or internal receipt details. `scripts/sync_global_skills.py` reads the templates when generating root `README.md` and `README.zh.md`.
 
 For README changes:
 
-1. Edit the durable template and adjacent SVGs.
+1. Edit both durable templates and use Mermaid for core flows.
 2. Generate a local repository snapshot only.
-3. Verify internal links, SVG parsing/accessibility, desktop/narrow rendering, and seven-skill selection.
+3. Verify internal links, Mermaid blocks, Codex/GPT-5.6 wording, memory flow, and eight-skill selection.
 4. Do not publish without a separate explicit request.
 
 ## Main Result And Ending Task

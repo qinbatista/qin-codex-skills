@@ -88,10 +88,11 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE)
 )
 CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Management", "General"]
-PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill"]
+PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "project-memory-skill", "verify-skill", "optimization-skill", "management-skill"]
 APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 ENGLISH_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.md"
+CHINESE_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.zh.md"
 CATEGORY_LABEL_WIDTH = 28
 SKILL_LABEL_WIDTH = 24
 CATEGORY_LABELS = {
@@ -117,6 +118,7 @@ SKILL_SUMMARIES = {
     "workflow-skill": "Executes only a positively admitted Task Analyze route. Ordinary work of any apparent complexity stays inline; admitted nodes keep locked pairs and receipts, present the completed result, then hand verification to Ending Real.",
     "prompt-skill": "The 100% global gate for reusable prompt and durable-instruction creation, review, edit, repair, standardization, testing, summarization, and optimization. It stays inline on the current model and excludes ordinary prose.",
     "code-skill": "Direct inline or admitted-route executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. Ordinary work keeps the current model; Spark is only an admitted obvious-task route.",
+    "project-memory-skill": "Recalls and records project changes by project, functional module, and concrete file, with a private local authority and optional Obsidian projection.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
     "verify-skill": "Real Verify runs in Ending Task after the completed result is presented and applies its verdict to the original receipt-backed result attempt.",
     "management-skill": "Handles Codex profile operations and global skill GitHub sync while preserving local private folders, local route history, and model-experience files from public mirrors.",
@@ -126,6 +128,7 @@ CHINESE_SKILL_SUMMARIES = {
     "workflow-skill": "只执行已经通过端到端性能准入的 Task Analyze 锁定路线。无论表面复杂度如何，普通任务都保持 inline；已准入节点保留锁定 pair 和 receipt。",
     "prompt-skill": "可复用 prompt 与持久 AI 指令创建、审查、编辑、修复、标准化、测试、总结和优化的全局 100% 入口。它在当前模型 inline 执行，普通文案不会误触发。",
     "code-skill": "活动注册代码域的 direct-inline 或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务保留当前模型；Spark 只用于已准入的明显小任务路线。",
+    "project-memory-skill": "按项目、功能模块和具体文件回溯与记录修改，本地私有记录为权威来源，Obsidian 为可选投影。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
     "verify-skill": "完成的主结果先立即展示；Real Verify 之后在 Ending Task 中执行，并把判定回填到原始的 receipt-backed 结果尝试。",
     "management-skill": "处理 Codex profile 操作和全局 skill GitHub 同步，不暴露私人数据，并保留本地私有路由历史。",
@@ -282,7 +285,7 @@ def assert_approved_global_skill_set(skill_paths):
             message += "\nUnexpected folders found:\n" + "\n".join(f"- {skill_name}" for skill_name in unexpected_names)
         if missing_names:
             message += "\nRequired folders missing:\n" + "\n".join(f"- {skill_name}" for skill_name in missing_names)
-        message += "\nUnrelated local skill folders are intentionally ignored and preserved. Check the approved seven before publishing."
+        message += "\nUnrelated local skill folders are intentionally ignored and preserved. Check the approved eight before publishing."
         raise RuntimeError(message)
 
 
@@ -291,7 +294,7 @@ def assert_repository_skill_set(repository_dir):
     if observed_names != APPROVED_GLOBAL_SKILL_NAMES:
         unexpected_names = sorted(observed_names - APPROVED_GLOBAL_SKILL_NAMES)
         missing_names = sorted(APPROVED_GLOBAL_SKILL_NAMES - observed_names)
-        message = "Refusing to pull because the remote mirror must contain exactly the approved seven skills."
+        message = "Refusing to pull because the remote mirror must contain exactly the approved eight skills."
         if unexpected_names:
             message += "\nUnexpected remote skills:\n" + "\n".join(f"- {name}" for name in unexpected_names)
         if missing_names:
@@ -392,17 +395,11 @@ def execution_domain_table(rows):
 
 
 def build_readme(skill_paths, language="en"):
-    if language == "zh":
-        return build_overview(skill_paths, language="zh").replace(
-            "# 当前 Codex Skills\n\n英文版: [README.md](./README.md)",
-            "# qin-codex-skills\n\n英文版: [README.md](./README.md)",
-            1,
-        )
-
-    template = ENGLISH_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
+    template_path = CHINESE_README_TEMPLATE if language == "zh" else ENGLISH_README_TEMPLATE
+    template = template_path.read_text(encoding="utf-8").rstrip() + "\n"
     marker = "<!-- EXECUTION_DOMAIN_TABLE -->"
     if template.count(marker) != 1:
-        raise RuntimeError("English README template must contain exactly one execution-domain marker")
+        raise RuntimeError(f"{template_path.name} must contain exactly one execution-domain marker")
     return template.replace(marker, execution_domain_table(load_staged_routing_policy(skill_paths)))
 
 
@@ -414,7 +411,7 @@ def skill_category(skill_name, description):
         return "Code"
     if skill_name == "optimization-skill":
         return "Optimization"
-    if skill_name == "management-skill":
+    if skill_name in {"management-skill", "project-memory-skill"}:
         return "Management"
     if "github" in text or "auth" in text:
         return "Management"
