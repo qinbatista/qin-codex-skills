@@ -18,7 +18,7 @@ BENCHMARK_RENDERER_PATH = SKILLS_DIR / "task-analyze-skill" / "scripts" / "rende
 BENCHMARK_RENDERER_SPEC = importlib.util.spec_from_file_location("management_benchmark_renderer", BENCHMARK_RENDERER_PATH)
 benchmark_renderer = importlib.util.module_from_spec(BENCHMARK_RENDERER_SPEC)
 BENCHMARK_RENDERER_SPEC.loader.exec_module(benchmark_renderer)
-NON_BENCHMARK_VISUAL_NAMES = ("qin-codex-skills-hero", "task-lifecycle", "model-router", "model-experience", "verification-topologies", "runtime-receipt")
+NON_BENCHMARK_VISUAL_NAMES = ("qin-codex-skills-hero", "task-lifecycle", "model-router", "model-experience", "verification-topologies", "runtime-receipt", "core-flow", "core-flow-zh")
 
 
 def svg_character_width_factor(character):
@@ -179,11 +179,16 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
 
         self.assertEqual(readme, expected)
-        self.assertLessEqual(len(template.splitlines()), 180)
-        self.assertLessEqual(len(template.split()), 1200)
-        self.assertEqual(readme.count("```mermaid"), 3)
+        self.assertLessEqual(len(template.splitlines()), 90)
+        self.assertLessEqual(len(template.split()), 700)
+        self.assertEqual(readme.count("```mermaid"), 0)
+        self.assertNotIn("|---", readme)
+        rules_section = readme.split("## Rules", 1)[1].split("\n## ", 1)[0]
+        rule_lines = [line for line in rules_section.splitlines() if line.startswith("- ")]
+        self.assertEqual(len(rule_lines), 9)
+        self.assertLessEqual(max(map(len, rule_lines)), 160)
         skills_section = readme.split("## 🧩 Eight public Skills", 1)[1].split("\n## ", 1)[0]
-        skill_rows = re.findall(r"^\| .*?\[`([^`]+)`\]\(\./([^/]+)/SKILL\.md\)", skills_section, re.M)
+        skill_rows = re.findall(r"^- \[`([^`]+)`\]\(\./([^/]+)/SKILL\.md\)", skills_section, re.M)
         expected_skill_rows = {"Task Analyze": "task-analyze-skill", "Workflow": "workflow-skill", "Prompt": "prompt-skill", "Code": "code-skill", "Project Memory": "project-memory-skill", "Verify": "verify-skill", "Optimization": "optimization-skill", "Management": "management-skill"}
         self.assertEqual(len(skill_rows), 8)
         self.assertEqual(dict(skill_rows), expected_skill_rows)
@@ -191,26 +196,27 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
         self.assertIn("# 🚀 Auto Best Model", readme)
-        self.assertIn("### Built for Codex", readme)
+        self.assertIn("**Codex-only · inline by default · route only with proof · verify after delivery**", readme)
         self.assertNotIn("AutoBestModel", readme)
-        self.assertIn("mirrored identically to `qin-codex-skills` and `auto-best-model`", readme)
-        self.assertIn("first tested and used with **GPT-5.6**", readme)
+        self.assertIn("**Mirrors:** `qin-codex-skills` · `auto-best-model`", readme)
+        self.assertIn("Tested from **GPT-5.6**", readme)
         self.assertIn("latest registered Codex models", readme)
-        self.assertIn("Ordinary work stays inline on the current Codex model", readme)
-        self.assertIn("Model delegation happens only for an explicit routing request", readme)
-        self.assertIn("Project + functional module + target files", readme)
-        self.assertIn("Authoritative local JSONL ledger", readme)
-        self.assertIn("Obsidian is optional and never blocks work", readme)
+        self.assertIn("Ordinary work stays on the current Codex model", readme)
+        self.assertIn("Delegate only on explicit request or current end-to-end proof", readme)
+        self.assertIn("Recall project/module/file history before editing", readme)
+        self.assertIn("Local JSONL is authoritative; Obsidian is optional", readme)
         self.assertIn("Present completed result", readme)
         self.assertIn("Ending Real verifies the result", readme)
-        self.assertIn("## 🧠 Basic principles", readme)
+        self.assertIn("## Rules", readme)
         self.assertIn("## 📊 Historical benchmark", readme)
         self.assertIn("Benchmark v5", readme)
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
-        self.assertIn("Publishing runs a public-safety scan", readme)
+        self.assertIn("every publish runs a safety scan", readme)
         self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example-mobile.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/core-flow.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-mobile.svg"), 1)
         self.assertNotIn('"schema_version":', readme)
         self.assertNotIn('"conditions":', readme)
         self.assertNotIn('"producer":', readme)
@@ -224,13 +230,13 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_readme_names_gpt_56_primary_ladder_and_latest_codex_registry(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
         self.assertNotIn("Spark-first executor", readme)
-        self.assertIn("primary adaptive ladder starts at GPT-5.6", readme)
+        self.assertIn("GPT-5.6 Luna → Terra → Sol", readme)
         self.assertIn("latest registered Codex models", readme)
         self.assertIn("`gpt-5.6-luna`", readme)
         self.assertIn("`gpt-5.6-terra`", readme)
         self.assertIn("`gpt-5.6-sol`", readme)
-        self.assertIn("optional compatibility route only for explicitly admitted tiny tasks", readme)
-        self.assertIn("Spark obvious-task eligible", readme)
+        self.assertIn("Spark only for admitted tiny tasks", readme)
+        self.assertIn("- `python` · code · `code-skill` · active · Spark: yes", readme)
         self.assertNotIn("| Spark first |", readme)
 
     def test_chinese_readme_is_compact_diagram_first_and_has_memory_contract(self):
@@ -238,26 +244,30 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         template = sync_global_skills.CHINESE_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
         self.assertEqual(readme, expected)
-        self.assertLessEqual(len(template.splitlines()), 180)
-        self.assertEqual(readme.count("```mermaid"), 3)
+        self.assertLessEqual(len(template.splitlines()), 90)
+        self.assertEqual(readme.count("```mermaid"), 0)
+        self.assertNotIn("|---", readme)
+        rules_section = readme.split("## 规则", 1)[1].split("\n## ", 1)[0]
+        rule_lines = [line for line in rules_section.splitlines() if line.startswith("- ")]
+        self.assertEqual(len(rule_lines), 9)
+        self.assertLessEqual(max(map(len, rule_lines)), 100)
         self.assertIn("# 🚀 Auto Best Model", readme)
-        self.assertIn("给 Codex 使用", readme)
-        self.assertIn("从 **GPT-5.6** 开始测试和使用", readme)
-        self.assertIn("按项目 + 功能模块 + 文件回溯记忆", readme)
-        self.assertIn("本地 JSONL 权威记录", readme)
-        self.assertIn("Obsidian 只做可读投影，未连接也不阻塞", readme)
-        self.assertIn("## 🧠 基本原理", readme)
+        self.assertIn("专用于 Codex", readme)
+        self.assertIn("从 **GPT-5.6** 开始测试", readme)
+        self.assertIn("修改前回溯项目/模块/文件历史", readme)
+        self.assertIn("本地 JSONL 是权威来源；Obsidian 可选", readme)
+        self.assertIn("## 规则", readme)
         self.assertIn("## 📊 历史 Benchmark", readme)
         self.assertIn("## 🧩 八个公开 Skill", readme)
+        self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh-mobile.svg"), 1)
 
     def test_readme_explains_project_module_file_memory_and_optional_obsidian(self):
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
-        self.assertIn("Project change memory", readme)
-        self.assertIn("Project index", readme)
-        self.assertIn("Module index", readme)
-        self.assertIn("File-level history", readme)
+        self.assertIn("project/module/file history", readme)
+        self.assertIn("record the verified change", readme)
         self.assertIn("Obsidian", readme)
-        self.assertIn("Local memory remains authoritative", readme)
+        self.assertIn("Local JSONL is authoritative", readme)
 
     def test_public_benchmark_asset_satisfies_current_strict_contract(self):
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
@@ -353,11 +363,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                     self.assertGreater(task["paired_wins"][metric], task["pair_count"] / 2)
 
         self.assertIn("## 📊 Historical benchmark", readme)
-        self.assertIn("**6 matched A/B pairs, 12 complete runs, 0 retries, 0 fallbacks, and 0 repairs**", readme)
-        for task in evidence["tasks"]:
-            verdict = "🟡 Noise-bound" if task["tier"] == "simple" else "🟢 Improved"
-            expected_row = f"| {task['tier'].title()} | `{benchmark_renderer.format_number(task['direct_totals']['logical_total_tokens'])} → {benchmark_renderer.format_number(task['global_totals']['logical_total_tokens'])}` | **{benchmark_renderer.aggregate_savings_percent(task, 'logical_total_tokens'):.3f}%** | `{benchmark_renderer.format_seconds(task['direct_totals']['first_result_elapsed_ms'])} → {benchmark_renderer.format_seconds(task['global_totals']['first_result_elapsed_ms'])}` | **{benchmark_renderer.aggregate_savings_percent(task, 'first_result_elapsed_ms'):.3f}%** | {verdict} |"
-            self.assertIn(expected_row, readme)
+        self.assertIn("**6 A/B pairs · 12 runs · 0 retries · 0 fallbacks · 0 repairs**", readme)
+        self.assertNotIn("| Tier |", readme)
         direct_token_total = sum(task["direct_totals"]["logical_total_tokens"] for task in evidence["tasks"])
         global_token_total = sum(task["global_totals"]["logical_total_tokens"] for task in evidence["tasks"])
         direct_time_total = sum(task["direct_totals"]["first_result_elapsed_ms"] for task in evidence["tasks"])
@@ -366,7 +373,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn(f"**{(direct_time_total - global_time_total) * 100 / direct_time_total:.3f}% faster**", readme)
         self.assertIn("model-benchmark-example.svg", readme)
         self.assertIn("model-benchmark-example-mobile.svg", readme)
-        self.assertIn("sanitized benchmark evidence", readme)
+        self.assertIn("sanitized benchmark evidence", readme.lower())
         for forbidden in ("/Users/", "thread_id", "session_id", "workload_prompt_sha256", "producer_run_id", '"prompt"', '"result"', '"receipt"', '"source_path"', '"plan_path"'):
             self.assertNotIn(forbidden, evidence_text)
         self.assertNotIn("timeout", evidence_text.lower())
@@ -487,7 +494,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             repository_dir = sandbox / "repository"
             repository_dir.mkdir()
             sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
-            self.assertIn("`rust` (active)", (repository_dir / "README.md").read_text(encoding="utf-8"))
+            self.assertIn("- `rust` · code · `code-skill` · active · Spark: yes", (repository_dir / "README.md").read_text(encoding="utf-8"))
 
     def test_snapshot_rejects_staged_domain_missing_owner_or_reference(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -514,19 +521,20 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             repository_dir = sandbox / "repository"
             repository_dir.mkdir()
             copied_names = sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
-            readme = (repository_dir / "README.md").read_text(encoding="utf-8")
-
             self.assertEqual(copied_names, sync_global_skills.PRIMARY_SKILL_ORDER)
-            local_references = set(re.findall(r'(?:src="|srcset="|\]\()(\./[^\"#)]+)', readme))
-            svg_references = {reference for reference in local_references if reference.lower().endswith(".svg")}
-            self.assertEqual(svg_references, {"./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"})
-            for reference in local_references:
-                referenced_path = repository_dir / reference.removeprefix("./")
-                self.assertTrue(referenced_path.exists(), f"Missing generated README reference: {reference}")
+            expected_svg_references = {"README.md": {"./management-skill/assets/readme/core-flow.svg", "./management-skill/assets/readme/core-flow-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}, "README.zh.md": {"./management-skill/assets/readme/core-flow-zh.svg", "./management-skill/assets/readme/core-flow-zh-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}}
+            for readme_name, expected_references in expected_svg_references.items():
+                readme = (repository_dir / readme_name).read_text(encoding="utf-8")
+                local_references = set(re.findall(r'(?:src="|srcset="|\]\()(\./[^\"#)]+)', readme))
+                svg_references = {reference for reference in local_references if reference.lower().endswith(".svg")}
+                self.assertEqual(svg_references, expected_references)
+                for reference in local_references:
+                    referenced_path = repository_dir / reference.removeprefix("./")
+                    self.assertTrue(referenced_path.exists(), f"Missing generated README reference: {reference}")
 
     def test_readme_svgs_are_parseable_accessible_and_self_contained(self):
         svg_paths = sorted(README_ASSET_DIR.glob("*.svg"))
-        self.assertEqual(len(svg_paths), 14)
+        self.assertEqual(len(svg_paths), 18)
 
         for svg_path in svg_paths:
             root = ElementTree.parse(svg_path).getroot()

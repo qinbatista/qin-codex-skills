@@ -386,11 +386,11 @@ def load_staged_routing_policy(skill_paths):
 
 
 def execution_domain_table(rows):
-    lines = ["| Domain | Kind | Owner | Spark obvious-task eligible | Reference |", "|---|---|---|---|---|"]
+    lines = []
     for row in rows:
         state = "active" if row["active"] else "history-only"
         spark = "yes" if row["spark_first"] else "no"
-        lines.append(f"| `{row['id']}` ({state}) | {row['kind']} | `{row['owner_skill']}` | {spark} | [`{row['reference_path']}`](./{row['reference_path']}) |")
+        lines.append(f"- `{row['id']}` · {row['kind']} · `{row['owner_skill']}` · {state} · Spark: {spark} · [rules](./{row['reference_path']})")
     return "\n".join(lines)
 
 

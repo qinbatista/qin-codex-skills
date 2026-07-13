@@ -56,14 +56,15 @@ The local global skill directory may contain unrelated skills such as `chronicle
 
 ## README Generation
 
-The durable README sources are `assets/readme/github-readme-template.md` and `assets/readme/github-readme-template.zh.md`. Keep both lively, compact, and diagram-first. They must use the exact product name `Auto Best Model`, identify it as Codex-only, state that the primary ladder was tested and used from GPT-5.6 and is aligned with the latest registered Codex models, explain the basic principles, show the inline/routed/verification flow, show project/module/file memory, list exactly eight public Skills, and include a concise Benchmark v5 visual/table backed by the sanitized public evidence. Never embed raw benchmark dumps, prompts, paths, session IDs, receipts, or internal-only details. `scripts/sync_global_skills.py` reads the templates when generating root `README.md` and `README.zh.md`.
+The durable README sources are `assets/readme/github-readme-template.md` and `assets/readme/github-readme-template.zh.md`. Keep both reviewed, compact, direct, and scan-first. Prefer one-line visible items, use tables only when shared columns are necessary, and remove prose already carried by a visual or source-backed evidence. They must use the exact product name `Auto Best Model`, identify it as Codex-only, state that the primary ladder was tested and used from GPT-5.6 and is aligned with the latest registered Codex models, explain the basic principles, show the inline/routed/verification flow, show project/module/file memory, list exactly eight public Skills, and include a concise Benchmark v5 visual backed by the sanitized public evidence. Never embed raw benchmark dumps, prompts, paths, session IDs, receipts, or internal-only details. `scripts/sync_global_skills.py` reads the templates when generating root `README.md` and `README.zh.md`.
 
 For README changes:
 
-1. Edit both durable templates and use Mermaid for core flows.
-2. Generate a local repository snapshot only.
-3. Verify internal links, Mermaid blocks, the exact `Auto Best Model` name, Codex/GPT-5.6 wording, basic principles, source-backed benchmark values, memory flow, and eight-skill selection.
-4. Do not publish without a separate explicit request.
+1. Edit both durable templates and use responsive desktop/mobile static SVGs for fixed core flows.
+2. Shorten copy before allowing avoidable wrapping; every visible item that can fit as one line should remain one line.
+3. Generate a local repository snapshot only.
+4. Verify internal links, rendered line density, the exact `Auto Best Model` name, Codex/GPT-5.6 wording, basic principles, source-backed benchmark values, memory flow, and eight-skill selection.
+5. Do not publish without a separate explicit request.
 
 ## Main Result And Ending Task
 
