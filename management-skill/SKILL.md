@@ -56,13 +56,13 @@ The local global skill directory may contain unrelated skills such as `chronicle
 
 ## README Generation
 
-The durable README sources are `assets/readme/github-readme-template.md` and `assets/readme/github-readme-template.zh.md`. Keep both compact and diagram-first. They must identify the project as Codex-only, state that the primary ladder was tested and used from GPT-5.6 and is aligned with the latest registered Codex models, show the inline/routed/verification flow, show project/module/file memory, list exactly eight public Skills, and explain privacy without embedding benchmark dumps or internal receipt details. `scripts/sync_global_skills.py` reads the templates when generating root `README.md` and `README.zh.md`.
+The durable README sources are `assets/readme/github-readme-template.md` and `assets/readme/github-readme-template.zh.md`. Keep both lively, compact, and diagram-first. They must use the exact product name `Auto Best Model`, identify it as Codex-only, state that the primary ladder was tested and used from GPT-5.6 and is aligned with the latest registered Codex models, explain the basic principles, show the inline/routed/verification flow, show project/module/file memory, list exactly eight public Skills, and include a concise Benchmark v5 visual/table backed by the sanitized public evidence. Never embed raw benchmark dumps, prompts, paths, session IDs, receipts, or internal-only details. `scripts/sync_global_skills.py` reads the templates when generating root `README.md` and `README.zh.md`.
 
 For README changes:
 
 1. Edit both durable templates and use Mermaid for core flows.
 2. Generate a local repository snapshot only.
-3. Verify internal links, Mermaid blocks, Codex/GPT-5.6 wording, memory flow, and eight-skill selection.
+3. Verify internal links, Mermaid blocks, the exact `Auto Best Model` name, Codex/GPT-5.6 wording, basic principles, source-backed benchmark values, memory flow, and eight-skill selection.
 4. Do not publish without a separate explicit request.
 
 ## Main Result And Ending Task

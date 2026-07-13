@@ -179,10 +179,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
 
         self.assertEqual(readme, expected)
-        self.assertLessEqual(len(template.splitlines()), 130)
-        self.assertLessEqual(len(template.split()), 900)
+        self.assertLessEqual(len(template.splitlines()), 180)
+        self.assertLessEqual(len(template.split()), 1200)
         self.assertEqual(readme.count("```mermaid"), 3)
-        skills_section = readme.split("## Eight public Skills", 1)[1].split("\n## ", 1)[0]
+        skills_section = readme.split("## 🧩 Eight public Skills", 1)[1].split("\n## ", 1)[0]
         skill_rows = re.findall(r"^\| .*?\[`([^`]+)`\]\(\./([^/]+)/SKILL\.md\)", skills_section, re.M)
         expected_skill_rows = {"Task Analyze": "task-analyze-skill", "Workflow": "workflow-skill", "Prompt": "prompt-skill", "Code": "code-skill", "Project Memory": "project-memory-skill", "Verify": "verify-skill", "Optimization": "optimization-skill", "Management": "management-skill"}
         self.assertEqual(len(skill_rows), 8)
@@ -190,7 +190,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
-        self.assertIn("# AutoBestModel for Codex", readme)
+        self.assertIn("# 🚀 Auto Best Model", readme)
+        self.assertIn("### Built for Codex", readme)
+        self.assertNotIn("AutoBestModel", readme)
         self.assertIn("mirrored identically to `qin-codex-skills` and `auto-best-model`", readme)
         self.assertIn("first tested and used with **GPT-5.6**", readme)
         self.assertIn("latest registered Codex models", readme)
@@ -201,11 +203,14 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Obsidian is optional and never blocks work", readme)
         self.assertIn("Present completed result", readme)
         self.assertIn("Ending Real verifies the result", readme)
+        self.assertIn("## 🧠 Basic principles", readme)
+        self.assertIn("## 📊 Historical benchmark", readme)
+        self.assertIn("Benchmark v5", readme)
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
         self.assertIn("Publishing runs a public-safety scan", readme)
-        self.assertNotIn("model-benchmark-example.svg", readme)
-        self.assertNotIn("benchmark_v5", readme)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example-mobile.svg"), 1)
         self.assertNotIn('"schema_version":', readme)
         self.assertNotIn('"conditions":', readme)
         self.assertNotIn('"producer":', readme)
@@ -233,14 +238,17 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         template = sync_global_skills.CHINESE_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
         self.assertEqual(readme, expected)
-        self.assertLessEqual(len(template.splitlines()), 130)
+        self.assertLessEqual(len(template.splitlines()), 180)
         self.assertEqual(readme.count("```mermaid"), 3)
+        self.assertIn("# 🚀 Auto Best Model", readme)
         self.assertIn("给 Codex 使用", readme)
         self.assertIn("从 **GPT-5.6** 开始测试和使用", readme)
         self.assertIn("按项目 + 功能模块 + 文件回溯记忆", readme)
         self.assertIn("本地 JSONL 权威记录", readme)
         self.assertIn("Obsidian 只做可读投影，未连接也不阻塞", readme)
-        self.assertIn("## 八个公开 Skill", readme)
+        self.assertIn("## 🧠 基本原理", readme)
+        self.assertIn("## 📊 历史 Benchmark", readme)
+        self.assertIn("## 🧩 八个公开 Skill", readme)
 
     def test_readme_explains_project_module_file_memory_and_optional_obsidian(self):
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
@@ -344,9 +352,21 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 if metric_gate["strict_majority_required"]:
                     self.assertGreater(task["paired_wins"][metric], task["pair_count"] / 2)
 
-        self.assertNotIn("benchmark_v5", readme)
-        self.assertNotIn("Historical cohort", readme)
-        self.assertNotIn("model-benchmark-example.svg", readme)
+        self.assertIn("## 📊 Historical benchmark", readme)
+        self.assertIn("**6 matched A/B pairs, 12 complete runs, 0 retries, 0 fallbacks, and 0 repairs**", readme)
+        for task in evidence["tasks"]:
+            verdict = "🟡 Noise-bound" if task["tier"] == "simple" else "🟢 Improved"
+            expected_row = f"| {task['tier'].title()} | `{benchmark_renderer.format_number(task['direct_totals']['logical_total_tokens'])} → {benchmark_renderer.format_number(task['global_totals']['logical_total_tokens'])}` | **{benchmark_renderer.aggregate_savings_percent(task, 'logical_total_tokens'):.3f}%** | `{benchmark_renderer.format_seconds(task['direct_totals']['first_result_elapsed_ms'])} → {benchmark_renderer.format_seconds(task['global_totals']['first_result_elapsed_ms'])}` | **{benchmark_renderer.aggregate_savings_percent(task, 'first_result_elapsed_ms'):.3f}%** | {verdict} |"
+            self.assertIn(expected_row, readme)
+        direct_token_total = sum(task["direct_totals"]["logical_total_tokens"] for task in evidence["tasks"])
+        global_token_total = sum(task["global_totals"]["logical_total_tokens"] for task in evidence["tasks"])
+        direct_time_total = sum(task["direct_totals"]["first_result_elapsed_ms"] for task in evidence["tasks"])
+        global_time_total = sum(task["global_totals"]["first_result_elapsed_ms"] for task in evidence["tasks"])
+        self.assertIn(f"**{(direct_token_total - global_token_total) * 100 / direct_token_total:.3f}% fewer task tokens**", readme)
+        self.assertIn(f"**{(direct_time_total - global_time_total) * 100 / direct_time_total:.3f}% faster**", readme)
+        self.assertIn("model-benchmark-example.svg", readme)
+        self.assertIn("model-benchmark-example-mobile.svg", readme)
+        self.assertIn("sanitized benchmark evidence", readme)
         for forbidden in ("/Users/", "thread_id", "session_id", "workload_prompt_sha256", "producer_run_id", '"prompt"', '"result"', '"receipt"', '"source_path"', '"plan_path"'):
             self.assertNotIn(forbidden, evidence_text)
         self.assertNotIn("timeout", evidence_text.lower())
@@ -499,7 +519,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(copied_names, sync_global_skills.PRIMARY_SKILL_ORDER)
             local_references = set(re.findall(r'(?:src="|srcset="|\]\()(\./[^\"#)]+)', readme))
             svg_references = {reference for reference in local_references if reference.lower().endswith(".svg")}
-            self.assertEqual(svg_references, set())
+            self.assertEqual(svg_references, {"./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"})
             for reference in local_references:
                 referenced_path = repository_dir / reference.removeprefix("./")
                 self.assertTrue(referenced_path.exists(), f"Missing generated README reference: {reference}")
