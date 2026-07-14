@@ -424,7 +424,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "fail")
         self.assertEqual(receipt["failure_class"], "protocol")
         self.assertTrue(receipt["duplicate_result_detected"])
-        self.assertEqual(result_ready_event, {"schema_version": 1, "stage": "result-ready", "workload_id": "stream-result", "benchmark_run_id": "benchmark-stream-result", "result_path": str(result_path), "child_result_ready_monotonic_ns": receipt["result_ready_monotonic_ns"]})
+        self.assertEqual(result_ready_event, {"schema_version": 2, "stage": "result-ready", "workload_id": "stream-result", "benchmark_run_id": "benchmark-stream-result", "result_path": str(result_path), "child_result_ready_monotonic_ns": receipt["result_ready_monotonic_ns"], "main_thread_id": "benchmark-stream-thread"})
         self.assertEqual(receipt["stderr_line_count"], 1)
         self.assertNotIn("commentary before result", json.dumps(receipt))
         self.assertNotIn("commentary after result", json.dumps(receipt))

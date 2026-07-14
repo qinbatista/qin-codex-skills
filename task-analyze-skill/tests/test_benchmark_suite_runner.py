@@ -48,20 +48,6 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     prompt_text = sys.stdin.read()
     time.sleep(0.08 if args.direct_task else 0.005)
     result_message = prompt_text.strip()
-    temporary_result = args.result_output.with_suffix(".tmp")
-    temporary_result.write_text(result_message + "\\n", encoding="utf-8")
-    temporary_result.replace(args.result_output)
-    result_ready_monotonic_ns = time.monotonic_ns()
-    result_ready_event = {"schema_version": 1, "stage": "result-ready", "workload_id": args.workload_id, "benchmark_run_id": args.benchmark_run_id, "result_path": str(args.result_output), "child_result_ready_monotonic_ns": result_ready_monotonic_ns}
-    result_ready_event_mode = os.environ.get("FAKE_RESULT_READY_EVENT_MODE")
-    if result_ready_event_mode == "wrong-path":
-        result_ready_event["result_path"] += ".wrong"
-    if result_ready_event_mode != "missing":
-        print(json.dumps(result_ready_event, separators=(",", ":")), flush=True)
-    if result_ready_event_mode == "duplicate":
-        print(json.dumps(result_ready_event, separators=(",", ":")), flush=True)
-    if args.workload_id == "simple-r01-direct":
-        time.sleep(0.15)
     pair = f"{args.model}|{args.effort}"
     thread_id = f"fake-{args.workload_id}"
     role = "result-producer"
@@ -78,6 +64,34 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (thread_id, str(rollout_path), "exec", args.model, args.effort, total_tokens))
     connection.commit()
     connection.close()
+    temporary_result = args.result_output.with_suffix(".tmp")
+    temporary_result.write_text(result_message + "\\n", encoding="utf-8")
+    temporary_result.replace(args.result_output)
+    result_ready_monotonic_ns = time.monotonic_ns()
+    result_ready_event = {"schema_version": 2, "stage": "result-ready", "workload_id": args.workload_id, "benchmark_run_id": args.benchmark_run_id, "result_path": str(args.result_output), "child_result_ready_monotonic_ns": result_ready_monotonic_ns, "main_thread_id": thread_id}
+    result_ready_event_mode = os.environ.get("FAKE_RESULT_READY_EVENT_MODE")
+    if result_ready_event_mode == "wrong-path":
+        result_ready_event["result_path"] += ".wrong"
+    if result_ready_event_mode == "missing-main-thread":
+        result_ready_event.pop("main_thread_id")
+    if result_ready_event_mode != "missing":
+        print(json.dumps(result_ready_event, separators=(",", ":")), flush=True)
+    if result_ready_event_mode == "duplicate":
+        print(json.dumps(result_ready_event, separators=(",", ":")), flush=True)
+    if os.environ.get("FAKE_POST_RESULT_ENDING") == "1":
+        time.sleep(0.03)
+        ending_thread_id = f"{thread_id}-ending"
+        ending_tokens = 250
+        ending_rollout_path = sessions_root / f"rollout-{ending_thread_id}.jsonl"
+        ending_rollout_events = [{"type": "session_meta", "payload": {"id": ending_thread_id, "source": "subagent"}}, {"type": "turn_context", "payload": {"model": args.model, "effort": args.effort}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": ending_tokens}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
+        ending_rollout_path.write_text("\\n".join(json.dumps(event) for event in ending_rollout_events) + "\\n", encoding="utf-8")
+        ending_source = json.dumps({"subagent": {"thread_spawn": {"parent_thread_id": thread_id}}})
+        connection = sqlite3.connect(args.state_db)
+        connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (ending_thread_id, str(ending_rollout_path), ending_source, args.model, args.effort, ending_tokens))
+        connection.commit()
+        connection.close()
+    if args.workload_id == "simple-r01-direct":
+        time.sleep(0.15)
     prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
     receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": args.benchmark_run_id, "workload_id": args.workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": args.model, "requested_effort": args.effort, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "duplicate_result_detected": False, "workload_prompt_sha256": prompt_sha256, "prompt_sha256": prompt_sha256}
     args.output.write_text(json.dumps(receipt) + "\\n", encoding="utf-8")
@@ -183,6 +197,10 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(receipt["result_ready_clock"], "benchmark-runner-monotonic")
         self.assertEqual(receipt["result_ready_event_sequence"], 1)
         self.assertIsInstance(receipt["child_result_ready_monotonic_ns"], int)
+        self.assertEqual(evidence["foreground_main_thread_id"], receipt["thread_id"])
+        self.assertEqual([session["thread_id"] for session in evidence["foreground_sessions"]], [receipt["thread_id"]])
+        self.assertTrue(evidence["foreground_state_snapshot"]["before_complete"])
+        self.assertTrue(evidence["foreground_state_snapshot"]["after_complete"])
         self.assertGreaterEqual(total_wall_elapsed_ms - first_result_elapsed_ms, 100)
 
     def test_runner_rejects_receipt_ready_event_that_does_not_match_receipt(self):
@@ -197,7 +215,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
                 module.execute_run(args, run_plan, tier_inputs[run_plan["tier"]]["prompt_text"])
 
     def test_runner_rejects_missing_duplicate_and_wrong_path_result_ready_events(self):
-        for event_mode in ["missing", "duplicate", "wrong-path"]:
+        for event_mode in ["missing", "duplicate", "wrong-path", "missing-main-thread"]:
             with self.subTest(event_mode=event_mode), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 self.write_suite_inputs(root)
@@ -394,10 +412,28 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(direct_manifest["runtime_root_session_count"], 1)
         self.assertEqual(direct_manifest["runtime_descendant_session_count"], 0)
         self.assertEqual(direct_manifest["logical_total_tokens"], 1000)
-        self.assertEqual(set(census_diagnostics), {"schema_version", "before", "after"})
+        self.assertEqual(set(census_diagnostics), {"schema_version", "before", "foreground", "after"})
+        self.assertEqual(census_diagnostics["schema_version"], 2)
+        self.assertEqual(census_diagnostics["foreground"]["status"], "complete")
         self.assertEqual(census_diagnostics["after"]["status"], "complete")
         self.assertEqual(census_diagnostics["after"]["successful_read_count"], 2)
         self.assertNotIn("thread_id", json.dumps(census_diagnostics))
+
+    def test_post_result_ending_session_is_censused_but_excluded_from_logical_tokens(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_suite_inputs(root)
+            args = self.arguments(root)
+            with mock.patch.dict(module.os.environ, {"FAKE_POST_RESULT_ENDING": "1"}):
+                module.run_suite(args)
+            manifest = json.loads((root / "manifests" / "simple-r01-direct.json").read_text(encoding="utf-8"))
+            evidence = json.loads((root / "raw" / "simple-r01-direct" / "evidence.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["acceptance_status"], "pass")
+        self.assertEqual(manifest["runtime_session_count"], 2)
+        self.assertEqual(manifest["runtime_descendant_session_count"], 1)
+        self.assertEqual(manifest["logical_total_tokens"], 1000)
+        self.assertEqual(len(evidence["foreground_sessions"]), 1)
+        self.assertEqual(len(evidence["runtime_sessions"]), 2)
 
     def test_odd_repeat_count_fails_before_plan_or_receipt_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -518,6 +554,21 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertNotIn("credits", status)
         self.assertNotIn("private-credit-id", json.dumps(status))
 
+    def test_quota_response_accepts_explicit_null_secondary_without_fabricating_usage(self):
+        response = {"id": module.QUOTA_RESPONSE_ID, "result": {"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 23, "windowDurationMins": 10080, "resetsAt": 2100000000}, "secondary": None, "rateLimitReachedType": None}}}
+        status = module.parse_quota_response(response)
+        self.assertEqual(status, {"limit_id": "codex", "rate_limit_reached_type": None, "primary": {"used_percent": 23.0, "window_minutes": 10080, "resets_at": 2100000000}})
+        self.assertIsNone(module.quota_pause(status, 80, "simple-r01"))
+
+    def test_quota_response_still_rejects_missing_or_malformed_windows(self):
+        base_rate_limits = {"limitId": "codex", "primary": {"usedPercent": 23, "windowDurationMins": 10080, "resetsAt": 2100000000}, "secondary": None, "rateLimitReachedType": None}
+        for label, mutate, expected_error in [("missing-primary", lambda value: value.pop("primary"), "quota_primary_missing"), ("missing-secondary", lambda value: value.pop("secondary"), "quota_secondary_missing"), ("malformed-secondary", lambda value: value.update(secondary=[]), "quota_secondary_missing")]:
+            with self.subTest(label=label):
+                rate_limits = dict(base_rate_limits)
+                mutate(rate_limits)
+                with self.assertRaisesRegex(module.QuotaStatusError, expected_error):
+                    module.parse_quota_response({"id": module.QUOTA_RESPONSE_ID, "result": {"rateLimits": rate_limits}})
+
     def test_blocked_or_unknown_preflight_creates_zero_suite_outputs(self):
         cases = [
             (self.quota_status(used=100, reached_type="rate_limit_reached"), None, "quota_reached"),
@@ -637,13 +688,13 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             args = self.arguments(root)
             original_snapshot = module.read_runtime_thread_snapshot
 
-            def incomplete_post_run_snapshot(state_db_path, required_thread_id=None, timeout_seconds=module.RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=None):
+            def incomplete_post_run_snapshot(state_db_path, required_thread_id=None, timeout_seconds=module.RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=None, quiescence_seconds=module.RUNTIME_CENSUS_QUIESCENCE_SECONDS):
                 if required_thread_id is not None:
                     return {"complete": False, "threads": {}}
-                return original_snapshot(state_db_path, required_thread_id=required_thread_id, timeout_seconds=timeout_seconds, diagnostics=diagnostics)
+                return original_snapshot(state_db_path, required_thread_id=required_thread_id, timeout_seconds=timeout_seconds, diagnostics=diagnostics, quiescence_seconds=quiescence_seconds)
 
             with mock.patch.object(module, "read_runtime_thread_snapshot", side_effect=incomplete_post_run_snapshot):
-                with self.assertRaisesRegex(module.BenchmarkRunnerError, "cohort_contaminated_gate_runtime_state_snapshot_incomplete"):
+                with self.assertRaisesRegex(module.BenchmarkRunnerError, "cohort_contaminated_gate_evidence_foreground_state_snapshot_incomplete"):
                     module.run_suite(args)
             calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]
         self.assertEqual([call["run_id"] for call in calls], ["simple-r01-direct"])
@@ -656,7 +707,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             before_rollouts = {"available": False, "complete": True, "thread_ids": set()}
             after_rollouts = {"available": True, "complete": True, "thread_ids": {"fake-simple-r01-direct", "hidden-child"}}
             with mock.patch.object(module, "read_runtime_rollout_snapshot", side_effect=[before_rollouts, after_rollouts]):
-                with self.assertRaisesRegex(module.BenchmarkRunnerError, "cohort_contaminated_gate_runtime_state_snapshot_incomplete"):
+                with self.assertRaisesRegex(module.BenchmarkRunnerError, "cohort_contaminated_gate_evidence_foreground_unknown_session"):
                     module.run_suite(args)
             calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]
             diagnostics = json.loads((root / "raw" / "simple-r01-direct" / "census-diagnostics.json").read_text(encoding="utf-8"))

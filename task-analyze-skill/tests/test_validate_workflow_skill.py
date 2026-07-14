@@ -128,6 +128,19 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         self.assertIn("frozen, receipt-backed, Real-passing, and `trial=false`", text)
         self.assertNotIn("observable entry model and effort belong only to Task Analyze", text)
 
+    def test_global_entry_required_terms_match_compact_contract(self):
+        required = module.REQUIRED_ENTRY
+        self.assertIn("Eligible text/code producers read shared ladder", required)
+        self.assertIn("local JSON stays read-only", required)
+        self.assertIn("Spark first: easy=low, complex=high", required)
+        self.assertIn("Zero-result operational failure uses current 5.6 pair", required)
+        self.assertIn("publish, then return", required)
+        self.assertIn("Exact read-only uses one bounded rg per authoritative file, anchored to exact members", required)
+        self.assertIn("resolve aliases", required)
+        self.assertIn("no subagent/route/plan, guesses, unrelated skills, broad search, reread, full-file read, or pre-result check", required)
+        self.assertNotIn("Try Spark first: easy=low, complex=high", required)
+        self.assertNotIn("no route, plan, guessed names, unrelated skills, broad search, reread, full-file read, or pre-result check", required)
+
     def test_routing_matrix_separates_ordinary_inline_from_admitted_routes(self):
         matrix_path = Path(__file__).resolve().parents[2] / "workflow-skill" / "references" / "routing-matrix.md"
         routes = module.parse_routes(matrix_path.read_text(encoding="utf-8"))

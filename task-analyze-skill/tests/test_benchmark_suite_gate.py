@@ -38,12 +38,19 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         model, effort = pair.split("|", 1)
         return {"thread_id": thread_id, "parent_thread_id": parent_thread_id, "source_kind": source_kind, "model": model, "effort": effort, "tokens_used": total_tokens, "rollout_sha256": "a" * 64, "rollout_model": model, "rollout_effort": effort, "rollout_total_tokens": total_tokens, "turn_completed": turn_completed}
 
-    def make_evidence(self, path, run_id, session_ids, first_result_ms, total_wall_ms, pair="gpt-5.6-sol|ultra", total_tokens=100, runtime_sessions=None):
+    def make_foreground_session(self, runtime_session):
+        return {key: runtime_session[key] for key in module.FOREGROUND_SESSION_KEYS}
+
+    def make_evidence(self, path, run_id, session_ids, first_result_ms, total_wall_ms, pair="gpt-5.6-sol|ultra", total_tokens=100, runtime_sessions=None, foreground_sessions=None, foreground_main_thread_id=None):
         runtime_sessions = runtime_sessions or [self.make_runtime_session(session_id, pair, total_tokens) for session_id in session_ids]
+        foreground_sessions = [self.make_foreground_session(runtime_session) for runtime_session in runtime_sessions] if foreground_sessions is None else foreground_sessions
+        foreground_main_thread_id = foreground_main_thread_id or foreground_sessions[0]["thread_id"]
         before_thread_ids = []
         after_thread_ids = [runtime_session["thread_id"] for runtime_session in runtime_sessions]
+        foreground_thread_ids = [foreground_session["thread_id"] for foreground_session in foreground_sessions]
         state_snapshot = {"before_complete": True, "after_complete": True, "before_thread_count": 0, "after_thread_count": len(after_thread_ids), "before_thread_ids_sha256": module.sha256_text(module.canonical_json(sorted(before_thread_ids))), "after_thread_ids_sha256": module.sha256_text(module.canonical_json(sorted(after_thread_ids)))}
-        evidence = {"schema_version": module.SCHEMA_VERSION, "run_id": run_id, "started_monotonic_ns": 1_000_000_000, "first_result_monotonic_ns": 1_000_000_000 + first_result_ms * 1_000_000, "producer_finished_monotonic_ns": 1_000_000_000 + total_wall_ms * 1_000_000, "producer_process_exit_code": 0, "producer_timed_out": False, "producer_complete": True, "launched_session_ids": session_ids, "retry_session_ids": [], "fallback_session_ids": [], "repair_session_ids": [], "state_snapshot": state_snapshot, "runtime_sessions": runtime_sessions}
+        foreground_state_snapshot = {"before_complete": True, "after_complete": True, "before_thread_count": 0, "after_thread_count": len(foreground_thread_ids), "before_thread_ids_sha256": module.sha256_text(module.canonical_json(sorted(before_thread_ids))), "after_thread_ids_sha256": module.sha256_text(module.canonical_json(sorted(foreground_thread_ids)))}
+        evidence = {"schema_version": module.SCHEMA_VERSION, "run_id": run_id, "started_monotonic_ns": 1_000_000_000, "first_result_monotonic_ns": 1_000_000_000 + first_result_ms * 1_000_000, "producer_finished_monotonic_ns": 1_000_000_000 + total_wall_ms * 1_000_000, "producer_process_exit_code": 0, "producer_timed_out": False, "producer_complete": True, "foreground_main_thread_id": foreground_main_thread_id, "foreground_state_snapshot": foreground_state_snapshot, "foreground_sessions": foreground_sessions, "launched_session_ids": session_ids, "retry_session_ids": [], "fallback_session_ids": [], "repair_session_ids": [], "state_snapshot": state_snapshot, "runtime_sessions": runtime_sessions}
         self.write_json(path, evidence)
         return evidence
 
@@ -689,6 +696,9 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             evidence["launched_session_ids"].append(child_session["thread_id"])
             evidence["state_snapshot"]["after_thread_count"] += 1
             evidence["state_snapshot"]["after_thread_ids_sha256"] = module.sha256_text(module.canonical_json(sorted(evidence["launched_session_ids"])))
+            evidence["foreground_sessions"].append(self.make_foreground_session(child_session))
+            evidence["foreground_state_snapshot"]["after_thread_count"] += 1
+            evidence["foreground_state_snapshot"]["after_thread_ids_sha256"] = module.sha256_text(module.canonical_json(sorted(session["thread_id"] for session in evidence["foreground_sessions"])))
             self.write_json(target_paths["evidence"], evidence)
             module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
             manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
@@ -730,6 +740,32 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertEqual(manifest["unreceipted_descendant_count"], 0)
         self.assertEqual(manifest["logical_total_tokens"], 401)
         self.assertEqual(manifest["executed_pairs"], ["gpt-5.6-sol|ultra", ending_pair])
+
+    def test_foreground_census_rejects_incomplete_unknown_mismatched_and_excess_tokens(self):
+        cases = ["incomplete", "unknown", "mismatched", "excess"]
+        for case_name in cases:
+            with self.subTest(case_name=case_name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                _, _, run_paths = self.build_suite(root)
+                evidence = json.loads(run_paths["simple-1-direct"]["evidence"].read_text(encoding="utf-8"))
+                if case_name == "incomplete":
+                    evidence["foreground_state_snapshot"].update({"after_complete": False, "after_thread_count": None, "after_thread_ids_sha256": None})
+                    expected_failure = "evidence_foreground_state_snapshot_incomplete"
+                elif case_name == "unknown":
+                    main_thread_id = evidence["foreground_main_thread_id"]
+                    unknown_session = self.make_foreground_session(self.make_runtime_session("unknown-session", "gpt-5.6-sol|ultra", 1, main_thread_id, "subagent"))
+                    evidence["foreground_sessions"].append(unknown_session)
+                    evidence["foreground_state_snapshot"]["after_thread_count"] += 1
+                    evidence["foreground_state_snapshot"]["after_thread_ids_sha256"] = module.sha256_text(module.canonical_json(sorted(session["thread_id"] for session in evidence["foreground_sessions"])))
+                    expected_failure = "evidence_foreground_unknown_session"
+                elif case_name == "mismatched":
+                    evidence["foreground_sessions"][0]["model"] = "gpt-5.6-luna"
+                    expected_failure = "evidence_foreground_session_mismatch"
+                else:
+                    evidence["foreground_sessions"][0]["tokens_used"] = evidence["runtime_sessions"][0]["tokens_used"] + 1
+                    expected_failure = "evidence_foreground_tokens_exceed_final"
+                with self.assertRaisesRegex(module.BenchmarkGateError, expected_failure):
+                    module.validate_evidence(evidence, "simple-1-direct")
 
     def test_plan_and_evidence_cannot_supply_acceptance_status(self):
         with tempfile.TemporaryDirectory() as temporary:

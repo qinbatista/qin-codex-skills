@@ -13,8 +13,8 @@ from pathlib import Path, PureWindowsPath
 from tempfile import mkstemp
 
 
-SCHEMA_VERSION = 3
-MANIFEST_SCHEMA_VERSION = 4
+SCHEMA_VERSION = 4
+MANIFEST_SCHEMA_VERSION = 5
 CATALOG_SCHEMA_VERSION = 1
 MINIMUM_PAIRED_SAVINGS_PERCENT = 0.0
 MINIMUM_PAIRED_TIME_SAVINGS_PERCENT = MINIMUM_PAIRED_SAVINGS_PERCENT
@@ -27,7 +27,7 @@ TIERS = ("simple", "medium", "complex")
 ARMS = ("direct", "global")
 GATED_METRICS = ("logical_total_tokens", "first_result_elapsed_ms")
 OVERALL_RULE = "simple AND medium AND complex"
-TOKEN_RULE = "For logical task tokens: Global cohort total < Direct cohort total AND raw Global median < raw Direct median AND paired savings median is non-negative; pairwise wins and worst-pair regressions are diagnostics, not arbitrary percentage vetoes"
+TOKEN_RULE = "For result-ready foreground logical task tokens: Global cohort total < Direct cohort total AND raw Global median < raw Direct median AND paired savings median is non-negative; mandatory post-result Ending sessions remain in the completion census but not the task-token metric"
 TIME_RULE = "For user-visible first-result time only: Simple must stay inside the Direct cohort's measured median-absolute-deviation noise envelope; Medium requires lower cohort total, lower raw median, non-negative paired savings median, and a strict majority of faster pairs; Complex time is diagnostic and cannot veto correctness plus token benefit. Post-result Ending time is excluded"
 ENTRY_EXECUTION_MODES = frozenset({"executed", "deterministic-pre-model"})
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -39,8 +39,9 @@ RUN_REQUIRED_KEYS = frozenset({"run_id", "pair_id", "tier", "repeat_index", "arm
 RUN_OPTIONAL_KEYS = frozenset({"prompt_path", "source_root", "source_files_pointer", "source_snapshot_sha256", "environment"})
 RECEIPT_REQUIRED_KEYS = frozenset({"path", "pair", "role", "bind_result", "workload_prompt_sha256"})
 RECEIPT_OPTIONAL_KEYS = frozenset()
-EVIDENCE_KEYS = frozenset({"schema_version", "run_id", "started_monotonic_ns", "first_result_monotonic_ns", "producer_finished_monotonic_ns", "producer_process_exit_code", "producer_timed_out", "producer_complete", "launched_session_ids", "retry_session_ids", "fallback_session_ids", "repair_session_ids", "state_snapshot", "runtime_sessions"})
+EVIDENCE_KEYS = frozenset({"schema_version", "run_id", "started_monotonic_ns", "first_result_monotonic_ns", "producer_finished_monotonic_ns", "producer_process_exit_code", "producer_timed_out", "producer_complete", "foreground_main_thread_id", "foreground_state_snapshot", "foreground_sessions", "launched_session_ids", "retry_session_ids", "fallback_session_ids", "repair_session_ids", "state_snapshot", "runtime_sessions"})
 STATE_SNAPSHOT_KEYS = frozenset({"before_complete", "after_complete", "before_thread_count", "after_thread_count", "before_thread_ids_sha256", "after_thread_ids_sha256"})
+FOREGROUND_SESSION_KEYS = frozenset({"thread_id", "parent_thread_id", "source_kind", "model", "effort", "tokens_used"})
 RUNTIME_SESSION_KEYS = frozenset({"thread_id", "parent_thread_id", "source_kind", "model", "effort", "tokens_used", "rollout_sha256", "rollout_model", "rollout_effort", "rollout_total_tokens", "turn_completed"})
 MARKETPLACE_SOURCE_KEYS = frozenset({"name", "root", "sha256", "file_count"})
 CATALOG_ENVIRONMENT_KEYS = frozenset({"catalog_schema_version", "skills_catalog_root", "skills_catalog_sha256", "skills_catalog_file_count", "plugins_catalog_root", "plugins_catalog_sha256", "plugins_catalog_file_count", "marketplace_catalog_sources", "marketplace_catalog_sha256", "marketplace_catalog_file_count", "visible_catalog_sha256"})
@@ -559,6 +560,21 @@ def read_exact_json_result(path, failure_code):
     return document, result_bytes
 
 
+def validate_state_snapshot(state_snapshot, failure_code):
+    if not isinstance(state_snapshot, dict) or set(state_snapshot) != STATE_SNAPSHOT_KEYS or not isinstance(state_snapshot["before_complete"], bool) or not isinstance(state_snapshot["after_complete"], bool):
+        raise BenchmarkGateError(failure_code)
+    for snapshot_side in ["before", "after"]:
+        complete = state_snapshot[f"{snapshot_side}_complete"]
+        count = state_snapshot[f"{snapshot_side}_thread_count"]
+        digest = state_snapshot[f"{snapshot_side}_thread_ids_sha256"]
+        if complete:
+            require_integer(count, failure_code, 0)
+            require_sha256(digest, failure_code)
+        elif count is not None or digest is not None:
+            raise BenchmarkGateError(failure_code)
+    return state_snapshot
+
+
 def validate_evidence(evidence, run_id):
     if not isinstance(evidence, dict) or set(evidence) != EVIDENCE_KEYS or evidence.get("schema_version") != SCHEMA_VERSION or evidence.get("run_id") != run_id:
         raise BenchmarkGateError("evidence_contract")
@@ -569,6 +585,7 @@ def validate_evidence(evidence, run_id):
         raise BenchmarkGateError("evidence_completion")
     if evidence["producer_complete"] != (evidence["producer_process_exit_code"] == 0 and not evidence["producer_timed_out"]):
         raise BenchmarkGateError("evidence_completion")
+    foreground_main_thread_id = require_string(evidence["foreground_main_thread_id"], "evidence_foreground_main_thread_id")
     for session_key in ["launched_session_ids", "retry_session_ids", "fallback_session_ids", "repair_session_ids"]:
         require_string_list(evidence[session_key], f"evidence_{session_key}")
     launched_sessions = set(evidence["launched_session_ids"])
@@ -576,18 +593,53 @@ def validate_evidence(evidence, run_id):
         raise BenchmarkGateError("evidence_session_duplicate")
     if any(not set(evidence[session_key]).issubset(launched_sessions) for session_key in ["retry_session_ids", "fallback_session_ids", "repair_session_ids"]):
         raise BenchmarkGateError("evidence_session_classification")
-    state_snapshot = evidence["state_snapshot"]
-    if not isinstance(state_snapshot, dict) or set(state_snapshot) != STATE_SNAPSHOT_KEYS or not isinstance(state_snapshot["before_complete"], bool) or not isinstance(state_snapshot["after_complete"], bool):
-        raise BenchmarkGateError("evidence_state_snapshot")
-    for snapshot_side in ["before", "after"]:
-        complete = state_snapshot[f"{snapshot_side}_complete"]
-        count = state_snapshot[f"{snapshot_side}_thread_count"]
-        digest = state_snapshot[f"{snapshot_side}_thread_ids_sha256"]
-        if complete:
-            require_integer(count, "evidence_state_snapshot", 0)
-            require_sha256(digest, "evidence_state_snapshot")
-        elif count is not None or digest is not None:
-            raise BenchmarkGateError("evidence_state_snapshot")
+    state_snapshot = validate_state_snapshot(evidence["state_snapshot"], "evidence_state_snapshot")
+    foreground_state_snapshot = validate_state_snapshot(evidence["foreground_state_snapshot"], "evidence_foreground_state_snapshot")
+    if foreground_state_snapshot["before_complete"] is not True or foreground_state_snapshot["after_complete"] is not True:
+        raise BenchmarkGateError("evidence_foreground_state_snapshot_incomplete")
+    if state_snapshot["before_complete"] and any(foreground_state_snapshot[key] != state_snapshot[key] for key in ["before_complete", "before_thread_count", "before_thread_ids_sha256"]):
+        raise BenchmarkGateError("evidence_foreground_state_snapshot_mismatch")
+    foreground_sessions = evidence["foreground_sessions"]
+    if not isinstance(foreground_sessions, list):
+        raise BenchmarkGateError("evidence_foreground_sessions")
+    foreground_thread_ids = []
+    for foreground_session in foreground_sessions:
+        if not isinstance(foreground_session, dict) or set(foreground_session) != FOREGROUND_SESSION_KEYS:
+            raise BenchmarkGateError("evidence_foreground_session_contract")
+        foreground_thread_ids.append(require_string(foreground_session["thread_id"], "evidence_foreground_session_contract"))
+        if foreground_session["source_kind"] not in {"root", "subagent"}:
+            raise BenchmarkGateError("evidence_foreground_session_contract")
+        for required_string_key in ["model", "effort"]:
+            require_string(foreground_session[required_string_key], "evidence_foreground_session_contract")
+        if foreground_session["parent_thread_id"] is not None and (not isinstance(foreground_session["parent_thread_id"], str) or not foreground_session["parent_thread_id"]):
+            raise BenchmarkGateError("evidence_foreground_session_contract")
+        require_integer(foreground_session["tokens_used"], "evidence_foreground_session_contract", 0)
+    if len(foreground_thread_ids) != len(set(foreground_thread_ids)):
+        raise BenchmarkGateError("evidence_foreground_session_duplicate")
+    if foreground_state_snapshot["after_thread_count"] - foreground_state_snapshot["before_thread_count"] != len(foreground_sessions):
+        raise BenchmarkGateError("evidence_foreground_state_snapshot_delta")
+    foreground_by_id = {foreground_session["thread_id"]: foreground_session for foreground_session in foreground_sessions}
+    foreground_main_session = foreground_by_id.get(foreground_main_thread_id)
+    if foreground_main_session is None or foreground_main_session["source_kind"] != "root" or foreground_main_session["parent_thread_id"] is not None:
+        raise BenchmarkGateError("evidence_foreground_session_tree")
+    for foreground_session in foreground_sessions:
+        if foreground_session["source_kind"] == "root":
+            if foreground_session["thread_id"] != foreground_main_thread_id or foreground_session["parent_thread_id"] is not None:
+                raise BenchmarkGateError("evidence_foreground_session_tree")
+            continue
+        parent_thread_id = foreground_session["parent_thread_id"]
+        if parent_thread_id is None:
+            raise BenchmarkGateError("evidence_foreground_session_tree")
+        visited_thread_ids = {foreground_session["thread_id"]}
+        current_thread_id = parent_thread_id
+        while current_thread_id != foreground_main_thread_id:
+            if current_thread_id in visited_thread_ids or current_thread_id not in foreground_by_id:
+                raise BenchmarkGateError("evidence_foreground_session_tree")
+            visited_thread_ids.add(current_thread_id)
+            current_session = foreground_by_id[current_thread_id]
+            if current_session["source_kind"] != "subagent" or current_session["parent_thread_id"] is None:
+                raise BenchmarkGateError("evidence_foreground_session_tree")
+            current_thread_id = current_session["parent_thread_id"]
     runtime_sessions = evidence["runtime_sessions"]
     if not isinstance(runtime_sessions, list):
         raise BenchmarkGateError("evidence_runtime_sessions")
@@ -614,6 +666,15 @@ def validate_evidence(evidence, run_id):
         raise BenchmarkGateError("evidence_session_census")
     if state_snapshot["before_complete"] and state_snapshot["after_complete"] and state_snapshot["after_thread_count"] - state_snapshot["before_thread_count"] != len(runtime_sessions):
         raise BenchmarkGateError("evidence_state_snapshot_delta")
+    runtime_by_id = {runtime_session["thread_id"]: runtime_session for runtime_session in runtime_sessions}
+    for foreground_session in foreground_sessions:
+        runtime_session = runtime_by_id.get(foreground_session["thread_id"])
+        if runtime_session is None:
+            raise BenchmarkGateError("evidence_foreground_unknown_session")
+        if any(foreground_session[key] != runtime_session[key] for key in ["parent_thread_id", "source_kind", "model", "effort"]) or runtime_session["tokens_used"] is None:
+            raise BenchmarkGateError("evidence_foreground_session_mismatch")
+        if foreground_session["tokens_used"] > runtime_session["tokens_used"]:
+            raise BenchmarkGateError("evidence_foreground_tokens_exceed_final")
     started_ns = evidence["started_monotonic_ns"]
     first_result_ns = evidence["first_result_monotonic_ns"]
     producer_finished_ns = evidence["producer_finished_monotonic_ns"]
@@ -622,7 +683,7 @@ def validate_evidence(evidence, run_id):
     return evidence
 
 
-def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_session_pairs, excluded_token_root_ids=None):
+def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_session_pairs):
     failures = []
     runtime_sessions = evidence["runtime_sessions"]
     runtime_by_id = {runtime_session["thread_id"]: runtime_session for runtime_session in runtime_sessions}
@@ -670,16 +731,9 @@ def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_
             if current_thread_id in runtime_by_id and current_thread_id not in allowed_root_thread_ids:
                 if "runtime_session_tree" not in failures:
                     failures.append("runtime_session_tree")
-    excluded_token_root_ids = set(excluded_token_root_ids or ())
-    excluded_token_session_ids = set(excluded_token_root_ids)
-    changed = True
-    while changed:
-        changed = False
-        for runtime_session in runtime_sessions:
-            if runtime_session["parent_thread_id"] in excluded_token_session_ids and runtime_session["thread_id"] not in excluded_token_session_ids:
-                excluded_token_session_ids.add(runtime_session["thread_id"])
-                changed = True
-    valid_token_values = [runtime_session["tokens_used"] for runtime_session in runtime_sessions if runtime_session["thread_id"] not in excluded_token_session_ids and isinstance(runtime_session["tokens_used"], int) and not isinstance(runtime_session["tokens_used"], bool) and runtime_session["tokens_used"] >= 0]
+    if evidence["foreground_main_thread_id"] != main_thread_id:
+        failures.append("foreground_main_thread_mismatch")
+    valid_token_values = [foreground_session["tokens_used"] for foreground_session in evidence["foreground_sessions"]]
     return {"thread_ids": list(runtime_by_id), "sessions_by_id": runtime_by_id, "session_count": len(runtime_sessions), "root_session_count": len(root_sessions), "descendant_session_count": len(runtime_sessions) - len(root_sessions), "logical_total_tokens": sum(valid_token_values), "failures": failures}
 
 
@@ -896,8 +950,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     if len(bound_receipt_thread_ids) != 1:
         fail("runtime_main_receipt", True)
     receipt_session_pairs = {summary["thread_id"]: summary["pair"] for summary in receipt_summaries if summary["thread_id"] is not None and isinstance(summary["pair"], str)}
-    ending_or_verification_root_ids = {summary["thread_id"] for summary in receipt_summaries if summary["role"] in {"ending", "verification"} and summary["thread_id"] is not None}
-    runtime_summary = summarize_runtime_sessions(evidence, main_thread_id, run_plan["selected_entry_pair"], receipt_session_pairs, ending_or_verification_root_ids) if evidence is not None else {"thread_ids": [], "sessions_by_id": {}, "session_count": 0, "root_session_count": 0, "descendant_session_count": 0, "logical_total_tokens": 0, "failures": ["runtime_state_snapshot_incomplete"]}
+    runtime_summary = summarize_runtime_sessions(evidence, main_thread_id, run_plan["selected_entry_pair"], receipt_session_pairs) if evidence is not None else {"thread_ids": [], "sessions_by_id": {}, "session_count": 0, "root_session_count": 0, "descendant_session_count": 0, "logical_total_tokens": 0, "failures": ["foreground_state_snapshot_incomplete", "runtime_state_snapshot_incomplete"]}
     for runtime_failure in runtime_summary["failures"]:
         fail(runtime_failure, True)
     runtime_thread_ids = runtime_summary["thread_ids"]
@@ -922,7 +975,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     if repair_count:
         fail("repair_not_allowed")
     logical_total_tokens = runtime_summary["logical_total_tokens"]
-    metrics_complete = not any(failure in failures for failure in ["receipt_invalid", "receipt_incomplete", "receipt_tokens", "receipt_thread_id", "receipt_route_attempts", "receipt_reroutes", "receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_raw_prompt_mismatch", "receipt_result_hash", "receipt_result_not_published", "receipt_result_not_frozen", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "receipt_session_duplicate", "unexpected_receipt", "runtime_main_receipt", "runtime_state_snapshot_incomplete", "runtime_session_tree", "runtime_session_pair_mismatch", "runtime_session_incomplete", "receipt_runtime_token_mismatch"])
+    metrics_complete = not any(failure in failures for failure in ["receipt_invalid", "receipt_incomplete", "receipt_tokens", "receipt_thread_id", "receipt_route_attempts", "receipt_reroutes", "receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_raw_prompt_mismatch", "receipt_result_hash", "receipt_result_not_published", "receipt_result_not_frozen", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "receipt_session_duplicate", "unexpected_receipt", "runtime_main_receipt", "foreground_state_snapshot_incomplete", "foreground_main_thread_mismatch", "runtime_state_snapshot_incomplete", "runtime_session_tree", "runtime_session_pair_mismatch", "runtime_session_incomplete", "receipt_runtime_token_mismatch"])
     first_result_elapsed_ms = None
     producer_elapsed_ms = None
     total_wall_elapsed_ms = None

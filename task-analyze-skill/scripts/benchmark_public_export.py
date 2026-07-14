@@ -13,7 +13,7 @@ from tempfile import mkstemp
 
 TASK_LABELS = {"simple": "simple constant lookup", "medium": "medium one-method audit", "complex": "complex multi-file workflow graph"}
 MINIMUM_PUBLIC_PAIR_COUNT = 2
-PUBLIC_SCHEMA_VERSION = 3
+PUBLIC_SCHEMA_VERSION = 4
 FORBIDDEN_PUBLIC_KEYS = frozenset({"prompt", "raw_prompt", "result", "raw_result", "thread_id", "thread_ids", "session_id", "session_ids", "receipt", "receipt_path", "receipt_paths", "receipt_session_ids", "codex_home", "config_path", "agents_path", "models_cache_path", "memories_root", "workdir", "source_root", "evidence_path", "skills_catalog_root", "plugins_catalog_root", "marketplace_catalog_sources"})
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SUMMARY_KEYS = frozenset({"schema_version", "suite_id", "plan_sha256", "repeat_count", "tier_repeat_counts", "overall_status", "overall_rule", "time_rule", "token_rule", "tiers"})
@@ -217,7 +217,7 @@ def validate_configuration_hashes(plan):
 def validate_summary(summary, plan, manifests, plan_sha256, tier_repeat_counts):
     if set(summary) != SUMMARY_KEYS:
         raise PublicExportError("summary_schema_mismatch")
-    if summary.get("schema_version") != benchmark_suite_gate.SCHEMA_VERSION or summary.get("suite_id") != plan["suite_id"] or summary.get("plan_sha256") != plan_sha256 or summary.get("overall_status") != "pass":
+    if summary.get("schema_version") != benchmark_suite_gate.SCHEMA_VERSION or summary.get("suite_id") != plan["suite_id"] or summary.get("plan_sha256") != plan_sha256 or summary.get("overall_status") not in {"pass", "fail"}:
         raise PublicExportError("summary_identity_or_status_failure")
     uniform_repeat_count = next(iter(set(tier_repeat_counts.values()))) if len(set(tier_repeat_counts.values())) == 1 else None
     if summary.get("repeat_count") != uniform_repeat_count:
@@ -233,11 +233,14 @@ def validate_summary(summary, plan, manifests, plan_sha256, tier_repeat_counts):
         raise PublicExportError("summary_manifest_recompute_mismatch")
     for tier in benchmark_suite_gate.TIERS:
         tier_summary = summary_tiers[tier]
-        if tier_summary.get("status") != "pass" or tier_summary.get("failures") != [] or tier_summary.get("failed_run_ids") != []:
+        failures = tier_summary.get("failures")
+        metric_statuses = [tier_summary.get("metric_gates", {}).get(metric, {}).get("status") for metric in benchmark_suite_gate.GATED_METRICS]
+        expected_status = "pass" if all(status == "pass" for status in metric_statuses) else "fail"
+        if tier_summary.get("failed_run_ids") != [] or tier_summary.get("status") != expected_status or not isinstance(failures, list) or any(not isinstance(failure, str) or not failure for failure in failures) or bool(failures) is (expected_status == "pass"):
             raise PublicExportError("summary_tier_failure")
         if tier_summary.get("pair_count") != tier_repeat_counts[tier] or tier_summary.get("run_count") != tier_repeat_counts[tier] * 2:
             raise PublicExportError("summary_tier_count_failure")
-        if any(tier_summary.get("metric_gates", {}).get(metric, {}).get("status") != "pass" for metric in benchmark_suite_gate.GATED_METRICS):
+        if any(status not in {"pass", "fail"} for status in metric_statuses):
             raise PublicExportError("summary_metric_gate_failure")
     return summary_tiers
 
@@ -295,8 +298,9 @@ def build_public_export(plan_path, summary_path, manifest_dir):
     task_summaries = []
     for tier in benchmark_suite_gate.TIERS:
         tier_summary = tier_summaries[tier]
-        task_summaries.append({"tier": tier, "label": TASK_LABELS[tier], "pair_count": tier_summary["pair_count"], "run_count": tier_summary["run_count"], "direct_totals": tier_summary["direct_totals"], "global_totals": tier_summary["global_totals"], "direct_medians": tier_summary["direct_medians"], "global_medians": tier_summary["global_medians"], "paired_savings_percent_medians": tier_summary["paired_savings_percent_medians"], "paired_wins": tier_summary["paired_wins"], "metric_gates": tier_summary["metric_gates"]})
-    public_document = {"schema_version": PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Global empirical cohort", "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "overall_status": "pass", "all_correct": True, "expected_run_count": expected_run_count, "entry_pair": next(iter(entry_pairs)), "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": TOKEN_RULE, "time": TIME_RULE, "overall": OVERALL_RULE, "minimum_pairs_per_tier": MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": execution_integrity, "tasks": task_summaries, "caveats": {"tokens": "Logical task tokens sum censused foreground root and descendant sessions through the first result, include cached input, and exclude post-result Ending/verification sessions. They are a usage proxy, not a billing-token or price claim.", "first_result": "First-result time ends when the completed result is first available. Post-result Ending Task Real Verify is excluded from user-visible return time and reported separately when present.", "generalization": "This is a passing empirical cohort for these frozen workloads and conditions, not a universal guarantee for every task or future runtime."}}
+        task_summaries.append({"tier": tier, "label": TASK_LABELS[tier], "status": tier_summary["status"], "failures": tier_summary["failures"], "pair_count": tier_summary["pair_count"], "run_count": tier_summary["run_count"], "direct_totals": tier_summary["direct_totals"], "global_totals": tier_summary["global_totals"], "direct_medians": tier_summary["direct_medians"], "global_medians": tier_summary["global_medians"], "paired_savings_percent_medians": tier_summary["paired_savings_percent_medians"], "paired_wins": tier_summary["paired_wins"], "metric_gates": tier_summary["metric_gates"]})
+    cohort_result = "passing" if summary["overall_status"] == "pass" else "failed strategy-performance"
+    public_document = {"schema_version": PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Global empirical cohort", "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "overall_status": summary["overall_status"], "all_correct": True, "expected_run_count": expected_run_count, "entry_pair": next(iter(entry_pairs)), "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": TOKEN_RULE, "time": TIME_RULE, "overall": OVERALL_RULE, "minimum_pairs_per_tier": MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": execution_integrity, "tasks": task_summaries, "caveats": {"tokens": "Logical task tokens sum censused foreground root and descendant sessions through the first result, include cached input, and exclude post-result Ending/verification sessions. They are a usage proxy, not a billing-token or price claim.", "first_result": "First-result time ends when the completed result is first available. Post-result Ending Task Real Verify is excluded from user-visible return time and reported separately when present.", "generalization": f"This is a {cohort_result} empirical cohort for these frozen workloads and conditions, not a universal guarantee for every task or future runtime."}}
     validate_public_privacy(public_document, private_strings_from_evidence(plan, manifests))
     return public_document
 

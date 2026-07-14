@@ -98,12 +98,12 @@ REQUIRED_MANAGEMENT = ["Do not load this skill for ordinary exact-scoped read-on
 REQUIRED_ENTRY = [
     "# Task Lifecycle",
     "Merge this section into `~/.codex/AGENTS.md`",
-    "Eligible text/code producers read the shared ladder",
+    "Eligible text/code producers read shared ladder",
     "Obsidian `Projects/<key>/ModelExperience`",
-    "local model JSON stays read-only",
-    "Try Spark first: easy=low, complex=high",
-    "zero-result operational failure uses the current 5.6 pair",
-    "published output returns now",
+    "local JSON stays read-only",
+    "Spark first: easy=low, complex=high",
+    "Zero-result operational failure uses current 5.6 pair",
+    "publish, then return",
     "Prompt/AI-instruction work loads `prompt-skill`",
     "durable edits load `project-memory-skill`",
     "recall first",
@@ -119,8 +119,9 @@ REQUIRED_ENTRY = [
     "re-present",
     "different verifier",
     "No hook",
-    "Exact read-only uses one bounded rg per authoritative file",
-    "no route, plan, guessed names, unrelated skills, broad search, reread, full-file read, or pre-result check",
+    "Exact read-only uses one bounded rg per authoritative file, anchored to exact members",
+    "resolve aliases",
+    "no subagent/route/plan, guesses, unrelated skills, broad search, reread, full-file read, or pre-result check",
 ]
 REQUIRED_SELECTION = ["assets/model-capability-ladder.json", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "Obsidian `Projects/<project-key>/ModelExperience`", "project/task/module/file/symbol/code context", "Ending Real alone writes the verdict", "eligible text/code result producers try Spark-low for easy work or Spark-high for complex work", "old local `model_experience.json` stays legacy read-only", "Exact read-only stays inline", "obsidian_adaptive_model_runner.py", "Multi-node strategy remains separately performance-admitted"]
 REQUIRED_ADAPTIVE = ["project/task/module/file/symbol/code context", "assets/model-capability-ladder.json", "Obsidian `Projects/<project-key>/ModelExperience`", "Ending Real alone stores sanitized producer receipts", "Old local `model_experience.json` is legacy read-only only", "Spark is a priority attempt, not a rung in the 5.6 quality ladder", "zero-result, zero-token operational failure", "Evidence does not cross project keys", "obsidian_adaptive_model_runner.py", "`strategy_performance.py` remains separate", "Ending Real alone records the matching producer pass/fail to Obsidian", "read-only compatibility surfaces only"]

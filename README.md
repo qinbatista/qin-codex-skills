@@ -43,16 +43,18 @@ Spark-first text/code producer: `gpt-5.3-codex-spark` · easy=`low` · complex=`
 - **Models:** Text/code tries Spark; GPT-5.6 Luna → Terra → Sol remains the quality/fallback ladder.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
-## 📊 Historical benchmark
+## 📊 Current benchmark
 
-**Benchmark v5** · `gpt-5.6-sol | ultra` in both arms · **6 A/B pairs · 12 runs · 0 retries · 0 fallbacks · 0 repairs**
+**Benchmark v6** · `gpt-5.6-sol | ultra` in both arms · **6 A/B pairs · 12 runs · 0 retries · 0 fallbacks · 0 repairs**
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg">
-  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Historical GPT-5.6 Direct versus Global benchmark">
+  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Current GPT-5.6 Direct versus Global benchmark with a failed strategy-performance gate">
 </picture>
 
-> **77.292% fewer task tokens** · **29.464% faster** first result · frozen cohort only · not billing tokens · Ending Real excluded
+> **85.284% fewer task tokens** · **8.629% faster** overall first result · all 12 results correct · strategy gate **FAIL**: Medium won 1/2 timing pairs
+
+> Frozen read-only bootstrap cohort; Spark was not eligible here · not billing tokens · Ending Real excluded
 
 [Sanitized benchmark evidence](./task-analyze-skill/assets/model-routing-benchmark-example.json)
 

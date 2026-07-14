@@ -29,7 +29,7 @@ class RenderBenchmarkSvgTests(unittest.TestCase):
             metric_gate = {"aggregate_global_lower": True, "raw_global_median_lower": True, "minimum_paired_savings_percent": 0.0, "paired_savings_median_meets_threshold": True, "strict_majority_better": True, "strict_majority_required": True, "maximum_pair_regression_percent": 5.0, "regression_bound_required": False, "worst_pair_regression_within_limit": True, "worst_pair_savings_percent": -1.0, "status": "pass"}
             metric_gates = {metric: {**metric_gate, "strict_majority_better": paired_wins[metric] > pair_count / 2, "strict_majority_required": metric != "logical_total_tokens"} for metric in module.GATED_METRIC_KEYS}
             metric_gates["first_result_elapsed_ms"].update({"worst_pair_regression_within_limit": True, "worst_pair_savings_percent": 1.0, "maximum_pair_regression_ms": module.benchmark_public_export.benchmark_suite_gate.MAXIMUM_PAIRED_TIME_REGRESSION_MS, "worst_pair_regression_ms": 0, "material_pair_regression_count": 0})
-            tasks.append({"tier": tier, "label": module.benchmark_public_export.TASK_LABELS[tier], "pair_count": pair_count, "run_count": pair_count * 2, "direct_totals": direct_totals, "global_totals": global_totals, "direct_medians": direct_medians, "global_medians": global_medians, "paired_savings_percent_medians": savings, "paired_wins": paired_wins, "metric_gates": metric_gates})
+            tasks.append({"tier": tier, "label": module.benchmark_public_export.TASK_LABELS[tier], "status": "pass", "failures": [], "pair_count": pair_count, "run_count": pair_count * 2, "direct_totals": direct_totals, "global_totals": global_totals, "direct_medians": direct_medians, "global_medians": global_medians, "paired_savings_percent_medians": savings, "paired_wins": paired_wins, "metric_gates": metric_gates})
         tier_repeat_counts = {tier: module.benchmark_public_export.MINIMUM_PUBLIC_PAIR_COUNT for tier in module.benchmark_public_export.benchmark_suite_gate.TIERS}
         expected_run_count = sum(tier_repeat_counts.values()) * 2
         configuration = {"config_hash_equal": True, "config_sha256": "b" * 64, "agents_sha256": {"direct": "c" * 64, "global": "d" * 64}, "runtime_context_hash_equal": True, "models_cache_sha256": "3" * 64, "memories_sha256": "4" * 64, "catalog_hash_equal": True, "catalog_schema_version": 1, "catalog_sha256": {"skills": "e" * 64, "plugins": "f" * 64, "marketplaces": "1" * 64, "visible": "2" * 64}, "catalog_file_counts": {"skills": 10, "plugins": 20, "marketplaces": 30, "marketplace_sources": 2}}
@@ -100,6 +100,29 @@ class RenderBenchmarkSvgTests(unittest.TestCase):
             self.assertIn(encoded_value, mobile_text)
         self.assertEqual(desktop_mode, 0o644)
         self.assertEqual(mobile_mode, 0o644)
+
+    def test_valid_all_correct_strategy_failure_renders_fail_state_and_reason(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            input_path = root / "public.json"
+            desktop_path = root / "desktop.svg"
+            mobile_path = root / "mobile.svg"
+            document = self.public_document()
+            medium = document["tasks"][1]
+            document["overall_status"] = "fail"
+            medium["status"] = "fail"
+            medium["failures"] = ["first_result_majority_loss"]
+            medium["paired_wins"]["first_result_elapsed_ms"] = 1
+            medium["metric_gates"]["first_result_elapsed_ms"]["strict_majority_better"] = False
+            medium["metric_gates"]["first_result_elapsed_ms"]["status"] = "fail"
+            input_path.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            module.render_svgs(input_path, desktop_path, mobile_path)
+            desktop_text = desktop_path.read_text(encoding="utf-8")
+            mobile_text = mobile_path.read_text(encoding="utf-8")
+        self.assertIn("Real A/B benchmark · FAIL", desktop_text)
+        self.assertIn("FAIL · 2 pairs · 4 runs", desktop_text)
+        self.assertIn("Medium: first result majority loss", desktop_text)
+        self.assertIn("Strategy gate FAIL", mobile_text)
 
     def test_strict_v4_public_contract_rejects_schema_gate_and_integrity_drift(self):
         cases = (("top_level_extra", "public_json_schema"), ("rules_missing_minimum", "public_rule_contract"), ("rules_wrong_minimum", "public_rule_contract"), ("rules_wrong_token", "public_rule_contract"), ("rules_wrong_time", "public_rule_contract"), ("rules_wrong_overall", "public_rule_contract"), ("tier_pair_count", "public_pair_count_contract"), ("task_pair_count", "public_task_contract"), ("expected_run_count", "public_run_count_contract"), ("integrity_missing_field", "public_execution_integrity"), ("integrity_incomplete", "public_execution_integrity"), ("integrity_retry", "public_execution_integrity"), ("metric_gate_legacy", "public_metric_gate_contract"), ("metric_gate_threshold", "public_metric_gate_contract"), ("metric_gate_threshold_status", "public_metric_gate_contract"), ("metric_gate_majority_status", "public_metric_gate_contract"), ("time_floor_missing", "public_metric_gate_contract"), ("time_floor_wrong", "public_metric_gate_contract"), ("time_tail_required", "public_metric_gate_contract"), ("time_material_invalid", "public_metric_gate_contract"), ("time_tail_inconsistent", "public_metric_gate_contract"), ("time_material_exceeds_losses", "public_metric_gate_contract"), ("time_wins_tie", "public_metric_gate_contract"), ("raw_time_loss", "public_metric_gate_contract"), ("total_token_loss", "public_metric_gate_contract"), ("configuration_extra", "public_configuration_contract"), ("catalog_hash_false", "public_configuration_contract"), ("catalog_hash_invalid", "public_configuration_contract"), ("catalog_count_invalid", "public_configuration_contract"), ("caveat_missing", "public_caveat_contract"))

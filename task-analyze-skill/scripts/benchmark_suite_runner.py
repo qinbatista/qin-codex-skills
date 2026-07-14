@@ -27,7 +27,7 @@ RUNTIME_CENSUS_TIMEOUT_SECONDS = 120.0
 RUNTIME_CENSUS_BUSY_TIMEOUT_MS = 2000
 RUNTIME_CENSUS_RETRY_INTERVAL_SECONDS = 0.1
 RUNTIME_CENSUS_QUIESCENCE_SECONDS = 0.2
-RESULT_READY_EVENT_KEYS = frozenset({"schema_version", "stage", "workload_id", "benchmark_run_id", "result_path", "child_result_ready_monotonic_ns"})
+RESULT_READY_EVENT_KEYS = frozenset({"schema_version", "stage", "workload_id", "benchmark_run_id", "result_path", "child_result_ready_monotonic_ns", "main_thread_id"})
 
 
 class BenchmarkRunnerError(ValueError):
@@ -98,7 +98,11 @@ def parse_quota_response(response):
         raise QuotaStatusError("quota_reached_type_invalid")
     windows = {}
     for window_name in ("primary", "secondary"):
-        window = rate_limits.get(window_name)
+        if window_name not in rate_limits:
+            raise QuotaStatusError(f"quota_{window_name}_missing")
+        window = rate_limits[window_name]
+        if window_name == "secondary" and window is None:
+            continue
         if not isinstance(window, dict):
             raise QuotaStatusError(f"quota_{window_name}_missing")
         window_minutes = window.get("windowDurationMins")
@@ -178,7 +182,7 @@ def read_quota_status(args, codex_home):
 
 
 def quota_pause(status, pause_at_percent, next_pair_id):
-    exhausted_windows = [name for name in ("primary", "secondary") if status[name]["used_percent"] >= pause_at_percent]
+    exhausted_windows = [name for name in ("primary", "secondary") if name in status and status[name]["used_percent"] >= pause_at_percent]
     if status["rate_limit_reached_type"] is not None and not exhausted_windows:
         exhausted_windows = ["primary"]
     if status["rate_limit_reached_type"] is None and not exhausted_windows:
@@ -256,7 +260,7 @@ def read_runtime_rollout_snapshot(codex_home):
     return {"available": True, "complete": True, "thread_ids": thread_ids}
 
 
-def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout_seconds=RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=None):
+def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout_seconds=RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=None, quiescence_seconds=RUNTIME_CENSUS_QUIESCENCE_SECONDS):
     deadline = time.monotonic() + timeout_seconds
     stable_signature = None
     started = time.monotonic()
@@ -337,13 +341,17 @@ def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout
                         diagnostics.update({"status": "complete", "elapsed_ms": round((time.monotonic() - started) * 1000)})
                     return {"complete": True, "threads": threads}
                 if required_thread_id in threads:
+                    if quiescence_seconds <= 0:
+                        if diagnostics is not None:
+                            diagnostics.update({"status": "complete", "elapsed_ms": round((time.monotonic() - started) * 1000)})
+                        return {"complete": True, "threads": threads}
                     current_signature = tuple(sorted((thread_id, thread["tokens_used"]) for thread_id, thread in threads.items()))
                     if current_signature == stable_signature:
                         if diagnostics is not None:
                             diagnostics.update({"status": "complete", "elapsed_ms": round((time.monotonic() - started) * 1000)})
                         return {"complete": True, "threads": threads}
                     stable_signature = current_signature
-                    retry_interval_seconds = RUNTIME_CENSUS_QUIESCENCE_SECONDS
+                    retry_interval_seconds = quiescence_seconds
                 else:
                     stable_signature = None
         remaining_seconds = deadline - time.monotonic()
@@ -406,6 +414,17 @@ def runtime_session_records(before_snapshot, after_snapshot):
         source_kind, parent_thread_id = runtime_source_identity(thread["source"])
         observation = rollout_observation(thread["rollout_path"])
         records.append({"thread_id": thread_id, "parent_thread_id": parent_thread_id, "source_kind": source_kind, "model": thread["model"], "effort": thread["effort"], "tokens_used": thread["tokens_used"], **observation})
+    return records
+
+
+def foreground_session_records(before_snapshot, foreground_snapshot):
+    if before_snapshot["complete"] is not True or foreground_snapshot["complete"] is not True:
+        return []
+    records = []
+    for thread_id in sorted(set(foreground_snapshot["threads"]) - set(before_snapshot["threads"])):
+        thread = foreground_snapshot["threads"][thread_id]
+        source_kind, parent_thread_id = runtime_source_identity(thread["source"])
+        records.append({"thread_id": thread_id, "parent_thread_id": parent_thread_id, "source_kind": source_kind, "model": thread["model"], "effort": thread["effort"], "tokens_used": thread["tokens_used"]})
     return records
 
 
@@ -737,11 +756,15 @@ def execute_run(args, run_plan, prompt_text):
                     event = parse_result_ready_event_line(raw_line)
                     if event is not None:
                         child_ready_ns = event.get("child_result_ready_monotonic_ns")
-                        event_valid = set(event) == RESULT_READY_EVENT_KEYS and event.get("schema_version") == 1 and event.get("workload_id") == run_plan["run_id"] and event.get("benchmark_run_id") == f"benchmark-{run_plan['run_id']}" and event.get("result_path") == str(result_path) and not isinstance(child_ready_ns, bool) and isinstance(child_ready_ns, int) and child_ready_ns >= 0
+                        main_thread_id = event.get("main_thread_id")
+                        event_valid = set(event) == RESULT_READY_EVENT_KEYS and event.get("schema_version") == 2 and event.get("workload_id") == run_plan["run_id"] and event.get("benchmark_run_id") == f"benchmark-{run_plan['run_id']}" and event.get("result_path") == str(result_path) and not isinstance(child_ready_ns, bool) and isinstance(child_ready_ns, int) and child_ready_ns >= 0 and isinstance(main_thread_id, str) and bool(main_thread_id)
                         if not event_valid or result_ready_events:
                             result_ready_event_failures.append("result_ready_event_invalid")
                         else:
-                            result_ready_events.append({"event": event, "runner_monotonic_ns": time.monotonic_ns()})
+                            runner_monotonic_ns = time.monotonic_ns()
+                            foreground_census_diagnostics = {}
+                            foreground_snapshot = read_runtime_thread_snapshot(state_db_path, required_thread_id=main_thread_id, diagnostics=foreground_census_diagnostics, quiescence_seconds=0)
+                            result_ready_events.append({"event": event, "runner_monotonic_ns": runner_monotonic_ns, "foreground_snapshot": foreground_snapshot, "foreground_census_diagnostics": foreground_census_diagnostics})
                 if time.monotonic_ns() >= deadline_ns and process.poll() is None:
                     outer_timed_out = True
                     process.kill()
@@ -757,10 +780,13 @@ def execute_run(args, run_plan, prompt_text):
         raise BenchmarkRunnerError("receipt_result_ready_event_invalid")
     result_ready_event = result_ready_events[0]["event"]
     first_result_ns = result_ready_events[0]["runner_monotonic_ns"]
+    foreground_snapshot = result_ready_events[0]["foreground_snapshot"]
+    foreground_census_diagnostics = result_ready_events[0]["foreground_census_diagnostics"]
     if not isinstance(receipt, dict):
         raise BenchmarkRunnerError("receipt_result_ready_event_invalid")
     child_result_ready_ns = receipt.get("result_ready_monotonic_ns")
-    if child_result_ready_ns != result_ready_event["child_result_ready_monotonic_ns"]:
+    thread_id = receipt.get("thread_id") if isinstance(receipt.get("thread_id"), str) and receipt.get("thread_id") else None
+    if child_result_ready_ns != result_ready_event["child_result_ready_monotonic_ns"] or thread_id != result_ready_event["main_thread_id"]:
         raise BenchmarkRunnerError("receipt_result_ready_event_invalid")
     if not started_ns <= first_result_ns <= producer_finished_ns:
         raise BenchmarkRunnerError("receipt_result_ready_timing_invalid")
@@ -771,7 +797,6 @@ def execute_run(args, run_plan, prompt_text):
     benchmark_suite_gate.atomic_write_json(receipt_path, receipt)
     receipt_timed_out = bool(receipt and receipt.get("failure_class") == "timeout")
     timed_out = outer_timed_out or receipt_timed_out
-    thread_id = receipt.get("thread_id") if receipt and isinstance(receipt.get("thread_id"), str) and receipt.get("thread_id") else None
     route_attempts = receipt.get("route_attempts") if receipt and isinstance(receipt.get("route_attempts"), list) else []
     reroutes = receipt.get("reroutes") if receipt and isinstance(receipt.get("reroutes"), list) else []
     after_census_diagnostics = {}
@@ -789,9 +814,9 @@ def execute_run(args, run_plan, prompt_text):
     fallback_session_ids = [thread_id] if thread_id is not None and reroutes else []
     repair_session_ids = [thread_id] if thread_id is not None and receipt.get("node_role") == "repair" else []
     producer_complete = process_exit_code == 0 and not timed_out
-    evidence = {"schema_version": benchmark_suite_gate.SCHEMA_VERSION, "run_id": run_plan["run_id"], "started_monotonic_ns": started_ns, "first_result_monotonic_ns": first_result_ns, "producer_finished_monotonic_ns": producer_finished_ns, "producer_process_exit_code": process_exit_code, "producer_timed_out": timed_out, "producer_complete": producer_complete, "launched_session_ids": launched_session_ids, "retry_session_ids": retry_session_ids, "fallback_session_ids": fallback_session_ids, "repair_session_ids": repair_session_ids, "state_snapshot": state_snapshot_evidence(before_snapshot, after_snapshot), "runtime_sessions": runtime_sessions}
+    evidence = {"schema_version": benchmark_suite_gate.SCHEMA_VERSION, "run_id": run_plan["run_id"], "started_monotonic_ns": started_ns, "first_result_monotonic_ns": first_result_ns, "producer_finished_monotonic_ns": producer_finished_ns, "producer_process_exit_code": process_exit_code, "producer_timed_out": timed_out, "producer_complete": producer_complete, "foreground_main_thread_id": result_ready_event["main_thread_id"], "foreground_state_snapshot": state_snapshot_evidence(before_snapshot, foreground_snapshot), "foreground_sessions": foreground_session_records(before_snapshot, foreground_snapshot), "launched_session_ids": launched_session_ids, "retry_session_ids": retry_session_ids, "fallback_session_ids": fallback_session_ids, "repair_session_ids": repair_session_ids, "state_snapshot": state_snapshot_evidence(before_snapshot, after_snapshot), "runtime_sessions": runtime_sessions}
     benchmark_suite_gate.atomic_write_json(evidence_path, evidence)
-    benchmark_suite_gate.atomic_write_json(receipt_path.parent / "census-diagnostics.json", {"schema_version": 1, "before": before_census_diagnostics, "after": after_census_diagnostics})
+    benchmark_suite_gate.atomic_write_json(receipt_path.parent / "census-diagnostics.json", {"schema_version": 2, "before": before_census_diagnostics, "foreground": foreground_census_diagnostics, "after": after_census_diagnostics})
     return {"run_id": run_plan["run_id"], "arm": run_plan["arm"], "exit_code": process_exit_code, "timed_out": timed_out, "thread_id_present": thread_id is not None}
 
 

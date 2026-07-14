@@ -65,7 +65,8 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         before_thread_ids = []
         after_thread_ids = [thread_id]
         state_snapshot = {"before_complete": True, "after_complete": True, "before_thread_count": 0, "after_thread_count": 1, "before_thread_ids_sha256": module.benchmark_suite_gate.sha256_text(module.benchmark_suite_gate.canonical_json(before_thread_ids)), "after_thread_ids_sha256": module.benchmark_suite_gate.sha256_text(module.benchmark_suite_gate.canonical_json(after_thread_ids))}
-        evidence = {"schema_version": module.benchmark_suite_gate.SCHEMA_VERSION, "run_id": run_id, "started_monotonic_ns": 1_000_000_000, "first_result_monotonic_ns": 1_000_000_000 + first_result_ms * 1_000_000, "producer_finished_monotonic_ns": 1_000_000_000 + producer_elapsed_ms * 1_000_000, "producer_process_exit_code": 0, "producer_timed_out": False, "producer_complete": True, "launched_session_ids": [thread_id], "retry_session_ids": [], "fallback_session_ids": [], "repair_session_ids": [], "state_snapshot": state_snapshot, "runtime_sessions": [runtime_session]}
+        foreground_session = {key: runtime_session[key] for key in module.benchmark_suite_gate.FOREGROUND_SESSION_KEYS}
+        evidence = {"schema_version": module.benchmark_suite_gate.SCHEMA_VERSION, "run_id": run_id, "started_monotonic_ns": 1_000_000_000, "first_result_monotonic_ns": 1_000_000_000 + first_result_ms * 1_000_000, "producer_finished_monotonic_ns": 1_000_000_000 + producer_elapsed_ms * 1_000_000, "producer_process_exit_code": 0, "producer_timed_out": False, "producer_complete": True, "foreground_main_thread_id": thread_id, "foreground_state_snapshot": state_snapshot, "foreground_sessions": [foreground_session], "launched_session_ids": [thread_id], "retry_session_ids": [], "fallback_session_ids": [], "repair_session_ids": [], "state_snapshot": state_snapshot, "runtime_sessions": [runtime_session]}
         self.write_json(path, evidence)
 
     def build_fixture(self, root, tier_repeat_counts=None):
@@ -120,6 +121,22 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         summary = module.benchmark_suite_gate.evaluate_suite(plan_path, manifest_dir, summary_path)
         return {"plan": plan_path, "summary": summary_path, "manifests": manifest_dir, "output": root / "public.json", "plan_document": plan, "summary_document": summary, "raw": root / "raw"}
 
+    def make_medium_majority_failure(self, paths):
+        run_plan = next(run for run in paths["plan_document"]["runs"] if run["run_id"] == "medium-r02-global")
+        plan_root = paths["plan"].parent
+        evidence_path = plan_root / run_plan["evidence_path"]
+        receipt_path = plan_root / run_plan["receipts"][0]["path"]
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        result_ready_monotonic_ns = evidence["started_monotonic_ns"] + 203_000_000
+        evidence["first_result_monotonic_ns"] = result_ready_monotonic_ns
+        evidence["producer_finished_monotonic_ns"] = evidence["started_monotonic_ns"] + 223_000_000
+        receipt["result_ready_monotonic_ns"] = result_ready_monotonic_ns
+        receipt["child_result_ready_monotonic_ns"] = result_ready_monotonic_ns
+        self.write_json(evidence_path, evidence)
+        self.write_json(receipt_path, receipt)
+        return module.benchmark_suite_gate.evaluate_suite(paths["plan"], paths["manifests"], paths["summary"])
+
     def test_happy_path_exports_only_sanitized_passing_metrics_and_public_mode(self):
         with tempfile.TemporaryDirectory() as temporary:
             paths = self.build_fixture(Path(temporary))
@@ -144,6 +161,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertNotEqual(public_document["configuration"]["agents_sha256"]["direct"], public_document["configuration"]["agents_sha256"]["global"])
         self.assertEqual(public_document["execution_integrity"], {"complete_runs": 12, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "runtime_session_count": 12, "runtime_descendant_count": 0, "multi_session_run_count": 0})
         self.assertEqual([task["label"] for task in public_document["tasks"]], [module.TASK_LABELS[tier] for tier in module.benchmark_suite_gate.TIERS])
+        self.assertTrue(all(task["status"] == "pass" and task["failures"] == [] for task in public_document["tasks"]))
         self.assertTrue(all(task["paired_savings_percent_medians"]["logical_total_tokens"] > 0 for task in public_document["tasks"]))
         self.assertIn("not a billing-token", public_document["caveats"]["tokens"])
         self.assertIn("not a universal guarantee", public_document["caveats"]["generalization"])
@@ -153,6 +171,26 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertNotIn("skills_catalog_root", public_text)
         self.assertNotIn("plugins_catalog_root", public_text)
         self.assertEqual(output_mode, 0o644)
+
+    def test_failed_strategy_gate_with_all_runs_correct_is_exported_and_rendered_as_fail(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.build_fixture(root)
+            summary = self.make_medium_majority_failure(paths)
+            public_document = module.export_public_json(paths["plan"], paths["summary"], paths["manifests"], paths["output"])
+            desktop_path = root / "desktop.svg"
+            mobile_path = root / "mobile.svg"
+            renderer.render_svgs(paths["output"], desktop_path, mobile_path)
+            desktop_text = desktop_path.read_text(encoding="utf-8")
+            mobile_text = mobile_path.read_text(encoding="utf-8")
+        medium = next(task for task in public_document["tasks"] if task["tier"] == "medium")
+        self.assertEqual(summary["overall_status"], "fail")
+        self.assertEqual(public_document["overall_status"], "fail")
+        self.assertTrue(public_document["all_correct"])
+        self.assertEqual(medium["status"], "fail")
+        self.assertEqual(medium["failures"], ["first_result_majority_loss"])
+        self.assertIn("Real A/B benchmark · FAIL", desktop_text)
+        self.assertIn("Strategy gate FAIL", mobile_text)
 
     def test_two_pair_confirmation_suite_is_publicly_exportable(self):
         with tempfile.TemporaryDirectory() as temporary:

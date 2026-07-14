@@ -43,16 +43,18 @@
 - **模型：** 文字/代码优先 Spark；GPT-5.6 Luna → Terra → Sol 仍是质量/回退梯级。
 - **隐私：** secret、原始 Prompt/结果、receipt、ledger、cache 和临时文件留在本地。
 
-## 📊 历史 Benchmark
+## 📊 当前 Benchmark
 
-**Benchmark v5** · Direct/Global 都使用 `gpt-5.6-sol | ultra` · **6 组 A/B · 12 次运行 · 0 retry · 0 fallback · 0 repair**
+**Benchmark v6** · Direct/Global 都使用 `gpt-5.6-sol | ultra` · **6 组 A/B · 12 次运行 · 0 retry · 0 fallback · 0 repair**
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg">
-  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="GPT-5.6 Direct 与 Global 历史 benchmark">
+  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="当前 GPT-5.6 Direct 与 Global benchmark，策略性能门禁失败">
 </picture>
 
-> **77.292% 更少 task tokens** · **首次结果快 29.464%** · 仅该冻结样本 · 非计费 tokens · 不含 Ending Real
+> **85.284% 更少 task tokens** · **整体首次结果快 8.629%** · 12 个结果全部正确 · 策略门禁 **FAIL**：Medium 计时仅赢 1/2 组
+
+> 冻结只读 bootstrap 样本；此处不满足 Spark 条件 · 非计费 tokens · 不含 Ending Real
 
 [脱敏 benchmark 证据](./task-analyze-skill/assets/model-routing-benchmark-example.json)
 

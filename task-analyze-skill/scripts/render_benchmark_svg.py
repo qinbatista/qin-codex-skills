@@ -12,6 +12,7 @@ from tempfile import mkstemp
 
 DIRECT_COLOR = "#3b82f6"
 GLOBAL_COLOR = "#22c55e"
+FAIL_COLOR = "#fb923c"
 BACKGROUND_COLOR = "#071526"
 PANEL_COLOR = "#101c31"
 TEXT_COLOR = "#f8fafc"
@@ -24,10 +25,11 @@ CONFIGURATION_KEYS = frozenset({"config_hash_equal", "config_sha256", "agents_sh
 CATALOG_SHA_KEYS = frozenset({"skills", "plugins", "marketplaces", "visible"})
 CATALOG_COUNT_KEYS = frozenset({"skills", "plugins", "marketplaces", "marketplace_sources"})
 INTEGRITY_KEYS = frozenset({"complete_runs", "retry_count", "fallback_count", "repair_count", "runtime_session_count", "runtime_descendant_count", "multi_session_run_count"})
-TASK_KEYS = frozenset({"tier", "label", "pair_count", "run_count", "direct_totals", "global_totals", "direct_medians", "global_medians", "paired_savings_percent_medians", "paired_wins", "metric_gates"})
+TASK_KEYS = frozenset({"tier", "label", "status", "failures", "pair_count", "run_count", "direct_totals", "global_totals", "direct_medians", "global_medians", "paired_savings_percent_medians", "paired_wins", "metric_gates"})
 METRIC_KEYS = frozenset({"logical_total_tokens", "first_result_elapsed_ms", "total_wall_elapsed_ms"})
 METRIC_GATE_KEYS = frozenset({"aggregate_global_lower", "raw_global_median_lower", "minimum_paired_savings_percent", "paired_savings_median_meets_threshold", "strict_majority_better", "strict_majority_required", "maximum_pair_regression_percent", "regression_bound_required", "worst_pair_regression_within_limit", "worst_pair_savings_percent", "status"})
 TIME_METRIC_GATE_KEYS = METRIC_GATE_KEYS | frozenset({"maximum_pair_regression_ms", "worst_pair_regression_ms", "material_pair_regression_count"})
+STRATEGY_FAILURES = frozenset({"token_aggregate_loss", "token_raw_median_loss", "token_savings_threshold_loss", "first_result_aggregate_loss", "first_result_raw_median_loss", "first_result_savings_threshold_loss", "first_result_majority_loss", "first_result_tolerance_loss"})
 
 
 class BenchmarkSvgError(ValueError):
@@ -66,8 +68,8 @@ def load_public_json(path):
         raise BenchmarkSvgError("public_json_invalid")
     if not has_exact_keys(document, PUBLIC_KEYS):
         raise BenchmarkSvgError("public_json_schema")
-    if document.get("schema_version") != benchmark_public_export.PUBLIC_SCHEMA_VERSION or document.get("evidence_scope") != EVIDENCE_SCOPE or document.get("overall_status") != "pass" or document.get("all_correct") is not True:
-        raise BenchmarkSvgError("public_json_not_passing")
+    if document.get("schema_version") != benchmark_public_export.PUBLIC_SCHEMA_VERSION or document.get("evidence_scope") != EVIDENCE_SCOPE or document.get("overall_status") not in {"pass", "fail"} or document.get("all_correct") is not True:
+        raise BenchmarkSvgError("public_json_status_contract")
     if not isinstance(document.get("suite_id"), str) or benchmark_public_export.benchmark_suite_gate.RUN_ID_PATTERN.fullmatch(document["suite_id"]) is None or benchmark_public_export.SHA256_PATTERN.fullmatch(str(document.get("plan_sha256", ""))) is None or not isinstance(document.get("entry_pair"), str) or "|" not in document["entry_pair"]:
         raise BenchmarkSvgError("public_identity_contract")
     rules = document["rules"]
@@ -97,11 +99,14 @@ def load_public_json(path):
     tasks = document.get("tasks")
     if not isinstance(tasks, list) or [task.get("tier") for task in tasks if isinstance(task, dict)] != list(benchmark_public_export.benchmark_suite_gate.TIERS):
         raise BenchmarkSvgError("public_task_contract")
+    task_statuses = []
     for task in tasks:
         tier = task["tier"]
         pair_count = tier_repeat_counts[tier]
-        if not has_exact_keys(task, TASK_KEYS) or task.get("label") != benchmark_public_export.TASK_LABELS[tier] or task.get("pair_count") != pair_count or task.get("run_count") != pair_count * 2:
+        failures = task.get("failures")
+        if not has_exact_keys(task, TASK_KEYS) or task.get("label") != benchmark_public_export.TASK_LABELS[tier] or task.get("status") not in {"pass", "fail"} or not isinstance(failures, list) or len(failures) != len(set(failures)) or any(failure not in STRATEGY_FAILURES for failure in failures) or bool(failures) is (task.get("status") == "pass") or task.get("pair_count") != pair_count or task.get("run_count") != pair_count * 2:
             raise BenchmarkSvgError("public_task_contract")
+        task_statuses.append(task["status"])
         for metric_group in ("direct_totals", "global_totals", "direct_medians", "global_medians", "paired_savings_percent_medians"):
             metrics = task.get(metric_group)
             if not has_exact_keys(metrics, METRIC_KEYS) or any(not is_number(value) or metric_group != "paired_savings_percent_medians" and value < 0 for value in metrics.values()):
@@ -121,14 +126,13 @@ def load_public_json(path):
             expected_gate_keys = TIME_METRIC_GATE_KEYS if metric == "first_result_elapsed_ms" else METRIC_GATE_KEYS
             if not has_exact_keys(metric_gate, expected_gate_keys):
                 raise BenchmarkSvgError("public_metric_gate_contract")
-            expected_true_fields = ("aggregate_global_lower", "raw_global_median_lower", "paired_savings_median_meets_threshold") if metric == "logical_total_tokens" or tier == "medium" else ()
-            if any(metric_gate.get(field) is not True for field in expected_true_fields) or metric_gate.get("status") != "pass":
+            if metric_gate.get("status") not in {"pass", "fail"}:
                 raise BenchmarkSvgError("public_metric_gate_contract")
             expected_strict_majority_better = wins[metric] > pair_count / 2
             majority_required = metric_gate.get("strict_majority_required")
             expected_majority_required = metric == "first_result_elapsed_ms" and tier == "medium"
             invalid_majority_policy = metric == "logical_total_tokens" and majority_required is not False or expected_majority_required and majority_required is not True or metric == "first_result_elapsed_ms" and tier != "medium" and not isinstance(majority_required, bool)
-            if invalid_majority_policy or metric_gate.get("strict_majority_better") is not expected_strict_majority_better or majority_required and metric_gate.get("strict_majority_better") is not True:
+            if invalid_majority_policy or metric_gate.get("strict_majority_better") is not expected_strict_majority_better:
                 raise BenchmarkSvgError("public_metric_gate_contract")
             if metric_gate.get("minimum_paired_savings_percent") != benchmark_public_export.benchmark_suite_gate.MINIMUM_PAIRED_SAVINGS_PERCENT or metric_gate.get("maximum_pair_regression_percent") != benchmark_public_export.benchmark_suite_gate.MAXIMUM_PAIRED_REGRESSION_PERCENT:
                 raise BenchmarkSvgError("public_metric_gate_contract")
@@ -146,9 +150,24 @@ def load_public_json(path):
                     raise BenchmarkSvgError("public_metric_gate_contract")
                 if material_count > 0 and (metric_gate["worst_pair_regression_ms"] <= metric_gate["maximum_pair_regression_ms"] or metric_gate["worst_pair_savings_percent"] >= -metric_gate["maximum_pair_regression_percent"]):
                     raise BenchmarkSvgError("public_metric_gate_contract")
-            if metric == "logical_total_tokens" or tier == "medium":
-                if global_totals[metric] >= direct_totals[metric] or global_medians[metric] >= direct_medians[metric] or savings[metric] < metric_gate["minimum_paired_savings_percent"] or expected_majority_required and wins[metric] <= pair_count / 2:
-                    raise BenchmarkSvgError("public_metric_gate_contract")
+            expected_aggregate_lower = global_totals[metric] < direct_totals[metric]
+            expected_raw_median_lower = global_medians[metric] < direct_medians[metric]
+            expected_threshold = savings[metric] >= metric_gate["minimum_paired_savings_percent"]
+            if metric_gate.get("aggregate_global_lower") is not expected_aggregate_lower or metric_gate.get("raw_global_median_lower") is not expected_raw_median_lower or metric_gate.get("paired_savings_median_meets_threshold") is not expected_threshold:
+                raise BenchmarkSvgError("public_metric_gate_contract")
+            if metric == "logical_total_tokens":
+                expected_metric_status = "fail" if any(failure.startswith("token_") for failure in failures) else "pass"
+            elif tier == "simple":
+                expected_metric_status = "fail" if "first_result_tolerance_loss" in failures else "pass"
+            elif tier == "medium":
+                expected_metric_status = "fail" if any(failure.startswith("first_result_") for failure in failures) else "pass"
+            else:
+                expected_metric_status = "pass"
+            if metric_gate.get("status") != expected_metric_status:
+                raise BenchmarkSvgError("public_metric_gate_contract")
+    expected_overall_status = "pass" if all(status == "pass" for status in task_statuses) else "fail"
+    if document["overall_status"] != expected_overall_status:
+        raise BenchmarkSvgError("public_json_status_contract")
     return document
 
 
@@ -196,6 +215,15 @@ def metric_gate_verdict(document):
     return "tokens lower · Simple noise-aware · Medium strict · Complex time diagnostic"
 
 
+def failure_summary(document):
+    failed = []
+    for task in document["tasks"]:
+        if task["status"] == "fail":
+            reasons = ", ".join(failure.replace("_", " ") for failure in task["failures"])
+            failed.append(f'{task["tier"].title()}: {reasons}')
+    return "; ".join(failed)
+
+
 def aggregate_savings_percent(task, metric):
     direct_total = task["direct_totals"][metric]
     return (direct_total - task["global_totals"][metric]) / direct_total * 100
@@ -208,8 +236,9 @@ def bar_width(value, maximum, available_width):
 def svg_header(width, height, document, layout):
     task_descriptions = "; ".join(f"{task['tier']} cohort totals saved {aggregate_savings_percent(task, 'logical_total_tokens'):.3f}% tokens and {aggregate_savings_percent(task, 'first_result_elapsed_ms'):.3f}% first-result time" for task in document["tasks"])
     metadata = html.escape(json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
-    title = f"Global strategy real benchmark PASS, {layout} layout"
-    description = f"Direct blue versus Global green cohort totals. {task_descriptions}. All {document['expected_run_count']} runs passed correctness and evidence gates."
+    strategy_status = document["overall_status"].upper()
+    title = f"Global strategy real benchmark {strategy_status}, {layout} layout"
+    description = f"Direct blue versus Global green cohort totals. {task_descriptions}. All {document['expected_run_count']} runs passed correctness and evidence gates; the strategy performance gate is {strategy_status}."
     return [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">', f'  <title id="title">{escaped(title)}</title>', f'  <desc id="desc">{escaped(description)}</desc>', f'  <metadata id="benchmark-data">{metadata}</metadata>', f'  <rect width="{width}" height="{height}" rx="30" fill="{BACKGROUND_COLOR}"/>']
 
 
@@ -217,7 +246,9 @@ def desktop_svg(document):
     width = 1200
     height = 760
     lines = svg_header(width, height, document, "desktop")
-    lines.extend([f'  <text x="48" y="50" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="28" font-weight="700">Real A/B benchmark · PASS</text>', f'  <text x="48" y="80" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="16">Direct current model vs Global inline strategy · lower is better · {escaped(integrity_summary(document))}</text>', f'  <rect x="906" y="34" width="16" height="16" rx="4" fill="{DIRECT_COLOR}"/><text x="930" y="48" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Direct</text>', f'  <rect x="1014" y="34" width="16" height="16" rx="4" fill="{GLOBAL_COLOR}"/><text x="1038" y="48" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Global</text>'])
+    overall_status = document["overall_status"].upper()
+    overall_color = GLOBAL_COLOR if document["overall_status"] == "pass" else FAIL_COLOR
+    lines.extend([f'  <text x="48" y="50" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="28" font-weight="700">Real A/B benchmark · {overall_status}</text>', f'  <text x="48" y="80" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="16">Direct current model vs Global inline strategy · lower is better · {escaped(integrity_summary(document))}</text>', f'  <rect x="906" y="34" width="16" height="16" rx="4" fill="{DIRECT_COLOR}"/><text x="930" y="48" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Direct</text>', f'  <rect x="1014" y="34" width="16" height="16" rx="4" fill="{GLOBAL_COLOR}"/><text x="1038" y="48" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Global</text>'])
     for index, task in enumerate(document["tasks"]):
         y = 104 + index * 184
         direct_tokens = task["direct_totals"]["logical_total_tokens"]
@@ -228,8 +259,11 @@ def desktop_svg(document):
         time_maximum = max(direct_time, global_time)
         token_savings = aggregate_savings_percent(task, "logical_total_tokens")
         time_savings = aggregate_savings_percent(task, "first_result_elapsed_ms")
-        lines.extend([f'  <g transform="translate(48 {y})">', f'    <rect width="1104" height="166" rx="18" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'    <text x="22" y="31" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700">{escaped(task["label"])}</text>', f'    <text x="1080" y="31" text-anchor="end" fill="{GLOBAL_COLOR}" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="700">PASS · {task["pair_count"]} pairs · {task["run_count"]} runs</text>', f'    <text x="22" y="57" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Cohort totals saved {token_savings:.3f}% tokens · {time_savings:.3f}% first-result time · wins {task["paired_wins"]["first_result_elapsed_ms"]}/{task["pair_count"]}</text>', f'    <text x="22" y="85" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT LOGICAL TOKENS</text>', f'    <text x="574" y="85" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT FIRST-RESULT TIME</text>', f'    <text x="22" y="111" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_number(direct_tokens)}</text>', f'    <rect x="164" y="98" width="{bar_width(direct_tokens, token_maximum, 330)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="22" y="140" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_number(global_tokens)}</text>', f'    <rect x="164" y="127" width="{bar_width(global_tokens, token_maximum, 330)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="574" y="111" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_seconds(direct_time)}</text>', f'    <rect x="710" y="98" width="{bar_width(direct_time, time_maximum, 330)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="574" y="140" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_seconds(global_time)}</text>', f'    <rect x="710" y="127" width="{bar_width(global_time, time_maximum, 330)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', '  </g>'])
-    lines.extend([f'  <rect x="48" y="662" width="1104" height="76" rx="16" fill="#0d2b25" stroke="{GLOBAL_COLOR}"/>', f'  <text x="600" y="690" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">All tiers PASS · {escaped(metric_gate_verdict(document))}</text>', f'  <text x="600" y="716" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">{escaped(format_entry_pair(document["entry_pair"]))} · empirical frozen cohort, not a universal guarantee · logical tokens are not billing tokens</text>', '</svg>'])
+        task_color = GLOBAL_COLOR if task["status"] == "pass" else FAIL_COLOR
+        lines.extend([f'  <g transform="translate(48 {y})">', f'    <rect width="1104" height="166" rx="18" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'    <text x="22" y="31" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700">{escaped(task["label"])}</text>', f'    <text x="1080" y="31" text-anchor="end" fill="{task_color}" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="700">{task["status"].upper()} · {task["pair_count"]} pairs · {task["run_count"]} runs</text>', f'    <text x="22" y="57" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Cohort totals saved {token_savings:.3f}% tokens · {time_savings:.3f}% first-result time · wins {task["paired_wins"]["first_result_elapsed_ms"]}/{task["pair_count"]}</text>', f'    <text x="22" y="85" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT LOGICAL TOKENS</text>', f'    <text x="574" y="85" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT FIRST-RESULT TIME</text>', f'    <text x="22" y="111" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_number(direct_tokens)}</text>', f'    <rect x="164" y="98" width="{bar_width(direct_tokens, token_maximum, 330)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="22" y="140" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_number(global_tokens)}</text>', f'    <rect x="164" y="127" width="{bar_width(global_tokens, token_maximum, 330)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="574" y="111" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_seconds(direct_time)}</text>', f'    <rect x="710" y="98" width="{bar_width(direct_time, time_maximum, 330)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="574" y="140" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_seconds(global_time)}</text>', f'    <rect x="710" y="127" width="{bar_width(global_time, time_maximum, 330)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', '  </g>'])
+    footer_title = f"All tiers PASS · {metric_gate_verdict(document)}" if document["overall_status"] == "pass" else f"Strategy gate FAIL · {failure_summary(document)}"
+    footer_fill = "#0d2b25" if document["overall_status"] == "pass" else "#33210f"
+    lines.extend([f'  <rect x="48" y="662" width="1104" height="76" rx="16" fill="{footer_fill}" stroke="{overall_color}"/>', f'  <text x="600" y="690" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">{escaped(footer_title)}</text>', f'  <text x="600" y="716" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">{escaped(format_entry_pair(document["entry_pair"]))} · all runs correctness/evidence PASS · logical tokens are not billing tokens</text>', '</svg>'])
     return "\n".join(lines) + "\n"
 
 
@@ -237,7 +271,9 @@ def mobile_svg(document):
     width = 720
     height = 1260
     lines = svg_header(width, height, document, "mobile")
-    lines.extend([f'  <text x="34" y="48" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="25" font-weight="700">Real A/B benchmark · PASS</text>', f'  <text x="34" y="76" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Direct blue vs Global green · {escaped(integrity_summary(document))}</text>'])
+    overall_status = document["overall_status"].upper()
+    overall_color = GLOBAL_COLOR if document["overall_status"] == "pass" else FAIL_COLOR
+    lines.extend([f'  <text x="34" y="48" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="25" font-weight="700">Real A/B benchmark · {overall_status}</text>', f'  <text x="34" y="76" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Direct blue vs Global green · {escaped(integrity_summary(document))}</text>'])
     for index, task in enumerate(document["tasks"]):
         y = 98 + index * 350
         direct_tokens = task["direct_totals"]["logical_total_tokens"]
@@ -246,8 +282,11 @@ def mobile_svg(document):
         global_time = task["global_totals"]["first_result_elapsed_ms"]
         token_maximum = max(direct_tokens, global_tokens)
         time_maximum = max(direct_time, global_time)
-        lines.extend([f'  <g transform="translate(34 {y})">', f'    <rect width="652" height="330" rx="18" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'    <text x="20" y="31" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700">{escaped(task["label"])}</text>', f'    <text x="20" y="57" fill="{GLOBAL_COLOR}" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">PASS · {task["pair_count"]} pairs · {task["run_count"]} runs</text>', f'    <text x="20" y="83" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Totals saved {aggregate_savings_percent(task, "logical_total_tokens"):.3f}% tokens · {aggregate_savings_percent(task, "first_result_elapsed_ms"):.3f}% first-result</text>', f'    <text x="20" y="114" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT LOGICAL TOKENS</text>', f'    <text x="20" y="141" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_number(direct_tokens)}</text>', f'    <rect x="158" y="128" width="{bar_width(direct_tokens, token_maximum, 450)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="20" y="170" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_number(global_tokens)}</text>', f'    <rect x="158" y="157" width="{bar_width(global_tokens, token_maximum, 450)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="20" y="207" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT FIRST-RESULT TIME</text>', f'    <text x="20" y="234" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_seconds(direct_time)}</text>', f'    <rect x="158" y="221" width="{bar_width(direct_time, time_maximum, 450)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="20" y="263" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_seconds(global_time)}</text>', f'    <rect x="158" y="250" width="{bar_width(global_time, time_maximum, 450)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="20" y="299" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">First-result wins {task["paired_wins"]["first_result_elapsed_ms"]}/{task["pair_count"]} · Ending Real excluded</text>', '  </g>'])
-    lines.extend([f'  <rect x="34" y="1150" width="652" height="82" rx="16" fill="#0d2b25" stroke="{GLOBAL_COLOR}"/>', f'  <text x="360" y="1179" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700">All tiers PASS · {escaped(metric_gate_verdict(document))}</text>', f'  <text x="360" y="1205" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">{escaped(format_entry_pair(document["entry_pair"]))} · empirical cohort · not billing tokens</text>', '</svg>'])
+        task_color = GLOBAL_COLOR if task["status"] == "pass" else FAIL_COLOR
+        lines.extend([f'  <g transform="translate(34 {y})">', f'    <rect width="652" height="330" rx="18" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'    <text x="20" y="31" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700">{escaped(task["label"])}</text>', f'    <text x="20" y="57" fill="{task_color}" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">{task["status"].upper()} · {task["pair_count"]} pairs · {task["run_count"]} runs</text>', f'    <text x="20" y="83" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Totals saved {aggregate_savings_percent(task, "logical_total_tokens"):.3f}% tokens · {aggregate_savings_percent(task, "first_result_elapsed_ms"):.3f}% first-result</text>', f'    <text x="20" y="114" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT LOGICAL TOKENS</text>', f'    <text x="20" y="141" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_number(direct_tokens)}</text>', f'    <rect x="158" y="128" width="{bar_width(direct_tokens, token_maximum, 450)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="20" y="170" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_number(global_tokens)}</text>', f'    <rect x="158" y="157" width="{bar_width(global_tokens, token_maximum, 450)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="20" y="207" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">COHORT FIRST-RESULT TIME</text>', f'    <text x="20" y="234" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_seconds(direct_time)}</text>', f'    <rect x="158" y="221" width="{bar_width(direct_time, time_maximum, 450)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="20" y="263" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Global {format_seconds(global_time)}</text>', f'    <rect x="158" y="250" width="{bar_width(global_time, time_maximum, 450)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="20" y="299" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">First-result wins {task["paired_wins"]["first_result_elapsed_ms"]}/{task["pair_count"]} · Ending Real excluded</text>', '  </g>'])
+    footer_title = f"All tiers PASS · {metric_gate_verdict(document)}" if document["overall_status"] == "pass" else f"Strategy gate FAIL · {failure_summary(document)}"
+    footer_fill = "#0d2b25" if document["overall_status"] == "pass" else "#33210f"
+    lines.extend([f'  <rect x="34" y="1150" width="652" height="82" rx="16" fill="{footer_fill}" stroke="{overall_color}"/>', f'  <text x="360" y="1179" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700">{escaped(footer_title)}</text>', f'  <text x="360" y="1205" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">{escaped(format_entry_pair(document["entry_pair"]))} · all runs correct · not billing tokens</text>', '</svg>'])
     return "\n".join(lines) + "\n"
 
 

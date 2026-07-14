@@ -19,7 +19,7 @@ class PromptContractTests(unittest.TestCase):
     def test_global_prompt_gate_is_mandatory_and_bounded(self):
         for contract_text in ["Always use for every task", "100% global prompt-task gate across projects", "Do not trigger merely because an ordinary request is text", "Prompt-in-code also uses its owning code executor"]:
             self.assertIn(contract_text, self.prompt_skill)
-        for contract_text in ["Prompt work is the no-skill exception", "always load `prompt-skill`", "Ordinary text does not trigger it", "present the completed prompt before Ending Real"]:
+        for contract_text in ["Prompt/AI-instruction work loads `prompt-skill`"]:
             self.assertIn(contract_text, self.global_entry_rule)
 
     def test_loader_interface_repeats_the_trigger_without_expanding_scope(self):

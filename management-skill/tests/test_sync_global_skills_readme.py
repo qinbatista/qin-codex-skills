@@ -221,8 +221,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Present completed result", readme)
         self.assertIn("Ending Real verifies the result", readme)
         self.assertIn("## Rules", readme)
-        self.assertIn("## 📊 Historical benchmark", readme)
-        self.assertIn("Benchmark v5", readme)
+        self.assertIn("## 📊 Current benchmark", readme)
+        self.assertIn("Benchmark v6", readme)
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
         self.assertIn("every publish runs a safety scan", readme)
@@ -277,7 +277,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("合格文字/代码先用 Spark：简单 `low`，复杂 `high`", readme)
         self.assertIn("新的 GPT-5.6 修复", readme)
         self.assertIn("## 规则", readme)
-        self.assertIn("## 📊 历史 Benchmark", readme)
+        self.assertIn("## 📊 当前 Benchmark", readme)
         self.assertIn("## 🧩 八个公开 Skill", readme)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh-mobile.svg"), 1)
@@ -312,7 +312,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIsNotNone(benchmark_exporter.SHA256_PATTERN.fullmatch(evidence["plan_sha256"]))
         self.assertEqual(evidence["entry_pair"], "gpt-5.6-sol|ultra")
         self.assertEqual(evidence["evidence_scope"], benchmark_renderer.EVIDENCE_SCOPE)
-        self.assertEqual(evidence["overall_status"], "pass")
+        self.assertEqual(evidence["overall_status"], "fail")
         self.assertIs(evidence["all_correct"], True)
         self.assertEqual(evidence["tier_repeat_counts"], {"simple": 2, "medium": 2, "complex": 2})
         self.assertEqual(evidence["expected_run_count"], 12)
@@ -356,9 +356,13 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual([task["tier"] for task in evidence["tasks"]], ["simple", "medium", "complex"])
         self.assertEqual(sum(task["pair_count"] for task in evidence["tasks"]), 6)
         self.assertEqual(sum(task["run_count"] for task in evidence["tasks"]), evidence["expected_run_count"])
+        expected_task_statuses = {"simple": "pass", "medium": "fail", "complex": "pass"}
+        expected_task_failures = {"simple": [], "medium": ["first_result_majority_loss"], "complex": []}
         for task in evidence["tasks"]:
             self.assertEqual(set(task), set(benchmark_renderer.TASK_KEYS))
             self.assertEqual(task["label"], benchmark_exporter.TASK_LABELS[task["tier"]])
+            self.assertEqual(task["status"], expected_task_statuses[task["tier"]])
+            self.assertEqual(task["failures"], expected_task_failures[task["tier"]])
             self.assertEqual(task["pair_count"], 2)
             self.assertEqual(task["run_count"], 4)
             for metric_group in ("direct_totals", "global_totals", "direct_medians", "global_medians", "paired_savings_percent_medians"):
@@ -368,7 +372,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             for metric, metric_gate in task["metric_gates"].items():
                 expected_gate_keys = benchmark_renderer.TIME_METRIC_GATE_KEYS if metric == "first_result_elapsed_ms" else benchmark_renderer.METRIC_GATE_KEYS
                 self.assertEqual(set(metric_gate), set(expected_gate_keys))
-                self.assertEqual(metric_gate["status"], "pass")
+                expected_metric_status = "fail" if task["tier"] == "medium" and metric == "first_result_elapsed_ms" else "pass"
+                self.assertEqual(metric_gate["status"], expected_metric_status)
                 if metric == "logical_total_tokens":
                     self.assertLess(task["global_totals"][metric], task["direct_totals"][metric])
                     self.assertLess(task["global_medians"][metric], task["direct_medians"][metric])
@@ -384,9 +389,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                         self.assertGreaterEqual(task["paired_savings_percent_medians"][metric], metric_gate["minimum_paired_savings_percent"])
                     self.assertGreaterEqual(metric_gate["worst_pair_regression_ms"], 0)
                 if metric_gate["strict_majority_required"]:
-                    self.assertGreater(task["paired_wins"][metric], task["pair_count"] / 2)
+                    if metric_gate["status"] == "pass":
+                        self.assertGreater(task["paired_wins"][metric], task["pair_count"] / 2)
+                    else:
+                        self.assertLessEqual(task["paired_wins"][metric], task["pair_count"] / 2)
 
-        self.assertIn("## 📊 Historical benchmark", readme)
+        self.assertIn("## 📊 Current benchmark", readme)
         self.assertIn("**6 A/B pairs · 12 runs · 0 retries · 0 fallbacks · 0 repairs**", readme)
         self.assertNotIn("| Tier |", readme)
         direct_token_total = sum(task["direct_totals"]["logical_total_tokens"] for task in evidence["tasks"])
@@ -411,11 +419,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(metadata.attrib.get("id"), "benchmark-data", filename)
             self.assertEqual(json.loads(metadata.text), evidence, filename)
             visible_text = " ".join("".join(element.itertext()) for element in svg_root.findall(".//svg:text", namespace))
-            self.assertIn("Real A/B benchmark · PASS", visible_text)
+            self.assertIn("Real A/B benchmark · FAIL", visible_text)
             self.assertIn(benchmark_renderer.integrity_summary(evidence), visible_text)
             for task in evidence["tasks"]:
                 self.assertIn(task["label"], visible_text)
-                self.assertIn(f"PASS · {task['pair_count']} pairs · {task['run_count']} runs", visible_text)
+                self.assertIn(f"{task['status'].upper()} · {task['pair_count']} pairs · {task['run_count']} runs", visible_text)
                 self.assertIn(f"{benchmark_renderer.aggregate_savings_percent(task, 'logical_total_tokens'):.3f}%", visible_text)
                 self.assertIn(f"{benchmark_renderer.aggregate_savings_percent(task, 'first_result_elapsed_ms'):.3f}%", visible_text)
             self.assertNotIn("timeout", svg_text.lower())
@@ -447,10 +455,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertGreaterEqual(translate_y, viewbox[1])
             self.assertLessEqual(translate_x + float(card.attrib["width"]), viewbox[2])
             self.assertLessEqual(translate_y + float(card.attrib["height"]), viewbox[3])
-            pass_labels = [text for text in group.findall("svg:text", namespace) if "PASS ·" in "".join(text.itertext())]
-            self.assertEqual(len(pass_labels), 1)
-            self.assertEqual(pass_labels[0].attrib.get("text-anchor"), "end")
-            self.assertLessEqual(translate_x + float(pass_labels[0].attrib["x"]), viewbox[2] - 48)
+            status_labels = [text for text in group.findall("svg:text", namespace) if any(label in "".join(text.itertext()) for label in ("PASS ·", "FAIL ·"))]
+            self.assertEqual(len(status_labels), 1)
+            self.assertEqual(status_labels[0].attrib.get("text-anchor"), "end")
+            self.assertLessEqual(translate_x + float(status_labels[0].attrib["x"]), viewbox[2] - 48)
 
         verdict_rects = [rect for rect in root.findall("svg:rect", namespace) if rect.attrib.get("x") == "48" and rect.attrib.get("y") == "662" and rect.attrib.get("width") == "1104" and rect.attrib.get("height") == "76"]
         self.assertEqual(len(verdict_rects), 1)
@@ -462,9 +470,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         summary_text = " ".join("".join(text.itertext()) for text in summary_lines)
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
         evidence = benchmark_renderer.load_public_json(evidence_path)
-        self.assertIn(f"All tiers PASS · {benchmark_renderer.metric_gate_verdict(evidence)}", summary_text)
+        self.assertIn(f"Strategy gate FAIL · {benchmark_renderer.failure_summary(evidence)}", summary_text)
         self.assertIn("gpt-5.6-sol | ultra", summary_text)
-        self.assertIn("not a universal guarantee", summary_text)
+        self.assertIn("all runs correctness/evidence PASS", summary_text)
         self.assertIn("not billing tokens", summary_text)
 
     def test_learning_visuals_do_not_present_fixed_code_model_pairs(self):

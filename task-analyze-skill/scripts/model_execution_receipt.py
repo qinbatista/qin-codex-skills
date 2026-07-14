@@ -385,8 +385,8 @@ def atomic_write_private_text(path, text):
             os.unlink(temporary_path)
 
 
-def emit_benchmark_result_ready_event(args, result_path, child_result_ready_monotonic_ns):
-    event = {"schema_version": 1, "stage": "result-ready", "workload_id": args.workload_id, "benchmark_run_id": args.benchmark_run_id, "result_path": str(result_path), "child_result_ready_monotonic_ns": child_result_ready_monotonic_ns}
+def emit_benchmark_result_ready_event(args, result_path, child_result_ready_monotonic_ns, main_thread_id):
+    event = {"schema_version": 2, "stage": "result-ready", "workload_id": args.workload_id, "benchmark_run_id": args.benchmark_run_id, "result_path": str(result_path), "child_result_ready_monotonic_ns": child_result_ready_monotonic_ns, "main_thread_id": main_thread_id}
     print(json.dumps(event, sort_keys=True, separators=(",", ":")), flush=True)
 
 
@@ -454,6 +454,7 @@ def run_streaming_result_process(command, execution_prompt, args, command_enviro
     agent_messages = []
     result_messages = []
     result_ready_monotonic_ns = []
+    thread_ids = []
     duplicate_result_detected = []
     stream_errors = []
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=args.workdir, env=command_environment, shell=False, bufsize=1)
@@ -468,12 +469,21 @@ def run_streaming_result_process(command, execution_prompt, args, command_enviro
         result_messages.append(result_message)
         result_ready_callback = getattr(args, "result_ready_callback", None)
         if callable(result_ready_callback):
-            result_ready_callback(args.result_output, result_ready_monotonic_ns[0])
+            if stream_mode == "benchmark":
+                result_ready_callback(args.result_output, result_ready_monotonic_ns[0], thread_ids[0] if len(thread_ids) == 1 else None)
+            else:
+                result_ready_callback(args.result_output, result_ready_monotonic_ns[0])
 
     def drain_stdout():
         try:
             for raw_line in process.stdout:
                 stdout_lines.append(raw_line)
+                try:
+                    stdout_event = json.loads(raw_line)
+                except json.JSONDecodeError:
+                    stdout_event = None
+                if isinstance(stdout_event, dict) and stdout_event.get("type") == "thread.started" and isinstance(stdout_event.get("thread_id"), str) and stdout_event["thread_id"] and stdout_event["thread_id"] not in thread_ids:
+                    thread_ids.append(stdout_event["thread_id"])
                 agent_message = completed_agent_message(raw_line)
                 if agent_message is not None:
                     agent_messages.append(agent_message)
