@@ -4,11 +4,13 @@ Every user task, from a tiny read-only answer to a complex write, releases its c
 
 ## Parent sequence
 
-1. Complete the requested result and show it immediately in a user-visible commentary update.
+1. Complete the requested result and show it immediately in a user-visible commentary update beginning `MAIN RESULT READY`. Include the usable outcome or artifact links and `Acceptance: PENDING — Ending Real is starting`; a progress sentence is not a result presentation.
 2. Start a lifecycle with `scripts/ending_task_ledger.py start`; require `status=written` and `local.written=true`.
-3. Immediately spawn an independent Ending subagent. Result-producing delegation performance admission does not apply to this post-result worker.
-4. Start safe non-result log, report, or documentation workers alongside verification when they have isolated outputs. Shared-state or verdict-dependent records stay ordered.
-5. Keep the parent task active. Final may be sent only when `audit` reports `final_gate_passed=true`; the already-visible main result means this wait does not delay the first result.
+3. Choose one execution mode. A same-task subagent is independent but is not detached backend work. Use a persistent background Codex task only when the user or active project instructions explicitly authorize background/non-blocking execution and the host supports persistent task creation.
+4. Launch exactly one Ending worker. Result-producing delegation performance admission does not apply to this post-result worker. Do not add speculative review agents or duplicate parent-side tests.
+5. In same-task mode, state `Ending mode: SAME TASK — this task remains open`, keep the parent active, and send final only when `audit` reports `final_gate_passed=true`.
+6. In persistent-background mode, create and identify the background task, pass the lifecycle receipt and exact acceptance contract, state `Ending mode: BACKGROUND`, and return the foreground task immediately with `Acceptance: PENDING`. The background task owns terminal `PASS` or `BLOCKED` reporting and any authorized repair.
+7. If persistent background creation fails, disclose the fallback and use same-task mode. Never label the fallback as background.
 
 ## Pass
 
@@ -16,13 +18,22 @@ The independent verifier records `event --event pass` with realistic evidence. D
 
 ## Failure and repair
 
-1. Record `event --event fail` before any repair starts.
+1. Record `event --event fail` before any repair starts and show `REPAIRING` to the user.
 2. If failed durable changes remain, write a `project-memory-skill` record with `verification-status=failed`; otherwise keep the error only in this lifecycle ledger.
 3. Notify the user in commentary and start a repair lifecycle with `start --repair-of-lifecycle-id <failed-id>`.
-4. Launch a repair subagent under the owning skill. The verifier does not silently self-certify its own repair.
+4. Launch one repair producer under the owning skill. The verifier does not silently self-certify its own repair, and no extra diagnostic agents are launched unless the recorded failure identifies a concrete information gap.
 5. Show the corrected result immediately, then launch a different Ending verifier for the repair lifecycle.
 6. A passed repair project record uses `--supersedes <failed-record-id>`. Every root ledger state stores `max_repair_attempts=3`; repair children inherit that limit. Exceeding it records lifecycle `BLOCKED` and stops further repair instead of looping silently.
 
 ## Parallel boundary
 
-Verification and isolated bookkeeping may run concurrently. Final project-change memory depends on the Real verdict. Failure logging precedes repair. Repair precedes its new independent verification. Any background change to the user-visible result is a new result-producing task, not bookkeeping.
+Verification and isolated bookkeeping may run concurrently only when they do not duplicate testing or compete for shared state. Final project-change memory depends on the Real verdict. Failure logging precedes repair. Repair precedes its new independent verification. Any change to the user-visible result is a new result-producing task, not bookkeeping.
+
+## Status and waiting
+
+- `MAIN RESULT READY` means producer completion, not acceptance.
+- `PASS` means Ending accepted the result.
+- `REPAIRING` means the presented candidate was rejected and bounded repair is active.
+- `BLOCKED` means acceptance could not be established.
+- Do not use unqualified `done` or `finished` while acceptance is pending.
+- Do not narrate fixed-interval waits or repeatedly poll unchanged state. Wait on worker/status changes when the host supports it; otherwise report only meaningful state transitions.
