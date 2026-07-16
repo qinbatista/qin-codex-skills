@@ -20,7 +20,6 @@ try:
         execution_domain_is_active,
         is_code_execution_domain,
         resolve_execution_domain,
-        is_tiny_spark_profile,
         validate_execution_domain_registry,
     )
 except ModuleNotFoundError:
@@ -35,36 +34,50 @@ except ModuleNotFoundError:
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     is_code_execution_domain = _routing_policy.is_code_execution_domain
     resolve_execution_domain = _routing_policy.resolve_execution_domain
-    is_tiny_spark_profile = _routing_policy.is_tiny_spark_profile
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
+
+try:
+    from model_registry import load_registry, validate_registry
+except ModuleNotFoundError:
+    _model_registry_spec = importlib.util.spec_from_file_location("task_analyze_model_registry", TASK_ANALYZE_SCRIPTS / "model_registry.py")
+    _model_registry = importlib.util.module_from_spec(_model_registry_spec)
+    _model_registry_spec.loader.exec_module(_model_registry)
+    load_registry = _model_registry.load_registry
+    validate_registry = _model_registry.validate_registry
 
 
 INLINE_ROUTE_PREFIX = ["inline-current-model"]
 ACTIVATED_INLINE_ROUTE_PREFIX = ["task-analyze-skill", "inline-current-model"]
 BENCHMARK_ROUTE_PREFIX = ["task-analyze-skill", "benchmark runner"]
 ADMITTED_ROUTE_PREFIX = ["task-analyze-skill", "workflow-skill"]
-ACTIVE_MODEL_ORDER = ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol")
-ACTIVE_MODEL_EFFORTS = {model: MODEL_EFFORTS[model] for model in ACTIVE_MODEL_ORDER}
-LEGACY_SPARK_MODEL = "gpt-5.3-codex-spark"
+MODEL_REGISTRY = load_registry()
+ACTIVE_MODEL_ORDER = tuple(model["id"] for model in MODEL_REGISTRY["models"])
+ACTIVE_MODEL_EFFORTS = {model["id"]: tuple(model["codex_efforts"]) for model in MODEL_REGISTRY["models"]}
+PRIORITY_PRODUCER = MODEL_REGISTRY.get("priority_producer")
+PRIORITY_PRODUCER_MODEL = PRIORITY_PRODUCER.get("id") if isinstance(PRIORITY_PRODUCER, dict) else None
 REQUIRED_WORKFLOW = [
-    "one Obsidian-context Spark-first producer with a selected 5.6 fallback",
+    "one Obsidian-context priority-first producer with a catalog-derived quality fallback",
     "performance-admitted locked multi-node route",
     "Ineligible ordinary work remains inline",
     "universal Ending lifecycle after presentation",
     "comparable end-to-end admission evidence",
     "complete Global foreground path includes entry/controller plus child costs",
     "frozen, receipt-backed, Real-passing, and `trial=false`",
-    "current entry model may execute inline",
+    "must call `obsidian_adaptive_model_runner.py` once, including cold start",
+    "reads the saved shared contract unchanged",
+    "Ordinary tasks do not scan or refresh the local model cache",
+    "Only an explicit user model-update request",
+    "never fetch models over the network",
+    "preserve the saved contract when the local cache is unavailable",
     "not controller-only",
     "exact model and effort for each delegated node",
     "matching sanitized receipt",
-    "Obsidian `Projects/<project-key>/ModelExperience`",
+    "Obsidian broad `Model Switch.md`",
     "project/task/module/file/symbol/code",
     "obsidian_adaptive_model_runner.py",
     "Only a real graph with at least two model-executed nodes saves private schema-2 JSON",
-    "Ending Real alone records receipt-backed pass/fail to Obsidian",
-    "Spark attempt evidence to Obsidian",
-    "Old local `model_experience.json` and legacy `model_routing_history.py` remain read-only compatibility only",
+    "priority-attempt evidence to Obsidian automatically",
+    "sole current contextual experience authority",
     "End-to-end performance admission remains separate",
     "Continue in the same task",
     "no hook is used",
@@ -83,6 +96,8 @@ REQUIRED_WORKFLOW = [
     "independent optimization verification",
     "must not silently substitute another pair",
     "Runtime Receipt And Learning",
+    "Start it with `--producer-receipt`",
+    "terminal ledger event automatically records receipt-backed pass/fail",
     "suite total never converts a losing class into a pass",
     "Ending Real time is separate",
     "stage=result-ready",
@@ -91,44 +106,46 @@ REQUIRED_WORKFLOW = [
 ]
 REQUIRED_TEMPLATE = ["Admitted Workflow Display Templates", "Ordinary requests", "stay inline on the current model", "## Admitted Single Node: Text Only", "## Admitted Complex Graph: Mermaid", "current selected model | current selected effort", "Show main result now", "Dispatch Ending Task", "Real Verify", "Independent optimization verification", "Main Result always precedes Ending Task", "Workflow With Models"]
 REQUIRED_MATRIX = ["Ordinary requests stay on the current model regardless of apparent complexity", "never load full `task-analyze-skill` or `workflow-skill`", "activation still returns to inline", "Workflow executes admitted routes only", "ordinary-direct", "explicit-routing-no-admission", "admitted-single", "admitted-complex", "Every active registry-owned code-domain implementation uses `code-skill`", "Main Result precedes all verification", "background correctness failure", "--direct-task", "--bootstrap-task"]
-REQUIRED_CODE = ["Obsidian-context Spark-first producer with a selected 5.6 fallback", "Obsidian `Projects/<project-key>/ModelExperience`", "project/task/module/file/symbol/code", "Easy text code tries Spark-low", "complex text code tries Spark-high", "zero-result, zero-token operational Spark failure", "new 5.6 repair lifecycle", "Old local `model_experience.json` remains legacy read-only", "mandatory post-result Ending lifecycle still runs", "After presentation, always start the independent Ending lifecycle", "different `verify-skill` worker performs independent verification"]
+REQUIRED_CODE = ["Obsidian-context priority-first producer with a catalog-derived quality fallback", "Obsidian broad `Model Switch.md`", "project/task/module/file/symbol/code", "catalog-generated priority/quality contract", "highest registered numeric GPT family", "easy text code uses low", "complex text code uses high", "zero-result, zero-token operational priority-producer failure", "new quality-pair repair lifecycle", "Old local `model_experience.json` remains legacy read-only", "mandatory post-result Ending lifecycle still runs", "After presentation, always start the independent Ending lifecycle", "different `verify-skill` worker performs independent verification"]
 REQUIRED_VERIFY = ["Verification has one category", "Real Verify", "Every user task launches an independent post-result Ending lifecycle", "Never add Mini/Fast Verify before the user's first presentation", "current user-selected model", "PASS or explicit BLOCKED", "different optimizer/verifier identities", "reopen"]
-REQUIRED_OPTIMIZATION = ["Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "Use this skill directly only when the user requests optimization", "current model and no foreground verifier", "positively admitted", "different verifier", "before/after", "--direct-task", "--bootstrap-task", "neither arm enters Task Analyze context"]
-REQUIRED_MANAGEMENT = ["Do not load this skill for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms", "directly only for an explicit routing-record", "admitted a delegated route", "Projects/<project-key>/ModelExperience", "project/task/module/file/symbol/code", "obsidian_model_memory.py", "Ending Real", "matched producer receipt", "legacy read-only", "Never push/sync/publish unless the user explicitly requested publishing"]
+REQUIRED_OPTIMIZATION = ["Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "Use this skill directly only when the user requests optimization", "catalog-derived adaptive producer", "positively admitted", "different verifier", "before/after", "producer receipt", "--direct-task", "--bootstrap-task", "neither arm enters Task Analyze context"]
+REQUIRED_MANAGEMENT = ["Do not load this skill for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms", "directly only for an explicit routing-record", "admitted a delegated route", "broad Model Switch.md", "project/task/module/file/symbol/code", "obsidian_model_memory.py", "Ending Real starts with the producer receipt", "terminal ledger event records the result automatically", "legacy read-only", "Never push/sync/publish unless the user explicitly requested publishing"]
 REQUIRED_ENTRY = [
     "# Task Lifecycle",
     "Merge this section into `~/.codex/AGENTS.md`",
-    "Eligible text/code producers read shared ladder",
-    "Obsidian `Projects/<key>/ModelExperience`",
-    "local JSON stays read-only",
-    "Spark first: easy=low, complex=high",
-    "Zero-result operational failure uses current 5.6 pair",
-    "publish, then return",
+    "Eligible text/code MUST run adaptive producer",
+    "Saved highest-family ladder",
+    "only explicit user model-update",
+    "never fetch",
+    "absent cache keeps it",
+    "Obsidian broad `Model Switch.md`",
+    "no hierarchy notes or local JSON authority",
+    "Priority: easy=low, complex=high",
+    "zero-result uses contextual quality pair",
+    "publish then return",
     "Prompt/AI-instruction work loads `prompt-skill`",
-    "durable edits load `project-memory-skill`",
-    "recall first",
+    "Durable edits: `project-memory-skill`",
+    "recall",
     "record reason/result/verification/files after Ending",
     "Every non-ENDING_TASK_WORKER task",
-    "Ending start receipt",
-    "independent Ending subagent",
-    "Ending Real writes the receipt-backed outcome to Obsidian",
-    "Parallelize isolated logs/docs",
+    "routed Ending uses `--producer-receipt`",
+    "independent Ending",
+    "writes PASS/FAIL to a broad page",
+    "Parallel docs/logs",
     "Final requires PASS or BLOCKED",
-    "quality/correctness failure",
-    "new 5.6 repair lifecycle",
+    "Failure logs fields before repair",
     "re-present",
-    "different verifier",
+    "another verifier",
     "No hook",
-    "Exact read-only uses one bounded rg per authoritative file, anchored to exact members",
-    "resolve aliases",
-    "no subagent/route/plan, guesses, unrelated skills, broad search, reread, full-file read, or pre-result check",
+    "Exact read-only: one bounded rg/file at exact members/aliases",
+    "no subagent/route/plan, guesses, broad/reread/full read/pre-result check",
 ]
-REQUIRED_SELECTION = ["assets/model-capability-ladder.json", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "Obsidian `Projects/<project-key>/ModelExperience`", "project/task/module/file/symbol/code context", "Ending Real alone writes the verdict", "eligible text/code result producers try Spark-low for easy work or Spark-high for complex work", "old local `model_experience.json` stays legacy read-only", "Exact read-only stays inline", "obsidian_adaptive_model_runner.py", "Multi-node strategy remains separately performance-admitted"]
-REQUIRED_ADAPTIVE = ["project/task/module/file/symbol/code context", "assets/model-capability-ladder.json", "Obsidian `Projects/<project-key>/ModelExperience`", "Ending Real alone stores sanitized producer receipts", "Old local `model_experience.json` is legacy read-only only", "Spark is a priority attempt, not a rung in the 5.6 quality ladder", "zero-result, zero-token operational failure", "Evidence does not cross project keys", "obsidian_adaptive_model_runner.py", "`strategy_performance.py` remains separate", "Ending Real alone records the matching producer pass/fail to Obsidian", "read-only compatibility surfaces only"]
+REQUIRED_SELECTION = ["# Catalog-Generated Model Selection", "assets/model-capability-ladder.json", "scripts/model_registry.py", "`~/.codex/models_cache.json`", "bootstrap it once", "Only an explicit user model-update request", "highest numeric GPT family", "Older numeric families remain catalog-only", "Obsidian broad `Model Switch.md`", "matching Obsidian broad `Model Switch.md` context", "terminal Ending event automatically records the matched producer verdict", "optional specialized priority text/code producer", "sole current contextual evidence authority", "Exact read-only", "obsidian_adaptive_model_runner.py", "Multi-node strategy and savings claims remain separately performance-admitted"]
+REQUIRED_ADAPTIVE = ["project/task/module/file/symbol/code context", "assets/model-capability-ladder.json", "last explicitly refreshed local Codex model order", "source digest", "Obsidian broad `Model Switch.md`", "sole active private authority", "optional priority producer runs first", "contextual quality pair", "zero-result, zero-token priority-producer operational failure", "atomically bootstrapped from the local cache when missing", "Only an explicit user model-update request", "preserve the last valid registry", "Evidence never crosses project keys", "`strategy_performance.py` remains the separate authority", "Ending PASS/FAIL event automatically writes the producer outcome to Obsidian"]
 REQUIRED_OBSIDIAN_RUNNER = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status"]
-REQUIRED_OBSIDIAN_MEMORY = ["DEFAULT_LADDER", "model-capability-ladder.json", "Projects", "ModelExperience", "task_type", "module", "file", "symbol", "code_kind", "modality", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"]
+REQUIRED_OBSIDIAN_MEMORY = ["DEFAULT_LADDER", "model-capability-ladder.json", "Model Switch.md", "task_type", "module", "file", "symbol", "code_kind", "modality", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"]
 REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
-FORBIDDEN = ["observable entry model and effort belong only to Task Analyze and route coordination", "selected entry model and effort run Task Analyze and route coordination only", "Every route begins with independent `task-analyze-skill`", "Registry-owned code-domain executor selected in the locked task-analyze-skill plan", "Use this as the verification executor named by the locked `task-analyze-skill` plan", "Use this skill only when the locked `task-analyze-skill` plan", "internal Task Analyze", "not a sixth top-level skill", "Task Analyze itself uses `GPT-5.6-Sol`", "Task Analyze still runs on Sol", "correctness-affecting Real Verify stays before", "Real Verify always stays before Main Goal Done", "approved five", "five-folder boundary", "private ledger remains authoritative", "Learning is shared across projects", "generalized task-type conditions"]
+FORBIDDEN = ["observable entry model and effort belong only to Task Analyze and route coordination", "selected entry model and effort run Task Analyze and route coordination only", "Every route begins with independent `task-analyze-skill`", "Registry-owned code-domain executor selected in the locked task-analyze-skill plan", "Use this as the verification executor named by the locked `task-analyze-skill` plan", "Use this skill only when the locked `task-analyze-skill` plan", "internal Task Analyze", "not a sixth top-level skill", "Task Analyze itself uses `GPT-5.6-Sol`", "Task Analyze still runs on Sol", "correctness-affecting Real Verify stays before", "Real Verify always stays before Main Goal Done", "approved five", "five-folder boundary", "private ledger remains authoritative", "Learning is shared across projects", "generalized task-type conditions", "only ordered Luna, Terra, and Sol", "current 5.6 pair", "new 5.6 repair lifecycle", "auto-refreshed shared contract", "automatically refreshed shared contract", "passively refreshed shared contract", "Spark is a priority attempt, not a rung in the 5.6 quality ladder", "every visible, routable Codex model except the optional priority producer", "Obsidian selects from every current visible catalog model", "every visible supported non-priority catalog model from weakest to strongest"]
 NEGATIVE_DESCRIPTION_PREFIXES = {"code": "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction", "verify": "Use only for explicitly requested verification as the task itself, or for post-result Ending Task Real Verify", "optimization": "Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "management": "Do not use for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms"}
 NEGATIVE_AGENT_PREFIXES = {"code_agent": "$code-skill: exact read-only lookup/audit stays skill-free", "verify_agent": "$verify-skill: every user task launches an independent post-result Ending lifecycle", "optimization_agent": "$optimization-skill: do not load from benchmark repetition alone or for exact-scoped read-only work", "management_agent": "$management-skill: do not load for ordinary exact-scoped read-only work or benchmark worker arms"}
 
@@ -170,7 +187,7 @@ def legacy_only_failures(label, text):
     for line_number, line in enumerate(text.splitlines(), start=1):
         lowered = line.lower()
         marker = "model_experience.json"
-        if marker in lowered and not ("legacy" in lowered and "read-only" in lowered):
+        if marker in lowered and "read-only" not in lowered:
             failures.append(f"{label}:{line_number} references {marker} without legacy read-only scope")
     return failures
 
@@ -178,24 +195,41 @@ def legacy_only_failures(label, text):
 def validate_shared_ladder(text):
     try:
         payload = json.loads(text)
-    except json.JSONDecodeError:
-        return ["shared model-capability ladder is invalid JSON"]
-    models = payload.get("models") if isinstance(payload.get("models"), list) else []
-    model_ids = [model.get("id") for model in models if isinstance(model, dict)]
+        validate_registry(payload)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+        return [f"shared model-capability ladder is invalid: {error}"]
+    models = payload["models"]
+    model_ids = [model["id"] for model in models]
     failures = []
-    if payload.get("scope") != "shared_non_personal":
-        failures.append("shared model-capability ladder must remain non-personal")
-    if model_ids != list(ACTIVE_MODEL_ORDER):
-        failures.append("shared model-capability ladder must contain only ordered Luna, Terra, and Sol")
-    if LEGACY_SPARK_MODEL in model_ids:
-        failures.append("Spark must not be an active shared-ladder rung")
-    spark = payload.get("spark_first")
-    if not isinstance(spark, dict) or spark.get("id") != LEGACY_SPARK_MODEL or spark.get("adaptive_efforts") != ["low", "high"]:
-        failures.append("shared model-capability ladder must define Spark low/high priority attempts")
-    elif spark.get("effort_by_complexity") != {"easy": "low", "complex": "high"} or spark.get("eligible_modalities") != ["text"]:
-        failures.append("shared Spark priority eligibility is invalid")
-    if isinstance(spark, dict) and (spark.get("operational_fallback") != "current_obsidian_5_6_pair" or spark.get("quality_failure") != "record_to_obsidian_then_new_5_6_repair_lifecycle"):
-        failures.append("shared Spark failure contract is invalid")
+    active_family = payload.get("active_family")
+    if not isinstance(active_family, dict) or active_family.get("selection") != "highest_numeric_gpt_family" or active_family.get("model_count") != len(models):
+        failures.append("shared model-capability ladder must select exactly the highest numeric GPT family")
+    else:
+        family_id = active_family.get("id")
+        if not isinstance(family_id, str) or any(model_id != family_id and not model_id.startswith(f"{family_id}-") for model_id in model_ids):
+            failures.append("shared model-capability ladder contains a model outside its active numeric GPT family")
+    catalog_models = payload.get("catalog_models")
+    if not isinstance(catalog_models, list) or not catalog_models:
+        failures.append("shared model-capability registry must preserve the visible catalog inventory")
+    else:
+        active_catalog_ids = {model.get("id") for model in catalog_models if isinstance(model, dict) and model.get("catalog_role") == "active_quality"}
+        if active_catalog_ids != set(model_ids):
+            failures.append("active quality ladder must exactly match active_quality catalog roles")
+    if tuple(model_ids) != ACTIVE_MODEL_ORDER:
+        failures.append("shared model-capability ladder quality models drifted from the active generated registry")
+    for model in models:
+        if tuple(model["codex_efforts"]) != ACTIVE_MODEL_EFFORTS.get(model["id"]):
+            failures.append(f"shared model-capability ladder efforts drifted for {model['id']}")
+    priority_producer = payload.get("priority_producer")
+    observed_priority_model = priority_producer.get("id") if isinstance(priority_producer, dict) else None
+    if observed_priority_model != PRIORITY_PRODUCER_MODEL:
+        failures.append("shared model-capability ladder priority producer drifted from the active generated registry")
+    if observed_priority_model in model_ids:
+        failures.append("priority producer must remain outside the quality ladder")
+    if isinstance(catalog_models, list) and observed_priority_model is not None and not any(model.get("id") == observed_priority_model and model.get("catalog_role") == "priority_producer" for model in catalog_models if isinstance(model, dict)):
+        failures.append("priority producer must remain separately classified in the catalog inventory")
+    if not isinstance(payload.get("source", {}).get("catalog_sha256"), str):
+        failures.append("shared model-capability ladder must include the catalog source digest")
     return failures
 
 
@@ -264,10 +298,10 @@ def validate_trace(name, trace, skills_root=Path(__file__).resolve().parents[2])
     for node in trace:
         if not node.get("model") or not node.get("effort"):
             failures.append(f"{node.get('id', '<unknown>')} lacks model/effort")
-        if node.get("model") == LEGACY_SPARK_MODEL:
-            failures.append(f"{node.get('id', '<unknown>')} Spark is injected only as a result-producer attempt and cannot be a plan node")
+        if PRIORITY_PRODUCER_MODEL is not None and node.get("model") == PRIORITY_PRODUCER_MODEL:
+            failures.append(f"{node.get('id', '<unknown>')} priority producer is injected only as a result-producer attempt and cannot be a plan node")
         elif node.get("model") and node.get("model") not in ACTIVE_MODEL_ORDER:
-            failures.append(f"{node.get('id', '<unknown>')} model is outside the active shared GPT-5.6 ladder")
+            failures.append(f"{node.get('id', '<unknown>')} model is outside the active catalog-generated quality ladder")
         if resolve_skill_path(node.get("skill"), skills_root) is None:
             failures.append(f"{node.get('id', '<unknown>')} names unavailable skill {node.get('skill')}")
     result_index = ids.index("main-result") if "main-result" in ids else -1
@@ -312,10 +346,19 @@ def validate_trace(name, trace, skills_root=Path(__file__).resolve().parents[2])
 
 
 def sample_traces():
-    easy = [{"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill"}, {"id": "direct", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "real-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill"}, {"id": "records", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}]
-    complex_code = [{"id": "task-analyze", "model": "gpt-5.6-sol", "effort": "ultra", "skill": "task-analyze-skill"}, {"id": "audit", "model": "gpt-5.6-terra", "effort": "high", "skill": "workflow-skill"}, {"id": "implement", "model": "gpt-5.6-terra", "effort": "high", "skill": "code-skill", "language": "python", "purpose": "implement", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"}, {"id": "main-result", "model": "gpt-5.6-luna", "effort": "medium", "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "medium", "skill": "workflow-skill"}, {"id": "real-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "optimization-verify", "model": "gpt-5.6-terra", "effort": "high", "skill": "verify-skill"}, {"id": "records", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}]
-    terra_entry = [{"id": "task-analyze", "model": "gpt-5.6-terra", "effort": "medium", "skill": "task-analyze-skill"}, {"id": "direct", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"}, {"id": "real-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill"}]
-    return {"admitted-single-luna-entry": easy, "admitted-complex-sol-ultra-entry": complex_code, "admitted-single-terra-entry": terra_entry}
+    floor_model, floor_effort = MODEL_REGISTRY["role_pairs"]["floor"].split("|", 1)
+    balanced_model, balanced_effort = MODEL_REGISTRY["role_pairs"]["balanced_default"].split("|", 1)
+    complex_model, complex_effort = MODEL_REGISTRY["role_pairs"]["balanced_complex"].split("|", 1)
+    frontier_model, frontier_effort = MODEL_REGISTRY["role_pairs"]["frontier_complex"].split("|", 1)
+    middle_row = MODEL_REGISTRY["models"][len(MODEL_REGISTRY["models"]) // 2]
+    middle_model, middle_effort = middle_row["id"], middle_row["default_effort"]
+    easy = [{"id": "task-analyze", "model": floor_model, "effort": floor_effort, "skill": "task-analyze-skill"}, {"id": "direct", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "main-result", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "real-verify", "model": floor_model, "effort": floor_effort, "skill": "verify-skill"}, {"id": "records", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}]
+    complex_code = [{"id": "task-analyze", "model": frontier_model, "effort": frontier_effort, "skill": "task-analyze-skill"}, {"id": "audit", "model": balanced_model, "effort": balanced_effort, "skill": "workflow-skill"}, {"id": "implement", "model": complex_model, "effort": complex_effort, "skill": "code-skill", "language": "python", "purpose": "implement", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"}, {"id": "main-result", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "real-verify", "model": complex_model, "effort": complex_effort, "skill": "verify-skill"}, {"id": "optimization-verify", "model": complex_model, "effort": complex_effort, "skill": "verify-skill"}, {"id": "records", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}]
+    middle_entry = [{"id": "task-analyze", "model": middle_model, "effort": middle_effort, "skill": "task-analyze-skill"}, {"id": "direct", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "main-result", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "ending-dispatch", "model": floor_model, "effort": floor_effort, "skill": "workflow-skill"}, {"id": "real-verify", "model": floor_model, "effort": floor_effort, "skill": "verify-skill"}]
+    traces = {"admitted-single-floor-entry": easy, "admitted-complex-frontier-entry": complex_code}
+    if middle_model not in {floor_model, frontier_model}:
+        traces["admitted-single-middle-entry"] = middle_entry
+    return traces
 
 
 def validate(skill_dir):
@@ -367,7 +410,7 @@ def validate(skill_dir):
         expected_prefix = NEGATIVE_DESCRIPTION_PREFIXES[label]
         if not executor_metadata.get("description", "").lower().startswith(expected_prefix.lower()):
             failures.append(f"{expected_name} description must begin with the exact-scoped read-only negative preselection boundary: {expected_prefix}")
-    failures.extend(missing_terms("workflow agent", texts["agent"], ["eligible text/code producers", "try Spark first", "easy low; complex high", "selected 5.6 pair as zero-result operational fallback", "Published output returns immediately", "Ending Real alone records", "quality/correctness failure", "new 5.6 repair lifecycle", "different verifier", "Local model_experience.json stays legacy read-only", "Multi-node JSON and savings need separate end-to-end admission", "independent Ending subagent", "isolated logs/docs run in parallel", "Final needs PASS or BLOCKED", "Ending time is outside first-result time", "No hook", "exposed machine plan"]))
+    failures.extend(missing_terms("workflow agent", texts["agent"], ["eligible text/code producer", "saved highest-family ladder", "optional priority producer first", "easy low; complex high", "selected quality pair as zero-result fallback", "Ordinary tasks do not scan or refresh the model cache", "explicit user model-update", "local models_cache.json", "never network", "unavailable cache keeps the saved ladder", "Published output returns immediately", "Start Ending with the producer receipt", "terminal event automatically records PASS/FAIL learning", "quality-pair repair lifecycle", "different verifier", "broad Model Switch page is the sole current contextual experience authority", "Multi-node savings need separate proof", "Every task has independent Ending", "isolated logs/docs may run in parallel", "Final needs PASS or BLOCKED", "No hook", "visible machine plan"]))
     failures.extend(missing_terms("workflow", texts["workflow"], REQUIRED_WORKFLOW))
     failures.extend(missing_terms("template", texts["template"], REQUIRED_TEMPLATE))
     failures.extend(missing_terms("matrix", texts["matrix"], REQUIRED_MATRIX))
@@ -383,10 +426,10 @@ def validate(skill_dir):
         expected_prefix = NEGATIVE_AGENT_PREFIXES[label]
         if not prompt_text.lower().startswith(expected_prefix.lower()):
             failures.append(f"{label} default_prompt must begin with the exact-scoped read-only negative preselection boundary: {expected_prefix}")
-    failures.extend(missing_terms("code-skill agent", texts["code_agent"], ["exact read-only lookup/audit stays skill-free", "Implementation, edit, debug, refactor, or authored tests", "Try Spark first", "easy low; complex high", "zero-result operational failure uses the selected 5.6 pair", "Return published code immediately", "Ending Real alone records", "correctness/quality failure", "new 5.6 repair lifecycle", "different verifier", "Local model_experience.json stays legacy read-only", "independent Ending", "no foreground verify", "Ending time is outside first-result time"]))
+    failures.extend(missing_terms("code-skill agent", texts["code_agent"], ["exact read-only lookup/audit stays skill-free", "Implementation, edit, debug, refactor, or authored tests", "catalog-generated ladder", "optional priority producer", "easy low; complex high", "zero-result operational failure uses the selected contextual quality pair", "Return published code immediately", "producer receipt", "terminal event automatically records", "correctness/quality failure", "new quality-pair repair lifecycle", "different verifier", "Local model_experience.json stays legacy read-only", "independent Ending", "no foreground verify"]))
     failures.extend(missing_terms("verify-skill agent", texts["verify_agent"], ["every user task launches an independent post-result Ending lifecycle", "Never add Mini/Fast Verify before first presentation", "producer shows the completed result", "record lifecycle started", "proportional Real Verify", "isolated logs/docs may run in parallel", "PASS or explicit BLOCKED opens the final gate", "persist lifecycle evidence", "before a new repair child", "different Ending verifier", "Ending time is separate"]))
-    failures.extend(missing_terms("optimization-skill agent", texts["optimization_agent"], ["do not load from benchmark repetition alone", "user-requested optimization", "explicitly authorized reusable improvement", "positively admitted node", "present the optimized result immediately", "no foreground Mini/Fast Verify", "different Ending Real verifier", "Ending time is excluded from first-result time", "never self-certify savings"]))
-    failures.extend(missing_terms("management-skill agent", texts["management_agent"], ["do not load for ordinary exact-scoped read-only work or benchmark worker arms", "explicit management request or admitted node", "Obsidian Projects/<project-key>/ModelExperience", "obsidian_model_memory.py", "local model_experience.json and central TaskModelExperience are legacy read-only", "Eligible text/code tries Spark low/high first", "operational failure is neutral and quality failure starts a new 5.6 repair", "Ending Real alone records a matched producer verdict", "never publish private state"]))
+    failures.extend(missing_terms("optimization-skill agent", texts["optimization_agent"], ["do not load from benchmark repetition alone", "user-requested optimization", "explicitly authorized reusable improvement", "positively admitted node", "catalog-generated ladder", "present the optimized result immediately", "no foreground Mini/Fast Verify", "different Real verifier", "Ending time is excluded from first-result time", "never self-certify savings"]))
+    failures.extend(missing_terms("management-skill agent", texts["management_agent"], ["do not load for ordinary exact-scoped read-only work or benchmark worker arms", "explicit management request or admitted node", "broad Obsidian Model Switch.md", "local model_experience.json and central TaskModelExperience are legacy read-only", "catalog-generated ladder", "optional priority producer", "operational failure is neutral", "quality failure starts a contextual quality-pair repair", "terminal ledger event automatically records its verdict", "never publish private state"]))
     failures.extend(missing_terms("task-analyze-entry-rule", texts["task_analyze_entry_rule"], REQUIRED_ENTRY))
     failures.extend(missing_terms("task-analyze-model-selection", texts["task_analyze_selection"], REQUIRED_SELECTION))
     failures.extend(missing_terms("task-analyze-adaptive", texts["task_analyze_adaptive"], REQUIRED_ADAPTIVE))
@@ -431,7 +474,7 @@ def validate(skill_dir):
     for result in trace_results:
         failures.extend([f"trace {result['name']}: {failure}" for failure in result["failures"]])
     entry_models = {trace[0]["model"] for trace in sample_traces().values()}
-    if len(entry_models) < 3:
+    if len(entry_models) < min(3, len(ACTIVE_MODEL_ORDER)):
         failures.append("entry-model regression samples do not prove arbitrary selected entry models")
     fixture_path = global_root / "task-analyze-skill" / "assets" / "graduated-route-fixtures.json"
     graduated_failures = validate_graduated_fixture(fixture_path, global_root, True)

@@ -16,7 +16,6 @@ DIRECT_REAL_CONDITIONS = {"Open Chrome": "Chrome is open", "Open Chrome and open
 DIRECT_ROUTE = ["inline-current-model", "chrome:control-chrome"]
 COMPLEX_ROUTE = ["inline-current-model", "build-web-apps:frontend-app-builder"]
 ADMITTED_ROUTE = ["task-analyze-skill", "workflow-skill", "build-web-apps:frontend-app-builder"]
-REQUIRED_PAIRS = {"design": "gpt-5.6-sol|high", "implementation": "gpt-5.6-terra|high", "ending_real": "gpt-5.6-terra|high"}
 ENDING_CHECKS = ["responsive", "console", "navigation", "accessibility", "visual"]
 SCENARIO_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "execution_surface", "route", "ending_real_condition", "timing_evidence"}
 PSEUDO_ROUTE_IDS = {"inline-current-model"}
@@ -70,18 +69,15 @@ def _validate_dispatcher_template(template, skills_root, failures):
         failures.append("admitted_dispatcher_template must be an object")
         return
     dispatcher = _dispatcher_module()
-    supported_pairs = {
-        f"{model}|{effort}"
-        for model, efforts in dispatcher.ACTIVE_MODEL_EFFORTS.items()
-        for effort in efforts
-    }
+    supported_pairs = set(dispatcher.normal_adaptive_pair_texts())
+    required_pairs = {"design": dispatcher.MODEL_ROLE_PAIRS["frontier_complex"], "implementation": dispatcher.MODEL_ROLE_PAIRS["balanced_complex"], "ending_real": dispatcher.MODEL_ROLE_PAIRS["balanced_complex"]}
     if template.get("activation") != "explicit_and_performance_admitted" or template.get("admission_precondition") != "positive_end_to_end_evidence_required":
         failures.append("admitted dispatcher template lacks explicit positive performance-admission precondition")
     if template.get("authorization") != "topology_only_not_execution_proof":
         failures.append("admitted dispatcher template must not claim execution authorization")
     if template.get("route") != ADMITTED_ROUTE:
         failures.append(f"admitted dispatcher route ordering must be {ADMITTED_ROUTE}")
-    if template.get("illustrative_cold_start_pairs") != REQUIRED_PAIRS or any(pair not in supported_pairs for pair in template.get("illustrative_cold_start_pairs", {}).values()):
+    if template.get("illustrative_cold_start_pairs") != required_pairs or any(pair not in supported_pairs for pair in template.get("illustrative_cold_start_pairs", {}).values()):
         failures.append("admitted dispatcher static model/effort roles are incorrect or unsupported")
     if template.get("adaptive_result_producer") != "implementation":
         failures.append("admitted dispatcher adaptive producer must be implementation")
@@ -94,7 +90,10 @@ def _validate_dispatcher_template(template, skills_root, failures):
         failures.append("admitted dispatcher template dispatcher_plan must be an object")
         return
     expected_nodes = ["design", "implementation", "ending-real"]
-    expected_roles = {"design": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-sol", "high", [], "general"), "implementation": ("result", "build-web-apps:frontend-app-builder", "gpt-5.6-terra", "high", ["design"], "general"), "ending-real": ("ending", "verify-skill", "gpt-5.6-terra", "high", ["implementation"], "general")}
+    design_model, design_effort = required_pairs["design"].split("|", 1)
+    implementation_model, implementation_effort = required_pairs["implementation"].split("|", 1)
+    ending_model, ending_effort = required_pairs["ending_real"].split("|", 1)
+    expected_roles = {"design": ("result", "build-web-apps:frontend-app-builder", design_model, design_effort, [], "general"), "implementation": ("result", "build-web-apps:frontend-app-builder", implementation_model, implementation_effort, ["design"], "general"), "ending-real": ("ending", "verify-skill", ending_model, ending_effort, ["implementation"], "general")}
     template_nodes = plan.get("nodes", [])
     if [node.get("id") for node in template_nodes if isinstance(node, dict)] != expected_nodes:
         failures.append("admitted dispatcher plan node topology is incorrect")
@@ -111,11 +110,11 @@ def _validate_dispatcher_template(template, skills_root, failures):
         if f"{node.get('model')}|{node.get('effort')}" != template["illustrative_cold_start_pairs"].get(pair_key):
             failures.append(f"admitted dispatcher plan pair is incorrect for {node['id']}")
     implementation = next(node for node in template_nodes if node.get("id") == "implementation")
-    expected_ladder = [f"gpt-5.6-luna|{effort}" for effort in ["low", "medium", "high", "xhigh", "max"]] + [f"gpt-5.6-terra|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]] + [f"gpt-5.6-sol|{effort}" for effort in ["low", "medium", "high", "xhigh", "max", "ultra"]]
-    if implementation.get("candidate_ladder") != expected_ladder or implementation.get("hard_floor") != "gpt-5.6-luna|low":
-        failures.append("admitted implementation must use the full GPT-5.6 ladder with Luna-low hard floor")
+    expected_ladder = dispatcher.normal_adaptive_pair_texts()
+    if implementation.get("candidate_ladder") != expected_ladder or implementation.get("hard_floor") != dispatcher.MODEL_ROLE_PAIRS["floor"]:
+        failures.append("admitted implementation must use the full catalog quality ladder with its role floor")
     recommendation = implementation.get("routing_recommendation", {})
-    if recommendation.get("selected_pair") != "gpt-5.6-terra|high" or recommendation.get("trial") is not False or not recommendation.get("profile_fingerprint"):
+    if recommendation.get("selected_pair") != required_pairs["implementation"] or recommendation.get("trial") is not False or not recommendation.get("profile_fingerprint"):
         failures.append("admitted implementation recommendation proof is invalid")
     with tempfile.TemporaryDirectory(prefix="graduated-admitted-plan-") as temporary:
         for model, efforts in dispatcher.ACTIVE_MODEL_EFFORTS.items():

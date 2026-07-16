@@ -5,7 +5,7 @@ description: "Do not infer optimization from repeated benchmark arms or exact-sc
 
 # Optimization Skill
 
-Do not infer optimization from repeated benchmark arms or exact-scoped read-only work. Use this skill directly only when the user requests optimization or explicitly authorizes a reusable workflow improvement, or execute it as an exact node when Task Analyze has positively admitted a delegated route. Inline optimization uses the current model and no foreground verifier, Workflow, or child receipt. An admitted node preserves its locked pair and dependencies. In both modes, the optimizer never verifies its own behavior.
+Do not infer optimization from repeated benchmark arms or exact-scoped read-only work. Use this skill directly only when the user requests optimization or explicitly authorizes a reusable workflow improvement, or execute it as an exact node when Task Analyze has positively admitted a delegated route. Eligible text/code optimization uses the catalog-derived adaptive producer; ineligible tool-only work stays inline. An admitted node preserves its locked pair and dependencies. In every mode, the optimizer never verifies its own behavior.
 
 ## Trigger
 
@@ -31,14 +31,14 @@ Select only the optimization form required by the inline request or admitted nod
 
 ## Model Contract
 
-Ordinary inline optimization intentionally uses the current user-selected model and performs no foreground downgrade/upgrade trial. An admitted optimization node follows the exact model and effort in the locked plan:
+Eligible optimization production follows the catalog-generated shared ladder and matching Obsidian context. An admitted optimization node follows the exact model and effort in the locked plan:
 
-- Luna, Terra, and Sol roles are cold-start hints only; the exact similar-task profile learns across the effort-first Luna-low through Sol-ultra ladder.
-- Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Eligible text/code result producers try Spark first at low effort for easy work and high effort for complex work; the shared GPT-5.6 Luna/Terra/Sol ladder remains the active quality/fallback ladder. A zero-result operational Spark failure uses the current 5.6 pair, while a verified Spark correctness/quality failure starts a new 5.6 repair lifecycle. Ordinary non-routed inline implementation uses the current model.
+- Shared role models are cold-start hints only; auto-build or refresh the highest registered numeric GPT family from weakest to strongest and exclude older families from active switching.
+- Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Eligible text/code result producers try the optional catalog-derived priority producer at low effort for easy work and high effort for complex work. A zero-result operational failure uses the contextual quality pair; verified correctness/quality failure is recorded before a new quality-pair repair lifecycle.
 - Correctness and quality are eligibility gates. Rank tokens, then process time, then weaker rung only when every compared Real-passing pair shares the same exact workload hash with complete metrics; otherwise use the quality boundary.
 - A frozen exact-profile pair is reused until verified failure or material ladder, hard-floor, profile, or policy drift.
 
-An admitted node does not silently inherit or reselect another pair. Inline work intentionally remains on the current model and does not fabricate a receipt. A label is not execution proof; use runtime receipts only when admitted model routing, an explicit benchmark, or savings is part of acceptance.
+An admitted node does not silently inherit or reselect another pair. Ineligible inline work does not fabricate a receipt. A label is not execution proof; eligible production and any claimed model routing, benchmark, or savings require the matched runtime receipt.
 
 ## Workflow
 
@@ -47,8 +47,8 @@ An admitted node does not silently inherit or reselect another pair. Inline work
 3. Select the smallest reusable form: tighter rule, reference, script, asset, template, or safe parallel topology.
 4. Use `code-skill` for every Python/C# implementation or authored probe.
 5. Implement only the authorized optimization.
-6. Show the raw after artifact immediately; do not add a foreground verifier or child receipt.
-7. After presentation, hand the before/after evidence to an independent Ending Real verifier without changing the locked route.
+6. Show the raw after artifact immediately; do not add a foreground verifier.
+7. After presentation, start Ending with the producer receipt when one exists, then hand the before/after evidence to an independent Ending Real verifier without changing the locked route.
 8. When independent proof is required, hand optimizer identity, files, commands, before/after evidence, and remaining risks to a different verifier after the main result.
 
 ## Independent Verification Contract

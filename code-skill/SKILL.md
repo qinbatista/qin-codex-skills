@@ -5,7 +5,7 @@ description: "Do not use for an exact-scoped read-only lookup, audit, transform,
 
 # Code Skill
 
-Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. Ordinary implementation may run inline or as one Obsidian-context Spark-first producer with a selected 5.6 fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. No path adds a pre-result verifier; the mandatory post-result Ending lifecycle still runs.
+Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. No path adds a pre-result verifier; the mandatory post-result Ending lifecycle still runs.
 
 ## Internal Route Selection
 
@@ -45,7 +45,7 @@ Read only what the inline request or admitted node needs:
 - Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`;
 - prompt-in-code: always load the global `prompt-skill` first, then use `references/prompt-generation.md` for executable-string and language-specific details; a missing or skipped `prompt-skill` is a prompt-task routing failure, not a fallback condition;
 - safe repeated/parallel registered-code work: `references/parallelization.md`;
-- active Spark-first code boundary and legacy parsing notes: `references/spark-small-code.md`.
+- active catalog-derived priority-producer boundary and legacy parsing notes: `references/spark-small-code.md`.
 
 Active registry-owned code domains share this executor while retaining separate evidence keys and references. Current examples are `python`, `csharp`, and `unity_csharp`; `code_unspecified` is migration/history-only. Registry metadata identifies the domain; language rules are documented in this skill's `references` directory (for example, `python-rules.md`, `csharp-rules.md`, and `unity-csharp-rules.md`).
 
@@ -53,11 +53,11 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 
 ## Model Contract
 
-- Adaptive code work reads the shared Spark-first contract and matching Obsidian `Projects/<project-key>/ModelExperience` by project/task/module/file/symbol/code context. Easy text code tries Spark-low; complex text code tries Spark-high. Exact read-only, image/mixed, verifier, and Ending work skip Spark.
-- A zero-result, zero-token operational Spark failure may immediately use the contextual 5.6 pair. A published Spark result returns first; Ending correctness/quality failure is recorded before a new 5.6 repair lifecycle with a different verifier.
-- Old local `model_experience.json` remains legacy read-only. Every adaptive code profile retains `code-skill` ownership; Obsidian selects the active Luna-to-Sol fallback and learns its verified boundary.
+- Adaptive code work reads the catalog-generated priority/quality contract and matching Obsidian broad `Model Switch.md` by project/task/module/file/symbol/code context. The current priority producer is Spark; easy text code uses low and complex text code uses high. Exact read-only, image/mixed, verifier, and Ending work skip it.
+- A zero-result, zero-token operational priority-producer failure may immediately use the contextual quality pair. A published result returns first; Ending correctness/quality failure is recorded before a new quality-pair repair lifecycle with a different verifier.
+- Old local `model_experience.json` remains legacy read-only. Every adaptive code profile retains `code-skill` ownership; Obsidian selects within the highest registered numeric GPT family and learns its verified boundary. Older numeric families remain catalog-only.
 - An admitted fallback must already be allowed by Task Analyze and must carry its runtime reroute/receipt evidence. Inline execution does not invent fallback metadata.
-- Image-dependent, broad integration, or evidence-heavy work may cold-start on Terra or Sol; verified bounded work may descend to Luna.
+- Image-dependent, broad integration, or evidence-heavy work uses a balanced/frontier cold start inside that highest family; verified bounded work descends only within the active family and its efforts.
 - A planned label is not execution proof. Return receipt evidence only when an admitted route, explicit benchmark, or routing acceptance target requires it.
 
 ## Workflow

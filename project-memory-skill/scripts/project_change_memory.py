@@ -15,6 +15,8 @@ SCHEMA_VERSION = 1
 SCOPE_VALUES = ("project", "feature", "code", "file")
 CHANGE_KIND_VALUES = ("add", "edit", "rename", "move", "delete", "mixed")
 VERIFICATION_STATUS_VALUES = ("passed", "partial", "failed", "not-run")
+CANONICAL_KNOWLEDGE_FOLDER = "Knowledge"
+LEGACY_KNOWLEDGE_FOLDER = "KnowledgeAreas"
 
 
 def _single_line(value, field_name, required=True, max_length=1200):
@@ -83,32 +85,261 @@ def _markdown_entry(record):
     decisions = "; ".join(record["decisions"]) or "none"
     risks = "; ".join(record["risks"]) or "none"
     supersedes = record["supersedes"] or "none"
-    return f"## {record['recorded_at']} — {record['summary']}\n\n- Record ID: `{record['id']}`\n- Module: {record['module']}\n- Scope: {record['scope']}\n- Change kind: {record['change_kind']}\n- What changed: {record['summary']}\n- Why: {record['reason']}\n- Result: {record['result']}\n- Verification: {record['verification_status']} — {verifications}\n- Decisions: {decisions}\n- Remaining risks: {risks}\n- Supersedes: `{supersedes}`\n- Files:\n{files}\n\n"
+    anchor = _event_anchor(record["id"])
+    return f"### {record['recorded_at']} — {record['summary']}\n\n- Record ID: `{record['id']}`\n- Module: {record['module']}\n- Scope: {record['scope']}\n- Change kind: {record['change_kind']}\n- What changed: {record['summary']}\n- Why: {record['reason']}\n- Result: {record['result']}\n- Verification: {record['verification_status']} — {verifications}\n- Decisions: {decisions}\n- Remaining risks: {risks}\n- Supersedes: `{supersedes}`\n- Files:\n{files}\n\n^{anchor}\n\n"
 
 
-def _append_markdown(path, title, entry):
+HISTORY_SECTIONS = (
+    "Rules and Decisions",
+    "Implementation and Changes",
+    "Errors and Failures",
+    "Retries and Repairs",
+    "Verification and Results",
+    "Documentation, Assets and Releases",
+    "Relationships",
+)
+
+
+def _event_anchor(record_id):
+    """Stable, linkable anchor for the one canonical History entry."""
+    return "change-" + _slug(record_id, "record")
+
+
+def _normalized_registered_root(project_root):
+    root = _normalize_project_root(project_root)
+    home = _normalize_project_root(Path.home())
+    if root == home:
+        return "/"
+    if root.startswith(home + "/"):
+        return root[len(home):]
+    return root
+
+
+def _normalize_project_root(value):
+    path = Path(value)
+    if str(value).startswith("~/"):
+        path = Path.home() / str(value)[2:]
+    return path.resolve().as_posix().lower().rstrip("/")
+
+
+def _sorted_registered_owner_entries(entries):
+    return tuple(sorted(entries, key=lambda item: len(item[0]), reverse=True))
+
+
+HOME_PROJECT_OWNER_ROOTS = ((".codex", "Global Codex Skills"),)
+
+# Paths are deliberately relative to the user's Documents folder. Old and
+# current locations may coexist here so moving a repository does not split its
+# durable change history or adaptive model learning.
+DOCUMENT_PROJECT_OWNER_ROOTS = (
+    ("Muse/SVGDrawer", "SVGDrawer"),
+    ("Muse/MuseAI", "MuseAI"),
+    ("Muse/UserExamples", "MuseAI"),
+    ("YofaGames/ThisIsMyOregon", "ThisIsMyOregon"),
+    ("YofaGames/AIAnimation2D", "AIAnimation2D"),
+    ("YofaGames/AIShaderGraphic2D", "AIShaderGraphic2D"),
+    ("YofaGames/AIVFX2D", "AIVFX2D"),
+    ("FilesManagement/Destiny", "Destiny"),
+    ("YofaGames/Destiny", "Destiny"),
+    ("YofaGames/FunctionWebsite", "FunctionWebsite"),
+    ("Unity3DPersonalProject/MetaStory", "MetaStory"),
+    ("YofaGames/MetaStory", "MetaStory"),
+    ("Unity3DPersonalProject/UnityCodexTest", "UnityCodexTest"),
+    ("YofaGames/UnityCodexTest", "UnityCodexTest"),
+    ("PythonProject/XNews", "XNews"),
+    ("YofaGames/XNews", "XNews"),
+    ("Muse/taggingapilandingpage", "TaggingAPILandingPage"),
+    ("PythonProject/Agent-ImageEdtior", "AgentImageEditor"),
+    ("DockerProject/Docker-Mokozoo", "Mokozoo"),
+)
+
+
+def _registered_project_owner_paths():
+    home = Path.home()
+    entries = [(home / relative, owner) for relative, owner in HOME_PROJECT_OWNER_ROOTS]
+    entries.extend((home / "Documents" / relative, owner) for relative, owner in DOCUMENT_PROJECT_OWNER_ROOTS)
+    return tuple(entries)
+
+
+def _registered_project_owners():
+    return _sorted_registered_owner_entries(
+        (_normalized_registered_root(prefix), owner)
+        for prefix, owner in _registered_project_owner_paths()
+    )
+
+
+def _registered_owner_alias(record_root):
+    return _normalized_registered_root(record_root)
+
+
+def _registered_owner(record_root):
+    root = _registered_owner_alias(record_root)
+    for registered_root, owner in _registered_project_owners():
+        if root == registered_root or root.startswith(registered_root + "/"):
+            return owner
+    return None
+
+
+def _project_key_for_root(project_root):
+    root = Path(project_root).expanduser().resolve()
+    path_hash = hashlib.sha256(str(root).encode()).hexdigest()[:10]
+    return f"{_slug(root.name or 'project', 'project')}-{path_hash}"
+
+
+def _registered_owner_project_keys(owner):
+    if not owner:
+        return set()
+    return {
+        _project_key_for_root(root)
+        for root, registered_owner in _registered_project_owner_paths()
+        if registered_owner == owner
+    }
+
+
+def _record_matches_project(record, project):
+    """Match exact identity or a registered old/current root for one owner."""
+    project_key = project.get("key")
+    record_project = record.get("project") if isinstance(record.get("project"), dict) else {}
+    record_key = record_project.get("key") or record.get("project_key")
+    if project_key and record_key == project_key:
+        return True
+    owner = _registered_owner(project.get("root", ""))
+    if not owner:
+        return False
+    if record.get("project_owner") == owner:
+        return True
+    record_root = record_project.get("root")
+    if record_root and _registered_owner(record_root) == owner:
+        return True
+    return record_key in _registered_owner_project_keys(owner)
+
+
+def _active_knowledge_root(vault_path):
+    """Use legacy knowledge only when the vault has not adopted Knowledge/."""
+    canonical_root = vault_path / CANONICAL_KNOWLEDGE_FOLDER
+    legacy_root = vault_path / LEGACY_KNOWLEDGE_FOLDER
+    if canonical_root.exists() or not legacy_root.exists():
+        return canonical_root
+    return legacy_root
+
+
+def _canonical_history_target(record, vault_path):
+    """Return the only broad History page permitted for an Obsidian projection."""
+    project_root = Path(record["project"]["root"]).expanduser().resolve()
+    if project_root == vault_path.resolve():
+        return _active_knowledge_root(vault_path) / "Source Ingest and Wiki Maintenance.md", "Source Ingest and Wiki Maintenance"
+    owner = _registered_owner(record["project"]["root"])
+    if owner == "Global Codex Skills":
+        return vault_path / "Skills" / "Global Codex Skills History.md", "Global Codex Skills"
+    if owner is None:
+        return None, ""
+    return vault_path / "Projects" / owner / "History.md", owner
+
+
+def _history_section(record):
+    text = " ".join([record.get("summary", ""), record.get("reason", ""), record.get("result", ""), record.get("verification_status", ""), record.get("change_kind", "")]).lower()
+    if any(word in text for word in ("rule", "design", "architecture", "contract", "ownership", "decision", "strategy")):
+        return HISTORY_SECTIONS[0]
+    if any(word in text for word in ("retry", "repair", "rollback", "supersed", "recovery", " fix ")):
+        return HISTORY_SECTIONS[3]
+    if record.get("verification_status") in {"failed", "partial"} or any(word in text for word in ("fail", "bug", "crash", "regression", "mismatch", "blocked")):
+        return HISTORY_SECTIONS[2]
+    if any(word in text for word in ("test", "audit", "benchmark", "verify", "verification", "acceptance", "measured", "visual proof")):
+        return HISTORY_SECTIONS[4]
+    if any(word in text for word in ("publish", "readme", "docs", "repository", "release", "asset-only")):
+        return HISTORY_SECTIONS[5]
+    return HISTORY_SECTIONS[1]
+
+
+def _insert_history_entry(path, title, section, entry, record_id):
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        path.write_text(f"# {title}\n\n", encoding="utf-8")
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(entry)
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+    else:
+        text = "# " + title + " History\n\n" + "\n\n".join("## " + heading for heading in HISTORY_SECTIONS) + "\n"
+    if f"Record ID: `{record_id}`" in text:
+        return
+    marker = "## " + section
+    position = text.find(marker)
+    if position < 0:
+        text = text.rstrip() + "\n\n" + marker + "\n"
+        position = text.find(marker)
+    next_position = text.find("\n## ", position + len(marker))
+    insertion = next_position if next_position >= 0 else len(text)
+    text = text[:insertion].rstrip() + "\n\n" + entry.rstrip() + "\n\n" + text[insertion:].lstrip("\n")
+    path.write_text(text, encoding="utf-8")
+
+
+def _activity_index_target(history_target, vault_path):
+    if history_target.parent.parent.name == "Projects":
+        return history_target.parent / "Activity Index.md"
+    if history_target.parent.name == "Skills":
+        return vault_path / "Skills" / "Activity Index.md"
+    return history_target.parent / "Activity Index.md"
+
+
+def _write_activity_pointer(history_target, vault_path, record, section):
+    target = _activity_index_target(history_target, vault_path)
+    relative_history = history_target.relative_to(vault_path).with_suffix("").as_posix()
+    pointer = f"- {record['recorded_at'][:10]} · {record['change_kind']} · [[{relative_history}#^{_event_anchor(record['id'])}|{record['summary']}]] · {record['verification_status'].upper()}"
+    text = target.read_text(encoding="utf-8") if target.exists() else "# Activity Index\n\nChronological pointers to canonical History detail.\n\n"
+    if pointer not in text:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text.rstrip() + "\n" + pointer + "\n", encoding="utf-8")
+
+
+def _journal_pointer(history_target, vault_path, record):
+    relative_history = history_target.relative_to(vault_path).with_suffix("").as_posix()
+    return f"- {record['recorded_at'][:10]} · [[{relative_history}#^{_event_anchor(record['id'])}|{record['summary']}]] · {record['verification_status'].upper()}"
+
+
+def _write_journal_pointer(history_target, vault_path, record):
+    journal = vault_path / "Journal"
+    log = journal / "log.md"
+    index = journal / "index.md"
+    pointer = _journal_pointer(history_target, vault_path, record)
+    log_text = log.read_text(encoding="utf-8") if log.exists() else "# Journal Log\n\nPointer-only chronology. Canonical event bodies remain in their owning History.\n"
+    if pointer not in log_text:
+        journal.mkdir(parents=True, exist_ok=True)
+        log_text = log_text.rstrip() + "\n" + pointer + "\n"
+        log.write_text(log_text, encoding="utf-8")
+
+    pointer_lines = [line for line in log_text.splitlines() if line.startswith("- ")]
+    recent = "\n".join(pointer_lines[-20:])
+    begin = "<!-- BEGIN BOUNDED RECENT POINTERS -->"
+    end = "<!-- END BOUNDED RECENT POINTERS -->"
+    index_text = index.read_text(encoding="utf-8") if index.exists() else "# Journal\n\nChronological navigation only; canonical detail remains in History.\n\n## Recent\n\n" + begin + "\n" + end + "\n"
+    if begin not in index_text or end not in index_text:
+        index_text = index_text.rstrip() + "\n\n## Recent\n\n" + begin + "\n" + end + "\n"
+    prefix, remainder = index_text.split(begin, 1)
+    _, suffix = remainder.split(end, 1)
+    updated_index = prefix + begin + "\n" + recent + "\n" + end + suffix
+    if updated_index != index_text:
+        index.write_text(updated_index, encoding="utf-8")
 
 
 def _write_obsidian(record, vault):
     vault_path = _resolve_vault(vault)
     if vault_path is None:
         return {"status": "unavailable", "written": False}
-    root = vault_path / "Projects" / record["project"]["key"] / "ChangeMemory"
     entry = _markdown_entry(record)
-    timestamp = datetime.fromisoformat(record["recorded_at"].replace("Z", "+00:00"))
-    _append_markdown(root / "index.md", f"{record['project']['name']} Change Memory", entry)
-    _append_markdown(root / "modules" / f"{_slug(record['module'], 'module')}.md", f"Module: {record['module']}", entry)
-    _append_markdown(root / "records" / timestamp.strftime("%Y") / f"{timestamp.strftime('%Y-%m')}.md", f"Changes {timestamp.strftime('%Y-%m')}", entry)
-    for relative_file in record["files"]:
-        parts = [_slug(part, "path") for part in PurePosixPath(relative_file).parts]
-        file_path = root / "files" / Path(*parts[:-1]) / f"{parts[-1]}.md"
-        _append_markdown(file_path, f"File: {relative_file}", entry)
-    return {"status": "written", "written": True, "root": root.relative_to(vault_path).as_posix()}
+    target, title = _canonical_history_target(record, vault_path)
+    if target is None:
+        return {"status": "no-op", "written": False, "reason": "unregistered_project_root"}
+    section = _history_section(record)
+    _insert_history_entry(target, title, section, entry, record["id"])
+    _write_activity_pointer(target, vault_path, record, section)
+    _write_journal_pointer(target, vault_path, record)
+    if target.parent.parent.name == "Projects":
+        index = target.parent / "index.md"
+        if not index.exists():
+            index.write_text(f"# {title}\n\n- [[Projects/{title}/History]]\n- [[Projects]]\n", encoding="utf-8")
+        projects_index = vault_path / "Projects" / "index.md"
+        line = f"- [[Projects/{title}/index|{title}]]"
+        existing = projects_index.read_text(encoding="utf-8") if projects_index.exists() else "# Projects\n\n"
+        if line not in existing:
+            projects_index.write_text(existing.rstrip() + "\n" + line + "\n", encoding="utf-8")
+    return {"status": "written", "written": True, "root": target.relative_to(vault_path).as_posix()}
 
 
 def _fingerprint(record):
@@ -140,7 +371,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
             superseded = next((existing for existing in existing_records if existing.get("id") == record["supersedes"]), None)
             if not superseded:
                 raise ValueError("supersedes must reference an existing record")
-            if superseded.get("project", {}).get("key") != project["key"]:
+            if not _record_matches_project(superseded, project):
                 raise ValueError("supersedes must reference the same project")
             if superseded.get("module") != record["module"]:
                 raise ValueError("supersedes must reference the same module")
@@ -164,12 +395,12 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
 
 
 def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE):
-    project_key = _project_identity(project_root)["key"] if project_root else ""
+    project = _project_identity(project_root) if project_root else None
     normalized_files = _normalize_files(project_root, files) if project_root and files else list(files or [])
     terms = [term for term in re.findall(r"[\w.+-]+", query.lower()) if len(term) >= 2][:12]
     matches = []
     for record in reversed(_read_records(Path(store).expanduser().resolve() / "index.jsonl")):
-        if project_key and record["project"]["key"] != project_key:
+        if project and not _record_matches_project(record, project):
             continue
         if module and record["module"].lower() != module.strip().lower():
             continue

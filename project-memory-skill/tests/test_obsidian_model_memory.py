@@ -1,10 +1,10 @@
-#!/usr/bin/env python3
 import importlib.util
 import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "obsidian_model_memory.py"
@@ -17,212 +17,185 @@ class ObsidianModelMemoryTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        self.project = self.root / "ExampleProject"
-        self.project.mkdir()
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.path_home_patcher = mock.patch.object(module.Path, "home", lambda: self.home)
+        self.path_home_patcher.start()
+        self.project = self.home / "Documents" / "YofaGames" / "ThisIsMyOregon" / "ExampleProject"
+        (self.project / "src").mkdir(parents=True)
+        (self.project / "src" / "example.py").write_text("result = 1\n", encoding="utf-8")
         self.vault = self.root / "vault"
         self.vault.mkdir()
+        (self.vault / "Projects" / "ThisIsMyOregon").mkdir(parents=True)
+        self.broad_page = self.vault / "Projects" / "ThisIsMyOregon" / "Model Switch.md"
+        self.broad_page.write_text("# Model Switch\n", encoding="utf-8")
+        self.broad_index = self.vault / "Projects" / "ThisIsMyOregon" / "index.md"
+        self.broad_index.write_text("# ThisIsMyOregon\n", encoding="utf-8")
         self.receipt = self.root / "receipt.json"
-        self.counter = 0
 
     def tearDown(self):
+        self.path_home_patcher.stop()
         self.temporary.cleanup()
 
-    def write_receipt(self, pair, *, valid=True):
-        self.counter += 1
-        model, effort = pair.split("|", 1)
-        payload = {
-            "status": "pass" if valid else "fail",
-            "turn_completed": valid,
-            "model_match": valid,
-            "effort_match": valid,
-            "requested_model": model,
-            "requested_effort": effort,
-            "requested_pair": pair,
-            "executed_pair": pair,
-            "workload_prompt_sha256": f"{self.counter:064x}",
-            "tokens": {"total_tokens": 100 + self.counter},
-            "process_elapsed_ms": 1000 + self.counter,
-        }
-        self.receipt.write_text(json.dumps(payload), encoding="utf-8")
+    def write_receipt(self, pair, path=None, context=None):
+        target = path or self.receipt
+        receipt = {"status": "pass", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "requested_pair": pair, "executed_pair": pair, "priority_attempt_pair": pair, "workload_prompt_sha256": "1" * 64, "tokens": {"total_tokens": 101}, "process_elapsed_ms": 1001}
+        if context is not None:
+            receipt.update({"node_type": "locked-route-node", "node_role": "result-producer", "model_learning_context": context, "route_attempts": [{"status": "pass", "executed_pair": pair, "model_match": True, "effort_match": True}]})
+        target.write_text(json.dumps(receipt), encoding="utf-8")
+        return target
 
-    def scope(self, **overrides):
-        values = {
-            "file_value": "src/example.py",
-            "symbol": "Example.run",
-            "code_kind": "python",
-            "operation": "edit",
-            "modality": "mixed",
-            "complexity": "easy",
-            "risk": "low",
-            "ambiguity": "low",
-            "task_summary": "Edit one bounded Python method and preserve its verified contract.",
-            "vault": self.vault,
-        }
-        values.update(overrides)
-        return values
+    def record(self, recorded_at=datetime(2026, 7, 13, 12, 0, tzinfo=timezone.utc)):
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
+        self.write_receipt(recommendation["attempt_pair"])
+        return module.record_model_result(self.project, "code", "example-module", self.receipt, "pass", "none", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault, recorded_at=recorded_at)
 
-    def record(self, pair, *, real_status="pass", failure_class="none", **scope_overrides):
-        self.write_receipt(pair, valid=failure_class not in module.OPERATIONAL_FAILURES)
-        return module.record_model_result(
-            self.project,
-            "code",
-            "example-module",
-            self.receipt,
-            real_status,
-            failure_class,
-            recorded_at=datetime(2026, 7, 13, 12, 0, self.counter, tzinfo=timezone.utc),
-            **self.scope(**scope_overrides),
-        )
-
-    def recommend(self, **scope_overrides):
-        return module.recommend_model(
-            self.project,
-            "code",
-            "example-module",
-            **self.scope(**scope_overrides),
-        )
-
-    def test_cold_start_reads_shared_ladder_without_creating_local_json(self):
-        result = self.recommend()
-        self.assertEqual(result["source"], "obsidian_project_memory")
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|medium")
-        self.assertEqual(result["reason"], "shared_cold_start")
-        self.assertEqual(result["matched_records"], 0)
-        self.assertFalse(any(self.root.rglob("model_experience.json")))
-
-    def test_text_code_uses_spark_first_and_complex_uses_high(self):
-        easy = self.recommend(modality="text")
-        complex_result = self.recommend(modality="text", complexity="complex")
-        self.assertEqual(easy["attempt_pair"], "gpt-5.3-codex-spark|low")
-        self.assertEqual(easy["selected_pair"], "gpt-5.6-terra|medium")
-        self.assertEqual(easy["attempt_reason"], "spark_first_text_code")
-        self.assertEqual(complex_result["attempt_pair"], "gpt-5.3-codex-spark|high")
-        self.assertEqual(complex_result["selected_pair"], "gpt-5.6-terra|high")
-
-    def test_spark_quality_failure_moves_to_new_5_6_repair_pair(self):
-        self.record("gpt-5.3-codex-spark|low", real_status="fail", failure_class="correctness", modality="text")
-        result = self.recommend(modality="text")
-        self.assertEqual(result["attempt_pair"], "gpt-5.6-terra|medium")
-        self.assertEqual(result["attempt_reason"], "spark_quality_failure_to_5_6")
-        self.assertEqual(result["spark_verdict"], "fail")
-
-    def test_verified_spark_is_retained(self):
-        self.record("gpt-5.3-codex-spark|low", modality="text")
-        result = self.recommend(modality="text")
-        self.assertEqual(result["attempt_pair"], "gpt-5.3-codex-spark|low")
-        self.assertEqual(result["attempt_reason"], "verified_spark_retained")
-        self.assertEqual(result["attempt_calibration_state"], "frozen")
-
-    def test_real_pass_moves_one_rung_down_and_writes_project_indexes(self):
-        written = self.record("gpt-5.6-terra|medium")
+    def test_write_is_one_broad_page_with_one_structured_record(self):
+        written = self.record()
+        page = self.vault / written["obsidian_note"]
+        text = page.read_text(encoding="utf-8")
         self.assertEqual(written["status"], "written")
-        result = self.recommend()
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|low")
-        self.assertEqual(result["reason"], "real_pass_one_rung_down")
-        self.assertTrue(result["trial"])
-        project_root = self.vault / "Projects" / result["project_key"] / "ModelExperience"
-        self.assertTrue((project_root / "index.md").is_file())
-        self.assertTrue(any((project_root / "modules").glob("*.md")))
-        self.assertTrue(any((project_root / "files").rglob("*.md")))
-        self.assertTrue(any((project_root / "symbols").rglob("*.md")))
-        record = module._read_project_records(project_root)[0]
-        self.assertEqual(record["selection_reason"], "shared_cold_start")
-        self.assertEqual(record["recommendation_state"], "cold_start")
-        self.assertEqual(record["specificity"], "project_task")
+        self.assertEqual(text.count("<!-- model-experience: "), 1)
+        self.assertIn("## Normal Script Update", text)
+        self.assertFalse(any(self.vault.rglob("ModelExperience/*.md")))
+        self.assertFalse(any(self.vault.rglob(".model-experience.lock")))
 
-    def test_repeated_real_passes_descend_to_luna_low_and_freeze(self):
-        recommendation = self.recommend()
-        visited = []
-        for _ in range(20):
-            pair = recommendation["selected_pair"]
-            visited.append(pair)
-            self.record(pair)
-            recommendation = self.recommend()
-            if recommendation["calibration_state"] == "frozen":
-                break
-        self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
-        self.assertEqual(recommendation["reason"], "verified_floor_retained")
-        self.assertFalse(recommendation["trial"])
-        self.assertIn("gpt-5.6-terra|low", visited)
-        self.assertIn("gpt-5.6-luna|max", visited)
+    def test_receipt_replay_is_byte_idempotent(self):
+        first = self.record()
+        page = self.vault / first["obsidian_note"]
+        before = page.read_bytes()
+        replay = self.record(datetime(2026, 7, 13, 12, 1, tzinfo=timezone.utc))
+        self.assertEqual(replay["status"], "duplicate")
+        self.assertEqual(page.read_bytes(), before)
 
-    def test_quality_failure_moves_exactly_one_rung_up(self):
-        self.record("gpt-5.6-terra|medium", real_status="fail", failure_class="quality")
-        result = self.recommend()
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|high")
-        self.assertEqual(result["reason"], "quality_failure_one_rung_up")
-        self.assertTrue(result["trial"])
+    def test_sequential_path_backed_writes_and_stress_stay_on_one_page(self):
+        first = self.record()
+        page = self.vault / first["obsidian_note"]
+        for index in range(1, 100):
+            receipt = self.root / f"receipt-{index}.json"
+            recommendation = module.recommend_model(self.project, "code", "example-module", file_value=Path("src") / f"example-{index}.py", symbol=f"Example.run{index}", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Sequential Path-backed write.", vault=self.vault)
+            receipt.write_text(json.dumps({"status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "requested_pair": recommendation["attempt_pair"], "executed_pair": recommendation["attempt_pair"], "priority_attempt_pair": recommendation["attempt_pair"], "workload_prompt_sha256": f"{index:064x}", "tokens": {"total_tokens": index}, "process_elapsed_ms": index}), encoding="utf-8")
+            written = module.record_model_result(self.project, "code", "example-module", receipt, "pass", "none", file_value=Path("src") / f"example-{index}.py", symbol=f"Example.run{index}", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Sequential Path-backed write.", vault=self.vault, recorded_at=datetime(2026, 7, 13, 12, 0, index % 60, tzinfo=timezone.utc))
+            self.assertEqual(written["status"], "written")
+        self.assertEqual(page.read_text(encoding="utf-8").count("<!-- model-experience: "), 100)
+        self.assertEqual(len(list(self.vault.rglob("*.md"))), 2)
 
-    def test_operational_failure_is_neutral(self):
-        self.record("gpt-5.6-terra|medium", real_status="fail", failure_class="timeout")
-        result = self.recommend()
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|medium")
-        self.assertEqual(result["reason"], "shared_cold_start")
-        self.assertEqual(result["quality_samples"], 0)
+    def test_reader_scopes_records_from_its_single_page(self):
+        self.record()
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
+        self.assertEqual(recommendation["matched_records"], 1)
+        self.assertEqual(recommendation["specificity"], "symbol")
 
-    def test_matched_receipt_must_use_the_current_obsidian_recommendation(self):
-        with self.assertRaisesRegex(ValueError, "current Obsidian recommendation"):
-            self.record("gpt-5.6-sol|high")
-        self.assertFalse(any(self.vault.rglob("*.md")))
+    def test_shared_page_ignores_another_project_record(self):
+        foreign = {"model_experience_schema": 1, "project_key": "other-project", "task_type": "code", "module": "example-module", "file": "src/example.py", "symbol": "Example.run", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "risk": "low", "ambiguity": "low", "pair": "gpt-5.6-terra|high", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none"}
+        self.broad_page.write_text("# Model Switch\n\n<!-- model-experience: " + json.dumps(foreign) + " -->\n", encoding="utf-8")
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Isolation test.", vault=self.vault)
+        self.assertEqual(recommendation["matched_records"], 0)
 
-    def test_same_receipt_and_verdict_are_idempotent_after_boundary_moves(self):
-        self.write_receipt("gpt-5.6-terra|medium")
-        arguments = self.scope()
-        first = module.record_model_result(
-            self.project,
-            "code",
-            "example-module",
-            self.receipt,
-            "pass",
-            "none",
-            recorded_at=datetime(2026, 7, 13, 12, 30, tzinfo=timezone.utc),
-            **arguments,
-        )
-        second = module.record_model_result(
-            self.project,
-            "code",
-            "example-module",
-            self.receipt,
-            "pass",
-            "none",
-            recorded_at=datetime(2026, 7, 13, 12, 31, tzinfo=timezone.utc),
-            **arguments,
-        )
-        self.assertEqual(first["status"], "written")
-        self.assertEqual(second["status"], "duplicate")
-        self.assertEqual(first["record_id"], second["record_id"])
+    def test_registered_project_move_reuses_old_model_learning(self):
+        old_root = self.home / "Documents" / "YofaGames" / "XNews"
+        current_root = self.home / "Documents" / "PythonProject" / "XNews"
+        (old_root / "src").mkdir(parents=True)
+        (current_root / "src").mkdir(parents=True)
+        page = self.vault / "Projects" / "XNews" / "Model Switch.md"
+        page.parent.mkdir(parents=True)
+        old_key = module.project_change_memory._project_identity(old_root)["key"]
+        old_record = {"model_experience_schema": 1, "project_key": old_key, "task_type": "code", "module": "feed", "file": "src/feed.py", "symbol": "Feed.run", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "risk": "low", "ambiguity": "low", "pair": "gpt-5.6-terra|high", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none", "recorded_at": "2026-07-15T12:00:00Z"}
+        page.write_text("# Model Switch\n\n<!-- model-experience: " + json.dumps(old_record) + " -->\n", encoding="utf-8")
+        recommendation = module.recommend_model(current_root, "code", "feed", file_value="src/feed.py", symbol="Feed.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Update feed parser.", vault=self.vault)
+        self.assertEqual(recommendation["matched_records"], 1)
+        self.assertEqual(recommendation["specificity"], "symbol")
 
-    def test_exact_symbol_evidence_outranks_other_file_evidence(self):
-        self.record("gpt-5.6-terra|medium", real_status="fail", failure_class="correctness")
-        self.record(
-            "gpt-5.6-terra|high",
-            file_value="src/other.py",
-            symbol="Other.run",
-            task_summary="Edit another bounded Python method and preserve its contract.",
-        )
-        result = self.recommend()
-        self.assertEqual(result["specificity"], "symbol")
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|high")
-        self.assertEqual(result["matched_records"], 1)
+    def test_rebuild_hides_foreign_rows_but_preserves_structured_record(self):
+        self.record()
+        own = module._read_project_records(self.broad_page)[0]
+        foreign = dict(own, record_id="foreign", project_key="unrelated-project", project_owner="Unrelated", module="foreign-module")
+        self.broad_page.write_text("# Model Switch\n\n" + "\n".join("<!-- model-experience: " + json.dumps(record) + " -->" for record in (own, foreign)) + "\n", encoding="utf-8")
+        result = module.rebuild_model_switches(self.project, vault=self.vault)
+        text = self.broad_page.read_text(encoding="utf-8")
+        records = module._read_project_records(self.broad_page)
+        self.assertEqual(result["records"], 1)
+        self.assertEqual(result["page_records"], 2)
+        self.assertNotIn("| foreign-module |", text)
+        self.assertEqual({record.get("record_id") for record in records}, {own.get("record_id"), "foreign"})
 
-    def test_same_symbol_name_in_another_file_cannot_cross_the_file_boundary(self):
-        self.record("gpt-5.6-terra|medium", real_status="fail", failure_class="correctness", symbol="")
-        self.record(
-            "gpt-5.6-terra|high",
-            file_value="src/other.py",
-            symbol="Example.run",
-            task_summary="Edit a same-named method in a different file.",
-        )
-        result = self.recommend()
-        self.assertEqual(result["specificity"], "file")
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|high")
-        self.assertEqual(result["matched_records"], 1)
+    def test_same_name_project_rebuild_no_op_with_local_only_clone(self):
+        root_one = self.home / "Documents" / "Muse" / "SVGDrawer"
+        root_two = self.root / "other" / "SVGDrawer"
+        root_one.mkdir(parents=True)
+        root_two.mkdir(parents=True)
+        shared_page = self.vault / "Projects" / "SVGDrawer" / "Model Switch.md"
+        shared_page.parent.mkdir(parents=True)
+        foreign = {"model_experience_schema": 1, "project_key": module.project_change_memory._project_identity(root_one)["key"], "task_type": "code", "module": "root-one", "file": "src/one.py", "symbol": "run", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "risk": "low", "ambiguity": "low", "pair": "gpt-5.6-terra|high", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none"}
+        shared_page.write_text("# Model Switch\n\n<!-- model-experience: " + json.dumps(foreign) + " -->\n", encoding="utf-8")
+        result = module.rebuild_model_switches(root_two, vault=self.vault)
+        records = module._read_project_records(shared_page)
+        self.assertEqual(result["status"], "no-op")
+        self.assertEqual(records, [foreign])
 
-    def test_status_names_obsidian_as_the_authority(self):
+    def test_unknown_root_status_reports_missing_broad_page_without_crash(self):
         status = module.memory_status(self.project, vault=self.vault)
-        self.assertEqual(status["authority"], "obsidian_project_memory")
-        self.assertEqual(status["records"], 0)
-        self.assertGreater(status["active_pairs"], 0)
+        self.assertEqual(status["status"], "ready")
+        self.assertTrue(status["memory_available"])
+        self.assertIsNone(status["reason"])
+        self.broad_page.unlink()
+        status = module.memory_status(self.project, vault=self.vault)
+        self.assertEqual(status["status"], "ready")
+        self.assertTrue(status["memory_available"])
+        self.assertEqual(status["reason"], "configured_broad_page_missing")
+
+    def test_first_receipt_backed_record_lazily_creates_broad_page_and_links_index(self):
+        self.broad_page.unlink()
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
+        self.write_receipt(recommendation["attempt_pair"], path=self.root / "first.json")
+        result = module.record_model_result(self.project, "code", "example-module", self.root / "first.json", "pass", "none", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
+        self.assertEqual(result["status"], "written")
+        text = self.broad_page.read_text(encoding="utf-8")
+        index = self.broad_index.read_text(encoding="utf-8")
+        self.assertEqual(text.count("<!-- model-experience: "), 1)
+        self.assertIn("- [[Projects/ThisIsMyOregon/Model Switch.md]]", index)
+
+    def test_real_absolute_nested_svgdrawer_mapping_is_more_specific_than_muse(self):
+        query = {"project": {"name": "skill", "root": str(self.home / "Documents" / "Muse" / "SVGDrawer" / "skill"), "key": "svgdrawer-test"}}
+        (self.vault / "Projects" / "SVGDrawer").mkdir(parents=True)
+        (self.vault / "Projects" / "SVGDrawer" / "Model Switch.md").write_text("# Model Switch\n", encoding="utf-8")
+        _, page = module._memory_root(query, self.vault)
+        self.assertEqual(page.resolve(), (self.vault / "Projects" / "SVGDrawer" / "Model Switch.md").resolve())
+
+    def test_unknown_root_cannot_create_a_broad_page(self):
+        unknown = self.root / "Desktop"
+        unknown.mkdir()
+        before = list((self.vault / "Projects").rglob("*.md"))
+        result = module.rebuild_model_switches(unknown, vault=self.vault)
+        self.assertEqual(result["status"], "no-op")
+        self.assertEqual(list((self.vault / "Projects").rglob("*.md")), before)
+
+    def test_categories_are_fixed(self):
+        self.assertEqual(len(module.MODEL_SWITCH_CATEGORIES), 6)
+        self.assertEqual(module._task_category({"task_type": "code", "code_kind": "python", "operation": "edit"}), "normal-script-update")
+
+    def test_bound_historical_failure_records_once_after_recommendation_advances(self):
+        pair = "gpt-5.6-terra|high"
+        context = {"project_root": str(self.project.resolve()), "task_type": "documentation-instructions", "module": "example-module", "file": "src/example.py", "symbol": "Example.run", "code_kind": "python", "operation": "repair", "modality": "text", "complexity": "complex", "risk": "high", "ambiguity": "low", "task_summary": "Record a bound historical failure."}
+        first_receipt = self.write_receipt(pair, self.root / "historical-one.json", context)
+        first_binding = {"receipt_sha256": module.hashlib.sha256(first_receipt.read_bytes()).hexdigest(), "model_learning_context": context, "executed_pair": pair}
+        first = module.record_model_result(self.project, "documentation-instructions", "example-module", first_receipt, "fail", "correctness", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="repair", modality="text", complexity="complex", risk="high", ambiguity="low", task_summary="Record a bound historical failure.", vault=self.vault, bound_receipt=first_binding)
+        advanced = module.recommend_model(self.project, "documentation-instructions", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="repair", modality="text", complexity="complex", risk="high", ambiguity="low", task_summary="Record a bound historical failure.", vault=self.vault)
+        second_receipt = self.write_receipt(pair, self.root / "historical-two.json", context)
+        second_payload = json.loads(second_receipt.read_text(encoding="utf-8"))
+        second_payload["workload_prompt_sha256"] = "2" * 64
+        second_receipt.write_text(json.dumps(second_payload), encoding="utf-8")
+        second_binding = {"receipt_sha256": module.hashlib.sha256(second_receipt.read_bytes()).hexdigest(), "model_learning_context": context, "executed_pair": pair}
+        second = module.record_model_result(self.project, "documentation-instructions", "example-module", second_receipt, "fail", "correctness", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="repair", modality="text", complexity="complex", risk="high", ambiguity="low", task_summary="Record a bound historical failure.", vault=self.vault, bound_receipt=second_binding)
+        replay = module.record_model_result(self.project, "documentation-instructions", "example-module", second_receipt, "fail", "correctness", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="repair", modality="text", complexity="complex", risk="high", ambiguity="low", task_summary="Record a bound historical failure.", vault=self.vault, bound_receipt=second_binding)
+        final = module.recommend_model(self.project, "documentation-instructions", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="repair", modality="text", complexity="complex", risk="high", ambiguity="low", task_summary="Record a bound historical failure.", vault=self.vault)
+        self.assertEqual(first["status"], "written")
+        self.assertEqual(advanced["selected_pair"], "gpt-5.6-terra|xhigh")
+        self.assertEqual(advanced["attempt_pair"], "gpt-5.3-codex-spark|high")
+        self.assertEqual(second["status"], "written")
+        self.assertEqual(replay["status"], "duplicate")
+        self.assertEqual(final["selected_pair"], "gpt-5.6-terra|xhigh")
+        self.assertEqual(final["attempt_pair"], "gpt-5.3-codex-spark|high")
 
 
 if __name__ == "__main__":

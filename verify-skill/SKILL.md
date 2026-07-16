@@ -17,11 +17,11 @@ The required order is:
 
 1. producer completes the requested result;
 2. show the result immediately;
-3. write a lifecycle start receipt and launch exactly one Ending worker in the authorized execution mode;
+3. write a lifecycle start receipt, add `--producer-receipt` when an adaptive producer created the result, and launch exactly one Ending worker in the authorized execution mode;
 4. run one proportional Real Verify while isolated logs/docs may run in parallel;
 5. if Real fails, persist the error and failed durable project state before repair;
 6. launch repair as a new child lifecycle, present the correction, and use a different Ending verifier;
-7. record sanitized routing/memory learning only after that producer's Real verdict.
+7. let the terminal ledger event automatically record sanitized routing/memory learning for the bound producer receipt.
 
 First-result latency ends at step 2. Ending time is recorded separately and never added to first-result time. In same-task mode the UI may still show the task as active; the `MAIN RESULT READY` block is therefore mandatory so the user can distinguish producer completion from acceptance. In persistent-background mode, the foreground task returns after linking the background task and stating `Acceptance: PENDING`; the background task owns the eventual `PASS` or `BLOCKED` result. A tool's own returned state or process exit is completion evidence for the requested action, not a separate foreground verification pass.
 
@@ -75,7 +75,7 @@ For receipt-backed grounded JSON, Ending Real may use `../task-analyze-skill/scr
 
 An admitted verification node preserves the locked model, effort, dependencies, input, output, and stop condition. Runtime labels are not proof; use the sanitized receipt contract in `../task-analyze-skill/references/runtime-receipts.md`. Ordinary inline Real Verify uses the current user-selected model and needs no fabricated child receipt.
 
-Routing quality learning records only the producer pair after Real. For a matched adaptive producer receipt, use `../project-memory-skill/scripts/obsidian_model_memory.py record` with the same project/task/module/file/symbol/code context. Obsidian `Projects/<project-key>/ModelExperience` is the sole active private authority; old local `model_experience.json` and central `TaskModelExperience/` are legacy read-only only. Spark is an active priority text/code producer at low/high effort, and its matched Real verdict may be recorded. Operational failures are neutral; a Spark correctness/quality failure starts a new 5.6 repair lifecycle. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
+Routing quality learning records only the producer pair after Real. The adaptive receipt carries its project/task/module/file/symbol/code context; start the lifecycle with `--producer-receipt`, then the terminal ledger event invokes `obsidian_model_memory.py record` automatically. Obsidian broad `Model Switch.md` pages are the sole active private authority; no local model-learning file or central monthly archive is active. The current catalog may expose Spark as the priority text/code producer at low/high effort; the quality ladder and repair pair use only the highest registered numeric GPT family and switch families when a newer version appears. Operational failures are neutral; a priority-producer correctness/quality failure starts a new quality-pair repair lifecycle. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
 
 ## Real Verify Workflow
 
@@ -83,8 +83,8 @@ Routing quality learning records only the producer pair after Real. For a matche
 2. Select one realistic evidence path proportional to risk.
 3. Run or inspect the actual artifact/state.
 4. Record input, method, observed output, and pass/fail reason.
-5. On pass, record lifecycle `PASS`, finish Ending Task, and update only related sanitized learning.
-6. On correctness failure, record lifecycle `FAIL` before repair and notify with `REPAIRING`; never let a background failure disappear.
+5. On pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching broad Obsidian `Model Switch.md` page before terminal PASS.
+6. On correctness failure, record lifecycle `FAIL --failure-class correctness` before repair; the ledger then writes the failed bound producer outcome and never lets a failure disappear.
 7. A repair uses a new lifecycle ID and cannot self-verify; its corrected result receives a new independent Ending pass.
 
 ## Artifact Guidance

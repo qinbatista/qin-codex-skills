@@ -12,6 +12,11 @@ SCRIPT_PATH = Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"
 MODULE_SPEC = importlib.util.spec_from_file_location("validate_workflow_skill", SCRIPT_PATH)
 module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
+QUALITY_MODEL = module.ACTIVE_MODEL_ORDER[0]
+QUALITY_EFFORT = module.ACTIVE_MODEL_EFFORTS[QUALITY_MODEL][0]
+COMPLEX_MODEL, COMPLEX_EFFORT = module.MODEL_REGISTRY["role_pairs"]["balanced_complex"].split("|", 1)
+PRIORITY_MODEL = module.PRIORITY_PRODUCER_MODEL
+PRIORITY_EFFORT = module.PRIORITY_PRODUCER["effort_by_complexity"]["easy"] if module.PRIORITY_PRODUCER else None
 
 
 class ValidateWorkflowSkillTests(unittest.TestCase):
@@ -53,10 +58,10 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
 
     def test_validate_trace_rejects_rust_wrong_owner(self):
         trace = [
-            {"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill", "execution_domain": "general"},
-            {"id": "implement", "model": "gpt-5.3-codex-spark", "effort": "low", "skill": "workflow-skill", "execution_domain": "rust", "language": "rust"},
-            {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
-            {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
+            {"id": "task-analyze", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "task-analyze-skill", "execution_domain": "general"},
+            {"id": "implement", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "execution_domain": "rust", "language": "rust"},
+            {"id": "main-result", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "execution_domain": "general"},
+            {"id": "ending-dispatch", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "execution_domain": "general"},
         ]
         with self._with_rust_domain(trace) as synthetic_skills_root:
             result = module.validate_trace("synthetic-rust-wrong-owner", trace, synthetic_skills_root)
@@ -65,11 +70,11 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
 
     def test_validate_trace_rejects_renamed_foreground_verifier_without_user_request_flag(self):
         trace = [
-            {"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill"},
-            {"id": "quick-check", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill"},
-            {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"},
-            {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"},
-            {"id": "real-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill"},
+            {"id": "task-analyze", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "task-analyze-skill"},
+            {"id": "quick-check", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "verify-skill"},
+            {"id": "main-result", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill"},
+            {"id": "ending-dispatch", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill"},
+            {"id": "real-verify", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "verify-skill"},
         ]
         rejected = module.validate_trace("renamed-foreground-verifier", trace)
         trace[1]["user_requested_verification_result"] = True
@@ -80,44 +85,56 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
 
     def test_validate_trace_rejects_user_request_flag_on_non_verifier(self):
         trace = [
-            {"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill"},
-            {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "user_requested_verification_result": True},
-            {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill"},
-            {"id": "real-verify", "model": "gpt-5.6-luna", "effort": "low", "skill": "verify-skill"},
+            {"id": "task-analyze", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "task-analyze-skill"},
+            {"id": "main-result", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "user_requested_verification_result": True},
+            {"id": "ending-dispatch", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill"},
+            {"id": "real-verify", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "verify-skill"},
         ]
         result = module.validate_trace("misplaced-user-verification-flag", trace)
         self.assertEqual(result["status"], "fail")
         self.assertTrue(any("user_requested_verification_result is valid only" in failure for failure in result["failures"]))
 
-    def test_validate_trace_accepts_complex_terra(self):
+    def test_validate_trace_accepts_complex_quality_model(self):
         trace = [
-            {"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill", "execution_domain": "general"},
-            {"id": "implement", "model": "gpt-5.6-terra", "effort": "low", "skill": "code-skill", "execution_domain": "rust", "language": "rust", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"},
-            {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
-            {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
+            {"id": "task-analyze", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "task-analyze-skill", "execution_domain": "general"},
+            {"id": "implement", "model": COMPLEX_MODEL, "effort": COMPLEX_EFFORT, "skill": "code-skill", "execution_domain": "rust", "language": "rust", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"},
+            {"id": "main-result", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "execution_domain": "general"},
+            {"id": "ending-dispatch", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "execution_domain": "general"},
         ]
         with self._with_rust_domain(trace) as synthetic_skills_root:
             result = module.validate_trace("synthetic-rust-nonspark", trace, synthetic_skills_root)
         self.assertEqual(result["status"], "pass")
 
-    def test_validate_trace_rejects_complex_spark(self):
+    @unittest.skipIf(PRIORITY_MODEL is None, "catalog has no optional priority producer")
+    def test_validate_trace_rejects_priority_producer_as_plan_node(self):
         trace = [
-            {"id": "task-analyze", "model": "gpt-5.6-luna", "effort": "low", "skill": "task-analyze-skill", "execution_domain": "general"},
-            {"id": "implement", "model": "gpt-5.3-codex-spark", "effort": "low", "skill": "code-skill", "execution_domain": "rust", "language": "rust", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"},
-            {"id": "main-result", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
-            {"id": "ending-dispatch", "model": "gpt-5.6-luna", "effort": "low", "skill": "workflow-skill", "execution_domain": "general"},
+            {"id": "task-analyze", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "task-analyze-skill", "execution_domain": "general"},
+            {"id": "implement", "model": PRIORITY_MODEL, "effort": PRIORITY_EFFORT, "skill": "code-skill", "execution_domain": "rust", "language": "rust", "task_family": "code", "modality": "text", "risk": "medium", "complexity": "complex", "ambiguity": "medium"},
+            {"id": "main-result", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "execution_domain": "general"},
+            {"id": "ending-dispatch", "model": QUALITY_MODEL, "effort": QUALITY_EFFORT, "skill": "workflow-skill", "execution_domain": "general"},
         ]
         with self._with_rust_domain(trace) as synthetic_skills_root:
             result = module.validate_trace("synthetic-rust-spark", trace, synthetic_skills_root)
         self.assertEqual(result["status"], "fail")
-        self.assertTrue(any("Spark is injected only as a result-producer attempt" in failure for failure in result["failures"]))
+        self.assertTrue(any("priority producer is injected only as a result-producer attempt" in failure for failure in result["failures"]))
 
-    def test_validate_trace_rejects_model_outside_shared_gpt56_ladder(self):
-        trace = json.loads(json.dumps(module.sample_traces()["admitted-single-luna-entry"]))
+    def test_validate_trace_rejects_model_outside_catalog_quality_ladder(self):
+        trace = json.loads(json.dumps(next(iter(module.sample_traces().values()))))
         trace[1]["model"] = "gpt-4.1"
         result = module.validate_trace("outside-shared-ladder", trace)
         self.assertEqual(result["status"], "fail")
-        self.assertTrue(any("outside the active shared GPT-5.6 ladder" in failure for failure in result["failures"]))
+        self.assertTrue(any("outside the active catalog-generated quality ladder" in failure for failure in result["failures"]))
+
+    def test_workflow_validator_uses_highest_numeric_family_registry_and_optional_priority_producer(self):
+        payload = module.MODEL_REGISTRY
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(tuple(model["id"] for model in payload["models"]), module.ACTIVE_MODEL_ORDER)
+        active_family = payload["active_family"]["id"]
+        self.assertEqual(payload["active_family"]["selection"], "highest_numeric_gpt_family")
+        self.assertTrue(all(model["id"].startswith(f"{active_family}-") or model["id"] == active_family for model in payload["models"]))
+        self.assertEqual(len(payload["source"]["catalog_sha256"]), 64)
+        if module.PRIORITY_PRODUCER_MODEL is not None:
+            self.assertNotIn(module.PRIORITY_PRODUCER_MODEL, module.ACTIVE_MODEL_ORDER)
 
     def test_workflow_contract_keeps_ordinary_tasks_inline(self):
         workflow_path = Path(__file__).resolve().parents[2] / "workflow-skill" / "SKILL.md"
@@ -128,17 +145,29 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         self.assertIn("frozen, receipt-backed, Real-passing, and `trial=false`", text)
         self.assertNotIn("observable entry model and effort belong only to Task Analyze", text)
 
+    def test_workflow_contract_refreshes_models_only_on_explicit_local_update(self):
+        workflow_path = Path(__file__).resolve().parents[2] / "workflow-skill" / "SKILL.md"
+        text = workflow_path.read_text(encoding="utf-8")
+        self.assertIn("reads the saved shared contract unchanged", text)
+        self.assertIn("Ordinary tasks do not scan or refresh the local model cache", text)
+        self.assertIn("Only an explicit user model-update request", text)
+        self.assertIn("never fetch models over the network", text)
+        self.assertIn("preserve the saved contract when the local cache is unavailable", text)
+        self.assertNotIn("auto-refreshed shared contract", text)
+
     def test_global_entry_required_terms_match_compact_contract(self):
         required = module.REQUIRED_ENTRY
-        self.assertIn("Eligible text/code producers read shared ladder", required)
-        self.assertIn("local JSON stays read-only", required)
-        self.assertIn("Spark first: easy=low, complex=high", required)
-        self.assertIn("Zero-result operational failure uses current 5.6 pair", required)
-        self.assertIn("publish, then return", required)
-        self.assertIn("Exact read-only uses one bounded rg per authoritative file, anchored to exact members", required)
-        self.assertIn("resolve aliases", required)
-        self.assertIn("no subagent/route/plan, guesses, unrelated skills, broad search, reread, full-file read, or pre-result check", required)
-        self.assertNotIn("Try Spark first: easy=low, complex=high", required)
+        self.assertIn("Eligible text/code MUST run adaptive producer", required)
+        self.assertIn("Saved highest-family ladder", required)
+        self.assertIn("only explicit user model-update", required)
+        self.assertIn("never fetch", required)
+        self.assertIn("no hierarchy notes or local JSON authority", required)
+        self.assertIn("Priority: easy=low, complex=high", required)
+        self.assertIn("zero-result uses contextual quality pair", required)
+        self.assertIn("publish then return", required)
+        self.assertIn("Exact read-only: one bounded rg/file at exact members/aliases", required)
+        self.assertIn("no subagent/route/plan, guesses, broad/reread/full read/pre-result check", required)
+        self.assertNotIn("Spark first: easy=low, complex=high", required)
         self.assertNotIn("no route, plan, guessed names, unrelated skills, broad search, reread, full-file read, or pre-result check", required)
 
     def test_routing_matrix_separates_ordinary_inline_from_admitted_routes(self):
@@ -156,10 +185,11 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         verify_text = (skills_root / "verify-skill" / "SKILL.md").read_text(encoding="utf-8")
         optimization_text = (skills_root / "optimization-skill" / "SKILL.md").read_text(encoding="utf-8")
         management_text = (skills_root / "management-skill" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("Ordinary implementation may run inline or as one Obsidian-context Spark-first producer with a selected 5.6 fallback", code_text)
+        self.assertIn("Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback", code_text)
+        self.assertIn("highest registered numeric GPT family", code_text)
         self.assertIn("bounded read-only lookup or audit stays on the bootstrap", code_text)
         self.assertIn("Ordinary inline Real Verify uses the current user-selected model and needs no fabricated child receipt", verify_text)
-        self.assertIn("Inline optimization uses the current model and no foreground verifier, Workflow, or child receipt", optimization_text)
+        self.assertIn("Eligible text/code optimization uses the catalog-derived adaptive producer; ineligible tool-only work stays inline", optimization_text)
         self.assertIn("Do not load this skill for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms", management_text)
         self.assertIn("positively admitted", code_text)
         self.assertIn("An admitted verification node preserves the locked model", verify_text)

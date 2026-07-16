@@ -34,6 +34,7 @@ try:
     from routing_policy import (
         ACTIVE_MODEL_EFFORTS,
         EXECUTION_DOMAINS,
+        MODEL_ROLE_PAIRS,
         adaptive_pair_texts_for_profile,
         execution_domain_is_active,
         expected_owner_skill,
@@ -52,6 +53,7 @@ except ModuleNotFoundError:
     _routing_policy_spec.loader.exec_module(_routing_policy)
     ACTIVE_MODEL_EFFORTS = _routing_policy.ACTIVE_MODEL_EFFORTS
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
+    MODEL_ROLE_PAIRS = _routing_policy.MODEL_ROLE_PAIRS
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
@@ -204,7 +206,7 @@ def _obsidian_recommendation_and_proof(node, project_root):
         "profile_fingerprint": fingerprint,
         "calibration_state": recommendation.get("calibration_state"),
         "best_pair": recommendation.get("success_model"),
-        "selection_basis": "obsidian_project_memory",
+        "selection_basis": "obsidian_broad_model_switch",
     }
     return recommendation, proof
 
@@ -316,7 +318,7 @@ def validate_plan(
         model = node.get("model")
         effort = node.get("effort")
         if model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set()):
-            failures.append(f"{node_id} must use a model/effort from the shared active GPT-5.6 ladder")
+            failures.append(f"{node_id} must use a model/effort from the catalog quality ladder")
         skill = node.get("skill")
         if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
@@ -352,7 +354,7 @@ def validate_plan(
             try:
                 node["allow_fallback"] = receipt_module.normalize_fallback_pairs(allow_fallbacks)
                 if any(model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS[model] for model, effort in node["allow_fallback"]):
-                    failures.append(f"{node_id} allow_fallback must stay inside the shared active GPT-5.6 ladder")
+                    failures.append(f"{node_id} allow_fallback must stay inside the catalog quality ladder")
             except (TypeError, ValueError):
                 failures.append(f"{node_id} allow_fallback contains unsupported model|effort pairs")
 
@@ -453,7 +455,7 @@ def validate_plan(
                         routing_condition["ambiguity"],
                     )
                     if ordered_pairs != expected_ladder:
-                        failures.append(f"{node_id} candidate_ladder must exactly match the shared full GPT-5.6 ladder")
+                        failures.append(f"{node_id} candidate_ladder must exactly match the full catalog quality ladder")
                 recommendation = node.get("routing_recommendation")
                 if not isinstance(recommendation, dict):
                     failures.append(f"{node_id} requires routing_recommendation proof")

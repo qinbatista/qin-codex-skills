@@ -21,6 +21,16 @@ except ModuleNotFoundError:
     project_change_memory = importlib.util.module_from_spec(_memory_spec)
     _memory_spec.loader.exec_module(project_change_memory)
 
+try:
+    import model_registry
+except ModuleNotFoundError:
+    import importlib.util
+
+    _registry_path = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "model_registry.py"
+    _registry_spec = importlib.util.spec_from_file_location("model_registry", _registry_path)
+    model_registry = importlib.util.module_from_spec(_registry_spec)
+    _registry_spec.loader.exec_module(model_registry)
+
 
 SCHEMA_VERSION = 1
 DEFAULT_VAULT = project_change_memory.DEFAULT_VAULT
@@ -31,12 +41,30 @@ FAILURE_CLASSES = {"none"} | QUALITY_FAILURES | OPERATIONAL_FAILURES
 LEVEL_VALUES = {"low", "medium", "high"}
 COMPLEXITY_VALUES = {"easy", "complex"}
 MODALITY_VALUES = {"text", "mixed", "image"}
+MODEL_SWITCH_CATEGORIES = (
+    "normal-script-update",
+    "code-design",
+    "finding-bugs",
+    "documentation-instructions",
+    "tests-verification",
+    "general-work",
+)
+MODEL_SWITCH_DIRECTIONS = (
+    "initial",
+    "upgrade",
+    "downgrade",
+    "freeze",
+    "no_switch",
+    "operational_fallback",
+)
+MODEL_SWITCH_CATEGORY_MARKER = "<!-- generated:model-switch-category -->"
 FRONTMATTER_FIELDS = (
     "model_experience_schema",
     "record_id",
     "recorded_at",
     "project_name",
     "project_key",
+    "project_owner",
     "task_type",
     "task_summary",
     "module",
@@ -51,6 +79,8 @@ FRONTMATTER_FIELDS = (
     "model",
     "effort",
     "pair",
+    "selected_pair",
+    "prior_pair",
     "attempt_pair",
     "active_fallback_pair",
     "operational_failure_pairs",
@@ -72,6 +102,16 @@ FRONTMATTER_FIELDS = (
     "process_ms",
     "receipt_sha256",
 )
+
+
+def _json_safe(value):
+    if isinstance(value, Path):
+        return value.expanduser().resolve().as_posix()
+    if isinstance(value, dict):
+        return {str(key): _json_safe(nested) for key, nested in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(nested) for nested in value]
+    return value
 
 
 def _single_line(value, field, *, required=True, maximum=280):
@@ -106,68 +146,20 @@ def _optional_relative_file(project_root, value):
 
 def load_shared_ladder(path=DEFAULT_LADDER):
     try:
-        payload = json.loads(Path(path).expanduser().resolve().read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        resolved = Path(path).expanduser().resolve()
+        if resolved.exists():
+            payload = model_registry.load_registry(resolved)
+        elif resolved == DEFAULT_LADDER.expanduser().resolve():
+            payload = model_registry.ensure_registry(resolved)["registry"]
+        else:
+            payload = model_registry.load_registry(resolved)
+        model_registry.validate_registry(payload)
+    except (OSError, RuntimeError, json.JSONDecodeError, ValueError) as error:
         raise ValueError(f"shared model ladder is unreadable: {error}") from error
-    models = payload.get("models") if isinstance(payload, dict) else None
-    effort_order = payload.get("effort_order") if isinstance(payload, dict) else None
-    if payload.get("schema_version") != 1 or payload.get("scope") != "shared_non_personal":
-        raise ValueError("shared model ladder contract is invalid")
-    if not isinstance(models, list) or not isinstance(effort_order, list):
-        raise ValueError("shared model ladder is incomplete")
     pairs = []
-    expected_rank = 1
-    for row in models:
-        if row.get("capability_rank") != expected_rank or not str(row.get("id", "")).startswith("gpt-5.6-"):
-            raise ValueError("shared model capability order is invalid")
-        efforts = row.get("codex_efforts")
-        if not isinstance(efforts, list) or efforts != [effort for effort in effort_order if effort in efforts]:
-            raise ValueError("shared model effort order is invalid")
+    for row in payload["models"]:
+        efforts = row["codex_efforts"]
         pairs.extend(f"{row['id']}|{effort}" for effort in efforts)
-        expected_rank += 1
-    if not pairs or payload.get("policy", {}).get("minimum_pair") != pairs[0]:
-        raise ValueError("shared model floor is invalid")
-    private_contract = payload.get("private_learning_contract")
-    if (
-        not isinstance(private_contract, dict)
-        or private_contract.get("authority") != "obsidian_project_memory"
-        or private_contract.get("path_template") != "Projects/<project-key>/ModelExperience"
-        or private_contract.get("specificity_order") != ["project_task", "module", "file", "symbol"]
-        or private_contract.get("legacy_local_json") != "read_only_inactive"
-    ):
-        raise ValueError("shared private-learning contract is invalid")
-    valid_pairs = set(pairs)
-    default_pair = payload.get("default_cold_start")
-    if default_pair not in valid_pairs:
-        raise ValueError("shared default cold start is invalid")
-    cold_starts = payload.get("cold_start_defaults")
-    if not isinstance(cold_starts, dict):
-        raise ValueError("shared cold-start map is missing")
-    for task_type, levels in cold_starts.items():
-        if not isinstance(levels, dict) or any(pair not in valid_pairs for pair in levels.values()):
-            raise ValueError(f"shared cold-start map is invalid for {task_type}")
-    spark = payload.get("spark_first")
-    if (
-        not isinstance(spark, dict)
-        or spark.get("enabled") is not True
-        or spark.get("id") != "gpt-5.3-codex-spark"
-        or spark.get("input_modalities") != ["text"]
-        or spark.get("eligible_modalities") != ["text"]
-        or spark.get("operational_fallback") != "current_obsidian_5_6_pair"
-        or spark.get("quality_failure") != "record_to_obsidian_then_new_5_6_repair_lifecycle"
-    ):
-        raise ValueError("shared Spark-first contract is invalid")
-    spark_efforts = spark.get("codex_efforts")
-    adaptive_efforts = spark.get("adaptive_efforts")
-    effort_by_complexity = spark.get("effort_by_complexity")
-    if (
-        not isinstance(spark_efforts, list)
-        or not isinstance(adaptive_efforts, list)
-        or any(effort not in spark_efforts for effort in adaptive_efforts)
-        or set(effort_by_complexity or {}) != COMPLEXITY_VALUES
-        or any(effort not in adaptive_efforts for effort in effort_by_complexity.values())
-    ):
-        raise ValueError("shared Spark effort contract is invalid")
     return payload, pairs
 
 
@@ -191,19 +183,49 @@ def _query(project_root, task_type, module, file_value="", symbol="", code_kind=
     }
 
 
+def _project_switch_directory(vault_path, owner):
+    if owner == "Global Codex Skills":
+        return vault_path / "Skills"
+    return vault_path / "Projects" / owner
+
+
+def _memory_root_owner(vault_path, owner):
+    if owner is None:
+        return None
+    return _project_switch_directory(vault_path, owner) / "Model Switch.md"
+
+
+def _is_configured_owner(vault_path, owner):
+    if vault_path is None or owner is None:
+        return False
+    return _project_switch_directory(vault_path, owner).is_dir()
+
+
 def _memory_root(query, vault):
     vault_path = project_change_memory._resolve_vault(vault)
     if vault_path is None:
         return None, None
-    return vault_path, vault_path / "Projects" / query["project"]["key"] / "ModelExperience"
+    owner = project_change_memory._registered_owner(query["project"]["root"])
+    if owner is None:
+        return vault_path, None
+    return vault_path, _memory_root_owner(vault_path, owner)
 
 
-def _frontmatter(record):
-    lines = ["---"]
-    for field in FRONTMATTER_FIELDS:
-        lines.append(f"{field}: {json.dumps(record.get(field), ensure_ascii=False)}")
-    lines.append("---")
-    return "\n".join(lines)
+def _project_switch_index(vault_path, owner):
+    if owner == "Global Codex Skills":
+        return None
+    return _project_switch_directory(vault_path, owner) / "index.md"
+
+
+def _ensure_model_switch_index_link(vault_path, owner, memory_root):
+    index_path = _project_switch_index(vault_path, owner)
+    if index_path is None or not index_path.exists():
+        return
+    target = _vault_relative_path(vault_path, memory_root).as_posix()
+    line = f"- [[{target}]]"
+    text = index_path.read_text(encoding="utf-8")
+    if line not in text:
+        index_path.write_text(text.rstrip() + "\n" + line + "\n", encoding="utf-8")
 
 
 def _parse_frontmatter(path):
@@ -231,12 +253,21 @@ def _parse_frontmatter(path):
 def _read_project_records(memory_root):
     if memory_root is None or not memory_root.exists():
         return []
+    if memory_root.is_file():
+        records = []
+        for raw in re.findall(r"<!-- model-experience: (.*?) -->", memory_root.read_text(encoding="utf-8"), flags=re.DOTALL):
+            try:
+                record = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if record.get("model_experience_schema") == SCHEMA_VERSION:
+                records.append(_json_safe(record))
+        return records
     records = []
     for path in sorted((memory_root / "records").glob("*/*/*.md")):
         record = _parse_frontmatter(path)
         if record is not None:
-            record["_path"] = path
-            records.append(record)
+            records.append(_json_safe(record))
     return records
 
 
@@ -368,18 +399,20 @@ def _active_recommendation(shared, pairs, query, records):
     }
 
 
-def _spark_priority_pair(shared, query):
-    spark = shared["spark_first"]
+def _priority_producer_pair(shared, query):
+    producer = shared.get("priority_producer")
+    if not isinstance(producer, dict) or producer.get("enabled") is not True:
+        return None
     if (
-        query["task_type"] not in set(spark["eligible_task_types"])
-        or query["modality"] not in set(spark["eligible_modalities"])
-        or query["operation"] in set(spark["excluded_operations"])
+        query["task_type"] not in set(producer["eligible_task_types"])
+        or query["modality"] not in set(producer["eligible_modalities"])
+        or query["operation"] in set(producer["excluded_operations"])
     ):
         return None
-    effort = spark["effort_by_complexity"].get(query["complexity"])
-    if effort not in set(spark["adaptive_efforts"]):
+    effort = producer["effort_by_complexity"].get(query["complexity"])
+    if effort not in set(producer["adaptive_efforts"]):
         return None
-    return f"{spark['id']}|{effort}"
+    return f"{producer['id']}|{effort}"
 
 
 def _latest_record(records):
@@ -390,42 +423,45 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, risk, ambiguity, task_summary)
     vault_path, memory_root = _memory_root(query, vault)
-    records, specificity, score = _best_scope_records(_read_project_records(memory_root), query)
+    owner = project_change_memory._registered_owner(query["project"]["root"])
+    memory_configured = _is_configured_owner(vault_path, owner)
+    records = [record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])]
+    records, specificity, score = _best_scope_records(records, query)
     active = _active_recommendation(shared, pairs, query, records)
     selected_pair = active["selected_pair"]
     attempt_pair = selected_pair
     attempt_reason = active["reason"]
     attempt_state = active["calibration_state"]
     attempt_trial = active["trial"]
-    spark_pair = _spark_priority_pair(shared, query)
-    spark_verdict = None
-    if spark_pair:
-        spark_verdicts = [_quality_verdict(record) for record in records if record.get("pair") == spark_pair]
-        spark_verdict = "fail" if "fail" in spark_verdicts else "pass" if "pass" in spark_verdicts else None
+    priority_pair = _priority_producer_pair(shared, query)
+    priority_verdict = None
+    if priority_pair:
+        priority_verdicts = [_quality_verdict(record) for record in records if record.get("pair") == priority_pair]
+        priority_verdict = "fail" if "fail" in priority_verdicts else "pass" if "pass" in priority_verdicts else None
         latest = _latest_record(records)
         latest_operational = latest.get("operational_failure_pairs") if isinstance(latest, dict) else []
         skip_for_repair = bool(
             isinstance(latest, dict)
             and latest.get("real_status") == "fail"
             and isinstance(latest_operational, list)
-            and spark_pair in latest_operational
+            and priority_pair in latest_operational
         )
-        if spark_verdict == "pass":
-            attempt_pair = spark_pair
-            attempt_reason = "verified_spark_retained"
+        if priority_verdict == "pass":
+            attempt_pair = priority_pair
+            attempt_reason = "verified_priority_retained"
             attempt_state = "frozen"
             attempt_trial = False
-        elif spark_verdict == "fail":
-            attempt_reason = "spark_quality_failure_to_5_6"
+        elif priority_verdict == "fail":
+            attempt_reason = "priority_quality_failure_to_quality_pair"
             attempt_state = "quality_boundary" if selected_pair else "blocked"
             attempt_trial = selected_pair is not None
         elif skip_for_repair:
-            attempt_reason = "spark_operational_failure_to_5_6_repair"
+            attempt_reason = "priority_operational_failure_to_quality_repair"
             attempt_state = "quality_boundary" if selected_pair else "blocked"
             attempt_trial = selected_pair is not None
         else:
-            attempt_pair = spark_pair
-            attempt_reason = "spark_first_text_code"
+            attempt_pair = priority_pair
+            attempt_reason = "priority_first_text_code"
             attempt_state = "cold_start"
             attempt_trial = True
     if attempt_pair is None:
@@ -434,8 +470,8 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     selected_model, selected_effort = selected_pair.split("|", 1) if selected_pair else (None, None)
     return {
         "schema_version": SCHEMA_VERSION,
-        "source": "obsidian_project_memory",
-        "memory_available": vault_path is not None,
+        "source": "obsidian_broad_model_switch",
+        "memory_available": memory_configured,
         "shared_model_registry": shared["registry_id"],
         "project_key": query["project"]["key"],
         "task_type": query["task_type"],
@@ -448,7 +484,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "specificity": specificity,
         "specificity_score": score,
         "matched_records": len(records),
-        "quality_samples": active["quality_samples"] + (1 if spark_verdict else 0),
+        "quality_samples": active["quality_samples"] + (1 if priority_verdict else 0),
         "selected_pair": selected_pair,
         "selected_model": selected_model,
         "selected_effort": selected_effort,
@@ -456,7 +492,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "attempt_model": attempt_model,
         "attempt_effort": attempt_effort,
         "active_fallback_pair": selected_pair if attempt_pair and attempt_pair != selected_pair else None,
-        "spark_verdict": spark_verdict,
+        "priority_verdict": priority_verdict,
         "trial": active["trial"],
         "reason": active["reason"],
         "calibration_state": active["calibration_state"],
@@ -491,28 +527,102 @@ def _atomic_write(path, text):
             os.unlink(temporary)
 
 
-def _append_index(path, title, line):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = path.read_text(encoding="utf-8") if path.exists() else f"# {title}\n\n"
-    if line not in text:
-        _atomic_write(path, text.rstrip() + "\n\n" + line + "\n")
+def _vault_relative_path(vault_path, path):
+    canonical_vault = Path(vault_path).expanduser().resolve()
+    canonical_path = Path(path).expanduser().resolve()
+    try:
+        return canonical_path.relative_to(canonical_vault)
+    except ValueError as error:
+        raise ValueError(f"model experience path must stay inside the Obsidian vault: {canonical_path}") from error
+def _task_category(record):
+    task_type = str(record.get("task_type") or "").strip().lower()
+    code_kind = str(record.get("code_kind") or "").strip().lower()
+    operation = str(record.get("operation") or "").strip().lower()
+    values = " ".join((task_type, code_kind, operation))
+    task_type_tokens = set(re.split(r"[._-]+", task_type))
+    if task_type_tokens & {"doc", "docs", "documentation", "instruction", "instructions", "instructional", "prompt", "prompts", "prompting"}:
+        return "documentation-instructions"
+    if any(term in values for term in ("test", "verify", "validation")):
+        return "tests-verification"
+    if any(term in values for term in ("document", "instruction", "prompt", "readme", "guide")):
+        return "documentation-instructions"
+    if any(term in values for term in ("bug", "debug", "find", "diagnos")):
+        return "finding-bugs"
+    if any(term in values for term in ("design", "architect", "plan")):
+        return "code-design"
+    if task_type == "script" or code_kind == "script" or operation in {"script_update", "script_edit"} or (operation in {"edit", "update", "implement", "fix"} and code_kind in {"python", "csharp", "code"}):
+        return "normal-script-update"
+    return "general-work"
 
 
-def _index_paths(memory_root, query):
-    paths = [(memory_root / "index.md", f"{query['project']['name']} Model Experience")]
-    paths.append((memory_root / "tasks" / f"{project_change_memory._slug(query['task_type'], 'task')}.md", f"Task: {query['task_type']}"))
-    paths.append((memory_root / "modules" / f"{project_change_memory._slug(query['module'], 'module')}.md", f"Module: {query['module']}"))
-    if query["file"]:
-        parts = [project_change_memory._slug(part, "path") for part in PurePosixPath(query["file"]).parts]
-        paths.append((memory_root / "files" / Path(*parts[:-1]) / f"{parts[-1]}.md", f"File: {query['file']}"))
-    if query["symbol"]:
-        symbol_hash = hashlib.sha256(f"{query['file']}::{query['symbol']}".encode()).hexdigest()[:10]
-        symbol_name = project_change_memory._slug(query["symbol"], "symbol")
-        paths.append((memory_root / "symbols" / project_change_memory._slug(query["module"], "module") / f"{symbol_name}-{symbol_hash}.md", f"Symbol: {query['symbol']}"))
-    return paths
+def _switch_details(record):
+    attempt_pair = record.get("attempt_pair") or None
+    selected_pair = record.get("selected_pair") or record.get("active_fallback_pair") or record.get("pair") or None
+    effective_pair = record.get("pair") or None
+    prior_pair = record.get("prior_pair") or record.get("success_pair") or record.get("failed_pair") or None
+    reason = record.get("selection_reason") or "unknown_selection_reason"
+    state = record.get("recommendation_state") or "unknown_state"
+    operational_failures = record.get("operational_failure_pairs") if isinstance(record.get("operational_failure_pairs"), list) else []
+    if operational_failures and effective_pair and attempt_pair and effective_pair != attempt_pair:
+        switch_direction = "operational_fallback"
+        switch_reason = f"operational fallback after {', '.join(operational_failures)}; selection {reason}"
+    elif prior_pair is None:
+        switch_direction = "initial"
+        switch_reason = reason
+    elif "one_rung_down" in reason:
+        switch_direction = "downgrade"
+        switch_reason = reason
+    elif "one_rung_up" in reason or "quality_failure" in reason:
+        switch_direction = "upgrade"
+        switch_reason = reason
+    elif state == "frozen" or "retained" in reason or reason in {"verified_floor_retained", "verified_quality_boundary"}:
+        switch_direction = "freeze"
+        switch_reason = reason
+    else:
+        switch_direction = "no_switch"
+        switch_reason = reason
+    return {"prior_pair": prior_pair, "selected_pair": selected_pair, "effective_pair": effective_pair, "attempt_pair": attempt_pair, "switch_direction": switch_direction, "switch_reason": switch_reason}
 
 
-def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None):
+def rebuild_model_switches(project_root, *, vault=None):
+    project = project_change_memory._project_identity(project_root)
+    vault_path = project_change_memory._resolve_vault(vault)
+    if vault_path is None:
+        return {"status": "unavailable", "written": False, "reason": "obsidian_vault_unavailable"}
+    query = _query(project_root, "script", "general")
+    _, broad_page = _memory_root(query, vault)
+    if broad_page is not None and broad_page.exists():
+        page_records = _read_project_records(broad_page)
+        records = [record for record in page_records if project_change_memory._record_matches_project(record, project)]
+        foreign_records = [record for record in page_records if not project_change_memory._record_matches_project(record, project)]
+        project_record_count = len(records)
+        heading = "# Model Switch\n\n"
+        sections = {"normal-script-update": "Normal Script Update", "code-design": "Code Design", "finding-bugs": "Finding Bugs", "documentation-instructions": "Documentation and Instructions", "tests-verification": "Tests and Verification", "general-work": "General Work"}
+        lines = [heading.rstrip(), "", "This page is the private adaptive-learning authority. Structured records are embedded below.", ""]
+        for category, label in sections.items():
+            lines.extend(["## " + label, "", "| Task type | Module | File / symbol | Model | Prior / selected / effective | Direction / reason | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
+            for record in records:
+                if _task_category(record) != category:
+                    continue
+                detail = _switch_details(record)
+                lines.append(f"| {record.get('task_type','')} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('model','')} / {record.get('effort','')} | {detail['prior_pair'] or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
+                lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
+            lines.append("")
+        # Preserve unexpected records byte-semantically without displaying them
+        # in another project's visible summary table.
+        for record in foreign_records:
+            lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
+        _atomic_write(broad_page, "\n".join(lines).rstrip() + "\n")
+        return {"status": "rebuilt", "written": True, "project_key": project["key"], "records": project_record_count, "page_records": len(page_records), "summary": _vault_relative_path(vault_path, broad_page).as_posix()}
+    return {"status": "no-op", "written": False, "project_key": project["key"], "reason": "broad_model_switch_missing"}
+
+
+def relink_project(project_root, *, vault=None):
+    project = project_change_memory._project_identity(project_root)
+    return {"status": "disabled", "written": False, "project_key": project["key"], "reason": "legacy_hierarchy_relink_disabled"}
+
+
+def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None):
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, risk, ambiguity, task_summary)
     if real_status not in {"pass", "fail"} or failure_class not in FAILURE_CLASSES:
@@ -522,11 +632,18 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     receipt_sha256 = hashlib.sha256(receipt_bytes).hexdigest()
     receipt = json.loads(receipt_bytes.decode("utf-8"))
     pair = _receipt_pair(receipt)
-    spark = shared["spark_first"]
-    spark_pairs = {f"{spark['id']}|{effort}" for effort in spark["adaptive_efforts"]}
-    if pair not in set(pairs) | spark_pairs:
+    priority_producer = shared.get("priority_producer")
+    priority_pairs = {f"{priority_producer['id']}|{effort}" for effort in priority_producer["adaptive_efforts"]} if isinstance(priority_producer, dict) and priority_producer.get("enabled") is True else set()
+    if pair not in set(pairs) | priority_pairs:
         raise ValueError("receipt pair is outside the shared active producer contract")
     valid_receipt = receipt.get("status") == "pass" and receipt.get("turn_completed") is True and receipt.get("model_match") is True and receipt.get("effort_match") is True
+    historical_binding = isinstance(bound_receipt, dict)
+    if historical_binding:
+        if bound_receipt.get("receipt_sha256") != receipt_sha256 or bound_receipt.get("model_learning_context") != receipt.get("model_learning_context") or bound_receipt.get("executed_pair") not in {None, pair}:
+            raise ValueError("bound producer receipt does not match its immutable lifecycle binding")
+        matched_route_attempt = next((attempt for attempt in receipt.get("route_attempts", []) if isinstance(attempt, dict) and attempt.get("status") == "pass" and attempt.get("executed_pair") == pair and attempt.get("model_match") is True and attempt.get("effort_match") is True), None)
+        if receipt.get("node_type") != "locked-route-node" or receipt.get("node_role") != "result-producer" or receipt.get("result_published") is not True or not matched_route_attempt:
+            raise ValueError("bound producer receipt is missing locked-route execution evidence")
     if real_status == "pass" and (failure_class != "none" or not valid_receipt):
         raise ValueError("a Real pass requires a matched passing producer receipt and failure_class=none")
     if failure_class in QUALITY_FAILURES and (real_status != "fail" or not valid_receipt):
@@ -536,10 +653,19 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     vault_path, memory_root = _memory_root(query, vault)
     if vault_path is None:
         return {"status": "unavailable", "written": False, "reason": "obsidian_vault_unavailable"}
+    if memory_root is None:
+        return {"status": "no-op", "written": False, "reason": "unregistered_or_unknown_project_root"}
+    owner = project_change_memory._registered_owner(query["project"]["root"])
+    if not _is_configured_owner(vault_path, owner):
+        return {
+            "status": "no-op",
+            "written": False,
+            "reason": "unregistered_or_unknown_project_root",
+        }
     duplicate = next(
         (
             record
-            for record in _read_project_records(memory_root)
+            for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])
             if record.get("receipt_sha256") == receipt_sha256
             and record.get("real_status") == real_status
             and record.get("failure_class") == failure_class
@@ -547,7 +673,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         None,
     )
     if duplicate is not None:
-        return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "shared_model_registry": shared["registry_id"]}
+        model_switch = rebuild_model_switches(project_root, vault=vault)
+        return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
     recommendation = recommend_model(
         project_root,
         task_type,
@@ -566,12 +693,12 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     )
     priority_attempt_pair = receipt.get("priority_attempt_pair") or receipt.get("requested_pair")
     operational_failure_pairs = receipt.get("operational_failure_pairs") if isinstance(receipt.get("operational_failure_pairs"), list) else []
-    operational_failure_pairs = [value for value in operational_failure_pairs if value in set(pairs) | spark_pairs]
-    if valid_receipt and recommendation.get("attempt_pair") != priority_attempt_pair:
+    operational_failure_pairs = [value for value in operational_failure_pairs if value in set(pairs) | priority_pairs]
+    if valid_receipt and not historical_binding and recommendation.get("attempt_pair") != priority_attempt_pair:
         raise ValueError("receipt attempt does not match the current Obsidian recommendation")
-    if valid_receipt and pair not in {recommendation.get("attempt_pair"), recommendation.get("active_fallback_pair")}:
-        raise ValueError("receipt result is outside the authorized Spark/5.6 route")
-    if valid_receipt and pair != recommendation.get("attempt_pair") and recommendation.get("attempt_pair") not in operational_failure_pairs:
+    if valid_receipt and not historical_binding and pair not in {recommendation.get("attempt_pair"), recommendation.get("active_fallback_pair")}:
+        raise ValueError("receipt result is outside the authorized priority/quality route")
+    if valid_receipt and not historical_binding and pair != recommendation.get("attempt_pair") and recommendation.get("attempt_pair") not in operational_failure_pairs:
         raise ValueError("fallback receipt lacks the failed priority attempt")
     timestamp = recorded_at or datetime.now(timezone.utc)
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
@@ -584,6 +711,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "project_name": query["project"]["name"],
         "project_key": query["project"]["key"],
+        "project_owner": owner,
         "task_type": query["task_type"],
         "task_summary": query["task_summary"],
         "module": query["module"],
@@ -598,6 +726,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "model": pair.split("|", 1)[0],
         "effort": pair.split("|", 1)[1],
         "pair": pair,
+        "selected_pair": receipt.get("selected_pair") or receipt.get("active_fallback_pair") or (pair if historical_binding else recommendation.get("selected_pair")),
+        "prior_pair": receipt.get("prior_pair") or (recommendation.get("success_model") or recommendation.get("failed_model")),
         "attempt_pair": priority_attempt_pair,
         "active_fallback_pair": recommendation.get("active_fallback_pair"),
         "operational_failure_pairs": operational_failure_pairs,
@@ -607,9 +737,9 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "model_match": receipt.get("model_match") is True,
         "effort_match": receipt.get("effort_match") is True,
         "turn_completed": receipt.get("turn_completed") is True,
-        "trial": recommendation["attempt_trial"],
-        "selection_reason": recommendation["attempt_reason"],
-        "recommendation_state": recommendation["attempt_calibration_state"],
+        "trial": receipt.get("trial") if historical_binding and isinstance(receipt.get("trial"), bool) else recommendation["attempt_trial"],
+        "selection_reason": receipt.get("selection_reason") or ("bound_historical_receipt" if historical_binding else recommendation["attempt_reason"]),
+        "recommendation_state": receipt.get("recommendation_state") or ("bound_historical_receipt" if historical_binding else recommendation["attempt_calibration_state"]),
         "specificity": recommendation["specificity"],
         "matched_records": recommendation["matched_records"],
         "success_pair": recommendation["success_model"],
@@ -619,47 +749,57 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "process_ms": receipt.get("process_elapsed_ms") if isinstance(receipt.get("process_elapsed_ms"), int) and receipt.get("process_elapsed_ms") >= 0 else None,
         "receipt_sha256": receipt_sha256,
     }
-    fingerprint_payload = {key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}}
+    base = _json_safe(base)
+    fingerprint_payload = _json_safe({key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}})
     fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     base["record_id"] = f"{timestamp.strftime('%Y%m%dT%H%M%SZ')}-{fingerprint[:12]}"
-    lock_path = memory_root / ".model-experience.lock"
+    lock_path = Path.home() / ".codex" / "project-change-memory" / ".model-experience.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        duplicate = next((record for record in _read_project_records(memory_root) if record.get("receipt_sha256") == base["receipt_sha256"] and record.get("real_status") == real_status and record.get("failure_class") == failure_class), None)
+        duplicate = next((record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"]) and record.get("receipt_sha256") == base["receipt_sha256"] and record.get("real_status") == real_status and record.get("failure_class") == failure_class), None)
         if duplicate is not None:
-            return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "shared_model_registry": shared["registry_id"]}
-        record_path = memory_root / "records" / timestamp.strftime("%Y") / timestamp.strftime("%m") / f"{base['record_id']}.md"
-        body = (
-            f"{_frontmatter(base)}\n\n"
-            f"# {query['task_type']} — {query['module']}\n\n"
-            f"- Scope: project `{query['project']['key']}`; module `{query['module']}`; file `{query['file'] or 'project/module'}`; symbol `{query['symbol'] or 'none'}`\n"
-            f"- Work: `{query['operation']}` / `{query['code_kind']}` / `{query['modality']}` / `{query['complexity']}`\n"
-            f"- Producer: attempt `{base['attempt_pair']}`; result `{pair}`; fallback `{base['active_fallback_pair']}`; operational failures `{base['operational_failure_pairs']}`\n"
-            f"- Real: `{real_status}`; failure `{failure_class}`; trial `{str(base['trial']).lower()}`\n"
-            f"- Selection: `{base['selection_reason']}`; state `{base['recommendation_state']}`; specificity `{base['specificity']}`; prior pass `{base['success_pair']}`; prior fail `{base['failed_pair']}`\n"
-            f"- Summary: {query['task_summary'] or 'No sanitized summary supplied.'}\n"
-            f"- Evidence: matched receipt `{base['receipt_status']}`; tokens `{base['total_tokens']}`; process ms `{base['process_ms']}`\n"
-        )
-        _atomic_write(record_path, body)
-        relative_note = record_path.relative_to(vault_path).with_suffix("").as_posix()
-        label = f"{base['recorded_at']} — {query['task_type']} / {query['module']} / {query['symbol'] or query['file'] or 'project'}"
-        line = f"- [[{relative_note}|{label}]] — `{pair}` — Real `{real_status}` — `{failure_class}` — `{base['selection_reason']}`"
-        for index_path, title in _index_paths(memory_root, query):
-            _append_index(index_path, title, line)
+            model_switch = rebuild_model_switches(project_root, vault=vault)
+            return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
+        record_path = memory_root
+        records = _read_project_records(record_path)
+        records.append(_json_safe(base))
+        _atomic_write(record_path, "# Model Switch\n\n" + "\n".join("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->" for record in records) + "\n")
+        _ensure_model_switch_index_link(vault_path, owner, record_path)
+        model_switch = rebuild_model_switches(project_root, vault=vault)
         fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-    return {"status": "written", "written": True, "record_id": base["record_id"], "project_key": query["project"]["key"], "pair": pair, "real_status": real_status, "failure_class": failure_class, "shared_model_registry": shared["registry_id"], "obsidian_note": record_path.relative_to(vault_path).as_posix()}
+    return {"status": "written", "written": True, "record_id": base["record_id"], "project_key": query["project"]["key"], "pair": pair, "real_status": real_status, "failure_class": failure_class, "shared_model_registry": shared["registry_id"], "obsidian_note": _vault_relative_path(vault_path, record_path).as_posix(), "model_switch": model_switch}
 
 
 def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER):
     shared, pairs = load_shared_ladder(ladder)
     vault_path = project_change_memory._resolve_vault(vault)
-    spark = shared["spark_first"]
-    output = {"status": "ready" if vault_path else "unavailable", "authority": "obsidian_project_memory", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + len(spark["adaptive_efforts"]), "active_5_6_pairs": len(pairs), "spark_attempt_pairs": len(spark["adaptive_efforts"]), "vault": str(vault_path) if vault_path else ""}
+    priority_producer = shared.get("priority_producer")
+    priority_pair_count = len(priority_producer["adaptive_efforts"]) if isinstance(priority_producer, dict) and priority_producer.get("enabled") is True else 0
+    output = {"status": "ready" if vault_path else "unavailable", "authority": "obsidian_broad_model_switch", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "vault": str(vault_path) if vault_path else ""}
     if project_root and vault_path:
         project = project_change_memory._project_identity(project_root)
-        root = vault_path / "Projects" / project["key"] / "ModelExperience"
-        output.update({"project_key": project["key"], "records": len(_read_project_records(root))})
+        owner = project_change_memory._registered_owner(project["root"])
+        _, page = _memory_root(_query(project_root, "script", "general"), vault)
+        memory_available = _is_configured_owner(vault_path, owner)
+        if owner is None:
+            reason = "unregistered_or_unknown_project_root"
+        elif page is None:
+            reason = "unconfigured_project_root"
+        elif not page.exists():
+            reason = "configured_broad_page_missing"
+        else:
+            reason = None
+        output.update(
+            {
+                "project_key": project["key"],
+                "memory_available": memory_available,
+                "broad_page_owner": owner,
+                "records": 0 if page is None else len(_read_project_records(page)),
+                "page": "" if page is None else _vault_relative_path(vault_path, page).as_posix(),
+                "reason": reason,
+            }
+        )
     return output
 
 
@@ -693,6 +833,10 @@ def parse_args(argv=None):
     record.add_argument("--trial", action="store_true")
     status = commands.add_parser("status")
     status.add_argument("--project-root", type=Path)
+    relink = commands.add_parser("relink")
+    relink.add_argument("--project-root", type=Path, required=True)
+    rebuild = commands.add_parser("rebuild-model-switches")
+    rebuild.add_argument("--project-root", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -701,6 +845,10 @@ def main(argv=None):
     common = {"vault": args.vault, "ladder": args.ladder}
     if args.command == "status":
         output = memory_status(args.project_root, **common)
+    elif args.command == "relink":
+        output = relink_project(args.project_root, vault=args.vault)
+    elif args.command == "rebuild-model-switches":
+        output = rebuild_model_switches(args.project_root, vault=args.vault)
     else:
         scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, **common}
         if args.command == "recommend":

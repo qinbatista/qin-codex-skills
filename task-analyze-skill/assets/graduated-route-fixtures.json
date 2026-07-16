@@ -158,7 +158,7 @@
             "profile_fingerprint": "af4400a8824bfe69cf34260f196bc429139b6e232e4b390fc855cde921744589",
             "calibration_state": "cold_start",
             "best_pair": null,
-            "selection_basis": "obsidian_project_memory"
+            "selection_basis": "obsidian_broad_model_switch"
           }
         },
         {

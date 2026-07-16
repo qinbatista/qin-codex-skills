@@ -1,45 +1,33 @@
 # Adaptive Model Learning
 
-The learner chooses a verified contextual 5.6 `model|effort` boundary for matching project/task/module/file/symbol/code context and separately decides whether eligible text/code work should try Spark first. Correctness wins over token or time savings.
+The learner chooses a verified contextual `model|effort` boundary for matching project/task/module/file/symbol/code context. Correctness wins over token or time savings.
 
 ## Two Routing Authorities
 
-- Shared: `assets/model-capability-ladder.json` contains only model rank, supported Codex efforts, strengths, and movement policy. It is mirrorable and contains no user history.
-- Project scoped: Obsidian `Projects/<project-key>/ModelExperience` contains receipt-backed contextual evidence keyed by project/task/module/file/symbol/code context.
+- Shared: saved `assets/model-capability-ladder.json` contains the last explicitly refreshed local Codex model order, supported efforts, source digest, cold starts, optional priority-producer policy, and movement rules, with no user history.
+- Project scoped: Obsidian broad `Model Switch.md` pages contain receipt-backed contextual evidence keyed by project/task/module/file/symbol/code fields.
 
-Each Obsidian record references the shared ladder pair instead of copying the model list. Ending Real alone stores sanitized producer receipts, pass/fail verdicts, quality boundaries, tokens, and process time; never raw prompts, raw results, credentials, or secrets. Old local `model_experience.json` is legacy read-only only and is never an active selection or write target.
+The shared registry may be atomically bootstrapped from the local cache when missing. Ordinary tasks never refresh it. Only an explicit user model-update request may rescan the local cache and replace a valid registry; this workflow never fetches over the network. If the cache is unavailable, preserve the last valid registry. If both are absent, routing fails clearly instead of inventing models.
 
-## Shared Ladder
+## Start And End Flow
 
-The active ladder is read from the shared file, weakest to strongest:
+1. Every eligible text/code production task reads the generated registry and its matching Obsidian context.
+2. The optional priority producer runs first; otherwise the contextual quality pair runs directly. A cold context is a real `trial=true` producer route rather than an inline dead end.
+3. A zero-result, zero-token priority-producer operational failure may run the contextual quality fallback in the same receipt.
+4. The result is presented immediately.
+5. The lifecycle starts with `--producer-receipt`; its Ending PASS/FAIL event automatically writes the producer outcome to Obsidian.
+6. The next matching task moves exactly one rung, freezes a verified floor/boundary, or reuses a frozen pair.
 
-`Luna low ... Luna max -> Terra low ... Terra ultra -> Sol low ... Sol ultra`
+The automatic Ending write stores sanitized model/effort, quality verdict, task context, tokens, timing, and receipt hash on the existing broad page. Project, task, module, file, symbol, and code remain record fields; no hierarchy notes are created. It never stores raw prompts, raw results, credentials, or secrets. A verifier pair is never learned as the producer.
 
-Spark is a priority attempt, not a rung in the 5.6 quality ladder. Easy text/code uses Spark-low and complex text/code uses Spark-high. A zero-result, zero-token operational failure immediately uses the contextual 5.6 pair. A Spark quality/correctness failure is stored in Obsidian and the repair lifecycle starts on 5.6. Downgrade and upgrade within 5.6 keep their existing order.
-
-## Project Context Identity
-
-Learning stays inside the matching project record and uses these identity fields:
-
-`project_key, task_context, module_path, file_path, symbol, code_context`
-
-Artifact, scope, ambiguity, modality, risk, complexity, execution domain, owning skill, and verification shape remain supporting evidence. Evidence does not cross project keys merely because two tasks have a broad family label.
+Each terminal write rebuilds the six sections on that same broad `Model Switch.md` page. Categories are exactly `normal-script-update`, `code-design`, `finding-bugs`, `tests-verification`, `documentation-instructions`, and `general-work`; public `switch_direction` values are exactly `initial`, `upgrade`, `downgrade`, `freeze`, `no_switch`, and `operational_fallback`. The priority attempt is displayed separately from quality-ladder movement.
 
 ## Movement
 
-1. Eligible text/code cold start tries the configured Spark effort; other work uses the broad 5.6 preset.
-2. A receipt-matched Ending Real pass trials exactly one lower rung.
-3. A receipt-matched correctness or quality failure moves exactly one rung higher and keeps a sticky failure boundary.
-4. Operational failures are quality-neutral; only unpublished zero-token Spark failure may trigger the current 5.6 fallback.
-5. A Real pass at `gpt-5.6-luna|low`, or an adjacent verified pass/fail boundary, freezes the lowest passing pair with `trial=false`.
-6. A later quality failure, material task-profile drift, shared-policy change, or explicit reset reopens learning.
+- PASS: one rung down, effort before model.
+- Quality/correctness FAIL: one rung up, effort before stronger model; record the failure before repair.
+- Operational FAIL: neutral; it does not create a quality boundary.
+- Priority-producer quality FAIL: record first, then start a new repair lifecycle on the contextual quality pair.
+- Lowest passing pair or closed pass/fail boundary: freeze with `trial=false` until a later quality failure or catalog/policy drift.
 
-`obsidian_adaptive_model_runner.py` executes one Spark-first route with at most the selected 5.6 operational fallback. It reads the shared contract and matching Obsidian record but never writes learning. This is not proof that a multi-node Global strategy is faster or smaller than Direct; `strategy_performance.py` remains separate.
-
-## Commands
-
-```bash
-python3 scripts/obsidian_adaptive_model_runner.py --help
-```
-
-The ordinary runner resolves the project/task/module/file/symbol/code key, reads the active Obsidian boundary, and emits a receipt-backed producer result. Ending Real alone records the matching producer pass/fail to Obsidian; it never learns the verifier as the producer. Legacy `model_routing_history.py` and local `model_experience.json` access are read-only compatibility surfaces only.
+Evidence never crosses project keys merely because two tasks share a broad page or display name. The broad `Model Switch.md` page is the sole active private authority. `strategy_performance.py` remains the separate authority for multi-node Global-versus-Direct admission and savings claims.

@@ -4,26 +4,26 @@
 
 Finish the requested task and show the completed result immediately. Do not run Mini/Fast Verify before first presentation. Real Verify, broader regression, optimization proof, reports, logs, documentation, and routing learning belong after that result in Ending Task. A later correctness failure must notify the user, reopen the task, repair, and present the corrected result.
 
-## Ordinary Inline Contract
+## Ordinary Entry Contract
 
-The hookless always-loaded bootstrap, not this full skill, owns ordinary work. The user's current model performs the task directly regardless of apparent complexity, uses the relevant installed tool or production skill, and presents the completed result with no foreground verification pass. It does not show a route, resolve the entry pair, load Workflow, or create a child receipt merely to answer. Ending Real begins only after presentation.
+The hookless always-loaded bootstrap, not this full skill, owns ordinary work. Eligible text/code production uses exactly one `obsidian_adaptive_model_runner.py` producer even on cold start, so a real receipt can be learned after Ending. Tool-only, image/mixed, and exact read-only work stays on the current model inline. Neither path shows a route or adds foreground verification; Ending Real begins only after presentation.
 
 - One obvious reversible action uses one tool action and presents the observed result immediately.
 - Exact-scoped read-only work stays inline with no subagent or route. An exact named-source audit first runs one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answers once. Anchor named members directly; enclosing-class or call-site anchors, guessed identifier families, separate planning, broad searches, whole-file reads, rereads, and pre-result checks are forbidden. Present immediately.
 - An exact bounded multi-file allowlist uses one boundary-labelled broad search, not parallel agents, separate locator/read rounds, or one full read per file.
-- Requested edits use the smallest write surface and present the completed change; syntax, parse, compile, test, render, or state verification runs in Ending Real.
-- A task that appears complex still stays inline unless the user explicitly asks for routing/benchmarking/maintenance or current comparable evidence positively admits delegation.
+- Requested text/code production uses the smallest adaptive producer surface and presents the completed change; syntax, parse, compile, test, render, or state verification runs in Ending Real. Its lifecycle start binds the producer receipt so the terminal verdict is recorded automatically.
+- A task that appears complex still avoids multi-node routing unless the user explicitly asks for routing/benchmarking/maintenance or current comparable evidence positively admits a graph. This does not suppress the single adaptive producer.
 
 The graduated examples are therefore inline by default:
 
 - Open Chrome: perform the action, present completion, then verify state in Ending Real.
 - Open Chrome and open YouTube: perform the action, present completion, then verify `youtube.com` in Ending Real.
 - Open Chrome, open YouTube, and search CCTV: perform the action, present completion, then inspect the query/results in Ending Real.
-- Design a website like YouTube: build on the current model, present the completed draft, then run render and interaction checks in Ending Real. Apparent complexity alone does not create a dispatcher.
+- Design a website like YouTube: use one adaptive producer, present the completed draft, then run render and interaction checks in Ending Real. Apparent complexity alone does not create a dispatcher.
 
 ## Explicit Or Admitted Foreground Budget
 
-Load full Task Analyze only for explicit model routing/benchmarking, Task Analyze maintenance, or a real dependency graph under consideration. Full activation still defaults back to inline execution. A delegated foreground exists only after comparable end-to-end evidence positively admits it.
+Load full Task Analyze only for explicit model routing/benchmarking, Task Analyze maintenance, or a real dependency graph under consideration. Full activation still defaults to one adaptive producer or inline ineligible work. A multi-node foreground exists only after comparable end-to-end evidence positively admits it.
 
 For an admitted route, the entry model may coordinate the route but must not duplicate a child's source inspection. Every collaboration child starts with `LOCKED_ROUTE_NODE`, and collaboration plus dispatcher must never execute the same branch twice.
 
@@ -89,7 +89,7 @@ When a dispatcher is useful, save schema version 2 JSON inside the active task c
 - main-producer `model_memory_scope` with module plus file/symbol/code/operation when known; omitted file/symbol values intentionally fall back to module-level project evidence;
 - `main_result_node` and one post-result Real verifier.
 
-The internal main producer carries a complete `routing_recommendation` matching its selected 5.6 `model|effort`, `trial`, and profile fingerprint. The controller recomputes it and rejects stale or self-authored plans. Spark is never a schema-version-2 plan node; for eligible text/code the dispatcher injects the current Spark attempt ahead of the plan's selected 5.6 pair and records both attempts in one receipt.
+The internal main producer carries a complete `routing_recommendation` matching its selected catalog-derived quality `model|effort`, `trial`, and profile fingerprint. The controller recomputes it and rejects stale or self-authored plans. The optional priority producer is never a schema-version-2 plan node; for eligible text/code the dispatcher injects it ahead of the plan's selected quality pair and records both attempts in one receipt.
 
 The plan also carries `first_result_timeout_seconds`. Dispatcher stdout is a compact locator only; the full manifest remains on disk. Read-only locked nodes omit broad user configuration by default because their prompt already includes the exact owning skill path and domain reference; set `load_user_config=true` only when a configured plugin/tool surface is genuinely required.
 
@@ -104,11 +104,11 @@ Admitted dispatcher fixtures are topology-only portable templates, not execution
 - The current pair performs ordinary inline work. In an admitted route, downstream nodes use their locked pairs rather than silently inheriting the entry pair.
 - Every downstream model and effort is supported and receipt-backed when execution proof is required.
 - Every owning skill is installed.
-- Active registry-owned code-domain implementation and authored probes use `code-skill`. Plan nodes and ordinary fallbacks use the shared 5.6 ladder; eligible text/code result producers may receive the hidden receipt-backed Spark first attempt.
+- Active registry-owned code-domain implementation and authored probes use `code-skill`. Plan nodes and ordinary fallbacks use the generated quality ladder; eligible text/code result producers may receive the hidden receipt-backed priority first attempt.
 - Main Result is upstream of Ending Task.
 - Ending Real Verify, optimization verification, reports, logs, docs, and memory do not gate the first result.
 - Optional related-memory preflight is read-only, bounded, and advisory. An unavailable provider or no matches never blocks routing. Ending updates only related sanitized memory after the result; model-switch memory waits for Real Verify.
-- The main producer carries a complete Obsidian-derived `routing_recommendation` proof matching its selected pair, trial flag, and profile fingerprint. Record model-quality learning only after Ending Real through `project-memory-skill/scripts/obsidian_model_memory.py`; tool-only routes never record adaptive producer samples, verifier models are never recorded as producers, and deterministic controller recording needs no decorative Luna call.
+- The main producer carries a complete Obsidian-derived `routing_recommendation` proof matching its selected pair, trial flag, and profile fingerprint. Bind its receipt to `ending_task_ledger.py start`; the terminal event records model-quality learning through `project-memory-skill/scripts/obsidian_model_memory.py`. Tool-only routes never record adaptive producer samples, verifier models are never recorded as producers, and deterministic controller recording needs no decorative model call.
 - A later correctness failure notifies and reopens.
 - No lifecycle hook or chat-visible machine plan is required.
 - Ending wave scheduling requires dependency-ready batches with a three-node concurrency cap.

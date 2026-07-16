@@ -1,11 +1,11 @@
 ---
 name: workflow-skill
-description: "Execute one Obsidian-context Spark-first producer or a performance-admitted multi-node route. Every task still launches the mandatory post-result Ending lifecycle."
+description: "Execute one Obsidian-context catalog-derived producer or a performance-admitted multi-node route. Every task still launches the mandatory post-result Ending lifecycle."
 ---
 
 # Workflow Skill
 
-Use result-producing Workflow for one Obsidian-context Spark-first producer with a selected 5.6 fallback, or after full `task-analyze-skill` returns a performance-admitted locked multi-node route. Ineligible ordinary work remains inline, and every task uses the universal Ending lifecycle after presentation. Continue in the same task; no hook is used; never print the private machine plan.
+Use result-producing Workflow for one Obsidian-context priority-first producer with a catalog-derived quality fallback, or after full `task-analyze-skill` returns a performance-admitted locked multi-node route. Ineligible ordinary work remains inline, and every task uses the universal Ending lifecycle after presentation. Continue in the same task; no hook is used; never print the private machine plan.
 
 ## Admission Gate
 
@@ -17,7 +17,7 @@ Before a multi-node route or savings claim, confirm that Task Analyze supplied c
 - the selected pair is frozen, receipt-backed, Real-passing, and `trial=false`;
 - evidence is current, complete, and workload-comparable.
 
-If any item is missing, stale, cross-workload, incomplete, or negative, reject the multi-node route and its savings claim. Separately, the shared ladder plus matching Obsidian `Projects/<project-key>/ModelExperience` context may admit exactly one ordinary 5.6 producer at cold start, one-rung downgrade/upgrade trial, or frozen reuse; this route does not claim strategy savings.
+If any item is missing, stale, cross-workload, incomplete, or negative, reject the multi-node route and its savings claim. Separately, the generated shared ladder plus matching Obsidian broad `Model Switch.md` context admits exactly one ordinary producer at cold start, one-rung downgrade/upgrade trial, or frozen reuse; this route does not claim strategy savings.
 
 ## Authority
 
@@ -40,7 +40,7 @@ Workflow reports only an actual fallback or post-result repair. It never adds a 
 
 ## Inline Boundary
 
-Eligible ordinary tasks get one project/task/module/file/symbol/code lookup. The bootstrap may call `obsidian_adaptive_model_runner.py` once and create one route receipt: Spark first for text/code, with one selected 5.6 fallback only after zero-result operational failure. It never launches foreground verification.
+Eligible ordinary production tasks get one project/task/module/file/symbol/code lookup and must call `obsidian_adaptive_model_runner.py` once, including cold start. The current catalog's optional priority producer runs first for text/code, with one selected quality fallback only after zero-result operational failure. It never launches foreground verification.
 
 Inline work uses one direct task action or direct execution surface, then shows the completed main result immediately. Ending Real Verify starts only afterward.
 
@@ -49,11 +49,11 @@ Inline work uses one direct task action or direct execution surface, then shows 
 1. Execute only dependency-ready nodes. Parallelize safe independent branches; keep ordered, shared-state, irreversible, or output-dependent work sequential.
 2. Load each owning skill and only task-relevant references. Preserve user work and the smallest source allowlist.
 3. Use one execution surface per branch. Collaboration prompts start `LOCKED_ROUTE_NODE`; do not repeat that branch in a dispatcher.
-4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; eligible text/code starts on Spark (`easy=low`, `complex=high`) and otherwise uses the contextual 5.6 pair. It emits the first completed result without a foreground verification gate.
+4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; eligible text/code starts on the catalog priority producer (`easy=low`, `complex=high` when supported) and otherwise uses the contextual quality pair. It emits the first completed result without a foreground verification gate.
 5. Only a real graph with at least two model-executed nodes saves private schema-2 JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once.
 6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work without user authorization.
 
-The adaptive producer rechecks the shared contract and matching Obsidian project context before execution. It never writes learning. Spark launch/access/transport failure can use the selected 5.6 pair only before any published result and with zero tokens; all attempts stay in one route receipt. Explicit benchmark baselines remain outside entry context.
+The adaptive producer reads the saved shared contract unchanged and checks the matching Obsidian project context before execution. Ordinary tasks do not scan or refresh the local model cache. Only an explicit user model-update request may refresh the shared contract from local `models_cache.json`; never fetch models over the network, and preserve the saved contract when the local cache is unavailable. It never writes learning. Priority-producer launch/access/transport failure can use the selected quality pair only before any published result and with zero tokens; all attempts stay in one route receipt. Explicit benchmark baselines remain outside entry context.
 
 ## First Result Before Verification
 
@@ -69,7 +69,7 @@ For a dispatcher use ongoing `run-plan` session -> `result-ready` event -> show 
 
 ## Mandatory Ending Task
 
-Ending Task begins only after the main result and is mandatory for read-only/write and simple/complex work. It owns the independent proportional Real Verify plus any genuinely needed broader regression, visual replay, independent optimization verification, reports, logs, docs, and sanitized learning. Ending Real alone records receipt-backed pass/fail to Obsidian `Projects/<project-key>/ModelExperience`. It bypasses result-producing performance admission. Missing memory is a successful no-op.
+Ending Task begins only after the main result and is mandatory for read-only/write and simple/complex work. It owns the independent proportional Real Verify plus any genuinely needed broader regression, visual replay, independent optimization verification, reports, logs, docs, and sanitized learning. Start it with `--producer-receipt` for adaptive results; the terminal ledger event automatically records receipt-backed pass/fail to an Obsidian broad `Model Switch.md` page. It bypasses result-producing performance admission. Missing memory is a successful no-op only for work that has no bound producer receipt.
 
 An Ending worker starts with `ENDING_TASK_WORKER`; any locked-route metadata follows that marker. It never restarts Task Analyze/Workflow or silently changes the delivered result. Safe isolated log/doc branches run in parallel with verification; final project memory and Obsidian writes remain ordered. Before final, the lifecycle ledger must report `PASS` or explicit `BLOCKED`.
 
@@ -79,13 +79,13 @@ On failure, persist lifecycle error evidence and any failed durable project reco
 
 Use runtime receipts only for delegated model nodes, explicit routing proof, or benchmarking. A timeout remains a failure with elapsed time and partial token lower bounds.
 
-`obsidian_adaptive_model_runner.py` reads the shared contract and matching project/task/module/file/symbol/code experience but never writes learning. Ending Real alone writes the receipt-backed effective producer result and Spark attempt evidence to Obsidian. Old local `model_experience.json` and legacy `model_routing_history.py` remain read-only compatibility only. Operational failures are quality-neutral. End-to-end performance admission remains separate.
+`obsidian_adaptive_model_runner.py` reads the shared contract and matching project/task/module/file/symbol/code experience but never writes learning. It embeds a sanitized learning context in the private receipt. Ending Real's terminal ledger event writes the effective producer result and priority-attempt evidence to Obsidian automatically. The broad `Model Switch.md` page is the sole current contextual experience authority. Operational failures are quality-neutral. End-to-end performance admission remains separate.
 
 Savings claims count every session once and test simple, medium, and complex separately. User-visible latency ends at the first completed result; Ending Real time is separate. A suite total never converts a losing class into a pass.
 
 ## Prompt And Code Rules
 
-Delegated code nodes retain `code-skill`. Eligible text/code result producers try the shared Spark effort first, while entry/controller, verifier, Ending, image/mixed, and exact read-only work remain on their active 5.6 or inline route. Local execution does not fabricate model metadata.
+Delegated code nodes retain `code-skill`. Eligible text/code result producers try the catalog priority effort first, while entry/controller, verifier, Ending, image/mixed, and exact read-only work remain on their active or inline route. Local execution does not fabricate model metadata.
 
 ## Files And Verification
 

@@ -2,13 +2,13 @@
 
 # 🚀 Auto Best Model
 
-**专用于 Codex · 默认 inline · 有证据才路由 · 交付后再验证**
+**专用于 Codex · 合格文字/代码使用自适应生产模型 · 例外保持 inline · 交付后再验证**
 
 [English](./README.md)
 
-从 **GPT-5.6** 开始测试 · 最新注册 Codex 模型：`gpt-5.6-luna` · `gpt-5.6-terra` · `gpt-5.6-sol`
+已保存的最高版本家族质量梯级 · 只有你主动要求本地模型更新时才刷新
 
-文字/代码优先使用 Spark：`gpt-5.3-codex-spark` · 简单=`low` · 复杂=`high`
+当前目录推导的优先生产模型：`gpt-5.3-codex-spark` · 简单=`low` · 复杂=`high`
 
 </div>
 
@@ -23,24 +23,24 @@
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
-  <img src="./management-skill/assets/readme/model-router.svg" alt="文字和代码优先使用 Spark，按上下文回退 GPT-5.6，并在私有 Obsidian 中学习">
+  <img src="./management-skill/assets/readme/model-router.svg" alt="目录推导优先生产模型与完整质量梯级，并在私有 Obsidian 中学习">
 </picture>
 
-- **优先：** 合格文字/代码先用 Spark：简单 `low`，复杂 `high`。
-- **操作故障：** 零结果、零 token 时，使用 Obsidian 当前选择的 GPT-5.6。
-- **质量故障：** 已产出就先返回；Ending 记录失败，再用不同验证者开启新的 GPT-5.6 修复。
-- **学习：** 只有匹配回执的 Ending 结果，才更新私有项目/任务/模块/文件/方法/代码模型经验。
+- **优先：** 合格文字/代码使用自适应目录优先生产模型：简单 `low`，复杂 `high`；精确只读、图像/混合和纯工具任务保持 inline。
+- **操作故障：** 零结果、零 token 时，使用 Obsidian 当前上下文选择的质量模型档位。
+- **质量故障：** 已产出就先返回；Ending 自动记录 receipt 对应的失败，再用不同验证者开启新的质量档修复。
+- **学习：** Ending 结果更新宽泛项目/Skills `Model Switch.md` 页面；project/task/module/file/symbol 仅是字段，不创建层级笔记。
 
 ## 规则
 
-- **Inline：** 普通任务使用当前 Codex 模型。
+- **Producer：** 合格文字/代码用自适应目录优先生产模型；精确只读、图像/混合和纯工具任务保持 inline。
 - **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
 - **路由：** 只有明确要求或当前端到端证据成立时才委派。
 - **交付：** 先展示完成结果，再运行 Ending Real。
 - **验证：** Ending Real 在交付后运行；first-result 不包含它。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
-- **记忆：** 修改历史用本地 JSONL（可投影 Obsidian）；模型学习只写私有 Obsidian。
-- **模型：** 文字/代码优先 Spark；GPT-5.6 Luna → Terra → Sol 仍是质量/回退梯级。
+- **记忆：** 修改历史用本地 JSONL（可投影 Obsidian）；私有学习用宽泛项目/Skills `Model Switch.md`，仅字段，不建层级笔记。
+- **模型：** 普通任务只读已保存 JSON；主动本地更新时选择最高数字 GPT 家族，缓存不可用就保留原列表。
 - **隐私：** secret、原始 Prompt/结果、receipt、ledger、cache 和临时文件留在本地。
 
 ## 📊 当前 Benchmark

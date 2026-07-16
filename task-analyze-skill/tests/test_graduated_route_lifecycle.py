@@ -31,6 +31,10 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
         self.assertEqual(plan["schema_version"], 2)
         self.assertEqual({node["phase"] for node in plan["nodes"]}, {"result", "ending"})
         self.assertNotIn("mini_verify_node", plan)
+        implementation = next(node for node in plan["nodes"] if node["id"] == "implementation")
+        self.assertEqual(implementation["candidate_ladder"], dispatcher.normal_adaptive_pair_texts())
+        self.assertEqual(len(implementation["candidate_ladder"]), sum(len(efforts) for efforts in dispatcher.ACTIVE_MODEL_EFFORTS.values()))
+        self.assertEqual(implementation["hard_floor"], dispatcher.MODEL_ROLE_PAIRS["floor"])
 
     def test_run_plan_release_then_ending_dispatches_the_producer_verifier(self):
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -38,9 +42,12 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             cache_dir = root / "work" / "cache" / "route"
-            plan = validator.materialize_dispatcher_plan(template, cache_dir, "gpt-5.6-luna", "low")
+            entry_model, entry_effort = dispatcher.routing_history_module.parse_pair(dispatcher.MODEL_ROLE_PAIRS["floor"])
+            plan = validator.materialize_dispatcher_plan(template, cache_dir, entry_model, entry_effort)
             implementation = next(node for node in plan["nodes"] if node["id"] == "implementation")
-            self.assertEqual(implementation["routing_recommendation"]["selection_basis"], "obsidian_project_memory")
+            self.assertEqual(implementation["routing_recommendation"]["selection_basis"], "obsidian_broad_model_switch")
+            locked_proof = implementation["routing_recommendation"]
+            current_recommendation = {"selected_pair": locked_proof["selected_pair"], "trial": locked_proof["trial"]}
             calls = []
 
             def fake_run_node(node, node_cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
@@ -52,8 +59,8 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
                 receipt_path.write_text(json.dumps({"status": "pass", "thread_id": node["id"]}), encoding="utf-8")
                 return {"id": node["id"], "phase": node["phase"], "skill": node["skill"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "worker_identity": node["id"]}
 
-            with patch.object(dispatcher.routing_history_module, "recommend_route", side_effect=AssertionError("legacy local recommendation used")), patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
-                manifest = dispatcher.run_plan(plan, "gpt-5.6-luna", "low", root)
+            with patch.object(dispatcher.routing_history_module, "recommend_route", side_effect=AssertionError("legacy local recommendation used")), patch.object(dispatcher, "_obsidian_recommendation_and_proof", return_value=(current_recommendation, locked_proof)), patch.object(dispatcher, "run_node", side_effect=fake_run_node), patch.object(dispatcher, "_run_record", return_value={"status": "recorded"}):
+                manifest = dispatcher.run_plan(plan, entry_model, entry_effort, root)
             self.assertEqual(calls, ["design", "implementation"])
             self.assertEqual(manifest["ending_nodes_pending"], ["ending-real"])
             handoff_path = Path(manifest["ending_handoff_path"])

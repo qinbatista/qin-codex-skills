@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import importlib.util
+import json
 from copy import deepcopy
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_PATH = __import__("pathlib").Path(__file__).resolve().parents[1] / "scripts" / "routing_policy.py"
@@ -18,16 +20,17 @@ class RoutingPolicyTests(unittest.TestCase):
         complex_profile = module.resolve_profile_preset("grounded-repository-answer-complex", project_family="museai", owning_skill="muse-ai-plugin:muse-ai-dev-skill")
         self.assertEqual(easy["candidate_ladder"], module.normal_adaptive_pair_texts())
         self.assertEqual(complex_profile["candidate_ladder"], module.normal_adaptive_pair_texts())
-        self.assertEqual(complex_profile["static_suggestion"], "gpt-5.6-terra|high")
-        self.assertEqual(complex_profile["hard_floor"], "gpt-5.6-luna|low")
+        self.assertEqual(complex_profile["static_suggestion"], module.MODEL_ROLE_PAIRS["balanced_complex"])
+        self.assertEqual(complex_profile["hard_floor"], module.MODEL_ROLE_PAIRS["floor"])
 
-    def test_tiny_presets_use_shared_gpt56_ladder(self):
+    def test_tiny_presets_use_shared_dynamic_quality_ladder(self):
         tiny_text = module.resolve_profile_preset("tiny-text", project_family="global")
         tiny_code = module.resolve_profile_preset("tiny-code", project_family="global", execution_domain="python")
         expected = module.normal_adaptive_pair_texts()
         self.assertEqual(tiny_text["candidate_ladder"], expected)
         self.assertEqual(tiny_code["candidate_ladder"], expected)
-        self.assertEqual(tiny_text["hard_floor"], "gpt-5.6-luna|low")
+        self.assertEqual(tiny_text["static_suggestion"], module.MODEL_ROLE_PAIRS["floor"])
+        self.assertEqual(tiny_text["hard_floor"], module.MODEL_ROLE_PAIRS["floor"])
 
     def test_code_presets_support_python_csharp_and_unity_without_duplicate_rows(self):
         domains = ["python", "csharp", "unity_csharp"]
@@ -46,33 +49,73 @@ class RoutingPolicyTests(unittest.TestCase):
             module.EXECUTION_DOMAINS.clear()
             module.EXECUTION_DOMAINS.update(original)
 
-    def test_normal_adaptive_ladder_has_luna_floor_and_sol_ceiling_without_spark(self):
+    def test_normal_adaptive_ladder_uses_registry_floor_and_ceiling_without_priority_producer(self):
         ladder = module.normal_adaptive_ladder()
-        self.assertEqual(ladder[0], ("gpt-5.6-luna", "low"))
-        self.assertEqual(ladder[-1], ("gpt-5.6-sol", "ultra"))
-        self.assertNotIn(("gpt-5.3-codex-spark", "low"), ladder)
-        self.assertEqual(module.downgrade_pair(ladder[-1], ladder), ("gpt-5.6-sol", "max"))
+        self.assertEqual(ladder[0], module.parse_pair(module.MODEL_ROLE_PAIRS["floor"]))
+        self.assertEqual(ladder[-1], (module.ACTIVE_MODEL_ROWS[-1]["id"], module.ACTIVE_MODEL_ROWS[-1]["codex_efforts"][-1]))
+        self.assertTrue(all(model != module.PRIORITY_PRODUCER_MODEL for model, _ in ladder))
+        self.assertEqual(module.downgrade_pair(ladder[-1], ladder), ladder[-2])
         self.assertEqual(module.upgrade_pair(ladder[-2], ladder), ladder[-1])
 
     def test_shared_registry_drives_active_rank_efforts_and_policy(self):
         rows = module.public_model_capability_rows()
-        self.assertEqual([row["id"] for row in rows["models"]], ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"])
-        self.assertEqual([row["capability_rank"] for row in rows["models"]], [1, 2, 3])
-        self.assertEqual(rows["policy"]["minimum_pair"], "gpt-5.6-luna|low")
-        self.assertEqual(rows["private_learning_contract"]["authority"], "obsidian_project_memory")
-        self.assertEqual(rows["private_learning_contract"]["specificity_order"], ["project_task", "module", "file", "symbol"])
-        self.assertEqual(rows["private_learning_contract"]["legacy_local_json"], "read_only_inactive")
-        self.assertNotIn("ultra", module.ACTIVE_MODEL_EFFORTS["gpt-5.6-luna"])
-        self.assertIn("ultra", module.ACTIVE_MODEL_EFFORTS["gpt-5.6-terra"])
+        model_ids = [row["id"] for row in rows["models"]]
+        self.assertEqual(rows["schema_version"], 2)
+        self.assertEqual(model_ids, module.ACTIVE_MODEL_ORDER)
+        self.assertEqual(rows["active_family"]["selection"], "highest_numeric_gpt_family")
+        self.assertEqual(rows["active_family"]["model_count"], len(model_ids))
+        self.assertEqual({row["id"] for row in rows["catalog_models"] if row["catalog_role"] == "active_quality"}, set(model_ids))
+        self.assertTrue(set(model_ids).issubset({row["id"] for row in rows["catalog_models"]}))
+        self.assertEqual([row["capability_rank"] for row in rows["models"]], list(range(1, len(rows["models"]) + 1)))
+        self.assertEqual([row["provider_priority"] for row in rows["models"]], sorted([row["provider_priority"] for row in rows["models"]], reverse=True))
+        self.assertEqual(rows["policy"]["minimum_pair"], rows["role_pairs"]["floor"])
+        self.assertEqual(rows["role_models"]["weak"], model_ids[0])
+        self.assertEqual(rows["role_models"]["frontier"], model_ids[-1])
+        self.assertNotIn(module.PRIORITY_PRODUCER_MODEL, model_ids)
+        self.assertIn("private_learning_contract", rows)
+        self.assertTrue(all(module.ACTIVE_MODEL_EFFORTS[row["id"]] == set(row["codex_efforts"]) for row in rows["models"]))
 
-    def test_spark_priority_is_separate_from_5_6_ladder_and_contextual(self):
+    def test_custom_schema_v2_registry_accepts_no_priority_producer(self):
+        registry = deepcopy(module.MODEL_CAPABILITY_CONFIG)
+        priority_id = registry["priority_producer"]["id"]
+        registry["priority_producer"] = None
+        registry["policy"]["priority_producer_first_text_code"] = False
+        next(row for row in registry["catalog_models"] if row["id"] == priority_id)["catalog_role"] = "catalog_only"
+        with tempfile.TemporaryDirectory(prefix="routing-policy-registry-") as temporary:
+            registry_path = Path(temporary) / "model-capability-ladder.json"
+            registry_path.write_text(json.dumps(registry), encoding="utf-8")
+            loaded = module._load_model_capability_config(registry_path)
+        self.assertIsNone(loaded["priority_producer"])
+        self.assertEqual([row["id"] for row in loaded["models"]], module.ACTIVE_MODEL_ORDER)
+
+    def test_default_loader_reads_saved_registry_without_scanning_local_catalog(self):
+        with tempfile.TemporaryDirectory(prefix="routing-policy-saved-registry-") as temporary:
+            registry_path = Path(temporary) / "model-capability-ladder.json"
+            registry_path.write_text(json.dumps(module.MODEL_CAPABILITY_CONFIG), encoding="utf-8")
+            original_path = module.MODEL_CAPABILITY_CONFIG_PATH
+            try:
+                module.MODEL_CAPABILITY_CONFIG_PATH = registry_path
+                with mock.patch.object(module._MODEL_REGISTRY, "load_catalog", side_effect=AssertionError("routing scanned the local catalog")):
+                    loaded = module._load_model_capability_config(registry_path)
+            finally:
+                module.MODEL_CAPABILITY_CONFIG_PATH = original_path
+        self.assertEqual(loaded["source"]["catalog_sha256"], module.MODEL_CAPABILITY_CONFIG["source"]["catalog_sha256"])
+
+    def test_priority_producer_is_separate_from_quality_ladder_and_contextual(self):
         rows = module.public_model_capability_rows()
-        self.assertEqual(rows["spark_first"]["adaptive_efforts"], ["low", "high"])
-        self.assertEqual(module.spark_first_pair("code", "text", "edit", "easy"), ("gpt-5.3-codex-spark", "low"))
-        self.assertEqual(module.spark_first_pair("code", "text", "edit", "complex"), ("gpt-5.3-codex-spark", "high"))
-        self.assertEqual(module.spark_first_pair("document", "text", "write", "easy"), ("gpt-5.3-codex-spark", "low"))
-        self.assertIsNone(module.spark_first_pair("code", "mixed", "edit", "easy"))
-        self.assertIsNone(module.spark_first_pair("code", "text", "review", "easy"))
+        priority = rows["priority_producer"]
+        self.assertEqual(rows["spark_first"], priority)
+        self.assertEqual(module.priority_first_pair("code", "text", "edit", "easy"), (priority["id"], priority["effort_by_complexity"]["easy"]))
+        self.assertEqual(module.priority_first_pair("code", "text", "edit", "complex"), (priority["id"], priority["effort_by_complexity"]["complex"]))
+        self.assertEqual(module.spark_first_pair("document", "text", "write", "easy"), module.priority_first_pair("document", "text", "write", "easy"))
+        self.assertIsNone(module.priority_first_pair("code", "mixed", "edit", "easy"))
+        self.assertIsNone(module.priority_first_pair("code", "text", "review", "easy"))
+
+    def test_documentation_instructions_uses_spark_for_edits_but_not_reviews(self):
+        priority = module.public_model_capability_rows()["priority_producer"]
+        self.assertEqual(module.priority_first_pair("documentation-instructions", "text", "edit", "easy"), (priority["id"], "low"))
+        self.assertEqual(module.priority_first_pair("documentation-instructions", "text", "edit", "complex"), (priority["id"], "high"))
+        self.assertIsNone(module.priority_first_pair("documentation-instructions", "text", "review", "easy"))
 
     def test_legacy_spark_profile_recognizer_is_history_only_and_bounded(self):
         self.assertTrue(module.is_tiny_spark_profile("tiny_code", "text", "low", "easy", "low"))
@@ -87,13 +130,13 @@ class RoutingPolicyTests(unittest.TestCase):
             module.normal_adaptive_pair_texts(),
         )
         self.assertFalse(
-            any(pair.startswith("gpt-5.3-codex-spark|") for pair in module.adaptive_pair_texts_for_profile("code", "text", "low", "easy", "low"))
+            any(pair.startswith(f"{module.PRIORITY_PRODUCER_MODEL}|") for pair in module.adaptive_pair_texts_for_profile("code", "text", "low", "easy", "low"))
         )
 
     def test_tiny_profile_excludes_history_only_spark(self):
         ladder = module.adaptive_pair_texts_for_profile("tiny_code", "text", "low", "easy", "low")
         self.assertEqual(ladder, module.normal_adaptive_pair_texts())
-        self.assertFalse(any(pair.startswith("gpt-5.3-codex-spark|") for pair in ladder))
+        self.assertFalse(any(pair.startswith(f"{module.PRIORITY_PRODUCER_MODEL}|") for pair in ladder))
 
     def test_plugin_frontend_implementation_without_language_is_general(self):
         self.assertEqual(module.resolve_execution_domain(owning_skill="build-web-apps:frontend-app-builder", task_family="integration", purpose="implement"), "general")
@@ -157,14 +200,15 @@ class RoutingPolicyTests(unittest.TestCase):
         original_indexes = {model: dict(indexes) for model, indexes in module.MODEL_EFFORT_INDEX.items()}
         original_position = dict(module.MODEL_POSITION)
         try:
-            module.MODEL_ORDER[:] = original_order[:2] + ["gpt-5.6-aurora"] + original_order[2:]
-            module.MODEL_EFFORTS["gpt-5.6-aurora"] = {"low", "high"}
-            module.MODEL_EFFORT_INDEX["gpt-5.6-aurora"] = {"low": 0, "high": 1}
+            insertion_index = original_order.index("gpt-5.6-terra")
+            module.MODEL_ORDER[:] = original_order[:insertion_index] + ["gpt-future-aurora"] + original_order[insertion_index:]
+            module.MODEL_EFFORTS["gpt-future-aurora"] = {"low", "high"}
+            module.MODEL_EFFORT_INDEX["gpt-future-aurora"] = {"low": 0, "high": 1}
             module.MODEL_POSITION = {model: index for index, model in enumerate(module.MODEL_ORDER)}
 
-            extended_pairs = module.canonical_pairs(["gpt-5.3-codex-spark|low", "gpt-5.6-luna|high", "gpt-5.6-aurora|low", "gpt-5.6-aurora|high", "gpt-5.6-terra|low"])
-            self.assertEqual(module.upgrade_pair(("gpt-5.6-luna", "high"), extended_pairs), ("gpt-5.6-aurora", "low"))
-            self.assertEqual(module.downgrade_pair(("gpt-5.6-aurora", "low"), extended_pairs), ("gpt-5.6-luna", "high"))
+            extended_pairs = module.canonical_pairs(["gpt-5.3-codex-spark|low", "gpt-5.6-luna|high", "gpt-future-aurora|low", "gpt-future-aurora|high", "gpt-5.6-terra|low"])
+            self.assertEqual(module.upgrade_pair(("gpt-5.6-luna", "high"), extended_pairs), ("gpt-future-aurora", "low"))
+            self.assertEqual(module.downgrade_pair(("gpt-future-aurora", "low"), extended_pairs), ("gpt-5.6-luna", "high"))
         finally:
             module.MODEL_DEFINITIONS.clear()
             module.MODEL_DEFINITIONS.update(original_definitions)

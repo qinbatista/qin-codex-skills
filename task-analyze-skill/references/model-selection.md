@@ -1,31 +1,30 @@
-# Spark-First Model Selection
+# Catalog-Generated Model Selection
 
-The shared source of truth is `assets/model-capability-ladder.json`. The code reads it directly; this page is the human summary.
+The shared source of truth is the saved `assets/model-capability-ladder.json`. Ordinary routing loads it without comparing or refreshing the local catalog. If the ladder is missing, `scripts/model_registry.py` may bootstrap it once from `~/.codex/models_cache.json` without network access. Only an explicit user model-update request may run `scripts/sync_model_capabilities.py` to rescan the local cache and replace the ladder. If that cache is unavailable, retain the last valid ladder. `--check` verifies the saved JSON and human snapshot agree; it does not update either file.
 
-| Rank | Model | Best cold-start use | Codex efforts |
-|---:|---|---|---|
-| 1 | `gpt-5.6-luna` | Simple questions, summaries, routine spreadsheet/document transforms, small well-specified code edits, high-volume work | low, medium, high, xhigh, max |
-| 2 | `gpt-5.6-terra` | Everyday coding, grounded repository work, debugging, moderate multi-file edits, structured analysis and spreadsheets | low, medium, high, xhigh, max, ultra |
-| 3 | `gpt-5.6-sol` | Ambiguous architecture, hard debugging/review, complex integration, high-risk or long-horizon professional work | low, medium, high, xhigh, max, ultra |
+## Quality Order
 
-Rank is approximate capability order, weakest to strongest, not a claim that every higher pair is cheaper or faster. OpenAI positions Luna for efficient high-volume work, Terra for intelligence/cost balance, and Sol as the frontier model for complex professional reasoning and coding.
-
-## Effort Order
+The saved quality ladder contains only the highest numeric GPT family seen during the last explicit local update, excluding the optional priority producer. Provider catalog priority orders that family's variants from weakest to strongest, and each variant contributes only its supported reasoning efforts. Older numeric families remain catalog-only.
 
 `low -> medium -> high -> xhigh -> max -> ultra`
 
-- `low`: bounded and latency-sensitive.
-- `medium`: ordinary balanced default.
-- `high` / `xhigh`: use when representative tasks show a quality gain.
-- `max`: hardest quality-first work.
-- `ultra`: Codex automatic delegation for several substantial independent branches; only Terra and Sol expose it locally.
+Only efforts exposed for a model are included. Movement stays inside the generated pairs:
 
-Official GPT-5.6 API guidance also lists `none`; the current local Codex catalog does not expose it, so it is not an adaptive rung. Conversely, `ultra` is a Codex execution mode rather than an ordinary API reasoning-effort name.
+- Real PASS trials one lower effort on the same model, then the strongest effort on the next weaker model.
+- Quality/correctness failure trials one higher effort on the same model, then the lowest effort on the next stronger model.
+- Repeated PASS freezes the generated minimum pair; an adjacent verified pass/fail boundary also freezes its lowest passing pair.
+- Operational failure is quality-neutral.
 
-## Selection Rules
+## Cold Start And Priority Producer
 
-Use the task preset only as a cold-start hint. Then read the matching Obsidian `Projects/<project-key>/ModelExperience` boundary keyed by project/task/module/file/symbol/code context. A receipt-backed Ending Real pass moves one rung lower; a quality failure moves one rung higher; repeated passes may reach and freeze Luna-low. Operational failures do not change quality rank, and Ending Real alone writes the verdict.
+Cold starts are derived from three catalog roles instead of versioned names: weakest, balanced, and frontier. Each task type maps easy/complex work to one of those roles and the closest supported effort.
 
-Promotion and demotion stay inside the exact 5.6 ladder. Separately, eligible text/code result producers try Spark-low for easy work or Spark-high for complex work. Zero-result operational failure uses the contextual 5.6 pair; Ending quality/correctness failure is recorded before a new 5.6 repair lifecycle. Exact read-only stays inline, and old local `model_experience.json` stays legacy read-only. The ordinary producer uses `obsidian_adaptive_model_runner.py`; multi-node strategy remains separately performance-admitted.
+The catalog may also expose an optional specialized priority text/code producer. The current catalog resolves that role to Spark, so easy work uses low effort and complex work uses high effort. It remains outside the quality ladder. A zero-result, zero-token operational failure may use the contextual quality pair; a published result never foreground-fallbacks. Ending quality/correctness failure is recorded before a new quality-pair repair lifecycle.
 
-The documentation basis checked on 2026-07-13 is the official OpenAI model catalog and GPT-5.6 guidance plus the local Codex `models_cache.json` for actually exposed efforts.
+## Learning Boundary
+
+Every eligible production task runs `obsidian_adaptive_model_runner.py`, including a cold context. The runner reads the generated ladder and matching Obsidian broad `Model Switch.md` context. It produces a receipt but never writes learning.
+
+After presentation, `ending_task_ledger.py start --producer-receipt <path>` binds that receipt to the lifecycle. The terminal Ending event automatically records the matched producer verdict to Obsidian. This closes the former gap where cold-start tasks stayed inline and therefore could never create enough evidence to descend, ascend, or freeze.
+
+Exact read-only, tool-only, image/mixed, verifier, and Ending work stays inline and never fabricates a producer receipt. The broad project-scoped `Model Switch.md` page is the sole current contextual evidence authority. Multi-node strategy and savings claims remain separately performance-admitted.

@@ -1,93 +1,26 @@
 #!/usr/bin/env python3
 """Load the shared model ladder and expose deterministic routing helpers."""
 
-import json
+import importlib.util
 from pathlib import Path
 
 MODEL_CAPABILITY_CONFIG_PATH = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
+MODEL_REGISTRY_SCRIPT_PATH = Path(__file__).resolve().with_name("model_registry.py")
+_MODEL_REGISTRY_SPEC = importlib.util.spec_from_file_location("task_analyze_model_registry", MODEL_REGISTRY_SCRIPT_PATH)
+_MODEL_REGISTRY = importlib.util.module_from_spec(_MODEL_REGISTRY_SPEC)
+_MODEL_REGISTRY_SPEC.loader.exec_module(_MODEL_REGISTRY)
 
 
 def _load_model_capability_config(path=MODEL_CAPABILITY_CONFIG_PATH):
     try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        resolved_path = Path(path).expanduser().resolve()
+        if resolved_path == MODEL_CAPABILITY_CONFIG_PATH.resolve():
+            payload = _MODEL_REGISTRY.load_registry(resolved_path) if resolved_path.exists() else _MODEL_REGISTRY.ensure_registry(registry_path=resolved_path)["registry"]
+        else:
+            payload = _MODEL_REGISTRY.load_registry(resolved_path)
+        return _MODEL_REGISTRY.validate_registry(payload)
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as error:
         raise ValueError(f"shared model capability registry is unreadable: {error}") from error
-    required = {"schema_version", "registry_id", "scope", "ladder_direction", "policy", "spark_first", "effort_order", "effort_guidance", "models"}
-    if not isinstance(payload, dict) or not required.issubset(payload):
-        raise ValueError("shared model capability registry is incomplete")
-    if payload["schema_version"] != 1 or payload["scope"] != "shared_non_personal" or payload["ladder_direction"] != "weakest_to_strongest":
-        raise ValueError("shared model capability registry contract is invalid")
-    models = payload.get("models")
-    if not isinstance(models, list) or not models:
-        raise ValueError("shared model capability registry has no active models")
-    ranks = [row.get("capability_rank") for row in models if isinstance(row, dict)]
-    if ranks != list(range(1, len(models) + 1)):
-        raise ValueError("shared model capability ranks must be contiguous weakest-to-strongest")
-    effort_order = payload.get("effort_order")
-    if not isinstance(effort_order, list) or len(effort_order) != len(set(effort_order)):
-        raise ValueError("shared effort order must be a unique list")
-    seen = set()
-    for row in models:
-        model = row.get("id")
-        efforts = row.get("codex_efforts")
-        if not isinstance(model, str) or not model.startswith("gpt-5.6-") or model in seen:
-            raise ValueError("shared model ids must be unique GPT-5.6 ids")
-        if not isinstance(efforts, list) or not efforts or any(effort not in effort_order for effort in efforts):
-            raise ValueError(f"shared model {model} has invalid Codex efforts")
-        if efforts != [effort for effort in effort_order if effort in efforts]:
-            raise ValueError(f"shared model {model} efforts are not canonical")
-        seen.add(model)
-    policy = payload.get("policy")
-    required_policy = {"enabled", "quality_first", "downgrade_after_real_pass", "upgrade_after_quality_failure", "operational_failures_are_neutral", "freeze_lowest_verified_pair", "minimum_pair"}
-    if not isinstance(policy, dict) or not required_policy.issubset(policy) or policy.get("enabled") is not True:
-        raise ValueError("shared adaptive policy is disabled or incomplete")
-    valid_pairs = {f"{row['id']}|{effort}" for row in models for effort in row["codex_efforts"]}
-    if policy.get("minimum_pair") not in valid_pairs:
-        raise ValueError("shared minimum pair is not active")
-    if payload.get("default_cold_start") not in valid_pairs:
-        raise ValueError("shared default cold start is not active")
-    cold_starts = payload.get("cold_start_defaults")
-    if not isinstance(cold_starts, dict) or not cold_starts:
-        raise ValueError("shared cold-start defaults are missing")
-    for task_type, levels in cold_starts.items():
-        if not isinstance(task_type, str) or not isinstance(levels, dict) or set(levels) != {"easy", "complex"}:
-            raise ValueError("shared cold-start defaults are malformed")
-        if any(pair not in valid_pairs for pair in levels.values()):
-            raise ValueError("shared cold-start pair is not active")
-    spark = payload.get("spark_first")
-    if (
-        not isinstance(spark, dict)
-        or spark.get("enabled") is not True
-        or spark.get("id") != "gpt-5.3-codex-spark"
-        or spark.get("routing_role") != "first_attempt_text_code_producer"
-        or spark.get("input_modalities") != ["text"]
-        or spark.get("eligible_modalities") != ["text"]
-        or spark.get("operational_fallback") != "current_obsidian_5_6_pair"
-        or spark.get("quality_failure") != "record_to_obsidian_then_new_5_6_repair_lifecycle"
-    ):
-        raise ValueError("shared Spark-first contract is invalid")
-    spark_efforts = spark.get("codex_efforts")
-    adaptive_efforts = spark.get("adaptive_efforts")
-    effort_by_complexity = spark.get("effort_by_complexity")
-    if (
-        not isinstance(spark_efforts, list)
-        or spark_efforts != [effort for effort in effort_order if effort in spark_efforts]
-        or not isinstance(adaptive_efforts, list)
-        or any(effort not in spark_efforts for effort in adaptive_efforts)
-        or set(effort_by_complexity or {}) != {"easy", "complex"}
-        or any(effort not in adaptive_efforts for effort in effort_by_complexity.values())
-    ):
-        raise ValueError("shared Spark effort contract is invalid")
-    private_contract = payload.get("private_learning_contract")
-    if (
-        not isinstance(private_contract, dict)
-        or private_contract.get("authority") != "obsidian_project_memory"
-        or private_contract.get("path_template") != "Projects/<project-key>/ModelExperience"
-        or private_contract.get("specificity_order") != ["project_task", "module", "file", "symbol"]
-        or private_contract.get("legacy_local_json") != "read_only_inactive"
-    ):
-        raise ValueError("shared private-learning boundary is invalid")
-    return payload
 
 
 MODEL_CAPABILITY_CONFIG = _load_model_capability_config()
@@ -95,10 +28,13 @@ ADAPTIVE_POLICY = dict(MODEL_CAPABILITY_CONFIG["policy"])
 ACTIVE_MODEL_ROWS = tuple(dict(row) for row in MODEL_CAPABILITY_CONFIG["models"])
 ACTIVE_MODEL_ORDER = [row["id"] for row in ACTIVE_MODEL_ROWS]
 ACTIVE_MODEL_DEFINITIONS = {row["id"]: {"efforts": list(row["codex_efforts"])} for row in ACTIVE_MODEL_ROWS}
-SPARK_FIRST_CONFIG = dict(MODEL_CAPABILITY_CONFIG["spark_first"])
-SPARK_MODEL = SPARK_FIRST_CONFIG["id"]
-SPARK_MODEL_DEFINITIONS = {SPARK_MODEL: {"efforts": list(SPARK_FIRST_CONFIG["codex_efforts"])}}
-MODEL_DEFINITIONS = {**SPARK_MODEL_DEFINITIONS, **ACTIVE_MODEL_DEFINITIONS}
+PRIORITY_PRODUCER_CONFIG = dict(MODEL_CAPABILITY_CONFIG["priority_producer"] or {})
+PRIORITY_PRODUCER_MODEL = PRIORITY_PRODUCER_CONFIG.get("id")
+PRIORITY_PRODUCER_DEFINITIONS = {PRIORITY_PRODUCER_MODEL: {"efforts": list(PRIORITY_PRODUCER_CONFIG["codex_efforts"])}} if PRIORITY_PRODUCER_MODEL else {}
+SPARK_FIRST_CONFIG = PRIORITY_PRODUCER_CONFIG
+SPARK_MODEL = PRIORITY_PRODUCER_MODEL
+SPARK_MODEL_DEFINITIONS = PRIORITY_PRODUCER_DEFINITIONS
+MODEL_DEFINITIONS = {**PRIORITY_PRODUCER_DEFINITIONS, **ACTIVE_MODEL_DEFINITIONS}
 
 MODEL_ORDER = list(MODEL_DEFINITIONS.keys())
 MODEL_EFFORT_ORDER = list(MODEL_CAPABILITY_CONFIG["effort_order"])
@@ -107,9 +43,10 @@ ACTIVE_MODEL_EFFORTS = {model: set(data["efforts"]) for model, data in ACTIVE_MO
 MODEL_EFFORT_INDEX = {model: {effort: index for index, effort in enumerate(data["efforts"])} for model, data in MODEL_DEFINITIONS.items()}
 MODEL_POSITION = {model: index for index, model in enumerate(MODEL_ORDER)}
 SPARK_BOOTSTRAP_FAMILIES = {"tiny_text", "tiny_code", "command_generation"}
-SPARK_LOW_PAIR = (SPARK_MODEL, "low")
+SPARK_LOW_PAIR = (PRIORITY_PRODUCER_MODEL, PRIORITY_PRODUCER_CONFIG["effort_by_complexity"]["easy"]) if PRIORITY_PRODUCER_MODEL else None
 NORMAL_ADAPTIVE_MODELS = list(ACTIVE_MODEL_ORDER)
 NORMAL_ADAPTIVE_LADDER = [(model, effort) for model in NORMAL_ADAPTIVE_MODELS for effort in MODEL_DEFINITIONS[model]["efforts"]]
+MODEL_ROLE_PAIRS = dict(MODEL_CAPABILITY_CONFIG["role_pairs"])
 # Retained only so the legacy local-history reader can parse old records.
 LEARNING_FIELDS = ("task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "execution_domain")
 
@@ -176,22 +113,28 @@ EXECUTION_DOMAINS = {
 }
 
 PROFILE_PRESET_VERSION = 2
+
+
+def _profile_model_fields(role_pair):
+    return {"static_suggestion": MODEL_ROLE_PAIRS[role_pair], "hard_floor": MODEL_ROLE_PAIRS["floor"]}
+
+
 PROFILE_PRESETS = {
-    "general-answer-easy": {"task_family": "direct", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|medium", "hard_floor": "gpt-5.6-luna|low"},
-    "summary-easy": {"task_family": "document", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
-    "analysis-complex": {"task_family": "grounded", "artifact": "report", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
-    "spreadsheet-easy": {"task_family": "data", "artifact": "document", "scope": "single", "ambiguity": "low", "modality": "mixed", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|low", "hard_floor": "gpt-5.6-luna|low"},
-    "spreadsheet-complex": {"task_family": "data", "artifact": "document", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
-    "document-easy": {"task_family": "document", "artifact": "document", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|medium", "hard_floor": "gpt-5.6-luna|low"},
-    "document-complex": {"task_family": "document", "artifact": "document", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
-    "integration-complex": {"task_family": "integration", "artifact": "patch", "scope": "project", "ambiguity": "high", "modality": "mixed", "risk": "medium", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-sol|high", "hard_floor": "gpt-5.6-luna|low"},
-    "grounded-repository-answer-easy": {"task_family": "grounded", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|medium", "hard_floor": "gpt-5.6-luna|low"},
-    "grounded-repository-answer-complex": {"task_family": "grounded", "artifact": "answer", "scope": "multi", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
-    "tiny-text": {"task_family": "tiny_text", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
-    "command-generation": {"task_family": "command_generation", "artifact": "script", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
-    "tiny-code": {"task_family": "tiny_code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low"},
-    "code-easy": {"task_family": "code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-terra|medium", "hard_floor": "gpt-5.6-luna|low"},
-    "code-complex": {"task_family": "code", "artifact": "patch", "scope": "multi", "ambiguity": "medium", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, "static_suggestion": "gpt-5.6-terra|high", "hard_floor": "gpt-5.6-luna|low"},
+    "general-answer-easy": {"task_family": "direct", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("weak_default")},
+    "summary-easy": {"task_family": "document", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("floor")},
+    "analysis-complex": {"task_family": "grounded", "artifact": "report", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("balanced_complex")},
+    "spreadsheet-easy": {"task_family": "data", "artifact": "document", "scope": "single", "ambiguity": "low", "modality": "mixed", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("balanced_default")},
+    "spreadsheet-complex": {"task_family": "data", "artifact": "document", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("balanced_complex")},
+    "document-easy": {"task_family": "document", "artifact": "document", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("weak_default")},
+    "document-complex": {"task_family": "document", "artifact": "document", "scope": "multi", "ambiguity": "medium", "modality": "mixed", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("balanced_complex")},
+    "integration-complex": {"task_family": "integration", "artifact": "patch", "scope": "project", "ambiguity": "high", "modality": "mixed", "risk": "medium", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("frontier_complex")},
+    "grounded-repository-answer-easy": {"task_family": "grounded", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("balanced_default")},
+    "grounded-repository-answer-complex": {"task_family": "grounded", "artifact": "answer", "scope": "multi", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": None, "execution_domain": "general", **_profile_model_fields("balanced_complex")},
+    "tiny-text": {"task_family": "tiny_text", "artifact": "answer", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", **_profile_model_fields("floor")},
+    "command-generation": {"task_family": "command_generation", "artifact": "script", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": "general", **_profile_model_fields("floor")},
+    "tiny-code": {"task_family": "tiny_code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, **_profile_model_fields("floor")},
+    "code-easy": {"task_family": "code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, **_profile_model_fields("balanced_default")},
+    "code-complex": {"task_family": "code", "artifact": "patch", "scope": "multi", "ambiguity": "medium", "modality": "text", "risk": "low", "complexity": "complex", "verification_shape": "real", "owning_skill": "code-skill", "execution_domain": None, **_profile_model_fields("balanced_complex")},
 }
 
 
@@ -469,17 +412,21 @@ def adaptive_ladder_for_profile(task_family, modality, risk, complexity="easy", 
     return normal_adaptive_ladder()
 
 
+def priority_first_pair(task_type, modality="text", operation="work", complexity="easy"):
+    if not PRIORITY_PRODUCER_CONFIG.get("enabled") or PRIORITY_PRODUCER_MODEL is None:
+        return None
+    if task_type not in set(PRIORITY_PRODUCER_CONFIG["eligible_task_types"]):
+        return None
+    if modality not in set(PRIORITY_PRODUCER_CONFIG["eligible_modalities"]):
+        return None
+    if operation in set(PRIORITY_PRODUCER_CONFIG["excluded_operations"]):
+        return None
+    effort = PRIORITY_PRODUCER_CONFIG["effort_by_complexity"].get(complexity)
+    return (PRIORITY_PRODUCER_MODEL, effort) if effort in PRIORITY_PRODUCER_CONFIG["adaptive_efforts"] else None
+
+
 def spark_first_pair(task_type, modality="text", operation="work", complexity="easy"):
-    if not SPARK_FIRST_CONFIG.get("enabled"):
-        return None
-    if task_type not in set(SPARK_FIRST_CONFIG["eligible_task_types"]):
-        return None
-    if modality not in set(SPARK_FIRST_CONFIG["eligible_modalities"]):
-        return None
-    if operation in set(SPARK_FIRST_CONFIG["excluded_operations"]):
-        return None
-    effort = SPARK_FIRST_CONFIG["effort_by_complexity"].get(complexity)
-    return (SPARK_MODEL, effort) if effort in SPARK_FIRST_CONFIG["adaptive_efforts"] else None
+    return priority_first_pair(task_type, modality, operation, complexity)
 
 
 def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
@@ -538,14 +485,20 @@ def public_model_capability_rows():
         "schema_version": MODEL_CAPABILITY_CONFIG["schema_version"],
         "registry_id": MODEL_CAPABILITY_CONFIG["registry_id"],
         "scope": MODEL_CAPABILITY_CONFIG["scope"],
+        "source": dict(MODEL_CAPABILITY_CONFIG["source"]),
+        "active_family": dict(MODEL_CAPABILITY_CONFIG["active_family"]),
+        "catalog_models": [dict(row) for row in MODEL_CAPABILITY_CONFIG["catalog_models"]],
         "ladder_direction": MODEL_CAPABILITY_CONFIG["ladder_direction"],
+        "role_models": dict(MODEL_CAPABILITY_CONFIG["role_models"]),
+        "role_pairs": dict(MODEL_ROLE_PAIRS),
         "policy": dict(ADAPTIVE_POLICY),
+        "priority_producer": dict(PRIORITY_PRODUCER_CONFIG) if PRIORITY_PRODUCER_CONFIG else None,
         "spark_first": dict(SPARK_FIRST_CONFIG),
         "private_learning_contract": dict(MODEL_CAPABILITY_CONFIG["private_learning_contract"]),
         "default_cold_start": MODEL_CAPABILITY_CONFIG["default_cold_start"],
         "cold_start_defaults": {key: dict(value) for key, value in MODEL_CAPABILITY_CONFIG["cold_start_defaults"].items()},
         "effort_order": list(MODEL_EFFORT_ORDER),
-        "effort_guidance": dict(MODEL_CAPABILITY_CONFIG["effort_guidance"]),
+        "effort_guidance": dict(MODEL_CAPABILITY_CONFIG.get("effort_guidance", {})),
         "models": [dict(row) for row in ACTIVE_MODEL_ROWS],
     }
 
@@ -565,13 +518,16 @@ def validate_profile_preset_registry():
 
 
 def validate_model_capability_registry():
+    _MODEL_REGISTRY.validate_registry(MODEL_CAPABILITY_CONFIG)
     if set(ACTIVE_MODEL_ORDER) != set(ACTIVE_MODEL_EFFORTS):
         raise ValueError("shared active model registry is inconsistent")
     minimum_pair = parse_pair(ADAPTIVE_POLICY["minimum_pair"])
     if minimum_pair != NORMAL_ADAPTIVE_LADDER[0]:
         raise ValueError("shared minimum pair must be the weakest active ladder pair")
-    if any(not model.startswith("gpt-5.6-") for model, _ in NORMAL_ADAPTIVE_LADDER):
-        raise ValueError("active adaptive ladder must contain only GPT-5.6 models")
+    if PRIORITY_PRODUCER_MODEL and any(model == PRIORITY_PRODUCER_MODEL for model, _ in NORMAL_ADAPTIVE_LADDER):
+        raise ValueError("priority producer must stay outside the quality ladder")
+    if ACTIVE_MODEL_ORDER != [row["id"] for row in sorted(ACTIVE_MODEL_ROWS, key=lambda row: row["capability_rank"])]:
+        raise ValueError("quality models must remain weakest-to-strongest")
     return True
 
 

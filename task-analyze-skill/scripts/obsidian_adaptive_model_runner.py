@@ -5,6 +5,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -92,6 +93,12 @@ def _recommend(args):
 
 def _zero_token_map():
     return {field: 0 for field in model_execution_receipt.TOKEN_FIELDS}
+
+
+def _model_learning_context(args):
+    def clean(value, limit=600):
+        return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
+    return {"project_root": clean(Path(args.project_root).expanduser().resolve(), 1200), "task_type": clean(args.task_type, 160), "module": clean(args.module, 160), "file": clean(args.file), "symbol": clean(args.symbol), "code_kind": clean(args.code_kind, 80), "operation": clean(args.operation, 80), "modality": clean(args.modality, 40), "complexity": clean(args.complexity, 40), "risk": clean(args.risk, 40), "ambiguity": clean(args.ambiguity, 40), "task_summary": clean(args.task_summary)}
 
 
 def _pre_execution_failure(receipt_args):
@@ -186,6 +193,8 @@ def run(args, prompt):
         if not model_execution_receipt.immediate_operational_fallback(attempt_receipt):
             break
     receipt = _merge_attempt_receipts(receipts, attempted_pairs, pair, active_pair, args.result_output)
+    learning_context = _model_learning_context(args)
+    receipt["model_learning_context"] = learning_context
     result_published = bool(receipt.get("result_published") is True and args.result_output.is_file() and args.result_output.stat().st_size > 0)
     receipt["result_published"] = result_published
     _atomic_write_json(args.receipt_output, receipt)
@@ -213,6 +222,7 @@ def run(args, prompt):
         "elapsed_ms": receipt.get("process_elapsed_ms"),
         "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else None,
         "ending_real_status": "pending" if receipt.get("status") == "pass" and result_published else "not_started",
+        "model_learning_context": learning_context,
     }
     if args.emit_result and summary["status"] == "pass":
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
@@ -220,7 +230,7 @@ def run(args, prompt):
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="Run one Obsidian-memory-selected Spark-first producer")
+    parser = argparse.ArgumentParser(description="Run one Obsidian-memory-selected catalog priority/quality producer")
     parser.add_argument("--vault", type=Path)
     parser.add_argument("--ladder", type=Path, default=obsidian_model_memory.DEFAULT_LADDER)
     parser.add_argument("--project-root", type=Path, required=True)

@@ -35,14 +35,44 @@ def split_frontmatter(text):
     frontmatter_text = text[4:end_index]
     metadata = {}
     errors = []
-    for line in frontmatter_text.splitlines():
+    frontmatter_lines = frontmatter_text.splitlines()
+    line_index = 0
+    while line_index < len(frontmatter_lines):
+        line = frontmatter_lines[line_index]
         if not line.strip():
+            line_index += 1
             continue
         if ":" not in line:
             errors.append(f"invalid frontmatter line: {line}")
+            line_index += 1
             continue
         key, value = line.split(":", 1)
-        metadata[key.strip()] = value.strip().strip('"').strip("'")
+        value = value.strip()
+        if value[:1] in {"|", ">"} and all(character in "+-0123456789" for character in value[1:]):
+            line_index += 1
+            block_lines = []
+            while line_index < len(frontmatter_lines) and (not frontmatter_lines[line_index].strip() or frontmatter_lines[line_index][:1].isspace()):
+                block_lines.append(frontmatter_lines[line_index])
+                line_index += 1
+            indentation = min((len(block_line) - len(block_line.lstrip()) for block_line in block_lines if block_line.strip()), default=0)
+            block_lines = [block_line[indentation:] if block_line.strip() else "" for block_line in block_lines]
+            if value.startswith(">"):
+                folded_value = []
+                blank_line_count = 0
+                for block_line in block_lines:
+                    if block_line:
+                        if folded_value:
+                            folded_value.append("\n" * blank_line_count if blank_line_count else " ")
+                        folded_value.append(block_line)
+                        blank_line_count = 0
+                    else:
+                        blank_line_count += 1
+                metadata[key.strip()] = "".join(folded_value).strip()
+            else:
+                metadata[key.strip()] = "\n".join(block_lines).strip()
+            continue
+        metadata[key.strip()] = value.strip('"').strip("'")
+        line_index += 1
     return metadata, text[end_index + 5 :], errors
 
 
@@ -55,16 +85,20 @@ def local_links(text):
 
 
 def command_paths(text):
-    return re.findall(r"(?<!\w)(?:\./|\.\./|scripts/|references/)[^\s\"'`]+", text)
+    return re.findall(r"(?<![\w./-])(?:(?:~/(?!/)|/(?!/)(?:Users|home)/)|(?:\./|\.\./|scripts/|references/)|(?:[A-Za-z0-9][\w.-]*-skill/(?:scripts|references|assets)/))[^\s\"'`]+", text)
 
 
-def resolve_reference(raw_path, skill_dir):
+def resolve_reference(raw_path, skill_dir, skills_root):
     clean_path = raw_path.split("#", 1)[0].strip()
-    if not clean_path or re.match(r"^[a-z]+://", clean_path):
+    if not clean_path or clean_path.startswith("//") or re.match(r"^[a-z]+://", clean_path):
         return None
     path = Path(clean_path).expanduser()
     if path.is_absolute():
         return path
+    if clean_path.startswith(("./", "../")):
+        return (skill_dir / path).resolve()
+    if path.parts and path.parts[0] not in {".", "..", "scripts", "references"} and (path.parts[0].endswith("-skill") or (skills_root / path.parts[0]).is_dir()):
+        return (skills_root / path).resolve()
     return (skill_dir / path).resolve()
 
 
@@ -73,8 +107,9 @@ def has_toc(text):
     return "table of contents" in lower_text or "## contents" in lower_text or "## 目录" in lower_text
 
 
-def audit_skill(skill_dir):
+def audit_skill(skill_dir, skills_root=None):
     skill_file = skill_dir / "SKILL.md"
+    skills_root = (skills_root or skill_dir.parent).resolve()
     result = {
         "skill": skill_dir.name,
         "path": str(skill_dir),
@@ -113,11 +148,11 @@ def audit_skill(skill_dir):
         result["warnings"].append(f"SKILL.md has {len(text.splitlines())} lines; consider moving details into references/")
 
     for raw_link in local_links(text):
-        resolved_path = resolve_reference(raw_link, skill_dir)
+        resolved_path = resolve_reference(raw_link, skill_dir, skills_root)
         if resolved_path and not resolved_path.exists():
             result["errors"].append(f"missing linked file: {raw_link}")
     for raw_path in command_paths(text):
-        resolved_path = resolve_reference(raw_path.rstrip(".,)"), skill_dir)
+        resolved_path = resolve_reference(raw_path.rstrip(".,)"), skill_dir, skills_root)
         if resolved_path and not resolved_path.exists():
             result["errors"].append(f"missing command/reference path: {raw_path}")
 
@@ -150,7 +185,8 @@ def main():
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
-    results = [audit_skill(skill_dir) for skill_dir in collect_skill_dirs(args.skills_root.expanduser().resolve())]
+    skills_root = args.skills_root.expanduser().resolve()
+    results = [audit_skill(skill_dir, skills_root) for skill_dir in collect_skill_dirs(skills_root)]
     summary = {
         "skills_root": str(args.skills_root.expanduser().resolve()),
         "skill_count": len(results),

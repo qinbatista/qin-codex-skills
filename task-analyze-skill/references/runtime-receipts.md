@@ -17,6 +17,7 @@ A diagram label or CLI request proves intent only. A useful local receipt combin
 - process exit code, match status, and sanitized errors.
 - timeout completeness fields: `metrics_complete=false`, measured `process_elapsed_ms`, and `tokens_lower_bound=true` only when partial rollout usage exists.
 - sanitized node role, entry-context status, and authorization source; never the environment or marker value.
+- for an adaptive producer only, one sanitized `model_learning_context` with project root, task/module/file/symbol/code/operation, modality, complexity, risk, ambiguity, and bounded task summary; no raw prompt or result.
 
 Do not save raw stdout, stderr, prompts, response items, base instructions, environment, auth data, rate limits, credits, or rollout summaries.
 
@@ -25,6 +26,8 @@ Do not save raw stdout, stderr, prompts, response items, base instructions, envi
 `model_execution_receipt.py --entry-task` gives the spawned Codex controller an inherited entry-context marker. While that marker is present, an ordinary result producer needs `obsidian_adaptive_model_runner.py` in-process authorization after the current Obsidian project-context recommendation selects the exact shared-ladder pair; a multi-node dispatcher uses its distinct adaptive-result authorization after the locked recommendation matches its pair, trial flag, fingerprint, and proof. The old `adaptive_model_runner.py` authorization is legacy compatibility only. A plain fixed-pair or forged dispatcher receipt call is rejected before `codex exec`. Dispatcher verification, repair, and ending nodes have separate matching in-process authorization. Role labels alone are insufficient. Fixed-pair benchmark baselines work outside entry context and cannot be used as an entry fallback.
 
 When an orchestrating parent needs the routed node's user-facing result, `model_execution_receipt.py run --result-output <task-cache-path>` may save only the final agent message in the active task cache. The sanitized receipt stores its hash and path, never raw stdout/stderr.
+
+After that result is shown, start Ending with `ending_task_ledger.py start --producer-receipt <receipt-path>`. The ledger validates and privately binds the learning context. A producer-bound `event pass` writes the matched Obsidian Model Switch record before terminal PASS; a producer-bound `event fail --failure-class <class>` writes lifecycle FAIL first and then the failed model outcome. Lifecycles without a producer receipt keep the ordinary non-learning behavior. Duplicate receipt/verdict records are idempotent success.
 
 On timeout, preserve the prompt/workload hashes, measured elapsed time, partial thread identity, resolved/effective pair, last allowlisted token count, and availability when recoverable. Partial tokens are a lower bound, never a completed-run total. Do not replace recoverable evidence with an empty generic receipt.
 

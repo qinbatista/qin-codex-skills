@@ -1,8 +1,10 @@
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "ending_task_ledger.py"
@@ -12,6 +14,36 @@ SPEC.loader.exec_module(LEDGER)
 
 
 class EndingTaskLedgerTests(unittest.TestCase):
+    def producer_receipt(self, root, project_name="project", **context_updates):
+        project = root / project_name
+        project.mkdir(exist_ok=True)
+        context = {"project_root": str(project.resolve()), "task_type": "code", "module": "runtime", "file": "script.py", "symbol": "run", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "risk": "low", "ambiguity": "low", "task_summary": "Edit one function."}
+        context.update(context_updates)
+        pair = "gpt-5.3-codex-spark|low"
+        receipt = {
+            "status": "pass",
+            "result_published": True,
+            "turn_completed": True,
+            "model_match": True,
+            "effort_match": True,
+            "node_type": "locked-route-node",
+            "node_role": "result-producer",
+            "requested_model": "gpt-5.3-codex-spark",
+            "requested_effort": "low",
+            "requested_pair": pair,
+            "executed_pair": pair,
+            "priority_attempt_pair": pair,
+            "operational_failure_pairs": [],
+            "workload_prompt_sha256": "1" * 64,
+            "tokens": {"total_tokens": 101},
+            "process_elapsed_ms": 250,
+            "model_learning_context": context,
+            "route_attempts": [{"status": "pass", "executed_pair": pair, "model_match": True, "effort_match": True}],
+        }
+        path = root / "producer-receipt.json"
+        path.write_text(json.dumps(receipt), encoding="utf-8")
+        return project, path
+
     def test_passed_lifecycle_opens_final_gate(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -54,29 +86,141 @@ class EndingTaskLedgerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "failed parent"):
                 LEDGER.start_lifecycle("repair", root, "Invalid early repair", repair_of_lifecycle_id=original["lifecycle_id"], store=store)
 
-    def test_repair_attempts_are_bounded(self):
+    def test_root_wide_repair_attempts_normalize_siblings_and_enforce_the_limit(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             store = root / "store"
-            original = LEDGER.start_lifecycle("code", root, "Original result", store=store, max_repair_attempts=1)
+            original = LEDGER.start_lifecycle("code", root, "Original result", store=store, max_repair_attempts=3)
             LEDGER.record_event(original["lifecycle_id"], "fail", "First verification failed", store=store)
             repair = LEDGER.start_lifecycle("repair", root, "First repair", repair_of_lifecycle_id=original["lifecycle_id"], store=store)
-            LEDGER.record_event(repair["lifecycle_id"], "fail", "Repair verification failed", store=store)
+            LEDGER.record_event(repair["lifecycle_id"], "blocked", "Repair infrastructure failed", store=store)
+            sibling = LEDGER.start_lifecycle("repair", root, "Second repair sibling", repair_of_lifecycle_id=original["lifecycle_id"], store=store)
+            LEDGER.record_event(sibling["lifecycle_id"], "blocked", "Second repair infrastructure failed", store=store)
+            third = LEDGER.start_lifecycle("repair", root, "Third repair from blocked child", repair_of_lifecycle_id=sibling["lifecycle_id"], store=store)
+            LEDGER.record_event(third["lifecycle_id"], "fail", "Third repair verification failed", store=store)
+            before_states = sorted((store / "lifecycles").glob("*.json"))
             with self.assertRaisesRegex(ValueError, "repair attempt limit exceeded"):
-                LEDGER.start_lifecycle("repair", root, "Disallowed second repair", repair_of_lifecycle_id=repair["lifecycle_id"], store=store)
+                LEDGER.start_lifecycle("repair", root, "Disallowed fourth repair", repair_of_lifecycle_id=original["lifecycle_id"], store=store)
             audit = LEDGER.audit_lifecycle(original["lifecycle_id"], store)
             repair_state = json.loads((store / "lifecycles" / f"{repair['lifecycle_id']}.json").read_text(encoding="utf-8"))
+            sibling_state = json.loads((store / "lifecycles" / f"{sibling['lifecycle_id']}.json").read_text(encoding="utf-8"))
+            third_state = json.loads((store / "lifecycles" / f"{third['lifecycle_id']}.json").read_text(encoding="utf-8"))
+            root_state = json.loads((store / "lifecycles" / f"{original['lifecycle_id']}.json").read_text(encoding="utf-8"))
             events = [json.loads(line) for line in (store / "index.jsonl").read_text(encoding="utf-8").splitlines()]
-            repair_failure_index = next(index for index, event in enumerate(events) if event["event"] == "fail" and event["lifecycle_id"] == repair["lifecycle_id"])
-            blocked_index = next(index for index, event in enumerate(events) if event["event"] == "blocked" and event["lifecycle_id"] == repair["lifecycle_id"])
             self.assertEqual(audit["terminal_status"], "blocked")
             self.assertEqual(audit["status"], "blocked")
             self.assertTrue(audit["final_gate_passed"])
-            self.assertEqual(audit["chain"], [original["lifecycle_id"], repair["lifecycle_id"]])
+            self.assertEqual(audit["root_lifecycle_id"], original["lifecycle_id"])
+            self.assertEqual(audit["chain"], [original["lifecycle_id"], repair["lifecycle_id"], sibling["lifecycle_id"], third["lifecycle_id"]])
+            self.assertEqual(audit["descendants"], [repair["lifecycle_id"], sibling["lifecycle_id"], third["lifecycle_id"]])
+            self.assertEqual([repair_state["attempt_index"], sibling_state["attempt_index"], third_state["attempt_index"]], [1, 2, 3])
             self.assertEqual(repair_state["status"], "blocked")
-            self.assertEqual(repair_state["events"][-1]["event"], "blocked")
-            self.assertLess(repair_failure_index, blocked_index)
-            self.assertEqual(sum(event["event"] == "started" for event in events), 2)
+            self.assertEqual(sibling_state["status"], "blocked")
+            self.assertEqual(third_state["status"], "failed")
+            self.assertEqual(root_state["status"], "blocked")
+            self.assertEqual(root_state["events"][-1]["error_fingerprint"], "repair-attempt-limit-exceeded")
+            self.assertEqual(before_states, sorted((store / "lifecycles").glob("*.json")))
+            self.assertEqual(sum(event["event"] == "started" for event in events), 4)
+
+    def test_bound_pass_records_model_result_before_terminal_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, producer_receipt=receipt)
+            learned = {"status": "written", "written": True, "record_id": "record-1", "model_switch": {"status": "rebuilt", "records": 1}}
+            with patch.object(LEDGER, "_record_bound_model_result", return_value=learned) as record:
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Test passed"], store=store)
+                duplicate = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Test passed"], store=store)
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        record.assert_called_once()
+        self.assertEqual(record.call_args.args[1:], ("pass", "none"))
+        self.assertEqual(passed["model_learning"], learned)
+        self.assertEqual(passed["model_learning"]["model_switch"]["status"], "rebuilt")
+        self.assertEqual(state["events"][-1]["model_learning"], learned)
+        self.assertEqual(state["producer_binding"]["status"], "recorded")
+        self.assertEqual(duplicate["status"], "duplicate")
+
+    def test_real_bound_ending_writes_canonical_model_switch_projection_idempotently(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            home = root / "home"
+            (home / "Documents" / "Muse").mkdir(parents=True)
+            project, receipt = self.producer_receipt(home / "Documents" / "Muse", project_name="MuseAI")
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            store = root / "store"
+            vault = root / "vault"
+            (vault / "Projects" / "MuseAI").mkdir(parents=True)
+            (vault / "Projects" / "MuseAI" / "Model Switch.md").write_text("# Model Switch\n", encoding="utf-8")
+            previous_vault = os.environ.get("CODEX_OBSIDIAN_VAULT")
+            os.environ["CODEX_OBSIDIAN_VAULT"] = str(vault)
+            try:
+                with patch("pathlib.Path.home", return_value=home):
+                    started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, producer_receipt=receipt)
+                    passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Focused integration passed"], store=store)
+                learned = passed["model_learning"]
+                canonical_vault = vault.resolve()
+                record_path = canonical_vault / "Projects" / "MuseAI" / "Model Switch.md"
+                record_before = record_path.read_bytes()
+
+                duplicate = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Focused integration passed"], store=store)
+
+                self.assertEqual(learned["obsidian_note"], "Projects/MuseAI/Model Switch.md")
+                self.assertTrue(record_path.is_file())
+                self.assertIn("## Normal Script Update", record_before.decode("utf-8"))
+                self.assertIn(learned["record_id"], record_before.decode("utf-8"))
+                self.assertEqual(duplicate["status"], "duplicate")
+                self.assertEqual(record_path.read_bytes(), record_before)
+                self.assertFalse(any(canonical_vault.rglob("ModelExperience/*.md")))
+                self.assertFalse(any(project.rglob("model_experience.json")))
+            finally:
+                if previous_vault is None:
+                    os.environ.pop("CODEX_OBSIDIAN_VAULT", None)
+                else:
+                    os.environ["CODEX_OBSIDIAN_VAULT"] = previous_vault
+
+    def test_bound_fail_requires_class_and_unavailable_memory_keeps_lifecycle_running(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, producer_receipt=receipt, store=store)
+            with self.assertRaisesRegex(ValueError, "explicit failure_class"):
+                LEDGER.record_event(started["lifecycle_id"], "fail", "Verification failed", store=store)
+            unavailable = {"status": "unavailable", "written": False, "reason": "obsidian_vault_unavailable"}
+            with patch.object(LEDGER, "_record_bound_model_result", return_value=unavailable) as record:
+                result = LEDGER.record_event(started["lifecycle_id"], "fail", "Verification found an error", ["Mismatch"], store=store, failure_class="correctness")
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        record.assert_called_once()
+        self.assertEqual(record.call_args.args[1:], ("fail", "correctness"))
+        self.assertEqual(result["status"], "unavailable")
+        self.assertFalse(result["final_gate_passed"])
+        self.assertEqual(state["status"], "running")
+        self.assertNotIn("model_learning", state)
+
+    def test_unregistered_broad_model_switch_is_a_successful_learning_noop(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, producer_receipt=receipt, store=store)
+            no_op = {"status": "no-op", "written": False, "reason": "unregistered_or_missing_broad_model_switch"}
+            with patch.object(LEDGER, "_record_bound_model_result", return_value=no_op):
+                result = LEDGER.record_event(started["lifecycle_id"], "fail", "Verification found an error", ["Mismatch"], store=store, failure_class="correctness")
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        self.assertEqual(result["status"], "written")
+        self.assertEqual(result["lifecycle_status"], "failed")
+        self.assertEqual(result["model_learning"], no_op)
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["producer_binding"]["status"], "no-op")
+        self.assertEqual(state["model_learning"], no_op)
+
+    def test_bound_receipt_rejects_unsanitized_or_extra_learning_context(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root, task_summary="unsafe\nsummary", raw_prompt="secret")
+            with self.assertRaisesRegex(ValueError, "exact sanitized"):
+                LEDGER.start_lifecycle("code", project, "Result is ready", project, producer_receipt=receipt, store=root / "store")
 
 
 if __name__ == "__main__":

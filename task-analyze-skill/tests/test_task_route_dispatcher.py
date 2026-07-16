@@ -21,12 +21,38 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class TaskRouteDispatcherTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture_vault = tempfile.TemporaryDirectory()
+        self.fixture_owner_roots = {}
+        (Path(self.fixture_vault.name) / "Skills").mkdir()
+        self.original_registered_owner = module.obsidian_model_memory.project_change_memory._registered_owner
+
+        def fixture_registered_owner(record_root):
+            root = Path(record_root).expanduser().resolve()
+            return self.fixture_owner_roots.get(root, self.original_registered_owner(record_root))
+
+        self.owner_patch = patch.object(module.obsidian_model_memory.project_change_memory, "_registered_owner", side_effect=fixture_registered_owner)
+        self.vault_patch = patch.dict(os.environ, {"CODEX_OBSIDIAN_VAULT": self.fixture_vault.name}, clear=False)
+        self.owner_patch.start()
+        self.vault_patch.start()
+
+    def tearDown(self):
+        self.vault_patch.stop()
+        self.owner_patch.stop()
+        self.fixture_vault.cleanup()
+
+    def register_fixture_owner(self, cache_dir):
+        cache_path = Path(cache_dir).expanduser().resolve()
+        project_root = next(parent.parent for parent in (cache_path, *cache_path.parents) if parent.name == "work")
+        self.fixture_owner_roots[project_root] = "Global Codex Skills"
+
     def refresh_recommendation(self, node):
         pairs = module.routing_history_module.canonical_pairs(node["candidate_ladder"])
         fingerprint = module.routing_history_module.profile_fingerprint(node["routing_condition"], pairs, module.routing_history_module.parse_pair(node["static_suggestion"]), module.routing_history_module.parse_pair(node["hard_floor"]))
-        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_project_memory"}
+        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"}
 
     def plan(self, cache_dir):
+        self.register_fixture_owner(cache_dir)
         condition = {
             "task_family": "direct",
             "artifact": "answer",
@@ -41,20 +67,18 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             "execution_domain": "general",
         }
         ladder = module.normal_adaptive_pair_texts()
-        fingerprint = module.routing_history_module.profile_fingerprint(
-            condition,
-            module.routing_history_module.canonical_pairs(ladder),
-            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
-            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
-        )
-        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": "gpt-5.6-luna|low", "hard_floor": "gpt-5.6-luna|low", "trial": False, "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_project_memory"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "sandbox": "read-only"}], "main_result_node": "direct"}
+        floor_pair = module.MODEL_ROLE_PAIRS["floor"]
+        floor_model, floor_effort = module.routing_history_module.parse_pair(floor_pair)
+        fingerprint = module.routing_history_module.profile_fingerprint(condition, module.routing_history_module.canonical_pairs(ladder), (floor_model, floor_effort), (floor_model, floor_effort))
+        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "sandbox": "read-only"}], "main_result_node": "direct"}
 
     def dependent_plan(self, cache_dir):
         plan = self.plan(cache_dir)
         main_node = plan["nodes"][0]
         main_node["id"] = "main-result"
         main_node["dependencies"] = ["upstream"]
-        plan["nodes"].insert(0, {"id": "upstream", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return the upstream result.", "sandbox": "read-only"})
+        floor_model, floor_effort = module.routing_history_module.parse_pair(module.MODEL_ROLE_PAIRS["floor"])
+        plan["nodes"].insert(0, {"id": "upstream", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return the upstream result.", "sandbox": "read-only"})
         plan["nodes"][-1]["dependencies"] = ["main-result"]
         plan["main_result_node"] = "main-result"
         return plan
@@ -78,12 +102,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             "execution_domain": "general",
         }
         ladder = module.normal_adaptive_pair_texts()
-        fingerprint = module.routing_history_module.profile_fingerprint(
-            condition,
-            module.routing_history_module.canonical_pairs(ladder),
-            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
-            module.routing_history_module.parse_pair("gpt-5.6-luna|low"),
-        )
+        floor_pair = module.MODEL_ROLE_PAIRS["floor"]
+        floor_model, floor_effort = module.routing_history_module.parse_pair(floor_pair)
+        fingerprint = module.routing_history_module.profile_fingerprint(condition, module.routing_history_module.canonical_pairs(ladder), (floor_model, floor_effort), (floor_model, floor_effort))
         return {
             "schema_version": 2,
             "complexity": "easy",
@@ -95,32 +116,32 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                     "id": "direct",
                     "phase": "result",
                     "skill": "workflow-skill",
-                    "model": "gpt-5.6-luna",
-                    "effort": "low",
+                    "model": floor_model,
+                    "effort": floor_effort,
                     "dependencies": [],
                     "prompt": "Return a base result",
                     "sandbox": "read-only",
                     "routing_condition": condition,
                     "task_summary": "Return a validated result for this task.",
                     "candidate_ladder": ladder,
-                    "static_suggestion": "gpt-5.6-luna|low",
-                    "hard_floor": "gpt-5.6-luna|low",
+                    "static_suggestion": floor_pair,
+                    "hard_floor": floor_pair,
                     "trial": False,
-                    "routing_recommendation": {"selected_pair": "gpt-5.6-luna|low", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_project_memory"},
+                    "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"},
                 },
-                {"id": "optimization", "phase": "ending", "skill": "optimization-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Optimize this result independently.", "sandbox": "read-only"},
+                {"id": "optimization", "phase": "ending", "skill": "optimization-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Optimize this result independently.", "sandbox": "read-only"},
                 {
                     "id": "optimization-verify",
                     "phase": "ending",
                     "skill": "verify-skill",
-                    "model": "gpt-5.6-luna",
-                    "effort": "low",
+                    "model": floor_model,
+                    "effort": floor_effort,
                     "dependencies": ["direct", "optimization"],
                     "verifies_node": "optimization",
                     "prompt": "Verify optimization output.",
                     "sandbox": "read-only",
                 },
-                {"id": "real-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["direct"], "prompt": "Run real verify.", "sandbox": "read-only"},
+                {"id": "real-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Run real verify.", "sandbox": "read-only"},
             ],
             "main_result_node": "direct",
         }
@@ -144,7 +165,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan = self.plan(root / "work" / "cache" / "route")
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
-        self.assertEqual(plan["nodes"][0]["model"], "gpt-5.6-luna")
+        self.assertEqual(f"{plan['nodes'][0]['model']}|{plan['nodes'][0]['effort']}", module.MODEL_ROLE_PAIRS["floor"])
 
     def test_schema_two_rejects_legacy_foreground_mini(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -293,7 +314,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "fail")
         run_node.assert_not_called()
 
-    def test_tiny_profile_uses_the_same_full_gpt56_ladder(self):
+    def test_tiny_profile_uses_the_same_full_catalog_quality_ladder(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
@@ -315,7 +336,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             node["effort"] = "medium"
             self.refresh_recommendation(node)
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(any("shared active GPT-5.6 ladder" in failure for failure in failures))
+        self.assertTrue(any("catalog quality ladder" in failure for failure in failures))
         self.assertTrue(any("selected pair must be in candidate_ladder" in failure for failure in failures))
 
     def test_real_verify_rejects_management_only_ending(self):
@@ -326,14 +347,14 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("exactly one non-targeted Ending verify-skill" in failure for failure in failures))
 
-    def test_non_tiny_profile_requires_the_complete_gpt56_ladder(self):
+    def test_non_tiny_profile_requires_the_complete_catalog_quality_ladder(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
             plan["nodes"][0]["candidate_ladder"] = plan["nodes"][0]["candidate_ladder"][:-1]
             self.refresh_recommendation(plan["nodes"][0])
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(any("exactly match the shared full GPT-5.6 ladder" in failure for failure in failures))
+        self.assertTrue(any("exactly match the full catalog quality ladder" in failure for failure in failures))
 
     def test_plan_rejects_wrong_entry_pair_and_unsafe_sandbox(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -890,14 +911,15 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertTrue(any("every result node" in failure for failure in failures))
         self.assertTrue(any("depend directly on the main result node" in failure for failure in failures))
 
-    def test_sol_ultra_entry_is_not_used_for_luna_downstream_nodes(self):
+    def test_frontier_entry_is_not_used_for_role_floor_downstream_nodes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
             plan["entry"] = {"model": "gpt-5.6-sol", "effort": "ultra"}
             failures = module.validate_plan(plan, "gpt-5.6-sol", "ultra", root)
         self.assertEqual(failures, [])
-        self.assertTrue(all(node["model"] == "gpt-5.6-luna" for node in plan["nodes"]))
+        floor_model, floor_effort = module.routing_history_module.parse_pair(module.MODEL_ROLE_PAIRS["floor"])
+        self.assertTrue(all((node["model"], node["effort"]) == (floor_model, floor_effort) for node in plan["nodes"]))
 
     def test_parallel_plan_returns_after_ready_branches_and_merge(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -909,7 +931,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             direct = plan["nodes"][0]
             condition = direct["routing_condition"]
             profile = {"routing_condition": condition, "task_summary": direct["task_summary"], "candidate_ladder": direct["candidate_ladder"], "static_suggestion": direct["static_suggestion"], "hard_floor": direct["hard_floor"], "trial": False, "routing_recommendation": direct["routing_recommendation"]}
-            plan["nodes"] = [{"id": "branch-a", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return A.", "sandbox": "read-only"}, {"id": "branch-b", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Return B.", "sandbox": "read-only"}, {"id": "merge", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": ["branch-a", "branch-b"], "prompt": "Merge A and B.", "sandbox": "read-only", **profile}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-terra", "effort": "low", "dependencies": ["merge"], "prompt": "Run post-result verification.", "sandbox": "read-only"}]
+            floor_model, floor_effort = module.routing_history_module.parse_pair(module.MODEL_ROLE_PAIRS["floor"])
+            plan["nodes"] = [{"id": "branch-a", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return A.", "sandbox": "read-only"}, {"id": "branch-b", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return B.", "sandbox": "read-only"}, {"id": "merge", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["branch-a", "branch-b"], "prompt": "Merge A and B.", "sandbox": "read-only", **profile}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["merge"], "prompt": "Run post-result verification.", "sandbox": "read-only"}]
             plan["main_result_node"] = "merge"
             calls = []
             def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
@@ -1454,7 +1477,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             self.refresh_recommendation(plan["nodes"][0])
             with self._with_rust_domain() as synthetic_skills_root:
                 failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
-        self.assertTrue(any("shared active GPT-5.6 ladder" in failure for failure in failures))
+        self.assertTrue(any("catalog quality ladder" in failure for failure in failures))
 
     def test_plan_injects_reference_prompt_for_synthetic_domain(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1693,7 +1716,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 args.result_output.write_text("RESULT=12\n", encoding="utf-8")
                 return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": f"{args.model}|{args.effort}", "status": "pass", "failure_class": None, "route_attempts": [], "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
 
-            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": "gpt-5.6-luna|low"}, current_recommendation)) as recommend_mock, patch.object(module.receipt_module, "run_receipt", side_effect=guarded_model_stub) as model_stub:
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": module.MODEL_ROLE_PAIRS["floor"]}, current_recommendation)) as recommend_mock, patch.object(module.receipt_module, "run_receipt", side_effect=guarded_model_stub) as model_stub:
                 valid_record = module.run_node(valid_node, valid_cache, {}, root / "state.sqlite", root)
             self.assertEqual(valid_record["status"], "pass")
             self.assertEqual(recommend_mock.call_count, 1)
@@ -1706,7 +1729,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             forged_node["model"] = "gpt-5.6-terra"
             forged_node["effort"] = "low"
             forged_node["routing_recommendation"]["selected_pair"] = "gpt-5.6-terra|low"
-            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": "gpt-5.6-luna|low"}, current_recommendation)), patch.object(module.receipt_module, "run_receipt") as forged_model_stub:
+            with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": module.MODEL_ROLE_PAIRS["floor"]}, current_recommendation)), patch.object(module.receipt_module, "run_receipt") as forged_model_stub:
                 forged_record = module.run_node(forged_node, forged_cache, {}, root / "state.sqlite", root)
             forged_receipt = json.loads((forged_cache / "direct-receipt.json").read_text(encoding="utf-8"))
         forged_model_stub.assert_not_called()
@@ -1715,7 +1738,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(forged_receipt["authorization_reason"], "dispatcher_adaptive_recommendation_invalid")
         self.assertEqual(len(forged_receipt["route_attempts"]), 1)
 
-    def test_dispatcher_injects_spark_then_uses_selected_5_6_on_zero_result_failure(self):
+    def test_dispatcher_injects_priority_then_uses_selected_quality_floor_on_zero_result_failure(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             cache_dir = root / "work" / "cache" / "spark"
@@ -1723,7 +1746,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             node = self.plan(cache_dir)["nodes"][0]
             node["_project_root"] = str(root)
             proof = deepcopy(node["routing_recommendation"])
-            recommendation = {"selected_pair": "gpt-5.6-luna|low", "attempt_pair": "gpt-5.3-codex-spark|low", "active_fallback_pair": "gpt-5.6-luna|low"}
+            recommendation = {"selected_pair": module.MODEL_ROLE_PAIRS["floor"], "attempt_pair": "gpt-5.3-codex-spark|low", "active_fallback_pair": module.MODEL_ROLE_PAIRS["floor"]}
             calls = []
 
             def routed_stub(args, _prompt):
@@ -1737,7 +1760,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             with patch.dict(os.environ, {module.receipt_module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module, "_obsidian_recommendation_and_proof", return_value=(recommendation, proof)), patch.object(module.receipt_module, "run_receipt", side_effect=routed_stub):
                 record = module.run_node(node, cache_dir, {}, root / "state.sqlite", root)
             receipt = json.loads((cache_dir / "direct-receipt.json").read_text(encoding="utf-8"))
-        self.assertEqual(calls, ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low"])
+        self.assertEqual(calls, ["gpt-5.3-codex-spark|low", module.MODEL_ROLE_PAIRS["floor"]])
         self.assertEqual(record["status"], "pass")
         self.assertEqual(receipt["priority_attempt_pair"], "gpt-5.3-codex-spark|low")
         self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.3-codex-spark|low"])

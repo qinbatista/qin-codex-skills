@@ -14,6 +14,12 @@ MODULE_SPEC = importlib.util.spec_from_file_location("validate_task_analyze_skil
 module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
 APPROVED = {"task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill", "project-memory-skill"}
+QUALITY_MODEL = module.ACTIVE_MODEL_ORDER[0]
+QUALITY_EFFORT = module.ACTIVE_MODEL_EFFORTS[QUALITY_MODEL][0]
+BALANCED_MODEL, BALANCED_EFFORT = module._complex_followup_node_pair()
+COMPLEX_MODEL, COMPLEX_EFFORT = module._complex_followup_implementation_pair()
+PRIORITY_MODEL = module.PRIORITY_PRODUCER_MODEL
+PRIORITY_EFFORT = module.PRIORITY_PRODUCER["effort_by_complexity"]["easy"] if module.PRIORITY_PRODUCER else None
 
 
 class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
@@ -62,33 +68,37 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
 
-    def test_plan_accepts_complex_terra_code_domain(self):
+    def test_plan_accepts_complex_quality_code_domain(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
         plan = json.loads(json.dumps(complex_plan))
         impl = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
         impl["execution_domain"] = "rust"
         impl["skill"] = "code-skill"
-        impl["model"] = "gpt-5.6-luna"
+        impl["model"] = QUALITY_MODEL
+        impl["effort"] = QUALITY_EFFORT
         with self._with_rust_domain() as synthetic_skills_root:
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
         self.assertEqual(failures, [])
 
-    def test_plan_rejects_complex_spark_code_domain(self):
+    @unittest.skipIf(PRIORITY_MODEL is None, "catalog has no optional priority producer")
+    def test_plan_rejects_priority_producer_as_code_plan_node(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
         plan = json.loads(json.dumps(complex_plan))
         impl = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
         impl["execution_domain"] = "rust"
         impl["skill"] = "code-skill"
-        impl["model"] = "gpt-5.3-codex-spark"
+        impl["model"] = PRIORITY_MODEL
+        impl["effort"] = PRIORITY_EFFORT
         with self._with_rust_domain() as synthetic_skills_root:
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
-        self.assertTrue(any("Spark is injected only as a result-producer attempt" in failure for failure in failures))
+        self.assertTrue(any("priority producer is injected only as a result-producer attempt" in failure for failure in failures))
 
-    def test_plan_rejects_spark_entry(self):
+    @unittest.skipIf(PRIORITY_MODEL is None, "catalog has no optional priority producer")
+    def test_plan_rejects_priority_producer_entry(self):
         plan = json.loads(json.dumps(next(iter(module.sample_plans().values()))))
-        plan["entry"] = {"model": module.LEGACY_SPARK_MODEL, "effort": "low"}
+        plan["entry"] = {"model": PRIORITY_MODEL, "effort": PRIORITY_EFFORT}
         failures = module.validate_plan(plan, APPROVED)
-        self.assertTrue(any("entry Spark is a result-producer priority attempt only" in failure for failure in failures))
+        self.assertTrue(any("entry priority producer is a result-producer first attempt only" in failure for failure in failures))
 
     def make_validation_inputs(self):
         source = Path(__file__).resolve().parents[1]
@@ -99,8 +109,17 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             destination.write_text((source / relative).read_text(encoding="utf-8"), encoding="utf-8")
         models_cache = temp_dir / "models_cache.json"
         ladder = json.loads((source / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8"))
-        cache_models = [{"slug": model["id"], "supported_reasoning_levels": [{"effort": effort} for effort in model["codex_efforts"]]} for model in ladder["models"]]
-        models_cache.write_text(json.dumps({"models": cache_models}) + "\n", encoding="utf-8")
+        registry_rows = list(ladder["models"])
+        if ladder.get("priority_producer"):
+            registry_rows.append(ladder["priority_producer"])
+        cache_models = []
+        for row in registry_rows:
+            efforts = row["codex_efforts"]
+            cache_models.append({"slug": row["id"], "display_name": row.get("display_name", row["id"]), "description": row.get("provider_positioning", ""), "visibility": "list", "priority": row["provider_priority"], "supported_reasoning_levels": [{"effort": effort} for effort in efforts], "default_reasoning_level": row.get("default_effort", efforts[0]), "supported_in_api": row.get("supported_in_api", False), "input_modalities": row.get("input_modalities", ["text"]), "context_window": row.get("context_window"), "additional_speed_tiers": row.get("additional_speed_tiers", [])})
+        models_cache.write_text(json.dumps({"client_version": "validator-test", "fetched_at": "2026-07-15T00:00:00Z", "models": cache_models}, indent=2) + "\n", encoding="utf-8")
+        catalog, catalog_sha256 = module.load_catalog(models_cache)
+        generated_ladder = module.build_registry(catalog, catalog_sha256)
+        (temp_dir / "assets" / "model-capability-ladder.json").write_text(json.dumps(generated_ladder, indent=2) + "\n", encoding="utf-8")
         global_agents = temp_dir / "AGENTS.md"
         entry_asset_text = (source / "assets" / "global-agents-entry-rule.md").read_text(encoding="utf-8")
         global_agents.write_text(entry_asset_text.replace("Merge this section into `~/.codex/AGENTS.md`.\n\n", ""), encoding="utf-8")
@@ -159,22 +178,86 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         entry_pairs = {(plan["entry"]["model"], plan["entry"]["effort"]) for plan in sample_plans.values()}
         self.assertEqual(len(sample_plans), expected_plan_count)
         self.assertEqual(len(entry_pairs), sum(len(efforts) for efforts in module.ACTIVE_MODEL_EFFORTS.values()))
-        self.assertNotIn(module.LEGACY_SPARK_MODEL, {model for model, _ in entry_pairs})
+        if module.PRIORITY_PRODUCER_MODEL is not None:
+            self.assertNotIn(module.PRIORITY_PRODUCER_MODEL, {model for model, _ in entry_pairs})
 
     def test_adaptive_contract_uses_shared_ladder_and_obsidian_authority(self):
         self.assertIn("assets/model-capability-ladder.json", module.REQUIRED_FILES)
+        self.assertIn("scripts/model_registry.py", module.REQUIRED_FILES)
+        self.assertIn("scripts/sync_model_capabilities.py", module.REQUIRED_FILES)
         self.assertIn("scripts/obsidian_adaptive_model_runner.py", module.REQUIRED_FILES)
         self.assertNotIn("scripts/adaptive_model_runner.py", module.REQUIRED_FILES)
-        self.assertIn("Obsidian `Projects/<project-key>/ModelExperience`", module.REQUIRED_ADAPTIVE_TEXT)
-        self.assertIn("Old local `model_experience.json` is legacy read-only only", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("Obsidian broad `Model Switch.md`", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("sole active private authority", module.REQUIRED_ADAPTIVE_TEXT)
         self.assertEqual(tuple(module.ACTIVE_MODEL_EFFORTS), module.ACTIVE_MODEL_ORDER)
 
-    def test_shared_ladder_rejects_active_spark(self):
+    def test_shared_registry_contains_only_the_highest_numeric_gpt_family_and_source_digest(self):
+        payload = json.loads((Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(tuple(model["id"] for model in payload["models"]), module.ACTIVE_MODEL_ORDER)
+        active_family = payload["active_family"]["id"]
+        self.assertEqual(payload["active_family"]["selection"], "highest_numeric_gpt_family")
+        self.assertTrue(active_family.startswith("gpt-"))
+        self.assertTrue(all(model["id"].startswith(f"{active_family}-") or model["id"] == active_family for model in payload["models"]))
+        self.assertEqual(payload["active_family"]["model_count"], len(payload["models"]))
+        self.assertEqual(len(payload["source"]["catalog_sha256"]), 64)
+        if payload.get("priority_producer"):
+            self.assertNotIn(payload["priority_producer"]["id"], module.ACTIVE_MODEL_ORDER)
+
+    def test_explicit_check_detects_a_higher_synthetic_numeric_family_without_version_assumption(self):
+        temp_dir, models_cache, _, _ = self.make_validation_inputs()
+        try:
+            cache = json.loads(models_cache.read_text(encoding="utf-8"))
+            synthetic_models = [{"slug": "gpt-99-test-weak", "display_name": "Synthetic Weak", "description": "Fast synthetic coding model.", "visibility": "list", "priority": 3, "supported_reasoning_levels": [{"effort": "low"}, {"effort": "medium"}, {"effort": "high"}], "default_reasoning_level": "medium", "supported_in_api": True, "input_modalities": ["text", "image"], "context_window": 272000, "additional_speed_tiers": []}, {"slug": "gpt-99-test-balanced", "display_name": "Synthetic Balanced", "description": "Balanced synthetic coding model for everyday work.", "visibility": "list", "priority": 2, "supported_reasoning_levels": [{"effort": "low"}, {"effort": "medium"}, {"effort": "high"}], "default_reasoning_level": "medium", "supported_in_api": True, "input_modalities": ["text", "image"], "context_window": 272000, "additional_speed_tiers": []}, {"slug": "gpt-99-test-frontier", "display_name": "Synthetic Frontier", "description": "Frontier synthetic coding model.", "visibility": "list", "priority": 1, "supported_reasoning_levels": [{"effort": "low"}, {"effort": "medium"}, {"effort": "high"}], "default_reasoning_level": "high", "supported_in_api": True, "input_modalities": ["text", "image"], "context_window": 272000, "additional_speed_tiers": []}]
+            cache["models"].extend(synthetic_models)
+            models_cache.write_text(json.dumps(cache, indent=2) + "\n", encoding="utf-8")
+            catalog, catalog_sha256 = module.load_catalog(models_cache)
+            expected_registry = module.build_registry(catalog, catalog_sha256)
+            self.assertEqual(expected_registry["active_family"]["id"], "gpt-99")
+            self.assertEqual([model["id"] for model in expected_registry["models"]], ["gpt-99-test-weak", "gpt-99-test-balanced", "gpt-99-test-frontier"])
+            self.assertFalse(any(model["id"] in module.ACTIVE_MODEL_ORDER for model in expected_registry["models"]))
+            if module.PRIORITY_PRODUCER_MODEL is not None:
+                self.assertEqual(expected_registry["priority_producer"]["id"], module.PRIORITY_PRODUCER_MODEL)
+            ladder_text = (temp_dir / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8")
+            status = module.check_model_cache_ladder(models_cache, ladder_text)
+            self.assertFalse(status["valid"])
+            self.assertEqual(status["status"], "stale")
+            self.assertNotEqual(status["expected_catalog_sha256"], status["observed_catalog_sha256"])
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_catalog_fetch_timestamp_only_does_not_mark_registry_stale(self):
+        temp_dir, models_cache, _, _ = self.make_validation_inputs()
+        try:
+            cache = json.loads(models_cache.read_text(encoding="utf-8"))
+            cache["fetched_at"] = "2099-01-01T00:00:00Z"
+            models_cache.write_text(json.dumps(cache, indent=2) + "\n", encoding="utf-8")
+            ladder_text = (temp_dir / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8")
+            status = module.check_model_cache_ladder(models_cache, ladder_text)
+            self.assertTrue(status["valid"])
+            self.assertEqual(status["status"], "pass")
+            self.assertEqual(status["expected_catalog_sha256"], status["observed_catalog_sha256"])
+        finally:
+            shutil.rmtree(temp_dir)
+
+    @unittest.skipIf(PRIORITY_MODEL is None, "catalog has no optional priority producer")
+    def test_shared_ladder_rejects_priority_producer_as_quality_rung(self):
         source = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
         payload = json.loads(source.read_text(encoding="utf-8"))
-        payload["models"].append({"id": module.LEGACY_SPARK_MODEL, "codex_efforts": ["low"]})
+        duplicate = dict(payload["models"][-1])
+        duplicate["id"] = PRIORITY_MODEL
+        duplicate["capability_rank"] = len(payload["models"]) + 1
+        duplicate["provider_priority"] = payload["models"][-1]["provider_priority"] - 1
+        payload["models"].append(duplicate)
         failures = module.validate_shared_ladder(json.dumps(payload))
-        self.assertTrue(any("Spark" in failure or "Luna, Terra, and Sol" in failure for failure in failures))
+        self.assertTrue(any("invalid" in failure or "priority producer" in failure for failure in failures))
+
+    def test_shared_ladder_rejects_private_learning_hierarchy_contract_drift(self):
+        source = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        payload["private_learning_contract"]["hierarchy_notes"] = True
+        failures = module.validate_shared_ladder(json.dumps(payload))
+        self.assertTrue(any("private learning contract" in failure or "invalid" in failure for failure in failures))
 
     def test_sample_plans_are_schema_two_result_then_ending(self):
         for name, plan in module.sample_plans().items():
@@ -197,8 +280,8 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                 "id": "legacy-mini",
                 "phase": "mini",
                 "skill": "verify-skill",
-                "model": "gpt-5.6-luna",
-                "effort": "low",
+                "model": QUALITY_MODEL,
+                "effort": QUALITY_EFFORT,
                 "dependencies": [main_result_node],
                 "execution_domain": "general",
             },
@@ -230,7 +313,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
 
     def test_downstream_pairs_may_equal_entry_pair(self):
         sample_plans = module.sample_plans()
-        plan = json.loads(json.dumps(sample_plans["admitted-single-gpt-5.6-luna-low"]))
+        plan = json.loads(json.dumps(next(plan for plan in sample_plans.values() if plan["complexity"] == "easy")))
         failures = module.validate_plan(plan, APPROVED)
         self.assertEqual(failures, [])
 
@@ -240,11 +323,12 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         failures = module.validate_plan(plan, APPROVED)
         self.assertTrue(any("explicitly admitted" in failure for failure in failures))
 
-    def test_route_contract_keeps_ordinary_complex_work_inline(self):
+    def test_route_contract_routes_eligible_production_and_keeps_exact_read_only_inline(self):
         route_text = (Path(__file__).resolve().parents[1] / "references" / "route-contract.md").read_text(encoding="utf-8")
-        self.assertIn("current model performs the task directly regardless of apparent complexity", route_text)
+        self.assertIn("Eligible text/code production uses exactly one `obsidian_adaptive_model_runner.py` producer even on cold start", route_text)
+        self.assertIn("exact read-only work stays on the current model inline", route_text)
         self.assertIn("Apparent complexity alone does not create a dispatcher", route_text)
-        self.assertIn("If admission is absent, execute inline with no route display", route_text)
+        self.assertIn("A multi-node foreground exists only after comparable end-to-end evidence positively admits it", route_text)
 
     def test_fixed_sol_entry_contract_is_rejected(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
@@ -303,13 +387,14 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         failures = module.validate_plan(plan, APPROVED)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
 
-    def test_plan_accepts_complex_unity_csharp_with_terra(self):
+    def test_plan_accepts_complex_unity_csharp_with_quality_model(self):
         complex_plan = next(plan for plan in module.sample_plans().values() if plan["complexity"] == "complex")
         plan = json.loads(json.dumps(complex_plan))
         implementation = next(node for node in plan["nodes"] if node.get("purpose") == "implement")
         implementation["language"] = "unity_csharp"
         implementation["skill"] = "code-skill"
-        implementation["model"] = "gpt-5.6-terra"
+        implementation["model"] = COMPLEX_MODEL
+        implementation["effort"] = COMPLEX_EFFORT
         failures = module.validate_plan(plan, APPROVED)
         self.assertEqual(failures, [])
 
@@ -321,15 +406,15 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         failures = module.validate_plan(plan, APPROVED)
         self.assertTrue(any("must not depend on Ending work" in failure for failure in failures))
 
-    def test_stale_model_snapshot_is_rejected(self):
+    def test_saved_model_snapshot_is_not_passively_compared_to_local_cache(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             cache = json.loads(models_cache.read_text(encoding="utf-8"))
-            cache["models"] = [model for model in cache["models"] if model["slug"] != "gpt-5.6-terra"]
+            cache["models"] = [model for model in cache["models"] if model["slug"] != QUALITY_MODEL]
             models_cache.write_text(json.dumps(cache) + "\n", encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
-            self.assertFalse(result["valid"])
-            self.assertTrue(any("shared model-capability ladder failed local cache check" in failure for failure in result["failures"]))
+            self.assertTrue(result["valid"])
+            self.assertEqual(result["capability_status"]["status"], "saved")
         finally:
             shutil.rmtree(temp_dir)
 
@@ -362,30 +447,32 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             bootstrap_text = global_agents.read_text(encoding="utf-8")
-            self.assertIn("Eligible text/code producers read shared ladder", bootstrap_text)
-            self.assertIn("Obsidian `Projects/<key>/ModelExperience`", bootstrap_text)
-            self.assertIn("local JSON stays read-only", bootstrap_text)
-            self.assertIn("Spark first: easy=low, complex=high", bootstrap_text)
-            self.assertIn("Zero-result operational failure uses current 5.6 pair", bootstrap_text)
-            self.assertIn("publish, then return", bootstrap_text)
+            self.assertIn("Eligible text/code MUST run adaptive producer", bootstrap_text)
+            self.assertIn("Saved highest-family ladder", bootstrap_text)
+            self.assertIn("only explicit user model-update", bootstrap_text)
+            self.assertIn("never fetch", bootstrap_text)
+            self.assertIn("project/task/module/file/symbol as fields only", bootstrap_text)
+            self.assertIn("Obsidian broad `Model Switch.md`", bootstrap_text)
+            self.assertIn("no hierarchy notes or local JSON authority", bootstrap_text)
+            self.assertIn("Priority: easy=low, complex=high", bootstrap_text)
+            self.assertIn("zero-result uses contextual quality pair", bootstrap_text)
+            self.assertIn("publish then return", bootstrap_text)
             self.assertIn("Prompt/AI-instruction work loads `prompt-skill`", bootstrap_text)
-            self.assertIn("durable edits load `project-memory-skill`", bootstrap_text)
+            self.assertIn("Durable edits: `project-memory-skill`", bootstrap_text)
             self.assertIn("Every non-ENDING_TASK_WORKER task", bootstrap_text)
-            self.assertIn("Ending start receipt", bootstrap_text)
-            self.assertIn("independent Ending subagent", bootstrap_text)
-            self.assertIn("Ending Real writes the receipt-backed outcome to Obsidian", bootstrap_text)
-            self.assertIn("Parallelize isolated logs/docs", bootstrap_text)
+            self.assertIn("routed Ending uses `--producer-receipt`", bootstrap_text)
+            self.assertIn("independent Ending", bootstrap_text)
+            self.assertIn("writes PASS/FAIL to a broad page", bootstrap_text)
+            self.assertIn("Parallel docs/logs", bootstrap_text)
             self.assertIn("Final requires PASS or BLOCKED", bootstrap_text)
-            self.assertIn("log failed project/module/file state before a new 5.6 repair lifecycle", bootstrap_text)
-            self.assertIn("re-present and use a different verifier", bootstrap_text)
-            self.assertIn("use a different verifier", bootstrap_text)
+            self.assertIn("Failure logs fields before repair", bootstrap_text)
+            self.assertIn("re-present with another verifier", bootstrap_text)
+            self.assertIn("another verifier", bootstrap_text)
             self.assertIn("No hook", bootstrap_text)
-            self.assertIn("Exact read-only uses one bounded rg per authoritative file", bootstrap_text)
-            self.assertIn("anchored to exact members", bootstrap_text)
-            self.assertIn("resolve aliases", bootstrap_text)
+            self.assertIn("Exact read-only: one bounded rg/file at exact members/aliases", bootstrap_text)
             self.assertIn("no subagent/route/plan", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)
-            global_agents.write_text(bootstrap_text.replace("one bounded rg", "one search", 1), encoding="utf-8")
+            global_agents.write_text(bootstrap_text.replace("one bounded rg/file", "one search/file", 1), encoding="utf-8")
             validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(validation["valid"])
             self.assertTrue(any("bounded rg" in failure.lower() for failure in validation["failures"]))
@@ -448,7 +535,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             agent_path = temp_dir / "agents" / "openai.yaml"
-            required_term = "trying Spark first"
+            required_term = "optional priority producer first"
             agent_path.write_text(agent_path.read_text(encoding="utf-8").replace(required_term, "removed priority attempt"), encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])

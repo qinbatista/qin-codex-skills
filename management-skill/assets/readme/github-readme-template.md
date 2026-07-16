@@ -2,13 +2,13 @@
 
 # 🚀 Auto Best Model
 
-**Codex-only · inline by default · route only with proof · verify after delivery**
+**Codex-only · adaptive producer for eligible text/code · inline exceptions · verify after delivery**
 
 [中文说明](./README.zh.md)
 
-Tested from **GPT-5.6** · latest registered Codex models: `gpt-5.6-luna` · `gpt-5.6-terra` · `gpt-5.6-sol`
+Saved highest-family quality ladder · refreshed only when you request a local model update
 
-Spark-first text/code producer: `gpt-5.3-codex-spark` · easy=`low` · complex=`high`
+Current catalog-derived priority producer: `gpt-5.3-codex-spark` · easy=`low` · complex=`high`
 
 </div>
 
@@ -23,24 +23,24 @@ Spark-first text/code producer: `gpt-5.3-codex-spark` · easy=`low` · complex=`
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
-  <img src="./management-skill/assets/readme/model-router.svg" alt="Spark-first text and code with a contextual GPT-5.6 fallback and private Obsidian learning">
+  <img src="./management-skill/assets/readme/model-router.svg" alt="Catalog-derived priority producer and full quality ladder with private Obsidian learning">
 </picture>
 
-- **Priority:** Eligible text/code tries Spark: easy `low`, complex `high`.
-- **Operational:** With zero result and zero tokens, use the current Obsidian-selected GPT-5.6 pair.
-- **Quality:** A published result returns now; Ending logs failure before a new GPT-5.6 repair with a different verifier.
-- **Learning:** Only matched Ending outcomes update private project/task/module/file/symbol/code model experience.
+- **Priority:** Eligible text/code uses the adaptive catalog priority producer: easy `low`, complex `high`; exact read-only, image/mixed, and tool-only work stays inline.
+- **Operational:** With zero result and zero tokens, use the current contextual Obsidian-selected quality pair.
+- **Quality:** A published result returns now; Ending automatically logs the receipt-backed failure before a new quality-pair repair with a different verifier.
+- **Learning:** Ending outcomes update broad project/Skills `Model Switch.md` pages; project/task/module/file/symbol are fields only—no hierarchy notes.
 
 ## Rules
 
-- **Inline:** Ordinary work stays on the current Codex model.
+- **Producer:** Eligible text/code uses the adaptive catalog priority producer; exact read-only, image/mixed, and tool-only work stays inline.
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Show the completed result before Ending Real.
 - **Verify:** Ending Real runs after delivery; first-result time excludes it.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
-- **Memory:** Change history uses local JSONL + optional Obsidian; model learning uses private Obsidian only.
-- **Models:** Text/code tries Spark; GPT-5.6 Luna → Terra → Sol remains the quality/fallback ladder.
+- **Memory:** Change history is local JSONL + optional Obsidian; private learning uses broad project/Skills `Model Switch.md`: fields only; no hierarchy notes.
+- **Models:** Ordinary tasks use saved JSON; explicit local update selects the highest numeric GPT family, while unavailable cache keeps the saved list.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
 ## 📊 Current benchmark

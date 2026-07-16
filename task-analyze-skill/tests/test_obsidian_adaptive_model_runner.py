@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import json
 import tempfile
 import time
 import unittest
@@ -17,7 +18,7 @@ SPEC.loader.exec_module(module)
 def recommendation(pair="gpt-5.6-terra|medium", attempt_pair=None):
     model, effort = pair.split("|", 1)
     return {
-        "source": "obsidian_project_memory",
+        "source": "obsidian_broad_model_switch",
         "memory_available": True,
         "selected_pair": pair,
         "selected_model": model,
@@ -80,9 +81,28 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["memory_source"], "obsidian_project_memory")
+        self.assertEqual(result["memory_source"], "obsidian_broad_model_switch")
         self.assertEqual(result["selected_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(result["result"], "RESULT")
+
+    def test_receipt_and_summary_embed_only_sanitized_model_learning_context(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.task_summary = "  Edit one method.\nKeep behavior stable.  "
+
+            def fake_run(receipt_args, prompt):
+                receipt_args.result_output.write_text("RESULT", encoding="utf-8")
+                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "effective_pair": "gpt-5.6-terra|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
+
+            with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+                result = module.run(args, "SECRET RAW PROMPT MUST NOT BE STORED")
+            receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
+        expected_fields = {"project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "risk", "ambiguity", "task_summary"}
+        self.assertEqual(set(result["model_learning_context"]), expected_fields)
+        self.assertEqual(receipt["model_learning_context"], result["model_learning_context"])
+        self.assertEqual(result["model_learning_context"]["task_summary"], "Edit one method. Keep behavior stable.")
+        self.assertNotIn("SECRET RAW PROMPT", json.dumps(receipt))
+        self.assertNotIn("SECRET RAW PROMPT", json.dumps(result))
 
     def test_receipt_args_use_an_exact_supported_route_marker(self):
         with tempfile.TemporaryDirectory() as temporary:

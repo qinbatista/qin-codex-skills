@@ -605,23 +605,6 @@ def build_skill_details(rows, language="en"):
     return lines
 
 
-def build_overview(skill_paths, language="en"):
-    rows = []
-    groups = {}
-    for skill_path in skill_paths:
-        metadata = read_skill_metadata(skill_path)
-        skill_name = metadata.get("name", skill_path.name)
-        description = metadata.get("description", "No description provided.")
-        category = skill_category(skill_name, description)
-        rows.append((category, skill_name, description))
-        groups.setdefault(category, []).append(skill_name)
-    primary_rows = ordered_primary_rows(rows)
-
-    if language == "zh":
-        lines = ["# 当前 Codex Skills", "", "英文版: [README.md](./README.md)", "", "## 技能图", "", *build_skill_graph(primary_rows, language="zh"), "", *workflow_lane_section(language="zh"), *build_skill_summary_table(primary_rows, language="zh"), "", *build_support_skill_details([(category, skill_name, description, skill_name) for category, skill_name, description in rows], language="zh"), "", "## 运行规则", "", "- 单范围任务由当前模型一次读取、一次输出，完成后立即显示；不运行前台 Mini/Fast Verify。", "- 三个及以上独立非简单部分可由父任务保留最大部分，并只开两个互不重叠的同模型子任务；禁止重复读取和集中复核。", "- 只有显式路由、benchmark、Task Analyze 维护或待评估图谱才加载完整 `task-analyze-skill`；激活后默认仍是 inline。", "- `workflow-skill` 只有完整 Global 路径在相同 workload/config/entry cohort 下通过正确性、token 和时间准入时才运行。", "- first-result 时间在已完成结果展示时停止，排除之后的所有 Ending Real 工作。", "- 正确性是 gate；只有至少两个 Real 通过 pair 在相同 workload hash cohort 中且 token/time 完整时，才按总 token、process time、较弱 rung 排序；否则使用质量边界，不声明节省。", "- 模型降级先降低 effort，再降低 model；升级顺序相反。相似任务一旦找到已验证最佳 pair 就冻结，只有 Ending Real 失败或 profile/ladder 漂移才重新搜索。", "- Ending Real 在结果展示后验证并更新同一个 producer attempt，持久化并冻结 `best_pair`；验证失败则通知、重新打开并修复。", "- 非 tiny 委派路线保留完整 Luna/Terra/Sol ladder；tiny 路线必须是 `Spark-low + 完整常规 fallback`。", "- 每个活动的注册代码域都进入 `code-skill`；Python、普通 C#、Unity C# 是内置示例。", "- benchmark 两边固定相同的 `model|effort`（本次为 `gpt-5.6-sol | ultra`）：Direct 使用 raw `--direct-task`，Global 使用 raw `--bootstrap-task`；两者都在 entry context 外运行，不使用 `LOCKED_ROUTE_NODE`，也不忽略用户配置。", "- 私有 ledger 在 `task-analyze-skill/local/adaptive-routing/model_experience.json`，不进入镜像。"]
-        return "\n".join(lines) + "\n"
-
-
 def copy_skill_directory(source_dir, target_dir, preserve_local=False):
     assert_no_symlinks([source_dir], "source skill tree")
     if target_dir.exists() or target_dir.is_symlink():

@@ -161,7 +161,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
         self.assertEqual(args.scope, "multi")
         self.assertEqual(args.execution_domain, "general")
         self.assertEqual(args.static_suggestion, "gpt-5.6-terra|high")
-        self.assertEqual(args.hard_floor, "gpt-5.6-luna|low")
+        self.assertEqual(args.hard_floor, args.candidate_ladder[0])
         self.assertEqual(args.candidate_ladder, module.model_routing_history.normal_adaptive_pair_texts())
 
     def test_frozen_sol_max_is_executed_instead_of_terra_static(self):
