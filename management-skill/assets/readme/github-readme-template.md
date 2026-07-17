@@ -54,67 +54,46 @@ Main work and Ending verification are deliberately different task sessions. “B
 - **Models:** Ordinary tasks use saved JSON; explicit local update selects the highest numeric GPT family, while unavailable cache keeps the saved list.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
-## 📊 Full lifecycle benchmark: main task + Ending task
+## 📊 Three-tier lifecycle benchmark: without skill vs with skill
 
-**Technical summary:** The current global skill preserved correctness but did not improve performance on this tiny exact-output workload. Across six paired runs, the skill-enabled lifecycle was slower in five pairs, increased median whole-lifecycle time by **17.6%**, and increased median token use by **46.1%**.
+**Corrected baseline:** “Without skill” performs only the requested main work. It has **0 verification tokens and 0 verification time**. “With skill” returns the main result and then runs a separate background Ending session. Across simple, medium, and complex tasks, all 18 sessions produced the expected result, but the full skill lifecycle used more time and tokens in every tier.
 
-![Full lifecycle benchmark showing main task, Ending task, whole time, tokens, and all six paired runs](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
+![Three-tier lifecycle benchmark comparing tokens and full-session time with zero verification in the without-skill baseline](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
-### Main work and background verification cost
+### Median whole picture
 
-| Mode | Main tokens | Verify tokens behind main | Cohort tokens | Main time | Verify time behind main | Cohort time |
-|---|---:|---:|---:|---:|---:|---:|
-| Without global skill | 78,102 | 78,585 (50.2%) | 156,687 | 19.153 s | 18.039 s (48.5%) | 37.192 s |
-| With global skill | 114,826 | 114,727 (50.0%) | 229,553 | 22.138 s | 24.628 s (52.7%) | 46.766 s |
+| Tier | Workload | Model | Without tokens | With main | With verify | With whole | Without time | With main | With verify | With whole |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Simple | Exact arithmetic JSON | `gpt-5.6-luna \| low` | 13,017 | 19,044 | 19,115 | 38,159 | 2.790 s | 3.291 s | 3.456 s | 6.747 s |
+| Medium | One Python pricing method | `gpt-5.6-terra \| medium` | 14,860 | 20,893 | 42,069 | 62,961 | 3.237 s | 4.370 s | 7.054 s | 11.423 s |
+| Complex | Six-file dependency audit | `gpt-5.6-sol \| high` | 30,869 | 55,269 | 43,443 | 98,712 | 11.597 s | 17.584 s | 12.775 s | 30.359 s |
 
-The visual deliberately places the striped verification segment **behind the main-task segment**. Ending does not block delivery, but its time and tokens are still real lifecycle cost. This benchmark did not capture first-visible-result latency, so it does not pretend that full main-session duration is first-result time.
+The blue baseline stops after main—there is no baseline Ending session. The green striped portion exists only with the skill and shows the exact background-verification cost behind the completed main result.
 
-### Whole picture
+### Full run evidence
 
-| Mode | Main session median | Ending session median | Whole lifecycle median | Total-token median | Whole-lifecycle wins |
-|---|---:|---:|---:|---:|---:|
-| Without global skill | 2.773 s | 2.778 s | 6.091 s | 26,113 | Baseline |
-| With global skill | 3.322 s | 3.473 s | 7.164 s | 38,163 | 1 of 6 |
-| Skill overhead | +19.8% | +25.0% | +17.6% | +46.1% | Slower in 5 of 6 |
+| Tier | Pair | Mode | Main time | Verify time | Whole time | Main tokens | Verify tokens | Whole tokens |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| Simple | 1 | Without | 2.858 s | 0 | 2.858 s | 13,017 | 0 | 13,017 |
+| Simple | 1 | With | 3.425 s | 3.529 s | 6.954 s | 19,044 | 19,115 | 38,159 |
+| Simple | 2 | Without | 2.722 s | 0 | 2.722 s | 13,017 | 0 | 13,017 |
+| Simple | 2 | With | 3.156 s | 3.383 s | 6.539 s | 19,044 | 19,115 | 38,159 |
+| Medium | 1 | Without | 3.274 s | 0 | 3.274 s | 14,863 | 0 | 14,863 |
+| Medium | 1 | With | 4.375 s | 5.826 s | 10.201 s | 20,880 | 42,008 | 62,888 |
+| Medium | 2 | Without | 3.200 s | 0 | 3.200 s | 14,856 | 0 | 14,856 |
+| Medium | 2 | With | 4.364 s | 8.281 s | 12.645 s | 20,905 | 42,129 | 63,034 |
+| Complex | 1 | Without | 13.141 s | 0 | 13.141 s | 30,816 | 0 | 30,816 |
+| Complex | 1 | With | 12.952 s | 13.685 s | 26.637 s | 43,031 | 43,957 | 86,988 |
+| Complex | 2 | Without | 10.053 s | 0 | 10.053 s | 30,922 | 0 | 30,922 |
+| Complex | 2 | With | 22.215 s | 11.865 s | 34.080 s | 67,507 | 42,928 | 110,435 |
 
-“Whole lifecycle” is main + Ending within each run, followed by the median of those six totals. It is not the sum of separately calculated stage medians.
+### Method, decision, and limits
 
-### All six paired runs
-
-| Run | Without: main | Without: Ending | Without: whole | With: main | With: Ending | With: whole | Faster whole |
-|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | 5.135 s | 2.918 s | 8.053 s | 3.226 s | 3.236 s | 6.462 s | With skill |
-| 2 | 2.256 s | 2.635 s | 4.891 s | 5.478 s | 3.628 s | 9.106 s | Without skill |
-| 3 | 2.629 s | 4.201 s | 6.830 s | 3.561 s | 4.111 s | 7.672 s | Without skill |
-| 4 | 2.508 s | 2.729 s | 5.237 s | 3.230 s | 3.318 s | 6.548 s | Without skill |
-| 5 | 2.916 s | 2.801 s | 5.717 s | 3.242 s | 7.081 s | 10.323 s | Without skill |
-| 6 | 3.709 s | 2.755 s | 6.464 s | 3.401 s | 3.254 s | 6.655 s | Without skill |
-
-### Token evidence
-
-| Run | Without: main | Without: Ending | Without: total | With: main | With: Ending | With: total |
-|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 13,017 | 13,101 | 26,118 | 19,044 | 19,119 | 38,163 |
-| 2 | 13,017 | 13,092 | 26,109 | 19,044 | 19,119 | 38,163 |
-| 3 | 13,017 | 13,092 | 26,109 | 19,606 | 19,131 | 38,737 |
-| 4 | 13,017 | 13,093 | 26,110 | 19,044 | 19,119 | 38,163 |
-| 5 | 13,017 | 13,109 | 26,126 | 19,044 | 19,120 | 38,164 |
-| 6 | 13,017 | 13,098 | 26,115 | 19,044 | 19,119 | 38,163 |
-| **Median** | **13,017** | **13,096** | **26,113** | **19,044** | **19,119** | **38,163** |
-
-### Method and evidence
-
-- **Cohort:** 6 paired comparisons, 24 independent sessions (`main + Ending` in both modes), same `gpt-5.6-luna | low` model and same exact workload.
-- **Order control:** Runs 1, 3, and 5 executed without skill first; runs 2, 4, and 6 executed with skill first.
-- **Without skill:** User configuration/global skills were disabled, but the harness still launched a second clean audit session so both modes kept the same two-session topology.
-- **With skill:** Current global configuration loaded; Ending ran as an independent `ENDING_TASK_WORKER` session.
-- **Correctness:** 12/12 main sessions PASS, 12/12 Ending audits PASS, 0 reroutes.
-- **Identity controls:** Main workload SHA-256 `6ed46ac3699918ac054b2bf8e9d9da2be31628443a4d142848a121432f905c2b`; Ending workload SHA-256 `9ffe75646e4ecb36f6426026ad6005dd8947d2635c435dde36bb4fe5b89fee6a`; identical main output SHA-256 `7ba6fb88894e1d0faf389562cd4639eae0d733bcae056d8788d606a8777a5121`.
-- **Timing definition:** Full session/process duration—not first-visible-result latency. All runs used a read-only sandbox.
-
-### Decision and limitation
-
-The skill is **not performance-admitted for this tiny workload**: it returned the same correct result but cost more time and tokens. This is descriptive lifecycle-overhead evidence, not proof about complex coding quality. The public report omits raw prompts, private paths, receipts, and session IDs.
+- **Design:** 2 paired comparisons per tier: 12 main sessions plus 6 with-skill Ending sessions = 18 independent sessions. Order alternated within each tier.
+- **Identity:** Each pair used the same task input, model, effort, and read-only sandbox. The without arm used `--ignore-user-config`; the with arm loaded the current global configuration and then launched a distinct `ENDING_TASK_WORKER` session.
+- **Correctness:** 18/18 expected outputs; 0 reroutes, retries, fallbacks, or repairs.
+- **Decision:** Full-lifecycle performance **FAIL** in all three tiers: +193.2% / +323.7% / +219.8% tokens and +141.8% / +252.9% / +161.8% time for simple / medium / complex.
+- **Limits:** These are full process/session durations, not first-visible-result latency. Logical tokens are not billing tokens. Two pairs per tier are descriptive evidence, not a performance-admission sample.
 
 ## 🧩 Eight public Skills
 
