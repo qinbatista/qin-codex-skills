@@ -5,9 +5,11 @@ description: "Use only for explicitly requested verification as the task itself,
 
 # Verify Skill
 
-Verification has one category: **Real Verify**. Every non-Ending user task launches Real Verify in a separate persistent Codex thread, regardless of task level. Code producers first apply the bounded Quick Check defined by `code-skill`; that check is producer completion evidence, not this skill and not an independent acceptance verdict. After Quick Check, present the usable result as `CODE READY` or `MAIN RESULT READY`, include PASS/SKIPPED evidence, start the lifecycle ledger, create a persistent thread, and rename it exactly `End Task-{concise related task name}`. Link it and return without waiting. The new thread loads this skill and owns the eventual PASS or BLOCKED. Follow `references/ending-lifecycle.md`.
+Verification has two scopes: user-requested verification as the task itself, and a <=60-second post-result Ending handoff audit. Every non-Ending user task creates that separate persistent Codex thread, but its audit is evidence-only: it does not run extra tests, APIs, broad regression, user questions, waits, or automatic repair. Code producers first apply the bounded Quick Check defined by `code-skill`; that check is completion evidence. After Quick Check, present the usable result as `CODE READY` or `MAIN RESULT READY`, include PASS/SKIPPED evidence, start the lifecycle ledger, create a persistent thread, and rename it exactly `End Task-{concise related task name}`. Link it and return without waiting. A concurrent state change records terminal BLOCKED and exits; it never gates the delivered result. Follow `references/ending-lifecycle.md`.
 
-A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability, then `set_thread_title` for the exact title. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, report the origin as BLOCKED; do not silently substitute a subagent or wait loop.
+Never add Mini/Fast Verify before the user's first presentation. The Ending audit has no extra tests, APIs, broad regression, user questions, waits, or automatic repair.
+
+A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability, then `set_thread_title` for the exact title. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, disclose that the audit was unavailable but keep the already-delivered result complete; do not silently substitute a subagent or wait loop.
 
 When the user explicitly asks for a test, audit, review, replay, or verification as the primary task, that work is the requested result and runs normally on the current model. It does not need a fabricated pre-result verification phase.
 
@@ -18,31 +20,30 @@ The required order is:
 1. producer completes the requested result and, for code, runs one bounded Quick Check;
 2. show the result immediately with Quick Check PASS/SKIPPED evidence;
 3. write a lifecycle start receipt, add `--producer-receipt` when an adaptive producer created the result, create a separate persistent Codex thread, rename it `End Task-{concise related task name}`, and pass the exact handoff;
-4. run one proportional Real Verify while isolated logs/docs may run in parallel;
-5. if Real fails, persist the error and failed durable project state before repair;
-6. launch repair as a new child lifecycle, present the correction, and use a different Ending verifier;
+4. run one bounded read-only handoff audit and end within 60 seconds;
+5. if evidence is missing or the state changed, record terminal `BLOCKED` and exit without asking the user or polling;
+6. run a broader test, external API check, or repair only when the user makes it a new explicit task;
 7. let the terminal ledger event automatically record sanitized routing/memory learning for the bound producer receipt.
 
-First-result latency includes Quick Check and ends at step 2. Ending time is recorded separately and never added to first-result time. The origin returns after linking the new task and stating that deeper testing has started; it does not wait or poll. The Ending task owns the eventual `PASS` or `BLOCKED` result. A tool's own returned state or process exit may be Quick Check evidence for the requested action, but it is not independent Real Verify.
+First-result latency includes Quick Check and ends at step 2. Ending time is recorded separately and never added to first-result time. The origin returns after linking the new task and states that the delivered result is complete; it does not wait or poll. The Ending task owns only its audit `PASS` or `BLOCKED` result. A tool's own returned state or process exit may be Quick Check evidence for the requested action, but it is not independent Real Verify.
 
 ## Persistent End Task Thread
 
-- Create one background Codex task after `CODE READY` or `MAIN RESULT READY`; pass it the lifecycle ID, producer receipt when present, exact acceptance target, Quick Check evidence, artifact paths, project root, touched files, allowed mutation boundary, and origin task ID when available.
+- Create one background Codex task after `CODE READY` or `MAIN RESULT READY`; pass it the lifecycle ID, producer receipt when present, Quick Check evidence, artifact paths, project root, touched files, a read-only mutation boundary, and origin task ID when available.
 - Use a saved project with local environment when available; otherwise use a projectless task and absolute paths. Use the configured default model unless an exact model was explicitly requested, and choose proportional reasoning effort.
-- Rename the task exactly `End Task-{concise related task name}` with `set_thread_title`, link or identify it, then return the origin immediately with `Acceptance: PENDING`.
-- The background task—not the returned foreground task—records and reports `PASS` or `BLOCKED`, performs ordered failure logging, and starts any authorized repair lifecycle. It must surface its terminal result to the user in its own task or back to the origin when the host supports that.
-- If persistent task creation fails, disclose `BLOCKED: Ending task creation failed`. Never substitute a same-task subagent.
+- Rename the task exactly `End Task-{concise related task name}` with `set_thread_title`, link or identify it, then return the origin immediately with `Delivery: complete; background audit started`.
+- The background task—not the returned foreground task—records and reports `PASS` or `BLOCKED` for its audit, finishes within 60 seconds, and never asks the user to resolve an external Git/state change. It must surface its terminal result in its own task or back to the origin when the host supports that.
+- If persistent task creation fails, disclose `Background audit unavailable`; never substitute a same-task subagent.
 
 ### Required Status Vocabulary
 
-- `MAIN RESULT READY`: producer work is complete and usable, but Ending has not accepted it yet.
-- `PASS`: Ending accepted the presented result.
-- `REPAIRING`: Ending rejected the presented result and a bounded repair lifecycle is active.
-- `BLOCKED`: acceptance could not be established or the repair limit was exhausted.
+- `MAIN RESULT READY`: producer work is complete, usable, and delivered.
+- `PASS`: the short Ending audit recorded sufficient handoff evidence.
+- `BLOCKED`: the short audit could not establish evidence (including concurrent state change) and has ended.
 
-Do not use `done`, `finished`, `green`, or equivalent unqualified wording while acceptance is pending.
+Do not describe audit `BLOCKED` as a block on the already-delivered result.
 
-The origin final requires a created End Task thread or explicit BLOCKED. The End Task thread final requires lifecycle PASS or explicit BLOCKED. No hook is used or installed.
+The origin final is complete after result presentation. The End Task thread final requires lifecycle PASS or explicit BLOCKED. No hook is used or installed.
 
 ## Real Verify Scope
 
@@ -73,9 +74,9 @@ Routing quality learning records only the producer pair after Real. The adaptive
 2. Select one realistic evidence path proportional to risk.
 3. Run or inspect the actual artifact/state.
 4. Record input, method, observed output, and pass/fail reason.
-5. On pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching broad Obsidian `Model Switch.md` page before terminal PASS.
-6. On correctness failure, record lifecycle `FAIL --failure-class correctness` before repair; the ledger then writes the failed bound producer outcome and never lets a failure disappear.
-7. A repair uses a new lifecycle ID and cannot self-verify; its corrected result receives a new independent Ending pass.
+5. On handoff pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching broad Obsidian `Model Switch.md` page before terminal PASS.
+6. On missing evidence, timeout, or concurrent state change, record lifecycle `BLOCKED` and exit; never ask the user for confirmation or start a repair.
+7. A correctness repair is a new explicit user task and receives its own Mini Test plus independent Ending audit.
 
 ## Artifact Guidance
 
@@ -124,12 +125,11 @@ Create a formal report only when requested or when evidence is long, visual, com
 - Never turn Quick Check into a broad test suite or independent acceptance claim.
 - Never use a same-task subagent for Ending.
 - Never substitute a progress update such as `implementation complete` for the required usable `MAIN RESULT READY` presentation.
-- Never launch multiple overlapping verifier/review workers for one lifecycle; one Ending worker owns the verdict.
-- Never hide task state behind repeated `wait` updates. Report only a changed status: `MAIN RESULT READY`, `REPAIRING`, `PASS`, or `BLOCKED`.
+- Never launch multiple overlapping verifier/review workers for one lifecycle; one Ending worker owns the audit verdict.
+- Never hide task state behind repeated `wait` updates or ask a user to unblock Ending. Report only `PASS` or `BLOCKED` for the audit.
 - Verify the user's observable result, not only the attempted method.
 - Do not hide uncertainty or a blocked environment.
 - Do not claim a model ran without runtime evidence.
-- Do not let Ending Real alter the already-presented result silently; any repair is a new result lifecycle that is explicitly re-presented.
-- Notify and reopen on correctness failure.
+- Do not let Ending alter the already-presented result; repair requires a new explicit user task.
 - Do not let an optimization implementer verify its own work.
 - Do not push, deploy, or send external messages without authorization.

@@ -11,8 +11,9 @@ This report is the current, reproducible evidence for the global Mini Test and d
 | `test_validate_task_analyze_skill.py` | PASS — 39 tests |
 | `validate_task_analyze_skill.py` | PASS — all supported model/effort route fixtures and 4/4 graduated prompt scenarios |
 | Full Task Analyze test discovery | PASS — 421 tests discovered and completed successfully |
+| Detached Ending non-blocking regression | PASS — concurrent external state records terminal `BLOCKED` and exits; Ending has a <=60-second, read-only audit budget with no extra tests, APIs, user questions, waits, or automatic repairs. |
 
-The direct validator checks that the global bootstrap and its source asset match exactly, remain within the compact limit, run a Mini Test for light local code, skip heavy API/large-file/expensive/side-effect execution in favor of syntax and changed-name checks, create a separate `End Task-{task name}` thread, and rerun the benchmark after structural changes.
+The direct validator checks that the global bootstrap and its source asset match exactly, remain within the compact limit, run a Mini Test for light local code, skip heavy API/large-file/expensive/side-effect execution in favor of syntax and changed-name checks, create a separate `End Task-{task name}` thread, make Ending a short non-blocking audit, and rerun the benchmark after structural changes.
 
 ## Simple to complex benchmark checks
 

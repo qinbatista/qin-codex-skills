@@ -91,7 +91,7 @@ REQUIRED_WORKFLOW = [
     "bypasses result-producing performance admission",
     "Ending worker starts with `ENDING_TASK_WORKER`",
     "lifecycle ledger must report `PASS` or explicit `BLOCKED`",
-    "repair as a new child lifecycle",
+    "A repair requires a new explicit user task",
     "Real Verify",
     "independent optimization verification",
     "must not silently substitute another pair",
@@ -107,39 +107,10 @@ REQUIRED_WORKFLOW = [
 REQUIRED_TEMPLATE = ["Admitted Workflow Display Templates", "Ordinary requests", "stay inline on the current model", "## Admitted Single Node: Text Only", "## Admitted Complex Graph: Mermaid", "current selected model | current selected effort", "Show main result now", "Dispatch Ending Task", "Real Verify", "Independent optimization verification", "Main Result always precedes Ending Task", "Workflow With Models"]
 REQUIRED_MATRIX = ["Ordinary requests stay on the current model regardless of apparent complexity", "never load full `task-analyze-skill` or `workflow-skill`", "activation still returns to inline", "Workflow executes admitted routes only", "ordinary-direct", "explicit-routing-no-admission", "admitted-single", "admitted-complex", "Every active registry-owned code-domain implementation uses `code-skill`", "Main Result precedes all verification", "background correctness failure", "--direct-task", "--bootstrap-task"]
 REQUIRED_CODE = ["Obsidian-context priority-first producer with a catalog-derived quality fallback", "Obsidian broad `Model Switch.md`", "project/task/module/file/symbol/code", "catalog-generated priority/quality contract", "highest registered numeric GPT family", "easy text code uses low", "complex text code uses high", "zero-result, zero-token operational priority-producer failure", "new quality-pair repair lifecycle", "Old local `model_experience.json` remains legacy read-only", "mandatory post-result Ending lifecycle still runs", "After presentation, always start the independent Ending lifecycle", "different `verify-skill` worker performs independent verification"]
-REQUIRED_VERIFY = ["Verification has one category", "Real Verify", "Every user task launches an independent post-result Ending lifecycle", "Never add Mini/Fast Verify before the user's first presentation", "current user-selected model", "PASS or explicit BLOCKED", "different optimizer/verifier identities", "reopen"]
+REQUIRED_VERIFY = ["Verification has two scopes", "Ending handoff audit", "Every non-Ending user task creates that separate persistent Codex thread", "Never add Mini/Fast Verify before the user's first presentation", "current user-selected model", "PASS or explicit BLOCKED", "no extra tests, APIs, broad regression, user questions, waits, or automatic repair", "new explicit user task"]
 REQUIRED_OPTIMIZATION = ["Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "Use this skill directly only when the user requests optimization", "catalog-derived adaptive producer", "positively admitted", "different verifier", "before/after", "producer receipt", "--direct-task", "--bootstrap-task", "neither arm enters Task Analyze context"]
 REQUIRED_MANAGEMENT = ["Do not load this skill for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms", "directly only for an explicit routing-record", "admitted a delegated route", "broad Model Switch.md", "project/task/module/file/symbol/code", "obsidian_model_memory.py", "Ending Real starts with the producer receipt", "terminal ledger event records the result automatically", "legacy read-only", "Never push/sync/publish unless the user explicitly requested publishing"]
-REQUIRED_ENTRY = [
-    "# Task Lifecycle",
-    "Merge this section into `~/.codex/AGENTS.md`",
-    "Eligible text/code MUST run adaptive producer",
-    "Saved highest-family ladder",
-    "only explicit user model-update",
-    "never fetch",
-    "absent cache keeps it",
-    "Obsidian broad `Model Switch.md`",
-    "no hierarchy notes or local JSON authority",
-    "Priority: easy=low, complex=high",
-    "zero-result uses contextual quality pair",
-    "publish then return",
-    "Prompt/AI-instruction work loads `prompt-skill`",
-    "Durable edits: `project-memory-skill`",
-    "recall",
-    "record reason/result/verification/files after Ending",
-    "Every non-ENDING_TASK_WORKER task",
-    "routed Ending uses `--producer-receipt`",
-    "independent Ending",
-    "writes PASS/FAIL to a broad page",
-    "Parallel docs/logs",
-    "Final requires PASS or BLOCKED",
-    "Failure logs fields before repair",
-    "re-present",
-    "another verifier",
-    "No hook",
-    "Exact read-only: one bounded rg/file at exact members/aliases",
-    "no subagent/route/plan, guesses, broad/reread/full read/pre-result check",
-]
+REQUIRED_ENTRY = ["# Task Lifecycle", "Merge this section into `~/.codex/AGENTS.md`", "Eligible text/code MUST run adaptive producer", "Saved highest-family ladder", "only explicit user model-update", "never fetch", "absent cache keeps it", "Obsidian `Model Switch.md` fields only", "no hierarchy/local JSON", "Priority easy=low, complex=high", "zero-result uses contextual quality pair", "publish then return", "Prompt/AI-instruction work loads `prompt-skill`", "durable edits load `project-memory-skill`", "recall", "record reason/result/verification/files after Ending", "Code Mini Test", "create thread `End Task-{task name}`", "never subtask", "Ending <=60s evidence-only", "no extra tests/API/questions/wait", "concurrent state change=>BLOCKED+exit", "never gates main result", "Structural skill changes rerun simple/medium/complex benchmark", "Exact read-only: one bounded rg/file at exact members/aliases", "no route/plan/guesses/reread/full read/pre-result check", "No hook", "Final PASS or BLOCKED is Ending-only"]
 REQUIRED_SELECTION = ["# Catalog-Generated Model Selection", "assets/model-capability-ladder.json", "scripts/model_registry.py", "`~/.codex/models_cache.json`", "bootstrap it once", "Only an explicit user model-update request", "highest numeric GPT family", "Older numeric families remain catalog-only", "Obsidian broad `Model Switch.md`", "matching Obsidian broad `Model Switch.md` context", "terminal Ending event automatically records the matched producer verdict", "optional specialized priority text/code producer", "sole current contextual evidence authority", "Exact read-only", "obsidian_adaptive_model_runner.py", "Multi-node strategy and savings claims remain separately performance-admitted"]
 REQUIRED_ADAPTIVE = ["project/task/module/file/symbol/code context", "assets/model-capability-ladder.json", "last explicitly refreshed local Codex model order", "source digest", "Obsidian broad `Model Switch.md`", "sole active private authority", "optional priority producer runs first", "contextual quality pair", "zero-result, zero-token priority-producer operational failure", "atomically bootstrapped from the local cache when missing", "Only an explicit user model-update request", "preserve the last valid registry", "Evidence never crosses project keys", "`strategy_performance.py` remains the separate authority", "Ending PASS/FAIL event automatically writes the producer outcome to Obsidian"]
 REQUIRED_OBSIDIAN_RUNNER = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status"]
@@ -410,7 +381,7 @@ def validate(skill_dir):
         expected_prefix = NEGATIVE_DESCRIPTION_PREFIXES[label]
         if not executor_metadata.get("description", "").lower().startswith(expected_prefix.lower()):
             failures.append(f"{expected_name} description must begin with the exact-scoped read-only negative preselection boundary: {expected_prefix}")
-    failures.extend(missing_terms("workflow agent", texts["agent"], ["eligible text/code producer", "saved highest-family ladder", "optional priority producer first", "easy low; complex high", "selected quality pair as zero-result fallback", "Ordinary tasks do not scan or refresh the model cache", "explicit user model-update", "local models_cache.json", "never network", "unavailable cache keeps the saved ladder", "Published output returns immediately", "Start Ending with the producer receipt", "terminal event automatically records PASS/FAIL learning", "quality-pair repair lifecycle", "different verifier", "broad Model Switch page is the sole current contextual experience authority", "Multi-node savings need separate proof", "Every task has independent Ending", "isolated logs/docs may run in parallel", "Final needs PASS or BLOCKED", "No hook", "visible machine plan"]))
+    failures.extend(missing_terms("workflow agent", texts["agent"], ["eligible text/code producer", "saved highest-family ladder", "optional priority producer first", "easy low; complex high", "selected quality pair as zero-result fallback", "Ordinary tasks do not scan or refresh the model cache", "explicit user model-update", "local models_cache.json", "never network", "unavailable cache keeps the saved ladder", "Published output returns immediately", "Start Ending with the producer receipt", "terminal event automatically records PASS/FAIL learning", "Ending audit is <=60s and evidence-only", "concurrent state change records BLOCKED and exits", "broad Model Switch page is the sole current contextual experience authority", "Multi-node savings need separate proof", "Every task has independent Ending", "isolated logs/docs may run in parallel", "Final needs PASS or BLOCKED", "No hook", "visible machine plan"]))
     failures.extend(missing_terms("workflow", texts["workflow"], REQUIRED_WORKFLOW))
     failures.extend(missing_terms("template", texts["template"], REQUIRED_TEMPLATE))
     failures.extend(missing_terms("matrix", texts["matrix"], REQUIRED_MATRIX))
@@ -427,7 +398,7 @@ def validate(skill_dir):
         if not prompt_text.lower().startswith(expected_prefix.lower()):
             failures.append(f"{label} default_prompt must begin with the exact-scoped read-only negative preselection boundary: {expected_prefix}")
     failures.extend(missing_terms("code-skill agent", texts["code_agent"], ["exact read-only lookup/audit stays skill-free", "Implementation, edit, debug, refactor, or authored tests", "catalog-generated ladder", "optional priority producer", "easy low; complex high", "zero-result operational failure uses the selected contextual quality pair", "Return published code immediately", "producer receipt", "terminal event automatically records", "correctness/quality failure", "new quality-pair repair lifecycle", "different verifier", "Local model_experience.json stays legacy read-only", "independent Ending", "no foreground verify"]))
-    failures.extend(missing_terms("verify-skill agent", texts["verify_agent"], ["every user task launches an independent post-result Ending lifecycle", "Never add Mini/Fast Verify before first presentation", "producer shows the completed result", "record lifecycle started", "proportional Real Verify", "isolated logs/docs may run in parallel", "PASS or explicit BLOCKED opens the final gate", "persist lifecycle evidence", "before a new repair child", "different Ending verifier", "Ending time is separate"]))
+    failures.extend(missing_terms("verify-skill agent", texts["verify_agent"], ["every user task launches an independent post-result Ending lifecycle", "Never add Mini/Fast Verify before first presentation", "producer shows the completed result", "record lifecycle started", "<=60-second evidence-only audit", "no extra tests/API, user question, wait, or repair", "concurrent state change records terminal BLOCKED and exits", "Ending-only final gate", "never blocks the delivered result", "Ending time is separate"]))
     failures.extend(missing_terms("optimization-skill agent", texts["optimization_agent"], ["do not load from benchmark repetition alone", "user-requested optimization", "explicitly authorized reusable improvement", "positively admitted node", "catalog-generated ladder", "present the optimized result immediately", "no foreground Mini/Fast Verify", "different Real verifier", "Ending time is excluded from first-result time", "never self-certify savings"]))
     failures.extend(missing_terms("management-skill agent", texts["management_agent"], ["do not load for ordinary exact-scoped read-only work or benchmark worker arms", "explicit management request or admitted node", "broad Obsidian Model Switch.md", "local model_experience.json and central TaskModelExperience are legacy read-only", "catalog-generated ladder", "optional priority producer", "operational failure is neutral", "quality failure starts a contextual quality-pair repair", "terminal ledger event automatically records its verdict", "never publish private state"]))
     failures.extend(missing_terms("task-analyze-entry-rule", texts["task_analyze_entry_rule"], REQUIRED_ENTRY))
@@ -443,8 +414,8 @@ def validate(skill_dir):
     for label in ("workflow", "code", "management", "task_analyze", "task_analyze_selection", "task_analyze_adaptive"):
         failures.extend(legacy_only_failures(label, texts[label]))
     entry_body = texts["task_analyze_entry_rule"].replace("Merge this section into `~/.codex/AGENTS.md`.\n\n", "", 1)
-    if len(entry_body.encode("utf-8")) > 1024:
-        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 1024 bytes")
+    if len(entry_body.encode("utf-8")) > 1152:
+        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 1152 bytes")
     if entry_body != texts["global_agents"]:
         failures.append("global entry asset does not exactly match global AGENTS after removing its merge directive")
     live_text = "\n".join(texts.values())

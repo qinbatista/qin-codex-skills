@@ -123,7 +123,8 @@ REQUIRED_SKILL_TEXT = [
     "Quick Check (the user-facing Mini Test)",
     "Call `create_thread`, then `set_thread_title`",
     "never substitute a same-task subtask",
-    "Final requires lifecycle `PASS` or explicit `BLOCKED`",
+    "origin final is complete after the result presentation",
+    "concurrent or missing evidence is terminal BLOCKED, not a user question",
     "End-to-End Performance Admission",
     "complete foreground path",
     "frozen model-visible catalogs and memory snapshot",
@@ -281,16 +282,16 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Eligible text/code MUST run adaptive producer", "Saved highest-family ladder", "only explicit user model-update refreshes local `models_cache.json`", "never fetch", "absent cache keeps it", "Obsidian `Model Switch.md` fields only", "no hierarchy/local JSON", "Priority easy=low, complex=high", "zero-result uses contextual quality pair", "publish then return", "Prompt/AI-instruction work loads `prompt-skill`", "durable edits load `project-memory-skill`", "recall", "record reason/result/verification/files after Ending", "Code Mini Test", "API/large-file/expensive/side-effect-heavy = skip", "function/variable/import/direct-reference names", "create thread `End Task-{task name}`", "never subtask", "Ending writes PASS/FAIL", "repairs use another verifier", "Structural skill changes rerun simple/medium/complex benchmark", "Exact read-only: one bounded rg/file at exact members/aliases", "no route/plan/guesses/reread/full read/pre-result check", "No hook", "Final PASS or BLOCKED"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Eligible text/code MUST run adaptive producer", "Saved highest-family ladder", "only explicit user model-update refreshes local `models_cache.json`", "never fetch", "absent cache keeps it", "Obsidian `Model Switch.md` fields only", "no hierarchy/local JSON", "Priority easy=low, complex=high", "zero-result uses contextual quality pair", "publish then return", "Prompt/AI-instruction work loads `prompt-skill`", "durable edits load `project-memory-skill`", "recall", "record reason/result/verification/files after Ending", "Code Mini Test", "API/large-file/expensive/side-effect-heavy = skip", "function/variable/import/direct-reference names", "create thread `End Task-{task name}`", "never subtask", "Ending <=60s evidence-only", "no extra tests/API/questions/wait", "concurrent state change=>BLOCKED+exit", "never gates main result", "Structural skill changes rerun simple/medium/complex benchmark", "Exact read-only: one bounded rg/file at exact members/aliases", "no route/plan/guesses/reread/full read/pre-result check", "No hook", "Final PASS or BLOCKED is Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
-REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "create `End Task-{concise related task name}` as a separate persistent Codex thread", "Ending inspection never silently changes the artifact"]
+REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "create `End Task-{concise related task name}` as a separate persistent Codex thread", "no extra test/API run, no user question, no wait, and no automatic repair"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy run and check syntax plus changed method, variable, namespace, and direct-reference names", "create a separate `End Task-{concise related task name}` thread", "return without waiting"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
-REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "In Ending Real, test with representative cases"]
+REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "Ending lifecycle as a <=60-second read-only handoff audit"]
 REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "present the completed prompt first"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "LOCKED_ROUTE_NODE", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
-MAX_GLOBAL_BOOTSTRAP_BYTES = 1024
+MAX_GLOBAL_BOOTSTRAP_BYTES = 1152
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
     "The entry is a bounded controller",
@@ -712,7 +713,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["eligible text/code producer", "saved catalog ladder", "optional priority producer first", "easy low; complex high", "selected quality pair as zero-result fallback", "Ordinary tasks never scan the model cache", "explicit user model-update", "missing cache keeps the saved ladder", "no network fetch", "Mini Test after code", "Present immediately", "separate End Task-{related task} thread", "without waiting or a same-task subtask", "Structural skill changes rerun simple/medium/complex benchmarks", "Load prompt-skill", "Exact read-only is bounded inline", "Final needs PASS or BLOCKED", "No hook"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["eligible text/code producer", "saved catalog ladder", "optional priority producer first", "easy low; complex high", "selected quality pair as zero-result fallback", "Ordinary tasks never scan the model cache", "explicit user model-update", "missing cache keeps the saved ladder", "no network fetch", "Mini Test after code", "Present immediately", "separate End Task-{related task} thread", "without waiting or a same-task subtask", "Ending is <=60s evidence-only", "concurrent state change=>BLOCKED+exit", "never gates the result", "Structural skill changes rerun simple/medium/complex benchmarks", "Load prompt-skill", "Exact read-only is bounded inline", "Final needs PASS or BLOCKED", "No hook"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))

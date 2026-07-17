@@ -2,7 +2,7 @@
 
 ## First Result Principle
 
-Finish the requested task. For code, run one bounded producer Quick Check before presentation (the Mini Test): a smallest safe local smoke for light work, or syntax and changed-name/reference checks when the real path is API-heavy, large-file, expensive, destructive, or side-effect-heavy. Do not run Mini/Fast Verify before first presentation beyond that bounded check; show the completed result immediately afterward. Real Verify, broader regression, optimization proof, reports, logs, documentation, and routing learning belong in a separate persistent `End Task-{concise related task name}` thread. Link it and return without waiting.
+Finish the requested task. For code, run one bounded producer Quick Check before presentation (the Mini Test): a smallest safe local smoke for light work, or syntax and changed-name/reference checks when the real path is API-heavy, large-file, expensive, destructive, or side-effect-heavy. Do not run Mini/Fast Verify before first presentation beyond that bounded check; show the completed result immediately afterward. The separate persistent `End Task-{concise related task name}` thread is a <=60-second read-only handoff audit, not a broader regression, API, or repair worker. Link it and return without waiting; concurrent state change means terminal BLOCKED and exit, never a user question; its terminal verdict is recorded automatically.
 
 ## Ordinary Entry Contract
 
@@ -11,7 +11,7 @@ The hookless always-loaded bootstrap, not this full skill, owns ordinary work. E
 - One obvious reversible action uses one tool action and presents the observed result immediately.
 - Exact-scoped read-only work stays inline with no subagent or route. An exact named-source audit first runs one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answers once. Anchor named members directly; enclosing-class or call-site anchors, guessed identifier families, separate planning, broad searches, whole-file reads, rereads, and pre-result checks are forbidden. Present immediately.
 - An exact bounded multi-file allowlist uses one boundary-labelled broad search, not parallel agents, separate locator/read rounds, or one full read per file.
-- Requested text/code production uses the smallest adaptive producer surface. Code runs one proportional Quick Check before presentation; heavy integration, API, build, render, or state verification remains in detached Ending Real. Its lifecycle start binds the producer receipt so the terminal verdict is recorded automatically.
+- Requested text/code production uses the smallest adaptive producer surface. Code runs one proportional Quick Check before presentation; heavy integration, API, build, render, or state verification runs only when the user explicitly requests it. Detached Ending Real only checks the handoff/receipt and records its terminal verdict automatically.
 - A task that appears complex still avoids multi-node routing unless the user explicitly asks for routing/benchmarking/maintenance or current comparable evidence positively admits a graph. This does not suppress the single adaptive producer.
 
 The graduated examples are therefore inline by default:

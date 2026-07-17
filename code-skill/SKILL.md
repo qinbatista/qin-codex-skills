@@ -74,6 +74,8 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 
 The smallest safe syntax, existence, direct-reference, or focused local execution check belongs to producer Quick Check. Full builds, broad lint, integration/API calls, large-file processing, live side effects, and regressions belong to the detached Ending thread unless they are themselves the user's requested task.
 
+The mandatory post-result Ending lifecycle still runs. After presentation, always start the independent Ending lifecycle, but it is a <=60-second handoff audit and no foreground verify. Return published code immediately; a new quality-pair repair lifecycle and different verifier require a new explicit user task. The producer receipt terminal event automatically records audit learning.
+
 ## Optimization Boundary
 
 When optimization is explicitly requested or admitted, implement only the authorized change and return raw before/after inputs, outputs, token/time evidence when relevant, and known risks. The optimization implementer never self-certifies same behavior. A different `verify-skill` worker performs independent verification after the result; an admitted route may schedule that worker in Ending Task.
