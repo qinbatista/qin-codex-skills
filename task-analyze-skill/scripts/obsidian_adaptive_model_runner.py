@@ -2,6 +2,7 @@
 """Run one Spark-first producer with an Obsidian-selected GPT-5.6 fallback."""
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -93,6 +94,18 @@ def _recommend(args):
 
 def _zero_token_map():
     return {field: 0 for field in model_execution_receipt.TOKEN_FIELDS}
+
+
+def infer_complexity(prompt):
+    """Choose the saved easy/complex effort class without reading task files."""
+    text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    if re.search(r"\b(?:multi[- ]file|multiple files|six[- ]file|pipeline|architecture|migration|integration|workflow graph|large[- ]file|heavy)\b", text):
+        return "complex"
+    numeric_signals = sum(
+        marker in text
+        for marker in ("decimal", "round_half_up", "round half up", "tax", "currency", "cents", "percent")
+    )
+    return "complex" if numeric_signals >= 2 else "easy"
 
 
 def _model_learning_context(args):
@@ -229,43 +242,69 @@ def run(args, prompt):
     return summary
 
 
+def resolve_fast_path_args(args, prompt):
+    explicit_fields = ("project_root", "task_type", "module", "workload_id", "receipt_output", "result_output")
+    fast_path = not all(getattr(args, field) is not None for field in explicit_fields)
+    workdir = Path(args.workdir).expanduser().resolve()
+    project_root = Path(args.project_root or os.environ.get("CODEX_PROJECT_ROOT") or workdir).expanduser().resolve()
+    task_type = args.task_type or "code"
+    module_name = args.module or project_root.name or "workspace"
+    args.complexity = args.complexity or (infer_complexity(prompt) if fast_path else "easy")
+    identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, args.complexity, args.risk, args.ambiguity, prompt))
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+    default_output_root = codex_home / "tmp" / "adaptive-producer" / f"fast-{digest}"
+    args.workdir = workdir
+    args.project_root = project_root
+    args.task_type = task_type
+    args.module = module_name
+    args.task_summary = args.task_summary or re.sub(r"\s+", " ", prompt).strip()[:280]
+    args.workload_id = args.workload_id or f"fast-{digest}"
+    args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
+    args.result_output = Path(args.result_output) if args.result_output is not None else default_output_root / "result.txt"
+    args.sandbox = args.sandbox or ("workspace-write" if fast_path else "read-only")
+    args.emit_result = bool(args.emit_result or fast_path)
+    if args.timeout <= 0 or args.receipt_output == args.result_output:
+        raise ValueError("invalid runner output or timeout")
+    return args
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Run one Obsidian-memory-selected catalog priority/quality producer")
     parser.add_argument("--vault", type=Path)
     parser.add_argument("--ladder", type=Path, default=obsidian_model_memory.DEFAULT_LADDER)
-    parser.add_argument("--project-root", type=Path, required=True)
-    parser.add_argument("--task-type", required=True)
-    parser.add_argument("--module", required=True)
+    parser.add_argument("--project-root", type=Path)
+    parser.add_argument("--task-type")
+    parser.add_argument("--module")
     parser.add_argument("--file", default="")
     parser.add_argument("--symbol", default="")
     parser.add_argument("--code-kind", default="general")
     parser.add_argument("--operation", default="work")
     parser.add_argument("--modality", choices=sorted(obsidian_model_memory.MODALITY_VALUES), default="text")
-    parser.add_argument("--complexity", choices=sorted(obsidian_model_memory.COMPLEXITY_VALUES), default="easy")
+    parser.add_argument("--complexity", choices=sorted(obsidian_model_memory.COMPLEXITY_VALUES))
     parser.add_argument("--risk", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--ambiguity", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--task-summary", default="")
-    parser.add_argument("--workload-id", required=True)
-    parser.add_argument("--receipt-output", type=Path, required=True)
-    parser.add_argument("--result-output", type=Path, required=True)
+    parser.add_argument("--workload-id")
+    parser.add_argument("--receipt-output", type=Path)
+    parser.add_argument("--result-output", type=Path)
     parser.add_argument("--workdir", type=Path, default=Path.cwd())
     parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "state_5.sqlite")
     parser.add_argument("--codex-bin", default="codex")
-    parser.add_argument("--sandbox", choices=("read-only", "workspace-write", "danger-full-access"), default="read-only")
+    parser.add_argument("--sandbox", choices=("read-only", "workspace-write", "danger-full-access"))
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--ignore-user-config", action="store_true")
     parser.add_argument("--allow-fallback", action="append", default=[])
     parser.add_argument("--emit-result", action="store_true")
-    args = parser.parse_args(argv)
-    if args.timeout <= 0 or args.receipt_output == args.result_output:
-        parser.error("invalid runner output or timeout")
-    return args
+    return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
+    prompt = sys.stdin.read()
     try:
-        summary = run(args, sys.stdin.read())
+        args = resolve_fast_path_args(args, prompt)
+        summary = run(args, prompt)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         summary = {"status": "fail", "reason": str(error)[:120] or "runner_validation_failed"}
     print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))

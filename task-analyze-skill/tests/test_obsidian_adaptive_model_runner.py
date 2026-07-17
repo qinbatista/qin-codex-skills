@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import io
 import json
 import tempfile
 import time
@@ -84,6 +85,80 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(result["memory_source"], "obsidian_broad_model_switch")
         self.assertEqual(result["selected_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(result["result"], "RESULT")
+
+    def test_zero_argument_stdin_fast_path_derives_safe_defaults(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workdir = root / "fixture"
+            workdir.mkdir()
+            with patch.dict(module.os.environ, {"CODEX_HOME": str(root / "codex-home")}, clear=False):
+                args = module.resolve_fast_path_args(module.parse_args(["--workdir", str(workdir)]), "  Implement one function.\nRun tests.  ")
+        self.assertEqual(args.project_root, workdir.resolve())
+        self.assertEqual(args.task_type, "code")
+        self.assertEqual(args.module, "fixture")
+        self.assertEqual(args.task_summary, "Implement one function. Run tests.")
+        self.assertEqual(args.complexity, "easy")
+        self.assertRegex(args.workload_id, r"^fast-[0-9a-f]{16}$")
+        self.assertEqual(args.receipt_output.parent, args.result_output.parent)
+        self.assertEqual(args.receipt_output.parent.parent.parent, (root / "codex-home" / "tmp").resolve())
+        self.assertEqual(args.sandbox, "workspace-write")
+        self.assertTrue(args.emit_result)
+
+    def test_explicit_route_arguments_keep_read_only_and_emit_defaults(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            argv = ["--project-root", str(root), "--task-type", "code", "--module", "module", "--workload-id", "explicit", "--receipt-output", str(root / "receipt.json"), "--result-output", str(root / "result.txt")]
+            args = module.resolve_fast_path_args(module.parse_args(argv), "Do work")
+        self.assertEqual(args.workload_id, "explicit")
+        self.assertEqual(args.sandbox, "read-only")
+        self.assertFalse(args.emit_result)
+        self.assertEqual(args.complexity, "easy")
+
+    def test_fast_path_infers_numeric_and_multifile_complexity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            numeric = module.resolve_fast_path_args(
+                module.parse_args(["--workdir", temporary]),
+                "Use Decimal, ROUND_HALF_UP cents, tax, and percent calculations.",
+            )
+            multifile = module.resolve_fast_path_args(
+                module.parse_args(["--workdir", temporary]),
+                "Complete the six-file store quote pipeline.",
+            )
+            explicit = module.resolve_fast_path_args(
+                module.parse_args(["--workdir", temporary, "--complexity", "easy"]),
+                "Complete the six-file store quote pipeline.",
+            )
+        self.assertEqual(numeric.complexity, "complex")
+        self.assertEqual(multifile.complexity, "complex")
+        self.assertEqual(explicit.complexity, "easy")
+
+    def test_fast_path_summary_respects_memory_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "word " * 200)
+        self.assertEqual(len(args.task_summary), 280)
+
+    def test_fast_path_identity_is_stable_per_project_and_prompt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            first = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "Do A")
+            second = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "Do A")
+            different = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "Do B")
+            different_metadata = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary, "--module", "other"]), "Do A")
+        self.assertEqual(first.workload_id, second.workload_id)
+        self.assertNotEqual(first.workload_id, different.workload_id)
+        self.assertNotEqual(first.workload_id, different_metadata.workload_id)
+
+    def test_main_zero_argument_path_resolves_before_run_without_refresh(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            workdir = Path(temporary)
+            with patch.object(module.Path, "cwd", return_value=workdir), patch.object(module.sys, "stdin", io.StringIO("Implement one function")), patch.object(module.sys, "stdout", io.StringIO()), patch.object(module, "_recommend") as recommend, patch.object(module, "run", return_value={"status": "pass"}) as execute:
+                status = module.main([])
+        self.assertEqual(status, 0)
+        recommend.assert_not_called()
+        args, prompt = execute.call_args.args
+        self.assertEqual(prompt, "Implement one function")
+        self.assertEqual(args.task_type, "code")
+        self.assertEqual(args.sandbox, "workspace-write")
+        self.assertTrue(args.emit_result)
 
     def test_receipt_and_summary_embed_only_sanitized_model_learning_context(self):
         with tempfile.TemporaryDirectory() as temporary:

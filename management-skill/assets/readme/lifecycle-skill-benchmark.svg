@@ -1,74 +1,100 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1160" viewBox="0 0 1400 1160" role="img" aria-labelledby="title desc">
-  <title id="title">Three-tier lifecycle benchmark with and without the global skill</title>
-  <desc id="desc">Simple, medium, and complex paired benchmarks. Without skill is blue main work only with zero verification. With skill is green main work followed by striped green background verification. Every tier compares logical tokens and full-session time.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1500" viewBox="0 0 1600 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Real adaptive lifecycle A/B benchmark</title>
+  <desc id="desc">Six real A/B pairs across simple, medium, and complex code tasks. Both arms enter GPT-5.6-Sol ultra. Direct stops after main work. Auto shows foreground work in teal and a separate striped Ending verification extension. Overall Auto saves 14.500 percent foreground tokens and 41.808 percent first-result time; after Ending, time still saves 24.955 percent while tokens cost 2.956 percent more.</desc>
   <defs>
+    <pattern id="verifyHatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(40)">
+      <rect width="14" height="14" fill="#123c45"/>
+      <rect width="5" height="14" fill="#5eead4" opacity="0.72"/>
+    </pattern>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
     <style>
-      .sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.white{fill:#f8fafc}.muted{fill:#a9b6ca}.quiet{fill:#718096}.blue{fill:#3b82f6}.green{fill:#22c55e}.orange{fill:#fb923c}.label{font-size:15px;font-weight:700}.small{font-size:13px}.value{font-size:15px;font-weight:700}
+      .title{font:700 38px Inter,Arial,sans-serif;fill:#f8fafc}.sub{font:500 18px Inter,Arial,sans-serif;fill:#a9b7cc}
+      .cardTitle{font:700 25px Inter,Arial,sans-serif;fill:#f8fafc}.cardSub{font:500 15px Inter,Arial,sans-serif;fill:#a9b7cc}
+      .section{font:700 15px Inter,Arial,sans-serif;fill:#dbe7f5;letter-spacing:.4px}.label{font:600 14px Inter,Arial,sans-serif;fill:#c2cfdf}
+      .value{font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#edf4ff}.small{font:500 13px Inter,Arial,sans-serif;fill:#9eacc0}
+      .win{font:700 15px Inter,Arial,sans-serif;fill:#5eead4}.loss{font:700 15px Inter,Arial,sans-serif;fill:#fbbf24}
+      .kpi{font:800 27px Inter,Arial,sans-serif;fill:#f8fafc}.kpiSub{font:600 15px Inter,Arial,sans-serif;fill:#b8c6d8}
     </style>
-    <pattern id="greenVerify" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="12" height="12" fill="#123a2b"/><rect width="5" height="12" fill="#4ade80"/></pattern>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".28"/></filter>
   </defs>
+  <rect width="1600" height="1500" fill="#070f1b"/>
+  <rect x="34" y="30" width="1532" height="1435" rx="34" fill="#0a192b" stroke="#243a55" filter="url(#shadow)"/>
 
-  <rect width="1400" height="1160" fill="#070d16"/>
-  <rect x="38" y="34" width="1324" height="1092" rx="30" fill="#081728" filter="url(#shadow)"/>
+  <text x="78" y="88" class="title">Real A/B benchmark · foreground work vs background verify</text>
+  <text x="78" y="122" class="sub">Both arms enter gpt-5.6-sol | ultra · 6 A/B pairs · 12 main sessions + 6 Auto-only Ending sessions · 18/18 exact results correct</text>
+  <rect x="1120" y="66" width="18" height="18" rx="4" fill="#3b82f6"/><text x="1148" y="81" class="small">Without skill · main only</text>
+  <rect x="1120" y="96" width="18" height="18" rx="4" fill="#14b8a6"/><text x="1148" y="111" class="small">With skill · foreground</text>
+  <rect x="1360" y="96" width="18" height="18" rx="4" fill="url(#verifyHatch)"/><text x="1388" y="111" class="small">Ending · after result</text>
 
-  <text x="90" y="96" class="sans white" font-size="36" font-weight="780">Three-tier lifecycle A/B benchmark · FAIL</text>
-  <text x="90" y="134" class="sans muted" font-size="18">2 pairs per tier · 12 main runs · 6 with-skill background verifies · all correctness checks PASS</text>
+  <!-- Simple -->
+  <rect x="62" y="154" width="1476" height="318" rx="25" fill="#101f35" stroke="#31455f"/>
+  <text x="92" y="195" class="cardTitle">Simple · normalize_tags · 4/4 tests</text>
+  <text x="92" y="222" class="cardSub">Auto child: gpt-5.3-codex-spark | low · 2 pairs / 4 main runs</text>
+  <text x="1454" y="198" text-anchor="end" class="loss">FOREGROUND LOSS</text>
+  <text x="92" y="262" class="section">COHORT LOGICAL TOKENS</text>
+  <text x="92" y="298" class="label">Without</text><text x="172" y="298" class="value">231,823</text>
+  <rect x="350" y="282" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="282" width="204" height="20" rx="10" fill="#3b82f6"/>
+  <text x="92" y="338" class="label">With</text><text x="172" y="338" class="value">319,126 + 90,588 verify</text>
+  <rect x="350" y="322" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="322" width="280" height="20" rx="10" fill="#14b8a6"/><rect x="630" y="322" width="80" height="20" rx="10" fill="url(#verifyHatch)"/>
+  <text x="350" y="375" class="loss">37.659% more foreground · 76.736% more whole</text>
+  <text x="830" y="262" class="section">COHORT FIRST-RESULT TIME</text>
+  <text x="830" y="298" class="label">Without</text><text x="910" y="298" class="value">94.280s</text>
+  <rect x="1130" y="282" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="282" width="253" height="20" rx="10" fill="#3b82f6"/>
+  <text x="830" y="338" class="label">With</text><text x="910" y="338" class="value">94.657s + 26.633s verify</text>
+  <rect x="1130" y="322" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="322" width="254" height="20" rx="10" fill="#14b8a6"/><rect x="1384" y="322" width="71" height="20" rx="10" fill="url(#verifyHatch)"/>
+  <text x="1130" y="375" class="loss">0.400% slower foreground · 28.649% slower whole</text>
+  <text x="92" y="430" class="small">Pair results: 1 token/time win · 1 loss. Dispatch overhead and one recovered path typo are visible; no savings claim is made for simple work.</text>
 
-  <rect x="873" y="72" width="18" height="18" rx="5" class="blue"/><text x="901" y="87" class="sans muted" font-size="14">Without skill: main only</text>
-  <rect x="1080" y="72" width="18" height="18" rx="5" class="green"/><text x="1108" y="87" class="sans muted" font-size="14">With skill: main</text>
-  <rect x="1080" y="105" width="18" height="18" rx="4" fill="url(#greenVerify)"/><text x="1108" y="120" class="sans muted" font-size="14">With skill: verify behind</text>
+  <!-- Medium -->
+  <rect x="62" y="491" width="1476" height="318" rx="25" fill="#101f35" stroke="#31455f"/>
+  <text x="92" y="532" class="cardTitle">Medium · Decimal invoice calculation · 6/6 tests</text>
+  <text x="92" y="559" class="cardSub">Auto child: gpt-5.6-terra | medium · complexity-aware saved routing · 2 pairs / 4 main runs</text>
+  <text x="1454" y="535" text-anchor="end" class="win">FOREGROUND + WHOLE WIN</text>
+  <text x="92" y="599" class="section">COHORT LOGICAL TOKENS</text>
+  <text x="92" y="635" class="label">Without</text><text x="172" y="635" class="value">444,426</text>
+  <rect x="350" y="619" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="619" width="360" height="20" rx="10" fill="#3b82f6"/>
+  <text x="92" y="675" class="label">With</text><text x="172" y="675" class="value">286,645 + 94,981 verify</text>
+  <rect x="350" y="659" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="659" width="232" height="20" rx="10" fill="#14b8a6"/><rect x="582" y="659" width="77" height="20" rx="10" fill="url(#verifyHatch)"/>
+  <text x="350" y="712" class="win">35.502% saved foreground · 14.131% saved whole</text>
+  <text x="830" y="599" class="section">COHORT FIRST-RESULT TIME</text>
+  <text x="830" y="635" class="label">Without</text><text x="910" y="635" class="value">173.706s</text>
+  <rect x="1130" y="619" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="619" width="325" height="20" rx="10" fill="#3b82f6"/>
+  <text x="830" y="675" class="label">With</text><text x="910" y="675" class="value">89.014s + 43.947s verify</text>
+  <rect x="1130" y="659" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="659" width="168" height="20" rx="10" fill="#14b8a6"/><rect x="1298" y="659" width="82" height="20" rx="10" fill="url(#verifyHatch)"/>
+  <text x="1130" y="712" class="win">48.756% faster foreground · 23.456% faster whole</text>
+  <text x="92" y="770" class="small">Both Auto pairs beat matching Sol-ultra Direct runs; both detached Ending sessions passed read-only.</text>
 
-  <rect x="82" y="170" width="1236" height="270" rx="22" fill="#111f35" stroke="#2b3d59" stroke-width="1.5"/>
-  <text x="110" y="210" class="sans white" font-size="23" font-weight="760">1 · Simple exact-output task</text>
-  <text x="110" y="238" class="sans muted" font-size="14">gpt-5.6-luna | low · 2 pairs · exact arithmetic JSON</text>
-  <text x="1190" y="210" class="sans orange" font-size="17" font-weight="760">FAIL</text>
-  <text x="110" y="275" class="sans white label">MEDIAN LOGICAL TOKENS</text>
-  <text x="720" y="275" class="sans white label">MEDIAN FULL-SESSION TIME</text>
-  <text x="110" y="311" class="sans muted small">WITHOUT · 13,017 · verify 0</text>
-  <rect x="350" y="292" width="113" height="22" rx="8" class="blue"/>
-  <text x="720" y="311" class="sans muted small">WITHOUT · 2.790s · verify 0</text>
-  <rect x="960" y="292" width="136" height="22" rx="8" class="blue"/>
-  <text x="110" y="355" class="sans muted small">WITH · main 19,044 · verify 19,115</text>
-  <rect x="350" y="336" width="165" height="22" rx="8" class="green"/><rect x="515" y="336" width="165" height="22" rx="8" fill="url(#greenVerify)"/>
-  <text x="720" y="355" class="sans muted small">WITH · main 3.291s · verify 3.456s</text>
-  <rect x="960" y="336" width="161" height="22" rx="8" class="green"/><rect x="1121" y="336" width="169" height="22" rx="8" fill="url(#greenVerify)"/>
-  <text x="110" y="404" class="sans orange" font-size="15" font-weight="720">Full lifecycle vs without: +193.2% tokens · +141.8% time</text>
-  <text x="860" y="404" class="sans green" font-size="14" font-weight="700">STRIPED COST EXISTS ONLY WITH SKILL →</text>
+  <!-- Complex -->
+  <rect x="62" y="828" width="1476" height="318" rx="25" fill="#101f35" stroke="#31455f"/>
+  <text x="92" y="869" class="cardTitle">Complex · six-file store quote pipeline · 8/8 tests</text>
+  <text x="92" y="896" class="cardSub">Auto child: gpt-5.6-terra | medium · multi-file complexity route · 2 pairs / 4 main runs</text>
+  <text x="1454" y="872" text-anchor="end" class="win">FOREGROUND + WHOLE WIN</text>
+  <text x="92" y="936" class="section">COHORT LOGICAL TOKENS</text>
+  <text x="92" y="972" class="label">Without</text><text x="172" y="972" class="value">905,339</text>
+  <rect x="350" y="956" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="956" width="360" height="20" rx="10" fill="#3b82f6"/>
+  <text x="92" y="1012" class="label">With</text><text x="172" y="1012" class="value">746,484 + 90,510 verify</text>
+  <rect x="350" y="996" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="996" width="297" height="20" rx="10" fill="#14b8a6"/><rect x="647" y="996" width="36" height="20" rx="10" fill="url(#verifyHatch)"/>
+  <text x="350" y="1049" class="win">17.546% saved foreground · 7.549% saved whole</text>
+  <text x="830" y="936" class="section">COHORT FIRST-RESULT TIME</text>
+  <text x="830" y="972" class="label">Without</text><text x="910" y="972" class="value">413.022s</text>
+  <rect x="1130" y="956" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="956" width="325" height="20" rx="10" fill="#3b82f6"/>
+  <text x="830" y="1012" class="label">With</text><text x="910" y="1012" class="value">212.619s + 44.190s verify</text>
+  <rect x="1130" y="996" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="996" width="168" height="20" rx="10" fill="#14b8a6"/><rect x="1298" y="996" width="35" height="20" rx="10" fill="url(#verifyHatch)"/>
+  <text x="1130" y="1049" class="win">48.521% faster foreground · 37.822% faster whole</text>
+  <text x="92" y="1107" class="small">Both Auto pairs beat Direct. Ending starts only after the exact result and 8-test Mini Test are complete and available.</text>
 
-  <rect x="82" y="462" width="1236" height="270" rx="22" fill="#111f35" stroke="#2b3d59" stroke-width="1.5"/>
-  <text x="110" y="502" class="sans white" font-size="23" font-weight="760">2 · Medium single-method audit</text>
-  <text x="110" y="530" class="sans muted" font-size="14">gpt-5.6-terra | medium · 2 pairs · one Python pricing method</text>
-  <text x="1190" y="502" class="sans orange" font-size="17" font-weight="760">FAIL</text>
-  <text x="110" y="567" class="sans white label">MEDIAN LOGICAL TOKENS</text>
-  <text x="720" y="567" class="sans white label">MEDIAN FULL-SESSION TIME</text>
-  <text x="110" y="603" class="sans muted small">WITHOUT · 14,860 · verify 0</text>
-  <rect x="350" y="584" width="78" height="22" rx="8" class="blue"/>
-  <text x="720" y="603" class="sans muted small">WITHOUT · 3.237s · verify 0</text>
-  <rect x="960" y="584" width="94" height="22" rx="8" class="blue"/>
-  <text x="110" y="647" class="sans muted small">WITH · main 20,893 · verify 42,069</text>
-  <rect x="350" y="628" width="109" height="22" rx="8" class="green"/><rect x="459" y="628" width="221" height="22" rx="8" fill="url(#greenVerify)"/>
-  <text x="720" y="647" class="sans muted small">WITH · main 4.370s · verify 7.054s</text>
-  <rect x="960" y="628" width="125" height="22" rx="8" class="green"/><rect x="1085" y="628" width="205" height="22" rx="8" fill="url(#greenVerify)"/>
-  <text x="110" y="696" class="sans orange" font-size="15" font-weight="720">Full lifecycle vs without: +323.7% tokens · +252.9% time</text>
-
-  <rect x="82" y="754" width="1236" height="270" rx="22" fill="#111f35" stroke="#2b3d59" stroke-width="1.5"/>
-  <text x="110" y="794" class="sans white" font-size="23" font-weight="760">3 · Complex six-file dependency audit</text>
-  <text x="110" y="822" class="sans muted" font-size="14">gpt-5.6-sol | high · 2 pairs · trace pricing → discount → tax → service → API</text>
-  <text x="1190" y="794" class="sans orange" font-size="17" font-weight="760">FAIL</text>
-  <text x="110" y="859" class="sans white label">MEDIAN LOGICAL TOKENS</text>
-  <text x="720" y="859" class="sans white label">MEDIAN FULL-SESSION TIME</text>
-  <text x="110" y="895" class="sans muted small">WITHOUT · 30,869 · verify 0</text>
-  <rect x="350" y="876" width="103" height="22" rx="8" class="blue"/>
-  <text x="720" y="895" class="sans muted small">WITHOUT · 11.597s · verify 0</text>
-  <rect x="960" y="876" width="126" height="22" rx="8" class="blue"/>
-  <text x="110" y="939" class="sans muted small">WITH · main 55,269 · verify 43,443</text>
-  <rect x="350" y="920" width="185" height="22" rx="8" class="green"/><rect x="535" y="920" width="145" height="22" rx="8" fill="url(#greenVerify)"/>
-  <text x="720" y="939" class="sans muted small">WITH · main 17.584s · verify 12.775s</text>
-  <rect x="960" y="920" width="191" height="22" rx="8" class="green"/><rect x="1151" y="920" width="139" height="22" rx="8" fill="url(#greenVerify)"/>
-  <text x="110" y="988" class="sans orange" font-size="15" font-weight="720">Full lifecycle vs without: +219.8% tokens · +161.8% time</text>
-
-  <rect x="82" y="1048" width="1236" height="52" rx="14" fill="#3b210d" stroke="#fb923c" stroke-width="1.2"/>
-  <text x="700" y="1079" text-anchor="middle" class="sans white" font-size="16" font-weight="730">Truth: without skill stops after main (verify = 0). With skill returns main, then pays background verify tokens and time.</text>
-  <text x="82" y="1130" class="sans quiet" font-size="13">All 18 sessions produced the expected output. Full-session timing only; first-visible-result latency was not measured. Logical tokens are not billing tokens.</text>
+  <!-- Overall -->
+  <rect x="62" y="1170" width="1476" height="254" rx="28" fill="#0c2b32" stroke="#2dd4bf" stroke-width="2"/>
+  <text x="92" y="1215" class="cardTitle">Whole picture · 6 pairs</text>
+  <text x="92" y="1243" class="cardSub">Without skill has no verifier. With skill returns the main result first, then starts a separate Ending task; striped cost never gates first result.</text>
+  <text x="92" y="1294" class="kpi">14.500% fewer foreground tokens</text>
+  <text x="92" y="1322" class="kpiSub">1,581,588 Direct → 1,352,255 Auto main · 5 of 6 pairwise token wins</text>
+  <text x="590" y="1294" class="kpi">41.808% faster first result</text>
+  <text x="590" y="1322" class="kpiSub">681.008s Direct → 396.290s Auto main · 5 of 6 pairwise time wins</text>
+  <text x="1100" y="1294" class="kpi">Ending: +276,079 tokens · +114.770s</text>
+  <text x="1100" y="1322" class="kpiSub">Whole: +2.956% tokens · 24.955% faster</text>
+  <line x1="92" y1="1354" x2="1508" y2="1354" stroke="#315b63"/>
+  <text x="800" y="1392" text-anchor="middle" class="section">FINISH JOB FIRST  →  RETURN RESULT  →  BACKGROUND VERIFY IN A NEW END TASK</text>
+  <text x="800" y="1417" text-anchor="middle" class="small">Real local code edits · 4/4, 6/6, and 8/8 unittest checks · two pairs per tier are optimization confirmation, not six-pair admission</text>
 </svg>

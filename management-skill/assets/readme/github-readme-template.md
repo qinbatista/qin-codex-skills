@@ -54,46 +54,24 @@ Main work and Ending verification are deliberately different task sessions. “B
 - **Models:** Ordinary tasks use saved JSON; explicit local update selects the highest numeric GPT family, while unavailable cache keeps the saved list.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
-## 📊 Three-tier lifecycle benchmark: without skill vs with skill
+## 📊 Real adaptive benchmark: finish first, verify in background
 
-**Corrected baseline:** “Without skill” performs only the requested main work. It has **0 verification tokens and 0 verification time**. “With skill” returns the main result and then runs a separate background Ending session. Across simple, medium, and complex tasks, all 18 sessions produced the expected result, but the full skill lifecycle used more time and tokens in every tier.
+Both arms enter `gpt-5.6-sol | ultra`. **Without skill** stays on Sol-ultra, finishes the requested job, and stops: verification tokens/time are exactly **0**. **With skill** uses a receipt-proven adaptive producer, returns the completed main result, then starts a separate read-only Ending task.
 
-![Three-tier lifecycle benchmark comparing tokens and full-session time with zero verification in the without-skill baseline](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
+![Six real A/B pairs showing Direct main-only bars, Auto foreground bars, and striped Auto-only Ending cost](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
-### Median whole picture
+| Tier | Auto child | Direct foreground tokens | Auto foreground | Token result | Direct first result | Auto first result | Time result | Auto Ending |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Simple · 4 tests | `Spark \| low` | 231,823 | 319,126 | 37.659% more | 94.280s | 94.657s | 0.400% slower | 90,588 / 26.633s |
+| Medium · 6 tests | `Terra \| medium` | 444,426 | 286,645 | **35.502% fewer** | 173.706s | 89.014s | **48.756% faster** | 94,981 / 43.947s |
+| Complex · 8 tests | `Terra \| medium` | 905,339 | 746,484 | **17.546% fewer** | 413.022s | 212.619s | **48.521% faster** | 90,510 / 44.190s |
+| **All 6 pairs** | Spark + Terra | **1,581,588** | **1,352,255** | **14.500% fewer** | **681.008s** | **396.290s** | **41.808% faster** | **276,079 / 114.770s** |
 
-| Tier | Workload | Model | Without tokens | With main | With verify | With whole | Without time | With main | With verify | With whole |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Simple | Exact arithmetic JSON | `gpt-5.6-luna \| low` | 13,017 | 19,044 | 19,115 | 38,159 | 2.790 s | 3.291 s | 3.456 s | 6.747 s |
-| Medium | One Python pricing method | `gpt-5.6-terra \| medium` | 14,860 | 20,893 | 42,069 | 62,961 | 3.237 s | 4.370 s | 7.054 s | 11.423 s |
-| Complex | Six-file dependency audit | `gpt-5.6-sol \| high` | 30,869 | 55,269 | 43,443 | 98,712 | 11.597 s | 17.584 s | 12.775 s | 30.359 s |
+After adding the six later Ending sessions, Auto is still **24.955% faster sequentially**; whole-lifecycle tokens are **2.956% higher** because Direct buys no verifier. Medium and complex each won both pairs. Simple won one and lost one, so no simple-tier savings claim is made.
 
-The blue baseline stops after main—there is no baseline Ending session. The green striped portion exists only with the skill and shows the exact background-verification cost behind the completed main result.
+**Correctness:** 12/12 exact main results, local Mini Tests `4/4`, `6/6`, and `8/8`, plus 6/6 separate Ending PASS results. Two pairs per tier are optimization confirmation, not six-pair performance admission. Logical tokens are operational usage, not billing tokens.
 
-### Full run evidence
-
-| Tier | Pair | Mode | Main time | Verify time | Whole time | Main tokens | Verify tokens | Whole tokens |
-|---|---:|---|---:|---:|---:|---:|---:|---:|
-| Simple | 1 | Without | 2.858 s | 0 | 2.858 s | 13,017 | 0 | 13,017 |
-| Simple | 1 | With | 3.425 s | 3.529 s | 6.954 s | 19,044 | 19,115 | 38,159 |
-| Simple | 2 | Without | 2.722 s | 0 | 2.722 s | 13,017 | 0 | 13,017 |
-| Simple | 2 | With | 3.156 s | 3.383 s | 6.539 s | 19,044 | 19,115 | 38,159 |
-| Medium | 1 | Without | 3.274 s | 0 | 3.274 s | 14,863 | 0 | 14,863 |
-| Medium | 1 | With | 4.375 s | 5.826 s | 10.201 s | 20,880 | 42,008 | 62,888 |
-| Medium | 2 | Without | 3.200 s | 0 | 3.200 s | 14,856 | 0 | 14,856 |
-| Medium | 2 | With | 4.364 s | 8.281 s | 12.645 s | 20,905 | 42,129 | 63,034 |
-| Complex | 1 | Without | 13.141 s | 0 | 13.141 s | 30,816 | 0 | 30,816 |
-| Complex | 1 | With | 12.952 s | 13.685 s | 26.637 s | 43,031 | 43,957 | 86,988 |
-| Complex | 2 | Without | 10.053 s | 0 | 10.053 s | 30,922 | 0 | 30,922 |
-| Complex | 2 | With | 22.215 s | 11.865 s | 34.080 s | 67,507 | 42,928 | 110,435 |
-
-### Method, decision, and limits
-
-- **Design:** 2 paired comparisons per tier: 12 main sessions plus 6 with-skill Ending sessions = 18 independent sessions. Order alternated within each tier.
-- **Identity:** Each pair used the same task input, model, effort, and read-only sandbox. The without arm used `--ignore-user-config`; the with arm loaded the current global configuration and then launched a distinct `ENDING_TASK_WORKER` session.
-- **Correctness:** 18/18 expected outputs; 0 reroutes, retries, fallbacks, or repairs.
-- **Decision:** Full-lifecycle performance **FAIL** in all three tiers: +193.2% / +323.7% / +219.8% tokens and +141.8% / +252.9% / +161.8% time for simple / medium / complex.
-- **Limits:** These are full process/session durations, not first-visible-result latency. Logical tokens are not billing tokens. Two pairs per tier are descriptive evidence, not a performance-admission sample.
+[Read the full benchmark report and every run.](./management-skill/assets/readme/lifecycle-skill-benchmark.md)
 
 ## 🧩 Eight public Skills
 

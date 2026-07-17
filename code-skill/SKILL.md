@@ -1,11 +1,11 @@
 ---
 name: code-skill
-description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction, even when sources are Python, C#, or Unity C#; the inline bootstrap handles it without skills. Use for code implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond that supplied scope, directly inline or as a positively admitted node."
+description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction, or in the Sol-ultra entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill for code implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
 ---
 
 # Code Skill
 
-Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. The producer performs one bounded Quick Check before presenting code; deeper independent verification runs later in a separate persistent Ending thread.
+Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. The Sol-ultra entry parent dispatches first without loading this file; the selected `LOCKED_ROUTE_NODE` result producer loads it. Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. The producer performs one bounded Quick Check before presenting code; deeper independent verification runs later in a separate persistent Ending thread.
 
 ## Internal Route Selection
 
@@ -70,11 +70,11 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 6. Implement only the requested behavior; avoid unrequested abstractions, features, fallbacks, or compatibility layers.
 7. Run one bounded producer-side Quick Check. For light/local code, run the smallest safe smoke that exercises the changed function or direct path. For external-API, large-file, expensive-build, destructive, or side-effect-heavy work, do not execute the heavy path; check syntax plus the changed function, variable, import, and direct-reference names without importing code that may trigger side effects. This is a basic completion check, not independent Real Verify.
 8. Present `CODE READY` with changed paths, concrete behavior, and `Quick Check: PASS` or `Quick Check: SKIPPED (heavy) — <static evidence>`. Quick Check time is included in first-result latency.
-9. Start the lifecycle ledger, bind the producer receipt when present, create a separate persistent Codex thread, and rename it exactly `End Task-{concise related task name}`. Pass the acceptance target, project root, touched files, receipt/lifecycle paths, Quick Check evidence, and allowed repair scope. Link that task and return immediately without waiting or polling. Never use a same-task Ending subagent. The Ending thread alone runs deeper Real Verify and records PASS/BLOCKED learning and project memory.
+9. Start the lifecycle ledger and bind the producer receipt when present. When `create_thread` is callable, create a separate persistent Codex thread and rename it exactly `End Task-{concise related task name}`; pass the acceptance target, project root, touched files, receipt/lifecycle paths, Quick Check evidence, and allowed repair scope, link it, and return immediately. When thread tools are unavailable in a headless/worker/benchmark surface, return the completed code plus that exact Ending handoff to the outer host immediately. Never inspect app-server internals, emulate thread creation, wait, poll, self-verify, or use a same-task Ending subagent. The independently created Ending thread alone records PASS/BLOCKED learning and project memory.
 
 The smallest safe syntax, existence, direct-reference, or focused local execution check belongs to producer Quick Check. Full builds, broad lint, integration/API calls, large-file processing, live side effects, and regressions belong to the detached Ending thread unless they are themselves the user's requested task.
 
-The mandatory post-result Ending lifecycle still runs. After presentation, always start the independent Ending lifecycle, but it is a <=60-second handoff audit and no foreground verify. Return published code immediately; a new quality-pair repair lifecycle and different verifier require a new explicit user task. The producer receipt terminal event automatically records audit learning.
+The mandatory post-result Ending lifecycle still runs. After presentation, always release its handoff: create the independent task when thread tools are callable, otherwise return it for the outer host to create. It is a <=60-second handoff audit and no foreground verify. Return published code immediately; a new quality-pair repair lifecycle and different verifier require a new explicit user task. The producer receipt terminal event automatically records audit learning.
 
 ## Optimization Boundary
 

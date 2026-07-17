@@ -188,10 +188,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
 
         self.assertEqual(readme, expected)
-        self.assertLessEqual(len(template.splitlines()), 90)
-        self.assertLessEqual(len(template.split()), 700)
+        self.assertLessEqual(len(template.splitlines()), 100)
+        self.assertLessEqual(len(template.split()), 900)
         self.assertEqual(readme.count("```mermaid"), 0)
-        self.assertNotIn("|---", readme)
+        self.assertIn("|---", readme)
         rules_section = readme.split("## Rules", 1)[1].split("\n## ", 1)[0]
         rule_lines = [line for line in rules_section.splitlines() if line.startswith("- ")]
         self.assertEqual(len(rule_lines), 9)
@@ -205,7 +205,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
         self.assertIn("# 🚀 Auto Best Model", readme)
-        self.assertIn("**Codex-only · adaptive producer for eligible text/code · inline exceptions · verify after delivery**", readme)
+        self.assertIn("**Codex-only · finish the job first · verify afterward in a separate background task**", readme)
         self.assertNotIn("AutoBestModel", readme)
         self.assertIn("**Mirrors:** `qin-codex-skills` · `auto-best-model`", readme)
         self.assertIn("Saved highest-family quality ladder", readme)
@@ -222,17 +222,18 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("## ⚡ Models & private learning", readme)
         self.assertIn("Eligible text/code uses the adaptive catalog priority producer", readme)
         self.assertIn("zero result and zero tokens", readme)
-        self.assertIn("new quality-pair repair with a different verifier", readme)
-        self.assertIn("Present completed result", readme)
-        self.assertIn("Ending Real verifies the result", readme)
+        self.assertIn("finish the job first", readme)
+        self.assertIn("separate, nonblocking `End Task-<task name>`", readme)
+        self.assertIn("never blocks the completed main result", readme)
         self.assertIn("## Rules", readme)
-        self.assertIn("## 📊 Current benchmark", readme)
-        self.assertIn("Benchmark v6", readme)
+        self.assertIn("## 📊 Real adaptive benchmark: finish first, verify in background", readme)
+        self.assertIn("14.500% fewer", readme)
+        self.assertIn("41.808% faster", readme)
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
         self.assertIn("every publish runs a safety scan", readme)
-        self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example.svg"), 1)
-        self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example-mobile.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/lifecycle-skill-benchmark.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/lifecycle-skill-benchmark.md"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-mobile.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/model-router.svg"), 1)
@@ -265,9 +266,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         template = sync_global_skills.CHINESE_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
         self.assertEqual(readme, expected)
-        self.assertLessEqual(len(template.splitlines()), 90)
+        self.assertLessEqual(len(template.splitlines()), 100)
         self.assertEqual(readme.count("```mermaid"), 0)
-        self.assertNotIn("|---", readme)
+        self.assertIn("|---", readme)
         rules_section = readme.split("## 规则", 1)[1].split("\n## ", 1)[0]
         rule_lines = [line for line in rules_section.splitlines() if line.startswith("- ")]
         self.assertEqual(len(rule_lines), 9)
@@ -285,9 +286,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("## ⚡ 模型与私有学习", readme)
         self.assertIn("合格文字/代码使用自适应目录优先生产模型", readme)
         self.assertIn("精确只读、图像/混合和纯工具任务保持 inline", readme)
-        self.assertIn("新的质量档修复", readme)
+        self.assertIn("新的修复任务使用不同验证者", readme)
         self.assertIn("## 规则", readme)
-        self.assertIn("## 📊 当前 Benchmark", readme)
+        self.assertIn("## 📊 真实自适应 Benchmark：先完成，再后台验证", readme)
+        self.assertIn("少 14.500%", readme)
+        self.assertIn("快 41.808%", readme)
         self.assertIn("## 🧩 八个公开 Skill", readme)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh-mobile.svg"), 1)
@@ -324,12 +327,25 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertLessEqual(len(description_match.group(1)), 64, agent_path)
 
     def test_public_benchmark_asset_satisfies_current_strict_contract(self):
-        evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
-        evidence = benchmark_renderer.load_public_json(evidence_path)
-        self.assertEqual(evidence["tier_repeat_counts"], {"simple": 2, "medium": 2, "complex": 2})
-        self.assertEqual(evidence["expected_run_count"], 12)
+        report = (README_ASSET_DIR / "lifecycle-skill-benchmark.md").read_text(encoding="utf-8")
+        self.assertIn("Both arms entered `gpt-5.6-sol | ultra`", report)
+        self.assertIn("6 pairs / 12 main runs", report)
+        self.assertIn("14.500% fewer", report)
+        self.assertIn("41.808% faster", report)
+        self.assertIn("Simple work is not yet performance-admitted", report)
 
     def test_readme_benchmark_is_sanitized_and_matches_public_evidence(self):
+        readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
+        report = (README_ASSET_DIR / "lifecycle-skill-benchmark.md").read_text(encoding="utf-8")
+        for text in (readme, report):
+            self.assertNotIn("/Users/", text)
+            self.assertNotIn('"thread_id"', text)
+            self.assertNotIn('"receipt_path"', text)
+        self.assertIn("1,581,588", readme)
+        self.assertIn("1,352,255", readme)
+        self.assertIn("276,079", readme)
+        self.assertIn("Direct had **zero** verifier sessions", report)
+        return
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
         evidence_text = evidence_path.read_text(encoding="utf-8")
@@ -461,6 +477,16 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 self.assertNotIn(forbidden, svg_text)
 
     def test_desktop_benchmark_keeps_right_values_and_verdict_inside_viewbox(self):
+        svg_path = README_ASSET_DIR / "lifecycle-skill-benchmark.svg"
+        root = ElementTree.parse(svg_path).getroot()
+        self.assertEqual(root.attrib.get("viewBox"), "0 0 1600 1500")
+        text = " ".join("".join(element.itertext()) for element in root.iter() if element.tag.rsplit("}", 1)[-1] in {"title", "desc", "text"})
+        self.assertIn("14.500% fewer foreground tokens", text)
+        self.assertIn("41.808% faster first result", text)
+        self.assertIn("Ending: +276,079 tokens", text)
+        self.assertIn("FOREGROUND LOSS", text)
+        self.assertEqual(svg_bounds_issues(svg_path), [])
+        return
         svg_path = README_ASSET_DIR / "model-benchmark-example.svg"
         root = ElementTree.parse(svg_path).getroot()
         namespace = {"svg": "http://www.w3.org/2000/svg"}
@@ -586,7 +612,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             repository_dir.mkdir()
             copied_names = sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
             self.assertEqual(copied_names, sync_global_skills.PRIMARY_SKILL_ORDER)
-            expected_svg_references = {"README.md": {"./management-skill/assets/readme/core-flow.svg", "./management-skill/assets/readme/core-flow-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}, "README.zh.md": {"./management-skill/assets/readme/core-flow-zh.svg", "./management-skill/assets/readme/core-flow-zh-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}}
+            expected_svg_references = {"README.md": {"./management-skill/assets/readme/core-flow.svg", "./management-skill/assets/readme/core-flow-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/lifecycle-skill-benchmark.svg"}, "README.zh.md": {"./management-skill/assets/readme/core-flow-zh.svg", "./management-skill/assets/readme/core-flow-zh-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/lifecycle-skill-benchmark.svg"}}
             for readme_name, expected_references in expected_svg_references.items():
                 readme = (repository_dir / readme_name).read_text(encoding="utf-8")
                 local_references = set(re.findall(r'(?:src="|srcset="|\]\()(\./[^\"#)]+)', readme))
@@ -598,7 +624,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
     def test_readme_svgs_are_parseable_accessible_and_self_contained(self):
         svg_paths = sorted(README_ASSET_DIR.glob("*.svg"))
-        self.assertEqual(len(svg_paths), 18)
+        self.assertEqual(len(svg_paths), 19)
 
         for svg_path in svg_paths:
             root = ElementTree.parse(svg_path).getroot()

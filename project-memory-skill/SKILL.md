@@ -1,6 +1,6 @@
 ---
 name: project-memory-skill
-description: "Always use for any task that adds, edits, renames, moves, or deletes durable project files. Recall prior project/module/file decisions before editing, then record the completed change, reason, outcome, verification, and every touched file in local memory with an optional Obsidian projection. Do not use for read-only work or disposable cache/work artifacts."
+description: "Always use in the result-producing node for durable project-file changes. The Sol-ultra adaptive entry parent does not load memory before dispatch; the selected producer recalls prior project/module/file decisions before editing and records the completed change after Ending. Do not use for read-only work or disposable cache/work artifacts."
 ---
 
 # Project Memory Skill
@@ -11,7 +11,7 @@ Maintain a durable, file-level explanation of project changes so future AI work 
 
 ## Required Scope
 
-Load this skill whenever a task creates, edits, renames, moves, or deletes a durable project file, including source code, configuration, schemas, reusable prompts, tests, documentation, skill instructions, and source-controlled asset metadata.
+Load this skill in the selected result-producing node whenever a task creates, edits, renames, moves, or deletes a durable project file, including source code, configuration, schemas, reusable prompts, tests, documentation, skill instructions, and source-controlled asset metadata. The Sol-ultra adaptive entry parent dispatches before memory recall and never loads this skill merely to route.
 
 Do not load it for read-only tasks, external actions with no durable project-file change, or disposable `work/`, `cache/`, build, render, receipt, and temporary artifacts unless the user explicitly accepts those files as project deliverables.
 

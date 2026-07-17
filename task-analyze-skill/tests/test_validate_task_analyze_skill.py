@@ -450,13 +450,17 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Code Mini Test", bootstrap_text)
-            self.assertIn("create thread `End Task-{task name}`", bootstrap_text)
+            self.assertIn("If `create_thread` exists", bootstrap_text)
+            self.assertIn("If absent, emit handoff and return", bootstrap_text)
+            self.assertIn("no app-server/emulation/wait/self-verify", bootstrap_text)
             self.assertIn("Ending <=60s evidence-only", bootstrap_text)
-            self.assertIn("no extra tests/API/questions/wait", bootstrap_text)
-            self.assertIn("concurrent state change=>BLOCKED+exit", bootstrap_text)
-            self.assertIn("never gates main result", bootstrap_text)
-            self.assertIn("Structural skill changes rerun simple/medium/complex benchmark", bootstrap_text)
-            self.assertIn("no route/plan/guesses/reread/full read/pre-result check", bootstrap_text)
+            self.assertIn("outer host creates it", bootstrap_text)
+            self.assertIn("never gates main", bootstrap_text)
+            self.assertIn("each arm enters `gpt-5.6-sol|ultra`", bootstrap_text)
+            self.assertIn("before skills/memory/files", bootstrap_text)
+            self.assertIn("No parent implementation or repeated poll", bootstrap_text)
+            self.assertIn("foreground tokens/time decide, Ending separate", bootstrap_text)
+            self.assertIn("no route/plan/reread/full read/precheck", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)
             global_agents.write_text(bootstrap_text.replace("one bounded rg/file", "one search/file", 1), encoding="utf-8")
             validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
@@ -521,7 +525,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             agent_path = temp_dir / "agents" / "openai.yaml"
-            required_term = "optional priority producer first"
+            required_term = "before owning skills, memory, or files"
             agent_path.write_text(agent_path.read_text(encoding="utf-8").replace(required_term, "removed priority attempt"), encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])

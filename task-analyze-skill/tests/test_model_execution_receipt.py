@@ -160,6 +160,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertIn('model_reasoning_effort="high"', command)
         self.assertEqual(command[-1], "-")
         self.assertTrue(run_mock.call_args.kwargs["input"].startswith("LOCKED_ROUTE_NODE"))
+        self.assertIn(f"canonical working directory `{Path('/tmp').resolve()}`", run_mock.call_args.kwargs["input"])
         self.assertTrue(run_mock.call_args.kwargs["input"].endswith("same prompt"))
         self.assertTrue(run_mock.call_args.kwargs["shell"] is False)
         self.assertEqual(receipt["status"], "pass")
