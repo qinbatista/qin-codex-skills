@@ -60,6 +60,15 @@ Main work and Ending verification are deliberately different task sessions. “B
 
 ![Full lifecycle benchmark showing main task, Ending task, whole time, tokens, and all six paired runs](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
+### Main work and background verification cost
+
+| Mode | Main tokens | Verify tokens behind main | Cohort tokens | Main time | Verify time behind main | Cohort time |
+|---|---:|---:|---:|---:|---:|---:|
+| Without global skill | 78,102 | 78,585 (50.2%) | 156,687 | 19.153 s | 18.039 s (48.5%) | 37.192 s |
+| With global skill | 114,826 | 114,727 (50.0%) | 229,553 | 22.138 s | 24.628 s (52.7%) | 46.766 s |
+
+The visual deliberately places the striped verification segment **behind the main-task segment**. Ending does not block delivery, but its time and tokens are still real lifecycle cost. This benchmark did not capture first-visible-result latency, so it does not pretend that full main-session duration is first-result time.
+
 ### Whole picture
 
 | Mode | Main session median | Ending session median | Whole lifecycle median | Total-token median | Whole-lifecycle wins |
