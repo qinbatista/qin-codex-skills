@@ -54,20 +54,58 @@ Main work and Ending verification are deliberately different task sessions. “B
 - **Models:** Ordinary tasks use saved JSON; explicit local update selects the highest numeric GPT family, while unavailable cache keeps the saved list.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
-## 📊 Current benchmark
+## 📊 Full lifecycle benchmark: main task + Ending task
 
-**Benchmark v6** · `gpt-5.6-sol | ultra` in both arms · **6 A/B pairs · 12 runs · 0 retries · 0 fallbacks · 0 repairs**
+**Technical summary:** The current global skill preserved correctness but did not improve performance on this tiny exact-output workload. Across six paired runs, the skill-enabled lifecycle was slower in five pairs, increased median whole-lifecycle time by **17.6%**, and increased median token use by **46.1%**.
 
-<picture>
-  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg">
-  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Current GPT-5.6 Direct versus Global benchmark with a failed strategy-performance gate">
-</picture>
+![Full lifecycle benchmark showing main task, Ending task, whole time, tokens, and all six paired runs](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
-> **85.284% fewer task tokens** · **8.629% faster** overall first result · all 12 results correct · strategy gate **FAIL**: Medium won 1/2 timing pairs
+### Whole picture
 
-> Frozen read-only bootstrap cohort; Spark was not eligible here · not billing tokens · Ending Real excluded
+| Mode | Main session median | Ending session median | Whole lifecycle median | Total-token median | Whole-lifecycle wins |
+|---|---:|---:|---:|---:|---:|
+| Without global skill | 2.773 s | 2.778 s | 6.091 s | 26,113 | Baseline |
+| With global skill | 3.322 s | 3.473 s | 7.164 s | 38,163 | 1 of 6 |
+| Skill overhead | +19.8% | +25.0% | +17.6% | +46.1% | Slower in 5 of 6 |
 
-[Sanitized benchmark evidence](./task-analyze-skill/assets/model-routing-benchmark-example.json)
+“Whole lifecycle” is main + Ending within each run, followed by the median of those six totals. It is not the sum of separately calculated stage medians.
+
+### All six paired runs
+
+| Run | Without: main | Without: Ending | Without: whole | With: main | With: Ending | With: whole | Faster whole |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 5.135 s | 2.918 s | 8.053 s | 3.226 s | 3.236 s | 6.462 s | With skill |
+| 2 | 2.256 s | 2.635 s | 4.891 s | 5.478 s | 3.628 s | 9.106 s | Without skill |
+| 3 | 2.629 s | 4.201 s | 6.830 s | 3.561 s | 4.111 s | 7.672 s | Without skill |
+| 4 | 2.508 s | 2.729 s | 5.237 s | 3.230 s | 3.318 s | 6.548 s | Without skill |
+| 5 | 2.916 s | 2.801 s | 5.717 s | 3.242 s | 7.081 s | 10.323 s | Without skill |
+| 6 | 3.709 s | 2.755 s | 6.464 s | 3.401 s | 3.254 s | 6.655 s | Without skill |
+
+### Token evidence
+
+| Run | Without: main | Without: Ending | Without: total | With: main | With: Ending | With: total |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 13,017 | 13,101 | 26,118 | 19,044 | 19,119 | 38,163 |
+| 2 | 13,017 | 13,092 | 26,109 | 19,044 | 19,119 | 38,163 |
+| 3 | 13,017 | 13,092 | 26,109 | 19,606 | 19,131 | 38,737 |
+| 4 | 13,017 | 13,093 | 26,110 | 19,044 | 19,119 | 38,163 |
+| 5 | 13,017 | 13,109 | 26,126 | 19,044 | 19,120 | 38,164 |
+| 6 | 13,017 | 13,098 | 26,115 | 19,044 | 19,119 | 38,163 |
+| **Median** | **13,017** | **13,096** | **26,113** | **19,044** | **19,119** | **38,163** |
+
+### Method and evidence
+
+- **Cohort:** 6 paired comparisons, 24 independent sessions (`main + Ending` in both modes), same `gpt-5.6-luna | low` model and same exact workload.
+- **Order control:** Runs 1, 3, and 5 executed without skill first; runs 2, 4, and 6 executed with skill first.
+- **Without skill:** User configuration/global skills were disabled, but the harness still launched a second clean audit session so both modes kept the same two-session topology.
+- **With skill:** Current global configuration loaded; Ending ran as an independent `ENDING_TASK_WORKER` session.
+- **Correctness:** 12/12 main sessions PASS, 12/12 Ending audits PASS, 0 reroutes.
+- **Identity controls:** Main workload SHA-256 `6ed46ac3699918ac054b2bf8e9d9da2be31628443a4d142848a121432f905c2b`; Ending workload SHA-256 `9ffe75646e4ecb36f6426026ad6005dd8947d2635c435dde36bb4fe5b89fee6a`; identical main output SHA-256 `7ba6fb88894e1d0faf389562cd4639eae0d733bcae056d8788d606a8777a5121`.
+- **Timing definition:** Full session/process duration—not first-visible-result latency. All runs used a read-only sandbox.
+
+### Decision and limitation
+
+The skill is **not performance-admitted for this tiny workload**: it returned the same correct result but cost more time and tokens. This is descriptive lifecycle-overhead evidence, not proof about complex coding quality. The public report omits raw prompts, private paths, receipts, and session IDs.
 
 ## 🧩 Eight public Skills
 

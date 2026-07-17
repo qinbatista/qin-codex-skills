@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="960" viewBox="0 0 1400 960" role="img" aria-labelledby="title desc">
+  <title id="title">Lifecycle benchmark with and without the global skill</title>
+  <desc id="desc">Six paired runs compare main session, independent Ending session, whole lifecycle, and tokens. The skill-enabled lifecycle was slower in five of six runs and used 46.1 percent more median tokens.</desc>
+  <defs>
+    <style>
+      .sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.ink{fill:#172033}.muted{fill:#667085}.blue{fill:#2563eb}.orange{fill:#e87925}.grid{stroke:#d8dee9;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1400" height="960" rx="28" fill="#f8fafc"/>
+  <rect x="28" y="28" width="1344" height="904" rx="24" fill="#fff" stroke="#d8dee9" stroke-width="2"/>
+
+  <text x="70" y="92" class="sans ink" font-size="38" font-weight="750">Full lifecycle benchmark</text>
+  <text x="70" y="130" class="sans muted" font-size="20">Main task + independent Ending task · 6 paired runs · 24 sessions · same model and workload</text>
+
+  <rect x="70" y="168" width="1260" height="96" rx="16" fill="#fff7ed" stroke="#fdba74" stroke-width="2"/>
+  <text x="100" y="207" class="sans ink" font-size="22" font-weight="700">Result</text>
+  <text x="100" y="241" class="sans ink" font-size="23">With skill: <tspan font-weight="750">+17.6% whole time</tspan> · <tspan font-weight="750">+46.1% tokens</tspan> · faster in only <tspan font-weight="750">1/6</tspan> pairs · all outputs PASS</text>
+
+  <text x="70" y="324" class="sans ink" font-size="25" font-weight="720">Median whole picture</text>
+  <text x="70" y="354" class="sans muted" font-size="17">Stage medians and median of per-run whole totals; full session duration, not first-visible-result time.</text>
+
+  <text x="70" y="414" class="sans ink" font-size="20" font-weight="700">Without skill</text>
+  <rect x="250" y="380" width="300" height="64" rx="13" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="274" y="405" class="sans ink" font-size="15">MAIN</text><text x="274" y="433" class="mono ink" font-size="23" font-weight="750">2.773 s</text>
+  <text x="570" y="420" class="sans muted" font-size="28">→</text>
+  <rect x="620" y="380" width="300" height="64" rx="13" fill="#eff6ff" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="644" y="405" class="sans ink" font-size="15">ENDING</text><text x="644" y="433" class="mono ink" font-size="23" font-weight="750">2.778 s</text>
+  <rect x="960" y="380" width="370" height="64" rx="13" fill="#172033"/>
+  <text x="984" y="405" class="sans" fill="#cbd5e1" font-size="15">WHOLE · TOKENS</text><text x="984" y="433" class="mono" fill="#fff" font-size="22" font-weight="750">6.091 s · 26,113</text>
+
+  <text x="70" y="504" class="sans ink" font-size="20" font-weight="700">With skill</text>
+  <rect x="250" y="470" width="300" height="64" rx="13" fill="#ffedd5" stroke="#e87925" stroke-width="2"/>
+  <text x="274" y="495" class="sans ink" font-size="15">MAIN</text><text x="274" y="523" class="mono ink" font-size="23" font-weight="750">3.322 s</text>
+  <text x="570" y="510" class="sans muted" font-size="28">→</text>
+  <rect x="620" y="470" width="300" height="64" rx="13" fill="#fff7ed" stroke="#e87925" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="644" y="495" class="sans ink" font-size="15">ENDING</text><text x="644" y="523" class="mono ink" font-size="23" font-weight="750">3.473 s</text>
+  <rect x="960" y="470" width="370" height="64" rx="13" fill="#8a3214"/>
+  <text x="984" y="495" class="sans" fill="#fed7aa" font-size="15">WHOLE · TOKENS</text><text x="984" y="523" class="mono" fill="#fff" font-size="22" font-weight="750">7.164 s · 38,163</text>
+
+  <text x="70" y="596" class="sans ink" font-size="25" font-weight="720">Whole lifecycle by paired run</text>
+  <text x="70" y="626" class="sans muted" font-size="17">Seconds; lower is faster. Blue = without skill. Orange = with skill.</text>
+  <line x1="260" y1="660" x2="260" y2="874" class="grid"/><line x1="460" y1="660" x2="460" y2="874" class="grid"/><line x1="660" y1="660" x2="660" y2="874" class="grid"/><line x1="860" y1="660" x2="860" y2="874" class="grid"/><line x1="1060" y1="660" x2="1060" y2="874" class="grid"/><line x1="1260" y1="660" x2="1260" y2="874" class="grid"/>
+  <text x="260" y="899" text-anchor="middle" class="mono muted" font-size="14">0</text><text x="460" y="899" text-anchor="middle" class="mono muted" font-size="14">2</text><text x="660" y="899" text-anchor="middle" class="mono muted" font-size="14">4</text><text x="860" y="899" text-anchor="middle" class="mono muted" font-size="14">6</text><text x="1060" y="899" text-anchor="middle" class="mono muted" font-size="14">8</text><text x="1260" y="899" text-anchor="middle" class="mono muted" font-size="14">10 s</text>
+
+  <text x="90" y="680" class="sans ink" font-size="17">Run 1</text><rect x="260" y="663" width="805" height="11" rx="5" class="blue"/><rect x="260" y="680" width="646" height="11" rx="5" class="orange"/><text x="1077" y="674" class="mono muted" font-size="14">8.053</text><text x="918" y="691" class="mono muted" font-size="14">6.462</text>
+  <text x="90" y="718" class="sans ink" font-size="17">Run 2</text><rect x="260" y="701" width="489" height="11" rx="5" class="blue"/><rect x="260" y="718" width="911" height="11" rx="5" class="orange"/><text x="761" y="712" class="mono muted" font-size="14">4.891</text><text x="1183" y="729" class="mono muted" font-size="14">9.106</text>
+  <text x="90" y="756" class="sans ink" font-size="17">Run 3</text><rect x="260" y="739" width="683" height="11" rx="5" class="blue"/><rect x="260" y="756" width="767" height="11" rx="5" class="orange"/><text x="955" y="750" class="mono muted" font-size="14">6.830</text><text x="1039" y="767" class="mono muted" font-size="14">7.672</text>
+  <text x="90" y="794" class="sans ink" font-size="17">Run 4</text><rect x="260" y="777" width="524" height="11" rx="5" class="blue"/><rect x="260" y="794" width="655" height="11" rx="5" class="orange"/><text x="796" y="788" class="mono muted" font-size="14">5.237</text><text x="927" y="805" class="mono muted" font-size="14">6.548</text>
+  <text x="90" y="832" class="sans ink" font-size="17">Run 5</text><rect x="260" y="815" width="572" height="11" rx="5" class="blue"/><rect x="260" y="832" width="1032" height="11" rx="5" class="orange"/><text x="844" y="826" class="mono muted" font-size="14">5.717</text><text x="1304" y="843" class="mono muted" font-size="14">10.323</text>
+  <text x="90" y="870" class="sans ink" font-size="17">Run 6</text><rect x="260" y="853" width="646" height="11" rx="5" class="blue"/><rect x="260" y="870" width="666" height="11" rx="5" class="orange"/><text x="918" y="864" class="mono muted" font-size="14">6.464</text><text x="938" y="881" class="mono muted" font-size="14">6.655</text>
+
+  <text x="70" y="925" class="sans muted" font-size="14">Tiny exact-output workload. Descriptive lifecycle-overhead evidence only; not a complex coding-quality benchmark.</text>
+</svg>

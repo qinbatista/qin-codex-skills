@@ -54,20 +54,58 @@
 - **模型：** 普通任务只读已保存 JSON；主动本地更新时选择最高数字 GPT 家族，缓存不可用就保留原列表。
 - **隐私：** secret、原始 Prompt/结果、receipt、ledger、cache 和临时文件留在本地。
 
-## 📊 当前 Benchmark
+## 📊 完整生命周期 Benchmark：主任务 + Ending Task
 
-**Benchmark v6** · Direct/Global 都使用 `gpt-5.6-sol | ultra` · **6 组 A/B · 12 次运行 · 0 retry · 0 fallback · 0 repair**
+**技术结论：** 当前全局 Skill 在这个微型精确输出任务上保持了正确性，但没有提升性能。六组配对运行中，启用 Skill 的完整生命周期有五组更慢，中位完整时间增加 **17.6%**，中位 token 增加 **46.1%**。
 
-<picture>
-  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg">
-  <img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="当前 GPT-5.6 Direct 与 Global benchmark，策略性能门禁失败">
-</picture>
+![完整生命周期 benchmark：主任务、Ending Task、总时间、token 和六组配对运行](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
-> **85.284% 更少 task tokens** · **整体首次结果快 8.629%** · 12 个结果全部正确 · 策略门禁 **FAIL**：Medium 计时仅赢 1/2 组
+### 全貌
 
-> 冻结只读 bootstrap 样本；此处不满足 Spark 条件 · 非计费 tokens · 不含 Ending Real
+| 模式 | 主任务中位时间 | Ending 中位时间 | 完整生命周期中位时间 | 总 token 中位数 | 完整生命周期胜出 |
+|---|---:|---:|---:|---:|---:|
+| 不启用全局 Skill | 2.773 s | 2.778 s | 6.091 s | 26,113 | 基线 |
+| 启用全局 Skill | 3.322 s | 3.473 s | 7.164 s | 38,163 | 1/6 |
+| Skill 开销 | +19.8% | +25.0% | +17.6% | +46.1% | 5/6 更慢 |
 
-[脱敏 benchmark 证据](./task-analyze-skill/assets/model-routing-benchmark-example.json)
+“完整生命周期”先在每次运行中计算主任务 + Ending，再取六次总时间的中位数；它不等于两个阶段中位数直接相加。
+
+### 六组完整配对结果
+
+| 运行 | 无 Skill：主任务 | 无 Skill：Ending | 无 Skill：总计 | 有 Skill：主任务 | 有 Skill：Ending | 有 Skill：总计 | 总计更快 |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 5.135 s | 2.918 s | 8.053 s | 3.226 s | 3.236 s | 6.462 s | 有 Skill |
+| 2 | 2.256 s | 2.635 s | 4.891 s | 5.478 s | 3.628 s | 9.106 s | 无 Skill |
+| 3 | 2.629 s | 4.201 s | 6.830 s | 3.561 s | 4.111 s | 7.672 s | 无 Skill |
+| 4 | 2.508 s | 2.729 s | 5.237 s | 3.230 s | 3.318 s | 6.548 s | 无 Skill |
+| 5 | 2.916 s | 2.801 s | 5.717 s | 3.242 s | 7.081 s | 10.323 s | 无 Skill |
+| 6 | 3.709 s | 2.755 s | 6.464 s | 3.401 s | 3.254 s | 6.655 s | 无 Skill |
+
+### Token 证据
+
+| 运行 | 无 Skill：主任务 | 无 Skill：Ending | 无 Skill：总计 | 有 Skill：主任务 | 有 Skill：Ending | 有 Skill：总计 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 13,017 | 13,101 | 26,118 | 19,044 | 19,119 | 38,163 |
+| 2 | 13,017 | 13,092 | 26,109 | 19,044 | 19,119 | 38,163 |
+| 3 | 13,017 | 13,092 | 26,109 | 19,606 | 19,131 | 38,737 |
+| 4 | 13,017 | 13,093 | 26,110 | 19,044 | 19,119 | 38,163 |
+| 5 | 13,017 | 13,109 | 26,126 | 19,044 | 19,120 | 38,164 |
+| 6 | 13,017 | 13,098 | 26,115 | 19,044 | 19,119 | 38,163 |
+| **中位数** | **13,017** | **13,096** | **26,113** | **19,044** | **19,119** | **38,163** |
+
+### 方法与证据
+
+- **样本：** 6 组配对、24 个独立 session（两种模式都包含 `主任务 + Ending`），使用相同的 `gpt-5.6-luna | low` 和相同精确工作负载。
+- **顺序控制：** 第 1、3、5 组先运行无 Skill；第 2、4、6 组先运行有 Skill。
+- **无 Skill：** 关闭用户配置/全局 Skill，但测试工具仍另开一个干净审计 session，让两种模式保持相同的双 session 结构。
+- **有 Skill：** 加载当前全局配置；Ending 以独立 `ENDING_TASK_WORKER` session 运行。
+- **正确性：** 主任务 12/12 PASS，Ending 12/12 PASS，0 reroute。
+- **一致性：** 主任务 workload SHA-256 `6ed46ac3699918ac054b2bf8e9d9da2be31628443a4d142848a121432f905c2b`；Ending workload SHA-256 `9ffe75646e4ecb36f6426026ad6005dd8947d2635c435dde36bb4fe5b89fee6a`；主输出 SHA-256 始终为 `7ba6fb88894e1d0faf389562cd4639eae0d733bcae056d8788d606a8777a5121`。
+- **计时定义：** 完整 session/process 时间，不是首次可见结果时间。所有运行使用只读 sandbox。
+
+### 决策与限制
+
+这个 Skill 在该微型工作负载上**不满足性能准入**：结果同样正确，但耗时与 token 更高。这是生命周期开销的描述性证据，不代表复杂代码任务的质量结果。公开报告已去除原始 Prompt、私有路径、receipt 和 session ID。
 
 ## 🧩 八个公开 Skill
 
