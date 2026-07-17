@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**Codex-only · adaptive producer for eligible text/code · inline exceptions · verify after delivery**
+**Codex-only · finish the job first · verify afterward in a separate background task**
 
 [中文说明](./README.zh.md)
 
@@ -16,8 +16,19 @@ Current catalog-derived priority producer: `gpt-5.3-codex-spark` · easy=`low` �
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: Present completed result, then Ending Real verifies the result">
+  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: finish and return the main job first, then start a separate nonblocking background Ending task">
 </picture>
+
+## ✅ Finish first. Verify in background.
+
+This is the lifecycle’s most important structural rule:
+
+1. **Main task finishes the requested job** and runs only the proportional local check that belongs to implementation.
+2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
+3. **Start `End Task-<task name>` as a separate background Codex task.** It audits existing evidence read-only and never blocks the completed main result.
+4. **Ending reports PASS or the exact failure.** It does not ask the user questions, wait, poll, call heavy APIs, or repair inside the Ending task; a failure reopens a new repair task.
+
+Main work and Ending verification are deliberately different task sessions. “Background” means the user can continue working as soon as the main result is returned—it does not mean verification is skipped.
 
 ## ⚡ Models & private learning
 
@@ -28,7 +39,7 @@ Current catalog-derived priority producer: `gpt-5.3-codex-spark` · easy=`low` �
 
 - **Priority:** Eligible text/code uses the adaptive catalog priority producer: easy `low`, complex `high`; exact read-only, image/mixed, and tool-only work stays inline.
 - **Operational:** With zero result and zero tokens, use the current contextual Obsidian-selected quality pair.
-- **Quality:** A published result returns now; Ending automatically logs the receipt-backed failure before a new quality-pair repair with a different verifier.
+- **Quality:** A completed result returns first; the separate background Ending task logs a receipt-backed failure before a new repair task uses a different verifier.
 - **Learning:** Ending outcomes update broad project/Skills `Model Switch.md` pages; project/task/module/file/symbol are fields only—no hierarchy notes.
 
 ## Rules
@@ -36,8 +47,8 @@ Current catalog-derived priority producer: `gpt-5.3-codex-spark` · easy=`low` �
 - **Producer:** Eligible text/code uses the adaptive catalog priority producer; exact read-only, image/mixed, and tool-only work stays inline.
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
-- **Deliver:** Show the completed result before Ending Real.
-- **Verify:** Ending Real runs after delivery; first-result time excludes it.
+- **Deliver:** Finish and return the completed main result before background verification.
+- **Verify:** Launch a separate, nonblocking `End Task-<task name>` after delivery; first-result time excludes it.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
 - **Memory:** Change history is local JSONL + optional Obsidian; private learning uses broad project/Skills `Model Switch.md`: fields only; no hierarchy notes.
 - **Models:** Ordinary tasks use saved JSON; explicit local update selects the highest numeric GPT family, while unavailable cache keeps the saved list.

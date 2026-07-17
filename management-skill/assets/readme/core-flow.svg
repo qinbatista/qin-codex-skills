@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
   <title id="title">Auto Best Model core flow</title>
-  <desc id="desc">A compact five-stage flow from a Codex task through conditional memory and prompt gates, inline or admitted route execution, result presentation, Ending Real verification, and change recording.</desc>
+  <desc id="desc">A compact flow that finishes and returns the main Codex task first, then starts a separate nonblocking background Ending audit.</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#14213a"/></linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker>
   </defs>
   <rect width="1200" height="620" rx="28" fill="url(#background)"/>
-  <text x="48" y="60" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="32" font-weight="700">One task, one clear path</text>
-  <text x="48" y="92" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="18">Conditional gates stay small; ordinary work follows the highlighted default lane.</text>
+  <text x="48" y="60" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="32" font-weight="700">Finish the job first. Verify in background.</text>
+  <text x="48" y="92" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="18">The completed main result never waits for the separate Ending task.</text>
 
   <path d="M174 266H218 M466 266H510 M790 266H830 M974 266H1014" fill="none" stroke="#64748b" stroke-width="4" marker-end="url(#arrow)"/>
 
@@ -34,18 +34,18 @@
   <text x="552" y="348" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17" font-weight="700">Analyze → Workflow</text>
 
   <rect x="830" y="202" width="144" height="128" rx="20" fill="#102e2a" stroke="#34d399" stroke-width="2"/>
-  <text x="902" y="244" text-anchor="middle" fill="#a7f3d0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" font-weight="700">3  RESULT</text>
-  <text x="902" y="288" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="19" font-weight="700">Present</text>
+  <text x="902" y="244" text-anchor="middle" fill="#a7f3d0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" font-weight="700">3  MAIN DONE</text>
+  <text x="902" y="288" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="19" font-weight="700">Return</text>
 
   <rect x="1014" y="152" width="146" height="228" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
-  <text x="1087" y="190" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" font-weight="700">4  ENDING REAL</text>
-  <text x="1087" y="228" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="19" font-weight="700">Verify</text>
-  <text x="1087" y="254" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">repair if needed</text>
+  <text x="1087" y="190" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14" font-weight="700">4  BACKGROUND</text>
+  <text x="1087" y="228" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17" font-weight="700">Ending task</text>
+  <text x="1087" y="254" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">read-only audit</text>
   <line x1="1038" y1="276" x2="1136" y2="276" stroke="#6b4b88"/>
   <text x="1087" y="309" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17" font-weight="700">Files changed?</text>
   <text x="1087" y="335" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">record outcome</text>
 
   <rect x="90" y="458" width="1020" height="104" rx="22" fill="#0d2435" stroke="#334155"/>
-  <text x="600" y="500" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="23" font-weight="700">Default: inline → present result → Ending Real</text>
-  <text x="600" y="536" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17">Memory, Prompt Skill, and routing activate only when their exact gate applies.</text>
+  <text x="600" y="500" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="23" font-weight="700">Main task: finish → check → return</text>
+  <text x="600" y="536" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17">Then launch a separate background Ending task without waiting.</text>
 </svg>

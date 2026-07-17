@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**专用于 Codex · 合格文字/代码使用自适应生产模型 · 例外保持 inline · 交付后再验证**
+**专用于 Codex · 先完成并返回主任务 · 再由独立后台任务验证**
 
 [English](./README.md)
 
@@ -16,8 +16,19 @@
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-zh-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先展示完成结果，再由 Ending Real 验证结果">
+  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先完成并返回主任务，再启动独立且不阻塞的后台 Ending Task">
 </picture>
+
+## ✅ 先完成主任务，再后台验证
+
+这是整个生命周期最重要的结构规则：
+
+1. **主任务先完成用户要求的工作**，只运行与实现相称的本地基础检查。
+2. **立即返回已完成结果。** 不让用户被验证、轮询或修复流程卡住。
+3. **另开 `End Task-<任务名>` 独立 Codex 后台任务。** 它只读审计已有证据，绝不阻塞已经完成的主任务。
+4. **Ending 只返回 PASS 或准确失败。** 不向用户提问、不等待、不轮询、不调用重型 API，也不在 Ending 内修复；失败后另开新的修复任务。
+
+主工作与 Ending 验证刻意使用不同任务会话。“后台”表示主结果一返回，用户就能继续工作；它不表示跳过验证。
 
 ## ⚡ 模型与私有学习
 
@@ -28,7 +39,7 @@
 
 - **优先：** 合格文字/代码使用自适应目录优先生产模型：简单 `low`，复杂 `high`；精确只读、图像/混合和纯工具任务保持 inline。
 - **操作故障：** 零结果、零 token 时，使用 Obsidian 当前上下文选择的质量模型档位。
-- **质量故障：** 已产出就先返回；Ending 自动记录 receipt 对应的失败，再用不同验证者开启新的质量档修复。
+- **质量故障：** 先返回已完成结果；独立后台 Ending 记录 receipt 对应的失败，再由新的修复任务使用不同验证者。
 - **学习：** Ending 结果更新宽泛项目/Skills `Model Switch.md` 页面；project/task/module/file/symbol 仅是字段，不创建层级笔记。
 
 ## 规则
@@ -36,8 +47,8 @@
 - **Producer：** 合格文字/代码用自适应目录优先生产模型；精确只读、图像/混合和纯工具任务保持 inline。
 - **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
 - **路由：** 只有明确要求或当前端到端证据成立时才委派。
-- **交付：** 先展示完成结果，再运行 Ending Real。
-- **验证：** Ending Real 在交付后运行；first-result 不包含它。
+- **交付：** 先完成并返回主任务结果，再进行后台验证。
+- **验证：** 交付后另开不阻塞的 `End Task-<任务名>`；first-result 不包含它。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
 - **记忆：** 修改历史用本地 JSONL（可投影 Obsidian）；私有学习用宽泛项目/Skills `Model Switch.md`，仅字段，不建层级笔记。
 - **模型：** 普通任务只读已保存 JSON；主动本地更新时选择最高数字 GPT 家族，缓存不可用就保留原列表。

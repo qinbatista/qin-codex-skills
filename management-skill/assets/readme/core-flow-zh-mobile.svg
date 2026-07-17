@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="1040" viewBox="0 0 720 1040" role="img" aria-labelledby="title desc">
   <title id="title">Auto Best Model 移动端核心流程</title>
-  <desc id="desc">从 Codex 任务开始，经过按需启用的入口、inline 或已准入执行、结果展示、Ending Real 验证与修改记录。</desc>
+  <desc id="desc">先完成并返回 Codex 主任务，再启动独立且不阻塞的后台 Ending 审计。</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#14213a"/></linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker>
   </defs>
   <rect width="720" height="1040" rx="28" fill="url(#background)"/>
-  <text x="40" y="58" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="30" font-weight="700">一个任务，一条清晰路径</text>
-  <text x="40" y="88" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="17">普通任务走高亮的默认路线。</text>
+  <text x="40" y="58" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="30" font-weight="700">先完成，再后台验证</text>
+  <text x="40" y="88" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="17">主结果绝不等待 Ending。</text>
 
   <path d="M360 180V210 M360 390V420 M360 652V682 M360 800V830" fill="none" stroke="#64748b" stroke-width="4" marker-end="url(#arrow)"/>
 
@@ -33,13 +33,13 @@
   <text x="602" y="604" text-anchor="end" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="18" font-weight="700">Analyze → Workflow</text>
 
   <rect x="150" y="682" width="420" height="118" rx="22" fill="#102e2a" stroke="#34d399" stroke-width="2"/>
-  <text x="360" y="722" text-anchor="middle" fill="#a7f3d0" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="15" font-weight="700">3  结果</text>
-  <text x="360" y="762" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="23" font-weight="700">立即展示</text>
+  <text x="360" y="722" text-anchor="middle" fill="#a7f3d0" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="15" font-weight="700">3  主任务完成</text>
+  <text x="360" y="762" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="23" font-weight="700">立即返回</text>
 
   <rect x="110" y="830" width="500" height="130" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
-  <text x="360" y="870" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="15" font-weight="700">4  ENDING REAL</text>
-  <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="22" font-weight="700">验证结果 · 失败就修复</text>
-  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="16">如果修改了文件，记录已验证的结果。</text>
+  <text x="360" y="870" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="15" font-weight="700">4  独立后台任务</text>
+  <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="22" font-weight="700">Ending · 只读审计</text>
+  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="16">PASS 或准确失败；主任务不等待。</text>
 
-  <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="16">默认：inline → 展示结果 → Ending Real</text>
+  <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="16">完成 → 检查 → 返回 → 后台启动 Ending</text>
 </svg>
