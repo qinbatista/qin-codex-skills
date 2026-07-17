@@ -1,13 +1,13 @@
 ---
 name: verify-skill
-description: "Use only for explicitly requested verification as the task itself, or for post-result Ending Task Real Verify. Never add Mini/Fast Verify before the user's first presentation."
+description: "Use only for explicitly requested verification as the task itself, or for post-result Ending Task Real Verify in a separate persistent thread. A producer-side bounded Quick Check may precede code presentation; it is not independent verification."
 ---
 
 # Verify Skill
 
-Verification has one category: **Real Verify**. Every user task launches an independent post-result Ending lifecycle, regardless of task level. When another task produces the requested artifact, finish and present that artifact first. The presentation must be a usable result, not a progress sentence: start it with `MAIN RESULT READY`, include the outcome or artifact links, and state `Acceptance: PENDING — Ending Real is starting`. Only afterward may Ending Task load this skill. Do not insert Mini/Fast Verify, a verification model, a reread, or a repair round before first presentation. Follow `references/ending-lifecycle.md`.
+Verification has one category: **Real Verify**. Every non-Ending user task launches Real Verify in a separate persistent Codex thread, regardless of task level. Code producers first apply the bounded Quick Check defined by `code-skill`; that check is producer completion evidence, not this skill and not an independent acceptance verdict. After Quick Check, present the usable result as `CODE READY` or `MAIN RESULT READY`, include PASS/SKIPPED evidence, start the lifecycle ledger, create a persistent thread, and rename it exactly `End Task-{concise related task name}`. Link it and return without waiting. The new thread loads this skill and owns the eventual PASS or BLOCKED. Follow `references/ending-lifecycle.md`.
 
-An independent same-task subagent is not a detached backend. It still keeps the Codex task active and must never be described as background or non-blocking. True non-blocking verification requires a persistent background Codex task/thread supported by the host and explicit user or active-project authorization for background execution. If that authority or capability is absent, use the same-task mode, say that the task stays open until `PASS` or `BLOCKED`, and do not claim backend execution.
+A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability, then `set_thread_title` for the exact title. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, report the origin as BLOCKED; do not silently substitute a subagent or wait loop.
 
 When the user explicitly asks for a test, audit, review, replay, or verification as the primary task, that work is the requested result and runs normally on the current model. It does not need a fabricated pre-result verification phase.
 
@@ -15,33 +15,23 @@ When the user explicitly asks for a test, audit, review, replay, or verification
 
 The required order is:
 
-1. producer completes the requested result;
-2. show the result immediately;
-3. write a lifecycle start receipt, add `--producer-receipt` when an adaptive producer created the result, and launch exactly one Ending worker in the authorized execution mode;
+1. producer completes the requested result and, for code, runs one bounded Quick Check;
+2. show the result immediately with Quick Check PASS/SKIPPED evidence;
+3. write a lifecycle start receipt, add `--producer-receipt` when an adaptive producer created the result, create a separate persistent Codex thread, rename it `End Task-{concise related task name}`, and pass the exact handoff;
 4. run one proportional Real Verify while isolated logs/docs may run in parallel;
 5. if Real fails, persist the error and failed durable project state before repair;
 6. launch repair as a new child lifecycle, present the correction, and use a different Ending verifier;
 7. let the terminal ledger event automatically record sanitized routing/memory learning for the bound producer receipt.
 
-First-result latency ends at step 2. Ending time is recorded separately and never added to first-result time. In same-task mode the UI may still show the task as active; the `MAIN RESULT READY` block is therefore mandatory so the user can distinguish producer completion from acceptance. In persistent-background mode, the foreground task returns after linking the background task and stating `Acceptance: PENDING`; the background task owns the eventual `PASS` or `BLOCKED` result. A tool's own returned state or process exit is completion evidence for the requested action, not a separate foreground verification pass.
+First-result latency includes Quick Check and ends at step 2. Ending time is recorded separately and never added to first-result time. The origin returns after linking the new task and stating that deeper testing has started; it does not wait or poll. The Ending task owns the eventual `PASS` or `BLOCKED` result. A tool's own returned state or process exit may be Quick Check evidence for the requested action, but it is not independent Real Verify.
 
-## Execution Modes
+## Persistent End Task Thread
 
-### Same-task Ending
-
-- Use one independent `ENDING_TASK_WORKER` subagent.
-- State `Ending mode: SAME TASK — this task remains open` immediately after the first result.
-- The parent may receive the verdict and perform required ordered bookkeeping, but it must not run its own duplicate tests, launch speculative review agents, or enter narrated fixed-interval polling loops.
-- A failed verifier may trigger only the bounded repair lifecycle defined below. It is not permission for open-ended exploration.
-- Final still requires `PASS` or `BLOCKED`.
-
-### Persistent-background Ending
-
-- Use only when the user or active project instructions explicitly request background/non-blocking execution and the host exposes a persistent background task/thread mechanism.
-- Create one background Codex task after `MAIN RESULT READY`; pass it the lifecycle ID, exact acceptance target, artifact paths, project root, allowed mutation boundary, and origin task ID when available.
-- State `Ending mode: BACKGROUND`, link or identify that task, then return the foreground task immediately with `Acceptance: PENDING`.
+- Create one background Codex task after `CODE READY` or `MAIN RESULT READY`; pass it the lifecycle ID, producer receipt when present, exact acceptance target, Quick Check evidence, artifact paths, project root, touched files, allowed mutation boundary, and origin task ID when available.
+- Use a saved project with local environment when available; otherwise use a projectless task and absolute paths. Use the configured default model unless an exact model was explicitly requested, and choose proportional reasoning effort.
+- Rename the task exactly `End Task-{concise related task name}` with `set_thread_title`, link or identify it, then return the origin immediately with `Acceptance: PENDING`.
 - The background task—not the returned foreground task—records and reports `PASS` or `BLOCKED`, performs ordered failure logging, and starts any authorized repair lifecycle. It must surface its terminal result to the user in its own task or back to the origin when the host supports that.
-- If persistent task creation fails, disclose the fallback and use same-task Ending. Never silently substitute a same-task subagent while still calling it background.
+- If persistent task creation fails, disclose `BLOCKED: Ending task creation failed`. Never substitute a same-task subagent.
 
 ### Required Status Vocabulary
 
@@ -52,7 +42,7 @@ First-result latency ends at step 2. Ending time is recorded separately and neve
 
 Do not use `done`, `finished`, `green`, or equivalent unqualified wording while acceptance is pending.
 
-Final requires lifecycle PASS or explicit BLOCKED. No hook is used or installed.
+The origin final requires a created End Task thread or explicit BLOCKED. The End Task thread final requires lifecycle PASS or explicit BLOCKED. No hook is used or installed.
 
 ## Real Verify Scope
 
@@ -131,8 +121,8 @@ Create a formal report only when requested or when evidence is long, visual, com
 
 ## Guardrails
 
-- Never gate first presentation with Mini/Fast Verify.
-- Never call a same-task subagent a backend/background worker.
+- Never turn Quick Check into a broad test suite or independent acceptance claim.
+- Never use a same-task subagent for Ending.
 - Never substitute a progress update such as `implementation complete` for the required usable `MAIN RESULT READY` presentation.
 - Never launch multiple overlapping verifier/review workers for one lifecycle; one Ending worker owns the verdict.
 - Never hide task state behind repeated `wait` updates. Report only a changed status: `MAIN RESULT READY`, `REPAIRING`, `PASS`, or `BLOCKED`.

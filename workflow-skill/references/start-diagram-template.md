@@ -5,10 +5,10 @@ Ordinary requests stay inline on the current model and show no route. Use these 
 ## Admitted Single Node: Text Only
 
 ```text
-Route: Task Analyze [current selected model | current selected effort] -> <direct action> [<model> | <effort>, <skill>] -> Show main result now -> Dispatch Ending Task -> Real Verify [<model> | <effort>, verify-skill]
+Route: Task Analyze [current selected model | current selected effort] -> <direct action> [<model> | <effort>, <skill>] -> Quick Check when code -> Show main result now -> Create `End Task-{related task}` thread -> Real Verify [configured model | proportional effort, verify-skill]
 ```
 
-Do not add Mermaid or a formal target map for one admitted node. There is no foreground Mini/Fast Verify.
+Do not add Mermaid or a formal target map for one admitted node. Quick Check is bounded producer work, not a foreground verifier.
 
 ## Admitted Complex Graph: Mermaid
 

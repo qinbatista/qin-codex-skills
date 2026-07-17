@@ -49,29 +49,30 @@ Inline work uses one direct task action or direct execution surface, then shows 
 1. Execute only dependency-ready nodes. Parallelize safe independent branches; keep ordered, shared-state, irreversible, or output-dependent work sequential.
 2. Load each owning skill and only task-relevant references. Preserve user work and the smallest source allowlist.
 3. Use one execution surface per branch. Collaboration prompts start `LOCKED_ROUTE_NODE`; do not repeat that branch in a dispatcher.
-4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; eligible text/code starts on the catalog priority producer (`easy=low`, `complex=high` when supported) and otherwise uses the contextual quality pair. It emits the first completed result without a foreground verification gate.
+4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; eligible text/code starts on the catalog priority producer (`easy=low`, `complex=high` when supported) and otherwise uses the contextual quality pair. Code completion includes one bounded Quick Check before presentation, never a separate verifier.
 5. Only a real graph with at least two model-executed nodes saves private schema-2 JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once.
 6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work without user authorization.
 
 The adaptive producer reads the saved shared contract unchanged and checks the matching Obsidian project context before execution. Ordinary tasks do not scan or refresh the local model cache. Only an explicit user model-update request may refresh the shared contract from local `models_cache.json`; never fetch models over the network, and preserve the saved contract when the local cache is unavailable. It never writes learning. Priority-producer launch/access/transport failure can use the selected quality pair only before any published result and with zero tokens; all attempts stay in one route receipt. Explicit benchmark baselines remain outside entry context.
 
-## First Result Before Verification
+## Quick Check, First Result, Then Detached Ending
 
-Do not run Mini/Fast Verify before the user first sees the result. When requested work is complete:
+When requested work is complete:
 
-1. cross Main Goal Done Gate based on task completion, not a verification claim;
-2. show the main result immediately;
-3. only after it is shown, release the Ending Real handoff.
+1. cross Main Goal Done Gate based on task completion, not an independent verification claim;
+2. for code, run the smallest safe local smoke, or skip a heavy/API/large-file path and check syntax plus changed function, variable, import, and direct-reference names;
+3. show `CODE READY` or `MAIN RESULT READY` immediately with Quick Check PASS/SKIPPED evidence;
+4. release the Ending Real handoff, create a persistent Codex task, rename it exactly `End Task-{concise related task name}`, link it, and return without waiting.
 
 For adaptive or dispatched execution, launch the CLI as an ongoing session and read its newline-delimited `stage=result-ready` event. That event is emitted only after the public result path has been atomically written. Read and show that file immediately while the receipt/session continues; then collect the final receipt/manifest. A post-presentation receipt or protocol failure must notify and reopen instead of retracting or silently replacing the presented result.
 
-For a dispatcher use ongoing `run-plan` session -> `result-ready` event -> show the public result file -> collect final run manifest -> `release-main-result` -> `run-ending`. Never wait for the final receipt manifest before showing an emitted result. Never call `release-main-result` until the result has actually been shown and the final run manifest passes. A later Real correctness failure notifies the user, reopens, repairs, and explicitly presents the corrected result without inserting a new foreground Mini.
+For a dispatcher use ongoing `run-plan` session -> `result-ready` event -> bounded Quick Check when code -> show the public result file -> collect final run manifest -> `release-main-result` -> create/rename/link End Task -> origin returns. Only the End Task thread may call `run-ending`. Never use a same-task Ending subagent or wait for the Ending verdict in the origin. A later Real correctness failure is owned and reported by the End Task thread.
 
 ## Mandatory Ending Task
 
-Ending Task begins only after the main result and is mandatory for read-only/write and simple/complex work. It owns the independent proportional Real Verify plus any genuinely needed broader regression, visual replay, independent optimization verification, reports, logs, docs, and sanitized learning. Start it with `--producer-receipt` for adaptive results; the terminal ledger event automatically records receipt-backed pass/fail to an Obsidian broad `Model Switch.md` page. It bypasses result-producing performance admission. Missing memory is a successful no-op only for work that has no bound producer receipt.
+Ending Task begins only after the main result and is mandatory for read-only/write and simple/complex work. It is always a separate persistent Codex task named `End Task-{concise related task name}`; never a same-task subagent. It owns the independent proportional Real Verify plus any genuinely needed broader regression, visual replay, independent optimization verification, reports, logs, docs, and sanitized learning. Start the lifecycle with `--producer-receipt` for adaptive results and pass that receipt to the new task; the terminal ledger event automatically records receipt-backed pass/fail to an Obsidian broad `Model Switch.md` page.
 
-An Ending worker starts with `ENDING_TASK_WORKER`; any locked-route metadata follows that marker. It never restarts Task Analyze/Workflow or silently changes the delivered result. Safe isolated log/doc branches run in parallel with verification; final project memory and Obsidian writes remain ordered. Before final, the lifecycle ledger must report `PASS` or explicit `BLOCKED`.
+The End Task thread starts its worker prompt with `ENDING_TASK_WORKER`; any locked-route metadata follows that marker. It never restarts Task Analyze/Workflow or silently changes the delivered result. Safe isolated log/doc branches run in parallel with verification; final project memory and Obsidian writes remain ordered. The origin returns after creating and linking the thread; the End Task thread final requires lifecycle `PASS` or explicit `BLOCKED`.
 
 On failure, persist lifecycle error evidence and any failed durable project record before repair. Launch repair as a new child lifecycle under the owning skill, present the corrected result, and launch a different Ending verifier. The repair producer never verifies itself; repeated identical failures stop at a bounded blocker instead of looping silently.
 
@@ -81,7 +82,7 @@ Use runtime receipts only for delegated model nodes, explicit routing proof, or 
 
 `obsidian_adaptive_model_runner.py` reads the shared contract and matching project/task/module/file/symbol/code experience but never writes learning. It embeds a sanitized learning context in the private receipt. Ending Real's terminal ledger event writes the effective producer result and priority-attempt evidence to Obsidian automatically. The broad `Model Switch.md` page is the sole current contextual experience authority. Operational failures are quality-neutral. End-to-end performance admission remains separate.
 
-Savings claims count every session once and test simple, medium, and complex separately. User-visible latency ends at the first completed result; Ending Real time is separate. A suite total never converts a losing class into a pass.
+Savings claims count every session once and test simple, medium, and complex separately. User-visible latency includes any required producer Quick Check and ends at completed-result presentation; detached Ending Real time is separate. A suite total never converts a losing class into a pass.
 
 ## Prompt And Code Rules
 

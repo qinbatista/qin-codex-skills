@@ -4,7 +4,7 @@ Ordinary requests stay on the current model regardless of apparent complexity. T
 
 | Scenario | Use when | Foreground route | Model pattern | First presentation | Ending Task |
 |---|---|---|---|---|---|
-| ordinary-direct | One answer, read, command, open, or edit. | inline-current-model -> result | Current user-selected model; no child, receipt, dispatcher, or adaptive sample. | Present completed result with no Mini/Fast Verify. | One proportional Real Verify after presentation. |
+| ordinary-direct | One answer, read, command, open, or edit. | inline-current-model -> result | Current user-selected model; no foreground child, receipt, or dispatcher. | For code, one bounded Quick Check; then present. | Create and return from `End Task-{related task}` for proportional Real Verify. |
 | open-chrome | Open the user's Chrome profile. | inline-current-model -> chrome:control-chrome -> result | Tool-only inline action. | Report completion immediately. | Confirm observable Chrome state. |
 | open-youtube | Open Chrome and YouTube. | inline-current-model -> chrome:control-chrome -> result | Tool-only inline action. | Report completion immediately. | Confirm `youtube.com`. |
 | search-cctv-on-youtube | Open Chrome, YouTube, and search CCTV. | inline-current-model -> chrome:control-chrome -> result | Tool-only inline action. | Report completion immediately. | Confirm query/results. |
@@ -22,9 +22,9 @@ Ordinary requests stay on the current model regardless of apparent complexity. T
 - Full Task Analyze activates only for explicit routing/benchmark/maintenance or graph evaluation; activation alone does not admit Workflow.
 - Every active registry-owned code-domain implementation uses `code-skill`.
 - Main Result precedes all verification.
-- Ending Real Verify, optimization proof, reports, logs, docs, and memory begin only after first presentation.
+- Ending Real Verify, optimization proof, reports, logs, docs, and memory begin in the separate End Task thread after first presentation.
 - A background correctness failure notifies the user, reopens the task, repairs, and presents the correction.
 - Runtime receipts prove observed delegated routing; labels and availability probes do not.
 - Direct uses the exact raw prompt through `--direct-task`; Global uses it through `--bootstrap-task`.
-- Savings require complete like-for-like evidence per task class. Token cost includes all sessions; user-visible time ends at first presentation and excludes Ending Real.
+- Savings require complete like-for-like evidence per task class. Token cost includes all foreground sessions; user-visible time includes required Quick Check and ends at first presentation, excluding the detached Ending thread.
 - Do not publish or push unless explicitly requested.

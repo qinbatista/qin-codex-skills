@@ -223,8 +223,8 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         simple_summary = summary["tiers"]["simple"]
         self.assertEqual(summary["overall_status"], "pass")
         self.assertEqual(simple_summary["paired_wins"]["first_result_elapsed_ms"], 3)
-        self.assertEqual(simple_summary["paired_wins"]["total_wall_elapsed_ms"], 3)
         self.assertEqual(simple_summary["metric_gates"]["first_result_elapsed_ms"]["status"], "pass")
+        self.assertEqual(simple_summary["paired_wins"]["total_wall_elapsed_ms"], 3)
         self.assertNotIn("total_wall_elapsed_ms", simple_summary["metric_gates"])
         self.assertLess(simple_summary["global_medians"]["first_result_elapsed_ms"], simple_summary["direct_medians"]["first_result_elapsed_ms"])
         self.assertGreaterEqual(simple_summary["paired_savings_percent_medians"]["first_result_elapsed_ms"], module.MINIMUM_PAIRED_TIME_SAVINGS_PERCENT)

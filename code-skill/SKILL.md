@@ -5,7 +5,7 @@ description: "Do not use for an exact-scoped read-only lookup, audit, transform,
 
 # Code Skill
 
-Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. No path adds a pre-result verifier; the mandatory post-result Ending lifecycle still runs.
+Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. The producer performs one bounded Quick Check before presenting code; deeper independent verification runs later in a separate persistent Ending thread.
 
 ## Internal Route Selection
 
@@ -49,7 +49,7 @@ Read only what the inline request or admitted node needs:
 
 Active registry-owned code domains share this executor while retaining separate evidence keys and references. Current examples are `python`, `csharp`, and `unity_csharp`; `code_unspecified` is migration/history-only. Registry metadata identifies the domain; language rules are documented in this skill's `references` directory (for example, `python-rules.md`, `csharp-rules.md`, and `unity-csharp-rules.md`).
 
-For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems -> smallest complete solution` as an internal reasoning checklist, inspect the existing prompt and validators, and apply the complete `prompt-skill` contract plus only the conditional controls that materially improve behavior before the language-specific reference. Do not show a planning preamble; present the completed change before Ending Real verifies it.
+For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems -> smallest complete solution` as an internal reasoning checklist, inspect the existing prompt and validators, and apply the complete `prompt-skill` contract plus only the conditional controls that materially improve behavior before the language-specific reference. Do not show a planning preamble; apply the Quick Check boundary below before presenting the completed change.
 
 ## Model Contract
 
@@ -68,10 +68,11 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 4. Preserve Qin's existing style, naming, structure, and unrelated user changes.
 5. Keep Python signatures, calls, and literals on one line when the project/global rules require that style.
 6. Implement only the requested behavior; avoid unrequested abstractions, features, fallbacks, or compatibility layers.
-7. Show the changed path and concrete behavior immediately; do not launch a child receipt or verifier before presentation.
-8. After presentation, always start the independent Ending lifecycle. It runs proportional Real Verify such as syntax, compile, focused execution, or relevant regression. Ending Real alone records receipt-backed producer pass/fail to Obsidian. A failure is logged before a repair child starts; the correction is presented and verified by a different Ending worker.
+7. Run one bounded producer-side Quick Check. For light/local code, run the smallest safe smoke that exercises the changed function or direct path. For external-API, large-file, expensive-build, destructive, or side-effect-heavy work, do not execute the heavy path; check syntax plus the changed function, variable, import, and direct-reference names without importing code that may trigger side effects. This is a basic completion check, not independent Real Verify.
+8. Present `CODE READY` with changed paths, concrete behavior, and `Quick Check: PASS` or `Quick Check: SKIPPED (heavy) — <static evidence>`. Quick Check time is included in first-result latency.
+9. Start the lifecycle ledger, bind the producer receipt when present, create a separate persistent Codex thread, and rename it exactly `End Task-{concise related task name}`. Pass the acceptance target, project root, touched files, receipt/lifecycle paths, Quick Check evidence, and allowed repair scope. Link that task and return immediately without waiting or polling. Never use a same-task Ending subagent. The Ending thread alone runs deeper Real Verify and records PASS/BLOCKED learning and project memory.
 
-Compile, import, lint, schema, build, existence, and focused execution checks belong to post-result Real Verify unless they are themselves the user's requested task.
+The smallest safe syntax, existence, direct-reference, or focused local execution check belongs to producer Quick Check. Full builds, broad lint, integration/API calls, large-file processing, live side effects, and regressions belong to the detached Ending thread unless they are themselves the user's requested task.
 
 ## Optimization Boundary
 

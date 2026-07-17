@@ -31,8 +31,8 @@ Always apply the global `prompt-skill` first. A missing or skipped `prompt-skill
 9. State durable rules at the highest useful level. Do not add obvious prohibitions, near-duplicate warnings, or case-by-case exclusions.
 10. Treat examples, bad outputs, and edge cases as test evidence. Include only the minimum labeled example needed to define a reusable boundary; explicit rules remain authoritative.
 11. For Python f-strings, escape literal JSON braces as `{{` and `}}`; real interpolation placeholders stay single-braced, such as `{image_width}`.
-12. Present the completed Python assignment or C# constant immediately; do not put an external prompt trial or validator before the first presentation.
-13. In Ending Real, test the prompt with representative input/output scenarios. Use repeated fresh runs for stochastic production prompts: default 3 and 5 for critical image, structured-data, or reliability claims. Report artifact creation separately from semantic/file/visual acceptance, and reopen with a corrected prompt if validation fails.
+12. Apply the owning language's bounded Quick Check before presentation: a smallest safe local smoke for light code, or syntax plus changed prompt variable/constant and direct-reference checks for heavy/API paths. Do not run external prompt trials in Quick Check.
+13. Present `CODE READY` with Quick Check evidence, then create a separate `End Task-{concise related task name}` thread and return without waiting. In that Ending thread, test the prompt with representative input/output scenarios. Use repeated fresh runs for stochastic production prompts: default 3 and 5 for critical image, structured-data, or reliability claims. Report artifact creation separately from semantic/file/visual acceptance, and reopen with a corrected prompt if validation fails.
 
 ## Function Prompt Shape
 

@@ -1,16 +1,15 @@
 # Mandatory Ending Lifecycle
 
-Every user task, from a tiny read-only answer to a complex write, releases its completed main result before Ending work and then starts one independent Ending lifecycle. `ENDING_TASK_WORKER` verification bookkeeping is the only non-recursive worker role; a worker that repairs or produces a corrected artifact becomes a new repair task and must receive its own independent Ending verifier.
+Every user task, from a tiny read-only answer to a complex write, releases its completed main result and then creates one separate persistent Codex task for Ending. Code work first runs one bounded producer Quick Check. `ENDING_TASK_WORKER` verification bookkeeping is non-recursive; a worker that repairs or produces a corrected artifact becomes a new repair task and must receive its own independent Ending verifier inside the End Task thread.
 
 ## Parent sequence
 
-1. Complete the requested result and show it immediately in a user-visible commentary update beginning `MAIN RESULT READY`. Include the usable outcome or artifact links and `Acceptance: PENDING — Ending Real is starting`; a progress sentence is not a result presentation.
-2. Start a lifecycle with `scripts/ending_task_ledger.py start --producer-receipt <path>` when an eligible adaptive producer ran; omit the flag only when no producer receipt exists. Require `status=written`, `local.written=true`, and the expected receipt binding.
-3. Choose one execution mode. A same-task subagent is independent but is not detached backend work. Use a persistent background Codex task only when the user or active project instructions explicitly authorize background/non-blocking execution and the host supports persistent task creation.
-4. Launch exactly one Ending worker. Result-producing delegation performance admission does not apply to this post-result worker. Do not add speculative review agents or duplicate parent-side tests.
-5. In same-task mode, state `Ending mode: SAME TASK — this task remains open`, keep the parent active, and send final only when `audit` reports `final_gate_passed=true`.
-6. In persistent-background mode, create and identify the background task, pass the lifecycle receipt and exact acceptance contract, state `Ending mode: BACKGROUND`, and return the foreground task immediately with `Acceptance: PENDING`. The background task owns terminal `PASS` or `BLOCKED` reporting and any authorized repair.
-7. If persistent background creation fails, disclose the fallback and use same-task mode. Never label the fallback as background.
+1. Complete the requested result. For code, run the `code-skill` Quick Check: smallest safe local smoke for light work, or syntax/name/reference checks with the heavy path skipped.
+2. Show it immediately in a user-visible commentary update beginning `CODE READY` for code or `MAIN RESULT READY` otherwise. Include the usable outcome, artifact links, Quick Check PASS/SKIPPED evidence when applicable, and `Acceptance: PENDING — End Task is starting`; a progress sentence is not a result presentation.
+3. Start a lifecycle with `scripts/ending_task_ledger.py start --producer-receipt <path>` when an eligible adaptive producer ran; omit the flag only when no producer receipt exists. Require `status=written`, `local.written=true`, and the expected receipt binding.
+4. Call `create_thread`, then `set_thread_title` with exactly `End Task-{concise related task name}`. Pass the lifecycle receipt, producer receipt, Quick Check evidence, exact acceptance contract, absolute project/artifact paths, touched files, allowed repair scope, and origin task ID when available.
+5. State `Ending mode: BACKGROUND`, link or identify the new task, and return the origin immediately with `Acceptance: PENDING`. Do not wait, poll, or launch a same-task subagent. The background task owns terminal `PASS` or `BLOCKED` reporting and any authorized repair.
+6. If persistent task creation fails, report `BLOCKED: Ending task creation failed`. Never substitute a same-task subagent.
 
 ## Pass
 
