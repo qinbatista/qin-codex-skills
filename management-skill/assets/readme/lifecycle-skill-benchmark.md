@@ -126,7 +126,7 @@ The final code, documentation, and graphic were checked again after v26 was froz
 | Workflow routes / gates / traces / graduated prompts | 11/11 · 2/2 · 3/3 · 4/4 |
 | Changed Python entry points | `py_compile` passed |
 | Public benchmark graphic | XML parse, layout bounds test, and rendered PNG inspection passed |
-| Compact global bootstrap | 1,145 bytes; public entry-rule mirror byte-identical |
+| Compact global bootstrap | active `AGENTS.md` is 1,145 bytes; public asset preserves the required merge instruction |
 
 ## Decision
 
