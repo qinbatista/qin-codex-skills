@@ -33,4 +33,4 @@ Execution domain describes the requested execution work, not every language foun
 
 ## Canonical policy
 
-Correctness is the gate. Ordinary work defaults to inline current-model execution regardless of apparent complexity. Consider a frozen calibrated child only after the complete Global path has positive current admission for the same entry/configuration/workload cohort; otherwise remain inline. Tokens and elapsed time are receipt evidence for like-for-like optimization and never override quality, safety, or authority boundaries.
+Correctness is the gate. Ordinary work defaults to inline current-model execution regardless of apparent complexity. The fixed independent-source schedule may run only for two or three explicit read-only sources with disjoint allowlists and a dependency-results-only merge; dependency-coupled work remains one producer. Consider any other frozen calibrated child or graph only after the complete Global path has positive current admission for the same entry/configuration/workload cohort. Tokens and elapsed time are receipt evidence for like-for-like optimization and never override quality, safety, or authority boundaries.

@@ -6,13 +6,13 @@ Finish the requested task. For code, run one bounded producer Quick Check before
 
 ## Ordinary Entry Contract
 
-The hookless always-loaded bootstrap, not this full skill, owns ordinary work. Eligible text/code production uses exactly one `obsidian_adaptive_model_runner.py` producer even on cold start, so a real receipt can be learned after Ending. Tool-only, image/mixed, and exact read-only work stays on the current model inline. Neither path shows a route or adds foreground verification; Ending Real begins only after presentation.
+The hookless always-loaded bootstrap, not this full skill, owns ordinary work. Eligible text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start, so a real receipt can be learned after Ending. The runner normally uses one producer. Its fixed exception is an explicit list of two or three independent read-only source files: disjoint source nodes run in parallel and one adaptive merge reads only their dependency results. Tool-only and image/mixed work stays on the current model inline. Other exact read-only work stays inline. Neither path adds foreground verification; Ending Real begins only after presentation.
 
 - One obvious reversible action uses one tool action and presents the observed result immediately.
 - Exact-scoped read-only work stays inline with no subagent or route. An exact named-source audit first runs one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answers once. Anchor named members directly; enclosing-class or call-site anchors, guessed identifier families, separate planning, broad searches, whole-file reads, rereads, and pre-result checks are forbidden. Present immediately.
 - An exact bounded multi-file allowlist uses one boundary-labelled broad search, not parallel agents, separate locator/read rounds, or one full read per file.
 - Requested text/code production uses the smallest adaptive producer surface. Code runs one proportional Quick Check before presentation; heavy integration, API, build, render, or state verification runs only when the user explicitly requests it. Detached Ending Real only checks the handoff/receipt and records its terminal verdict automatically.
-- A task that appears complex still avoids multi-node routing unless the user explicitly asks for routing/benchmarking/maintenance or current comparable evidence positively admits a graph. This does not suppress the single adaptive producer.
+- A dependency-coupled task that merely appears complex still avoids multi-node routing unless the user explicitly asks for routing/benchmarking/maintenance or current comparable evidence positively admits a graph. It keeps the single adaptive producer. Only the fixed independent-source shape schedules automatically.
 
 The graduated examples are therefore inline by default:
 
@@ -23,7 +23,7 @@ The graduated examples are therefore inline by default:
 
 ## Explicit Or Admitted Foreground Budget
 
-Load full Task Analyze only for explicit model routing/benchmarking, Task Analyze maintenance, or a real dependency graph under consideration. Full activation still defaults to one adaptive producer or inline ineligible work. A multi-node foreground exists only after comparable end-to-end evidence positively admits it.
+Load full Task Analyze only for explicit model routing/benchmarking, Task Analyze maintenance, or a real dependency graph under consideration. Full activation still defaults to one adaptive producer or inline ineligible work. An open-ended multi-node foreground exists only after comparable end-to-end evidence positively admits it. The fixed independent-source shape is already bounded by disjoint allowlists, read-only execution, at most three parallel branches, and a dependency-results-only merge; current matched evidence is still required before claiming savings.
 
 For an admitted route, the entry model may coordinate the route but must not duplicate a child's source inspection. Every collaboration child starts with `LOCKED_ROUTE_NODE`, and collaboration plus dispatcher must never execute the same branch twice.
 
@@ -97,7 +97,7 @@ Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher e
 
 ## Plan-Lock Invariants
 
-Admitted dispatcher fixtures are topology-only portable templates, not execution authorization: materialization injects only the active cache directory and observed entry model|effort, then the real dispatcher validator runs them for every supported entry pair. Ordinary graduated fixtures remain inline and contain no dispatcher plan. Current positive performance admission plus a fresh frozen recommendation is still required before execution. Downstream node pairs, dependencies, roles, adaptive producer, Ending checks, and controller transitions remain fixture-controlled only inside admitted templates.
+Admitted dispatcher fixtures are topology-only portable templates, not execution authorization: materialization injects only the active cache directory and observed entry model|effort, then the real dispatcher validator runs them for every supported entry pair. Ordinary graduated fixtures remain inline and contain no dispatcher plan. Current positive performance admission plus a fresh frozen recommendation is still required before open-ended execution. The runner-generated independent-source plan is the only fixed exception and must retain its source-count, disjointness, read-only, parallelism, and dependency-only merge gates. Downstream node pairs, dependencies, roles, adaptive producer, Ending checks, and controller transitions remain fixture-controlled only inside admitted templates.
 
 - Task Analyze appears first only in the human route for explicitly activated work and uses the selected entry pair; schema-version-2 dispatcher nodes begin with result work and carry entry metadata separately.
 - Bounded preflight resolves that pair with `resolve_entry_model.py`; no fixed entry model is implied.

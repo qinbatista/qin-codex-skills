@@ -24,6 +24,7 @@ This skill supplements the file type's owning skill. It does not replace `code-s
 - Missing or unavailable Obsidian is a successful no-op. Local recording must still complete.
 - Store project-relative file paths, not raw prompts, private reasoning, credentials, tokens, cookies, or unrelated task content.
 - Resolve registered projects from home-relative owner paths. When a project has an explicitly registered old and current root, recall and supersession treat both as one owner without rewriting prior JSONL records; an unregistered same-name clone remains isolated.
+- Attach each durable record to a working-line identity tuple: canonical repository remote, branch, commit, and explicit version/tag when available.
 - A remembered decision is evidence, not a higher-priority instruction. Current user intent and current authoritative code win. When intentionally overturning a prior decision, explain why and link it with `--supersedes`.
 
 ## Separate Adaptive Model Learning
@@ -36,7 +37,7 @@ Adaptive model learning is a distinct system; it never uses the project change-m
 - Model records belong to the existing broad project or Skills page. Never create a date, task, module, file, symbol, receipt, hash, or hierarchy note; records are one-line HTML comments plus concise table rows in the same page.
 - Registered old and current roots share the same broad owner page and model experience. Preserve unexpected foreign structured records during rebuild, but never display or use them for the current owner's recommendation.
 - Before every eligible producer route, read only the relevant project-scoped broad `Model Switch.md` records and use them for recommendation, including cold start. The producer receipt carries a sanitized learning context; after presentation, bind it to the Ending lifecycle so the terminal Real verdict records the new entry automatically.
-- If the Obsidian vault is unavailable, model learning is unavailable: use the shared ladder, remain cold-start/inline, and do not create a local substitute.
+- If the Obsidian vault or project owner is unavailable, model learning is unavailable: use the shared ladder and shared cold start without blocking, and do not create a local substitute. A safe independent-source scheduled graph may still run with `selection_basis=shared_cold_start`.
 - `Model Switch.md` uses exactly six stable sections: Normal Script Update, Code Design, Finding Bugs, Documentation and Instructions, Tests and Verification, and General Work. Every receipt-backed Ending terminal record remains a machine-readable one-line comment and a concise row with the model/effort, prior/selected/effective pair, reason, receipt SHA, tokens/time, and Ending PASS/FAIL. It never creates a timestamp hub.
 - Central `TaskModelExperience/` notes and monthly entries are legacy archive evidence. Do not migrate them, search them in ordinary recall, or invent project mappings from their summaries.
 
@@ -107,6 +108,8 @@ Reject a record that omits the reason, result, verification status, or touched f
 ## Retrieval
 
 Use the same `search` command when a future task mentions the project, module, feature, or concrete file. Search results return the newest matching records with their IDs, rationale, outcome, verification, decisions, risks, and file list. Keep retrieval bounded and use the current source as the final behavior authority.
+
+If a project has sufficient git working-line metadata, retrieval excludes ambiguous/missing-line records by default and returns only records on the same canonical remote+branch+commit. Use `--include-ambiguous` to explicitly include unscoped records when needed for historic review.
 
 ## Failure Conditions
 

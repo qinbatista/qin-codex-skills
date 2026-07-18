@@ -17,7 +17,7 @@ Before a multi-node route or savings claim, confirm that Task Analyze supplied c
 - the selected pair is frozen, receipt-backed, Real-passing, and `trial=false`;
 - evidence is current, complete, and workload-comparable.
 
-If any item is missing, stale, cross-workload, incomplete, or negative, reject the multi-node route and its savings claim. Separately, the generated shared ladder plus matching Obsidian broad `Model Switch.md` context admits exactly one ordinary producer at cold start, one-rung downgrade/upgrade trial, or frozen reuse; this route does not claim strategy savings.
+If any item is missing, stale, cross-workload, incomplete, or negative, reject an open-ended multi-node route and its savings claim. The fixed independent-source topology is the narrow exception: two or three explicit existing project-relative read-only sources may run as disjoint parallel branches plus one dependency-results-only adaptive merge. It still cannot claim savings until the current matched benchmark passes. Separately, the generated shared ladder plus matching Obsidian broad `Model Switch.md` context admits one ordinary producer at cold start, one-rung downgrade/upgrade trial, or frozen reuse; missing Obsidian uses the shared cold start without learning and never blocks.
 
 ## Authority
 
@@ -40,7 +40,7 @@ Workflow reports only an actual fallback or post-result repair. It never adds a 
 
 ## Inline Boundary
 
-Eligible ordinary production tasks get one project/task/module/file/symbol/code lookup and must call `obsidian_adaptive_model_runner.py` once, including cold start. The current catalog's optional priority producer runs first for text/code, with one selected quality fallback only after zero-result operational failure. It never launches foreground verification.
+Eligible ordinary production tasks get one project/task/module/file/symbol/code lookup and must call `obsidian_adaptive_model_runner.py` once, including cold start. The current catalog's optional priority producer runs first for text/code, with one selected quality fallback only after zero-result operational failure. The same call may execute the fixed parallel independent-source schedule; a dependent multi-file task remains one producer. It never launches foreground verification.
 
 Inline work uses one direct task action or direct execution surface, then shows the completed main result immediately. Ending Real Verify starts only afterward.
 
@@ -51,6 +51,7 @@ Inline work uses one direct task action or direct execution surface, then shows 
 3. Use one execution surface per branch. Collaboration prompts start `LOCKED_ROUTE_NODE`; do not repeat that branch in a dispatcher.
 4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; eligible text/code starts on the catalog priority producer (`easy=low`, `complex=high` when supported) and otherwise uses the contextual quality pair. Code completion includes one bounded Quick Check before presentation, never a separate verifier.
 5. Only a real graph with at least two model-executed nodes saves private schema-2 JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once.
+   The runner may materialize this graph automatically only for its fixed two-or-three independent-source read-only shape; all branches have disjoint source allowlists and the merge reads dependency results only.
 6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work without user authorization.
 
 The adaptive producer reads the saved shared contract unchanged and checks the matching Obsidian project context before execution. Ordinary tasks do not scan or refresh the local model cache. Only an explicit user model-update request may refresh the shared contract from local `models_cache.json`; never fetch models over the network, and preserve the saved contract when the local cache is unavailable. It never writes learning. Priority-producer launch/access/transport failure can use the selected quality pair only before any published result and with zero tokens; all attempts stay in one route receipt. Explicit benchmark baselines remain outside entry context.
@@ -84,7 +85,7 @@ Use runtime receipts only for delegated model nodes, explicit routing proof, or 
 
 `obsidian_adaptive_model_runner.py` reads the shared contract and matching project/task/module/file/symbol/code experience but never writes learning. It embeds a sanitized learning context in the private receipt. Ending Real's terminal ledger event writes the effective producer result and priority-attempt evidence to Obsidian automatically. The broad `Model Switch.md` page is the sole current contextual experience authority. Operational failures are quality-neutral. End-to-end performance admission remains separate.
 
-Savings claims count every session once and test simple, medium, and complex separately. User-visible latency includes any required producer Quick Check and ends at completed-result presentation; detached Ending Real time is separate. A suite total never converts a losing class into a pass.
+Savings claims count every session once and test simple, medium, and complex separately. User-visible latency includes any required producer Quick Check and ends at completed-result presentation; detached Ending Real time is separate. A scheduled graph reports every branch and merge pair/token/time, not only its merge. A suite total never converts a losing class into a pass.
 
 ## Prompt And Code Rules
 

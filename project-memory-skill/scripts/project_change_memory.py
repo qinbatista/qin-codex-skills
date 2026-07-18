@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -60,6 +61,108 @@ def _project_file_index_path(project_dir, relative_file):
     parts = [_slug(part, "path") for part in PurePosixPath(relative_file).parts]
     leaf_hash = hashlib.sha256(relative_file.encode()).hexdigest()[:10]
     return project_dir / "files" / Path(*parts[:-1]) / f"{parts[-1]}-{leaf_hash}.jsonl"
+
+
+def _run_git(*command, cwd):
+    try:
+        result = subprocess.run(
+            command,
+            cwd=Path(cwd),
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=3,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return ""
+    return result.stdout.strip()
+
+
+def _canonicalize_git_remote(remote):
+    if not remote:
+        return ""
+    normalized = remote.strip()
+    if normalized.startswith("git@"):
+        normalized = normalized.replace(":", "/", 1)
+        normalized = normalized.replace("git@", "https://", 1)
+    if normalized.startswith("ssh://"):
+        normalized = normalized.replace("ssh://", "https://", 1)
+    normalized = normalized[:-4] if normalized.endswith(".git") else normalized
+    return normalized.rstrip("/")
+
+
+def _derive_working_line(project_root):
+    root = Path(project_root).expanduser().resolve()
+    branch = _run_git("git", "rev-parse", "--abbrev-ref", "HEAD", cwd=root)
+    if branch == "HEAD":
+        branch = "DETACHED_HEAD"
+    commit = _run_git("git", "rev-parse", "HEAD", cwd=root)
+    remote = _run_git("git", "remote", "get-url", "origin", cwd=root)
+    if not remote:
+        remotes = _run_git("git", "remote", "-v", cwd=root).splitlines()
+        for remote_line in remotes:
+            if "\t" in remote_line:
+                candidate, location = remote_line.split("\t", 1)
+                if not candidate:
+                    continue
+                remote = location.split()[0] if location else ""
+                break
+    version = _run_git("git", "describe", "--tags", "--exact-match", "--abbrev=0", "HEAD", cwd=root)
+    canonical_remote = _canonicalize_git_remote(remote)
+    if canonical_remote and branch and commit:
+        identity_scope = "scoped"
+    else:
+        identity_scope = "unscoped"
+    return {
+        "identity_scope": identity_scope,
+        "canonical_remote": canonical_remote,
+        "branch": branch,
+        "commit": commit,
+        "version": version,
+    }
+
+
+def _has_sufficient_working_line(line):
+    return bool(line.get("canonical_remote") and line.get("branch") and line.get("commit") and line.get("identity_scope") == "scoped")
+
+
+def _working_line_key(line):
+    if not line:
+        return ""
+    signature = {
+        "canonical_remote": line.get("canonical_remote", ""),
+        "branch": line.get("branch", ""),
+        "commit": line.get("commit", ""),
+    }
+    if line.get("version"):
+        signature["version"] = line.get("version", "")
+    return json.dumps(signature, sort_keys=True, separators=(",", ":"))
+
+
+def _working_lines_conflict(left, right):
+    if not _has_sufficient_working_line(left) or not _has_sufficient_working_line(right):
+        return False
+    if left.get("canonical_remote") != right.get("canonical_remote"):
+        return True
+    if left.get("branch") != right.get("branch"):
+        return True
+    if left.get("commit") != right.get("commit"):
+        return True
+    left_version = left.get("version", "")
+    right_version = right.get("version", "")
+    if left_version and right_version and left_version != right_version:
+        return True
+    return False
+
+
+def _should_exclude_from_auto_match(record, current_line, include_ambiguous=False):
+    record_line = record.get("project", {}).get("working_line") or record.get("working_line") or {}
+    if not include_ambiguous:
+        if not _has_sufficient_working_line(current_line) or not _has_sufficient_working_line(record_line):
+            return True
+        if _working_lines_conflict(record_line, current_line):
+            return True
+    return False
 
 
 def _read_records(index_path):
@@ -344,13 +447,17 @@ def _write_obsidian(record, vault):
 
 def _fingerprint(record):
     payload = {key: record[key] for key in ("project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes")}
+    if record.get("project", {}).get("working_line"):
+        payload["working_line"] = record["project"]["working_line"]
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None):
     project = _project_identity(project_root)
     timestamp = recorded_at or datetime.now(timezone.utc)
+    working_line = _derive_working_line(project_root)
     record = {"schema_version": SCHEMA_VERSION, "id": "", "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"), "project": project, "module": _single_line(module, "module", max_length=160), "scope": scope, "change_kind": change_kind, "summary": _single_line(summary, "summary"), "reason": _single_line(reason, "reason"), "result": _single_line(result, "result"), "verification_status": verification_status, "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "decisions": [_single_line(value, "decision", max_length=600) for value in (decisions or [])], "risks": [_single_line(value, "risk", max_length=600) for value in (risks or [])], "files": _normalize_files(project["root"], files), "supersedes": _single_line(supersedes, "supersedes", required=False, max_length=120)}
+    record["project"]["working_line"] = working_line
     if scope not in SCOPE_VALUES:
         raise ValueError(f"scope must be one of {', '.join(SCOPE_VALUES)}")
     if change_kind not in CHANGE_KIND_VALUES:
@@ -375,6 +482,8 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
                 raise ValueError("supersedes must reference the same project")
             if superseded.get("module") != record["module"]:
                 raise ValueError("supersedes must reference the same module")
+            if _working_lines_conflict(record["project"].get("working_line", {}), superseded.get("project", {}).get("working_line", {})):
+                raise ValueError("supersedes must reference the same project working line")
             if not set(superseded.get("files", [])) & set(record["files"]):
                 raise ValueError("supersedes must overlap at least one touched file")
         duplicate = next((existing for existing in reversed(existing_records) if existing.get("fingerprint") == record["fingerprint"]), None)
@@ -394,13 +503,16 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     return {"status": "written", "record_id": record["id"], "project": project, "files": record["files"], "local": {"written": True, "store": str(store_path), "record": str(record_path)}, "obsidian": obsidian_status}
 
 
-def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE):
+def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE, include_ambiguous=False):
     project = _project_identity(project_root) if project_root else None
     normalized_files = _normalize_files(project_root, files) if project_root and files else list(files or [])
+    current_line = _derive_working_line(project_root) if project_root else {}
     terms = [term for term in re.findall(r"[\w.+-]+", query.lower()) if len(term) >= 2][:12]
     matches = []
     for record in reversed(_read_records(Path(store).expanduser().resolve() / "index.jsonl")):
         if project and not _record_matches_project(record, project):
+            continue
+        if project and _should_exclude_from_auto_match(record, current_line, include_ambiguous=include_ambiguous):
             continue
         if module and record["module"].lower() != module.strip().lower():
             continue
@@ -433,6 +545,7 @@ def main():
     search_parser.add_argument("--file", action="append", default=[])
     search_parser.add_argument("--query", default="")
     search_parser.add_argument("--max-results", type=int, default=8)
+    search_parser.add_argument("--include-ambiguous", action="store_true")
     record_parser = subparsers.add_parser("record")
     record_parser.add_argument("--project-root", type=Path, required=True)
     record_parser.add_argument("--module", required=True)
@@ -450,7 +563,7 @@ def main():
     subparsers.add_parser("status")
     args = parser.parse_args()
     if args.command == "search":
-        output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store)
+        output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store, args.include_ambiguous)
     elif args.command == "record":
         output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault)
     else:

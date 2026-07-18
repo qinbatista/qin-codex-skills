@@ -56,20 +56,20 @@ Main work and Ending verification are deliberately different task sessions. “B
 
 ## 📊 Real adaptive benchmark: finish first, verify in background
 
-Both arms enter `gpt-5.6-sol | ultra`. **Without skill** stays on Sol-ultra, finishes the requested job, and stops: verification tokens/time are exactly **0**. **With skill** uses a receipt-proven adaptive producer, returns the completed main result, then starts a separate read-only Ending task.
+Both arms enter `gpt-5.6-sol | ultra`. **Without skill** finishes and stops; verification cost is **0**. **With skill** returns a receipt-proven result, then launches a separate read-only Ending task that never blocks delivery.
 
-![Six real A/B pairs showing Direct main-only bars, Auto foreground bars, and striped Auto-only Ending cost](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
+![Six real A/B pairs separating Direct, Auto controller, adaptive producer or schedule, and striped Auto-only Ending cost](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
-| Tier | Auto child | Direct foreground tokens | Auto foreground | Token result | Direct first result | Auto first result | Time result | Auto Ending |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| Simple · 4 tests | `Spark \| low` | 231,823 | 319,126 | 37.659% more | 94.280s | 94.657s | 0.400% slower | 90,588 / 26.633s |
-| Medium · 6 tests | `Terra \| medium` | 444,426 | 286,645 | **35.502% fewer** | 173.706s | 89.014s | **48.756% faster** | 94,981 / 43.947s |
-| Complex · 8 tests | `Terra \| medium` | 905,339 | 746,484 | **17.546% fewer** | 413.022s | 212.619s | **48.521% faster** | 90,510 / 44.190s |
-| **All 6 pairs** | Spark + Terra | **1,581,588** | **1,352,255** | **14.500% fewer** | **681.008s** | **396.290s** | **41.808% faster** | **276,079 / 114.770s** |
+| Tier | Auto route | Direct tokens | Auto controller | Auto producer | Auto foreground | Token result | Direct time | Auto time | Time result | Auto Ending |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Simple · 4 tests | Spark-low | 291,499 | 179,430 | 252,534 | 431,964 | 48.187% more | 134.659s | 100.856s | **25.103% faster** | 92,114 / 82.598s |
+| Medium · 6 tests | Spark-high | 464,397 | 176,040 | 467,556 | 643,596 | 38.587% more | 167.086s | 145.307s | **13.035% faster** | 92,658 / 39.845s |
+| Complex · 3 sources | 3× Spark-low → Terra-medium | 508,084 | 137,152 | 445,040 | 582,192 | 14.586% more | 158.780s | 107.498s | **32.298% faster** | 119,322 / 66.184s |
+| **All 6 pairs** | receipt-proven graph | **1,263,980** | **492,622** | **1,165,130** | **1,657,752** | **31.153% more** | **460.525s** | **353.661s** | **23.205% faster** | **304,094 / 188.627s** |
 
-After adding the six later Ending sessions, Auto is still **24.955% faster sequentially**; whole-lifecycle tokens are **2.956% higher** because Direct buys no verifier. Medium and complex each won both pairs. Simple won one and lost one, so no simple-tier savings claim is made.
+**The switch and schedule work.** Producers alone use **7.821% fewer tokens overall**; the complex graph uses **12.408% fewer** with a **72.583% faster critical path**. The Sol controller adds 492,622 tokens, so the honest foreground strategy result is token **FAIL**. Whole sequential Auto is **55.212% more tokens** and **17.754% slower** after Ending; delivery happened earlier.
 
-**Correctness:** 12/12 exact main results, local Mini Tests `4/4`, `6/6`, and `8/8`, plus 6/6 separate Ending PASS results. Two pairs per tier are optimization confirmation, not six-pair performance admission. Logical tokens are operational usage, not billing tokens.
+**Correctness:** 12/12 exact results, all Mini Tests, and 6/6 Ending audits passed. Two pairs per tier confirm this change, not performance admission. Logical tokens are not billing tokens.
 
 [Read the full benchmark report and every run.](./management-skill/assets/readme/lifecycle-skill-benchmark.md)
 

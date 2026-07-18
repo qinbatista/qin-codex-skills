@@ -25,6 +25,8 @@ def _load_file(name, path):
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
 model_execution_receipt = _load_file("obsidian_adaptive_receipt", SCRIPT_DIR / "model_execution_receipt.py")
+task_route_dispatcher = _load_file("obsidian_adaptive_dispatcher", SCRIPT_DIR / "task_route_dispatcher.py")
+resolve_entry_model = _load_file("obsidian_adaptive_entry", SCRIPT_DIR / "resolve_entry_model.py")
 obsidian_model_memory = _load_file(
     "obsidian_adaptive_memory",
     SKILLS_ROOT / "project-memory-skill" / "scripts" / "obsidian_model_memory.py",
@@ -42,6 +44,20 @@ def _atomic_write_json(path, value):
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(value, handle, sort_keys=True, separators=(",", ":"))
             handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def _atomic_write_text(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(value)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
@@ -108,6 +124,176 @@ def infer_complexity(prompt):
     return "complex" if numeric_signals >= 2 else "easy"
 
 
+def scheduled_source_paths(prompt, workdir):
+    """Return a safe independent-source graph without reading task sources."""
+    text = str(prompt or "")
+    normalized = re.sub(r"\s+", " ", text).strip().lower()
+    schedule_signal = re.search(r"\b(?:independent|parallel|multi[- ]node|scheduled?|workflow graph)\b", normalized)
+    read_only_signal = re.search(r"\b(?:read[- ]only|no edits?)\b", normalized) or "do not edit files" in normalized
+    if not schedule_signal or not read_only_signal:
+        return []
+    if _is_exact_expression_contract(normalized):
+        return []
+    root = Path(workdir).expanduser().resolve()
+    sources = []
+    candidates = re.findall(r"(?<![\w./-])([\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml))(?![\w/-])", text)
+    for candidate_text in candidates:
+        relative = Path(candidate_text)
+        if relative.is_absolute() or ".." in relative.parts:
+            return []
+        candidate = (root / relative).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return []
+        if not candidate.is_file():
+            return []
+        source = relative.as_posix()
+        if source not in sources:
+            sources.append(source)
+    return sources if 2 <= len(sources) <= 3 else []
+
+
+def _resolved_entry_pair(args):
+    explicit_model = getattr(args, "entry_model", None)
+    explicit_effort = getattr(args, "entry_effort", None)
+    if explicit_model and explicit_effort:
+        return explicit_model, explicit_effort, "explicit"
+    sessions_root = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+    resolved = resolve_entry_model.resolve_entry_model(os.environ.get("CODEX_THREAD_ID"), sessions_root)
+    if resolved.get("status") == "verified":
+        return resolved["model"], resolved["effort"], "runtime_receipt"
+    return "gpt-5.6-sol", "ultra", "sol_ultra_default"
+
+
+def _owned_source_contract(prompt, source):
+    """Keep global output rules plus the contract explicitly owned by one source."""
+    text = str(prompt or "")
+    owner_pattern = re.compile(
+        rf"(?m)^(?P<section>[A-Za-z][A-Za-z0-9_]*)\s+is\s+owned\s+only\s+by\s+{re.escape(source)}\b"
+    )
+    owned = owner_pattern.search(text)
+    if not owned:
+        return text
+    any_owner = re.compile(
+        r"(?m)^[A-Za-z][A-Za-z0-9_]*\s+is\s+owned\s+only\s+by\s+[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)\b"
+    )
+    first_owner = any_owner.search(text)
+    end_match = any_owner.search(text, owned.end())
+    source_files_match = re.compile(r"(?m)^source_files\b").search(text, owned.end())
+    end_candidates = [match.start() for match in (end_match, source_files_match) if match]
+    owned_end = min(end_candidates) if end_candidates else len(text)
+    common = text[: first_owner.start() if first_owner else owned.start()].rstrip()
+    section = text[owned.start():owned_end].strip()
+    return f"{common}\n\nOwned source contract:\n{section}".strip()
+
+
+def _scheduled_branch_prompt(prompt, source):
+    source_contract = _owned_source_contract(prompt, source)
+    return f"""Complete only the independent source-audit portion supported by `{source}`.
+
+Read only `{source}`. Do not read another source, edit files, run tests, call APIs, or add Markdown commentary. Return one compact valid JSON object containing every final-contract fact explicitly owned by this source. Omit unsupported fields; never guess, substitute, expand identifiers, reorder source events, or emit empty placeholders. Preserve exact identifiers, expressions, leading syntax keywords, contract literals, key order, JSON scalar types, booleans, and source-order semantics. Strip a keyword only when the contract explicitly says to strip it. Before returning, compare every emitted value against the owned contract one final time.
+
+Source-specific output contract:
+{source_contract}"""
+
+
+def _scheduled_merge_prompt(prompt):
+    return f"""Use only the completed dependency results below. Do not read source files, edit files, run tests, call APIs, or add Markdown commentary.
+
+Assemble and return exactly the final artifact required by the parent output contract. Reconcile overlapping dependency facts across sources; treat omitted fields as unknown, never as empty values. Prefer direct defining-source facts over a dependent source's unresolved reference. Before release, check every required key, key order, count, expression, leading syntax keyword, explicit contract literal, and source path against the parent contract. Return the exact requested one-line minified JSON and nothing else.
+
+Parent output contract:
+{prompt}"""
+
+
+def _is_exact_expression_contract(prompt):
+    normalized = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    return "return exactly" in normalized and sum(
+        marker in normalized
+        for marker in ("copy", "preserve", "exact literal", "exact expression", "key order")
+    ) >= 2
+
+
+def _scheduled_branch_pair(prompt, floor_pair):
+    """Protect exact-expression contracts from weak/low-effort source drift."""
+    if _is_exact_expression_contract(prompt):
+        return tuple(task_route_dispatcher.MODEL_ROLE_PAIRS["balanced_default"].split("|", 1))
+    return tuple(floor_pair.split("|", 1))
+
+
+def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_recommendation=None):
+    schedule_digest = hashlib.sha256((str(args.workdir) + "\0" + prompt).encode("utf-8")).hexdigest()[:16]
+    cache_dir = args.workdir / "work" / "cache" / f"adaptive-schedule-{schedule_digest}"
+    floor_pair = task_route_dispatcher.MODEL_ROLE_PAIRS["floor"]
+    floor_model, floor_effort = floor_pair.split("|", 1)
+    priority_pair = (entry_recommendation or {}).get("attempt_pair") or (entry_recommendation or {}).get("selected_pair") or floor_pair
+    priority_model = priority_pair.split("|", 1)[0]
+    branch_model, branch_effort = _scheduled_branch_pair(prompt, f"{priority_model}|low")
+    branch_ids = []
+    nodes = []
+    for index, source in enumerate(sources, start=1):
+        node_id = f"source-{index}"
+        branch_ids.append(node_id)
+        nodes.append({"id": node_id, "phase": "result", "skill": "workflow-skill", "model": branch_model, "effort": branch_effort, "priority_producer": True, "dependencies": [], "prompt": _scheduled_branch_prompt(prompt, source), "sandbox": "read-only", "source_allowlist": [source], "execution_domain": "general", "timeout": min(args.timeout, 300)})
+    condition = {"task_family": "grounded", "artifact": "answer", "scope": "multi", "ambiguity": args.ambiguity, "modality": "text", "risk": args.risk, "complexity": "complex", "owning_skill": "workflow-skill", "project_family": "global", "verification_shape": "real", "execution_domain": "general"}
+    candidate_ladder = task_route_dispatcher.adaptive_pair_texts_for_profile("grounded", "text", args.risk, "complex", args.ambiguity)
+    main_node = {"id": "merge-result", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": branch_ids, "prompt": _scheduled_merge_prompt(prompt), "sandbox": "read-only", "reads_dependency_results_only": True, "execution_domain": "general", "routing_condition": condition, "task_summary": "Merge independent source audits into one exact JSON manifest.", "candidate_ladder": candidate_ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "timeout": min(args.timeout, 300), "model_memory_scope": {"task_type": "question", "module": args.module, "code_kind": "general", "operation": "work"}}
+    recommendation, proof = task_route_dispatcher._obsidian_recommendation_and_proof(main_node, args.workdir)
+    selected_pair = recommendation.get("selected_pair")
+    if not selected_pair:
+        raise ValueError("scheduled merge recommendation is exhausted")
+    main_node["model"], main_node["effort"] = selected_pair.split("|", 1)
+    main_node["trial"] = recommendation.get("trial") is True
+    main_node["routing_recommendation"] = proof
+    nodes.append(main_node)
+    nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
+    return {"schema_version": 2, "complexity": "complex", "topology": "parallel", "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900)}, recommendation
+
+
+def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns):
+    entry_model, entry_effort, entry_source = _resolved_entry_pair(args)
+    plan, merge_recommendation = _scheduled_plan(args, prompt, sources, entry_model, entry_effort, recommendation)
+    ready = {}
+
+    def publish_result(result_path, ready_monotonic_ns):
+        text = Path(result_path).read_text(encoding="utf-8")
+        _atomic_write_text(args.result_output, text)
+        ready["monotonic_ns"] = ready_monotonic_ns
+        _emit_result_ready(args.result_output, ready_monotonic_ns)
+
+    manifest = task_route_dispatcher.run_plan(plan, entry_model, entry_effort, args.workdir, state_db=args.state_db, codex_bin=args.codex_bin, skills_root=SKILLS_ROOT, result_ready_callback=publish_result)
+    if manifest.get("status") != "pass" or not args.result_output.is_file():
+        return {"status": "fail", "reason": "scheduled_graph_failed", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path"), "failures": manifest.get("failures", []), "ending_real_status": "not_started"}
+    result_nodes = [node for node in manifest.get("nodes", []) if node.get("phase") == "result"]
+    main_node = next(node for node in result_nodes if node.get("id") == plan["main_result_node"])
+    main_receipt = json.loads(Path(main_node["receipt_path"]).read_text(encoding="utf-8"))
+    node_receipts = [json.loads(Path(node["receipt_path"]).read_text(encoding="utf-8")) for node in result_nodes]
+    tokens = model_execution_receipt.aggregate_token_maps([receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {} for receipt in node_receipts])
+    route_attempts = [attempt for receipt in node_receipts for attempt in receipt.get("route_attempts", []) if isinstance(attempt, dict)]
+    receipt = dict(main_receipt)
+    receipt["route_attempts"] = route_attempts
+    receipt["strategy_tokens"] = tokens
+    receipt["tokens"] = tokens
+    receipt["process_elapsed_ms"] = manifest.get("first_result_elapsed_ms")
+    receipt["scheduled_graph"] = True
+    receipt["schedule_mode"] = "parallel_independent_sources"
+    receipt["scheduled_sources"] = sources
+    receipt["scheduled_nodes"] = [{"id": node.get("id"), "requested_pair": f"{node.get('requested_model')}|{node.get('requested_effort')}", "effective_pair": f"{node.get('model')}|{node.get('effort')}", "tokens": (node.get("tokens") or {}).get("total_tokens"), "process_elapsed_ms": node.get("process_elapsed_ms")} for node in result_nodes]
+    receipt["scheduled_result_node_count"] = len(result_nodes)
+    receipt["parallel_branch_count"] = len(sources)
+    receipt["result_published"] = True
+    receipt["result_ready_monotonic_ns"] = ready.get("monotonic_ns", main_receipt.get("result_ready_monotonic_ns"))
+    receipt["model_learning_context"] = _model_learning_context(args)
+    _atomic_write_json(args.receipt_output, receipt)
+    effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
+    ready_ns = receipt.get("result_ready_monotonic_ns")
+    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "scheduled_sources": sources, "parallel_branch_count": len(sources), "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_real_status": "pending", "model_learning_context": receipt["model_learning_context"]}
+    if args.emit_result:
+        summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
+    return summary
+
+
 def _model_learning_context(args):
     def clean(value, limit=600):
         return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
@@ -137,6 +323,28 @@ def _attempt_pairs(args, recommendation):
         if pair in active_pairs and pair not in pairs:
             pairs.append(pair)
     return pairs
+
+
+def _exact_contract_recommendation(prompt, recommendation):
+    if not _is_exact_expression_contract(prompt):
+        return recommendation
+    guarded = dict(recommendation)
+    pair = task_route_dispatcher.MODEL_ROLE_PAIRS["frontier_complex"]
+    model, effort = pair.split("|", 1)
+    guarded.update({
+        "selected_pair": pair,
+        "selected_model": model,
+        "selected_effort": effort,
+        "attempt_pair": pair,
+        "active_fallback_pair": None,
+        "attempt_trial": False,
+        "attempt_reason": "exact_expression_quality_guard",
+        "attempt_calibration_state": "quality_boundary",
+        "trial": False,
+        "reason": "exact_expression_quality_guard",
+        "calibration_state": "quality_boundary",
+    })
+    return guarded
 
 
 def _merge_attempt_receipts(receipts, planned_pairs, attempt_pair, active_pair, result_output):
@@ -174,9 +382,10 @@ def run(args, prompt):
     started_ns = time.monotonic_ns()
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("prompt_required")
-    recommendation = _recommend(args)
-    if recommendation.get("memory_available") is not True:
-        return {"status": "blocked", "reason": "obsidian_model_memory_unavailable", "recommendation": recommendation}
+    recommendation = _exact_contract_recommendation(prompt, _recommend(args))
+    sources = scheduled_source_paths(prompt, args.workdir)
+    if sources:
+        return _run_scheduled_graph(args, prompt, sources, recommendation, started_ns)
     pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
     if not pair:
         return {"status": "blocked", "reason": recommendation.get("reason"), "recommendation": recommendation}
@@ -295,6 +504,8 @@ def parse_args(argv=None):
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--ignore-user-config", action="store_true")
     parser.add_argument("--allow-fallback", action="append", default=[])
+    parser.add_argument("--entry-model")
+    parser.add_argument("--entry-effort")
     parser.add_argument("--emit-result", action="store_true")
     return parser.parse_args(argv)
 

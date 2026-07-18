@@ -244,6 +244,17 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(failures, [])
         legacy.assert_not_called()
 
+    def test_unconfigured_obsidian_owner_uses_shared_cold_start_proof(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            node = self.plan(root / "work" / "cache" / "route")["nodes"][0]
+            selected_pair = f"{node['model']}|{node['effort']}"
+            recommendation = {"memory_available": False, "selected_pair": selected_pair, "attempt_pair": selected_pair, "active_fallback_pair": None, "trial": node["trial"], "reason": "shared_cold_start", "calibration_state": "cold_start", "success_model": None}
+            with patch.object(module.obsidian_model_memory, "recommend_model", return_value=recommendation):
+                current, proof = module._obsidian_recommendation_and_proof(node, root)
+        self.assertEqual(current, recommendation)
+        self.assertEqual(proof["selection_basis"], "shared_cold_start")
+
     def test_ending_record_uses_obsidian_model_memory_without_legacy_json(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -338,6 +349,33 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("catalog quality ladder" in failure for failure in failures))
         self.assertTrue(any("selected pair must be in candidate_ladder" in failure for failure in failures))
+
+    def test_single_source_branch_admits_catalog_priority_producer(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dependent_plan(root / "work" / "cache" / "route")
+            branch = plan["nodes"][0]
+            branch.update({
+                "model": module.PRIORITY_PRODUCER_CONFIG["id"],
+                "effort": "low",
+                "priority_producer": True,
+                "source_allowlist": ["source.py"],
+            })
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
+    def test_priority_producer_rejects_non_source_branch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dependent_plan(root / "work" / "cache" / "route")
+            branch = plan["nodes"][0]
+            branch.update({
+                "model": module.PRIORITY_PRODUCER_CONFIG["id"],
+                "effort": "low",
+                "priority_producer": True,
+            })
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("priority_producer is valid only" in failure for failure in failures))
 
     def test_real_verify_rejects_management_only_ending(self):
         with tempfile.TemporaryDirectory() as temp_dir:

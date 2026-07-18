@@ -227,8 +227,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("never blocks the completed main result", readme)
         self.assertIn("## Rules", readme)
         self.assertIn("## 📊 Real adaptive benchmark: finish first, verify in background", readme)
-        self.assertIn("14.500% fewer", readme)
-        self.assertIn("41.808% faster", readme)
+        self.assertIn("31.153% more", readme)
+        self.assertIn("23.205% faster", readme)
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
         self.assertIn("every publish runs a safety scan", readme)
@@ -289,8 +289,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("新的修复任务使用不同验证者", readme)
         self.assertIn("## 规则", readme)
         self.assertIn("## 📊 真实自适应 Benchmark：先完成，再后台验证", readme)
-        self.assertIn("少 14.500%", readme)
-        self.assertIn("快 41.808%", readme)
+        self.assertIn("多 31.153%", readme)
+        self.assertIn("快 23.205%", readme)
         self.assertIn("## 🧩 八个公开 Skill", readme)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh-mobile.svg"), 1)
@@ -328,11 +328,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
     def test_public_benchmark_asset_satisfies_current_strict_contract(self):
         report = (README_ASSET_DIR / "lifecycle-skill-benchmark.md").read_text(encoding="utf-8")
-        self.assertIn("Both arms entered `gpt-5.6-sol | ultra`", report)
-        self.assertIn("6 pairs / 12 main runs", report)
-        self.assertIn("14.500% fewer", report)
-        self.assertIn("41.808% faster", report)
-        self.assertIn("Simple work is not yet performance-admitted", report)
+        self.assertIn("Entry model in both arms: `gpt-5.6-sol | ultra`", report)
+        self.assertIn("12/12 main runs", report)
+        self.assertIn("31.153% more", report)
+        self.assertIn("23.205% faster", report)
+        self.assertIn("token strategy gate", report)
 
     def test_readme_benchmark_is_sanitized_and_matches_public_evidence(self):
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
@@ -341,10 +341,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertNotIn("/Users/", text)
             self.assertNotIn('"thread_id"', text)
             self.assertNotIn('"receipt_path"', text)
-        self.assertIn("1,581,588", readme)
-        self.assertIn("1,352,255", readme)
-        self.assertIn("276,079", readme)
-        self.assertIn("Direct had **zero** verifier sessions", report)
+        self.assertIn("1,263,980", readme)
+        self.assertIn("1,657,752", readme)
+        self.assertIn("304,094", readme)
+        self.assertIn("Direct has no verifier", report)
         return
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
@@ -479,12 +479,13 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_desktop_benchmark_keeps_right_values_and_verdict_inside_viewbox(self):
         svg_path = README_ASSET_DIR / "lifecycle-skill-benchmark.svg"
         root = ElementTree.parse(svg_path).getroot()
-        self.assertEqual(root.attrib.get("viewBox"), "0 0 1600 1500")
+        self.assertEqual(root.attrib.get("viewBox"), "0 0 1800 1550")
         text = " ".join("".join(element.itertext()) for element in root.iter() if element.tag.rsplit("}", 1)[-1] in {"title", "desc", "text"})
-        self.assertIn("14.500% fewer foreground tokens", text)
-        self.assertIn("41.808% faster first result", text)
-        self.assertIn("Ending: +276,079 tokens", text)
-        self.assertIn("FOREGROUND LOSS", text)
+        self.assertIn("+31.153% foreground tokens", text)
+        self.assertIn("23.205% faster first result", text)
+        self.assertIn("Ending +304,094", text)
+        self.assertIn("TOKEN STRATEGY FAIL", text)
+        self.assertIn("12.408% fewer", text)
         self.assertEqual(svg_bounds_issues(svg_path), [])
         return
         svg_path = README_ASSET_DIR / "model-benchmark-example.svg"

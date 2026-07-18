@@ -68,6 +68,8 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             ignore_user_config=True,
             timeout=60,
             emit_result=True,
+            entry_model="gpt-5.6-sol",
+            entry_effort="ultra",
         )
 
     def test_executes_exact_obsidian_selected_pair_and_returns_result(self):
@@ -131,6 +133,120 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(numeric.complexity, "complex")
         self.assertEqual(multifile.complexity, "complex")
         self.assertEqual(explicit.complexity, "easy")
+
+    def test_independent_read_only_sources_enable_safe_schedule(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "a.py").write_text("A = 1\n", encoding="utf-8")
+            (root / "b.py").write_text("B = 2\n", encoding="utf-8")
+            prompt = "Complete two independent source audits. Do not edit files.\n- a.py\n- b.py\nReturn JSON."
+            sources = module.scheduled_source_paths(prompt, root)
+            compressed = module.scheduled_source_paths("Audit independent a.py, b.py. Read-only, no edits.", root)
+            dependent = module.scheduled_source_paths("Complete a two-file pipeline. Do not edit files.\n- a.py\n- b.py", root)
+        self.assertEqual(sources, ["a.py", "b.py"])
+        self.assertEqual(compressed, ["a.py", "b.py"])
+        self.assertEqual(dependent, [])
+
+    def test_exact_expression_contract_does_not_fan_out(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "a.py").write_text("A = 1\n", encoding="utf-8")
+            (root / "b.py").write_text("B = 2\n", encoding="utf-8")
+            prompt = "Audit independent a.py and b.py. Read-only. Return exactly JSON; copy each exact expression, preserve key order and the exact literal."
+            sources = module.scheduled_source_paths(prompt, root)
+        self.assertEqual(sources, [])
+
+    def test_safe_source_graph_overrides_mislabeled_easy_complexity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.complexity = "easy"
+            (args.workdir / "a.py").write_text("A = 1\n", encoding="utf-8")
+            (args.workdir / "b.py").write_text("B = 2\n", encoding="utf-8")
+            with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module, "_run_scheduled_graph", return_value={"status": "pass"}) as scheduled:
+                result = module.run(args, "Audit independent a.py, b.py. Read-only, no edits.")
+        self.assertEqual(result["status"], "pass")
+        scheduled.assert_called_once()
+
+    def test_scheduled_plan_uses_parallel_priority_branches_and_adaptive_merge(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.complexity = "complex"
+            (args.workdir / "a.py").write_text("A = 1\n", encoding="utf-8")
+            (args.workdir / "b.py").write_text("B = 2\n", encoding="utf-8")
+            proof = {"selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.3-codex-spark|high", "active_fallback_pair": "gpt-5.6-terra|medium", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
+            adaptive = {"selected_pair": "gpt-5.6-terra|medium", "trial": False}
+            with patch.object(module.task_route_dispatcher, "_obsidian_recommendation_and_proof", return_value=(adaptive, proof)):
+                plan, merge_recommendation = module._scheduled_plan(
+                    args,
+                    "Complete two independent source audits. Do not edit files.\n- a.py\n- b.py",
+                    ["a.py", "b.py"],
+                    "gpt-5.6-sol",
+                    "ultra",
+                    recommendation(attempt_pair="gpt-5.3-codex-spark|high"),
+                )
+        result_nodes = [node for node in plan["nodes"] if node["phase"] == "result"]
+        self.assertEqual(plan["topology"], "parallel")
+        self.assertEqual(plan["entry"], {"model": "gpt-5.6-sol", "effort": "ultra"})
+        self.assertEqual([node["source_allowlist"] for node in result_nodes[:-1]], [["a.py"], ["b.py"]])
+        self.assertEqual([(node["model"], node["effort"]) for node in result_nodes[:-1]], [("gpt-5.3-codex-spark", "low"), ("gpt-5.3-codex-spark", "low")])
+        self.assertTrue(all(node["priority_producer"] is True for node in result_nodes[:-1]))
+        self.assertIn("Omit unsupported fields", result_nodes[0]["prompt"])
+        self.assertIn("Prefer direct defining-source facts", result_nodes[-1]["prompt"])
+        self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
+        self.assertEqual(result_nodes[-1]["routing_recommendation"]["attempt_pair"], "gpt-5.3-codex-spark|high")
+        self.assertEqual(merge_recommendation, adaptive)
+
+    def test_exact_expression_schedule_raises_branch_quality(self):
+        exact = "Return exactly one JSON object. Copy the exact expression, preserve key order, and preserve the exact literal."
+        relaxed = "Summarize two independent files as JSON."
+        self.assertEqual(module._scheduled_branch_pair(exact, "gpt-5.6-luna|low"), ("gpt-5.6-terra", "medium"))
+        self.assertEqual(module._scheduled_branch_pair(relaxed, "gpt-5.6-luna|low"), ("gpt-5.6-luna", "low"))
+
+    def test_exact_expression_single_producer_uses_frontier_quality_guard(self):
+        base = recommendation()
+        exact = "Return exactly JSON; copy the exact expression, preserve key order, and preserve the exact literal."
+        guarded = module._exact_contract_recommendation(exact, base)
+        self.assertEqual(guarded["selected_pair"], "gpt-5.6-sol|high")
+        self.assertEqual(guarded["attempt_pair"], "gpt-5.6-sol|high")
+        self.assertEqual(guarded["attempt_reason"], "exact_expression_quality_guard")
+        self.assertIsNone(guarded["active_fallback_pair"])
+        self.assertEqual(base["selected_pair"], "gpt-5.6-terra|medium")
+
+    def test_scheduled_branch_receives_only_its_owned_contract(self):
+        prompt = """Complete independent source audits. Do not edit files.
+- a.py
+- b.py
+Return exactly one JSON object.
+
+alpha is owned only by a.py and uses key value.
+- value is the exact assignment.
+
+beta is owned only by b.py and uses key name.
+- name is the exact function name.
+
+source_files must list both sources."""
+        first = module._scheduled_branch_prompt(prompt, "a.py")
+        second = module._scheduled_branch_prompt(prompt, "b.py")
+        self.assertIn("alpha is owned only by a.py", first)
+        self.assertNotIn("beta is owned only by b.py", first)
+        self.assertIn("beta is owned only by b.py", second)
+        self.assertNotIn("alpha is owned only by a.py", second)
+        self.assertIn("Return exactly one JSON object", first)
+        self.assertIn("Do not read another source", first)
+
+    def test_owned_contract_handles_long_prefix_offsets_as_search_positions(self):
+        prefix = "Global rule. " * 40
+        prompt = f"""{prefix}
+alpha is owned only by a.py and uses key value.
+- value is exact.
+
+beta is owned only by b.py and uses key name.
+- name is exact.
+
+source_files must list both sources."""
+        contract = module._owned_source_contract(prompt, "a.py")
+        self.assertIn("alpha is owned only by a.py", contract)
+        self.assertNotIn("beta is owned only by b.py", contract)
 
     def test_fast_path_summary_respects_memory_limit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -196,16 +312,20 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         execute.assert_not_called()
 
-    def test_missing_obsidian_memory_stays_inline_without_launching_model(self):
+    def test_missing_obsidian_memory_uses_shared_cold_start_instead_of_blocking(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
             unavailable = recommendation()
             unavailable["memory_available"] = False
-            with patch.object(module, "_recommend", return_value=unavailable), patch.object(module.model_execution_receipt, "run_receipt") as execute:
+            def fake_run(receipt_args, prompt):
+                receipt_args.result_output.write_text("COLD START RESULT", encoding="utf-8")
+                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "effective_pair": "gpt-5.6-terra|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
+            with patch.object(module, "_recommend", return_value=unavailable), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run) as execute:
                 result = module.run(args, "Do the work")
-        self.assertEqual(result["status"], "blocked")
-        self.assertEqual(result["reason"], "obsidian_model_memory_unavailable")
-        execute.assert_not_called()
+        self.assertEqual(result["status"], "pass")
+        self.assertFalse(result["memory_available"])
+        self.assertEqual(result["result"], "COLD START RESULT")
+        execute.assert_called_once()
 
     def test_failed_execution_is_operational_and_not_quality_learning(self):
         with tempfile.TemporaryDirectory() as temporary:

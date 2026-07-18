@@ -348,8 +348,10 @@ def parse_stdout_events(stdout_text):
         elif event_type == "turn.completed":
             summary["usage"] = event.get("usage", {})
             summary["turn_completed"] = True
+            summary["turn_failed"] = False
         elif event_type in {"turn.failed", "error"}:
             summary["turn_failed"] = True
+            summary["turn_completed"] = False
             failure_message = event.get("message") or (event.get("error") or {}).get("message") or ""
             summary["availability_failure"] = summary["availability_failure"] or any(marker in failure_message.lower() for marker in ("usage limit", "rate limit", "purchase more credits", "capacity", "temporarily unavailable"))
         elif event_type == "item.completed" and isinstance(event.get("item"), dict) and event["item"].get("type") == "agent_message":
@@ -615,7 +617,20 @@ def run_receipt(args, prompt_text):
     allowed_fallback_pairs = normalize_fallback_pairs(getattr(args, "allow_fallback", []))
     requested_pair = requested_pair_tuple
     allowed_pairs = [requested_pair] + [parse_model_effort_pair(value) for value in allowed_fallback_pairs]
-    command = [args.codex_bin, "exec", "--model", args.model, "-c", f'model_reasoning_effort="{args.effort}"', "--sandbox", args.sandbox, "--skip-git-repo-check", "--json"]
+    command = [
+        args.codex_bin,
+        "exec",
+        "--model",
+        args.model,
+        "-c",
+        f'model_reasoning_effort="{args.effort}"',
+        "-c",
+        "features.multi_agent=false",
+        "--sandbox",
+        args.sandbox,
+        "--skip-git-repo-check",
+        "--json",
+    ]
     command.extend(["--ignore-user-config"] if args.ignore_user_config else [])
     command.append("-")
     if args.entry_task or getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):

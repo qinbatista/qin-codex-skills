@@ -31,3 +31,5 @@ Each terminal write rebuilds the six sections on that same broad `Model Switch.m
 - Lowest passing pair or closed pass/fail boundary: freeze with `trial=false` until a later quality failure or catalog/policy drift.
 
 Evidence never crosses project keys merely because two tasks share a broad page or display name. The broad `Model Switch.md` page is the sole active private authority. `strategy_performance.py` remains the separate authority for multi-node Global-versus-Direct admission and savings claims.
+
+An unavailable vault or unregistered project owner disables private learning but does not disable execution. The runner uses the shared cold-start pair and marks `memory_available=false`; dispatcher proof uses `selection_basis=shared_cold_start`. The one fixed multi-node execution shape is a read-only list of two or three independent project-relative sources: current catalog priority-producer branches run at low effort in parallel and one adaptive merge reads only dependency results. Exact-expression or dependency-coupled work remains one producer. Open-ended graphs and public savings claims still require `strategy_performance.py` evidence.

@@ -50,6 +50,20 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertTrue(summary["availability_failure"])
         self.assertNotIn("purchase more credits", json.dumps(summary).lower())
 
+    def test_parse_stdout_uses_latest_terminal_turn_event(self):
+        recovered = "\n".join([
+            json.dumps({"type": "error", "message": "transient tool stream error"}),
+            json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12}}),
+        ])
+        failed = "\n".join([
+            json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12}}),
+            json.dumps({"type": "turn.failed", "error": {"message": "terminal failure"}}),
+        ])
+        self.assertTrue(module.parse_stdout_events(recovered)["turn_completed"])
+        self.assertFalse(module.parse_stdout_events(recovered)["turn_failed"])
+        self.assertFalse(module.parse_stdout_events(failed)["turn_completed"])
+        self.assertTrue(module.parse_stdout_events(failed)["turn_failed"])
+
     def test_raw_result_extraction_is_separate_from_sanitized_summary(self):
         stdout_text = json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "result kept only when requested"}})
         self.assertEqual(module.extract_last_agent_message(stdout_text), "result kept only when requested")
@@ -158,6 +172,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         command = run_mock.call_args.args[0]
         self.assertIn("gpt-5.3-codex-spark", command)
         self.assertIn('model_reasoning_effort="high"', command)
+        self.assertIn("features.multi_agent=false", command)
         self.assertEqual(command[-1], "-")
         self.assertTrue(run_mock.call_args.kwargs["input"].startswith("LOCKED_ROUTE_NODE"))
         self.assertIn(f"canonical working directory `{Path('/tmp').resolve()}`", run_mock.call_args.kwargs["input"])
@@ -180,7 +195,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="route-attempt", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
-        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
+        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "-c", "features.multi_agent=false", "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
         attempt = receipt["route_attempts"][0]
         self.assertEqual(attempt["requested_pair"], "gpt-5.6-luna|low")
         self.assertEqual(attempt["resolved_pair"], "gpt-5.6-luna|low")

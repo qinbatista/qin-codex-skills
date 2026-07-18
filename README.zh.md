@@ -56,20 +56,20 @@
 
 ## 📊 真实自适应 Benchmark：先完成，再后台验证
 
-两边都从 `gpt-5.6-sol | ultra` 开始。**无 Skill** 一直使用 Sol-ultra，完成主任务后停止：验证 token/时间都是 **0**。**有 Skill** 使用 receipt 证明的自适应 producer，先返回主结果，再启动独立只读 Ending 任务。
+两边都从 `gpt-5.6-sol | ultra` 开始。**无 Skill** 一直使用 Sol-ultra，完成主任务后停止：验证 token/时间都是 **0**。**有 Skill** 通过 receipt 证明的 producer 或 schedule 返回完整主结果，再启动独立只读 Ending 任务；Ending 永不阻塞交付。
 
-![六组真实 A/B：蓝色为无 Skill 主任务，绿色为有 Skill 前台，条纹仅为有 Skill 后台 Ending](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
+![六组真实 A/B：分别显示无 Skill、Auto 控制器、自适应 producer 或 schedule，以及仅属于 Auto 的条纹 Ending 成本](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
-| 档位 | Auto child | 无 Skill 前台 token | 有 Skill 前台 | Token 结果 | 无 Skill 首次结果 | 有 Skill 首次结果 | 时间结果 | 有 Skill Ending |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| 简单 · 4 tests | `Spark \| low` | 231,823 | 319,126 | 多 37.659% | 94.280s | 94.657s | 慢 0.400% | 90,588 / 26.633s |
-| 中等 · 6 tests | `Terra \| medium` | 444,426 | 286,645 | **少 35.502%** | 173.706s | 89.014s | **快 48.756%** | 94,981 / 43.947s |
-| 复杂 · 8 tests | `Terra \| medium` | 905,339 | 746,484 | **少 17.546%** | 413.022s | 212.619s | **快 48.521%** | 90,510 / 44.190s |
-| **全部 6 组** | Spark + Terra | **1,581,588** | **1,352,255** | **少 14.500%** | **681.008s** | **396.290s** | **快 41.808%** | **276,079 / 114.770s** |
+| 档位 | Auto 路线 | 无 Skill token | Auto 控制器 | Auto producer | Auto 前台 | Token 结果 | 无 Skill 时间 | Auto 时间 | 时间结果 | Auto Ending |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 简单 · 4 tests | Spark-low | 291,499 | 179,430 | 252,534 | 431,964 | 多 48.187% | 134.659s | 100.856s | **快 25.103%** | 92,114 / 82.598s |
+| 中等 · 6 tests | Spark-high | 464,397 | 176,040 | 467,556 | 643,596 | 多 38.587% | 167.086s | 145.307s | **快 13.035%** | 92,658 / 39.845s |
+| 复杂 · 3 sources | 3× Spark-low → Terra-medium | 508,084 | 137,152 | 445,040 | 582,192 | 多 14.586% | 158.780s | 107.498s | **快 32.298%** | 119,322 / 66.184s |
+| **全部 6 组** | receipt 证明的 graph | **1,263,980** | **492,622** | **1,165,130** | **1,657,752** | **多 31.153%** | **460.525s** | **353.661s** | **快 23.205%** | **304,094 / 188.627s** |
 
-加上六个稍后执行的 Ending session，Auto 的顺序总时间仍然**快 24.955%**；完整生命周期 token **多 2.956%**，因为无 Skill 完全没有 verifier。中等、复杂各赢两组；简单一赢一输，因此不宣称简单任务一定节省。
+**模型切换与 schedule 确实工作。** Producer 单独看整体少 **7.821% token**；复杂 graph 单独看少 **12.408% token**，记录的关键路径快 **72.583%**。但 Sol 控制器又增加 492,622 token，因此真实的前台 token 策略结论是 **FAIL**，不能伪装成胜利。顺序加上 Ending 后，Auto 多 **55.212% token**、慢 **17.754%**；但用户早已收到主结果。
 
-**正确性：** 12/12 主结果完全正确；本地 Mini Test 分别 `4/4`、`6/6`、`8/8`；6/6 独立 Ending 返回 PASS。每档两组仅是优化确认，不是六组性能准入。Logical token 是运行用量，不等于计费 token。
+**正确性：** 12/12 主结果完全正确；所有本地 Mini Test 通过；6/6 独立 Ending 返回 PASS。每档两组只用于确认本次代码结构修改，不代表六组性能准入。Logical token 是运行用量，不等于计费 token。
 
 [查看完整 Benchmark 报告与每次运行。](./management-skill/assets/readme/lifecycle-skill-benchmark.md)
 

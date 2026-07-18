@@ -1,100 +1,143 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1500" viewBox="0 0 1600 1500" role="img" aria-labelledby="title desc">
-  <title id="title">Real adaptive lifecycle A/B benchmark</title>
-  <desc id="desc">Six real A/B pairs across simple, medium, and complex code tasks. Both arms enter GPT-5.6-Sol ultra. Direct stops after main work. Auto shows foreground work in teal and a separate striped Ending verification extension. Overall Auto saves 14.500 percent foreground tokens and 41.808 percent first-result time; after Ending, time still saves 24.955 percent while tokens cost 2.956 percent more.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1550" viewBox="0 0 1800 1550" role="img" aria-labelledby="title desc">
+  <title id="title">Real adaptive lifecycle A/B benchmark v26</title>
+  <desc id="desc">Six real paired code tasks across simple, medium, and complex tiers. Both arms start GPT-5.6-Sol ultra. Direct has no verification. Auto separates the Sol controller, adaptive producer or schedule, and later striped Ending verification. All results are correct. Auto is 23.205 percent faster to first result but uses 31.153 percent more foreground tokens because controller overhead exceeds producer savings.</desc>
   <defs>
-    <pattern id="verifyHatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(40)">
-      <rect width="14" height="14" fill="#123c45"/>
-      <rect width="5" height="14" fill="#5eead4" opacity="0.72"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071528"/>
+      <stop offset="1" stop-color="#0c1830"/>
+    </linearGradient>
+    <pattern id="ending" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(36)">
+      <rect width="9" height="18" fill="#f59e0b"/>
+      <rect x="9" width="9" height="18" fill="#7c4a10"/>
     </pattern>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity="0.28"/>
+      <feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#020617" flood-opacity="0.45"/>
     </filter>
     <style>
-      .title{font:700 38px Inter,Arial,sans-serif;fill:#f8fafc}.sub{font:500 18px Inter,Arial,sans-serif;fill:#a9b7cc}
-      .cardTitle{font:700 25px Inter,Arial,sans-serif;fill:#f8fafc}.cardSub{font:500 15px Inter,Arial,sans-serif;fill:#a9b7cc}
-      .section{font:700 15px Inter,Arial,sans-serif;fill:#dbe7f5;letter-spacing:.4px}.label{font:600 14px Inter,Arial,sans-serif;fill:#c2cfdf}
-      .value{font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#edf4ff}.small{font:500 13px Inter,Arial,sans-serif;fill:#9eacc0}
-      .win{font:700 15px Inter,Arial,sans-serif;fill:#5eead4}.loss{font:700 15px Inter,Arial,sans-serif;fill:#fbbf24}
-      .kpi{font:800 27px Inter,Arial,sans-serif;fill:#f8fafc}.kpiSub{font:600 15px Inter,Arial,sans-serif;fill:#b8c6d8}
+      .title{font:800 38px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#f8fafc}
+      .subtitle{font:500 18px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#a9bad2}
+      .cardtitle{font:800 25px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#f8fafc}
+      .route{font:600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#9fb3cc}
+      .section{font:800 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#dce8f7;letter-spacing:.4px}
+      .label{font:650 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#d7e2f1}
+      .value{font:700 16px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#f8fafc}
+      .note{font:550 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#9fb3cc}
+      .win{font:800 17px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#59f3d0}
+      .loss{font:800 17px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#ffb454}
+      .kpi{font:850 29px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#f8fafc}
+      .kpisub{font:650 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#a9bad2}
+      .flow{font:850 20px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#eafffa;letter-spacing:.5px}
     </style>
   </defs>
-  <rect width="1600" height="1500" fill="#070f1b"/>
-  <rect x="34" y="30" width="1532" height="1435" rx="34" fill="#0a192b" stroke="#243a55" filter="url(#shadow)"/>
 
-  <text x="78" y="88" class="title">Real A/B benchmark · foreground work vs background verify</text>
-  <text x="78" y="122" class="sub">Both arms enter gpt-5.6-sol | ultra · 6 A/B pairs · 12 main sessions + 6 Auto-only Ending sessions · 18/18 exact results correct</text>
-  <rect x="1120" y="66" width="18" height="18" rx="4" fill="#3b82f6"/><text x="1148" y="81" class="small">Without skill · main only</text>
-  <rect x="1120" y="96" width="18" height="18" rx="4" fill="#14b8a6"/><text x="1148" y="111" class="small">With skill · foreground</text>
-  <rect x="1360" y="96" width="18" height="18" rx="4" fill="url(#verifyHatch)"/><text x="1388" y="111" class="small">Ending · after result</text>
+  <rect width="1800" height="1550" fill="#070d17"/>
+  <rect x="48" y="36" width="1704" height="1474" rx="38" fill="url(#bg)" stroke="#17365d" stroke-width="2" filter="url(#shadow)"/>
+
+  <text x="100" y="105" class="title">Real A/B benchmark v26 · CORRECTNESS PASS · TOKEN STRATEGY FAIL</text>
+  <text x="100" y="139" class="subtitle">gpt-5.6-sol | ultra in both arms · 6 pairs · 12/12 exact main results · 6/6 independent Ending PASS</text>
+  <g transform="translate(920 145)">
+    <rect width="18" height="18" rx="4" fill="#3b82f6"/><text x="28" y="15" class="note">Direct</text>
+    <rect x="145" width="18" height="18" rx="4" fill="#8b5cf6"/><text x="173" y="15" class="note">Auto controller</text>
+    <rect x="350" width="18" height="18" rx="4" fill="#18c6b3"/><text x="378" y="15" class="note">Producer / schedule</text>
+    <rect x="590" width="18" height="18" rx="4" fill="url(#ending)"/><text x="618" y="15" class="note">Ending, Auto only</text>
+  </g>
+
+  <rect x="94" y="174" width="1612" height="58" rx="18" fill="#0c3a3a" stroke="#28e0c4" stroke-width="2"/>
+  <text x="900" y="211" text-anchor="middle" class="flow">FINISH JOB FIRST  →  RETURN RESULT  →  BACKGROUND VERIFY IN A NEW END TASK</text>
 
   <!-- Simple -->
-  <rect x="62" y="154" width="1476" height="318" rx="25" fill="#101f35" stroke="#31455f"/>
-  <text x="92" y="195" class="cardTitle">Simple · normalize_tags · 4/4 tests</text>
-  <text x="92" y="222" class="cardSub">Auto child: gpt-5.3-codex-spark | low · 2 pairs / 4 main runs</text>
-  <text x="1454" y="198" text-anchor="end" class="loss">FOREGROUND LOSS</text>
-  <text x="92" y="262" class="section">COHORT LOGICAL TOKENS</text>
-  <text x="92" y="298" class="label">Without</text><text x="172" y="298" class="value">231,823</text>
-  <rect x="350" y="282" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="282" width="204" height="20" rx="10" fill="#3b82f6"/>
-  <text x="92" y="338" class="label">With</text><text x="172" y="338" class="value">319,126 + 90,588 verify</text>
-  <rect x="350" y="322" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="322" width="280" height="20" rx="10" fill="#14b8a6"/><rect x="630" y="322" width="80" height="20" rx="10" fill="url(#verifyHatch)"/>
-  <text x="350" y="375" class="loss">37.659% more foreground · 76.736% more whole</text>
-  <text x="830" y="262" class="section">COHORT FIRST-RESULT TIME</text>
-  <text x="830" y="298" class="label">Without</text><text x="910" y="298" class="value">94.280s</text>
-  <rect x="1130" y="282" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="282" width="253" height="20" rx="10" fill="#3b82f6"/>
-  <text x="830" y="338" class="label">With</text><text x="910" y="338" class="value">94.657s + 26.633s verify</text>
-  <rect x="1130" y="322" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="322" width="254" height="20" rx="10" fill="#14b8a6"/><rect x="1384" y="322" width="71" height="20" rx="10" fill="url(#verifyHatch)"/>
-  <text x="1130" y="375" class="loss">0.400% slower foreground · 28.649% slower whole</text>
-  <text x="92" y="430" class="small">Pair results: 1 token/time win · 1 loss. Dispatch overhead and one recovered path typo are visible; no savings claim is made for simple work.</text>
+  <g transform="translate(94 260)">
+    <rect width="1612" height="300" rx="28" fill="#101f38" stroke="#294568" stroke-width="2"/>
+    <text x="30" y="43" class="cardtitle">Simple · normalize tags · 4/4 tests</text>
+    <text x="1500" y="42" text-anchor="end" class="win">FIRST RESULT WIN</text>
+    <text x="30" y="72" class="route">Auto route: Spark-low · 2 pairs / 4 main runs</text>
+    <text x="30" y="108" class="section">LOGICAL TOKENS</text>
+    <text x="760" y="108" class="section">FIRST-RESULT TIME</text>
+
+    <text x="30" y="145" class="label">Direct</text><text x="120" y="145" class="value">291,499</text>
+    <rect x="420" y="128" width="217" height="22" rx="11" fill="#3b82f6"/>
+    <text x="30" y="185" class="label">Auto</text><text x="120" y="185" class="value">179,430 + 252,534</text>
+    <rect x="420" y="168" width="133" height="22" rx="11" fill="#8b5cf6"/>
+    <rect x="553" y="168" width="188" height="22" fill="#18c6b3"/>
+    <rect x="741" y="168" width="68" height="22" rx="11" fill="url(#ending)"/>
+    <text x="420" y="222" class="loss">Foreground 48.187% more</text>
+    <text x="660" y="222" class="note">Ending +92,114</text>
+
+    <text x="760" y="145" class="label">Direct</text><text x="855" y="145" class="value">134.659s</text>
+    <rect x="1160" y="128" width="286" height="22" rx="11" fill="#3b82f6"/>
+    <text x="760" y="185" class="label">Auto</text><text x="855" y="185" class="value">100.856s + 82.598s verify</text>
+    <rect x="1160" y="168" width="214" height="22" rx="11" fill="#18c6b3"/>
+    <rect x="1374" y="168" width="176" height="22" rx="11" fill="url(#ending)"/>
+    <text x="1160" y="222" class="win">25.103% faster first result</text>
+    <text x="30" y="267" class="note">Producer alone: 252,534 tokens · 13.367% fewer than Direct. Controller overhead reverses the foreground token result.</text>
+  </g>
 
   <!-- Medium -->
-  <rect x="62" y="491" width="1476" height="318" rx="25" fill="#101f35" stroke="#31455f"/>
-  <text x="92" y="532" class="cardTitle">Medium · Decimal invoice calculation · 6/6 tests</text>
-  <text x="92" y="559" class="cardSub">Auto child: gpt-5.6-terra | medium · complexity-aware saved routing · 2 pairs / 4 main runs</text>
-  <text x="1454" y="535" text-anchor="end" class="win">FOREGROUND + WHOLE WIN</text>
-  <text x="92" y="599" class="section">COHORT LOGICAL TOKENS</text>
-  <text x="92" y="635" class="label">Without</text><text x="172" y="635" class="value">444,426</text>
-  <rect x="350" y="619" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="619" width="360" height="20" rx="10" fill="#3b82f6"/>
-  <text x="92" y="675" class="label">With</text><text x="172" y="675" class="value">286,645 + 94,981 verify</text>
-  <rect x="350" y="659" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="659" width="232" height="20" rx="10" fill="#14b8a6"/><rect x="582" y="659" width="77" height="20" rx="10" fill="url(#verifyHatch)"/>
-  <text x="350" y="712" class="win">35.502% saved foreground · 14.131% saved whole</text>
-  <text x="830" y="599" class="section">COHORT FIRST-RESULT TIME</text>
-  <text x="830" y="635" class="label">Without</text><text x="910" y="635" class="value">173.706s</text>
-  <rect x="1130" y="619" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="619" width="325" height="20" rx="10" fill="#3b82f6"/>
-  <text x="830" y="675" class="label">With</text><text x="910" y="675" class="value">89.014s + 43.947s verify</text>
-  <rect x="1130" y="659" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="659" width="168" height="20" rx="10" fill="#14b8a6"/><rect x="1298" y="659" width="82" height="20" rx="10" fill="url(#verifyHatch)"/>
-  <text x="1130" y="712" class="win">48.756% faster foreground · 23.456% faster whole</text>
-  <text x="92" y="770" class="small">Both Auto pairs beat matching Sol-ultra Direct runs; both detached Ending sessions passed read-only.</text>
+  <g transform="translate(94 585)">
+    <rect width="1612" height="300" rx="28" fill="#101f38" stroke="#294568" stroke-width="2"/>
+    <text x="30" y="43" class="cardtitle">Medium · Decimal invoice math · 6/6 tests</text>
+    <text x="1500" y="42" text-anchor="end" class="win">FIRST RESULT WIN</text>
+    <text x="30" y="72" class="route">Auto route: Spark-high · 2 pairs / 4 main runs</text>
+    <text x="30" y="108" class="section">LOGICAL TOKENS</text>
+    <text x="760" y="108" class="section">FIRST-RESULT TIME</text>
+
+    <text x="30" y="145" class="label">Direct</text><text x="120" y="145" class="value">464,397</text>
+    <rect x="420" y="128" width="246" height="22" rx="11" fill="#3b82f6"/>
+    <text x="30" y="185" class="label">Auto</text><text x="120" y="185" class="value">176,040 + 467,556</text>
+    <rect x="420" y="168" width="93" height="22" rx="11" fill="#8b5cf6"/>
+    <rect x="513" y="168" width="248" height="22" fill="#18c6b3"/>
+    <rect x="761" y="168" width="49" height="22" rx="11" fill="url(#ending)"/>
+    <text x="420" y="222" class="loss">Foreground 38.587% more</text>
+    <text x="660" y="222" class="note">Ending +92,658</text>
+
+    <text x="760" y="145" class="label">Direct</text><text x="855" y="145" class="value">167.086s</text>
+    <rect x="1160" y="128" width="352" height="22" rx="11" fill="#3b82f6"/>
+    <text x="760" y="185" class="label">Auto</text><text x="855" y="185" class="value">145.307s + 39.845s verify</text>
+    <rect x="1160" y="168" width="306" height="22" rx="11" fill="#18c6b3"/>
+    <rect x="1466" y="168" width="84" height="22" rx="11" fill="url(#ending)"/>
+    <text x="1160" y="222" class="win">13.035% faster first result</text>
+    <text x="30" y="267" class="note">Producer alone: 467,556 tokens · 0.680% more than Direct. Pairwise results: one win, one loss.</text>
+  </g>
 
   <!-- Complex -->
-  <rect x="62" y="828" width="1476" height="318" rx="25" fill="#101f35" stroke="#31455f"/>
-  <text x="92" y="869" class="cardTitle">Complex · six-file store quote pipeline · 8/8 tests</text>
-  <text x="92" y="896" class="cardSub">Auto child: gpt-5.6-terra | medium · multi-file complexity route · 2 pairs / 4 main runs</text>
-  <text x="1454" y="872" text-anchor="end" class="win">FOREGROUND + WHOLE WIN</text>
-  <text x="92" y="936" class="section">COHORT LOGICAL TOKENS</text>
-  <text x="92" y="972" class="label">Without</text><text x="172" y="972" class="value">905,339</text>
-  <rect x="350" y="956" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="956" width="360" height="20" rx="10" fill="#3b82f6"/>
-  <text x="92" y="1012" class="label">With</text><text x="172" y="1012" class="value">746,484 + 90,510 verify</text>
-  <rect x="350" y="996" width="360" height="20" rx="10" fill="#1a2b44"/><rect x="350" y="996" width="297" height="20" rx="10" fill="#14b8a6"/><rect x="647" y="996" width="36" height="20" rx="10" fill="url(#verifyHatch)"/>
-  <text x="350" y="1049" class="win">17.546% saved foreground · 7.549% saved whole</text>
-  <text x="830" y="936" class="section">COHORT FIRST-RESULT TIME</text>
-  <text x="830" y="972" class="label">Without</text><text x="910" y="972" class="value">413.022s</text>
-  <rect x="1130" y="956" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="956" width="325" height="20" rx="10" fill="#3b82f6"/>
-  <text x="830" y="1012" class="label">With</text><text x="910" y="1012" class="value">212.619s + 44.190s verify</text>
-  <rect x="1130" y="996" width="325" height="20" rx="10" fill="#1a2b44"/><rect x="1130" y="996" width="168" height="20" rx="10" fill="#14b8a6"/><rect x="1298" y="996" width="35" height="20" rx="10" fill="url(#verifyHatch)"/>
-  <text x="1130" y="1049" class="win">48.521% faster foreground · 37.822% faster whole</text>
-  <text x="92" y="1107" class="small">Both Auto pairs beat Direct. Ending starts only after the exact result and 8-test Mini Test are complete and available.</text>
+  <g transform="translate(94 910)">
+    <rect width="1612" height="330" rx="28" fill="#10233d" stroke="#2de0c6" stroke-width="2.5"/>
+    <text x="30" y="43" class="cardtitle">Complex · three-source workflow audit + semantic merge gate</text>
+    <text x="1500" y="42" text-anchor="end" class="win">SCHEDULE + FIRST RESULT WIN</text>
+    <text x="30" y="72" class="route">Auto graph: 3× Spark-low source branches → Terra-medium merge · 2 pairs / 4 main runs</text>
+    <text x="30" y="108" class="section">LOGICAL TOKENS</text>
+    <text x="760" y="108" class="section">FIRST-RESULT TIME</text>
 
-  <!-- Overall -->
-  <rect x="62" y="1170" width="1476" height="254" rx="28" fill="#0c2b32" stroke="#2dd4bf" stroke-width="2"/>
-  <text x="92" y="1215" class="cardTitle">Whole picture · 6 pairs</text>
-  <text x="92" y="1243" class="cardSub">Without skill has no verifier. With skill returns the main result first, then starts a separate Ending task; striped cost never gates first result.</text>
-  <text x="92" y="1294" class="kpi">14.500% fewer foreground tokens</text>
-  <text x="92" y="1322" class="kpiSub">1,581,588 Direct → 1,352,255 Auto main · 5 of 6 pairwise token wins</text>
-  <text x="590" y="1294" class="kpi">41.808% faster first result</text>
-  <text x="590" y="1322" class="kpiSub">681.008s Direct → 396.290s Auto main · 5 of 6 pairwise time wins</text>
-  <text x="1100" y="1294" class="kpi">Ending: +276,079 tokens · +114.770s</text>
-  <text x="1100" y="1322" class="kpiSub">Whole: +2.956% tokens · 24.955% faster</text>
-  <line x1="92" y1="1354" x2="1508" y2="1354" stroke="#315b63"/>
-  <text x="800" y="1392" text-anchor="middle" class="section">FINISH JOB FIRST  →  RETURN RESULT  →  BACKGROUND VERIFY IN A NEW END TASK</text>
-  <text x="800" y="1417" text-anchor="middle" class="small">Real local code edits · 4/4, 6/6, and 8/8 unittest checks · two pairs per tier are optimization confirmation, not six-pair admission</text>
+    <text x="30" y="145" class="label">Direct</text><text x="120" y="145" class="value">508,084</text>
+    <rect x="420" y="128" width="282" height="22" rx="11" fill="#3b82f6"/>
+    <text x="30" y="185" class="label">Auto</text><text x="120" y="185" class="value">137,152 + 445,040</text>
+    <rect x="420" y="168" width="76" height="22" rx="11" fill="#8b5cf6"/>
+    <rect x="496" y="168" width="247" height="22" fill="#18c6b3"/>
+    <rect x="743" y="168" width="66" height="22" rx="11" fill="url(#ending)"/>
+    <text x="420" y="222" class="loss">Foreground 14.586% more</text>
+    <text x="660" y="222" class="note">Ending +119,322</text>
+
+    <text x="760" y="145" class="label">Direct</text><text x="855" y="145" class="value">158.780s</text>
+    <rect x="1160" y="128" width="356" height="22" rx="11" fill="#3b82f6"/>
+    <text x="760" y="185" class="label">Auto</text><text x="855" y="185" class="value">107.498s + 66.184s verify</text>
+    <rect x="1160" y="168" width="241" height="22" rx="11" fill="#18c6b3"/>
+    <rect x="1401" y="168" width="148" height="22" rx="11" fill="url(#ending)"/>
+    <text x="1160" y="222" class="win">32.298% faster first result</text>
+    <text x="30" y="267" class="win">Producer schedule alone: 445,040 tokens · 12.408% fewer than Direct</text>
+    <text x="30" y="298" class="note">Controller +137,152 reverses the token total. Recorded schedule critical path: 72.583% faster than Direct.</text>
+  </g>
+
+  <!-- Whole-picture KPI -->
+  <g transform="translate(94 1270)">
+    <rect width="1612" height="204" rx="28" fill="#0b3438" stroke="#2de0c6" stroke-width="2.5"/>
+    <text x="30" y="44" class="cardtitle">Whole picture · 6 pairs</text>
+    <line x1="30" y1="63" x2="1580" y2="63" stroke="#2b6971"/>
+    <text x="30" y="104" class="kpi">+31.153% foreground tokens</text>
+    <text x="30" y="132" class="kpisub">1,263,980 Direct → 492,622 controller + 1,165,130 producer</text>
+    <text x="595" y="104" class="kpi">23.205% faster first result</text>
+    <text x="595" y="132" class="kpisub">460.525s Direct → 353.661s Auto · Ending excluded</text>
+    <text x="1120" y="104" class="kpi">Ending +304,094 · +188.627s</text>
+    <text x="1120" y="132" class="kpisub">Auto only · whole: +55.212% tokens · 17.754% slower</text>
+    <text x="806" y="177" text-anchor="middle" class="flow">12/12 MAIN CORRECT  ·  MINI TESTS PASS  ·  6/6 ENDING PASS  ·  DIRECT VERIFY = 0</text>
+  </g>
 </svg>

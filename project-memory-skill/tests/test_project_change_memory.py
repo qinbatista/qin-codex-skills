@@ -94,7 +94,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             (current_root / "src" / "feed.py").write_text("value = 2\n", encoding="utf-8")
             with mock.patch.object(MEMORY.Path, "home", lambda: home):
                 written = MEMORY.record_change(old_root, "feed", "file", "edit", "Updated feed parser", "Preserve parsed stories", "Old-root change recorded", "passed", ["src/feed.py"], ["focused test passed"], store=store, vault=temporary / "missing")
-                recalled = MEMORY.search_records(current_root, "feed", ["src/feed.py"], "feed parser", 8, store)
+                recalled = MEMORY.search_records(current_root, "feed", ["src/feed.py"], "feed parser", 8, store, include_ambiguous=True)
             self.assertEqual(written["status"], "written")
             self.assertEqual(recalled["matches"][0]["id"], written["record_id"])
 
@@ -237,13 +237,88 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             recorded_at = datetime(2026, 7, 12, 20, 0, tzinfo=timezone.utc)
             first = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added stable feature behavior", "Preserve the public contract while fixing the implementation", "Focused behavior now passes", "passed", ["src/feature.py"], ["python unit test passed"], ["Keep the public key exact"], ["none"], store=store, vault=vault, recorded_at=recorded_at)
             duplicate = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added stable feature behavior", "Preserve the public contract while fixing the implementation", "Focused behavior now passes", "passed", ["src/feature.py"], ["python unit test passed"], ["Keep the public key exact"], ["none"], store=store, vault=vault, recorded_at=recorded_at)
-            search = MEMORY.search_records(project, "feature-engine", ["src/feature.py"], "stable feature", 8, store)
+            search = MEMORY.search_records(project, "feature-engine", ["src/feature.py"], "stable feature", 8, store, include_ambiguous=True)
             self.assertEqual(first["status"], "written")
             self.assertEqual(first["obsidian"]["status"], "no-op")
             self.assertEqual(duplicate["status"], "duplicate")
             self.assertEqual(search["matches"][0]["reason"], "Preserve the public contract while fixing the implementation")
             self.assertEqual(len((store / "index.jsonl").read_text(encoding="utf-8").splitlines()), 1)
             self.assertFalse((vault / "Projects" / "ExampleProject").exists())
+
+    def test_search_is_scoped_to_current_working_line(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            store = root / "store"
+            project = root / "project-mainline"
+            project.mkdir()
+            (project / "src").mkdir()
+            (project / "src" / "feature.py").write_text("value = 1\n", encoding="utf-8")
+            (project / "src" / "feature.py").write_text("value = 1\n", encoding="utf-8")
+            main_line = {
+                "identity_scope": "scoped",
+                "canonical_remote": "https://github.com/example/project.git",
+                "branch": "main",
+                "commit": "aaa",
+                "version": "",
+            }
+            stale_line = {
+                "identity_scope": "scoped",
+                "canonical_remote": "https://github.com/example/project.git",
+                "branch": "main",
+                "commit": "bbb",
+                "version": "",
+            }
+            active_line = {"value": main_line}
+
+            def derive_line(project_root):
+                return active_line["value"]
+
+            with mock.patch.object(MEMORY, "_derive_working_line", side_effect=derive_line):
+                main_record = MEMORY.record_change(project, "runtime", "code", "edit", "Mainline runtime update", "Use current branch line", "Pass", "passed", ["src/feature.py"], ["unit check"], ["Keep branch identity"], ["none"], store=store)
+                active_line["value"] = stale_line
+                MEMORY.record_change(project, "runtime", "code", "edit", "Stale branch update", "Mature on old commit", "Pass", "passed", ["src/feature.py"], ["unit check"], ["Keep branch identity"], ["none"], store=store)
+                active_line["value"] = main_line
+                scoped = MEMORY.search_records(project, "runtime", ["src/feature.py"], "runtime", 8, store)
+                all_records = MEMORY.search_records(project, "runtime", ["src/feature.py"], "runtime", 8, store, include_ambiguous=True)
+
+            self.assertEqual(len(scoped["matches"]), 1)
+            self.assertEqual(scoped["matches"][0]["id"], main_record["record_id"])
+            self.assertEqual(len(all_records["matches"]), 2)
+
+    def test_supersede_rejects_working_line_mismatch(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            store = root / "store"
+            project = root / "mainline"
+            project.mkdir()
+            (project / "src").mkdir()
+            (project / "src" / "config.py").write_text("value = 1\n", encoding="utf-8")
+            main_line = {
+                "identity_scope": "scoped",
+                "canonical_remote": "https://github.com/example/project.git",
+                "branch": "main",
+                "commit": "1111",
+                "version": "",
+            }
+            stale_line = {
+                "identity_scope": "scoped",
+                "canonical_remote": "https://github.com/example/project.git",
+                "branch": "main",
+                "commit": "2222",
+                "version": "",
+            }
+            active_line = {"value": main_line}
+
+            def derive_line(project_root):
+                return active_line["value"]
+
+            with mock.patch.object(MEMORY, "_derive_working_line", side_effect=derive_line):
+                active_line["value"] = stale_line
+                failed = MEMORY.record_change(project, "runtime", "file", "edit", "Mainline failure", "Needs repair", "Still failing", "failed", ["src/config.py"], ["baseline"], ["Must retain line"], ["none"], store=store)
+                active_line["value"] = main_line
+                MEMORY.record_change(project, "runtime", "file", "edit", "Stale branch change", "Different branch", "Passed", "passed", ["src/config.py"], ["baseline"], ["Keep branch identity"], ["none"], store=store)
+                with self.assertRaisesRegex(ValueError, "same project working line"):
+                    MEMORY.record_change(project, "runtime", "file", "edit", "Repair attempt", "Corrects failure", "Passed", "passed", ["src/config.py"], ["baseline"], ["Repair needs same line"], ["none"], supersedes=failed["record_id"], store=store)
 
     def test_rejects_files_outside_project(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

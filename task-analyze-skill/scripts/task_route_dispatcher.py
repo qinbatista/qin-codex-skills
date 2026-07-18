@@ -35,6 +35,7 @@ try:
         ACTIVE_MODEL_EFFORTS,
         EXECUTION_DOMAINS,
         MODEL_ROLE_PAIRS,
+        PRIORITY_PRODUCER_CONFIG,
         adaptive_pair_texts_for_profile,
         execution_domain_is_active,
         expected_owner_skill,
@@ -54,6 +55,7 @@ except ModuleNotFoundError:
     ACTIVE_MODEL_EFFORTS = _routing_policy.ACTIVE_MODEL_EFFORTS
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
     MODEL_ROLE_PAIRS = _routing_policy.MODEL_ROLE_PAIRS
+    PRIORITY_PRODUCER_CONFIG = _routing_policy.PRIORITY_PRODUCER_CONFIG
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
@@ -190,8 +192,6 @@ def _model_memory_arguments(node, project_root):
 
 def _obsidian_recommendation_and_proof(node, project_root):
     recommendation = obsidian_model_memory.recommend_model(**_model_memory_arguments(node, project_root))
-    if recommendation.get("memory_available") is not True:
-        raise ValueError("obsidian model memory is unavailable")
     condition = routing_history_module.validate_condition(node.get("routing_condition"))
     candidate_pairs = routing_history_module.canonical_pairs(node.get("candidate_ladder"))
     static_pair = routing_history_module.parse_pair(node.get("static_suggestion"))
@@ -206,7 +206,7 @@ def _obsidian_recommendation_and_proof(node, project_root):
         "profile_fingerprint": fingerprint,
         "calibration_state": recommendation.get("calibration_state"),
         "best_pair": recommendation.get("success_model"),
-        "selection_basis": "obsidian_broad_model_switch",
+        "selection_basis": "obsidian_broad_model_switch" if recommendation.get("memory_available") is True else "shared_cold_start",
     }
     return recommendation, proof
 
@@ -317,8 +317,22 @@ def validate_plan(
 
         model = node.get("model")
         effort = node.get("effort")
-        if model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set()):
+        priority_branch = bool(
+            node.get("priority_producer") is True
+            and node.get("phase") == "result"
+            and node.get("skill") == "workflow-skill"
+            and node.get("dependencies") == []
+            and node.get("sandbox", "read-only") == "read-only"
+            and isinstance(node.get("source_allowlist"), list)
+            and len(node["source_allowlist"]) == 1
+            and PRIORITY_PRODUCER_CONFIG.get("enabled") is True
+            and model == PRIORITY_PRODUCER_CONFIG.get("id")
+            and effort in PRIORITY_PRODUCER_CONFIG.get("adaptive_efforts", [])
+        )
+        if not priority_branch and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
             failures.append(f"{node_id} must use a model/effort from the catalog quality ladder")
+        if "priority_producer" in node and not priority_branch:
+            failures.append(f"{node_id} priority_producer is valid only for an admitted single-source read-only branch")
         skill = node.get("skill")
         if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
