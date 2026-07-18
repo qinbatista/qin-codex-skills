@@ -5,7 +5,7 @@ description: "Do not use for an exact-scoped read-only lookup, audit, transform,
 
 # Code Skill
 
-Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. The Sol-ultra entry parent dispatches first without loading this file; the selected `LOCKED_ROUTE_NODE` result producer loads it. Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. The producer performs one bounded Quick Check before presenting code; deeper independent verification runs later in a separate persistent Ending thread.
+Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. The Sol-ultra entry parent dispatches first without loading this file; the selected `LOCKED_ROUTE_NODE` result producer loads it. Every eligible implementation directly executes its Obsidian-context catalog-derived quality pair, with one stronger fallback only for zero-result operational failure. A self-contained bounded read-only lookup or audit stays on the bootstrap. Full Task Analyze may also deliver an exact locked code node. The producer performs one bounded Quick Check before presenting code; deeper independent verification runs later in a separate persistent Ending thread.
 
 ## Internal Route Selection
 
@@ -53,7 +53,7 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 
 ## Model Contract
 
-- Adaptive code work reads the catalog-generated priority/quality contract and matching Obsidian broad `Model Switch.md` by project/task/module/file/symbol/code context. The current priority producer is Spark; easy text code uses low and complex text code uses high. Exact read-only, image/mixed, verifier, and Ending work skip it.
+- Adaptive code work reads the catalog-generated quality contract and matching Obsidian broad `Model Switch.md` by project/task/module/file/symbol/code context. One Real PASS retains the pair, two PASS results downgrade one rung, and quality FAIL upgrades one rung. Spark is reserved for fixed disjoint-source schedule branches. Exact read-only, image/mixed, verifier, and Ending work skip it.
 - A zero-result, zero-token operational priority-producer failure may immediately use the contextual quality pair. A published result returns first; Ending correctness/quality failure is recorded before a new quality-pair repair lifecycle with a different verifier.
 - Old local `model_experience.json` remains legacy read-only. Every adaptive code profile retains `code-skill` ownership; Obsidian selects within the highest registered numeric GPT family and learns its verified boundary. Older numeric families remain catalog-only.
 - An admitted fallback must already be allowed by Task Analyze and must carry its runtime reroute/receipt evidence. Inline execution does not invent fallback metadata.

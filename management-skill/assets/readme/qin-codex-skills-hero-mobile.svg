@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="1120" viewBox="0 0 640 1120" role="img" aria-labelledby="title desc">
   <title id="title">qin-codex-skills mobile overview</title>
-  <desc id="desc">Tiny hookless bootstrap, inline ordinary work, admitted routing, and seven independent skills. Prompt is the global reusable-prompt gate; ordinary prose is excluded.</desc>
+  <desc id="desc">Tiny adaptive bootstrap, task-strategy quality pair, cost-admitted graph, and a separate post-result Ending task.</desc>
   <rect width="640" height="1120" rx="36" fill="#07111f"/>
   <g font-family="Arial,sans-serif">
     <text x="320" y="68" text-anchor="middle" fill="#f8fafc" font-size="44" font-weight="700">qin-codex-skills</text>
     <text x="320" y="108" text-anchor="middle" fill="#94a3b8" font-size="21">Tiny bootstrap · global Prompt gate</text>
-    <rect x="46" y="136" width="548" height="72" rx="22" fill="#0d2e35" stroke="#2dd4bf"/><text x="320" y="165" text-anchor="middle" fill="#99f6e4" font-size="21" font-weight="700">⚡ Inline ordinary work · completed result first</text><text x="320" y="193" text-anchor="middle" fill="#ccfbf1" font-size="18">Full graph only after token + time evidence</text>
+    <rect x="46" y="136" width="548" height="72" rx="22" fill="#0d2e35" stroke="#2dd4bf"/><text x="320" y="165" text-anchor="middle" fill="#99f6e4" font-size="21" font-weight="700">⚡ Adaptive pair · completed result first</text><text x="320" y="193" text-anchor="middle" fill="#ccfbf1" font-size="18">Graph only after pre-read cost admission</text>
     <rect x="46" y="232" width="548" height="92" rx="22" fill="#0f766e"/><text x="76" y="269" fill="#ccfbf1" font-size="27" font-weight="700">1 · Task Analyze</text><text x="76" y="301" fill="#f0fdfa" font-size="19">admission · routing · model experience</text>
     <rect x="46" y="344" width="548" height="92" rx="22" fill="#075985"/><text x="76" y="381" fill="#e0f2fe" font-size="27" font-weight="700">2 · Workflow</text><text x="76" y="413" fill="#f0f9ff" font-size="19">locked dependencies · first-result handoff</text>
     <rect x="46" y="456" width="548" height="92" rx="22" fill="#7e22ce" stroke="#e879f9"/><text x="76" y="493" fill="#fae8ff" font-size="27" font-weight="700">3 · Prompt</text><text x="76" y="525" fill="#fdf4ff" font-size="19">100% reusable-prompt gate · prose excluded</text>

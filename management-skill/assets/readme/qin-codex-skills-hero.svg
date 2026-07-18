@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="title desc">
   <title id="title">qin-codex-skills hookless adaptive workflow</title>
-  <desc id="desc">Seven independent skills cover routing, workflow, a global reusable-prompt gate, code, verification, optimization, and management. Prompt work always loads Prompt; ordinary prose is excluded. Full Task Analyze and Workflow routing load only for explicit or performance-admitted work.</desc>
+  <desc id="desc">Global skills use a compact adaptive quality route for ordinary production, cost-admitted graphs for large independent sources, and a separate post-result Ending task.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#17223d"/></linearGradient>
     <linearGradient id="line" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#2dd4bf"/><stop offset=".5" stop-color="#60a5fa"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
@@ -11,9 +11,9 @@
     <rect x="74" y="142" width="860" height="6" rx="3" fill="url(#line)"/>
     <text x="74" y="198" fill="#cbd5e1" font-size="28">Tiny bootstrap first. Prompt work always loads Prompt.</text>
     <g font-size="18" font-weight="700">
-      <rect x="74" y="232" width="350" height="52" rx="26" fill="#0d2e35" stroke="#2dd4bf"/><text x="249" y="265" text-anchor="middle" fill="#99f6e4">⚡ ordinary work stays inline</text>
+      <rect x="74" y="232" width="350" height="52" rx="26" fill="#0d2e35" stroke="#2dd4bf"/><text x="249" y="265" text-anchor="middle" fill="#99f6e4">⚡ ordinary Auto selects pair</text>
       <rect x="444" y="232" width="350" height="52" rx="26" fill="#122844" stroke="#60a5fa"/><text x="619" y="265" text-anchor="middle" fill="#bfdbfe">📣 result first, Real after</text>
-      <rect x="814" y="232" width="430" height="52" rx="26" fill="#2b1c42" stroke="#c084fc"/><text x="1029" y="265" text-anchor="middle" fill="#e9d5ff">📉 route only after token + time proof</text>
+      <rect x="814" y="232" width="430" height="52" rx="26" fill="#2b1c42" stroke="#c084fc"/><text x="1029" y="265" text-anchor="middle" fill="#e9d5ff">📉 graph only after cost admission</text>
       <rect x="1264" y="232" width="262" height="52" rx="26" fill="#3b1c2a" stroke="#fb7185"/><text x="1395" y="265" text-anchor="middle" fill="#fecdd3">🪝 hookless</text>
     </g>
     <g>

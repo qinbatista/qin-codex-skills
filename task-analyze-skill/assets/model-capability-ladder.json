@@ -204,20 +204,20 @@
   "policy": {
     "enabled": true,
     "quality_first": true,
-    "downgrade_after_real_pass": true,
+    "downgrade_after_repeated_real_passes": true,
+    "minimum_real_passes_before_downgrade": 2,
     "upgrade_after_quality_failure": true,
     "operational_failures_are_neutral": true,
     "freeze_lowest_verified_pair": true,
-    "priority_producer_first_text_code": true,
-    "priority_producer_operational_fallback": true,
-    "priority_producer_quality_failure_starts_repair": true,
+    "priority_producer_first_text_code": false,
+    "priority_producer_scheduled_sources_only": true,
     "minimum_pair": "gpt-5.6-luna|low"
   },
   "priority_producer": {
     "enabled": true,
     "id": "gpt-5.3-codex-spark",
     "display_name": "GPT-5.3-Codex-Spark",
-    "routing_role": "first_attempt_text_code_producer",
+    "routing_role": "scheduled_independent_source_branch",
     "provider_priority": 26,
     "provider_positioning": "Ultra-fast coding model.",
     "supported_in_api": false,
@@ -264,8 +264,8 @@
       "status",
       "verify"
     ],
-    "operational_fallback": "current_contextual_quality_pair",
-    "quality_failure": "record_then_new_quality_repair_lifecycle"
+    "operational_fallback": "fail_scheduled_graph",
+    "quality_failure": "fail_scheduled_graph"
   },
   "private_learning_contract": {
     "authority": "obsidian_broad_model_switch",

@@ -16,7 +16,7 @@ module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
 
 
-def recommendation(pair="gpt-5.6-terra|medium", attempt_pair=None):
+def recommendation(pair="gpt-5.6-terra|medium", fallback_pair="gpt-5.6-terra|high"):
     model, effort = pair.split("|", 1)
     return {
         "source": "obsidian_broad_model_switch",
@@ -24,11 +24,11 @@ def recommendation(pair="gpt-5.6-terra|medium", attempt_pair=None):
         "selected_pair": pair,
         "selected_model": model,
         "selected_effort": effort,
-        "attempt_pair": attempt_pair or pair,
-        "active_fallback_pair": pair if attempt_pair and attempt_pair != pair else None,
+        "attempt_pair": pair,
+        "active_fallback_pair": fallback_pair,
         "attempt_trial": True,
-        "attempt_reason": "spark_first_text_code" if attempt_pair else "real_pass_one_rung_down",
-        "attempt_calibration_state": "cold_start" if attempt_pair else "provisional",
+        "attempt_reason": "repeated_real_pass_one_rung_down",
+        "attempt_calibration_state": "provisional",
         "trial": True,
         "reason": "real_pass_one_rung_down",
         "calibration_state": "provisional",
@@ -156,16 +156,43 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             sources = module.scheduled_source_paths(prompt, root)
         self.assertEqual(sources, [])
 
-    def test_safe_source_graph_overrides_mislabeled_easy_complexity(self):
+    def test_explicit_latency_source_graph_overrides_mislabeled_easy_complexity(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
             args.complexity = "easy"
             (args.workdir / "a.py").write_text("A = 1\n", encoding="utf-8")
             (args.workdir / "b.py").write_text("B = 2\n", encoding="utf-8")
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module, "_run_scheduled_graph", return_value={"status": "pass"}) as scheduled:
-                result = module.run(args, "Audit independent a.py, b.py. Read-only, no edits.")
+                result = module.run(args, "Audit independent a.py, b.py. Read-only, no edits. Must run in parallel for latency.")
         self.assertEqual(result["status"], "pass")
         scheduled.assert_called_once()
+
+    def test_schedule_admission_prefers_one_producer_for_small_sources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = ["a.py", "b.py", "c.py"]
+            for source in sources:
+                (root / source).write_text("VALUE = 1\n", encoding="utf-8")
+            decision = module.schedule_admission("Audit independent a.py, b.py, c.py. Read-only, no edits.", root, sources)
+        self.assertFalse(decision["admitted"])
+        self.assertEqual(decision["decision"], "single_adaptive_producer")
+        self.assertEqual(decision["reason"], "single_producer_lower_estimated_logical_tokens")
+        self.assertLess(decision["estimated_single_input_tokens"], decision["estimated_scheduled_input_tokens"])
+
+    def test_schedule_admission_uses_graph_for_context_pressure_or_explicit_latency(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = ["a.py", "b.py", "c.py"]
+            for source in sources:
+                (root / source).write_text("X" * 70000, encoding="utf-8")
+            pressure = module.schedule_admission("Audit independent a.py, b.py, c.py. Read-only, no edits.", root, sources)
+            for source in sources:
+                (root / source).write_text("X", encoding="utf-8")
+            latency = module.schedule_admission("Audit independent a.py, b.py, c.py. Read-only, no edits. Parallel is required for latency-critical delivery.", root, sources)
+        self.assertTrue(pressure["admitted"])
+        self.assertEqual(pressure["reason"], "single_producer_context_budget_exceeded")
+        self.assertTrue(latency["admitted"])
+        self.assertEqual(latency["reason"], "explicit_parallel_latency_contract")
 
     def test_scheduled_plan_uses_parallel_priority_branches_and_adaptive_merge(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -173,7 +200,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             args.complexity = "complex"
             (args.workdir / "a.py").write_text("A = 1\n", encoding="utf-8")
             (args.workdir / "b.py").write_text("B = 2\n", encoding="utf-8")
-            proof = {"selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.3-codex-spark|high", "active_fallback_pair": "gpt-5.6-terra|medium", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
+            proof = {"selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
             adaptive = {"selected_pair": "gpt-5.6-terra|medium", "trial": False}
             with patch.object(module.task_route_dispatcher, "_obsidian_recommendation_and_proof", return_value=(adaptive, proof)):
                 plan, merge_recommendation = module._scheduled_plan(
@@ -182,7 +209,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
                     ["a.py", "b.py"],
                     "gpt-5.6-sol",
                     "ultra",
-                    recommendation(attempt_pair="gpt-5.3-codex-spark|high"),
+                    recommendation(),
                 )
         result_nodes = [node for node in plan["nodes"] if node["phase"] == "result"]
         self.assertEqual(plan["topology"], "parallel")
@@ -193,8 +220,48 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertIn("Omit unsupported fields", result_nodes[0]["prompt"])
         self.assertIn("Prefer direct defining-source facts", result_nodes[-1]["prompt"])
         self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
-        self.assertEqual(result_nodes[-1]["routing_recommendation"]["attempt_pair"], "gpt-5.3-codex-spark|high")
+        self.assertEqual(result_nodes[-1]["routing_recommendation"]["attempt_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(merge_recommendation, adaptive)
+
+    def test_exact_owned_three_source_schedule_fuses_final_source_with_merge(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.complexity = "complex"
+            sources = ["a.py", "b.py", "c.py"]
+            for source in sources:
+                (args.workdir / source).write_text(f"VALUE = {source!r}\n", encoding="utf-8")
+            prompt = """Complete three independent read-only source audits. Do not edit files.
+a.py
+b.py
+c.py
+Return one minified JSON object.
+
+alpha is owned only by a.py
+- value: exact assignment
+
+beta is owned only by b.py
+- value: exact assignment
+
+gamma is owned only by c.py
+- value: exact assignment
+
+source_files must list all sources in order."""
+            proof = {"selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
+            adaptive = {"selected_pair": "gpt-5.6-terra|medium", "trial": False}
+            with patch.object(module.task_route_dispatcher, "_obsidian_recommendation_and_proof", return_value=(adaptive, proof)):
+                plan, _ = module._scheduled_plan(args, prompt, sources, "gpt-5.6-sol", "ultra", recommendation())
+        result_nodes = [node for node in plan["nodes"] if node["phase"] == "result"]
+        self.assertEqual(plan["topology"], "mixed")
+        self.assertEqual(plan["schedule_mode"], "parallel_sources_fused_final")
+        self.assertEqual(plan["parallel_branch_count"], 2)
+        self.assertEqual(plan["fused_source"], "c.py")
+        self.assertEqual(len(result_nodes), 3)
+        self.assertEqual([node["source_allowlist"] for node in result_nodes], [["a.py"], ["b.py"], ["c.py"]])
+        self.assertEqual(result_nodes[-1]["dependencies"], ["source-1", "source-2"])
+        self.assertTrue(result_nodes[-1]["fuses_owned_source_with_dependencies"])
+        self.assertNotIn("reads_dependency_results_only", result_nodes[-1])
+        self.assertIn("Dependency results own every other section", result_nodes[-1]["prompt"])
+        self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
 
     def test_exact_expression_schedule_raises_branch_quality(self):
         exact = "Return exactly one JSON object. Copy the exact expression, preserve key order, and preserve the exact literal."
@@ -252,6 +319,11 @@ source_files must list both sources."""
         with tempfile.TemporaryDirectory() as temporary:
             args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "word " * 200)
         self.assertEqual(len(args.task_summary), 280)
+
+    def test_fast_path_classifies_read_only_source_audit_as_question(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "Audit independent a.py and b.py. Read-only, no edits.")
+        self.assertEqual(args.task_type, "question")
 
     def test_fast_path_identity_is_stable_per_project_and_prompt(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -337,7 +409,7 @@ source_files must list both sources."""
         self.assertEqual(result["reason"], "producer_operational_failure")
         self.assertEqual(result["ending_real_status"], "not_started")
 
-    def test_spark_pre_execution_failure_falls_back_once_to_active_5_6(self):
+    def test_selected_pair_pre_execution_failure_falls_back_once_to_stronger_pair(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
             calls = []
@@ -345,7 +417,7 @@ source_files must list both sources."""
             def fake_run(receipt_args, prompt):
                 pair = f"{receipt_args.model}|{receipt_args.effort}"
                 calls.append(pair)
-                if pair.startswith("gpt-5.3-codex-spark|"):
+                if pair == "gpt-5.6-terra|medium":
                     return {
                         "status": "fail",
                         "failure_class": "availability",
@@ -372,17 +444,17 @@ source_files must list both sources."""
                     "route_attempts": [{"requested_pair": pair, "effective_pair": pair, "tokens": {"total_tokens": 20}}],
                 }
 
-            spark = recommendation(attempt_pair="gpt-5.3-codex-spark|low")
-            with patch.object(module, "_recommend", return_value=spark), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+            adaptive = recommendation()
+            with patch.object(module, "_recommend", return_value=adaptive), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
             receipt = __import__("json").loads(args.receipt_output.read_text(encoding="utf-8"))
-        self.assertEqual(calls, ["gpt-5.3-codex-spark|low", "gpt-5.6-terra|medium"])
+        self.assertEqual(calls, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high"])
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["result"], "FALLBACK RESULT")
-        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.3-codex-spark|low"])
+        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.6-terra|medium"])
         self.assertEqual(len(receipt["route_attempts"]), 2)
 
-    def test_spark_published_result_never_foreground_fallbacks(self):
+    def test_selected_pair_published_result_never_foreground_fallbacks(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
             calls = []
@@ -390,13 +462,13 @@ source_files must list both sources."""
             def fake_run(receipt_args, prompt):
                 pair = f"{receipt_args.model}|{receipt_args.effort}"
                 calls.append(pair)
-                receipt_args.result_output.write_text("SPARK RESULT", encoding="utf-8")
+                receipt_args.result_output.write_text("ADAPTIVE RESULT", encoding="utf-8")
                 return {"status": "pass", "requested_pair": pair, "effective_pair": pair, "turn_completed": True, "model_match": True, "effort_match": True, "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 3, "tokens": {"total_tokens": 9}, "route_attempts": [{"requested_pair": pair, "effective_pair": pair, "tokens": {"total_tokens": 9}}]}
 
-            spark = recommendation(attempt_pair="gpt-5.3-codex-spark|low")
-            with patch.object(module, "_recommend", return_value=spark), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+            adaptive = recommendation()
+            with patch.object(module, "_recommend", return_value=adaptive), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
-        self.assertEqual(calls, ["gpt-5.3-codex-spark|low"])
+        self.assertEqual(calls, ["gpt-5.6-terra|medium"])
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["ending_real_status"], "pending")
 

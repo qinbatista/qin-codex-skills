@@ -413,20 +413,19 @@ def adaptive_ladder_for_profile(task_family, modality, risk, complexity="easy", 
 
 
 def priority_first_pair(task_type, modality="text", operation="work", complexity="easy"):
-    if not PRIORITY_PRODUCER_CONFIG.get("enabled") or PRIORITY_PRODUCER_MODEL is None:
-        return None
-    if task_type not in set(PRIORITY_PRODUCER_CONFIG["eligible_task_types"]):
-        return None
-    if modality not in set(PRIORITY_PRODUCER_CONFIG["eligible_modalities"]):
-        return None
-    if operation in set(PRIORITY_PRODUCER_CONFIG["excluded_operations"]):
-        return None
-    effort = PRIORITY_PRODUCER_CONFIG["effort_by_complexity"].get(complexity)
-    return (PRIORITY_PRODUCER_MODEL, effort) if effort in PRIORITY_PRODUCER_CONFIG["adaptive_efforts"] else None
+    """Legacy ordinary-route helper: schedule-only producers never run here."""
+    return None
 
 
 def spark_first_pair(task_type, modality="text", operation="work", complexity="easy"):
     return priority_first_pair(task_type, modality, operation, complexity)
+
+
+def scheduled_source_pair(complexity="easy"):
+    if not PRIORITY_PRODUCER_CONFIG.get("enabled") or PRIORITY_PRODUCER_MODEL is None:
+        return None
+    effort = PRIORITY_PRODUCER_CONFIG["effort_by_complexity"].get(complexity)
+    return (PRIORITY_PRODUCER_MODEL, effort) if effort in PRIORITY_PRODUCER_CONFIG["adaptive_efforts"] else None
 
 
 def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):

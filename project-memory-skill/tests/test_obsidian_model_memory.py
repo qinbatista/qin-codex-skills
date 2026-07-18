@@ -45,6 +45,25 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         target.write_text(json.dumps(receipt), encoding="utf-8")
         return target
 
+    def quality_record(self, pair, *, status="pass", workload="1", tokens=100, elapsed=1000):
+        return {
+            "pair": pair,
+            "receipt_status": "pass",
+            "turn_completed": True,
+            "model_match": True,
+            "effort_match": True,
+            "real_status": status,
+            "failure_class": "none" if status == "pass" else "correctness",
+            "workload_prompt_sha256": workload * 64,
+            "total_tokens": tokens,
+            "process_ms": elapsed,
+        }
+
+    def active(self, records):
+        shared, pairs = module.load_shared_ladder()
+        query = {"task_type": "code", "complexity": "easy"}
+        return module._active_recommendation(shared, pairs, query, records), pairs
+
     def record(self, recorded_at=datetime(2026, 7, 13, 12, 0, tzinfo=timezone.utc)):
         recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
         self.write_receipt(recommendation["attempt_pair"])
@@ -174,6 +193,47 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(len(module.MODEL_SWITCH_CATEGORIES), 6)
         self.assertEqual(module._task_category({"task_type": "code", "code_kind": "python", "operation": "edit"}), "normal-script-update")
 
+    def test_cold_start_executes_recommended_quality_pair_not_schedule_producer(self):
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Cold start.", vault=self.vault)
+        self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(recommendation["attempt_pair"], recommendation["selected_pair"])
+        self.assertEqual(recommendation["active_fallback_pair"], "gpt-5.6-terra|high")
+        self.assertEqual(recommendation["priority_producer_scope"], "scheduled_independent_sources_only")
+
+    def test_one_real_pass_collects_evidence_and_two_passes_downgrade_one_rung(self):
+        first, pairs = self.active([self.quality_record("gpt-5.6-terra|medium")])
+        second, _ = self.active([
+            self.quality_record("gpt-5.6-terra|medium", workload="1"),
+            self.quality_record("gpt-5.6-terra|medium", workload="2"),
+        ])
+        self.assertEqual(first["selected_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(first["reason"], "real_pass_collecting_evidence")
+        self.assertFalse(first["trial"])
+        self.assertEqual(second["selected_pair"], pairs[pairs.index("gpt-5.6-terra|medium") - 1])
+        self.assertEqual(second["reason"], "repeated_real_pass_one_rung_down")
+        self.assertTrue(second["trial"])
+
+    def test_quality_failure_upgrades_exactly_one_rung(self):
+        active, pairs = self.active([self.quality_record("gpt-5.6-terra|medium", status="fail")])
+        self.assertEqual(active["selected_pair"], pairs[pairs.index("gpt-5.6-terra|medium") + 1])
+        self.assertEqual(active["reason"], "quality_failure_one_rung_up")
+
+    def test_like_for_like_cost_ranks_tokens_then_time_then_weaker_pair(self):
+        records = [
+            self.quality_record("gpt-5.6-luna|low", workload="1", tokens=200, elapsed=100),
+            self.quality_record("gpt-5.6-terra|medium", workload="1", tokens=100, elapsed=500),
+        ]
+        token_winner, _ = self.active(records)
+        self.assertEqual(token_winner["selected_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(token_winner["reason"], "receipt_cost_best_verified")
+        records[0].update(total_tokens=100, process_ms=300)
+        records[1].update(total_tokens=100, process_ms=500)
+        time_winner, _ = self.active(records)
+        self.assertEqual(time_winner["selected_pair"], "gpt-5.6-luna|low")
+        records[0]["process_ms"] = records[1]["process_ms"] = 500
+        tie_winner, _ = self.active(records)
+        self.assertEqual(tie_winner["selected_pair"], "gpt-5.6-luna|low")
+
     def test_bound_historical_failure_records_once_after_recommendation_advances(self):
         pair = "gpt-5.6-terra|high"
         context = {"project_root": str(self.project.resolve()), "task_type": "documentation-instructions", "module": "example-module", "file": "src/example.py", "symbol": "Example.run", "code_kind": "python", "operation": "repair", "modality": "text", "complexity": "complex", "risk": "high", "ambiguity": "low", "task_summary": "Record a bound historical failure."}
@@ -191,11 +251,11 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         final = module.recommend_model(self.project, "documentation-instructions", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="repair", modality="text", complexity="complex", risk="high", ambiguity="low", task_summary="Record a bound historical failure.", vault=self.vault)
         self.assertEqual(first["status"], "written")
         self.assertEqual(advanced["selected_pair"], "gpt-5.6-terra|xhigh")
-        self.assertEqual(advanced["attempt_pair"], "gpt-5.3-codex-spark|high")
+        self.assertEqual(advanced["attempt_pair"], advanced["selected_pair"])
         self.assertEqual(second["status"], "written")
         self.assertEqual(replay["status"], "duplicate")
         self.assertEqual(final["selected_pair"], "gpt-5.6-terra|xhigh")
-        self.assertEqual(final["attempt_pair"], "gpt-5.3-codex-spark|high")
+        self.assertEqual(final["attempt_pair"], final["selected_pair"])
 
 
 if __name__ == "__main__":

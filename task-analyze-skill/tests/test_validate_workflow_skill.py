@@ -116,7 +116,7 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         with self._with_rust_domain(trace) as synthetic_skills_root:
             result = module.validate_trace("synthetic-rust-spark", trace, synthetic_skills_root)
         self.assertEqual(result["status"], "fail")
-        self.assertTrue(any("priority producer is injected only as a result-producer attempt" in failure for failure in result["failures"]))
+        self.assertTrue(any("schedule producer is valid only for a disjoint source branch" in failure for failure in result["failures"]))
 
     def test_validate_trace_rejects_model_outside_catalog_quality_ladder(self):
         trace = json.loads(json.dumps(next(iter(module.sample_traces().values()))))
@@ -140,7 +140,9 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         workflow_path = Path(__file__).resolve().parents[2] / "workflow-skill" / "SKILL.md"
         text = workflow_path.read_text(encoding="utf-8")
         self.assertIn("Ineligible ordinary work remains inline", text)
-        self.assertIn("complete Global foreground path includes entry/controller plus child costs", text)
+        self.assertIn("Direct task versus Auto task", text)
+        self.assertIn("Auto task + Ending", text)
+        self.assertIn("excluded routing diagnostic", text)
         self.assertIn("End-to-end performance admission remains separate", text)
         self.assertIn("frozen, receipt-backed, Real-passing, and `trial=false`", text)
         self.assertNotIn("observable entry model and effort belong only to Task Analyze", text)
@@ -157,37 +159,39 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
 
     def test_global_entry_required_terms_match_compact_contract(self):
         required = module.REQUIRED_ENTRY
-        self.assertIn("Eligible text/code: entry parent pipes task once", required)
-        self.assertIn("Saved highest-family ladder", required)
-        self.assertIn("explicit user model-update alone refreshes `models_cache.json`", required)
+        self.assertIn("pipe exact user text once via `/usr/bin/python3", required)
+        self.assertIn("Saved ladder", required)
+        self.assertIn("model-update refreshes cache", required)
         self.assertIn("never fetch", required)
-        self.assertIn("Priority infers easy=low/complex=high", required)
-        self.assertIn("zero-result fallback", required)
+        self.assertIn("Auto=saved pair", required)
+        self.assertIn("2 Real PASS:down 1 rung", required)
+        self.assertIn("quality FAIL:up 1", required)
+        self.assertIn("zero-result:stronger fallback", required)
+        self.assertIn("Spark:schedule sources only", required)
         self.assertIn("before skills/memory/files", required)
-        self.assertIn("No parent implementation or repeated poll", required)
-        self.assertIn("If `create_thread` exists", required)
-        self.assertIn("If absent, emit handoff and return", required)
-        self.assertIn("outer host creates it", required)
-        self.assertIn("no app-server/emulation/wait/self-verify", required)
-        self.assertIn("each arm enters `gpt-5.6-sol|ultra`", required)
-        self.assertIn("Direct fixed", required)
-        self.assertIn("Global receipt proves adaptive child", required)
-        self.assertIn("foreground tokens/time decide, Ending separate", required)
-        self.assertIn("Exact read-only: one bounded rg/file", required)
-        self.assertIn("no route/plan/reread/full read/precheck", required)
+        self.assertIn("2-3 sources cost-admit before reads", required)
+        self.assertIn("create/link `End Task-{task name}` if available", required)
+        self.assertIn("never subtask/emulate/wait/self-verify", required)
+        self.assertIn("`gpt-5.6-sol|ultra`", required)
+        self.assertIn("Direct fixed/no verify", required)
+        self.assertIn("Auto receipt=child/graph", required)
+        self.assertIn("task vs task+Ending", required)
+        self.assertIn("controller excluded", required)
+        self.assertIn("Exact one-source read-only:one bounded rg/file", required)
+        self.assertIn("no reread/full read/precheck", required)
         self.assertIn("Ending <=60s evidence-only", required)
-        self.assertIn("never gates main", required)
+        self.assertIn("never gates", required)
         self.assertNotIn("Spark first: easy=low, complex=high", required)
         self.assertNotIn("no route, plan, guessed names, unrelated skills, broad search, reread, full-file read, or pre-result check", required)
 
-    def test_routing_matrix_separates_ordinary_inline_from_admitted_routes(self):
+    def test_routing_matrix_separates_single_producer_from_cost_admitted_graphs(self):
         matrix_path = Path(__file__).resolve().parents[2] / "workflow-skill" / "references" / "routing-matrix.md"
         routes = module.parse_routes(matrix_path.read_text(encoding="utf-8"))
-        for name in ("open-chrome", "open-youtube", "search-cctv-on-youtube", "design-youtube-like-website"):
-            self.assertEqual(routes[name][0], "inline-current-model")
-            self.assertNotIn("workflow-skill", routes[name])
-        self.assertEqual(routes["admitted-single"][:2], ["task-analyze-skill", "workflow-skill"])
-        self.assertEqual(routes["admitted-complex"][:2], ["task-analyze-skill", "workflow-skill"])
+        self.assertEqual(routes["ordinary-production"], ["entry bootstrap", "adaptive producer", "result"])
+        self.assertEqual(routes["exact-one-source-read"], ["one bounded inline read", "result"])
+        self.assertEqual(routes["dependent-multi-file"], ["one adaptive producer", "owning skill", "result"])
+        self.assertEqual(routes["independent-large-sources"][:2], ["entry bootstrap", "admitted source graph"])
+        self.assertEqual(routes["admitted-complex"][:2], ["Task Analyze", "Workflow"])
 
     def test_executor_skills_support_inline_and_admitted_modes(self):
         skills_root = Path(__file__).resolve().parents[2]
@@ -195,7 +199,7 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         verify_text = (skills_root / "verify-skill" / "SKILL.md").read_text(encoding="utf-8")
         optimization_text = (skills_root / "optimization-skill" / "SKILL.md").read_text(encoding="utf-8")
         management_text = (skills_root / "management-skill" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("Every eligible implementation runs as one Obsidian-context priority-first producer with a catalog-derived quality fallback", code_text)
+        self.assertIn("Every eligible implementation directly executes its Obsidian-context catalog-derived quality pair", code_text)
         self.assertIn("highest registered numeric GPT family", code_text)
         self.assertIn("bounded read-only lookup or audit stays on the bootstrap", code_text)
         self.assertIn("Ordinary inline Real Verify uses the current user-selected model and needs no fabricated child receipt", verify_text)

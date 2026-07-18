@@ -91,14 +91,14 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         impl["effort"] = PRIORITY_EFFORT
         with self._with_rust_domain() as synthetic_skills_root:
             failures = module.validate_plan(plan, APPROVED, synthetic_skills_root)
-        self.assertTrue(any("priority producer is injected only as a result-producer attempt" in failure for failure in failures))
+        self.assertTrue(any("schedule producer is valid only for a disjoint source branch" in failure for failure in failures))
 
     @unittest.skipIf(PRIORITY_MODEL is None, "catalog has no optional priority producer")
     def test_plan_rejects_priority_producer_entry(self):
         plan = json.loads(json.dumps(next(iter(module.sample_plans().values()))))
         plan["entry"] = {"model": PRIORITY_MODEL, "effort": PRIORITY_EFFORT}
         failures = module.validate_plan(plan, APPROVED)
-        self.assertTrue(any("entry priority producer is a result-producer first attempt only" in failure for failure in failures))
+        self.assertTrue(any("entry schedule producer is valid only for a disjoint source branch" in failure for failure in failures))
 
     def make_validation_inputs(self):
         source = Path(__file__).resolve().parents[1]
@@ -325,10 +325,10 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
 
     def test_route_contract_routes_eligible_production_and_keeps_exact_read_only_inline(self):
         route_text = (Path(__file__).resolve().parents[1] / "references" / "route-contract.md").read_text(encoding="utf-8")
-        self.assertIn("Eligible text/code production uses exactly one `obsidian_adaptive_model_runner.py` producer even on cold start", route_text)
-        self.assertIn("exact read-only work stays on the current model inline", route_text)
+        self.assertIn("Eligible text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start", route_text)
+        self.assertIn("Other exact read-only work stays inline", route_text)
         self.assertIn("Apparent complexity alone does not create a dispatcher", route_text)
-        self.assertIn("A multi-node foreground exists only after comparable end-to-end evidence positively admits it", route_text)
+        self.assertIn("An open-ended multi-node foreground exists only after comparable end-to-end evidence positively admits it", route_text)
 
     def test_fixed_sol_entry_contract_is_rejected(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
@@ -449,18 +449,16 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             bootstrap_text = global_agents.read_text(encoding="utf-8")
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
-            self.assertIn("Code Mini Test", bootstrap_text)
-            self.assertIn("If `create_thread` exists", bootstrap_text)
-            self.assertIn("If absent, emit handoff and return", bootstrap_text)
-            self.assertIn("no app-server/emulation/wait/self-verify", bootstrap_text)
+            self.assertIn("Producer owns files/skills/Mini Test", bootstrap_text)
+            self.assertIn("create/link `End Task-{task name}` if available", bootstrap_text)
+            self.assertIn("never subtask/emulate/wait/self-verify", bootstrap_text)
             self.assertIn("Ending <=60s evidence-only", bootstrap_text)
-            self.assertIn("outer host creates it", bootstrap_text)
-            self.assertIn("never gates main", bootstrap_text)
-            self.assertIn("each arm enters `gpt-5.6-sol|ultra`", bootstrap_text)
+            self.assertIn("never gates", bootstrap_text)
+            self.assertIn("`gpt-5.6-sol|ultra`", bootstrap_text)
             self.assertIn("before skills/memory/files", bootstrap_text)
-            self.assertIn("No parent implementation or repeated poll", bootstrap_text)
-            self.assertIn("foreground tokens/time decide, Ending separate", bootstrap_text)
-            self.assertIn("no route/plan/reread/full read/precheck", bootstrap_text)
+            self.assertIn("NEVER spawn/read", bootstrap_text)
+            self.assertIn("task vs task+Ending", bootstrap_text)
+            self.assertIn("no reread/full read/precheck", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)
             global_agents.write_text(bootstrap_text.replace("one bounded rg/file", "one search/file", 1), encoding="utf-8")
             validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
@@ -525,7 +523,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             agent_path = temp_dir / "agents" / "openai.yaml"
-            required_term = "before owning skills, memory, or files"
+            required_term = "before skills, memory, or files"
             agent_path.write_text(agent_path.read_text(encoding="utf-8").replace(required_term, "removed priority attempt"), encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])

@@ -360,6 +360,8 @@ def validate_plan(
         dependencies = node.get("dependencies", [])
         if not isinstance(dependencies, list) or any(not isinstance(item, str) for item in dependencies):
             failures.append(f"{node_id} dependencies must be a list of node ids")
+        if "fuses_owned_source_with_dependencies" in node and not isinstance(node["fuses_owned_source_with_dependencies"], bool):
+            failures.append(f"{node_id} fuses_owned_source_with_dependencies must be a boolean")
 
         allow_fallbacks = node.get("allow_fallback", [])
         if not isinstance(allow_fallbacks, list):
@@ -542,8 +544,19 @@ def validate_plan(
                     branch_allowlists_are_disjoint = False
                     break
                 seen_sources.update(allowlist)
-            if not branch_allowlists_are_disjoint or node_by_id[main_result_node].get("reads_dependency_results_only") is not True or "source_allowlist" in node_by_id[main_result_node]:
-                failures.append("grounded read-only answers allow multiple result nodes only for disjoint source_allowlist branches merged with reads_dependency_results_only")
+            main_node = node_by_id[main_result_node]
+            dependency_only_merge = main_node.get("reads_dependency_results_only") is True and "source_allowlist" not in main_node and main_node.get("fuses_owned_source_with_dependencies") is not True
+            fused_allowlist = main_node.get("source_allowlist")
+            fused_merge = bool(
+                main_node.get("fuses_owned_source_with_dependencies") is True
+                and main_node.get("reads_dependency_results_only") is not True
+                and isinstance(fused_allowlist, list)
+                and len(fused_allowlist) == 1
+                and not seen_sources.intersection(fused_allowlist)
+                and set(main_node.get("dependencies", [])) == result_ids - {main_result_node}
+            )
+            if not branch_allowlists_are_disjoint or not (dependency_only_merge or fused_merge):
+                failures.append("grounded read-only answers allow multiple result nodes only for disjoint source branches plus either a dependency-only merge or one disjoint owned source fused into the main merge")
 
     ending_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
     optimization_ids = {node_id for node_id, node in node_by_id.items() if node.get("skill") == "optimization-skill"}

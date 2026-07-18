@@ -8,7 +8,7 @@
 
 Saved highest-family quality ladder · refreshed only when you request a local model update
 
-Current catalog-derived priority producer: `gpt-5.3-codex-spark` · easy=`low` · complex=`high`
+Ordinary Auto starts from the task-strategy quality pair, not Sol-ultra · Spark is schedule-branch-only
 
 </div>
 
@@ -26,7 +26,7 @@ This is the lifecycle’s most important structural rule:
 1. **Main task finishes the requested job** and runs only the proportional local check that belongs to implementation.
 2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
 3. **Start `End Task-<task name>` as a separate background Codex task.** It audits existing evidence read-only and never blocks the completed main result.
-4. **Ending reports PASS or the exact failure.** It does not ask the user questions, wait, poll, call heavy APIs, or repair inside the Ending task; a failure reopens a new repair task.
+4. **Ending reports PASS or the exact failure.** It does not ask the user questions, wait, poll, call heavy APIs, or repair inside the Ending task; a failure reopens a new repair task with a different verifier.
 
 Main work and Ending verification are deliberately different task sessions. “Background” means the user can continue working as soon as the main result is returned—it does not mean verification is skipped.
 
@@ -34,42 +34,43 @@ Main work and Ending verification are deliberately different task sessions. “B
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
-  <img src="./management-skill/assets/readme/model-router.svg" alt="Catalog-derived priority producer and full quality ladder with private Obsidian learning">
+  <img src="./management-skill/assets/readme/model-router.svg" alt="Task-strategy quality ladder that retains, downgrades, or upgrades one receipt-proven rung at a time">
 </picture>
 
-- **Priority:** Eligible text/code uses the adaptive catalog priority producer: easy `low`, complex `high`; exact read-only, image/mixed, and tool-only work stays inline.
-- **Operational:** With zero result and zero tokens, use the current contextual Obsidian-selected quality pair.
-- **Quality:** A completed result returns first; the separate background Ending task logs a receipt-backed failure before a new repair task uses a different verifier.
-- **Learning:** Ending outcomes update broad project/Skills `Model Switch.md` pages; project/task/module/file/symbol are fields only—no hierarchy notes.
+- **Cold start:** Task type and complexity select a saved Luna/Terra/Sol quality pair; ordinary work never defaults to Spark or permanently stays on Sol-ultra.
+- **Learning:** One receipt-valid Real PASS retains the pair; two matched PASS outcomes try one weaker rung; a quality failure upgrades one rung immediately.
+- **Operational:** A zero-result failure gets one stronger fallback and is not learned as a quality failure.
+- **Scheduling:** Spark is limited to independent source branches after a pre-read cost gate. Small multi-file work stays with one contextual producer when fan-out would repeat session context.
+- **Memory:** Ending outcomes update broad project/Skills `Model Switch.md` pages; project/task/module/file/symbol are fields only—no hierarchy notes.
 
 ## Rules
 
-- **Producer:** Eligible text/code uses the adaptive catalog priority producer; exact read-only, image/mixed, and tool-only work stays inline.
+- **Producer:** Use the saved task-strategy pair; 1 PASS retains, 2 matched PASS descend one rung, and quality failure climbs one rung.
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Finish and return the completed main result before background verification.
 - **Verify:** Launch a separate, nonblocking `End Task-<task name>` after delivery; first-result time excludes it.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
 - **Memory:** Change history is local JSONL + optional Obsidian; private learning uses broad project/Skills `Model Switch.md`: fields only; no hierarchy notes.
-- **Models:** Ordinary tasks use saved JSON; explicit local update selects the highest numeric GPT family, while unavailable cache keeps the saved list.
+- **Models:** Use saved JSON; explicit model update refreshes the highest GPT family; Spark is schedule-only; missing cache preserves the list.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
 ## 📊 Real adaptive benchmark: finish first, verify in background
 
-Both arms enter `gpt-5.6-sol | ultra`. **Without skill** finishes and stops; verification cost is **0**. **With skill** returns a receipt-proven result, then launches a separate read-only Ending task that never blocks delivery.
+Both arms enter `gpt-5.6-sol | ultra`. **Without skill** finishes and stops; verification cost is **0**. **With skill** executes the task on the receipt-proven dynamic pair, returns it, then launches a separate read-only Ending task that never blocks delivery.
 
-![Six real A/B pairs separating Direct, Auto controller, adaptive producer or schedule, and striped Auto-only Ending cost](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
+![Six real A/B pairs comparing Direct task, Auto task, and striped Auto-only Ending cost](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
 
-| Tier | Auto route | Direct tokens | Auto controller | Auto producer | Auto foreground | Token result | Direct time | Auto time | Time result | Auto Ending |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Simple · 4 tests | Spark-low | 291,499 | 179,430 | 252,534 | 431,964 | 48.187% more | 134.659s | 100.856s | **25.103% faster** | 92,114 / 82.598s |
-| Medium · 6 tests | Spark-high | 464,397 | 176,040 | 467,556 | 643,596 | 38.587% more | 167.086s | 145.307s | **13.035% faster** | 92,658 / 39.845s |
-| Complex · 3 sources | 3× Spark-low → Terra-medium | 508,084 | 137,152 | 445,040 | 582,192 | 14.586% more | 158.780s | 107.498s | **32.298% faster** | 119,322 / 66.184s |
-| **All 6 pairs** | receipt-proven graph | **1,263,980** | **492,622** | **1,165,130** | **1,657,752** | **31.153% more** | **460.525s** | **353.661s** | **23.205% faster** | **304,094 / 188.627s** |
+| Tier | Auto task pair | Direct task | Auto task | Separate Ending | Auto task + check | Task savings | Whole savings |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Simple · 4 tests | Terra-medium | 343,459 / 131.842s | 200,522 / 52.861s | 78,818 / 18.864s | 279,340 / 71.725s | **41.617% tokens / 59.906% time** | **18.669% / 45.598%** |
+| Medium · 6 tests | Terra-high | 472,575 / 199.180s | 211,128 / 56.713s | 94,741 / 23.940s | 305,869 / 80.653s | **55.324% tokens / 71.527% time** | **35.276% / 59.507%** |
+| Complex · 3 sources | Luna-low · one producer | 451,856 / 137.654s | 141,012 / 40.999s | 96,997 / 23.709s | 238,009 / 64.708s | **68.793% tokens / 70.216% time** | **47.326% / 52.992%** |
+| **All 6 pairs** | **receipt-proven dynamic pairs** | **1,267,890 / 468.676s** | **552,662 / 150.573s** | **270,556 / 66.513s** | **823,218 / 217.086s** | **56.411% tokens / 67.873% time** | **35.072% / 53.681%** |
 
-**The switch and schedule work.** Producers alone use **7.821% fewer tokens overall**; the complex graph uses **12.408% fewer** with a **72.583% faster critical path**. The Sol controller adds 492,622 tokens, so the honest foreground strategy result is token **FAIL**. Whole sequential Auto is **55.212% more tokens** and **17.754% slower** after Ending; delivery happened earlier.
+**Why the complex win is now large:** v34 estimates session-context cost before reading sources. The 68,483-byte complex fixture estimated **53,121 input tokens** for one producer versus **125,121** for a three-session schedule, so Auto correctly chose one Luna-low producer. Fan-out remains available for context pressure above 180,000 bytes or an explicit latency-critical parallel contract.
 
-**Correctness:** 12/12 exact results, all Mini Tests, and 6/6 Ending audits passed. Two pairs per tier confirm this change, not performance admission. Logical tokens are not billing tokens.
+**Correctness:** 12/12 exact results, all Mini Tests/gates, and 6/6 Ending audits passed, with 0 retry/fallback/repair. The common Sol-ultra dispatcher is excluded from the requested task/check worlds but disclosed in the full report as **404,598 tokens / 361.038s**. Two pairs per tier confirm this change, not performance admission. Logical tokens are not billing tokens.
 
 [Read the full benchmark report and every run.](./management-skill/assets/readme/lifecycle-skill-benchmark.md)
 

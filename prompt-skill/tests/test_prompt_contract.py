@@ -16,10 +16,10 @@ class PromptContractTests(unittest.TestCase):
         cls.global_entry_rule = GLOBAL_ENTRY_RULE_PATH.read_text(encoding="utf-8")
         cls.agent_config = AGENT_CONFIG_PATH.read_text(encoding="utf-8")
 
-    def test_global_prompt_gate_is_mandatory_and_bounded(self):
+    def test_global_prompt_gate_is_mandatory_and_owned_by_the_selected_producer(self):
         for contract_text in ["Always use for every task", "100% global prompt-task gate across projects", "Do not trigger merely because an ordinary request is text", "Prompt-in-code also uses its owning code executor"]:
             self.assertIn(contract_text, self.prompt_skill)
-        for contract_text in ["Prompt/AI-instruction work loads `prompt-skill`"]:
+        for contract_text in ["Producer owns files/skills/Mini Test"]:
             self.assertIn(contract_text, self.global_entry_rule)
 
     def test_loader_interface_repeats_the_trigger_without_expanding_scope(self):
@@ -44,7 +44,7 @@ class PromptContractTests(unittest.TestCase):
 
     def test_result_first_and_target_validation_are_separate(self):
         self.assertIn("Present the completed prompt or instruction artifact immediately", self.prompt_skill)
-        self.assertIn("In Ending Real, test with representative cases", self.prompt_skill)
+        self.assertIn("It does not test prompt cases; representative trials or repeated fresh runs happen only when the user explicitly requests testing", self.prompt_skill)
         self.assertIn("before returning", self.prompt_skill)
 
     def test_conflict_resolutions_are_explicit(self):

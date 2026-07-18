@@ -1,0 +1,251 @@
+{
+  "all_endings_pass": true,
+  "all_main_correct": true,
+  "benchmark_version": "v34-cost-admitted-single-or-graph-fixed-ending-validator",
+  "comparison_contract": "exactly_two_worlds",
+  "ending_runs": 6,
+  "entry_pair_both_arms": "gpt-5.6-sol|ultra",
+  "main_runs": 12,
+  "optimization_gate": {
+    "passed": true,
+    "requires_all_endings_pass": true,
+    "requires_all_tiers_correct": true,
+    "requires_each_tier_auto_task_tokens_below_direct": true
+  },
+  "pairs": 6,
+  "routing_overhead_diagnostic_excluded_from_both_worlds": {
+    "entry_pair": "gpt-5.6-sol|ultra",
+    "reason": "common entry used only to dispatch the receipt-proven Auto task",
+    "time_ms": 361038,
+    "tokens": 404598
+  },
+  "sample_scope": "2 real A/B pairs per tier; optimization confirmation, not six-pair per-condition admission",
+  "schema_version": 2,
+  "status": "pass",
+  "tiers": {
+    "complex": {
+      "adaptive_pairs": [
+        "gpt-5.6-luna|low"
+      ],
+      "adaptive_stage_pairs": [],
+      "all_endings_pass": true,
+      "all_main_correct": true,
+      "auto_main_session_count": 4,
+      "pairs": [
+        {
+          "auto": "complex-r01-auto",
+          "direct": "complex-r01-direct",
+          "repeat_index": 1,
+          "task_time_saved_percent": 74.74867439237985,
+          "task_time_win": true,
+          "task_token_saved_percent": 65.9664075981296,
+          "task_token_win": true
+        },
+        {
+          "auto": "complex-r02-auto",
+          "direct": "complex-r02-direct",
+          "repeat_index": 2,
+          "task_time_saved_percent": 63.25696183880949,
+          "task_time_win": true,
+          "task_token_saved_percent": 71.46578934903089,
+          "task_token_win": true
+        }
+      ],
+      "routing_overhead_diagnostic_excluded": {
+        "entry_pair": "gpt-5.6-sol|ultra",
+        "time_ms": 117116,
+        "tokens": 129738
+      },
+      "run_count": 4,
+      "schema_version": 2,
+      "status": "pass",
+      "task_plus_check_time_saved_percent": 52.99228500443141,
+      "task_plus_check_token_saved_percent": 47.32636061045997,
+      "task_time_saved_percent": 70.21590364246589,
+      "task_time_wins": 2,
+      "task_token_saved_percent": 68.7927127226373,
+      "task_token_wins": 2,
+      "tier": "complex",
+      "with_skill_background_check": {
+        "model_pair": "gpt-5.6-luna|low",
+        "time_ms": 23709,
+        "tokens": 96997
+      },
+      "with_skill_task": {
+        "median_time_ms": 20499.5,
+        "median_tokens": 70506.0,
+        "time_ms": 40999,
+        "tokens": 141012
+      },
+      "with_skill_task_plus_check": {
+        "sequential_time_ms": 64708,
+        "tokens": 238009
+      },
+      "without_skill_task": {
+        "median_time_ms": 68827.0,
+        "median_tokens": 225928.0,
+        "time_ms": 137654,
+        "tokens": 451856,
+        "verify_time_ms": 0,
+        "verify_tokens": 0
+      }
+    },
+    "medium": {
+      "adaptive_pairs": [
+        "gpt-5.6-terra|high"
+      ],
+      "adaptive_stage_pairs": [],
+      "all_endings_pass": true,
+      "all_main_correct": true,
+      "auto_main_session_count": 4,
+      "pairs": [
+        {
+          "auto": "medium-r01-auto",
+          "direct": "medium-r01-direct",
+          "repeat_index": 1,
+          "task_time_saved_percent": 77.27112634717885,
+          "task_time_win": true,
+          "task_token_saved_percent": 70.2943438321319,
+          "task_token_win": true
+        },
+        {
+          "auto": "medium-r02-auto",
+          "direct": "medium-r02-direct",
+          "repeat_index": 2,
+          "task_time_saved_percent": 61.24935235881422,
+          "task_time_win": true,
+          "task_token_saved_percent": 10.126549982140123,
+          "task_token_win": true
+        }
+      ],
+      "routing_overhead_diagnostic_excluded": {
+        "entry_pair": "gpt-5.6-sol|ultra",
+        "time_ms": 141132,
+        "tokens": 124967
+      },
+      "run_count": 4,
+      "schema_version": 2,
+      "status": "pass",
+      "task_plus_check_time_saved_percent": 59.50748067075008,
+      "task_plus_check_token_saved_percent": 35.276093741734115,
+      "task_time_saved_percent": 71.5267597148308,
+      "task_time_wins": 2,
+      "task_token_saved_percent": 55.32391683859704,
+      "task_token_wins": 2,
+      "tier": "medium",
+      "with_skill_background_check": {
+        "model_pair": "gpt-5.6-luna|low",
+        "time_ms": 23940,
+        "tokens": 94741
+      },
+      "with_skill_task": {
+        "median_time_ms": 28356.5,
+        "median_tokens": 105564.0,
+        "time_ms": 56713,
+        "tokens": 211128
+      },
+      "with_skill_task_plus_check": {
+        "sequential_time_ms": 80653,
+        "tokens": 305869
+      },
+      "without_skill_task": {
+        "median_time_ms": 99590.0,
+        "median_tokens": 236287.5,
+        "time_ms": 199180,
+        "tokens": 472575,
+        "verify_time_ms": 0,
+        "verify_tokens": 0
+      }
+    },
+    "simple": {
+      "adaptive_pairs": [
+        "gpt-5.6-terra|medium"
+      ],
+      "adaptive_stage_pairs": [],
+      "all_endings_pass": true,
+      "all_main_correct": true,
+      "auto_main_session_count": 4,
+      "pairs": [
+        {
+          "auto": "simple-r01-auto",
+          "direct": "simple-r01-direct",
+          "repeat_index": 1,
+          "task_time_saved_percent": 55.99326877982841,
+          "task_time_win": true,
+          "task_token_saved_percent": 22.360659809176894,
+          "task_token_win": true
+        },
+        {
+          "auto": "simple-r02-auto",
+          "direct": "simple-r02-direct",
+          "repeat_index": 2,
+          "task_time_saved_percent": 64.68556214613103,
+          "task_time_win": true,
+          "task_token_saved_percent": 55.67785681181615,
+          "task_token_win": true
+        }
+      ],
+      "routing_overhead_diagnostic_excluded": {
+        "entry_pair": "gpt-5.6-sol|ultra",
+        "time_ms": 102790,
+        "tokens": 149893
+      },
+      "run_count": 4,
+      "schema_version": 2,
+      "status": "pass",
+      "task_plus_check_time_saved_percent": 45.59776095629617,
+      "task_plus_check_token_saved_percent": 18.668603821707975,
+      "task_time_saved_percent": 59.905796331973114,
+      "task_time_wins": 2,
+      "task_token_saved_percent": 41.616903327616974,
+      "task_token_wins": 2,
+      "tier": "simple",
+      "with_skill_background_check": {
+        "model_pair": "gpt-5.6-luna|low",
+        "time_ms": 18864,
+        "tokens": 78818
+      },
+      "with_skill_task": {
+        "median_time_ms": 26430.5,
+        "median_tokens": 100261.0,
+        "time_ms": 52861,
+        "tokens": 200522
+      },
+      "with_skill_task_plus_check": {
+        "sequential_time_ms": 71725,
+        "tokens": 279340
+      },
+      "without_skill_task": {
+        "median_time_ms": 65921.0,
+        "median_tokens": 171729.5,
+        "time_ms": 131842,
+        "tokens": 343459,
+        "verify_time_ms": 0,
+        "verify_tokens": 0
+      }
+    }
+  },
+  "world_with_skill_background_check": {
+    "model_pair": "gpt-5.6-luna|low",
+    "time_ms": 66513,
+    "tokens": 270556
+  },
+  "world_with_skill_task": {
+    "time_ms": 150573,
+    "time_saved_percent": 67.87268816837218,
+    "token_saved_percent": 56.41088737982002,
+    "tokens": 552662
+  },
+  "world_with_skill_task_plus_check": {
+    "sequential_time_ms": 217086,
+    "sequential_time_saved_percent": 53.681007775094095,
+    "token_saved_percent": 35.07181222345787,
+    "tokens": 823218
+  },
+  "world_without_skill_task": {
+    "detached_check_time_ms": 0,
+    "detached_check_tokens": 0,
+    "time_ms": 468676,
+    "tokens": 1267890
+  }
+}

@@ -7,13 +7,13 @@ Every user task, from a tiny read-only answer to a complex write, releases its c
 1. Complete the requested result. For code, run the `code-skill` Quick Check: smallest safe local smoke for light work, or syntax/name/reference checks with the heavy path skipped.
 2. Show it immediately in a user-visible commentary update beginning `CODE READY` for code or `MAIN RESULT READY` otherwise. Include the usable outcome, artifact links, Quick Check PASS/SKIPPED evidence when applicable, and `Delivery: complete — background audit starting`; a progress sentence is not a result presentation.
 3. Start a lifecycle with `scripts/ending_task_ledger.py start --producer-receipt <path>` when an eligible adaptive producer ran; omit the flag only when no producer receipt exists. Require `status=written`, `local.written=true`, and the expected receipt binding.
-4. Call `create_thread`, then `set_thread_title` with exactly `End Task-{concise related task name}`. Pass the lifecycle receipt, producer receipt, Quick Check evidence, absolute project/artifact paths, touched files, a read-only boundary, and origin task ID when available.
+4. For exact machine-checkable acceptance, generate `scripts/ending_evidence_manifest.py build` after the result and pass its immutable path plus the exact `ending_evidence_manifest.py validate` command with the lifecycle receipt, producer receipt, Quick Check evidence, absolute project/artifact paths, touched files, a read-only boundary, and origin task ID. Call `create_thread`, then `set_thread_title` with exactly `End Task-{concise related task name}`.
 5. State `Ending mode: BACKGROUND AUDIT`, link or identify the new task, and return the origin immediately with `Delivery: complete`. Do not wait, poll, or launch a same-task subagent. The background task must finish within 60 seconds with terminal `PASS` or `BLOCKED`; it never asks the user a question.
 6. If persistent task creation fails, report `Background audit unavailable`; the delivered result remains complete. Never substitute a same-task subagent.
 
 ## Audit pass
 
-The independent auditor records `event --event pass` after checking the supplied handoff and one bounded read-only evidence item. It does not rerun tests or call APIs. With a bound producer receipt, the ledger first writes its sanitized PASS outcome to Obsidian and only then commits the terminal event; duplicate learning writes are idempotent. Ineligible inline work never fabricates a model receipt.
+The independent auditor records `event --event pass` after checking the supplied handoff and one bounded read-only evidence item. When an immutable evidence manifest is supplied, execute its fixed validator command and return the JSON stdout exactly; never author a substitute checker or reinterpret its fields. It does not rerun tests or call APIs. With a bound producer receipt, the ledger first writes its sanitized PASS outcome to Obsidian and only then commits the terminal event; duplicate learning writes are idempotent. Ineligible inline work never fabricates a model receipt.
 
 ## Blocked audit
 

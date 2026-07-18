@@ -1677,6 +1677,35 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
 
+    def test_grounded_read_only_answer_allows_disjoint_owned_source_fused_merge(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            main_node = plan["nodes"][0]
+            main_node["routing_condition"]["task_family"] = "grounded"
+            main_node["dependencies"] = ["source-a", "source-b"]
+            main_node["source_allowlist"] = ["source-c.py"]
+            main_node["fuses_owned_source_with_dependencies"] = True
+            self.refresh_recommendation(main_node)
+            plan["nodes"].insert(0, {"id": "source-a", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Read source A.", "source_allowlist": ["source-a.py"], "sandbox": "read-only"})
+            plan["nodes"].insert(1, {"id": "source-b", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Read source B.", "source_allowlist": ["source-b.py"], "sandbox": "read-only"})
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
+    def test_grounded_read_only_answer_rejects_fused_source_overlap(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            main_node = plan["nodes"][0]
+            main_node["routing_condition"]["task_family"] = "grounded"
+            main_node["dependencies"] = ["source-branch"]
+            main_node["source_allowlist"] = ["source-a.py"]
+            main_node["fuses_owned_source_with_dependencies"] = True
+            self.refresh_recommendation(main_node)
+            plan["nodes"].insert(0, {"id": "source-branch", "phase": "result", "skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low", "dependencies": [], "prompt": "Read source A.", "source_allowlist": ["source-a.py"], "sandbox": "read-only"})
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("one disjoint owned source fused" in failure for failure in failures))
+
     def test_run_plan_stops_before_node_when_first_result_deadline_is_exhausted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

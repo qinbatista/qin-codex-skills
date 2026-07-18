@@ -116,27 +116,133 @@ CHINESE_CATEGORY_LABELS = {
     "General": "通用类 / General",
 }
 SKILL_SUMMARIES = {
-    "task-analyze-skill": "Explicit routing, benchmark, and maintenance strategy. The always-loaded hookless bootstrap keeps ordinary work on the current model; the full skill defaults to inline and admits delegation only with comparable end-to-end proof.",
-    "workflow-skill": "Executes only a positively admitted Task Analyze route. Ordinary work of any apparent complexity stays inline; admitted nodes keep locked pairs and receipts, present the completed result, then hand verification to Ending Real.",
-    "prompt-skill": "The 100% global gate for reusable prompt and durable-instruction creation, review, edit, repair, standardization, testing, summarization, and optimization. It stays inline on the current model and excludes ordinary prose.",
-    "code-skill": "Direct inline or admitted-route executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. Ordinary work keeps the current model; Spark is only an admitted obvious-task route.",
+    "task-analyze-skill": "Explicit routing, benchmark, and maintenance strategy. The compact bootstrap sends eligible ordinary production to the saved contextual quality pair; full Task Analyze owns strategy and cost-admitted graphs.",
+    "workflow-skill": "Executes only positively admitted locked routes. Ordinary adaptive production uses one producer; cost-admitted nodes keep exact pairs and receipts, return the result, then hand evidence to Ending.",
+    "prompt-skill": "The 100% global gate for reusable prompt and durable-instruction creation, review, edit, repair, standardization, testing, summarization, and optimization. The selected producer loads it; ordinary prose is excluded.",
+    "code-skill": "Adaptive or admitted-route executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. The saved task-strategy pair executes ordinary work; Spark is schedule-source-only.",
     "project-memory-skill": "Recalls and records project changes by project, functional module, and concrete file, with a private local authority and optional Obsidian projection.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
     "verify-skill": "Real Verify runs in Ending Task after the completed result is presented and applies its verdict to the original receipt-backed result attempt.",
     "management-skill": "Handles Codex profile operations and global skill GitHub sync while preserving local private folders, local route history, and model-experience files from public mirrors.",
 }
 CHINESE_SKILL_SUMMARIES = {
-    "task-analyze-skill": "显式路由、benchmark 和维护策略：常驻的无 hook inline bootstrap 让普通任务直接使用当前模型；完整 skill 默认仍返回 inline，只有端到端可比证据通过才允许委派。",
-    "workflow-skill": "只执行已经通过端到端性能准入的 Task Analyze 锁定路线。无论表面复杂度如何，普通任务都保持 inline；已准入节点保留锁定 pair 和 receipt。",
-    "prompt-skill": "可复用 prompt 与持久 AI 指令创建、审查、编辑、修复、标准化、测试、总结和优化的全局 100% 入口。它在当前模型 inline 执行，普通文案不会误触发。",
-    "code-skill": "活动注册代码域的 direct-inline 或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务保留当前模型；Spark 只用于已准入的明显小任务路线。",
+    "task-analyze-skill": "显式路由、benchmark 和维护策略：紧凑 bootstrap 把合格普通生产任务交给已保存的上下文质量档；完整 skill 负责策略和成本准入图谱。",
+    "workflow-skill": "只执行已通过准入的锁定路线。普通 Auto 使用一个上下文 producer；已准入节点保留准确 pair 和 receipt，先返回结果，再把证据交给 Ending。",
+    "prompt-skill": "可复用 prompt 与持久 AI 指令创建、审查、编辑、修复、标准化、测试、总结和优化的全局 100% 入口。选中的 producer 加载它；普通文案不会误触发。",
+    "code-skill": "活动注册代码域的自适应或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务使用任务策略质量档；Spark 只用于 schedule source。",
     "project-memory-skill": "按项目、功能模块和具体文件回溯与记录修改，本地私有记录为权威来源，Obsidian 为可选投影。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
     "verify-skill": "完成的主结果先立即展示；Real Verify 之后在 Ending Task 中执行，并把判定回填到原始的 receipt-backed 结果尝试。",
     "management-skill": "处理 Codex profile 操作和全局 skill GitHub 同步，不暴露私人数据，并保留本地私有路由历史。",
 }
-SKILL_CONTENTS = {"task-analyze-skill": [("Hookless inline bootstrap", "The always-loaded policy keeps every ordinary request on the current model without loading this full skill."), ("Explicit activation boundary", "Load full Task Analyze only for routing/benchmark/maintenance or a graph under consideration; activation still defaults to inline."), ("Performance admission", "Delegation requires current comparable proof that the complete Global path preserves correctness and beats Direct in tokens and time."), ("Admitted route display", "Only admitted single nodes get concise text and admitted dependency graphs get Mermaid plus a numbered model list."), ("Runtime proof", "Raw Direct and Global arms use receipt-backed exact-workload evidence before any savings or delegation claim.")], "workflow-skill": [("Admitted route execution", "Execute only a positively admitted Task Analyze plan with exact locked pairs and matching receipts."), ("Inline rejection", "Reject missing, stale, cross-workload, incomplete, or negative admission and return execution to the current model."), ("Main Goal / Ending Task split", "The admitted main lane completes the requested work, presents the result immediately, and leaves verification to Ending Real."), ("Dependency topology", "Execute only dependency-ready nodes, use one surface per branch, and reserve dispatch for real multi-node graphs."), ("Runtime accounting", "Count the complete entry/controller/child path and never use producer-only savings as delegation proof.")], "prompt-skill": [("100% global prompt gate", "Always load Prompt for reusable prompt or durable-instruction creation, review, edit, repair, standardization, testing, summarization, or optimization across projects."), ("Ordinary-prose exclusion", "Do not trigger merely because an ordinary request is text; the requested artifact or target behavior must itself be a reusable prompt or durable AI instruction."), ("Conditional prompt controls", "Use role, workflow/tools, autonomy, reasoning, verbosity, delimiters, and examples only when they materially improve behavior."), ("Conflict-free contracts", "Require explicit objective, inputs, requirements/constraints, output, success/failure, and verification without visible chain-of-thought or blanket question gates."), ("Result-first prompt testing", "Present the completed prompt first; representative trials and Real Verify run afterward in Ending Task and reopen failures.")], "code-skill": [("Prompt-in-code integration", "Load Prompt first, then apply Python/C#/Unity C# executable-string, formatting, and ownership rules."), ("Karpathy Coding Guidelines", "Code thinking and implementation approach for assumptions, simple design, naming, branching, and surgical edits."), ("Python Code Checker", "Python modules, scripts, tests, snippets, prompt assignments, formatting, contracts, error handling, and logging rules."), ("C# Minimal Style", "C# and Unity C# MonoBehaviours, ScriptableObjects, managers, gameplay systems, editor scripts, lifecycle methods, and C# style."), ("Easy Python/C# Spark", "Ordinary bounded Python/C# work stays on the current user model. Spark-low appears only in an explicit benchmark or a positively admitted tiny route, with the full normal fallback retained.")], "optimization-skill": [("Skill Optimization", "Optimize explicit, repeated-at-least-three-times, or clearly reusable stable workflows into local scripts, references, assets, prompts, or templates that save tokens."), ("Official skill compliance", "Audit skill structure, frontmatter, trigger descriptions, references, scripts, assets, and token-use behavior."), ("Local Script Conversion", "Turn stable repeated verification, image, browser, computer-control, report, or generation steps into reusable local code."), ("Reference extraction", "Move long stable instructions into references/ so they load only when the task needs them."), ("Assets and templates", "Store reusable fixtures, templates, or media in assets/ when those files are part of the optimized skill.")], "verify-skill": [("UI Review", "UI/UX, layout, responsive checks, screenshots, frontend polish, browser states, and Taste Skill visual QA."), ("Local Script Verification", "Optimized local scripts and workflows with concrete cache inputs, real outputs, rerun behavior, and output paths."), ("Skill Verification", "SKILL.md frontmatter, trigger wording, referenced files, old-name cleanup, route behavior, and skill structure."), ("Generated Artifact Verification", "Markdown, images, PDFs, documents, reports, data files, and exports through open/render/parse/inspect checks."), ("Real Evidence And Reports", "Run real checks after result presentation with concrete inputs and outputs, choose chat/Markdown/PDF evidence by complexity, and require Input/Used/Output/Why Pass for reports.")], "management-skill": [("Codex Switch", "Local Codex auth profiles, saved profile listing, usage snapshots, login refresh, profile backup/import, and confirmed account switching."), ("GitHub Sync", "Global skill mirror status, preuse checks, public-safety scan, sync, pull, push, commit, and remote hash verification."), ("Privacy-Safe Management", "Auth files, tokens, cookies, profile IDs, raw logs, cache files, and secrets stay local and are never published.")]}
-CHINESE_SKILL_CONTENTS = {"task-analyze-skill": [("无 hook inline bootstrap", "常驻策略让所有普通任务直接使用当前模型，不加载完整 Task Analyze skill。"), ("显式激活边界", "只有路由、benchmark、维护或待评估图谱才加载完整 Task Analyze；激活后默认仍是 inline。"), ("性能准入", "只有完整 Global 路径保持正确并在 token 和时间都优于 Direct 的当前可比证据，才允许委派。"), ("已准入路线显示", "仅已准入的单节点显示精简文本，已准入依赖图显示 Mermaid 和编号模型列表。"), ("运行时证明", "Raw Direct 和 Global 必须有同一 workload 的 receipt 证据后才能声明节省或准入。")], "workflow-skill": [("已准入路线执行", "只执行通过性能准入的 Task Analyze 计划，保留准确锁定 pair 和匹配 receipt。"), ("Inline 回退", "准入证据缺失、过期、跨 workload、不完整或为负时，拒绝委派并回到当前模型 inline。"), ("Main Goal / Ending Task 分流", "已准入主线完成请求后立即显示结果，验证交给之后的 Ending Real。"), ("依赖拓扑", "只执行依赖就绪节点，每个分支使用一个执行面，只有真实多节点图才 dispatch。"), ("运行时计数", "计算完整 entry/controller/child 路径，绝不把 producer-only 节省当作委派证明。")], "prompt-skill": [("全局 100% Prompt 入口", "所有项目中的可复用 prompt 或持久 AI 指令创建、审查、编辑、修复、标准化、测试、总结与优化都必须加载 Prompt。"), ("普通文案排除", "普通请求只是文本时不触发；请求目标本身必须是可复用 prompt 或持久 AI 指令。"), ("条件化 Prompt 控制", "角色、工作流/工具、自主性、推理、详细度、分隔符和示例只有在确实改善行为时才加入。"), ("无冲突契约", "明确目标、输入、要求/约束、输出、成功/失败和验证，不要求展示思维链，也不设置一刀切提问门槛。"), ("结果优先测试", "先展示完成的 prompt；代表性试验和 Real Verify 随后在 Ending Task 中运行，失败则重新打开修复。")], "code-skill": [("Prompt-in-code 集成", "先加载 Prompt，再应用 Python/C#/Unity C# 可执行字符串、格式和代码所有权规则。"), ("Karpathy Coding Guidelines", "代码思考和实现方式：假设、简单设计、命名、分支和精确修改。"), ("Python Code Checker", "Python 模块、脚本、测试、片段、prompt 变量、格式、契约、错误处理和日志规则。"), ("C# Minimal Style", "C# 和 Unity C# MonoBehaviour、ScriptableObject、manager、玩法系统、编辑器脚本、生命周期方法和 C# 风格。"), ("Easy Python/C# Spark", "普通的小范围 Python/C# 工作保留当前用户模型。Spark-low 只会出现在显式 benchmark 或已通过准入的 tiny 路线中，并保留完整常规 fallback。")], "optimization-skill": [("Skill Optimization", "把明确要求、重复至少三次或明显可复用的稳定流程优化成本地脚本、引用资料、资产、prompt 或模板。"), ("官方 skill 合规检查", "检查 skill 结构、frontmatter、触发描述、references、scripts、assets 和 token 使用方式。"), ("本地脚本转换", "把稳定重复的验证、图片、浏览器、电脑控制、报告或生成步骤转成本地可复用代码。"), ("引用资料抽取", "把较长且稳定的说明移到 references/，只在任务需要时加载。"), ("资产和模板", "当可复用 fixture、模板或媒体属于 skill 的一部分时，放进 assets/。")], "verify-skill": [("UI Review", "UI/UX、布局、响应式检查、截图、前端 polish、浏览器状态和 Taste Skill 视觉 QA。"), ("本地脚本验证", "验证优化后的本地脚本和流程，检查 cache 输入、真实输出、重复运行和输出路径。"), ("Skill 验证", "检查 SKILL.md frontmatter、触发说明、引用文件、旧名称清理、路由行为和 skill 结构。"), ("生成物验证", "通过打开、渲染、解析或检查来验证 Markdown、图片、PDF、文档、报告、数据文件和导出物。"), ("真实证据和报告", "主结果展示后再用具体输入和真实输出运行检查，按复杂度选择聊天/Markdown/PDF 证据，并要求报告包含 Input/Used/Output/Why Pass。")], "management-skill": [("Codex Switch", "本地 Codex auth profile、已保存 profile 列表、使用快照、登录刷新、profile 备份/导入和确认后的账号切换。"), ("GitHub Sync", "全局 skill 镜像状态、preuse 检查、公开安全扫描、sync、pull、push、commit 和远端 hash 验证。"), ("隐私安全管理", "auth 文件、token、cookie、profile ID、原始日志、cache 文件和 secret 保持本地，不发布出去。")]}
+SKILL_CONTENTS = {
+    "task-analyze-skill": [
+        ("Adaptive bootstrap", "Eligible ordinary production executes the saved contextual quality pair without loading the full routing skill."),
+        ("Receipt-backed movement", "One Real PASS retains, two matched PASS outcomes try one weaker rung, and quality failure upgrades one rung."),
+        ("Source-cost admission", "Two or three independent sources choose one producer or a fused graph from byte and session-context estimates before content reads."),
+        ("Performance admission", "Open-ended graphs and savings claims require current comparable correctness, token, and time evidence."),
+        ("Two-world benchmark", "Direct task has no verifier; Auto returns the task result before a separate Ending check; dispatcher cost remains a disclosed diagnostic."),
+    ],
+    "workflow-skill": [
+        ("Locked route execution", "Execute only a positively admitted plan with exact pairs, dependencies, allowlists, and receipts."),
+        ("Single-producer default", "Dependency-coupled work and small independent sources stay with one contextual producer."),
+        ("Result-first handoff", "The producer completes proportional Quick Check, presents the result, then creates a persistent End Task."),
+        ("Ending isolation", "Ending is read-only, evidence-only, at most 60 seconds, and never waits, repairs, or gates the origin."),
+        ("Runtime proof", "Every model-generated node exposes its effective pair and token/time receipt."),
+    ],
+    "prompt-skill": [
+        ("100% global prompt gate", "Always load Prompt for reusable prompt or durable-instruction creation, review, edit, repair, standardization, testing, summarization, or optimization."),
+        ("Ordinary-prose exclusion", "Do not trigger merely because an ordinary request is text; the requested artifact must itself be a reusable prompt or durable AI instruction."),
+        ("Conditional prompt controls", "Use role, workflow/tools, autonomy, reasoning, verbosity, delimiters, and examples only when they materially improve behavior."),
+        ("Conflict-free contracts", "Require explicit objective, inputs, requirements, output, success/failure, and verification without visible chain-of-thought."),
+        ("Result-first prompt testing", "Present the completed prompt first; representative trials and evidence checks run afterward in Ending."),
+    ],
+    "code-skill": [
+        ("Prompt-in-code integration", "Load Prompt first, then apply Python, C#, or Unity C# executable-string, formatting, and ownership rules."),
+        ("Karpathy Coding Guidelines", "Use explicit assumptions, simple design, clear naming, shallow branching, and surgical edits."),
+        ("Proportional Quick Check", "Light local work gets a minimal smoke; heavy/API/large/side-effect work checks syntax, names, imports, and references."),
+        ("Adaptive execution", "The task-strategy quality pair executes ordinary code work; Spark is reserved for cost-admitted independent source branches."),
+        ("Result ownership", "One producer owns the edit, Quick Check, receipt, and completed result."),
+    ],
+    "project-memory-skill": [
+        ("Working-line recall", "Recall project, module, file, symbol, branch, and version-scoped change history before editing."),
+        ("Verified record", "Record only the final verified change after the result is complete."),
+        ("Private authority", "Local JSONL is authoritative with optional Obsidian projection; public mirrors exclude private records."),
+    ],
+    "optimization-skill": [
+        ("Skill Optimization", "Optimize explicit, repeated, or clearly reusable workflows into local scripts, references, assets, prompts, or templates."),
+        ("Behavior preservation", "Remove deterministic waste without weakening correctness or changing user-visible contracts."),
+        ("Evidence separation", "The optimizer presents the finished result and a different Ending session checks immutable evidence."),
+        ("Reference extraction", "Move long stable instructions into references so they load only when needed."),
+        ("Assets and templates", "Store reusable fixtures, templates, or media when they are part of the optimized skill."),
+    ],
+    "verify-skill": [
+        ("Proportional completion evidence", "The producer owns the bounded Quick Check before presentation."),
+        ("Persistent End Task", "Create and rename a new user-visible task exactly End Task-<related task> and return without waiting."),
+        ("Deterministic manifest", "Ending runs the supplied fixed validator instead of guessing schema fields or reinterpreting prose."),
+        ("Read-only boundary", "Ending never repeats heavy tests, calls APIs, asks questions, repairs, or blocks the origin."),
+        ("Terminal verdict", "Ending returns PASS or the exact recorded BLOCKED condition."),
+    ],
+    "management-skill": [
+        ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
+        ("GitHub Sync", "Run preuse checks, public-safety scan, sync, push, and remote hash verification for both mirrors."),
+        ("Privacy-Safe Management", "Auth, tokens, cookies, raw prompts/results, receipts, logs, caches, and private learning stay local."),
+    ],
+}
+CHINESE_SKILL_CONTENTS = {
+    "task-analyze-skill": [
+        ("自适应 bootstrap", "合格普通生产任务直接执行已保存的上下文质量档，不加载完整路由 skill。"),
+        ("Receipt 证据移动", "一次 Real PASS 保留，两次匹配 PASS 降一级，质量失败升一级。"),
+        ("Source 成本准入", "两个或三个独立 source 在读取前根据 byte 与会话上下文估算选择单 producer 或融合 graph。"),
+        ("性能准入", "开放式 graph 与节省声明必须有当前可比的正确性、token 和时间证据。"),
+        ("双世界 benchmark", "Direct 主任务无 verifier；Auto 先返回结果再独立 Ending；dispatcher 只作公开诊断。"),
+    ],
+    "workflow-skill": [
+        ("锁定路线执行", "只执行 pair、依赖、allowlist 与 receipt 都准确的已准入计划。"),
+        ("单 Producer 默认", "依赖耦合工作和小型独立 source 都使用一个上下文 producer。"),
+        ("结果优先交接", "Producer 完成 Quick Check、展示结果，再创建持久 End Task。"),
+        ("Ending 隔离", "Ending 只读、只审证据、最多 60 秒，绝不等待、修复或阻塞 origin。"),
+        ("运行证明", "每个模型节点都公开实际 effective pair 和 token/time receipt。"),
+    ],
+    "prompt-skill": [
+        ("全局 100% Prompt 入口", "所有可复用 prompt 或持久 AI 指令的创建、审查、修改、修复、标准化、测试、总结与优化都加载 Prompt。"),
+        ("普通文案排除", "请求只是文字不触发；目标本身必须是可复用 prompt 或持久 AI 指令。"),
+        ("条件化控制", "角色、工具、自主性、reasoning、verbosity、分隔符和示例只在确实改善行为时使用。"),
+        ("无冲突契约", "明确目标、输入、要求、输出、成功/失败与验证，不要求展示思维链。"),
+        ("结果优先测试", "先展示完成 prompt；代表性 trial 与证据检查之后在 Ending 运行。"),
+    ],
+    "code-skill": [
+        ("Prompt-in-code 集成", "先加载 Prompt，再应用 Python、C# 或 Unity C# 的可执行字符串、格式和 ownership 规则。"),
+        ("Karpathy Coding Guidelines", "使用明确假设、简单设计、清晰命名、浅分支和精确修改。"),
+        ("成比例 Quick Check", "轻量本地工作跑最小 smoke；重型/API/大文件/副作用工作检查语法、名称、import 和引用。"),
+        ("自适应执行", "普通代码工作使用任务策略质量档；Spark 只用于成本准入的独立 source 分支。"),
+        ("结果所有权", "一个 producer 负责修改、Quick Check、receipt 与完成结果。"),
+    ],
+    "project-memory-skill": [
+        ("工作线回溯", "修改前按项目、模块、文件、symbol、branch 和 version 回溯历史。"),
+        ("验证后记录", "只在结果完成并验证后记录最终修改。"),
+        ("私有权威", "本地 JSONL 为权威，可选投影到 Obsidian；公共镜像不包含私人记录。"),
+    ],
+    "optimization-skill": [
+        ("Skill Optimization", "把明确、重复或明显可复用流程优化为本地脚本、reference、asset、prompt 或 template。"),
+        ("保持行为", "删除确定性浪费，不弱化正确性，也不改变用户可见契约。"),
+        ("证据分离", "Optimizer 先展示完成结果，再由不同 Ending session 检查不可变证据。"),
+        ("Reference 抽取", "把长且稳定的说明移到 references，仅在需要时加载。"),
+        ("Assets 与模板", "属于优化 skill 的可复用 fixture、template 或媒体放入 assets。"),
+    ],
+    "verify-skill": [
+        ("成比例完成证据", "Producer 在展示前负责边界明确的 Quick Check。"),
+        ("持久 End Task", "创建并准确命名新的用户可见 End Task-<相关任务>，不等待就返回。"),
+        ("确定性 Manifest", "Ending 执行给定固定 validator，不猜 schema 字段，也不重新解释自然语言。"),
+        ("只读边界", "Ending 不重复重型测试、不调 API、不提问、不修复、不阻塞 origin。"),
+        ("终局判定", "Ending 只返回 PASS 或准确记录的 BLOCKED 条件。"),
+    ],
+    "management-skill": [
+        ("Codex Switch", "管理本地 Codex auth profile 与确认后的账号切换。"),
+        ("GitHub Sync", "对两个镜像运行 preuse、公开安全扫描、sync、push 和远端 hash 校验。"),
+        ("隐私安全", "auth、token、cookie、原始 prompt/result、receipt、log、cache 与私人学习保持本地。"),
+    ],
+}
 
 
 def run_command(command, cwd=None):
@@ -391,8 +497,8 @@ def execution_domain_table(rows):
     lines = []
     for row in rows:
         state = "active" if row["active"] else "history-only"
-        spark = "yes" if row["spark_first"] else "no"
-        lines.append(f"- `{row['id']}` · {row['kind']} · `{row['owner_skill']}` · {state} · Spark: {spark} · [rules](./{row['reference_path']})")
+        spark = "source-eligible" if row["spark_first"] else "no"
+        lines.append(f"- `{row['id']}` · {row['kind']} · `{row['owner_skill']}` · {state} · Spark schedule: {spark} · [rules](./{row['reference_path']})")
     return "\n".join(lines)
 
 
@@ -580,8 +686,49 @@ def build_support_skill_details(rows, language="en"):
 
 def workflow_lane_section(language="en"):
     if language == "zh":
-        return ["## Main Goal 和 Ending Task", "", "普通任务无论表面复杂度如何，都由当前模型 inline 完成；完整 Task Analyze 只处理显式路由/benchmark/维护或评估图谱，Workflow 只执行已通过端到端准入的路线。", "", "```mermaid", "flowchart TD", "  A[\"用户请求\"] --> B[\"无 hook inline bootstrap\"]", "  B --> C[\"当前模型执行请求\"]", "  C --> E[\"立即显示已完成的主结果\"]", "  B -->|显式路由 / benchmark / 维护| F[\"Task Analyze\"]", "  F -->|未通过准入| C", "  F -->|通过准入| G[\"workflow-skill 执行锁定节点\"]", "  G --> E", "  E --> I[\"Ending Real 验证与学习\"]", "```", "", "- **Inline：** 默认且适用于所有表面复杂度；不加载完整 Task Analyze 或 Workflow。", "- **主结果：** 任务完成后立即展示，不运行前台 Mini/Fast Verify；first-result 时间在此停止。", "- **Ending Real：** 在展示后做真实验证、失败通知、修复与学习。", "- **Workflow：** 只有完整 Global 路径有当前可比的正确性、token 和时间准入证据时才运行。", ""]
-    return ["## Main Goal And Ending Task", "", "Ordinary requests stay inline on the current model regardless of apparent complexity. Full Task Analyze handles explicit routing, benchmarks, maintenance, or graph evaluation; Workflow executes only positively admitted routes.", "", "```mermaid", "flowchart TD", "  A[\"User request\"] --> B[\"Hookless inline bootstrap\"]", "  B --> C[\"Current model executes request\"]", "  C --> E[\"Present completed result immediately\"]", "  B -->|explicit routing / benchmark / maintenance| F[\"Task Analyze\"]", "  F -->|not admitted| C", "  F -->|admitted| G[\"workflow-skill executes locked nodes\"]", "  G --> E", "  E --> I[\"Ending Real verification and learning\"]", "```", "", "- **Inline:** the default for every apparent complexity; it does not load full Task Analyze or Workflow.", "- **Main result:** present it immediately when complete, with no foreground Mini/Fast Verify; first-result time stops there.", "- **Ending Real:** verifies after presentation, then notifies, reopens, repairs, and learns when needed.", "- **Workflow:** runs only when current comparable correctness, token, and time evidence admits the complete Global path.", ""]
+        return [
+            "## Main Goal 和 Ending Task",
+            "",
+            "合格普通生产任务由紧凑 bootstrap 选择上下文质量档并执行；小型多 source 使用单 producer，只有成本或显式 latency 准入才运行 graph。",
+            "",
+            "```mermaid",
+            "flowchart TD",
+            '  A["用户请求"] --> B["任务策略质量档"]',
+            '  B --> C["自适应 Producer 或成本准入 Graph"]',
+            '  C --> Q["成比例 Quick Check"]',
+            '  Q --> R["立即展示完成结果"]',
+            '  R --> E["新建 End Task"]',
+            '  E --> V["只读 Ending 证据审计"]',
+            "```",
+            "",
+            "- **主任务：** 一个 producer 负责结果与 Quick Check；dependency-coupled 多文件绝不强制 fan-out。",
+            "- **主结果：** 完成后立即展示；first-result 时间到此停止。",
+            "- **Ending：** 新的持久任务只读检查不可变证据；origin 不等待、不轮询、不修复。",
+            "- **Workflow：** 只执行已通过成本/性能准入的锁定 graph。",
+            "",
+        ]
+    return [
+        "## Main Goal And Ending Task",
+        "",
+        "Eligible ordinary production uses the compact bootstrap to select and execute a contextual quality pair. Small multi-source work stays with one producer; only cost or explicit latency admission opens a graph.",
+        "",
+        "```mermaid",
+        "flowchart TD",
+        '  A["User request"] --> B["Task-strategy quality pair"]',
+        '  B --> C["Adaptive producer or cost-admitted graph"]',
+        '  C --> Q["Proportional Quick Check"]',
+        '  Q --> R["Present completed result immediately"]',
+        '  R --> E["Create new End Task"]',
+        '  E --> V["Read-only Ending evidence audit"]',
+        "```",
+        "",
+        "- **Main task:** one producer owns result work and Quick Check; dependency-coupled files never force fan-out.",
+        "- **Main result:** present it immediately when complete; first-result time stops there.",
+        "- **Ending:** a new persistent task audits immutable evidence; the origin never waits, polls, or repairs.",
+        "- **Workflow:** executes only a cost/performance-admitted locked graph.",
+        "",
+    ]
+
 
 
 def build_skill_details(rows, language="en"):

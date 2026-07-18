@@ -33,6 +33,7 @@ except ModuleNotFoundError:
 
 
 SCHEMA_VERSION = 1
+MIN_REAL_PASSES_BEFORE_DOWNGRADE = 2
 DEFAULT_VAULT = project_change_memory.DEFAULT_VAULT
 DEFAULT_LADDER = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "assets" / "model-capability-ladder.json"
 QUALITY_FAILURES = {"quality", "correctness"}
@@ -329,8 +330,76 @@ def _quality_verdict(record):
     return None
 
 
+def _median(values):
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def _cost_evidence(status, pairs, *, shared_hashes=None, scores=None):
+    hashes = sorted(shared_hashes or [])
+    digest = hashlib.sha256("\n".join(hashes).encode()).hexdigest() if hashes else None
+    return {
+        "status": status,
+        "compared_pairs": list(pairs),
+        "shared_cohort_count": len(hashes),
+        "shared_cohort_digest": digest,
+        "scores": {
+            pair: {"median_total_tokens": score[0], "median_process_ms": score[1]}
+            for pair, score in (scores or {}).items()
+        },
+    }
+
+
+def _like_for_like_cost_scores(records, passing_pairs):
+    candidates = list(passing_pairs)
+    if len(candidates) < 2:
+        return None, _cost_evidence("insufficient_pairs", candidates)
+    grouped = {pair: {} for pair in candidates}
+    for record in records:
+        pair = record.get("pair")
+        workload_hash = record.get("workload_prompt_sha256")
+        if pair not in grouped or _quality_verdict(record) != "pass" or not isinstance(workload_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", workload_hash):
+            continue
+        total_tokens = record.get("total_tokens")
+        process_ms = record.get("process_ms")
+        grouped[pair].setdefault(workload_hash, []).append((total_tokens, process_ms))
+    common_hashes = set(grouped[candidates[0]])
+    for pair in candidates[1:]:
+        common_hashes.intersection_update(grouped[pair])
+    if not common_hashes:
+        return None, _cost_evidence("no_common_workload", candidates)
+    cohort_scores = {pair: [] for pair in candidates}
+    for workload_hash in sorted(common_hashes):
+        for pair in candidates:
+            samples = grouped[pair][workload_hash]
+            if any(
+                isinstance(tokens, bool) or not isinstance(tokens, int) or tokens < 0
+                or isinstance(elapsed, bool) or not isinstance(elapsed, int) or elapsed < 0
+                for tokens, elapsed in samples
+            ):
+                return None, _cost_evidence("incomplete_metrics", candidates, shared_hashes=common_hashes)
+            cohort_scores[pair].append(
+                (
+                    _median([tokens for tokens, _ in samples]),
+                    _median([elapsed for _, elapsed in samples]),
+                )
+            )
+    scores = {
+        pair: (
+            _median([sample[0] for sample in samples]),
+            _median([sample[1] for sample in samples]),
+        )
+        for pair, samples in cohort_scores.items()
+    }
+    return scores, _cost_evidence("like_for_like", candidates, shared_hashes=common_hashes, scores=scores)
+
+
 def _active_recommendation(shared, pairs, query, records):
     verdicts = {}
+    pass_counts = {pair: 0 for pair in pairs}
     quality_samples = 0
     for record in records:
         pair = record.get("pair")
@@ -344,10 +413,12 @@ def _active_recommendation(shared, pairs, query, records):
             verdicts[pair] = "fail"
         elif verdicts.get(pair) != "fail":
             verdicts[pair] = "pass"
+            pass_counts[pair] += 1
     failed_pairs = [pair for pair, verdict in verdicts.items() if verdict == "fail"]
     failed_pair = max(failed_pairs, key=pairs.index) if failed_pairs else None
     passing_pairs = [pair for pair, verdict in verdicts.items() if verdict == "pass" and (failed_pair is None or pairs.index(pair) > pairs.index(failed_pair))]
     success_pair = min(passing_pairs, key=pairs.index) if passing_pairs else None
+    cost_scores, cost_evidence = _like_for_like_cost_scores(records, passing_pairs)
     selected_pair = None
     trial = False
     state = "cold_start"
@@ -357,14 +428,18 @@ def _active_recommendation(shared, pairs, query, records):
     elif failed_pair is None:
         success_index = pairs.index(success_pair)
         if success_index == 0:
-            selected_pair = success_pair
+            selected_pair = min(passing_pairs, key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair))) if cost_scores else success_pair
             state = "frozen"
-            reason = "verified_floor_retained"
+            reason = "receipt_cost_best_verified" if cost_scores else "verified_floor_retained"
+        elif pass_counts[success_pair] < MIN_REAL_PASSES_BEFORE_DOWNGRADE:
+            selected_pair = success_pair
+            state = "collecting_evidence"
+            reason = "real_pass_collecting_evidence"
         else:
             selected_pair = pairs[success_index - 1]
             trial = True
             state = "provisional"
-            reason = "real_pass_one_rung_down"
+            reason = "repeated_real_pass_one_rung_down"
     elif success_pair is None:
         failed_index = pairs.index(failed_pair)
         if failed_index + 1 < len(pairs):
@@ -385,9 +460,9 @@ def _active_recommendation(shared, pairs, query, records):
             state = "quality_boundary"
             reason = "quality_boundary_gap_trial"
         else:
-            selected_pair = success_pair
+            selected_pair = min(passing_pairs, key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair))) if cost_scores else success_pair
             state = "frozen"
-            reason = "verified_quality_boundary"
+            reason = "receipt_cost_best_verified" if cost_scores else "verified_quality_boundary"
     return {
         "selected_pair": selected_pair,
         "trial": trial,
@@ -396,6 +471,9 @@ def _active_recommendation(shared, pairs, query, records):
         "success_model": success_pair,
         "failed_model": failed_pair,
         "quality_samples": quality_samples,
+        "pass_counts": {pair: count for pair, count in pass_counts.items() if count},
+        "minimum_passes_before_downgrade": MIN_REAL_PASSES_BEFORE_DOWNGRADE,
+        "cost_evidence": cost_evidence,
     }
 
 
@@ -415,8 +493,11 @@ def _priority_producer_pair(shared, query):
     return f"{producer['id']}|{effort}"
 
 
-def _latest_record(records):
-    return max(records, key=lambda record: str(record.get("recorded_at") or ""), default=None)
+def _operational_fallback_pair(selected_pair, pairs):
+    if selected_pair not in pairs:
+        return None
+    selected_index = pairs.index(selected_pair)
+    return pairs[selected_index + 1] if selected_index + 1 < len(pairs) else None
 
 
 def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="", vault=None, ladder=DEFAULT_LADDER):
@@ -433,37 +514,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     attempt_reason = active["reason"]
     attempt_state = active["calibration_state"]
     attempt_trial = active["trial"]
-    priority_pair = _priority_producer_pair(shared, query)
-    priority_verdict = None
-    if priority_pair:
-        priority_verdicts = [_quality_verdict(record) for record in records if record.get("pair") == priority_pair]
-        priority_verdict = "fail" if "fail" in priority_verdicts else "pass" if "pass" in priority_verdicts else None
-        latest = _latest_record(records)
-        latest_operational = latest.get("operational_failure_pairs") if isinstance(latest, dict) else []
-        skip_for_repair = bool(
-            isinstance(latest, dict)
-            and latest.get("real_status") == "fail"
-            and isinstance(latest_operational, list)
-            and priority_pair in latest_operational
-        )
-        if priority_verdict == "pass":
-            attempt_pair = priority_pair
-            attempt_reason = "verified_priority_retained"
-            attempt_state = "frozen"
-            attempt_trial = False
-        elif priority_verdict == "fail":
-            attempt_reason = "priority_quality_failure_to_quality_pair"
-            attempt_state = "quality_boundary" if selected_pair else "blocked"
-            attempt_trial = selected_pair is not None
-        elif skip_for_repair:
-            attempt_reason = "priority_operational_failure_to_quality_repair"
-            attempt_state = "quality_boundary" if selected_pair else "blocked"
-            attempt_trial = selected_pair is not None
-        else:
-            attempt_pair = priority_pair
-            attempt_reason = "priority_first_text_code"
-            attempt_state = "cold_start"
-            attempt_trial = True
+    operational_fallback_pair = _operational_fallback_pair(selected_pair, pairs)
     if attempt_pair is None:
         attempt_state = "blocked"
     attempt_model, attempt_effort = attempt_pair.split("|", 1) if attempt_pair else (None, None)
@@ -484,15 +535,16 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "specificity": specificity,
         "specificity_score": score,
         "matched_records": len(records),
-        "quality_samples": active["quality_samples"] + (1 if priority_verdict else 0),
+        "quality_samples": active["quality_samples"],
         "selected_pair": selected_pair,
         "selected_model": selected_model,
         "selected_effort": selected_effort,
         "attempt_pair": attempt_pair,
         "attempt_model": attempt_model,
         "attempt_effort": attempt_effort,
-        "active_fallback_pair": selected_pair if attempt_pair and attempt_pair != selected_pair else None,
-        "priority_verdict": priority_verdict,
+        "active_fallback_pair": operational_fallback_pair,
+        "priority_verdict": None,
+        "priority_producer_scope": "scheduled_independent_sources_only",
         "trial": active["trial"],
         "reason": active["reason"],
         "calibration_state": active["calibration_state"],
@@ -501,6 +553,9 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "attempt_calibration_state": attempt_state,
         "success_model": active["success_model"],
         "failed_model": active["failed_model"],
+        "pass_counts": active["pass_counts"],
+        "minimum_passes_before_downgrade": active["minimum_passes_before_downgrade"],
+        "cost_evidence": active["cost_evidence"],
     }
 
 

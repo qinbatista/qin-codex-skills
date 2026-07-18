@@ -1,6 +1,6 @@
 # Admitted Workflow Display Templates
 
-Ordinary requests stay inline on the current model and show no route. Use these only after explicit Task Analyze activation and positive end-to-end performance admission.
+Eligible ordinary production uses the compact adaptive runner but shows no pre-result route. Exact one-source, tool-only, and image/mixed work stay inline. Use these display templates only after explicit Task Analyze activation and positive end-to-end performance admission.
 
 ## Admitted Single Node: Text Only
 
@@ -40,4 +40,4 @@ After the Mermaid diagram, list each real node with purpose, exact model ID, eff
 - Main Result always precedes Ending Task.
 - Ending Task always follows Main Result.
 - Real Verify never contributes to user-visible first-result latency.
-- A Real correctness failure notifies, reopens, repairs, and presents a corrected result.
+- A Real correctness failure is recorded and reported; repair requires a new explicit task.
