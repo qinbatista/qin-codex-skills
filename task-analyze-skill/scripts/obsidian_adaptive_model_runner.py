@@ -35,6 +35,7 @@ obsidian_model_memory = _load_file(
 SINGLE_PRODUCER_SOURCE_BYTE_LIMIT = 180_000
 ESTIMATED_SESSION_CONTEXT_TOKENS = 36_000
 ESTIMATED_CHARS_PER_TOKEN = 4
+SMALL_EDIT_MAXIMUM_COMPLEXITY_SCORE = 24
 
 
 def _emit_result_ready(result_path, ready_monotonic_ns):
@@ -104,6 +105,7 @@ def _recommend(args):
         operation=args.operation,
         modality=args.modality,
         complexity=args.complexity,
+        complexity_score=args.complexity_score,
         risk=args.risk,
         ambiguity=args.ambiguity,
         task_summary=args.task_summary,
@@ -116,16 +118,63 @@ def _zero_token_map():
     return {field: 0 for field in model_execution_receipt.TOKEN_FIELDS}
 
 
-def infer_complexity(prompt):
-    """Choose the saved easy/complex effort class without reading task files."""
+def infer_complexity_score(prompt):
+    """Score task complexity from 0 to 100 without reading task files."""
     text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
-    if re.search(r"\b(?:multi[- ]file|multiple files|six[- ]file|pipeline|architecture|migration|integration|workflow graph|large[- ]file|heavy)\b", text):
-        return "complex"
-    numeric_signals = sum(
-        marker in text
-        for marker in ("decimal", "round_half_up", "round half up", "tax", "currency", "cents", "percent")
+    explicit = re.search(r"\bcomplexity(?: score)?\s*[:=]\s*(100|[1-9]?\d)\b", text)
+    if explicit:
+        return int(explicit.group(1))
+    score = 30
+    scope_weight = 0
+    weighted_signals = (
+        (r"\b(?:multi[- ]file|multiple files|six[- ]file|across files|project[- ]wide|cross[- ]project)\b", 18),
+        (r"\b(?:architecture|migration|distributed|rollback)\b", 18),
+        (r"\b(?:integration|pipeline|workflow graph|orchestration)\b", 12),
+        (r"\b(?:security|database|concurrency|parallelism|performance|external api)\b", 15),
+        (r"\b(?:lifecycle|model routing|global skill|global skills|global task)\b", 18),
+        (r"\b(?:verification|verify|testing|tests|benchmark|regression|render|visual)\b", 10),
+        (r"\b(?:repair loops?|retry|fresh verifier|downgrade|upgrade|fallback)\b", 8),
+        (r"\b(?:separate tasks?|independent (?:checks?|tasks?)|subtasks?|own model)\b", 8),
     )
-    return "complex" if numeric_signals >= 2 else "easy"
+    for pattern, weight in weighted_signals:
+        if re.search(pattern, text):
+            scope_weight += weight
+    system_terms = sum(term in text for term in ("skill", "script", "validator", "documentation", "tests", "memory", "obsidian", "model", "ending"))
+    if system_terms >= 3:
+        scope_weight += min(20, (system_terms - 2) * 4)
+    score += scope_weight
+    if scope_weight < 20 and re.search(r"\b(?:small|tiny|simple|localized|one[- ]line|single[- ]file|exact (?:function|method|symbol)|typo|copy edit|text edit)\b", text):
+        score -= 14
+    if scope_weight < 20 and re.search(r"\b(?:edit|change|fix|modify|rename|replace|update)\b", text):
+        score -= 6
+    if re.search(r"\b(?:large[- ]file|large|heavy|exhaustive)\b", text):
+        score += 12
+    numeric_signals = sum(marker in text for marker in ("decimal", "round_half_up", "round half up", "tax", "currency", "cents", "percent"))
+    if numeric_signals >= 2:
+        score += 20
+    file_count = len(set(re.findall(r"(?<![\w./-])[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)(?![\w/-])", text)))
+    if file_count > 1:
+        score += min(20, (file_count - 1) * 5)
+    word_count = len(text.split())
+    if word_count >= 80:
+        score += 8
+    if word_count >= 160:
+        score += 8
+    return max(0, min(100, score))
+
+
+def infer_complexity(prompt):
+    return "complex" if infer_complexity_score(prompt) >= 50 else "easy"
+
+
+def infer_operation(prompt):
+    text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    for operation in ("rename", "replace", "update", "modify", "edit", "fix", "write"):
+        if re.search(rf"\b{operation}\b", text):
+            return operation
+    if re.search(r"\bchang(?:e|ing)\b", text):
+        return "edit"
+    return "work"
 
 
 def scheduled_source_paths(prompt, workdir):
@@ -362,10 +411,14 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["result_published"] = True
     receipt["result_ready_monotonic_ns"] = ready.get("monotonic_ns", main_receipt.get("result_ready_monotonic_ns"))
     receipt["model_learning_context"] = _model_learning_context(args)
+    receipt["complexity_score"] = args.complexity_score
+    receipt["complexity_band"] = obsidian_model_memory.complexity_band(args.complexity_score)
+    receipt["switch_direction"] = "no_switch"
+    receipt["switch_change"] = "scheduled_graph"
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
-    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_real_status": "pending", "model_learning_context": receipt["model_learning_context"]}
+    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_real_status": "pending", "model_learning_context": receipt["model_learning_context"]}
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary
@@ -374,7 +427,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
 def _model_learning_context(args):
     def clean(value, limit=600):
         return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
-    return {"project_root": clean(Path(args.project_root).expanduser().resolve(), 1200), "task_type": clean(args.task_type, 160), "module": clean(args.module, 160), "file": clean(args.file), "symbol": clean(args.symbol), "code_kind": clean(args.code_kind, 80), "operation": clean(args.operation, 80), "modality": clean(args.modality, 40), "complexity": clean(args.complexity, 40), "risk": clean(args.risk, 40), "ambiguity": clean(args.ambiguity, 40), "task_summary": clean(args.task_summary)}
+    return {"project_root": clean(Path(args.project_root).expanduser().resolve(), 1200), "task_type": clean(args.task_type, 160), "module": clean(args.module, 160), "file": clean(args.file), "symbol": clean(args.symbol), "code_kind": clean(args.code_kind, 80), "operation": clean(args.operation, 80), "modality": clean(args.modality, 40), "complexity": clean(args.complexity, 40), "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "risk": clean(args.risk, 40), "ambiguity": clean(args.ambiguity, 40), "task_summary": clean(args.task_summary)}
 
 
 def _pre_execution_failure(receipt_args):
@@ -408,6 +461,7 @@ def _exact_contract_recommendation(prompt, recommendation):
     guarded = dict(recommendation)
     pair = task_route_dispatcher.MODEL_ROLE_PAIRS["frontier_complex"]
     model, effort = pair.split("|", 1)
+    prior_attempt = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
     guarded.update({
         "selected_pair": pair,
         "selected_model": model,
@@ -418,6 +472,8 @@ def _exact_contract_recommendation(prompt, recommendation):
         "attempt_reason": "exact_expression_quality_guard",
         "attempt_calibration_state": "quality_boundary",
         "trial": False,
+        "switch_direction": "upgrade",
+        "switch_change": f"{prior_attempt}->{pair}",
         "reason": "exact_expression_quality_guard",
         "calibration_state": "quality_boundary",
     })
@@ -461,6 +517,8 @@ def run(args, prompt):
     started_ns = time.monotonic_ns()
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("prompt_required")
+    if not hasattr(args, "complexity_score") or args.complexity_score is None:
+        args.complexity_score = 65 if args.complexity == "complex" else 35
     recommendation = _exact_contract_recommendation(prompt, _recommend(args))
     sources = scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None
@@ -496,6 +554,14 @@ def run(args, prompt):
             break
     receipt = _merge_attempt_receipts(receipts, attempted_pairs, pair, active_pair, args.result_output)
     receipt["schedule_admission"] = admission
+    receipt["quality_pair"] = recommendation.get("selected_pair")
+    receipt["selection_reason"] = recommendation.get("attempt_reason", recommendation.get("reason"))
+    receipt["recommendation_state"] = recommendation.get("attempt_calibration_state", recommendation.get("calibration_state"))
+    receipt["trial"] = recommendation.get("attempt_trial", recommendation.get("trial"))
+    receipt["complexity_score"] = args.complexity_score
+    receipt["complexity_band"] = obsidian_model_memory.complexity_band(args.complexity_score)
+    receipt["switch_direction"] = recommendation.get("switch_direction", "no_switch")
+    receipt["switch_change"] = recommendation.get("switch_change", f"initial->{pair}")
     learning_context = _model_learning_context(args)
     receipt["model_learning_context"] = learning_context
     result_published = bool(receipt.get("result_published") is True and args.result_output.is_file() and args.result_output.stat().st_size > 0)
@@ -513,6 +579,11 @@ def run(args, prompt):
         "selected_pair": pair,
         "active_fallback_pair": active_pair,
         "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"),
+        "quality_pair": recommendation.get("selected_pair"),
+        "complexity_score": args.complexity_score,
+        "complexity_band": receipt["complexity_band"],
+        "switch_direction": receipt["switch_direction"],
+        "switch_change": receipt["switch_change"],
         "operational_failure_pairs": receipt.get("operational_failure_pairs", []),
         "trial": recommendation.get("attempt_trial", recommendation["trial"]),
         "calibration_state": recommendation.get("attempt_calibration_state", recommendation["calibration_state"]),
@@ -542,8 +613,16 @@ def resolve_fast_path_args(args, prompt):
     read_only_answer = bool(re.search(r"\b(?:read[- ]only|no edits?)\b", prompt_text, re.IGNORECASE) and re.search(r"[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)\b", prompt_text))
     task_type = args.task_type or ("question" if read_only_answer else "code")
     module_name = args.module or project_root.name or "workspace"
-    args.complexity = args.complexity or (infer_complexity(prompt) if fast_path else "easy")
-    identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, args.complexity, args.risk, args.ambiguity, prompt))
+    if args.complexity_score is None:
+        args.complexity_score = 65 if args.complexity == "complex" else 35 if args.complexity == "easy" else infer_complexity_score(prompt) if fast_path else 35
+    if isinstance(args.complexity_score, bool) or not 0 <= args.complexity_score <= 100:
+        raise ValueError("complexity_score must be an integer from 0 to 100")
+    args.complexity = "complex" if args.complexity_score >= 50 else "easy"
+    if fast_path and args.operation == "work":
+        args.operation = infer_operation(prompt)
+    complexity_band = obsidian_model_memory.complexity_band(args.complexity_score)
+    args.complexity_band = complexity_band
+    identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, prompt))
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
     default_output_root = codex_home / "tmp" / "adaptive-producer" / f"fast-{digest}"
@@ -575,6 +654,7 @@ def parse_args(argv=None):
     parser.add_argument("--operation", default="work")
     parser.add_argument("--modality", choices=sorted(obsidian_model_memory.MODALITY_VALUES), default="text")
     parser.add_argument("--complexity", choices=sorted(obsidian_model_memory.COMPLEXITY_VALUES))
+    parser.add_argument("--complexity-score", type=int)
     parser.add_argument("--risk", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--ambiguity", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--task-summary", default="")

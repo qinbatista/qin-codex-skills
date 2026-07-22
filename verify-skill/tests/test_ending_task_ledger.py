@@ -17,7 +17,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
     def producer_receipt(self, root, project_name="project", **context_updates):
         project = root / project_name
         project.mkdir(exist_ok=True)
-        context = {"project_root": str(project.resolve()), "task_type": "code", "module": "runtime", "file": "script.py", "symbol": "run", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "risk": "low", "ambiguity": "low", "task_summary": "Edit one function."}
+        context = {"project_root": str(project.resolve()), "task_type": "code", "module": "runtime", "file": "script.py", "symbol": "run", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "complexity_score": 12, "complexity_band": "small", "risk": "low", "ambiguity": "low", "task_summary": "Edit one function."}
         context.update(context_updates)
         pair = "gpt-5.3-codex-spark|low"
         receipt = {
@@ -109,7 +109,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
             events = [json.loads(line) for line in (store / "index.jsonl").read_text(encoding="utf-8").splitlines()]
             self.assertEqual(audit["terminal_status"], "blocked")
             self.assertEqual(audit["status"], "blocked")
-            self.assertTrue(audit["final_gate_passed"])
+            self.assertFalse(audit["final_gate_passed"])
             self.assertEqual(audit["root_lifecycle_id"], original["lifecycle_id"])
             self.assertEqual(audit["chain"], [original["lifecycle_id"], repair["lifecycle_id"], sibling["lifecycle_id"], third["lifecycle_id"]])
             self.assertEqual(audit["descendants"], [repair["lifecycle_id"], sibling["lifecycle_id"], third["lifecycle_id"]])
@@ -179,7 +179,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
                 else:
                     os.environ["CODEX_OBSIDIAN_VAULT"] = previous_vault
 
-    def test_bound_fail_requires_class_and_unavailable_memory_keeps_lifecycle_running(self):
+    def test_bound_fail_requires_class_and_unavailable_memory_still_records_local_failure(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project, receipt = self.producer_receipt(root)
@@ -193,10 +193,26 @@ class EndingTaskLedgerTests(unittest.TestCase):
             state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
         record.assert_called_once()
         self.assertEqual(record.call_args.args[1:], ("fail", "correctness"))
-        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["status"], "written")
+        self.assertEqual(result["lifecycle_status"], "failed")
+        self.assertTrue(result["repair_required"])
+        self.assertEqual(result["repair_handoff"]["action"], "create_repair_task_then_fresh_ending")
         self.assertFalse(result["final_gate_passed"])
-        self.assertEqual(state["status"], "running")
-        self.assertNotIn("model_learning", state)
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["producer_binding"]["status"], "unavailable")
+        self.assertEqual(state["model_learning"], unavailable)
+
+    def test_verification_required_lifecycle_binds_real_plan_and_model_pair(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            plan = root / "ending-plan.json"
+            plan.write_text(json.dumps({"verification_required": True}), encoding="utf-8")
+            started = LEDGER.start_lifecycle("code", root, "Run real tests", complexity_score=60, complexity_band="complex", verification_required=True, verification_plan=plan, ending_check_id="unit", selected_pair="gpt-5.6-terra|ultra", store=root / "store")
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        self.assertTrue(started["verification_required"])
+        self.assertEqual(started["verification_plan"], str(plan.resolve()))
+        self.assertEqual(state["ending_check_id"], "unit")
+        self.assertEqual(state["selected_pair"], "gpt-5.6-terra|ultra")
 
     def test_unregistered_broad_model_switch_is_a_successful_learning_noop(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -11,14 +11,14 @@ The shared registry may be atomically bootstrapped from the local cache when mis
 
 ## Start And End Flow
 
-1. Every eligible text/code production task reads the generated registry and its matching Obsidian context.
-2. The contextual quality pair runs directly. A cold context is a real producer route rather than an inline dead end; the optional fast producer is schedule-only for disjoint source branches.
-3. A zero-result, zero-token operational failure may run one stronger quality pair in the same receipt.
+1. Every submission receives a deterministic `0-100` score and band. Eligible text/code production also reads the generated registry and its matching Obsidian context.
+2. A low-risk, low-ambiguity text/code edit scoring `0-24` tries Spark first. Other production runs the contextual quality pair directly. Spark may also serve an admitted disjoint source branch.
+3. A zero-result, zero-token Spark operational failure may run the contextual quality pair in the same receipt. A quality-pair operational failure may run one stronger quality pair.
 4. The result is presented immediately.
-5. The lifecycle starts with `--producer-receipt`; its Ending PASS/FAIL event automatically writes the producer outcome to Obsidian.
+5. The hard-required lifecycle starts with score/band and `--producer-receipt` when present; its Ending PASS/FAIL event stores the score locally and automatically writes a receipt-backed producer outcome, switch direction, and next pair to Obsidian.
 6. The next matching task moves exactly one rung, freezes a verified floor/boundary, or reuses a frozen pair.
 
-The automatic Ending write stores sanitized model/effort, quality verdict, task context, tokens, timing, and receipt hash on the existing broad page. Project, task, module, file, symbol, and code remain record fields; no hierarchy notes are created. It never stores raw prompts, raw results, credentials, or secrets. A verifier pair is never learned as the producer.
+The automatic Ending write stores sanitized model/effort, complexity score/band, quality verdict, task context, tokens, timing, switch direction, next pair, and receipt hash on the existing broad page. Project, task, module, file, symbol, and code remain record fields; no hierarchy notes are created. It never stores raw prompts, raw results, credentials, or secrets. A verifier pair is never learned as the producer.
 
 Each terminal write rebuilds the six sections on that same broad `Model Switch.md` page. Categories are exactly `normal-script-update`, `code-design`, `finding-bugs`, `tests-verification`, `documentation-instructions`, and `general-work`; public `switch_direction` values are exactly `initial`, `upgrade`, `downgrade`, `freeze`, `no_switch`, and `operational_fallback`. The initial attempt is displayed separately from quality-ladder movement.
 
@@ -26,6 +26,7 @@ Each terminal write rebuilds the six sections on that same broad `Model Switch.m
 
 - First PASS at a pair: retain it and collect evidence. Second PASS at that pair: one rung down, effort before model.
 - Quality/correctness FAIL: one rung up, effort before stronger model; record the failure before repair.
+- Spark quality/correctness FAIL: suppress Spark for the matching project/task/operation/code-kind/score-band context and upgrade the next matching task to its contextual quality pair.
 - Operational FAIL: neutral; it does not create a quality boundary.
 - Like-for-like passing pairs: median tokens first, median process time second, weaker rung third.
 - Lowest passing pair or closed pass/fail boundary: freeze with `trial=false` until a later quality failure or catalog/policy drift.

@@ -17,6 +17,9 @@ DEFAULT_MODELS_CACHE_PATH = Path.home() / ".codex" / "models_cache.json"
 DEFAULT_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
 TASK_TYPES = ("question", "summary", "spreadsheet", "document", "code", "debug", "integration", "prompt", "script", "visual", "normal-script-update", "code-design", "finding-bugs", "documentation-instructions")
 PRIORITY_PRODUCER_TASK_TYPES = ("question", "summary", "document", "prompt", "code", "debug", "integration", "script", "normal-script-update", "code-design", "finding-bugs", "documentation-instructions")
+SMALL_EDIT_TASK_TYPES = ("document", "prompt", "code", "script", "normal-script-update", "documentation-instructions")
+SMALL_EDIT_OPERATIONS = ("edit", "fix", "modify", "rename", "replace", "update", "write")
+COMPLEXITY_BANDS = ({"id": "small", "minimum": 0, "maximum": 24}, {"id": "standard", "minimum": 25, "maximum": 49}, {"id": "complex", "minimum": 50, "maximum": 74}, {"id": "advanced", "minimum": 75, "maximum": 100})
 NUMERIC_GPT_FAMILY_PATTERN = re.compile(r"^gpt-(\d+(?:\.\d+)*)(?:-|$)", re.IGNORECASE)
 SEMANTIC_MODEL_FIELDS = ("slug", "display_name", "description", "default_reasoning_level", "visibility", "supported_in_api", "priority", "additional_speed_tiers", "input_modalities", "context_window")
 
@@ -129,7 +132,7 @@ def _priority_producer_row(model, effort_order):
     efforts = _supported_efforts(model, effort_order)
     easy_effort = "low" if "low" in efforts else efforts[0]
     complex_effort = "high" if "high" in efforts else efforts[-1]
-    return {"enabled": True, "id": model["slug"], "display_name": model.get("display_name", model["slug"]), "routing_role": "scheduled_independent_source_branch", "provider_priority": model["priority"], "provider_positioning": model.get("description", ""), "supported_in_api": bool(model.get("supported_in_api")), "input_modalities": list(model.get("input_modalities", [])), "context_window": model.get("context_window"), "codex_efforts": efforts, "adaptive_efforts": list(dict.fromkeys((easy_effort, complex_effort))), "effort_by_complexity": {"easy": easy_effort, "complex": complex_effort}, "eligible_task_types": list(PRIORITY_PRODUCER_TASK_TYPES), "eligible_modalities": ["text"], "excluded_operations": ["audit", "lookup", "read", "review", "status", "verify"], "operational_fallback": "fail_scheduled_graph", "quality_failure": "fail_scheduled_graph"}
+    return {"enabled": True, "id": model["slug"], "display_name": model.get("display_name", model["slug"]), "routing_role": "small_edit_priority_or_scheduled_source_branch", "provider_priority": model["priority"], "provider_positioning": model.get("description", ""), "supported_in_api": bool(model.get("supported_in_api")), "input_modalities": list(model.get("input_modalities", [])), "context_window": model.get("context_window"), "codex_efforts": efforts, "adaptive_efforts": list(dict.fromkeys((easy_effort, complex_effort))), "effort_by_complexity": {"easy": easy_effort, "complex": complex_effort}, "eligible_task_types": list(PRIORITY_PRODUCER_TASK_TYPES), "eligible_modalities": ["text"], "small_edit_task_types": list(SMALL_EDIT_TASK_TYPES), "small_edit_operations": list(SMALL_EDIT_OPERATIONS), "small_edit_maximum_complexity_score": 24, "excluded_operations": ["audit", "lookup", "read", "review", "status", "verify"], "operational_fallback": "contextual_quality_pair", "quality_failure": "suppress_matching_complexity_band_and_upgrade"}
 
 
 def build_registry(catalog, catalog_sha256=None):
@@ -182,7 +185,7 @@ def build_registry(catalog, catalog_sha256=None):
     cold_starts["code-design"] = cold_starts["code"]
     cold_starts["finding-bugs"] = cold_starts["debug"]
     cold_starts["documentation-instructions"] = cold_starts["document"]
-    return {"schema_version": REGISTRY_SCHEMA_VERSION, "registry_id": REGISTRY_ID, "scope": "shared_non_personal", "source": {"models_cache": "~/.codex/models_cache.json", "client_version": catalog["client_version"], "fetched_at": catalog["fetched_at"], "catalog_sha256": catalog_sha256}, "active_family": {"id": active_family_id, "numeric_version": list(active_numeric_version), "selection": "highest_numeric_gpt_family", "model_count": len(model_rows)}, "catalog_models": catalog_models, "ladder_direction": "weakest_to_strongest", "effort_order": effort_order, "role_models": role_models, "role_pairs": {"floor": floor_pair, "weak_default": weak_default_pair, "balanced_default": balanced_default_pair, "balanced_complex": balanced_complex_pair, "frontier_complex": frontier_complex_pair}, "policy": {"enabled": True, "quality_first": True, "downgrade_after_repeated_real_passes": True, "minimum_real_passes_before_downgrade": 2, "upgrade_after_quality_failure": True, "operational_failures_are_neutral": True, "freeze_lowest_verified_pair": True, "priority_producer_first_text_code": False, "priority_producer_scheduled_sources_only": priority_model is not None, "minimum_pair": floor_pair}, "priority_producer": _priority_producer_row(priority_model, effort_order), "private_learning_contract": {"authority": "obsidian_broad_model_switch", "path_template": "Model Switch.md", "specificity_order": ["project_task", "module", "file", "symbol"], "fields_only": True, "hierarchy_notes": False, "legacy_local_json": "read_only_inactive"}, "default_cold_start": balanced_default_pair, "cold_start_defaults": cold_starts, "models": model_rows}
+    return {"schema_version": REGISTRY_SCHEMA_VERSION, "registry_id": REGISTRY_ID, "scope": "shared_non_personal", "source": {"models_cache": "~/.codex/models_cache.json", "client_version": catalog["client_version"], "fetched_at": catalog["fetched_at"], "catalog_sha256": catalog_sha256}, "active_family": {"id": active_family_id, "numeric_version": list(active_numeric_version), "selection": "highest_numeric_gpt_family", "model_count": len(model_rows)}, "catalog_models": catalog_models, "ladder_direction": "weakest_to_strongest", "effort_order": effort_order, "complexity_scale": {"minimum": 0, "maximum": 100, "bands": list(COMPLEXITY_BANDS), "quality_complex_threshold": 50}, "role_models": role_models, "role_pairs": {"floor": floor_pair, "weak_default": weak_default_pair, "balanced_default": balanced_default_pair, "balanced_complex": balanced_complex_pair, "frontier_complex": frontier_complex_pair}, "policy": {"enabled": True, "quality_first": True, "downgrade_after_repeated_real_passes": True, "minimum_real_passes_before_downgrade": 2, "upgrade_after_quality_failure": True, "operational_failures_are_neutral": True, "freeze_lowest_verified_pair": True, "priority_producer_first_text_code": False, "priority_producer_first_small_edits": priority_model is not None, "priority_producer_scheduled_sources": priority_model is not None, "priority_producer_scheduled_sources_only": False, "minimum_pair": floor_pair}, "priority_producer": _priority_producer_row(priority_model, effort_order), "private_learning_contract": {"authority": "obsidian_broad_model_switch", "path_template": "Model Switch.md", "specificity_order": ["project_task", "module", "file", "symbol"], "fields_only": True, "hierarchy_notes": False, "legacy_local_json": "read_only_inactive"}, "default_cold_start": balanced_default_pair, "cold_start_defaults": cold_starts, "models": model_rows}
 
 
 def validate_registry(registry):
@@ -234,6 +237,10 @@ def validate_registry(registry):
     role_models = registry.get("role_models")
     if not isinstance(role_models, dict) or set(role_models) != {"weak", "balanced", "frontier"} or any(model not in model_ids for model in role_models.values()) or role_models["weak"] != model_ids[0] or role_models["frontier"] != model_ids[-1]:
         raise ValueError("model registry role assignments are invalid")
+    complexity_scale = registry.get("complexity_scale")
+    expected_bands = list(COMPLEXITY_BANDS)
+    if not isinstance(complexity_scale, dict) or complexity_scale.get("minimum") != 0 or complexity_scale.get("maximum") != 100 or complexity_scale.get("quality_complex_threshold") != 50 or complexity_scale.get("bands") != expected_bands:
+        raise ValueError("model registry complexity scale is invalid")
     role_pairs = registry.get("role_pairs")
     if not isinstance(role_pairs, dict) or set(role_pairs) != {"floor", "weak_default", "balanced_default", "balanced_complex", "frontier_complex"} or any(pair not in valid_pairs for pair in role_pairs.values()) or role_pairs["floor"] != valid_pairs[0]:
         raise ValueError("model registry role pairs are invalid")
@@ -247,7 +254,7 @@ def validate_registry(registry):
         raise ValueError("model registry cold starts are invalid")
     priority_producer = registry.get("priority_producer")
     if priority_producer is not None:
-        if not isinstance(priority_producer, dict) or priority_producer.get("id") in model_ids or priority_producer.get("input_modalities") != ["text"] or priority_producer.get("routing_role") != "scheduled_independent_source_branch":
+        if not isinstance(priority_producer, dict) or priority_producer.get("id") in model_ids or priority_producer.get("input_modalities") != ["text"] or priority_producer.get("routing_role") != "small_edit_priority_or_scheduled_source_branch":
             raise ValueError("model registry priority producer is invalid")
         efforts = priority_producer.get("codex_efforts")
         if not isinstance(efforts, list) or not efforts or efforts != [effort for effort in effort_order if effort in efforts]:
@@ -255,8 +262,10 @@ def validate_registry(registry):
         effort_by_complexity = priority_producer.get("effort_by_complexity")
         if priority_producer.get("enabled") is not True or not isinstance(effort_by_complexity, dict) or set(effort_by_complexity) != {"easy", "complex"} or any(effort not in efforts for effort in effort_by_complexity.values()):
             raise ValueError("model registry priority producer policy is invalid")
-    if policy.get("priority_producer_first_text_code") is not False or bool(priority_producer) != bool(policy.get("priority_producer_scheduled_sources_only")):
-        raise ValueError("model registry schedule-only producer admission is inconsistent")
+        if priority_producer.get("small_edit_task_types") != list(SMALL_EDIT_TASK_TYPES) or priority_producer.get("small_edit_operations") != list(SMALL_EDIT_OPERATIONS) or priority_producer.get("small_edit_maximum_complexity_score") != 24:
+            raise ValueError("model registry small-edit producer policy is invalid")
+    if policy.get("priority_producer_first_text_code") is not False or policy.get("priority_producer_scheduled_sources_only") is not False or bool(priority_producer) != bool(policy.get("priority_producer_first_small_edits")) or bool(priority_producer) != bool(policy.get("priority_producer_scheduled_sources")):
+        raise ValueError("model registry priority producer admission is inconsistent")
     if policy.get("downgrade_after_repeated_real_passes") is not True or policy.get("minimum_real_passes_before_downgrade") != 2 or policy.get("upgrade_after_quality_failure") is not True:
         raise ValueError("model registry adaptive learning policy is invalid")
     priority_producer_id = priority_producer.get("id") if isinstance(priority_producer, dict) else None

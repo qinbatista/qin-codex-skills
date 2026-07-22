@@ -136,6 +136,11 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                 (skill_dir / "SKILL.md").write_text("project-memory-skill\n", encoding="utf-8")
                 (skill_dir / "scripts").mkdir()
                 (skill_dir / "scripts" / "obsidian_model_memory.py").write_text((source.parent / "project-memory-skill" / "scripts" / "obsidian_model_memory.py").read_text(encoding="utf-8"), encoding="utf-8")
+            elif skill_name == "verify-skill":
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text((source.parent / "verify-skill" / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
+                (skill_dir / "scripts").mkdir()
+                (skill_dir / "scripts" / "ending_verification_plan.py").write_text((source.parent / "verify-skill" / "scripts" / "ending_verification_plan.py").read_text(encoding="utf-8"), encoding="utf-8")
             else:
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "SKILL.md").write_text(f"{skill_name}\n", encoding="utf-8")
@@ -166,9 +171,11 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         csharp_text = (skills_root / "code-skill" / "references" / "csharp-rules.md").read_text(encoding="utf-8")
         unity_text = (skills_root / "code-skill" / "references" / "unity-csharp-rules.md").read_text(encoding="utf-8")
         self.assertIn("Before presenting a light/local Python edit", python_text)
-        self.assertIn("separate persistent Codex thread and return without waiting", python_text)
+        self.assertIn("build real proportional Ending checks", python_text)
+        self.assertIn("Every required check must PASS", python_text)
         self.assertIn("Before presentation, run the smallest safe local smoke", csharp_text)
-        self.assertIn("separate `End Task-{concise related task name}` thread", csharp_text)
+        self.assertIn("separate scored/modelled End Tasks", csharp_text)
+        self.assertIn("All required checks must PASS", csharp_text)
         self.assertNotIn("check before the main result", csharp_text.lower())
         self.assertIn("uses this file plus", unity_text)
 
@@ -450,20 +457,21 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Producer owns files/skills/Mini Test", bootstrap_text)
-            self.assertIn("create/link `End Task-{task name}` if available", bootstrap_text)
-            self.assertIn("never subtask/emulate/wait/self-verify", bootstrap_text)
-            self.assertIn("Ending <=60s evidence-only", bootstrap_text)
-            self.assertIn("never gates", bootstrap_text)
+            self.assertIn("one own scored/model End Task per independent real test/API/render", bootstrap_text)
+            self.assertIn("FAIL creates Fix Task with exact error then fresh End Task", bootstrap_text)
+            self.assertIn("never same-task subtask/emulate/wait/self-verify", bootstrap_text)
+            self.assertIn("all checks must PASS", bootstrap_text)
+            self.assertIn("BLOCKED only unavailable/external/limit", bootstrap_text)
             self.assertIn("`gpt-5.6-sol|ultra`", bootstrap_text)
             self.assertIn("before skills/memory/files", bootstrap_text)
             self.assertIn("NEVER spawn/read", bootstrap_text)
             self.assertIn("task vs task+Ending", bootstrap_text)
             self.assertIn("no reread/full read/precheck", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)
-            global_agents.write_text(bootstrap_text.replace("one bounded rg/file", "one search/file", 1), encoding="utf-8")
+            global_agents.write_text(bootstrap_text.replace("task_complexity_score.py", "task_score.py", 1), encoding="utf-8")
             validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(validation["valid"])
-            self.assertTrue(any("bounded rg" in failure.lower() for failure in validation["failures"]))
+            self.assertTrue(any("task_complexity_score.py" in failure for failure in validation["failures"]))
         finally:
             shutil.rmtree(temp_dir)
 
@@ -523,7 +531,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             agent_path = temp_dir / "agents" / "openai.yaml"
-            required_term = "before skills, memory, or files"
+            required_term = "ending_verification_plan.py"
             agent_path.write_text(agent_path.read_text(encoding="utf-8").replace(required_term, "removed priority attempt"), encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])

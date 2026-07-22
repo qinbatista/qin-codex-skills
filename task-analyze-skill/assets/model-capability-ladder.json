@@ -4,9 +4,9 @@
   "scope": "shared_non_personal",
   "source": {
     "models_cache": "~/.codex/models_cache.json",
-    "client_version": "0.144.5",
-    "fetched_at": "2026-07-16T22:44:51.912505Z",
-    "catalog_sha256": "1c1c95048c7a56c130cfa0bffa8ff1ac0dbb7f25742a46cbf257f51bb039c275"
+    "client_version": "0.145.0",
+    "fetched_at": "2026-07-22T21:08:59.211408Z",
+    "catalog_sha256": "26030aba39242af8a98e68e965d819c6cbb6c259d22fdc964d30daa021390e85"
   },
   "active_family": {
     "id": "gpt-5.6",
@@ -189,6 +189,33 @@
     "max",
     "ultra"
   ],
+  "complexity_scale": {
+    "minimum": 0,
+    "maximum": 100,
+    "bands": [
+      {
+        "id": "small",
+        "minimum": 0,
+        "maximum": 24
+      },
+      {
+        "id": "standard",
+        "minimum": 25,
+        "maximum": 49
+      },
+      {
+        "id": "complex",
+        "minimum": 50,
+        "maximum": 74
+      },
+      {
+        "id": "advanced",
+        "minimum": 75,
+        "maximum": 100
+      }
+    ],
+    "quality_complex_threshold": 50
+  },
   "role_models": {
     "weak": "gpt-5.6-luna",
     "balanced": "gpt-5.6-terra",
@@ -210,14 +237,16 @@
     "operational_failures_are_neutral": true,
     "freeze_lowest_verified_pair": true,
     "priority_producer_first_text_code": false,
-    "priority_producer_scheduled_sources_only": true,
+    "priority_producer_first_small_edits": true,
+    "priority_producer_scheduled_sources": true,
+    "priority_producer_scheduled_sources_only": false,
     "minimum_pair": "gpt-5.6-luna|low"
   },
   "priority_producer": {
     "enabled": true,
     "id": "gpt-5.3-codex-spark",
     "display_name": "GPT-5.3-Codex-Spark",
-    "routing_role": "scheduled_independent_source_branch",
+    "routing_role": "small_edit_priority_or_scheduled_source_branch",
     "provider_priority": 26,
     "provider_positioning": "Ultra-fast coding model.",
     "supported_in_api": false,
@@ -256,6 +285,24 @@
     "eligible_modalities": [
       "text"
     ],
+    "small_edit_task_types": [
+      "document",
+      "prompt",
+      "code",
+      "script",
+      "normal-script-update",
+      "documentation-instructions"
+    ],
+    "small_edit_operations": [
+      "edit",
+      "fix",
+      "modify",
+      "rename",
+      "replace",
+      "update",
+      "write"
+    ],
+    "small_edit_maximum_complexity_score": 24,
     "excluded_operations": [
       "audit",
       "lookup",
@@ -264,8 +311,8 @@
       "status",
       "verify"
     ],
-    "operational_fallback": "fail_scheduled_graph",
-    "quality_failure": "fail_scheduled_graph"
+    "operational_fallback": "contextual_quality_pair",
+    "quality_failure": "suppress_matching_complexity_band_and_upgrade"
   },
   "private_learning_contract": {
     "authority": "obsidian_broad_model_switch",

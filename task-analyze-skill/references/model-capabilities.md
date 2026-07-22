@@ -3,9 +3,9 @@
 This snapshot and the shared JSON registry come from the local Codex catalog. They change only when the user explicitly runs the manual update command; ordinary routing reads the saved registry without scanning the catalog.
 
 - Source: `~/.codex/models_cache.json`
-- Codex client version: `0.144.5`
-- Local catalog snapshot: `2026-07-16T22:44:51.912505Z`
-- Semantic catalog SHA-256: `1c1c95048c7a56c130cfa0bffa8ff1ac0dbb7f25742a46cbf257f51bb039c275`
+- Codex client version: `0.145.0`
+- Local catalog snapshot: `2026-07-22T21:08:59.211408Z`
+- Semantic catalog SHA-256: `26030aba39242af8a98e68e965d819c6cbb6c259d22fdc964d30daa021390e85`
 - Registry schema: `2`
 - Active quality family: `gpt-5.6` (highest numeric GPT family)
 

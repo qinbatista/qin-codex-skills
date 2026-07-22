@@ -4,6 +4,8 @@ Date: 2026-07-17
 Frozen cohort: `real-adaptive-two-world-benchmark-v34`  
 Entry model in both arms: `gpt-5.6-sol | ultra`
 
+> **Frozen historical cohort:** This report preserves the v34 policy and measurements exactly as executed on 2026-07-17. The current lifecycle now scores every task from 0–100, prioritizes Spark-low for eligible small low-risk edits scoring 0–24, requires one separately scored/model-routed End Task per independent real check, and creates a Fix Task plus fresh End Task after failure. Those policy changes can affect future Auto results, so this cohort is evidence—not a forecast. The fixed Direct arm, controller exclusion, and task-versus-task-plus-Ending accounting method remain unchanged.
+
 ## Technical summary
 
 **The corrected skill now has a measurable reason to exist.** Across six real A/B pairs, the Auto result-producing task used **56.411% fewer logical tokens** and returned its usable result **67.873% faster** than the fixed Sol-ultra task. After adding all six separate Ending checks, the complete Auto world still used **35.072% fewer tokens** and **53.681% less sequential time** than Direct.

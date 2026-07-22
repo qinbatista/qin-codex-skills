@@ -17,7 +17,7 @@ SCHEMA_VERSION = 1
 TERMINAL_EVENTS = {"pass", "fail", "blocked"}
 ALL_EVENTS = TERMINAL_EVENTS | {"note"}
 FAILURE_CLASSES = {"none", "availability", "timeout", "protocol", "telemetry", "execution", "receipt", "quality", "correctness"}
-MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "risk", "ambiguity", "task_summary")
+MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
 
 
 def _now():
@@ -89,14 +89,22 @@ def _producer_binding(receipt_value, project_root=None):
         raise ValueError("producer receipt requires the exact sanitized model_learning_context fields")
     sanitized = {}
     for field in MODEL_CONTEXT_FIELDS:
-        maximum = 1200 if field == "project_root" else 600 if field in {"file", "symbol", "task_summary"} else 160
         value = context[field]
+        if field == "complexity_score":
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 100:
+                raise ValueError("producer model_learning_context.complexity_score must be an integer from 0 to 100")
+            sanitized[field] = value
+            continue
+        maximum = 1200 if field == "project_root" else 600 if field in {"file", "symbol", "task_summary"} else 160
         if not isinstance(value, str):
             raise ValueError(f"producer model_learning_context.{field} must be text")
         cleaned = _single_line(value, f"model_learning_context.{field}", required=field in {"project_root", "task_type", "module"}, max_length=maximum)
         if cleaned != value:
             raise ValueError(f"producer model_learning_context.{field} is not sanitized")
         sanitized[field] = cleaned
+    expected_band = "small" if sanitized["complexity_score"] <= 24 else "standard" if sanitized["complexity_score"] <= 49 else "complex" if sanitized["complexity_score"] <= 74 else "advanced"
+    if sanitized["complexity_band"] != expected_band:
+        raise ValueError("producer model_learning_context.complexity_band does not match complexity_score")
     context_root = Path(sanitized["project_root"]).expanduser().resolve()
     if not context_root.is_dir():
         raise ValueError("producer model_learning_context.project_root must be an existing directory")
@@ -125,7 +133,7 @@ def _record_bound_model_result(binding, real_status, failure_class):
         raise ValueError("bound producer receipt changed after lifecycle start")
     context = binding["model_learning_context"]
     memory = _load_model_memory_module()
-    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], bound_receipt=binding)
+    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], bound_receipt=binding)
 
 
 def _successful_model_learning_noop(result):
@@ -165,7 +173,7 @@ def _normalize_root_attempts(store, root, descendants, repair_limit):
             _write_state(store, descendant)
 
 
-def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None):
+def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair=""):
     cwd_path = Path(cwd).expanduser().resolve()
     if not cwd_path.is_dir():
         raise ValueError("cwd must be an existing directory")
@@ -173,6 +181,22 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
     project_path = Path(project_root).expanduser().resolve() if project_root else None
     if project_path is None and producer_binding:
         project_path = Path(producer_binding["model_learning_context"]["project_root"])
+    if producer_binding:
+        bound_score = producer_binding["model_learning_context"]["complexity_score"]
+        bound_band = producer_binding["model_learning_context"]["complexity_band"]
+        if complexity_score is not None and complexity_score != bound_score:
+            raise ValueError("lifecycle complexity_score does not match producer receipt")
+        if complexity_band and complexity_band != bound_band:
+            raise ValueError("lifecycle complexity_band does not match producer receipt")
+        complexity_score = bound_score
+        complexity_band = bound_band
+    elif complexity_score is not None:
+        if isinstance(complexity_score, bool) or not 0 <= complexity_score <= 100:
+            raise ValueError("complexity_score must be an integer from 0 to 100")
+        expected_band = "small" if complexity_score <= 24 else "standard" if complexity_score <= 49 else "complex" if complexity_score <= 74 else "advanced"
+        if complexity_band and complexity_band != expected_band:
+            raise ValueError("complexity_band does not match complexity_score")
+        complexity_band = expected_band
     normalized_files = _normalize_files(project_path, files or [])
     lifecycle_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:12]}"
     created_at = _now()
@@ -206,8 +230,11 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
                     _write_state(store_path, root)
                     _append_event(store_path, blocked_event)
                 raise ValueError("repair attempt limit exceeded")
-        event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary")}
-        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "module": _single_line(module, "module", required=False, max_length=160), "files": normalized_files, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
+        verification_plan_path = Path(verification_plan).expanduser().resolve() if verification_plan else None
+        if verification_required and (not verification_plan_path or not verification_plan_path.is_file()):
+            raise ValueError("verification-required lifecycle requires an existing verification plan")
+        event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _single_line(selected_pair, "selected_pair", required=False, max_length=160) or None}
+        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "module": _single_line(module, "module", required=False, max_length=160), "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
         if parent:
             parent_event = {"schema_version": SCHEMA_VERSION, "event": "repair_started", "recorded_at": created_at, "lifecycle_id": parent["lifecycle_id"], "child_lifecycle_id": lifecycle_id, "summary": f"Repair lifecycle {lifecycle_id} started"}
             parent["repair_children"].append(lifecycle_id)
@@ -217,7 +244,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
             _append_event(store_path, parent_event)
         state_path = _write_state(store_path, state)
         _append_event(store_path, event)
-    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
+    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
 
 
 def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none"):
@@ -243,23 +270,27 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
             if event_name == "fail" and failure_class == "none":
                 raise ValueError("a bound Ending fail requires an explicit failure_class")
             model_learning = _record_bound_model_result(binding, event_name, failure_class)
-            if not _successful_model_learning_noop(model_learning) and (model_learning.get("status") == "unavailable" or model_learning.get("written") is not True):
-                return {"status": "unavailable", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "model_learning": model_learning, "final_gate_passed": False, "local": {"written": False, "store": str(store_path), "state": str(_state_path(store_path, lifecycle_id))}}
             state["model_learning"] = model_learning
-            state["producer_binding"]["status"] = "no-op" if _successful_model_learning_noop(model_learning) else "recorded"
+            state["producer_binding"]["status"] = "no-op" if _successful_model_learning_noop(model_learning) else "recorded" if model_learning.get("written") is True else "unavailable"
         recorded_at = _now()
-        event = {"schema_version": SCHEMA_VERSION, "event": event_name, "recorded_at": recorded_at, "lifecycle_id": lifecycle_id, "summary": _single_line(summary, "summary"), "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "error_fingerprint": _single_line(error_fingerprint, "error_fingerprint", required=False, max_length=160) or None, "failure_class": failure_class if event_name in {"pass", "fail"} else None}
+        event = {"schema_version": SCHEMA_VERSION, "event": event_name, "recorded_at": recorded_at, "lifecycle_id": lifecycle_id, "summary": _single_line(summary, "summary"), "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "error_fingerprint": _single_line(error_fingerprint, "error_fingerprint", required=False, max_length=160) or None, "failure_class": failure_class if event_name in {"pass", "fail"} else None, "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band")}
         if model_learning is not None:
             event["model_learning"] = model_learning
+            event["switch_direction"] = model_learning.get("switch_direction")
+            event["switch_reason"] = model_learning.get("switch_reason")
+            event["next_pair"] = model_learning.get("next_pair")
         state["events"].append(event)
         state["updated_at"] = recorded_at
         if event_name in TERMINAL_EVENTS:
             state["status"] = {"pass": "passed", "fail": "failed", "blocked": "blocked"}[event_name]
         state_path = _write_state(store_path, state)
         _append_event(store_path, event)
-    output = {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": state["status"], "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
+    output = {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": state["status"], "final_gate_passed": event_name == "pass", "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
     if model_learning is not None:
         output["model_learning"] = model_learning
+    if event_name == "fail":
+        output["repair_required"] = True
+        output["repair_handoff"] = {"action": "create_repair_task_then_fresh_ending", "repair_of_lifecycle_id": lifecycle_id, "summary": event["summary"], "verification": event["verification"], "error_fingerprint": event["error_fingerprint"], "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band"), "max_repair_attempts": state.get("max_repair_attempts")}
     return output
 
 
@@ -273,7 +304,7 @@ def audit_lifecycle(lifecycle_id, store=DEFAULT_STORE):
     else:
         terminal_status = active["status"] if active["status"] in {"passed", "blocked"} else "pending"
     chain = [root["lifecycle_id"], *(state["lifecycle_id"] for state in descendants)]
-    return {"status": "pass" if terminal_status == "passed" else terminal_status, "root_lifecycle_id": root["lifecycle_id"], "active_lifecycle_id": active["lifecycle_id"], "terminal_status": terminal_status, "chain": chain, "descendants": [state["lifecycle_id"] for state in descendants], "final_gate_passed": terminal_status in {"passed", "blocked"}}
+    return {"status": "pass" if terminal_status == "passed" else terminal_status, "root_lifecycle_id": root["lifecycle_id"], "active_lifecycle_id": active["lifecycle_id"], "terminal_status": terminal_status, "complexity_score": active.get("complexity_score"), "complexity_band": active.get("complexity_band"), "chain": chain, "descendants": [state["lifecycle_id"] for state in descendants], "final_gate_passed": terminal_status == "passed"}
 
 
 def main():
@@ -290,6 +321,12 @@ def main():
     start_parser.add_argument("--repair-of-lifecycle-id", default="")
     start_parser.add_argument("--max-repair-attempts", type=int, default=DEFAULT_MAX_REPAIR_ATTEMPTS)
     start_parser.add_argument("--producer-receipt", type=Path)
+    start_parser.add_argument("--complexity-score", type=int)
+    start_parser.add_argument("--complexity-band", choices=("small", "standard", "complex", "advanced"), default="")
+    start_parser.add_argument("--verification-required", action="store_true")
+    start_parser.add_argument("--verification-plan", type=Path)
+    start_parser.add_argument("--ending-check-id", default="")
+    start_parser.add_argument("--selected-pair", default="")
     event_parser = subparsers.add_parser("event")
     event_parser.add_argument("--lifecycle-id", required=True)
     event_parser.add_argument("--event", choices=sorted(ALL_EVENTS), required=True)
@@ -301,7 +338,7 @@ def main():
     audit_parser.add_argument("--lifecycle-id", required=True)
     args = parser.parse_args()
     if args.command == "start":
-        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt)
+        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair)
     elif args.command == "event":
         output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class)
     else:

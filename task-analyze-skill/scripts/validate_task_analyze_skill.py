@@ -84,6 +84,7 @@ REQUIRED_FILES = [
     "scripts/resolve_entry_model.py",
     "scripts/model_execution_receipt.py",
     "scripts/obsidian_adaptive_model_runner.py",
+    "scripts/task_complexity_score.py",
     "scripts/model_registry.py",
     "scripts/sync_model_capabilities.py",
     "scripts/strategy_performance.py",
@@ -103,6 +104,9 @@ REQUIRED_SKILL_TEXT = [
     "hookless bootstrap",
     "matching project-scoped broad Obsidian `Model Switch.md`",
     "mandatory post-result Ending lifecycle",
+    "visible 0-100 complexity score",
+    "small low-risk edits",
+    "End Task is hard-required",
     "nested cache/fixture `SKILL.md`",
     "Activation Boundary",
     "Ordinary Inline Bootstrap",
@@ -124,7 +128,7 @@ REQUIRED_SKILL_TEXT = [
     "When `create_thread` is callable",
     "Never inspect or invoke app-server internals",
     "outer host must create the persistent End Task",
-    "never substitute a same-task subtask",
+    "substitute a same-task subtask",
     "origin final is complete after the result presentation",
     "concurrent or missing evidence is terminal BLOCKED, not a user question",
     "End-to-End Performance Admission",
@@ -145,12 +149,12 @@ REQUIRED_SKILL_TEXT = [
     "Ordinary work reads the saved ladder unchanged",
     "only an explicit user model-update request",
     "highest-version quality ladder",
-    "Ordinary result producers execute the contextual quality pair directly",
+    "eligible small edits attempt Spark-low",
     "two receipt-matched Real passes",
     "rank median logical tokens first",
     "two receipt-matched Real passes",
     "Ending Real alone records receipt-backed producer pass/fail evidence",
-    "Ending thread automatically writes that producer's Real verdict",
+    "Ending Real alone records receipt-backed producer pass/fail evidence",
     "Every benchmark entry starts from the user-selected `gpt-5.6-sol|ultra` pair",
     "Direct remains on that fixed pair",
     "Auto starts from the same entry",
@@ -183,10 +187,12 @@ REQUIRED_ROUTE_TEXT = [
     "show the completed result immediately",
     "Do not run Mini/Fast Verify before first presentation",
     "## Ordinary Entry Contract",
+    "Complexity: N/100 (band)",
+    "hard-required",
     "Eligible text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start",
     "explicit list of two or three independent read-only sources first records byte metadata",
     "Sources within the saved single-producer budget",
-    "Other exact read-only work stays inline",
+    "Exact/tool/image work uses the score-only script",
     "Design a website like YouTube",
     "Apparent complexity alone does not create a dispatcher",
     "## Explicit Or Admitted Foreground Budget",
@@ -220,13 +226,14 @@ REQUIRED_SELECTION_TEXT = [
     "highest numeric GPT family",
     "Older numeric families remain catalog-only",
     "## Quality Order",
-    "## Cold Start And Schedule Producer",
+    "## Cold Start, Score, And Spark Priority",
     "## Learning Boundary",
     "Obsidian broad `Model Switch.md`",
     "matching Obsidian broad `Model Switch.md` context",
     "terminal Ending event automatically records the matched producer verdict",
-    "optional specialized schedule producer",
-    "sole current contextual evidence authority",
+    "optional priority producer",
+    "sole current contextual model evidence authority",
+    "task_complexity_score.py",
     "Exact read-only",
     "obsidian_adaptive_model_runner.py",
     "Open-ended multi-node strategy and every savings claim remain separately performance-admitted",
@@ -273,18 +280,19 @@ REQUIRED_ADAPTIVE_TEXT = [
     "Only an explicit user model-update request",
     "preserve the last valid registry",
     "sole active private authority",
-    "contextual quality pair runs directly",
-    "schedule-only for disjoint source branches",
-    "zero-result, zero-token operational failure",
+    "deterministic `0-100` score and band",
+    "scoring `0-24` tries Spark first",
+    "suppress Spark for the matching project/task/operation/code-kind/score-band context",
+    "zero-result, zero-token Spark operational failure",
     "Evidence never crosses project keys",
     "`strategy_performance.py` remains the separate authority",
-    "Ending PASS/FAIL event automatically writes the producer outcome to Obsidian",
+    "automatically writes a receipt-backed producer outcome",
 ]
-REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status", "pending", "resolve_fast_path_args", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "scheduled_result_node_count", "parallel_branch_count"]
+REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status", "pending", "resolve_fast_path_args", "infer_complexity_score", "complexity_score", "complexity_band", "switch_direction", "switch_change", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "scheduled_result_node_count", "parallel_branch_count"]
 REQUIRED_MODEL_SWITCH_CATEGORIES = ["normal-script-update", "code-design", "finding-bugs", "tests-verification", "documentation-instructions", "general-work"]
 REQUIRED_MODEL_SWITCH_DIRECTIONS = ["initial", "upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"]
-REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "model-capability-ladder.json", "Model Switch.md", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
-REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
+REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "model-capability-ladder.json", "Model Switch.md", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "complexity_score", "complexity_band", "_priority_producer_pair", "_priority_history", "spark_verify_failure_suppresses_", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
+REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "complexity_scale", "small_edit_task_types", "small_edit_operations", "suppress_matching_complexity_band_and_upgrade", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
 REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
 REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "ENTRY_CONTEXT_ENV",
@@ -298,16 +306,18 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "pipe exact user text once via `/usr/bin/python3", "non-TTY", "obsidian_adaptive_model_runner.py", "before skills/memory/files", "except one-source exact read-only", "Wait 60s", "session id:resume once <=60s", "return result/pending", "NEVER spawn/read", "Receipt nodes direct", "never re-enter runner", "Saved ladder", "model-update refreshes cache", "never fetch", "Missing Obsidian:saved cold start,no block", "Auto=saved pair", "2 Real PASS:down 1 rung", "quality FAIL:up 1", "zero-result:stronger fallback", "Spark:schedule sources only", "2-3 sources cost-admit before reads", "single or fused graph", "dependent multi-file:one producer", "Producer owns files/skills/Mini Test", "light smoke", "heavy/API/large/side-effect checks syntax+names/references", "create/link `End Task-{task name}` if available", "never subtask/emulate/wait/self-verify", "Ending <=60s evidence-only", "never gates", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "Complex stage pairs", "Exact one-source read-only:one bounded rg/file", "no reread/full read/precheck", "No hook", "Final PASS/BLOCKED Ending-only"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "pipe exact user text once non-TTY to `/usr/bin/python3", "obsidian_adaptive_model_runner.py", "before skills/memory/files", "Exact one-source/tool/image:use `task_complexity_score.py`", "Small low-risk edit score<=24:Spark-low first", "Ending quality FAIL suppresses Spark", "next task upgrades to saved quality pair", "2 Real PASS down 1 rung", "quality FAIL up 1", "zero-result failure one stronger fallback", "Missing Obsidian uses saved cold start", "2-3 independent read-only sources cost-admit before reads", "dependent multi-file one producer", "Producer owns files/skills/Mini Test", "heavy/API/large/side-effect checks syntax+names/references", "End Task hard-required", "scored local ledger", "`ending_verification_plan.py`", "one own scored/model End Task per independent real test/API/render", "all checks must PASS", "FAIL creates Fix Task with exact error then fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal events sync local history+Obsidian Model Switch", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
-REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "create `End Task-{concise related task name}` as a separate persistent Codex thread", "no extra test/API run, no user question, no wait, and no automatic repair"]
-REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy run and check syntax plus changed method, variable, namespace, and direct-reference names", "create a separate `End Task-{concise related task name}` thread", "return without waiting"]
+REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "build real proportional Ending checks", "Every required check must PASS", "separate scoped repair task", "fresh verifier"]
+REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "separate scored/modelled End Tasks", "All required checks must PASS", "fresh verifier"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
-REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "Ending lifecycle as a <=60-second read-only handoff audit"]
+REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "mandatory scored Ending lifecycle", "ending_verification_plan.py", "fresh verifier"]
 REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "present the completed prompt first"]
+REQUIRED_VERIFY_SKILL_TEXT = ["execute a real proportional test", "ending_verification_plan.py", "own `0-100` check score", "All required checks must PASS", "create `Fix Task-{task}-{check}`", "fresh Ending task", "BLOCKED does not count as verified"]
+REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "weak_default", "balanced_default", "balanced_complex", "frontier_complex", "separate_persistent_tasks", "subprocess.run", "create_repair_task_then_fresh_ending", "max_repair_attempts"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
-MAX_GLOBAL_BOOTSTRAP_BYTES = 1152
+MAX_GLOBAL_BOOTSTRAP_BYTES = 2300
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
     "The entry is a bounded controller",
@@ -733,7 +743,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["text/code pipes exact user text once via /usr/bin/python3", "obsidian_adaptive_model_runner.py", "before skills, memory, or files", "except one-source exact read-only", "Wait 60s", "resume once <=60s", "return result or pending", "NEVER spawn or read", "Receipt nodes execute", "never re-enter", "saved pair", "two Real PASS results downgrade one rung", "quality FAIL upgrades one", "zero-result operational failure uses one stronger fallback", "Spark is schedule-only", "Two-three sources cost-admit before reads", "single producer or fused graph", "dependent multi-file uses one producer", "Producer owns skills/files/Mini Test", "Create/title/link End Task", "never subtask, emulate, wait, or self-verify", "Ending <=60s", "never gates", "Benchmark three tiers", "gpt-5.6-sol|ultra", "Direct fixed/no verify", "Auto receipt proves task child/graph", "task vs task+Ending", "controller diagnostics", "Final PASS/BLOCKED is Ending-only", "No hook"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score every task 0-100", "show score/band plus route change", "obsidian_adaptive_model_runner.py", "exact/tool/image uses task_complexity_score.py", "Small low-risk edit <=24 tries Spark-low", "quality failure suppresses its matching band", "End Task is hard-required", "ending_verification_plan.py", "one own scored/model task per independent real check", "all must PASS", "FAIL creates a separate repair task with exact error", "fresh verification", "up to three attempts", "BLOCKED never means verified", "Local lifecycle always records", "receipt-backed terminal events sync Obsidian", "Never emulate task creation", "same-task subagent", "self-verify"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
@@ -778,7 +788,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
             if normalize(forbidden) in normalize(global_agents_text):
                 failures.append(f"global AGENTS contains forbidden hook or machine-plan contract: {forbidden}")
     failures.extend(missing_terms("global entry asset", entry_asset_text, REQUIRED_GLOBAL_ENTRY_ASSET_TEXT))
-    failures.extend(missing_terms("benchmark evidence", benchmark_evidence_text, ["# Mini Test and Benchmark Evidence", "Status: PASS", "37 tests", "29 tests", "421 tests", "not a live API performance claim", "simple", "medium", "complex"]))
+    failures.extend(missing_terms("benchmark evidence", benchmark_evidence_text, ["# Mini Test and Benchmark Evidence", "Status: PASS", "37 tests", "29 tests", "448 tests", "38 tests", "17 tests", "Real-test Ending and repair lifecycle", "not a live API performance claim", "simple", "medium", "complex"]))
     if global_agents_path.exists() and entry_asset_text.replace(GLOBAL_ENTRY_ASSET_DIRECTIVE, "", 1) != global_agents_text:
         failures.append("global entry asset does not exactly match global AGENTS after removing its merge directive")
     for forbidden in FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT:
@@ -805,6 +815,16 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
             failures.append(f"{label} missing: {prompt_path}")
             continue
         failures.extend(missing_terms(label, read_text(prompt_path), required_terms))
+    verify_skill_path = global_skills_root / "verify-skill" / "SKILL.md"
+    ending_plan_path = global_skills_root / "verify-skill" / "scripts" / "ending_verification_plan.py"
+    if not verify_skill_path.exists():
+        failures.append(f"Verify skill missing: {verify_skill_path}")
+    else:
+        failures.extend(missing_terms("Verify skill", read_text(verify_skill_path), REQUIRED_VERIFY_SKILL_TEXT))
+    if not ending_plan_path.exists():
+        failures.append(f"Ending verification planner missing: {ending_plan_path}")
+    else:
+        failures.extend(missing_terms("Ending verification planner", read_text(ending_plan_path), REQUIRED_ENDING_PLAN_IMPLEMENTATION))
     nested_skill_files = [path for path in global_skills_root.rglob("SKILL.md") if ".system" not in path.relative_to(global_skills_root).parts and path.parent.parent != global_skills_root]
     if nested_skill_files:
         failures.append(f"loader-visible nested SKILL.md files remain under global skills: {len(nested_skill_files)}")

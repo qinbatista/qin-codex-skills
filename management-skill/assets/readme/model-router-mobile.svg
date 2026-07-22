@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 600 940">
   <title id="title">Per-node model router mobile diagram</title>
-  <desc id="desc">Task strategy selects the saved quality pair. Verified passes retain or downgrade one rung, quality failure upgrades one rung, and Spark is schedule-branch-only.</desc>
+  <desc id="desc">Every task receives a 0–100 score. Eligible small low-risk edits scoring 0–24 try Spark-low first; verified outcomes retain, downgrade, upgrade, or suppress Spark for the matching context.</desc>
   <rect width="600" height="940" rx="36" fill="#07111f"/>
   <text x="300" y="62" text-anchor="middle" fill="#f8fafc" font-family="Arial, sans-serif" font-size="38" font-weight="700">Model + effort router</text>
   <g font-family="Arial, sans-serif">
     <rect x="45" y="100" width="510" height="126" rx="24" fill="#0f766e"/><text x="70" y="144" fill="#ccfbf1" font-size="27" font-weight="700">Task strategy + Obsidian</text><text x="70" y="181" fill="#f0fdfa" font-size="22">1 PASS retain · 2 PASS down</text><text x="70" y="210" fill="#99f6e4" font-size="20">quality failure → one rung up</text>
     <text x="300" y="276" text-anchor="middle" fill="#f59e0b" font-size="23" font-weight="700">↓ saved contextual quality ladder ↓</text>
-    <rect x="45" y="310" width="510" height="112" rx="22" fill="#9a3412"/><text x="70" y="352" fill="#ffedd5" font-size="29" font-weight="700">Schedule branch · Spark</text><text x="70" y="390" fill="#fff7ed" font-size="20">cost-admitted only · never ordinary first</text>
+    <rect x="45" y="310" width="510" height="112" rx="22" fill="#9a3412"/><text x="70" y="352" fill="#ffedd5" font-size="29" font-weight="700">Small 0–24 · Spark-low</text><text x="70" y="390" fill="#fff7ed" font-size="20">low-risk edit first · FAIL suppresses context</text>
     <rect x="45" y="440" width="510" height="112" rx="22" fill="#4c1d95"/><text x="70" y="482" fill="#ede9fe" font-size="29" font-weight="700">5.6 weak · Luna</text><text x="70" y="520" fill="#f5f3ff" font-size="21">dynamic floor · every supported effort</text>
     <rect x="45" y="570" width="510" height="112" rx="22" fill="#1e3a8a"/><text x="70" y="612" fill="#dbeafe" font-size="29" font-weight="700">5.6 balanced · Terra</text><text x="70" y="650" fill="#eff6ff" font-size="21">after Luna · before Sol</text>
     <rect x="45" y="700" width="510" height="112" rx="22" fill="#7f1d1d"/><text x="70" y="742" fill="#fee2e2" font-size="29" font-weight="700">Saved frontier · Sol</text><text x="70" y="780" fill="#fef2f2" font-size="21">explicit local update may replace it</text>

@@ -81,6 +81,8 @@ class RoutingPolicyTests(unittest.TestCase):
         registry["priority_producer"] = None
         registry["policy"]["priority_producer_first_text_code"] = False
         registry["policy"]["priority_producer_scheduled_sources_only"] = False
+        registry["policy"]["priority_producer_first_small_edits"] = False
+        registry["policy"]["priority_producer_scheduled_sources"] = False
         next(row for row in registry["catalog_models"] if row["id"] == priority_id)["catalog_role"] = "catalog_only"
         with tempfile.TemporaryDirectory(prefix="routing-policy-registry-") as temporary:
             registry_path = Path(temporary) / "model-capability-ladder.json"

@@ -5,13 +5,13 @@ description: "Use only for explicitly requested verification as the task itself,
 
 # Verify Skill
 
-Verification has two scopes: user-requested verification as the task itself, and a <=60-second post-result Ending handoff audit. Every non-Ending user task creates that separate persistent Codex thread, but its audit is evidence-only: it does not run extra tests, APIs, broad regression, user questions, waits, or automatic repair. Code producers first apply the bounded Quick Check defined by `code-skill`; that check is completion evidence. After Quick Check, present the usable result as `CODE READY` or `MAIN RESULT READY`, include PASS/SKIPPED evidence, start the lifecycle ledger, create a persistent thread, and rename it exactly `End Task-{concise related task name}`. Link it and return without waiting. A concurrent state change records terminal BLOCKED and exits; it never gates the delivered result. Follow `references/ending-lifecycle.md`.
+Verification has two scopes: user-requested verification as the task itself, and post-result Ending Real Verify. End Task is hard-required. When the result needs verification—code/file changes, bug fixes, generated artifacts, UI/render behavior, integrations, or external actions—Ending must execute a real proportional test against the changed result; a receipt summary alone cannot PASS. Build the plan with `scripts/ending_verification_plan.py`. Give every independent check its own persistent `End Task-{task}-{check}` and select that task's model/effort from its own `0-100` check score. All required checks must PASS. Code producers still apply the bounded Quick Check before presentation; Ending is the independent proof.
 
-When the producer can express acceptance as exact receipt, JSON, exit-code, test-count, or digest checks, build one immutable evidence manifest after the result with `scripts/ending_evidence_manifest.py build`. The Ending worker executes the supplied fixed `ending_evidence_manifest.py validate` command and returns its JSON stdout exactly; it never rewrites the validator in Python/jq, guesses field names, replaces true deterministic checks with subjective reinterpretation, or invents a new acceptance condition. `BLOCKED` requires the validator to report a false/missing check, digest/state mismatch, timeout, or unavailable evidence.
+When the producer can express acceptance as an exact command, test, API probe, render check, receipt, JSON, exit-code, count, or digest, put the real command in `ending_verification_plan.py plan`. Each Ending worker executes only its assigned `run-check`, preserves stdout/stderr/exit code in evidence, and records PASS only when the command meets its expected result. `ending_evidence_manifest.py` may bind immutable inputs, but validating a manifest never replaces the real test.
 
-Never add Mini/Fast Verify before the user's first presentation. The Ending audit has no extra tests, APIs, broad regression, user questions, waits, or automatic repair.
+Never add a broad verifier before the user's first presentation. After presentation, Ending may run the real proportional unit, integration, API, build, render, visual, or state test required to prove the result. Keep each check focused; do not substitute prose inspection for an executable or observable check when one exists.
 
-A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability, then `set_thread_title` for the exact title. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, disclose that the audit was unavailable but keep the already-delivered result complete; do not silently substitute a subagent or wait loop.
+A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability, then `set_thread_title` for the exact title. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, record and disclose terminal `BLOCKED` with the exact outer-host handoff; do not silently mark the Ending lifecycle complete, substitute a subagent, or start a wait loop.
 
 When the user explicitly asks for a test, audit, review, replay, or verification as the primary task, that work is the requested result and runs normally on the current model. It does not need a fabricated pre-result verification phase.
 
@@ -21,29 +21,32 @@ The required order is:
 
 1. producer completes the requested result and, for code, runs one bounded Quick Check;
 2. show the result immediately with Quick Check PASS/SKIPPED evidence;
-3. write a lifecycle start receipt, add `--producer-receipt` when an adaptive producer created the result, create a separate persistent Codex thread, rename it `End Task-{concise related task name}`, and pass the exact handoff;
-4. run one bounded read-only handoff audit and end within 60 seconds;
-5. if evidence is missing or the state changed, record terminal `BLOCKED` and exit without asking the user or polling;
-6. run a broader test, external API check, or repair only when the user makes it a new explicit task;
-7. let the terminal ledger event automatically record sanitized routing/memory learning for the bound producer receipt.
+3. classify whether Real Verify is required; when required, build one plan containing the exact real checks and an independent score/model pair per check;
+4. write a scored lifecycle receipt, bind `--producer-receipt` when present, then create one persistent `End Task-{task}-{check}` per independent plan check;
+5. run each assigned real check and require all checks to PASS;
+6. on FAIL, record the exact command, exit code, stdout/stderr, and failure class, then automatically create `Fix Task-{task}-{check}` with that error and the allowed files; after repair, create a fresh Ending task with the same acceptance check;
+7. repeat the repair/reverify loop for at most three repair attempts; use BLOCKED only for unavailable infrastructure, external state, timeout, or exhausted repair limit;
+8. let every terminal ledger event record local history and let receipt-backed producer PASS/FAIL update Obsidian model learning.
 
-First-result latency includes Quick Check and ends at step 2. Ending time is recorded separately and never added to first-result time. The origin returns after linking the new task and states that the delivered result is complete; it does not wait or poll. The Ending task owns only its audit `PASS` or `BLOCKED` result. A tool's own returned state or process exit may be Quick Check evidence for the requested action, but it is not independent Real Verify.
+First-result latency includes Quick Check and ends at step 2. Ending time is recorded separately. The origin returns after linking the Ending tasks and does not poll. The lifecycle is verified only when every required check and any repair's fresh recheck PASS; BLOCKED does not count as verified. A tool's own producer-side state may be Quick Check evidence, but independent Ending must observe the completed result again.
 
 ## Persistent End Task Thread
 
-- Create one background Codex task after `CODE READY` or `MAIN RESULT READY`; pass it the lifecycle ID, producer receipt when present, Quick Check evidence, artifact paths, project root, touched files, a read-only mutation boundary, and origin task ID when available.
-- Use a saved project with local environment when available; otherwise use a projectless task and absolute paths. Use the configured default model unless an exact model was explicitly requested, and choose proportional reasoning effort.
-- Rename the task exactly `End Task-{concise related task name}` with `set_thread_title`, link or identify it, then return the origin immediately with `Delivery: complete; background audit started`.
-- The background task—not the returned foreground task—records and reports `PASS` or `BLOCKED` for its audit, finishes within 60 seconds, and never asks the user to resolve an external Git/state change. It must surface its terminal result in its own task or back to the origin when the host supports that.
-- If persistent task creation fails, disclose `Background audit unavailable`; never substitute a same-task subagent.
+- Build a plan with one check object per independent acceptance surface. Separate unit, integration/API, render/visual, and live-state checks when they do not share mutable state.
+- Create one persistent task per check; pass lifecycle ID, plan/check ID, exact command, score/band, selected model/effort, receipts, project root, touched files, and allowed repair scope.
+- Select quality-ladder roles by check score: small uses `weak_default`, standard `balanced_default`, complex `balanced_complex`, and advanced `frontier_complex`. Spark remains a small-edit producer, not an Ending verifier.
+- Run `ending_verification_plan.py run-check`; do not merely summarize prior Quick Check output. Independent safe checks may run concurrently. Shared-state checks remain ordered.
+- On failure, record terminal FAIL, create the repair task from `repair_handoff`, and require its new Ending task to rerun the original acceptance command. Never let the failing verifier edit the result itself.
+- If persistent task creation fails, record and disclose `BLOCKED: persistent End Task unavailable` plus the exact handoff; never substitute a same-task subagent or treat Ending as complete.
 
 ### Required Status Vocabulary
 
 - `MAIN RESULT READY`: producer work is complete, usable, and delivered.
-- `PASS`: the short Ending audit recorded sufficient handoff evidence.
-- `BLOCKED`: the short audit could not establish evidence (including concurrent state change) and has ended.
+- `PASS`: every required real check observed the expected result.
+- `FAIL`: a real check observed a defect and emitted a repair handoff.
+- `BLOCKED`: verification or repair could not run because of an external/unavailable condition or the three-attempt limit.
 
-Do not describe audit `BLOCKED` as a block on the already-delivered result.
+Do not call code verified when the lifecycle is FAIL or BLOCKED.
 
 The origin final is complete after result presentation. The End Task thread final requires lifecycle PASS or explicit BLOCKED. No hook is used or installed.
 
@@ -68,7 +71,7 @@ For receipt-backed grounded JSON, Ending Real may use `../task-analyze-skill/scr
 
 An admitted verification node preserves the locked model, effort, dependencies, input, output, and stop condition. Runtime labels are not proof; use the sanitized receipt contract in `../task-analyze-skill/references/runtime-receipts.md`. Ordinary inline Real Verify uses the current user-selected model and needs no fabricated child receipt.
 
-Routing quality learning records only the producer pair after Real. The adaptive receipt carries its project/task/module/file/symbol/code context; start the lifecycle with `--producer-receipt`, then the terminal ledger event invokes `obsidian_model_memory.py record` automatically. Obsidian broad `Model Switch.md` pages are the sole active private authority; no local model-learning file or central monthly archive is active. The current catalog may expose Spark as the priority text/code producer at low/high effort; the quality ladder and repair pair use only the highest registered numeric GPT family and switch families when a newer version appears. Operational failures are neutral; a priority-producer correctness/quality failure starts a new quality-pair repair lifecycle. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
+Routing quality learning records only the producer pair after Real. Every lifecycle stores complexity score/band locally. The adaptive receipt carries its project/task/module/file/symbol/code/operation/score-band context; start the lifecycle with `--producer-receipt`, then the terminal ledger event invokes `obsidian_model_memory.py record` automatically. Obsidian broad `Model Switch.md` pages are the sole active private model-learning authority. A small `0-24`, low-risk text/code edit tries Spark-low first. Operational failure is neutral and falls back to the contextual quality pair; Spark correctness/quality failure suppresses Spark for the matching context and upgrades the next matching task. Other quality pairs retain after one Real PASS, downgrade after two, and upgrade after quality FAIL. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
 
 ## Real Verify Workflow
 
@@ -78,7 +81,7 @@ Routing quality learning records only the producer pair after Real. The adaptive
 4. Record input, method, observed output, and pass/fail reason.
 5. On handoff pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching broad Obsidian `Model Switch.md` page before terminal PASS.
 6. On missing evidence, timeout, or concurrent state change, record lifecycle `BLOCKED` and exit; never ask the user for confirmation or start a repair.
-7. A correctness repair is a new explicit user task and receives its own Mini Test plus independent Ending audit.
+7. A correctness failure automatically creates a scoped repair task with the exact evidence; the repair receives its own Quick Check and a fresh independent Ending check.
 
 ## Artifact Guidance
 
@@ -127,11 +130,11 @@ Create a formal report only when requested or when evidence is long, visual, com
 - Never turn Quick Check into a broad test suite or independent acceptance claim.
 - Never use a same-task subagent for Ending.
 - Never substitute a progress update such as `implementation complete` for the required usable `MAIN RESULT READY` presentation.
-- Never launch multiple overlapping verifier/review workers for one lifecycle; one Ending worker owns the audit verdict.
-- Never hide task state behind repeated `wait` updates or ask a user to unblock Ending. Report only `PASS` or `BLOCKED` for the audit.
+- Never combine unrelated independent checks into one vague verifier. One Ending task owns one check; safe independent checks may run concurrently.
+- Never hide task state behind repeated waits or ask the user to fix a verified code defect manually. Report `PASS`, `FAIL` with repair handoff, or `BLOCKED` with the exact external reason.
 - Verify the user's observable result, not only the attempted method.
 - Do not hide uncertainty or a blocked environment.
 - Do not claim a model ran without runtime evidence.
-- Do not let Ending alter the already-presented result; repair requires a new explicit user task.
+- Do not let the failing Ending verifier alter the result. Create a separate repair task, then a fresh verifier task.
 - Do not let an optimization implementer verify its own work.
 - Do not push, deploy, or send external messages without authorization.

@@ -2,7 +2,7 @@
 
 Status: PASS
 
-This report is the current, reproducible evidence for the global Mini Test and detached Ending-thread contract.
+This report is the current, reproducible evidence for the global score, adaptive model, Mini Test, real-test Ending, and repair-loop contract.
 
 ## Contract checks
 
@@ -10,10 +10,11 @@ This report is the current, reproducible evidence for the global Mini Test and d
 | --- | --- |
 | `test_validate_task_analyze_skill.py` | PASS — 39 tests |
 | `validate_task_analyze_skill.py` | PASS — all supported model/effort route fixtures and 4/4 graduated prompt scenarios |
-| Full Task Analyze test discovery | PASS — 421 tests discovered and completed successfully |
-| Detached Ending non-blocking regression | PASS — concurrent external state records terminal `BLOCKED` and exits; Ending has a <=60-second, read-only audit budget with no extra tests, APIs, user questions, waits, or automatic repairs. |
+| Full Task Analyze test discovery | PASS — 448 tests discovered and completed successfully |
+| Project model/change memory | PASS — 38 tests |
+| Real-test Ending and repair lifecycle | PASS — 17 tests; executable checks capture real stdout/stderr/exit status, score each verifier, split independent checks, emit exact repair handoffs, and require fresh verification. |
 
-The direct validator checks that the global bootstrap and its source asset match exactly, remain within the compact limit, run a Mini Test for light local code, skip heavy API/large-file/expensive/side-effect execution in favor of syntax and changed-name checks, create a separate `End Task-{task name}` thread, make Ending a short non-blocking audit, and rerun the benchmark after structural changes.
+The direct validator checks that the global bootstrap and its source asset match exactly, run the score/model contract, keep the producer Quick Check bounded, create separate scored/modelled Ending tasks for independent real checks, require every check to PASS, and route a failure into a separate repair task plus fresh verification.
 
 ## Simple to complex benchmark checks
 

@@ -413,7 +413,7 @@ def adaptive_ladder_for_profile(task_family, modality, risk, complexity="easy", 
 
 
 def priority_first_pair(task_type, modality="text", operation="work", complexity="easy"):
-    """Legacy ordinary-route helper: schedule-only producers never run here."""
+    """Legacy ordinary-route helper; adaptive Spark priority is resolved by the model-memory policy."""
     return None
 
 

@@ -42,6 +42,7 @@ FAILURE_CLASSES = {"none"} | QUALITY_FAILURES | OPERATIONAL_FAILURES
 LEVEL_VALUES = {"low", "medium", "high"}
 COMPLEXITY_VALUES = {"easy", "complex"}
 MODALITY_VALUES = {"text", "mixed", "image"}
+COMPLEXITY_BANDS = (("small", 0, 24), ("standard", 25, 49), ("complex", 50, 74), ("advanced", 75, 100))
 MODEL_SWITCH_CATEGORIES = (
     "normal-script-update",
     "code-design",
@@ -75,6 +76,8 @@ FRONTMATTER_FIELDS = (
     "operation",
     "modality",
     "complexity",
+    "complexity_score",
+    "complexity_band",
     "risk",
     "ambiguity",
     "model",
@@ -102,6 +105,9 @@ FRONTMATTER_FIELDS = (
     "total_tokens",
     "process_ms",
     "receipt_sha256",
+    "switch_direction",
+    "switch_reason",
+    "next_pair",
 )
 
 
@@ -164,10 +170,33 @@ def load_shared_ladder(path=DEFAULT_LADDER):
     return payload, pairs
 
 
-def _query(project_root, task_type, module, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary=""):
+def complexity_band(complexity_score):
+    if isinstance(complexity_score, bool) or not isinstance(complexity_score, int) or not 0 <= complexity_score <= 100:
+        raise ValueError("complexity_score must be an integer from 0 to 100")
+    return next(name for name, minimum, maximum in COMPLEXITY_BANDS if minimum <= complexity_score <= maximum)
+
+
+def _legacy_complexity_score(complexity):
+    return 65 if complexity == "complex" else 35
+
+
+def _record_complexity_band(record):
+    stored_band = record.get("complexity_band")
+    if stored_band in {name for name, _, _ in COMPLEXITY_BANDS}:
+        return stored_band
+    stored_score = record.get("complexity_score")
+    if isinstance(stored_score, int) and not isinstance(stored_score, bool) and 0 <= stored_score <= 100:
+        return complexity_band(stored_score)
+    return "complex" if record.get("complexity") == "complex" else "standard"
+
+
+def _query(project_root, task_type, module, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary=""):
     project = project_change_memory._project_identity(project_root)
     if modality not in MODALITY_VALUES or complexity not in COMPLEXITY_VALUES or risk not in LEVEL_VALUES or ambiguity not in LEVEL_VALUES:
         raise ValueError("modality, complexity, risk, or ambiguity is invalid")
+    score = _legacy_complexity_score(complexity) if complexity_score is None else complexity_score
+    band = complexity_band(score)
+    derived_complexity = "complex" if score >= 50 else "easy"
     return {
         "project": project,
         "task_type": _slug(task_type, "task_type"),
@@ -178,7 +207,9 @@ def _query(project_root, task_type, module, file_value="", symbol="", code_kind=
         "code_kind": _slug(code_kind, "code_kind"),
         "operation": _slug(operation, "operation"),
         "modality": modality,
-        "complexity": complexity,
+        "complexity": derived_complexity,
+        "complexity_score": score,
+        "complexity_band": band,
         "risk": risk,
         "ambiguity": ambiguity,
     }
@@ -291,13 +322,14 @@ def _scope_score(record, query):
         "code_kind": 16,
         "operation": 32,
         "modality": 64,
-        "complexity": 8,
         "risk": 4,
         "ambiguity": 2,
     }
     for field, weight in context_weights.items():
         if query[field] and record.get(field) == query[field]:
             score += weight
+    if _record_complexity_band(record) == query["complexity_band"]:
+        score += 128
     return scope_level, score
 
 
@@ -482,15 +514,29 @@ def _priority_producer_pair(shared, query):
     if not isinstance(producer, dict) or producer.get("enabled") is not True:
         return None
     if (
-        query["task_type"] not in set(producer["eligible_task_types"])
+        query["task_type"] not in set(producer["small_edit_task_types"])
         or query["modality"] not in set(producer["eligible_modalities"])
+        or query["operation"] not in set(producer["small_edit_operations"])
         or query["operation"] in set(producer["excluded_operations"])
+        or query["complexity_score"] > producer["small_edit_maximum_complexity_score"]
+        or query["risk"] != "low"
+        or query["ambiguity"] != "low"
     ):
         return None
-    effort = producer["effort_by_complexity"].get(query["complexity"])
+    effort = producer["effort_by_complexity"]["easy"]
     if effort not in set(producer["adaptive_efforts"]):
         return None
     return f"{producer['id']}|{effort}"
+
+
+def _priority_history(records, query, priority_pair):
+    relevant = [record for record in records if record.get("task_type") == query["task_type"] and record.get("operation") == query["operation"] and record.get("code_kind") == query["code_kind"] and _record_complexity_band(record) == query["complexity_band"] and record.get("pair") == priority_pair]
+    verdicts = [_quality_verdict(record) for record in relevant]
+    if "fail" in verdicts:
+        return {"verdict": "fail", "pass_count": verdicts.count("pass"), "matched_records": len(relevant)}
+    if "pass" in verdicts:
+        return {"verdict": "pass", "pass_count": verdicts.count("pass"), "matched_records": len(relevant)}
+    return {"verdict": None, "pass_count": 0, "matched_records": len(relevant)}
 
 
 def _operational_fallback_pair(selected_pair, pairs):
@@ -500,21 +546,42 @@ def _operational_fallback_pair(selected_pair, pairs):
     return pairs[selected_index + 1] if selected_index + 1 < len(pairs) else None
 
 
-def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="", vault=None, ladder=DEFAULT_LADDER):
+def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", vault=None, ladder=DEFAULT_LADDER):
     shared, pairs = load_shared_ladder(ladder)
-    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, risk, ambiguity, task_summary)
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary)
     vault_path, memory_root = _memory_root(query, vault)
     owner = project_change_memory._registered_owner(query["project"]["root"])
     memory_configured = _is_configured_owner(vault_path, owner)
-    records = [record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])]
-    records, specificity, score = _best_scope_records(records, query)
+    project_records = [record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])]
+    records, specificity, score = _best_scope_records(project_records, query)
     active = _active_recommendation(shared, pairs, query, records)
     selected_pair = active["selected_pair"]
-    attempt_pair = selected_pair
-    attempt_reason = active["reason"]
-    attempt_state = active["calibration_state"]
-    attempt_trial = active["trial"]
-    operational_fallback_pair = _operational_fallback_pair(selected_pair, pairs)
+    priority_pair = _priority_producer_pair(shared, query)
+    priority_history = _priority_history(project_records, query, priority_pair) if priority_pair else {"verdict": None, "pass_count": 0, "matched_records": 0}
+    if priority_pair and priority_history["verdict"] != "fail":
+        attempt_pair = priority_pair
+        attempt_reason = "small_edit_spark_verified" if priority_history["verdict"] == "pass" else "small_edit_spark_priority"
+        attempt_state = "priority_verified" if priority_history["verdict"] == "pass" else "priority_trial"
+        attempt_trial = priority_history["verdict"] != "pass"
+        operational_fallback_pair = selected_pair
+        switch_direction = "freeze" if priority_history["verdict"] == "pass" else "downgrade"
+        switch_change = f"{selected_pair}->{priority_pair}"
+    elif priority_pair and priority_history["verdict"] == "fail":
+        attempt_pair = selected_pair
+        attempt_reason = "spark_verify_failure_upgrade"
+        attempt_state = "quality_boundary"
+        attempt_trial = True
+        operational_fallback_pair = _operational_fallback_pair(selected_pair, pairs)
+        switch_direction = "upgrade"
+        switch_change = f"{priority_pair}->{selected_pair}"
+    else:
+        attempt_pair = selected_pair
+        attempt_reason = active["reason"]
+        attempt_state = active["calibration_state"]
+        attempt_trial = active["trial"]
+        operational_fallback_pair = _operational_fallback_pair(selected_pair, pairs)
+        switch_direction = "downgrade" if "one_rung_down" in attempt_reason else "upgrade" if "one_rung_up" in attempt_reason or "quality_failure" in attempt_reason else "freeze" if attempt_state == "frozen" else "no_switch"
+        switch_change = f"{active['success_model'] or active['failed_model']}->{attempt_pair}" if active["success_model"] or active["failed_model"] else f"initial->{attempt_pair}"
     if attempt_pair is None:
         attempt_state = "blocked"
     attempt_model, attempt_effort = attempt_pair.split("|", 1) if attempt_pair else (None, None)
@@ -532,6 +599,9 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "code_kind": query["code_kind"],
         "operation": query["operation"],
         "modality": query["modality"],
+        "complexity": query["complexity"],
+        "complexity_score": query["complexity_score"],
+        "complexity_band": query["complexity_band"],
         "specificity": specificity,
         "specificity_score": score,
         "matched_records": len(records),
@@ -543,14 +613,18 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "attempt_model": attempt_model,
         "attempt_effort": attempt_effort,
         "active_fallback_pair": operational_fallback_pair,
-        "priority_verdict": None,
-        "priority_producer_scope": "scheduled_independent_sources_only",
+        "priority_verdict": priority_history["verdict"],
+        "priority_pass_count": priority_history["pass_count"],
+        "priority_matched_records": priority_history["matched_records"],
+        "priority_producer_scope": "small_edits_and_scheduled_independent_sources",
         "trial": active["trial"],
         "reason": active["reason"],
         "calibration_state": active["calibration_state"],
         "attempt_trial": attempt_trial,
         "attempt_reason": attempt_reason,
         "attempt_calibration_state": attempt_state,
+        "switch_direction": switch_direction,
+        "switch_change": switch_change,
         "success_model": active["success_model"],
         "failed_model": active["failed_model"],
         "pass_counts": active["pass_counts"],
@@ -618,7 +692,10 @@ def _switch_details(record):
     reason = record.get("selection_reason") or "unknown_selection_reason"
     state = record.get("recommendation_state") or "unknown_state"
     operational_failures = record.get("operational_failure_pairs") if isinstance(record.get("operational_failure_pairs"), list) else []
-    if operational_failures and effective_pair and attempt_pair and effective_pair != attempt_pair:
+    if record.get("switch_direction") in MODEL_SWITCH_DIRECTIONS and record.get("switch_reason"):
+        switch_direction = record["switch_direction"]
+        switch_reason = record["switch_reason"]
+    elif operational_failures and effective_pair and attempt_pair and effective_pair != attempt_pair:
         switch_direction = "operational_fallback"
         switch_reason = f"operational fallback after {', '.join(operational_failures)}; selection {reason}"
     elif prior_pair is None:
@@ -636,7 +713,7 @@ def _switch_details(record):
     else:
         switch_direction = "no_switch"
         switch_reason = reason
-    return {"prior_pair": prior_pair, "selected_pair": selected_pair, "effective_pair": effective_pair, "attempt_pair": attempt_pair, "switch_direction": switch_direction, "switch_reason": switch_reason}
+    return {"prior_pair": prior_pair, "selected_pair": selected_pair, "effective_pair": effective_pair, "attempt_pair": attempt_pair, "switch_direction": switch_direction, "switch_reason": switch_reason, "next_pair": record.get("next_pair")}
 
 
 def rebuild_model_switches(project_root, *, vault=None):
@@ -655,12 +732,12 @@ def rebuild_model_switches(project_root, *, vault=None):
         sections = {"normal-script-update": "Normal Script Update", "code-design": "Code Design", "finding-bugs": "Finding Bugs", "documentation-instructions": "Documentation and Instructions", "tests-verification": "Tests and Verification", "general-work": "General Work"}
         lines = [heading.rstrip(), "", "This page is the private adaptive-learning authority. Structured records are embedded below.", ""]
         for category, label in sections.items():
-            lines.extend(["## " + label, "", "| Task type | Module | File / symbol | Model | Prior / selected / effective | Direction / reason | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
+            lines.extend(["## " + label, "", "| Task type | Score | Module | File / symbol | Model | Prior / selected / effective / next | Direction / reason | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
             for record in records:
                 if _task_category(record) != category:
                     continue
                 detail = _switch_details(record)
-                lines.append(f"| {record.get('task_type','')} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('model','')} / {record.get('effort','')} | {detail['prior_pair'] or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
+                lines.append(f"| {record.get('task_type','')} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('model','')} / {record.get('effort','')} | {detail['prior_pair'] or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
                 lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
             lines.append("")
         # Preserve unexpected records byte-semantically without displaying them
@@ -677,9 +754,9 @@ def relink_project(project_root, *, vault=None):
     return {"status": "disabled", "written": False, "project_key": project["key"], "reason": "legacy_hierarchy_relink_disabled"}
 
 
-def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None):
+def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None):
     shared, pairs = load_shared_ladder(ladder)
-    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, risk, ambiguity, task_summary)
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary)
     if real_status not in {"pass", "fail"} or failure_class not in FAILURE_CLASSES:
         raise ValueError("Real status or failure class is invalid")
     receipt_path = Path(receipt_path).expanduser().resolve()
@@ -729,7 +806,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     )
     if duplicate is not None:
         model_switch = rebuild_model_switches(project_root, vault=vault)
-        return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
+        return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "complexity_score": duplicate.get("complexity_score", query["complexity_score"]), "complexity_band": duplicate.get("complexity_band", _record_complexity_band(duplicate)), "switch_direction": duplicate.get("switch_direction", _switch_details(duplicate)["switch_direction"]), "switch_reason": duplicate.get("switch_reason", _switch_details(duplicate)["switch_reason"]), "next_pair": duplicate.get("next_pair"), "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
     recommendation = recommend_model(
         project_root,
         task_type,
@@ -740,6 +817,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         operation=operation,
         modality=modality,
         complexity=complexity,
+        complexity_score=query["complexity_score"],
         risk=risk,
         ambiguity=ambiguity,
         task_summary=task_summary,
@@ -760,6 +838,10 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     workload_hash = receipt.get("workload_prompt_sha256")
     if not isinstance(workload_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", workload_hash):
         workload_hash = None
+    priority_failure = pair in priority_pairs and real_status == "fail" and failure_class in QUALITY_FAILURES
+    recorded_switch_direction = "upgrade" if priority_failure else recommendation["switch_direction"]
+    recorded_switch_reason = f"spark_verify_failure_suppresses_{query['complexity_band']}_band" if priority_failure else recommendation["attempt_reason"]
+    next_pair = recommendation["active_fallback_pair"] if priority_failure else recommendation["attempt_pair"]
     base = {
         "model_experience_schema": SCHEMA_VERSION,
         "record_id": "",
@@ -776,13 +858,15 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "operation": query["operation"],
         "modality": query["modality"],
         "complexity": query["complexity"],
+        "complexity_score": query["complexity_score"],
+        "complexity_band": query["complexity_band"],
         "risk": query["risk"],
         "ambiguity": query["ambiguity"],
         "model": pair.split("|", 1)[0],
         "effort": pair.split("|", 1)[1],
         "pair": pair,
         "selected_pair": receipt.get("selected_pair") or receipt.get("active_fallback_pair") or (pair if historical_binding else recommendation.get("selected_pair")),
-        "prior_pair": receipt.get("prior_pair") or (recommendation.get("success_model") or recommendation.get("failed_model")),
+        "prior_pair": receipt.get("prior_pair") or (recommendation.get("selected_pair") if pair in priority_pairs else recommendation.get("success_model") or recommendation.get("failed_model")),
         "attempt_pair": priority_attempt_pair,
         "active_fallback_pair": recommendation.get("active_fallback_pair"),
         "operational_failure_pairs": operational_failure_pairs,
@@ -803,6 +887,9 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "total_tokens": tokens.get("total_tokens") if isinstance(tokens.get("total_tokens"), int) and tokens.get("total_tokens") >= 0 else None,
         "process_ms": receipt.get("process_elapsed_ms") if isinstance(receipt.get("process_elapsed_ms"), int) and receipt.get("process_elapsed_ms") >= 0 else None,
         "receipt_sha256": receipt_sha256,
+        "switch_direction": recorded_switch_direction,
+        "switch_reason": recorded_switch_reason,
+        "next_pair": next_pair,
     }
     base = _json_safe(base)
     fingerprint_payload = _json_safe({key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}})
@@ -815,7 +902,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         duplicate = next((record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"]) and record.get("receipt_sha256") == base["receipt_sha256"] and record.get("real_status") == real_status and record.get("failure_class") == failure_class), None)
         if duplicate is not None:
             model_switch = rebuild_model_switches(project_root, vault=vault)
-            return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
+            return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "complexity_score": duplicate.get("complexity_score", query["complexity_score"]), "complexity_band": duplicate.get("complexity_band", _record_complexity_band(duplicate)), "switch_direction": duplicate.get("switch_direction", _switch_details(duplicate)["switch_direction"]), "switch_reason": duplicate.get("switch_reason", _switch_details(duplicate)["switch_reason"]), "next_pair": duplicate.get("next_pair"), "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
         record_path = memory_root
         records = _read_project_records(record_path)
         records.append(_json_safe(base))
@@ -823,7 +910,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         _ensure_model_switch_index_link(vault_path, owner, record_path)
         model_switch = rebuild_model_switches(project_root, vault=vault)
         fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-    return {"status": "written", "written": True, "record_id": base["record_id"], "project_key": query["project"]["key"], "pair": pair, "real_status": real_status, "failure_class": failure_class, "shared_model_registry": shared["registry_id"], "obsidian_note": _vault_relative_path(vault_path, record_path).as_posix(), "model_switch": model_switch}
+    return {"status": "written", "written": True, "record_id": base["record_id"], "project_key": query["project"]["key"], "pair": pair, "real_status": real_status, "failure_class": failure_class, "complexity_score": query["complexity_score"], "complexity_band": query["complexity_band"], "switch_direction": recorded_switch_direction, "switch_reason": recorded_switch_reason, "next_pair": next_pair, "shared_model_registry": shared["registry_id"], "obsidian_note": _vault_relative_path(vault_path, record_path).as_posix(), "model_switch": model_switch}
 
 
 def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER):
@@ -868,6 +955,7 @@ def _add_scope_arguments(parser, *, summary_required=False):
     parser.add_argument("--operation", default="work")
     parser.add_argument("--modality", choices=sorted(MODALITY_VALUES), default="text")
     parser.add_argument("--complexity", choices=sorted(COMPLEXITY_VALUES), default="easy")
+    parser.add_argument("--complexity-score", type=int)
     parser.add_argument("--risk", choices=sorted(LEVEL_VALUES), default="low")
     parser.add_argument("--ambiguity", choices=sorted(LEVEL_VALUES), default="low")
     parser.add_argument("--task-summary", required=summary_required, default="")
@@ -905,7 +993,7 @@ def main(argv=None):
     elif args.command == "rebuild-model-switches":
         output = rebuild_model_switches(args.project_root, vault=args.vault)
     else:
-        scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, **common}
+        scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, **common}
         if args.command == "recommend":
             output = recommend_model(args.project_root, args.task_type, args.module, **scope)
         else:

@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
   <title id="title">Auto Best Model 核心流程</title>
-  <desc id="desc">先完成并返回 Codex 主任务，再启动独立且不阻塞的后台 Ending 审计。</desc>
+  <desc id="desc">先评分并完成 Codex 主任务，再为每个独立真实检查运行一个强制评分 Ending Task。</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#14213a"/></linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker>
   </defs>
   <rect width="1200" height="620" rx="28" fill="url(#background)"/>
-  <text x="48" y="60" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="32" font-weight="700">先完成主任务，再后台验证</text>
-  <text x="48" y="92" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="18">已完成的主结果绝不等待独立 Ending Task。</text>
+  <text x="48" y="60" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="32" font-weight="700">先完成主任务，再执行强制真实验证</text>
+  <text x="48" y="92" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="18">每个独立检查使用自己的评分 Ending；所有必需检查都要 PASS。</text>
 
   <path d="M174 266H218 M466 266H510 M790 266H830 M974 266H1014" fill="none" stroke="#64748b" stroke-width="4" marker-end="url(#arrow)"/>
 
@@ -38,8 +38,8 @@
   <text x="902" y="280" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="19" font-weight="700">立即返回</text>
 
   <rect x="1014" y="152" width="146" height="228" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
-  <text x="1087" y="190" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="14" font-weight="700">4  独立后台</text>
-  <text x="1087" y="228" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="17" font-weight="700">Ending Task</text>
+  <text x="1087" y="190" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="14" font-weight="700">4  强制验证</text>
+  <text x="1087" y="228" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="17" font-weight="700">Ending Task(s)</text>
   <text x="1087" y="254" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="14">只读审计</text>
   <line x1="1038" y1="276" x2="1136" y2="276" stroke="#6b4b88"/>
   <text x="1087" y="309" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="17" font-weight="700">文件已修改？</text>
@@ -47,5 +47,5 @@
 
   <rect x="90" y="458" width="1020" height="104" rx="22" fill="#0d2435" stroke="#334155"/>
   <text x="600" y="500" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="23" font-weight="700">主任务：完成 → 检查 → 返回</text>
-  <text x="600" y="536" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="17">然后另开后台 Ending Task，不等待。</text>
+  <text x="600" y="536" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="17">每个独立真实检查都另开评分并选模的 Ending Task。</text>
 </svg>

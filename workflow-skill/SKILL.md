@@ -71,13 +71,13 @@ For a dispatcher use ongoing `run-plan` session -> `result-ready` event -> bound
 
 ## Mandatory Ending Task
 
-Ending Task begins only after the main result and is mandatory for read-only/write and simple/complex work. It is always a separate persistent Codex task named `End Task-{concise related task name}`; never a same-task subagent. The result-producing surface creates it only when the thread tools are callable; otherwise the outer host consumes the emitted handoff and creates it. Tool absence must end the producer session, not trigger app-server archaeology or a blocking workaround. Ending owns a <=60-second read-only handoff audit only—no broader regression, visual replay, API, optimization verification, report, or repair unless the user explicitly makes that work a new task. Start the lifecycle with `--producer-receipt` for adaptive results and pass that receipt to the new task; the terminal ledger event automatically records receipt-backed pass/fail to an Obsidian broad `Model Switch.md` page.
+Ending begins only after the main result and is mandatory. For verification-needed results, build `ending_verification_plan.py` and create one persistent `End Task-{task}-{check}` per independent real unit/integration/API/build/render/state check. Each check has its own `0-100` score and quality-ladder model/effort; all required checks must PASS. The result-producing surface creates tasks only when thread tools are callable; otherwise it emits BLOCKED handoffs for the outer host. Start the local lifecycle with score, plan, and `--producer-receipt` when present.
 
 The End Task thread starts its worker prompt with `ENDING_TASK_WORKER`; any locked-route metadata follows that marker. It never restarts Task Analyze/Workflow, silently changes the delivered result, asks the user to resolve external state, or waits/polls. A concurrent state change records terminal `BLOCKED` and exits. The origin returns after creating and linking the thread with its result complete; the End Task thread final requires lifecycle `PASS` or explicit `BLOCKED`.
 
-Do not run Mini/Fast Verify before the user first sees the result; show the main result immediately. Ending bypasses result-producing performance admission. The Ending worker starts with `ENDING_TASK_WORKER`; the lifecycle ledger must report `PASS` or explicit `BLOCKED`. Independent optimization verification, any broader test, and a repair as a new child lifecycle require a new explicit user task. Start it with `--producer-receipt` when applicable. Never wait for the final receipt manifest.
+Do not run broad verification before the user first sees the result; show the main result after Quick Check. Ending bypasses result-producing performance admission. The Ending worker starts with `ENDING_TASK_WORKER` and runs its assigned real check. PASS requires the expected observable result. FAIL records exact command/output/error and creates a separate repair task; the repaired result gets a fresh Ending task. Continue for up to three repairs. BLOCKED never counts as verified.
 
-On audit failure, persist the concrete terminal `BLOCKED` evidence and exit. A repair requires a new explicit user task; no Ending task may launch it automatically.
+On real-check failure, persist terminal FAIL evidence and emit the repair handoff automatically. Only unavailable infrastructure, external state, timeout, or exhausted repairs is BLOCKED.
 
 ## Runtime Receipt And Learning
 
@@ -89,7 +89,7 @@ Savings claims count every session once and test simple, medium, and complex sep
 
 ## Prompt And Code Rules
 
-Delegated code nodes retain `code-skill`. Ordinary text/code result producers execute their saved contextual quality pair; the catalog fast producer is schedule-only for disjoint source branches. Verifier, Ending, image/mixed, and exact read-only work remain on their active or inline route. Local execution does not fabricate model metadata.
+Delegated code nodes retain `code-skill`. Eligible small low-risk edits try the catalog Spark priority producer; other production executes the saved contextual quality pair, and Spark may also serve admitted disjoint source branches. Ending verifiers use score-derived quality pairs, never Spark. Local execution does not fabricate producer metadata.
 
 ## Files And Verification
 

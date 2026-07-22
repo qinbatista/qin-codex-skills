@@ -51,8 +51,8 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 ## Quick Check And Detached Ending
 
 - Before presenting a light/local Python edit, run the smallest safe focused smoke that exercises the changed function. For API, large-file, expensive, destructive, or import-side-effect-heavy work, skip the heavy run; use `py_compile` or AST parsing plus direct changed function, variable, import, and reference checks.
-- Present `CODE READY` with Quick Check PASS or SKIPPED evidence, then create `End Task-{concise related task name}` as a separate persistent Codex thread and return without waiting. The Ending thread has a <=60-second read-only handoff audit only: no extra test/API run, no user question, no wait, and no automatic repair; concurrent state change records BLOCKED and exits.
-- Ending inspection never silently changes the artifact already presented. If a simpler value path or any correctness failure requires an edit, notify the user, reopen the task, repair it, rerun the relevant checks, and present the corrected result.
+- Present `CODE READY` with Quick Check evidence, then build real proportional Ending checks. Create one scored/modelled persistent task per independent unit, integration/API, or runtime check and return without polling. Every required check must PASS.
+- A failing verifier records the exact command/output/error and creates a separate scoped repair task. After repair, create a fresh verifier that reruns the original check; continue for at most three attempts. BLOCKED is not verified.
 - Record an optional simplification idea without editing only when the delivered behavior is already correct and no repair is required.
 
 ## Error Handling

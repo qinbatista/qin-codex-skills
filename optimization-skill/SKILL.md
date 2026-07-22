@@ -34,7 +34,7 @@ Select only the optimization form required by the inline request or admitted nod
 Eligible optimization production follows the catalog-generated shared ladder and matching Obsidian context. An admitted optimization node follows the exact model and effort in the locked plan:
 
 - Shared role models are cold-start hints only; auto-build or refresh the highest registered numeric GPT family from weakest to strongest and exclude older families from active switching.
-- Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Eligible text/code result producers execute the saved contextual quality pair; two Real PASS results permit one-rung descent and verified correctness/quality failure moves one rung up. A zero-result operational failure may use one stronger pair. The catalog fast producer is schedule-only for disjoint source branches.
+- Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Eligible small low-risk edits try Spark first; other production executes the saved contextual quality pair. Two Real PASS results permit one-rung descent and verified correctness/quality failure moves one rung up. Spark failure suppresses the matching score band and upgrades the next task. Spark remains available for admitted disjoint source branches.
 - Correctness and quality are eligibility gates. Rank tokens, then process time, then weaker rung only when every compared Real-passing pair shares the same exact workload hash with complete metrics; otherwise use the quality boundary.
 - A frozen exact-profile pair is reused until verified failure or material ladder, hard-floor, profile, or policy drift.
 

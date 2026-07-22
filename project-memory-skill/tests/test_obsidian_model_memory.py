@@ -193,12 +193,31 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(len(module.MODEL_SWITCH_CATEGORIES), 6)
         self.assertEqual(module._task_category({"task_type": "code", "code_kind": "python", "operation": "edit"}), "normal-script-update")
 
-    def test_cold_start_executes_recommended_quality_pair_not_schedule_producer(self):
+    def test_standard_score_cold_start_executes_recommended_quality_pair(self):
         recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Cold start.", vault=self.vault)
         self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(recommendation["attempt_pair"], recommendation["selected_pair"])
         self.assertEqual(recommendation["active_fallback_pair"], "gpt-5.6-terra|high")
-        self.assertEqual(recommendation["priority_producer_scope"], "scheduled_independent_sources_only")
+        self.assertEqual(recommendation["complexity_score"], 35)
+        self.assertEqual(recommendation["priority_producer_scope"], "small_edits_and_scheduled_independent_sources")
+
+    def test_small_edit_score_uses_spark_priority_with_quality_fallback(self):
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity_score=12, risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
+        self.assertEqual(recommendation["complexity_band"], "small")
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.3-codex-spark|low")
+        self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(recommendation["active_fallback_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(recommendation["switch_direction"], "downgrade")
+
+    def test_spark_verify_failure_suppresses_matching_score_band_and_upgrades(self):
+        project = module.project_change_memory._project_identity(self.project)
+        failed = {"model_experience_schema": 1, "project_key": project["key"], "task_type": "code", "module": "other-module", "file": "", "symbol": "", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "complexity_score": 18, "complexity_band": "small", "risk": "low", "ambiguity": "low", "pair": "gpt-5.3-codex-spark|low", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "fail", "failure_class": "correctness"}
+        self.broad_page.write_text("# Model Switch\n\n<!-- model-experience: " + json.dumps(failed) + " -->\n", encoding="utf-8")
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity_score=8, risk="low", ambiguity="low", task_summary="Edit another bounded Python method.", vault=self.vault)
+        self.assertEqual(recommendation["priority_verdict"], "fail")
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(recommendation["switch_direction"], "upgrade")
+        self.assertEqual(recommendation["attempt_reason"], "spark_verify_failure_upgrade")
 
     def test_one_real_pass_collects_evidence_and_two_passes_downgrade_one_rung(self):
         first, pairs = self.active([self.quality_record("gpt-5.6-terra|medium")])

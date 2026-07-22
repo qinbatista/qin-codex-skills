@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="1040" viewBox="0 0 720 1040" role="img" aria-labelledby="title desc">
   <title id="title">Auto Best Model core flow for mobile</title>
-  <desc id="desc">A compact vertical flow that finishes and returns the main Codex task first, then starts a separate nonblocking background Ending audit.</desc>
+  <desc id="desc">A compact vertical flow that scores and finishes the main Codex task, then runs one mandatory scored Ending task per independent real check.</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#14213a"/></linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker>
   </defs>
   <rect width="720" height="1040" rx="28" fill="url(#background)"/>
-  <text x="40" y="58" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="30" font-weight="700">Finish first. Verify in background.</text>
-  <text x="40" y="88" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17">The main result never waits for Ending.</text>
+  <text x="40" y="58" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="30" font-weight="700">Finish first. Mandatory verify.</text>
+  <text x="40" y="88" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17">Each independent real check gets a scored Ending.</text>
 
   <path d="M360 180V210 M360 390V420 M360 652V682 M360 800V830" fill="none" stroke="#64748b" stroke-width="4" marker-end="url(#arrow)"/>
 
@@ -37,9 +37,9 @@
   <text x="360" y="762" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="23" font-weight="700">Return immediately</text>
 
   <rect x="110" y="830" width="500" height="130" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
-  <text x="360" y="870" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" font-weight="700">4  SEPARATE BACKGROUND TASK</text>
-  <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="700">Ending · read-only audit</text>
-  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">PASS or exact failure; main task does not wait.</text>
+  <text x="360" y="870" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" font-weight="700">4  MANDATORY ENDING TASK(S)</text>
+  <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="700">Run real checks · all PASS</text>
+  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">FAIL → Fix Task → fresh Ending, up to 3.</text>
 
-  <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">Finish → check → return → launch Ending in background</text>
+  <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">Score → finish → return → mandatory real Ending</text>
 </svg>

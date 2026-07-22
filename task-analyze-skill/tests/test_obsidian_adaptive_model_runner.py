@@ -52,6 +52,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             operation="edit",
             modality="text",
             complexity="easy",
+            complexity_score=12,
             risk="low",
             ambiguity="low",
             task_summary="Edit one method.",
@@ -100,6 +101,8 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(args.module, "fixture")
         self.assertEqual(args.task_summary, "Implement one function. Run tests.")
         self.assertEqual(args.complexity, "easy")
+        self.assertIsInstance(args.complexity_score, int)
+        self.assertEqual(args.complexity_band, module.obsidian_model_memory.complexity_band(args.complexity_score))
         self.assertRegex(args.workload_id, r"^fast-[0-9a-f]{16}$")
         self.assertEqual(args.receipt_output.parent, args.result_output.parent)
         self.assertEqual(args.receipt_output.parent.parent.parent, (root / "codex-home" / "tmp").resolve())
@@ -133,6 +136,25 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(numeric.complexity, "complex")
         self.assertEqual(multifile.complexity, "complex")
         self.assertEqual(explicit.complexity, "easy")
+
+    def test_explicit_numeric_score_overrides_inference_and_drives_band(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary, "--complexity-score", "9"]), "Complete a multi-file architecture migration.")
+        self.assertEqual(args.complexity_score, 9)
+        self.assertEqual(args.complexity, "easy")
+        self.assertEqual(module.obsidian_model_memory.complexity_band(args.complexity_score), "small")
+        self.assertEqual(module.infer_operation("Please change one text value"), "edit")
+
+    def test_complex_global_lifecycle_request_is_not_masked_by_small_edit_wording(self):
+        prompt = "Update global skills so small edits use Spark, add model routing downgrade and upgrade, build real verification tests, split independent Ending tasks, record Obsidian history, and run repair loops with fresh verifiers."
+        score = module.infer_complexity_score(prompt)
+        self.assertGreaterEqual(score, 75)
+        self.assertEqual(module.obsidian_model_memory.complexity_band(score), "advanced")
+
+    def test_one_local_typo_remains_small(self):
+        score = module.infer_complexity_score("Fix one typo in a single Python function.")
+        self.assertLessEqual(score, 24)
+        self.assertEqual(module.obsidian_model_memory.complexity_band(score), "small")
 
     def test_independent_read_only_sources_enable_safe_schedule(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -360,7 +382,7 @@ source_files must list both sources."""
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "SECRET RAW PROMPT MUST NOT BE STORED")
             receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
-        expected_fields = {"project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "risk", "ambiguity", "task_summary"}
+        expected_fields = {"project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary"}
         self.assertEqual(set(result["model_learning_context"]), expected_fields)
         self.assertEqual(receipt["model_learning_context"], result["model_learning_context"])
         self.assertEqual(result["model_learning_context"]["task_summary"], "Edit one method. Keep behavior stable.")

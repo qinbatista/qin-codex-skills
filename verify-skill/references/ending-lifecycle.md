@@ -1,35 +1,41 @@
-# Mandatory Ending Lifecycle
+# Mandatory Real-Test Ending Lifecycle
 
-Every user task, from a tiny read-only answer to a complex write, releases its completed main result and then creates one separate persistent Codex task for Ending. Code work first runs one bounded producer Quick Check. Ending is a <=60-second, read-only handoff audit; it is not a general regression, API, repair, or user-input worker.
+Every user submission records a scored local Ending lifecycle. When the completed result needs verification—code/file edits, bug fixes, generated artifacts, UI/render work, integrations, or external actions—Ending executes real proportional checks in separate persistent Codex tasks. Prior receipts or prose summaries alone cannot PASS.
 
 ## Parent sequence
 
-1. Complete the requested result. For code, run the `code-skill` Quick Check: smallest safe local smoke for light work, or syntax/name/reference checks with the heavy path skipped.
-2. Show it immediately in a user-visible commentary update beginning `CODE READY` for code or `MAIN RESULT READY` otherwise. Include the usable outcome, artifact links, Quick Check PASS/SKIPPED evidence when applicable, and `Delivery: complete — background audit starting`; a progress sentence is not a result presentation.
-3. Start a lifecycle with `scripts/ending_task_ledger.py start --producer-receipt <path>` when an eligible adaptive producer ran; omit the flag only when no producer receipt exists. Require `status=written`, `local.written=true`, and the expected receipt binding.
-4. For exact machine-checkable acceptance, generate `scripts/ending_evidence_manifest.py build` after the result and pass its immutable path plus the exact `ending_evidence_manifest.py validate` command with the lifecycle receipt, producer receipt, Quick Check evidence, absolute project/artifact paths, touched files, a read-only boundary, and origin task ID. Call `create_thread`, then `set_thread_title` with exactly `End Task-{concise related task name}`.
-5. State `Ending mode: BACKGROUND AUDIT`, link or identify the new task, and return the origin immediately with `Delivery: complete`. Do not wait, poll, or launch a same-task subagent. The background task must finish within 60 seconds with terminal `PASS` or `BLOCKED`; it never asks the user a question.
-6. If persistent task creation fails, report `Background audit unavailable`; the delivered result remains complete. Never substitute a same-task subagent.
+1. Complete the result and run the producer Quick Check for code.
+2. Present `CODE READY` or `MAIN RESULT READY` with paths, complexity score/band, route change, and Quick Check evidence.
+3. Define observable acceptance commands. Use `scripts/ending_verification_plan.py plan` with one check per independent unit, integration/API, build, render/visual, or live-state surface.
+4. Give every check its own complexity score. The planner selects `weak_default`, `balanced_default`, `balanced_complex`, or `frontier_complex`; Spark is not an Ending verifier.
+5. Start the local lifecycle with `--verification-required --verification-plan`, score/band, and `--producer-receipt` when present.
+6. Create and title one persistent `End Task-{task}-{check}` per plan item, using that check's selected model and effort. Pass the exact `run-check` command, lifecycle/receipt paths, project root, touched files, and repair boundary. Safe independent checks may run concurrently; shared-state checks stay ordered.
+7. Link the tasks and return the origin without polling. Missing task creation is terminal BLOCKED and is not verification.
 
-## Audit pass
+## Real check PASS
 
-The independent auditor records `event --event pass` after checking the supplied handoff and one bounded read-only evidence item. When an immutable evidence manifest is supplied, execute its fixed validator command and return the JSON stdout exactly; never author a substitute checker or reinterpret its fields. It does not rerun tests or call APIs. With a bound producer receipt, the ledger first writes its sanitized PASS outcome to Obsidian and only then commits the terminal event; duplicate learning writes are idempotent. Ineligible inline work never fabricates a model receipt.
+The Ending worker runs `ending_verification_plan.py run-check` for its assigned check. It records the real command, exit code, stdout/stderr, elapsed time, score/band, and selected pair. PASS requires the expected observable result. Every required check must PASS before the lifecycle final gate passes. A receipt-backed PASS also records producer model learning to Obsidian; the verifier pair is never learned as the producer.
 
-## Blocked audit
+## Real check FAIL and repair
 
-1. On a missing handoff, timeout, external Git/state change, or unavailable evidence, record `event --event blocked` with the concrete reason and exit immediately.
-2. Do not ask the user who changed Git, wait for confirmation, poll, start broad tests, or repair.
-3. The audit's `BLOCKED` is terminal and never reopens or downgrades the already-delivered main result.
-4. A correctness repair requires a new explicit user request; it is a new result task with its own Mini Test and Ending audit.
+1. Record lifecycle FAIL with the exact failing command, exit code, stdout/stderr, failure class, and stable error fingerprint.
+2. Use the emitted `repair_handoff` to create `Fix Task-{task}-{check}`. The repair task receives the original request, changed files, allowed scope, and exact error evidence.
+3. The repair task may edit only the authorized result, runs its own Quick Check, and then creates a fresh `End Task-{task}-{check}` that reruns the original acceptance check.
+4. Continue repair then fresh verification for at most three attempts. Never let a failing verifier repair its own target or claim PASS from its earlier evidence.
+5. If all repair attempts fail, record BLOCKED with the final exact error and attempt history. BLOCKED never counts as verified.
 
-## Parallel boundary
+## Split and model boundary
 
-The audit is read-only and must not duplicate testing or compete for shared state. Any change to the user-visible result requires a new explicit result-producing task; no Ending repair is authorized.
+- Split independent acceptance surfaces into separate Ending tasks so one vague summary cannot hide a failure.
+- Choose each Ending task's model from its own score, not only from the parent task score.
+- Keep checks focused and proportional; do not run unrelated exhaustive suites.
+- Order checks that share mutable state. Parallelize only independent safe checks.
+- A simple conversational answer may have a score/history-only Ending record when no observable verification is applicable; never fabricate a test.
 
-## Status and waiting
+## Status
 
-- `MAIN RESULT READY` means producer completion and delivered result.
-- `PASS` means the Ending handoff audit completed.
-- `BLOCKED` means the audit ended because evidence was unavailable or state changed.
-- Do not describe `BLOCKED` as blocking the delivered result.
-- Do not narrate waits, poll unchanged state, or ask the user for confirmation. End with PASS or BLOCKED inside the 60-second budget.
+- `PASS`: all required real checks passed.
+- `FAIL`: a real check found a defect and a repair handoff was created.
+- `BLOCKED`: task creation, verification infrastructure, external state, timeout, or the repair limit prevented PASS.
+
+Local lifecycle history always records the score, check, selected pair, evidence, and repair chain. Receipt-backed producer terminal events additionally sync score and route movement to the project Obsidian `Model Switch.md` page.
