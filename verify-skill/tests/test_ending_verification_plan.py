@@ -25,7 +25,11 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])
         self.assertEqual(plan["execution"], "separate_persistent_tasks")
+        self.assertEqual(plan["thread_target"], {"type": "projectless"})
+        self.assertEqual(plan["terminal_thread_policy"], {"pass": "record_pass_then_archive_self", "fail": "keep_unarchived", "blocked": "keep_unarchived"})
         self.assertEqual([task["title"] for task in plan["ending_tasks"]], ["End Task-routing-unit", "End Task-routing-integration"])
+        self.assertTrue(all(task["thread_target"] == {"type": "projectless"} for task in plan["ending_tasks"]))
+        self.assertTrue(all(task["terminal_thread_policy"]["pass"] == "record_pass_then_archive_self" for task in plan["ending_tasks"]))
         self.assertNotEqual(plan["ending_tasks"][0]["selected_pair"], plan["ending_tasks"][1]["selected_pair"])
 
     def test_run_check_executes_real_command_and_records_pass(self):
@@ -50,6 +54,8 @@ class EndingVerificationPlanTests(unittest.TestCase):
             evidence = PLAN.run_check(plan_path, "unit", evidence_path)
         self.assertEqual(evidence["status"], "fail")
         self.assertEqual(evidence["repair_handoff"]["action"], "create_repair_task_then_fresh_ending")
+        self.assertEqual(evidence["repair_handoff"]["thread_target"], {"type": "projectless"})
+        self.assertEqual(evidence["repair_handoff"]["terminal_thread_policy"]["fail"], "keep_unarchived")
         self.assertEqual(evidence["repair_handoff"]["error"]["exit_code"], 7)
         self.assertIn("broken", evidence["repair_handoff"]["error"]["stderr"])
 

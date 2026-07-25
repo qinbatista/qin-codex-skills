@@ -11,7 +11,7 @@ When the producer can express acceptance as an exact command, test, API probe, r
 
 Never add a broad verifier before the user's first presentation. After presentation, Ending may run the real proportional unit, integration, API, build, render, visual, or state test required to prove the result. Keep each check focused; do not substitute prose inspection for an executable or observable check when one exists.
 
-A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability, then `set_thread_title` for the exact title. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, record and disclose terminal `BLOCKED` with the exact outer-host handoff; do not silently mark the Ending lifecycle complete, substitute a subagent, or start a wait loop.
+A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability with target `{"type":"projectless"}`, then `set_thread_title` for the exact title. Never attach an End Task or Fix Task to the source project; pass the absolute project root/cwd and allowed files in the worker prompt instead. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, record and disclose terminal `BLOCKED` with the exact outer-host handoff; do not silently mark the Ending lifecycle complete, substitute a subagent, or start a wait loop.
 
 When the user explicitly asks for a test, audit, review, replay, or verification as the primary task, that work is the requested result and runs normally on the current model. It does not need a fabricated pre-result verification phase.
 
@@ -27,6 +27,7 @@ The required order is:
 6. on FAIL, record the exact command, exit code, stdout/stderr, and failure class, then automatically create `Fix Task-{task}-{check}` with that error and the allowed files; after repair, create a fresh Ending task with the same acceptance check;
 7. repeat the repair/reverify loop for at most three repair attempts; use BLOCKED only for unavailable infrastructure, external state, timeout, or exhausted repair limit;
 8. let every terminal ledger event record local history and let receipt-backed producer PASS/FAIL update Obsidian model learning.
+9. after a worker records durable terminal PASS, it calls `set_thread_archived` with `archived=true` and no thread ID so it archives itself; the archive may terminate the worker turn, so no later final message is required. FAIL and BLOCKED workers remain unarchived. If PASS cleanup cannot be accepted, keep the thread visible and return `BLOCKED: PASS recorded but self-archive unavailable`.
 
 First-result latency includes Quick Check and ends at step 2. Ending time is recorded separately. The origin returns after linking the Ending tasks and does not poll. The lifecycle is verified only when every required check and any repair's fresh recheck PASS; BLOCKED does not count as verified. A tool's own producer-side state may be Quick Check evidence, but independent Ending must observe the completed result again.
 
@@ -34,6 +35,7 @@ First-result latency includes Quick Check and ends at step 2. Ending time is rec
 
 - Build a plan with one check object per independent acceptance surface. Separate unit, integration/API, render/visual, and live-state checks when they do not share mutable state.
 - Create one persistent task per check; pass lifecycle ID, plan/check ID, exact command, score/band, selected model/effort, receipts, project root, touched files, and allowed repair scope.
+- Always create End/Fix tasks as projectless global tasks. Their prompts use absolute project paths; project membership is never used for filesystem access.
 - Select quality-ladder roles by check score: small uses `weak_default`, standard `balanced_default`, complex `balanced_complex`, and advanced `frontier_complex`. Spark remains a small-edit producer, not an Ending verifier.
 - Run `ending_verification_plan.py run-check`; do not merely summarize prior Quick Check output. Independent safe checks may run concurrently. Shared-state checks remain ordered.
 - On failure, record terminal FAIL, create the repair task from `repair_handoff`, and require its new Ending task to rerun the original acceptance command. Never let the failing verifier edit the result itself.
@@ -48,7 +50,7 @@ First-result latency includes Quick Check and ends at step 2. Ending time is rec
 
 Do not call code verified when the lifecycle is FAIL or BLOCKED.
 
-The origin final is complete after result presentation. The End Task thread final requires lifecycle PASS or explicit BLOCKED. No hook is used or installed.
+The origin final is complete after result presentation. After recording lifecycle PASS, the End Task archives itself; that action may terminate the worker turn. FAIL/BLOCKED remains visible and unarchived. No hook is used or installed.
 
 ## Real Verify Scope
 
@@ -80,8 +82,9 @@ Routing quality learning records only the producer pair after Real. Every lifecy
 3. Run or inspect the actual artifact/state.
 4. Record input, method, observed output, and pass/fail reason.
 5. On handoff pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching broad Obsidian `Model Switch.md` page before terminal PASS.
-6. On missing evidence, timeout, or concurrent state change, record lifecycle `BLOCKED` and exit; never ask the user for confirmation or start a repair.
-7. A correctness failure automatically creates a scoped repair task with the exact evidence; the repair receives its own Quick Check and a fresh independent Ending check.
+6. After the PASS event is durable, call `set_thread_archived(archived=true)` on the calling thread. Treat an accepted archive as successful cleanup even when it terminates the turn before a final reply. If self-archive is unavailable, retain the thread and emit explicit BLOCKED cleanup status.
+7. On missing evidence, timeout, or concurrent state change, record lifecycle `BLOCKED` and exit unarchived; never ask the user for confirmation or start a repair.
+8. A correctness failure automatically creates a projectless scoped repair task with the exact evidence; the repair receives its own Quick Check and a fresh independent Ending check.
 
 ## Artifact Guidance
 

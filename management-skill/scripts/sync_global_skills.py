@@ -146,8 +146,8 @@ SKILL_CONTENTS = {
     "workflow-skill": [
         ("Locked route execution", "Execute only a positively admitted plan with exact pairs, dependencies, allowlists, and receipts."),
         ("Single-producer default", "Dependency-coupled work and small independent sources stay with one contextual producer."),
-        ("Result-first handoff", "The producer completes proportional Quick Check, presents the result, then creates a persistent End Task."),
-        ("Ending isolation", "Ending is read-only, evidence-only, at most 60 seconds, and never waits, repairs, or gates the origin."),
+        ("Result-first handoff", "The producer completes proportional Quick Check, presents the result, then creates a global projectless End Task."),
+        ("Ending cleanup", "PASS records durable evidence then self-archives; archive may end the worker turn. FAIL or BLOCKED stays visible."),
         ("Runtime proof", "Every model-generated node exposes its effective pair and token/time receipt."),
     ],
     "prompt-skill": [
@@ -178,10 +178,10 @@ SKILL_CONTENTS = {
     ],
     "verify-skill": [
         ("Proportional completion evidence", "The producer owns the bounded Quick Check before presentation."),
-        ("Persistent End Task", "Create and rename a new user-visible task exactly End Task-<related task> and return without waiting."),
+        ("Persistent End Task", "Create and rename a global projectless task exactly End Task-<related task>; PASS records then self-archives and failures stay visible."),
         ("Deterministic manifest", "Ending runs the supplied fixed validator instead of guessing schema fields or reinterpreting prose."),
-        ("Read-only boundary", "Ending never repeats heavy tests, calls APIs, asks questions, repairs, or blocks the origin."),
-        ("Terminal verdict", "Ending returns PASS or the exact recorded BLOCKED condition."),
+        ("Real-check boundary", "Ending runs its assigned proportional real check; a failing verifier records evidence and hands repair to another task."),
+        ("Terminal verdict", "Durable PASS evidence precedes self-archive; FAIL or BLOCKED remains visible."),
     ],
     "management-skill": [
         ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
@@ -200,8 +200,8 @@ CHINESE_SKILL_CONTENTS = {
     "workflow-skill": [
         ("锁定路线执行", "只执行 pair、依赖、allowlist 与 receipt 都准确的已准入计划。"),
         ("单 Producer 默认", "依赖耦合工作和小型独立 source 都使用一个上下文 producer。"),
-        ("结果优先交接", "Producer 完成 Quick Check、展示结果，再创建持久 End Task。"),
-        ("Ending 隔离", "Ending 只读、只审证据、最多 60 秒，绝不等待、修复或阻塞 origin。"),
+        ("结果优先交接", "Producer 完成 Quick Check、展示结果，再创建全局 projectless End Task。"),
+        ("Ending 清理", "PASS 先写持久证据再自归档；归档可能结束 turn。FAIL/BLOCKED 保持可见。"),
         ("运行证明", "每个模型节点都公开实际 effective pair 和 token/time receipt。"),
     ],
     "prompt-skill": [
@@ -232,10 +232,10 @@ CHINESE_SKILL_CONTENTS = {
     ],
     "verify-skill": [
         ("成比例完成证据", "Producer 在展示前负责边界明确的 Quick Check。"),
-        ("持久 End Task", "创建并准确命名新的用户可见 End Task-<相关任务>，不等待就返回。"),
+        ("持久 End Task", "创建并准确命名全局 projectless End Task-<相关任务>；PASS 记录后自归档，失败保持可见。"),
         ("确定性 Manifest", "Ending 执行给定固定 validator，不猜 schema 字段，也不重新解释自然语言。"),
-        ("只读边界", "Ending 不重复重型测试、不调 API、不提问、不修复、不阻塞 origin。"),
-        ("终局判定", "Ending 只返回 PASS 或准确记录的 BLOCKED 条件。"),
+        ("真实检查边界", "Ending 执行分配的成比例真实检查；失败 verifier 记录证据并交给另一个任务修复。"),
+        ("终局判定", "持久 PASS 证据先于自归档；FAIL/BLOCKED 保持可见。"),
     ],
     "management-skill": [
         ("Codex Switch", "管理本地 Codex auth profile 与确认后的账号切换。"),

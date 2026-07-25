@@ -12,8 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BAND_ROLES = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}
+THREAD_TARGET = {"type": "projectless"}
+TERMINAL_THREAD_POLICY = {"pass": "record_pass_then_archive_self", "fail": "keep_unarchived", "blocked": "keep_unarchived"}
 
 
 def complexity_band(score):
@@ -75,6 +77,8 @@ def normalize_check(raw, project_root, task_name, task_score, registry=None):
         "check_id": check_id,
         "name": name,
         "title": f"End Task-{task_name}-{name}",
+        "thread_target": THREAD_TARGET,
+        "terminal_thread_policy": TERMINAL_THREAD_POLICY,
         "cwd": str(cwd),
         "command": command,
         "expected_exit_code": expected_exit,
@@ -84,6 +88,8 @@ def normalize_check(raw, project_root, task_name, task_score, registry=None):
         "on_failure": {
             "action": "create_repair_task_then_fresh_ending",
             "repair_title": f"Fix Task-{task_name}-{name}",
+            "thread_target": THREAD_TARGET,
+            "terminal_thread_policy": TERMINAL_THREAD_POLICY,
             "error_fields": ["exit_code", "stdout", "stderr", "timed_out"],
             "max_repair_attempts": 3,
         },
@@ -110,6 +116,8 @@ def build_plan(project_root, task_name, task_score, checks):
         "task_complexity": pair_for_score(task_score, registry),
         "verification_required": True,
         "execution": "separate_persistent_tasks",
+        "thread_target": THREAD_TARGET,
+        "terminal_thread_policy": TERMINAL_THREAD_POLICY,
         "all_checks_must_pass": True,
         "ending_tasks": tasks,
     }

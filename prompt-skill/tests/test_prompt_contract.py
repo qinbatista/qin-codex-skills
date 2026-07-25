@@ -44,7 +44,9 @@ class PromptContractTests(unittest.TestCase):
 
     def test_result_first_and_target_validation_are_separate(self):
         self.assertIn("Present the completed prompt or instruction artifact immediately", self.prompt_skill)
-        self.assertIn("It does not test prompt cases; representative trials or repeated fresh runs happen only when the user explicitly requests testing", self.prompt_skill)
+        self.assertIn("mandatory scored Ending lifecycle", self.prompt_skill)
+        self.assertIn("create separate real representative-case checks with `ending_verification_plan.py`", self.prompt_skill)
+        self.assertIn("all required cases must PASS", self.prompt_skill)
         self.assertIn("before returning", self.prompt_skill)
 
     def test_conflict_resolutions_are_explicit(self):

@@ -61,9 +61,9 @@ Negative instructions are appropriate for critical, plausible failures such as f
 8. For complex work, plan dependencies internally before execution and use `plan -> execute -> review -> finalize` only when those phases improve the result. Do not expose a planning preamble or private reasoning unless the user explicitly requests an appropriate planning artifact.
 9. Put tool order in the prompt only when order affects correctness or side effects. Name the tool purpose, required evidence, fallback, and stop condition when tools are part of the contract.
 10. Present the completed prompt or instruction artifact immediately. Do not put an external trial run, validator, report, or closeout step before that first presentation.
-11. Start the mandatory scored Ending lifecycle. When the prompt change needs behavioral verification, create separate real representative-case checks with `ending_verification_plan.py`, each using its own score-derived model/effort; all required cases must PASS.
+11. Start the mandatory scored Ending lifecycle. When the prompt change needs behavioral verification, create separate real representative-case checks with `ending_verification_plan.py` as global projectless tasks, each using its own score-derived model/effort; all required cases must PASS. PASS records durable evidence then self-archives; FAIL/BLOCKED stays visible.
 12. Grade artifact production separately from acceptance. A downloaded image, valid JSON container, or completed model response is not a pass when semantic, file, structure, or visual gates fail.
-13. If a real prompt check fails, record the exact case/output/error, create a separate repair task, then run a fresh verifier; allow up to three repair attempts. Missing infrastructure or exhausted attempts is BLOCKED and is not verified.
+13. If a real prompt check fails, record the exact case/output/error, create a separate projectless repair task, then run a fresh verifier; allow up to three repair attempts. Missing infrastructure or exhausted attempts is BLOCKED and is not verified.
 
 ## Recommended Prompt Shape
 

@@ -25,8 +25,8 @@ This is the lifecycle’s most important structural rule:
 
 1. **Score every submission from 0–100, then finish the requested job** and run the proportional implementation check.
 2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
-3. **Start one scored/model-routed `End Task-<task name>-<check>` per independent real test, API check, or render.** Dependent checks stay ordered instead of being fragmented.
-4. **Every Ending executes its assigned real check and all required checks must PASS.** Failure creates a Fix Task with the exact error, then a fresh End Task reruns the check, for up to three repairs.
+3. **Start one scored/model-routed global projectless `End Task-<task name>-<check>` per real check.** Absolute paths provide access without project membership.
+4. **Every Ending runs its assigned real check and all required checks must PASS.** PASS writes durable evidence, then self-archives; the archive may end the turn. FAIL/BLOCKED stays visible; failure creates a projectless Fix Task with the exact error, then a fresh End Task reruns the check, for up to three repairs.
 
 Main work and Ending verification are deliberately different task sessions. A summary is never verification: heavy changes need real tests, API evidence, builds, renders, or visual checks appropriate to the change.
 

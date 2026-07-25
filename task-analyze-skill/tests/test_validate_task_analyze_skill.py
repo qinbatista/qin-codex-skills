@@ -458,6 +458,8 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Producer owns files/skills/Mini Test", bootstrap_text)
             self.assertIn("one own scored/model End Task per independent real test/API/render", bootstrap_text)
+            self.assertIn("all End/Fix Tasks use global projectless threads", bootstrap_text)
+            self.assertIn("PASS records then self-archives;FAIL/BLOCKED stays visible", bootstrap_text)
             self.assertIn("FAIL creates Fix Task with exact error then fresh End Task", bootstrap_text)
             self.assertIn("never same-task subtask/emulate/wait/self-verify", bootstrap_text)
             self.assertIn("all checks must PASS", bootstrap_text)

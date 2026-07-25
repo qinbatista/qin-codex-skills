@@ -25,7 +25,7 @@ Always apply the global `prompt-skill` first. A missing or skipped `prompt-skill
 3. For an existing prompt, read it seriously and identify the failing or missing behavior before changing wording.
 4. Choose a function prompt for direct AI operations such as get, extract, change, check, fix, convert, compare, or return structured output.
 5. Choose a content prompt for text humans will read, such as descriptions, summaries, explanations, factory notes, doctor-facing notes, customer copy, or reviewer notes.
-6. Use the smallest applicable canonical structure: `Objective`, `Context and inputs`, `Requirements`, `Constraints`, optional controls, `Output contract`, `Success criteria`, `Failure conditions`, and `Verification`. Existing project headings may stay when they express the same contract clearly.
+6. Use the smallest applicable canonical structure. For an embedded function prompt that is the compact shape: one opening sentence stating the objective and each input's role, numbered required behaviors, a `Rules:` list of hard boundaries, one before-returning verification line, one closing `Return only ...` output line, and named data blocks last. Use explicit `Objective:`/`Requirements:`/`Success criteria:` headings only when a prompt is too complex for the compact form; existing project headings may stay when they express the same contract clearly.
 7. Add role, ordered workflow/tools, autonomy, reasoning level, verbosity, delimiters, or examples only when each one changes behavior or removes a real ambiguity.
 8. Keep the prompt complete and concise. Add missing logic when the prompt does not cover the task goal; merge overlapping rules instead of appending repeated warnings.
 9. State durable rules at the highest useful level. Do not add obvious prohibitions, near-duplicate warnings, or case-by-case exclusions.
@@ -38,38 +38,30 @@ Always apply the global `prompt-skill` first. A missing or skipped `prompt-skill
 
 ```python
 prompt = f"""
-Objective:
-Extract <target> from <source>.
+You are <one concrete operation> on <target>. SOURCE_TEXT is <source role>; the attached image, when present, is <image role>.
 
-Context and inputs:
-- SOURCE_TEXT contains <source role>.
+Do <N> things:
+1. <required behavior>
+2. <required behavior>
 
-Requirements:
-- <required behavior>
-
-Constraints:
+Rules:
 - <hard boundary or missing-value behavior>
+- <prohibition that rejects a plausible wrong output>
 
-Output contract:
-Return only valid JSON matching this schema:
+Before returning, check <the measurable acceptance evidence> and fix any rule the draft breaks.
+
+Return only valid JSON with this exact shape:
 {{
   "<key>": "<value>"
 }}
 
-Success criteria:
-- <measurable acceptance condition>
-
-Failure conditions:
-- <observable rejection condition>
-
-Verification:
-- Check <semantic and structural evidence> before returning.
-
 <SOURCE_TEXT>
 {source_text}
 </SOURCE_TEXT>
-"""
+""".strip()
 ```
+
+When an enforced response schema already defines the container, replace the inline JSON example with one `Return only the structured object with <top-level keys>.` line.
 
 ## Human-Reading Content Prompt Shape
 
@@ -110,6 +102,7 @@ Verification:
 
 ## Guardrails
 
+- Do not expand a compact embedded function prompt into ceremonial `Success criteria:`/`Failure conditions:`/`Verification:` heading blocks that restate its rules; fold acceptance into `Rules:` and the single before-returning check line.
 - Do not add persona text such as `You are...` unless a domain perspective or responsibility materially changes the result.
 - Let the output schema define the container shape and fields instead of repeating verbose JSON warnings.
 - Do not add sibling-case warnings for cases the user did not mention.

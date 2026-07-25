@@ -48,7 +48,7 @@ An admitted node does not silently inherit or reselect another pair. Ineligible 
 4. Use `code-skill` for every Python/C# implementation or authored probe.
 5. Implement only the authorized optimization.
 6. Show the raw after artifact immediately; do not add a foreground verifier.
-7. After presentation, start Ending with the producer receipt when one exists, then hand the before/after evidence to an independent Ending Real verifier without changing the locked route.
+7. After presentation, start Ending with the producer receipt when one exists, then hand the before/after evidence to an independent global projectless Ending Real verifier without changing the locked route. PASS records durable evidence then self-archives; FAIL/BLOCKED stays visible.
 8. When independent proof is required, hand optimizer identity, files, commands, before/after evidence, and remaining risks to a different verifier after the main result.
 
 ## Independent Verification Contract

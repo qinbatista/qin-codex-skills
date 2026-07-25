@@ -68,7 +68,7 @@ For README changes:
 
 ## Main Result And Ending Task
 
-For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. First-result time ends at that presentation. Ending Task then owns Real Verify, including deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. A background mismatch/failure notifies and reopens the task.
+For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. First-result time ends at that presentation. A global projectless Ending Task then owns Real Verify, including deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. PASS records durable evidence then self-archives; a mismatch, FAIL, or BLOCKED remains visible and reopens the task.
 
 ## Commands
 
