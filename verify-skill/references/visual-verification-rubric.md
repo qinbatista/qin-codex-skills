@@ -41,6 +41,12 @@ Check:
 - hierarchy makes the primary task or message clear at first glance
 - typography uses a coherent scale and stays readable at target breakpoints
 - spacing, alignment, radii, color, shadows, and component density form one system
+- peer regions that share a visual template align their outer edges, gutters, row starts, and intended height
+- related compact information stays on one row when it fits; only real narrow breakpoints reflow it
+- one logical group uses one visual boundary, without redundant nested panels or repeated classification
+- supplemental information stays inside its owner or uses an explicit aligned row/category
+- dynamic content and status changes keep control and panel geometry stable
+- visible color, copy, icon, badge, and enabled/disabled treatment truthfully match the real state
 - responsive behavior works at desktop and narrow/mobile widths when relevant
 - interactive states, loading, empty, disabled, error, hover, focus, and selected states are present when the user can encounter them
 - images and icons support the actual product/task, not generic decoration

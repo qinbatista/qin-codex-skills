@@ -2,6 +2,21 @@
 
 Search this file before UI generation, UI updates, UI optimization, or UI review. Use `rg -n "<component>|<symptom>|<action>" references/ui-problem-index.md`, then read only matching entries.
 
+## Mandatory Basic UI Gate
+
+Every UI edit must apply and every rendered UI acceptance must check all six rules:
+
+| Rule | Blocking requirement | Existing detailed entries |
+| --- | --- | --- |
+| 1. Align shared frames | Peer left/right, top/bottom, or side-by-side regions that share a visual template align outer edges, row starts, gutters, and intended height. Accidental tall/short peer layouts fail. | `UI-012`, `UI-013`, `UI-027`, `UI-041` |
+| 2. One row when it fits | Related labels, values, inputs, buttons, and compact controls stay on one line whenever the target width can hold them readably. Reflow is a real narrow-breakpoint fallback, not a reaction to a slightly undersized component. | `UI-004`, `UI-007`, `UI-022`, `UI-023`, `UI-031`, `UI-032` |
+| 3. Group once | One visual boundary represents one logical group. Existing panels, cards, headings, backgrounds, or spacing groups are not boxed or classified again without a distinct object or task. | `UI-019`, `UI-020`, `UI-035` |
+| 4. Add on the alignment grid | Supplemental information lives inside its owning panel or becomes an explicit aligned row/category with the same outer edges and gutters. Floating, offset, or partially aligned additions fail. | `UI-012`, `UI-023`, `UI-037` |
+| 5. Keep geometry stable | Expected status, loading, error, and optional-content changes do not resize controls or shift surrounding layout unpredictably. | `UI-042` |
+| 6. Keep state truthful | Color, text, icon, badge, and enabled/disabled treatment match the real state or lifecycle. | `UI-043` |
+
+Accessibility, localization, readable target sizes, and narrow viewports may require wrapping or deliberate asymmetry. Record the reason, preserve the alignment system after reflow, and verify the rendered exception. An unexplained exception is a failure.
+
 ## Contents
 
 - [Entry Format](#entry-format)
@@ -58,6 +73,8 @@ Search this file before UI generation, UI updates, UI optimization, or UI review
 - `UI-039`: mobile UI fix, local image edit, screenshot edit, layout defect, replace image, ChatGPT image
 - `UI-040`: mobile hero image, background crop, subject cropped, head only, viewport height
 - `UI-041`: Safari, Chrome, cross-browser, font rendering, text centering, button label center, alignment drift
+- `UI-042`: layout shift, status text, loading message, height jump, unstable controls, reserved space
+- `UI-043`: truthful status, lifecycle color, stale badge, state label, success color, disabled state
 
 ## Problems
 
@@ -347,3 +364,17 @@ Terms: Safari, Chrome, cross-browser, browser QA, font rendering, text centering
 Problem: Text, headline blocks, or CTA labels look centered in one browser but visually drift left/right in another because the layout relies on inherited text alignment, asymmetric grid tracks, font metrics, or untested browser-specific rendering.
 Solution: For centered UI, explicitly center the layout item and the text: use `justify-items`/`justify-self` or equivalent parent alignment plus `text-align: center` on the actual text element, and avoid fake centering from padding or spacer columns unless the opposite spacer is equal. Keep icons in fixed symmetric slots or separate them from the text flow.
 Validation: Before accepting a UI fix that changes typography, buttons, hero copy, nav, compact labels, or responsive alignment, render the affected viewport in both Chrome/Chromium and Safari/WebKit when available. For mobile fixes, include both a normal phone width and a narrow phone width when practical, such as 390px and 320px. Measure the text block center and CTA label center against the parent container, and check `scrollWidth`/`clientWidth` plus `scrollHeight`/`clientHeight` for overflow or clipping in both engines.
+
+### UI-042 Dynamic Content Causes Layout Shift
+
+Terms: layout shift, status text, loading message, error message, height jump, unstable dimensions, controls resize, panel resize, reserved space, content moves.
+Problem: A normal status, loading, error, or optional-content change alters a toolbar, control row, panel, or neighboring region enough that controls jump, peer panels lose alignment, or the user's reading position moves unexpectedly.
+Solution: Contain variable content inside its owning region and reserve the smallest practical space for known states. Keep peer controls and outer panel geometry stable; allow internal text wrapping or scrolling when needed instead of moving adjacent actions.
+Validation: Cycle representative short, long, loading, success, and error states in the rendered UI. Peer controls keep their position and size, shared frames remain aligned, and no unexpected layout shift occurs.
+
+### UI-043 Visible State Semantics Are Not Truthful
+
+Terms: truthful status, lifecycle color, stale badge, wrong state label, success color, warning color, disabled state, awaiting review, generated, loading.
+Problem: A color, label, icon, badge, or enabled/disabled treatment implies a state different from the real application lifecycle, such as green success for incomplete work or an active-looking action while the operation is unavailable.
+Solution: Define one visible semantic mapping from real state to copy, color, icon, and interactivity. Update those signals from the same authoritative state and remove stale or decorative indicators that conflict with it.
+Validation: Exercise every reachable state in the real UI and compare visible copy, color, icon, and enabled/disabled behavior with the authoritative application state. Any mismatch fails.

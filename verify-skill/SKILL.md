@@ -95,7 +95,7 @@ Check frontmatter, loader limits, referenced files, positive/negative contract s
 
 ### UI And Visual Artifacts
 
-Open/render the real artifact; inspect desktop and narrow states, interactions, layout, hierarchy, clipping, readability, consistency, and applicable taste rules. Use `references/visual-verification-rubric.md` and `references/ui-problem-index.md` when relevant.
+Open/render the real artifact; inspect desktop and narrow states, interactions, layout, hierarchy, clipping, readability, consistency, and applicable taste rules. The Mandatory Basic UI Gate in `references/ui-problem-index.md` is blocking for every UI change: shared-frame alignment, one-row-first density, single grouping, aligned additions, stable geometry, and truthful state semantics must all pass or have an explicit accessibility, localization, narrow-viewport, or product-priority reason. Use `references/visual-verification-rubric.md` and `references/ui-problem-index.md`; map the evidence to all six rules instead of returning a generic visual-pass statement.
 
 ### Documents And Reports
 
