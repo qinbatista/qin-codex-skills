@@ -682,7 +682,7 @@ def main(argv=None):
         summary = run(args, prompt)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         summary = {"status": "fail", "reason": str(error)[:120] or "runner_validation_failed"}
-    print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))
+    print(json.dumps(summary, separators=(",", ":")))
     return 0 if summary["status"] == "pass" else 1
 
 

@@ -20,6 +20,13 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class ModelExecutionReceiptTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows executable resolution")
+    def test_windows_default_codex_prefers_desktop_executable(self):
+        desktop_executable = r"C:\Program Files\WindowsApps\OpenAI.Codex\codex.exe"
+        with patch.object(module.shutil, "which", side_effect=lambda command: desktop_executable if command == "codex.exe" else r"C:\Users\example\AppData\Roaming\npm\codex"):
+            self.assertEqual(module.resolve_codex_command("codex"), desktop_executable)
+            self.assertEqual(module.codex_command_prefix("codex"), [desktop_executable])
+
     def test_immediate_operational_fallback_requires_zero_token_unpublished_failure(self):
         eligible = module.annotate_operational_fallback({"status": "fail", "failure_class": "availability", "turn_completed": False, "tokens": {"total_tokens": 0}, "result_published": False, "route_attempts": [{}]})
         published = dict(eligible, result_published=True)

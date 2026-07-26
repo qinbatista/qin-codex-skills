@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -39,6 +40,27 @@ ENTRY_CONTEXT_ENV = "CODEX_TASK_ANALYZE_ENTRY_CONTEXT"
 NODE_ROLES = {"entry", "result-producer", "verification", "repair", "ending", "benchmark-baseline"}
 DISPATCHER_FIXED_ROLES = {"verification", "repair", "ending"}
 _NODE_AUTHORIZATION = contextvars.ContextVar("task_analyze_receipt_node_authorization", default=None)
+
+
+def resolve_codex_command(codex_bin):
+    if os.name != "nt" or codex_bin != "codex":
+        return codex_bin
+    desktop_executable = shutil.which("codex.exe")
+    if desktop_executable:
+        return desktop_executable
+    desktop_bin = Path(os.environ.get("LOCALAPPDATA", "")) / "OpenAI" / "Codex" / "bin"
+    desktop_candidates = [path for path in desktop_bin.glob("**/codex.exe") if path.is_file()]
+    if desktop_candidates:
+        return str(max(desktop_candidates, key=lambda path: path.stat().st_mtime_ns))
+    return shutil.which(codex_bin) or codex_bin
+
+
+def codex_command_prefix(codex_bin):
+    resolved = resolve_codex_command(codex_bin)
+    resolved_path = Path(resolved)
+    if os.name == "nt" and resolved_path.is_file() and resolved_path.suffix.lower() not in {".exe", ".com", ".bat", ".cmd"}:
+        return [sys.executable, resolved]
+    return [resolved]
 
 
 class ReceiptAuthorizationError(ValueError):
@@ -459,7 +481,7 @@ def run_streaming_result_process(command, execution_prompt, args, command_enviro
     thread_ids = []
     duplicate_result_detected = []
     stream_errors = []
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=args.workdir, env=command_environment, shell=False, bufsize=1)
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", cwd=args.workdir, env=command_environment, shell=False, bufsize=1)
 
     def publish_result(result_message):
         if result_messages:
@@ -618,7 +640,7 @@ def run_receipt(args, prompt_text):
     requested_pair = requested_pair_tuple
     allowed_pairs = [requested_pair] + [parse_model_effort_pair(value) for value in allowed_fallback_pairs]
     command = [
-        args.codex_bin,
+        *codex_command_prefix(args.codex_bin),
         "exec",
         "--model",
         args.model,
@@ -673,7 +695,7 @@ def run_receipt(args, prompt_text):
         duplicate_result_detected = streamed_process["duplicate_result_detected"]
     else:
         try:
-            process = subprocess.run(command, input=execution_prompt, text=True, cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout, **({"env": command_environment} if command_environment is not None else {}))
+            process = subprocess.run(command, input=execution_prompt, text=True, encoding="utf-8", errors="replace", cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout, **({"env": command_environment} if command_environment is not None else {}))
         except subprocess.TimeoutExpired as error:
             process = None
             timed_out = True
