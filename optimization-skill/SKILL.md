@@ -51,6 +51,10 @@ An admitted node does not silently inherit or reselect another pair. Ineligible 
 7. After presentation, start Ending with the producer receipt when one exists, then hand the before/after evidence to an independent global projectless Ending Real verifier without changing the locked route. PASS records durable evidence then self-archives; FAIL/BLOCKED stays visible.
 8. When independent proof is required, hand optimizer identity, files, commands, before/after evidence, and remaining risks to a different verifier after the main result.
 
+## Result Model Disclosure
+
+Every user-facing origin result and each result/Ending node prints `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>` (or `effective=UNVERIFIED (no runtime receipt)`), `Previous model: <model | effort|none|unverified>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, and `Reason:` in 20 words or fewer. Current is actual user-visible execution; planned labels are not effective proof. Inline uses verified entry metadata or `unverified`, never guesses. A no-switch result still includes every field.
+
 ## Independent Verification Contract
 
 The optimization implementer and verifier must be different workers/agents. An inline task may call a different `verify-skill` worker after the main result; an admitted task uses its Ending verifier. The verifier reports:

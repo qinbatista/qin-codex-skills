@@ -98,6 +98,7 @@ REQUIRED_FILES = [
     "assets/graduated-route-fixtures.json",
     "assets/model-routing-benchmark-example.json",
     "scripts/validate_task_analyze_skill.py",
+    "tests/test_result_model_disclosure.py",
 ]
 REQUIRED_SKILL_TEXT = [
     "full routing and model-strategy skill",
@@ -311,6 +312,8 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
 ]
 REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "Dynamically split only distinct bounded work", "every result/Ending node gets its own score", "Parent score never forces one model", "small low-risk low-ambiguity text/code/write/execute segments score<=24 use Spark-low first", "even inside a larger task", "Dependency-ready independent nodes run in parallel", "shared writes,ordering,and output dependencies stay linear", "Single-node eligible text/code pipes exact user text once non-TTY", "obsidian_adaptive_model_runner.py", "multi-node work saves one `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark to execute a valid task graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses saved cold start", "Producer owns files/skills/Quick Check", "End Task hard-required after result", "score each independent real check", "global projectless End/Fix Tasks", "all checks must PASS", "PASS records then self-archives", "FAIL records exact evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal events sync local history+Obsidian Model Switch", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
+RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "Current model:", "Model pairs (requested / resolved / effective):", "Previous model:", "Route change: upgrade|downgrade|freeze|no_switch|operational_fallback", "Reason:", "effective=UNVERIFIED (no runtime receipt)", "planned labels", "verified entry metadata or `unverified`", "no-switch"]
+RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "build real proportional Ending checks", "Every required check must PASS", "separate scoped repair task", "fresh verifier"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "separate scored/modelled End Tasks", "All required checks must PASS", "fresh verifier"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
@@ -400,6 +403,18 @@ def folded_prompt_length(text):
 def missing_terms(label, text, required):
     normalized = normalize(text)
     return [f"{label} missing required contract: {term}" for term in required if normalize(term) not in normalized]
+
+
+def validate_result_model_disclosure(disclosure_text):
+    failures = []
+    required_patterns = {"Complexity": r"^Complexity:\s*\d+/100 \((?:small|standard|complex|advanced)\)$", "Current model": r"^Current model:\s*.+ \| .+$", "Model pairs": r"^Model pairs \(requested / resolved / effective\): requested=.+\|.+ -> resolved=.+\|.+ -> effective=(?:.+\|.+|UNVERIFIED \(no runtime receipt\))$", "Previous model": r"^Previous model:\s*(?:.+ \| .+|none|unverified)$", "Route change": r"^Route change:\s*(?:upgrade|downgrade|freeze|no_switch|operational_fallback)$", "Reason": r"^Reason:\s*.+$"}
+    for label, pattern in required_patterns.items():
+        if not re.search(pattern, disclosure_text, flags=re.MULTILINE):
+            failures.append(f"missing or invalid {label} disclosure")
+    reason_match = re.search(r"^Reason:\s*(.+)$", disclosure_text, flags=re.MULTILINE)
+    if reason_match and len(reason_match.group(1).split()) > 20:
+        failures.append("Reason disclosure exceeds 20 words")
+    return failures
 
 
 def legacy_only_failures(label, text):
@@ -749,6 +764,14 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score every task 0-100", "show score/band plus route change", "obsidian_adaptive_model_runner.py", "exact/tool/image uses task_complexity_score.py", "Small low-risk edit <=24 tries Spark-low", "quality failure suppresses its matching band", "End Task is hard-required", "ending_verification_plan.py", "one own scored/model global projectless task per independent real check", "all must PASS", "PASS records then self-archives", "FAIL/BLOCKED stays visible", "FAIL creates a separate projectless repair task with exact error", "fresh verification", "up to three attempts", "BLOCKED never means verified", "Local lifecycle always records", "receipt-backed terminal events sync Obsidian", "Never emulate task creation", "same-task subagent", "self-verify"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
+    failures.extend(missing_terms("Task Analyze result disclosure", skill_text, RESULT_MODEL_DISCLOSURE_TERMS))
+    failures.extend(missing_terms("route-contract result disclosure", route_text, RESULT_MODEL_DISCLOSURE_TERMS))
+    for disclosure_skill in RESULT_MODEL_DISCLOSURE_SKILLS:
+        disclosure_path = global_skills_root / disclosure_skill / "SKILL.md"
+        if not disclosure_path.exists():
+            failures.append(f"{disclosure_skill} missing result disclosure skill")
+            continue
+        failures.extend(missing_terms(f"{disclosure_skill} result disclosure", read_text(disclosure_path), RESULT_MODEL_DISCLOSURE_TERMS))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
     failures.extend(missing_terms("runtime-receipts", receipt_text, REQUIRED_RECEIPT_TEXT))
     failures.extend(missing_terms("adaptive-routing", adaptive_text, REQUIRED_ADAPTIVE_TEXT))
@@ -785,6 +808,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     else:
         global_agents_text = read_text(global_agents_path)
         failures.extend(missing_terms("global AGENTS", global_agents_text, REQUIRED_GLOBAL_BOOTSTRAP_TEXT))
+        failures.extend(missing_terms("global AGENTS result disclosure", global_agents_text, RESULT_MODEL_DISCLOSURE_TERMS))
         if len(global_agents_text.encode("utf-8")) > MAX_GLOBAL_BOOTSTRAP_BYTES:
             failures.append(f"global AGENTS exceeds compact bootstrap limit: {len(global_agents_text.encode('utf-8'))} > {MAX_GLOBAL_BOOTSTRAP_BYTES} bytes")
         for forbidden in FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT:

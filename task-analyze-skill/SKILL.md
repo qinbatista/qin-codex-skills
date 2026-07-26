@@ -36,7 +36,7 @@ The always-loaded policy applies inline before this file would be selected:
 3. After code implementation, run one bounded producer Quick Check (the user-facing Mini Test). Light/local work gets the smallest safe function smoke; external-API, large-file, expensive-build, destructive, or side-effect-heavy work skips the heavy path and checks syntax plus changed function, variable, import, and direct-reference names. Then present `CODE READY` with PASS or SKIPPED evidence. Quick Check is included in first-result time.
 4. Immediately after presentation, write a scored lifecycle receipt and bind `--producer-receipt` when present. End Task is hard-required. If the result needs verification, build `verify-skill/scripts/ending_verification_plan.py plan` with exact observable checks. Create one independently scored/modelled `End Task-{task}-{check}` for each independent real test/API/build/render/state check; all checks must PASS. When `create_thread` is callable, create and link those persistent tasks. Otherwise return BLOCKED handoffs; the outer host must create the persistent End Tasks. Never inspect or invoke app-server internals or substitute a same-task subtask. A FAIL records exact command/output/error, creates `Fix Task-{task}-{check}`, and after repair creates a fresh Ending check, for up to three attempts. Missing task creation, external infrastructure, or exhausted repairs is terminal BLOCKED and never verified. The origin links tasks and returns without polling. Local history stores score/check/model/evidence/repair chain; receipt-backed producer terminal events also write score, Real verdict, and switch movement to Obsidian.
 5. Run isolated non-result logs, reports, and documentation alongside Real Verify when safe. Keep final project memory, shared-state writes, and verdict-dependent work ordered.
-6. Every origin result visibly reports `Complexity: N/100 (band)` plus `Route change: downgrade|upgrade|freeze|no_switch|operational_fallback`. The origin final is complete after the result presentation and never waits for the audit. The End Task thread final requires lifecycle `PASS` or explicit `BLOCKED`; concurrent or missing evidence is terminal BLOCKED, not a user question. A repair is never automatic: it requires a new user request after a concrete recorded failure.
+6. Every origin result and result/Ending node uses the Result Model Disclosure block below. The origin final is complete after the result presentation and never waits for the audit. The End Task thread final requires lifecycle `PASS` or explicit `BLOCKED`; concurrent or missing evidence is terminal BLOCKED, not a user question. A repair is never automatic: it requires a new user request after a concrete recorded failure.
 
 Prompt work is the one ordinary owning-skill exception: the selected adaptive producer loads `prompt-skill` before creating, reviewing, editing, repairing, standardizing, testing, summarizing, optimizing, or changing a reusable prompt or durable AI instruction. Ordinary prose does not trigger it merely because it is text. Prompt-in-code also loads the owning code executor. Present the completed prompt first; trials and Real Verify follow in Ending Task.
 
@@ -127,6 +127,19 @@ For grounded JSON, present the producer result first. Ending Task may then use t
 ## First Result And Mandatory Ending
 
 For code, producer completion includes the bounded Quick Check; it is not independent Real Verify. Show the requested result immediately after that check so the user can continue while detached Ending runs.
+
+## Result Model Disclosure
+
+Every user-facing origin result and each result/Ending node prints this complete block:
+
+- `Complexity: <int>/100 (<band>)`
+- `Current model: <model> | <effort>`
+- `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`; without a runtime receipt, use `effective=UNVERIFIED (no runtime receipt)`.
+- `Previous model: <model | effort|none|unverified>`
+- `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`
+- `Reason: <concise sentence of 20 words or fewer>`
+
+`Current model` is the model that produced the user-visible output. Requested/resolved labels are planned until a receipt proves the effective pair; planned labels are not effective proof. Inline execution uses verified entry metadata or `unverified`, never guesses. A no-switch result still prints every model field, `Route change: no_switch`, and a reason.
 
 For dispatched or ordinary work, enforce result -> bounded Quick Check for code -> show result -> `release-main-result` -> scored lifecycle -> real-test plan when verification applies -> one persistent Ending task per independent check. Each check uses its own score-derived quality pair. The origin links them and returns without polling. PASS requires every real check. FAIL records exact evidence, launches a separate repair task, and launches fresh verification after repair; a failing verifier never edits its own target. Thread-tool absence, external state, timeout, or three failed repairs records BLOCKED. Receipt-backed producer PASS/FAIL writes to Obsidian after local lifecycle evidence is durable.
 

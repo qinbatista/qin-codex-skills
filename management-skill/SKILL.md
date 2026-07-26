@@ -68,7 +68,7 @@ For README changes:
 
 ## Main Result And Ending Task
 
-For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. First-result time ends at that presentation. A global projectless Ending Task then owns Real Verify, including deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. PASS records durable evidence then self-archives; a mismatch, FAIL, or BLOCKED remains visible and reopens the task.
+For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. Every user-facing origin result and result/Ending node prints `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>` (or `effective=UNVERIFIED (no runtime receipt)`), `Previous model: <model | effort|none|unverified>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, and `Reason:` in 20 words or fewer. Current is actual user-visible execution; planned labels are not effective proof. Inline uses verified entry metadata or `unverified`, never guesses. A no-switch result still includes every field. First-result time ends at that presentation. A global projectless Ending Task then owns Real Verify, including deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. PASS records durable evidence then self-archives; a mismatch, FAIL, or BLOCKED remains visible and reopens the task.
 
 ## Commands
 

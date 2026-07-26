@@ -126,7 +126,10 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         global_skills = temp_dir / "skills"
         for skill_name in APPROVED:
             skill_dir = global_skills / skill_name
-            if skill_name == "prompt-skill":
+            if skill_name in {"workflow-skill", "code-skill", "optimization-skill", "management-skill"}:
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text((source.parent / skill_name / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
+            elif skill_name == "prompt-skill":
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "agents").mkdir()
                 (skill_dir / "SKILL.md").write_text((source.parent / "prompt-skill" / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")

@@ -52,6 +52,10 @@ Do not call code verified when the lifecycle is FAIL or BLOCKED.
 
 The origin final is complete after result presentation. After recording lifecycle PASS, the End Task archives itself; that action may terminate the worker turn. FAIL/BLOCKED remains visible and unarchived. No hook is used or installed.
 
+## Result Model Disclosure
+
+Every user-facing origin result and each result/Ending node prints `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>` (or `effective=UNVERIFIED (no runtime receipt)`), `Previous model: <model | effort|none|unverified>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, and `Reason:` in 20 words or fewer. Current is actual user-visible execution; planned labels are not effective proof. Inline uses verified entry metadata or `unverified`, never guesses. A no-switch result never omits a model field.
+
 ## Real Verify Scope
 
 Choose the smallest realistic evidence that tests the observable result:

@@ -235,7 +235,10 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             locking_connection.execute("BEGIN EXCLUSIVE")
 
             def release_lock():
-                time.sleep(2.2)
+                # Leave a margin beyond the census connection's 2-second busy
+                # timeout so this test deterministically exercises its retry
+                # diagnostics rather than succeeding as the lock is released.
+                time.sleep(3.0)
                 locking_connection.rollback()
                 locking_connection.close()
 
@@ -248,7 +251,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             finally:
                 release_thread.join()
             elapsed = time.monotonic() - started
-        self.assertGreaterEqual(elapsed, 2.0)
+        self.assertGreaterEqual(elapsed, 2.8)
         self.assertTrue(snapshot["complete"])
         self.assertEqual(snapshot["threads"]["root-thread"]["tokens_used"], 71100)
         self.assertGreaterEqual(diagnostics["sqlite_error_count"], 1)
