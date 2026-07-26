@@ -412,13 +412,24 @@ def adaptive_ladder_for_profile(task_family, modality, risk, complexity="easy", 
     return normal_adaptive_ladder()
 
 
-def priority_first_pair(task_type, modality="text", operation="work", complexity="easy"):
-    """Legacy ordinary-route helper; adaptive Spark priority is resolved by the model-memory policy."""
-    return None
+def priority_first_pair(task_type, modality="text", operation="work", complexity="easy", complexity_score=None, purpose=None):
+    """Return the priority producer for a bounded eligible task or task segment."""
+    if not PRIORITY_PRODUCER_CONFIG.get("enabled") or PRIORITY_PRODUCER_MODEL is None or modality != "text" or complexity != "easy":
+        return None
+    maximum_score = PRIORITY_PRODUCER_CONFIG.get("task_segment_maximum_complexity_score", PRIORITY_PRODUCER_CONFIG.get("small_edit_maximum_complexity_score", 24))
+    if complexity_score is None or isinstance(complexity_score, bool) or not isinstance(complexity_score, int) or not 0 <= complexity_score <= maximum_score:
+        return None
+    eligible_task = task_type in PRIORITY_PRODUCER_CONFIG.get("small_edit_task_types", [])
+    eligible_operation = operation in PRIORITY_PRODUCER_CONFIG.get("small_edit_operations", [])
+    eligible_segment = purpose in PRIORITY_PRODUCER_CONFIG.get("task_segment_purposes", [])
+    if not ((eligible_task and eligible_operation) or eligible_segment):
+        return None
+    effort = PRIORITY_PRODUCER_CONFIG["effort_by_complexity"]["easy"]
+    return (PRIORITY_PRODUCER_MODEL, effort)
 
 
-def spark_first_pair(task_type, modality="text", operation="work", complexity="easy"):
-    return priority_first_pair(task_type, modality, operation, complexity)
+def spark_first_pair(task_type, modality="text", operation="work", complexity="easy", complexity_score=None, purpose=None):
+    return priority_first_pair(task_type, modality, operation, complexity, complexity_score, purpose)
 
 
 def scheduled_source_pair(complexity="easy"):

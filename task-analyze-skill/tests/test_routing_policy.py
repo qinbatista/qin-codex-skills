@@ -82,6 +82,7 @@ class RoutingPolicyTests(unittest.TestCase):
         registry["policy"]["priority_producer_first_text_code"] = False
         registry["policy"]["priority_producer_scheduled_sources_only"] = False
         registry["policy"]["priority_producer_first_small_edits"] = False
+        registry["policy"]["priority_producer_task_segments"] = False
         registry["policy"]["priority_producer_scheduled_sources"] = False
         next(row for row in registry["catalog_models"] if row["id"] == priority_id)["catalog_role"] = "catalog_only"
         with tempfile.TemporaryDirectory(prefix="routing-policy-registry-") as temporary:
@@ -104,20 +105,22 @@ class RoutingPolicyTests(unittest.TestCase):
                 module.MODEL_CAPABILITY_CONFIG_PATH = original_path
         self.assertEqual(loaded["source"]["catalog_sha256"], module.MODEL_CAPABILITY_CONFIG["source"]["catalog_sha256"])
 
-    def test_priority_producer_is_schedule_only_and_never_an_ordinary_first_attempt(self):
+    def test_priority_producer_handles_small_edits_and_bounded_task_segments(self):
         rows = module.public_model_capability_rows()
         priority = rows["priority_producer"]
         self.assertEqual(rows["spark_first"], priority)
-        self.assertIsNone(module.priority_first_pair("code", "text", "edit", "easy"))
+        self.assertEqual(module.priority_first_pair("code", "text", "edit", "easy", 18), (priority["id"], priority["effort_by_complexity"]["easy"]))
         self.assertIsNone(module.priority_first_pair("code", "text", "edit", "complex"))
-        self.assertIsNone(module.spark_first_pair("document", "text", "write", "easy"))
+        self.assertEqual(module.spark_first_pair("document", "text", "write", "easy", 12), (priority["id"], priority["effort_by_complexity"]["easy"]))
+        self.assertEqual(module.priority_first_pair("question", "text", "work", "easy", 16, "execute"), (priority["id"], priority["effort_by_complexity"]["easy"]))
+        self.assertIsNone(module.priority_first_pair("code", "text", "edit", "easy", 25))
         self.assertEqual(module.scheduled_source_pair("easy"), (priority["id"], priority["effort_by_complexity"]["easy"]))
         self.assertEqual(module.scheduled_source_pair("complex"), (priority["id"], priority["effort_by_complexity"]["complex"]))
         self.assertIsNone(module.priority_first_pair("code", "mixed", "edit", "easy"))
         self.assertIsNone(module.priority_first_pair("code", "text", "review", "easy"))
 
-    def test_documentation_instructions_uses_adaptive_quality_pair_not_spark(self):
-        self.assertIsNone(module.priority_first_pair("documentation-instructions", "text", "edit", "easy"))
+    def test_documentation_instructions_uses_spark_only_for_small_edit_segments(self):
+        self.assertEqual(module.priority_first_pair("documentation-instructions", "text", "edit", "easy", 14), module.SPARK_LOW_PAIR)
         self.assertIsNone(module.priority_first_pair("documentation-instructions", "text", "edit", "complex"))
         self.assertIsNone(module.priority_first_pair("documentation-instructions", "text", "review", "easy"))
 

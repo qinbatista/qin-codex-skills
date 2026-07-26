@@ -79,6 +79,7 @@ OBSIDIAN_MEMORY_SPEC.loader.exec_module(obsidian_model_memory)
 
 NODE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 DISPATCH_SCHEMA_VERSION = 2
+DYNAMIC_ROUTING_MODE = "dynamic_task_graph"
 ALLOWED_PHASES = {"result", "ending"}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 ENDING_SKILLS = {"verify-skill", "optimization-skill", "management-skill"}
@@ -99,6 +100,54 @@ CONTROLLED_FIELDS = [
 RECOMMENDATION_PROOF_FIELDS = ("selected_pair", "trial", "reason", "profile_fingerprint", "calibration_state", "best_pair", "selection_basis")
 
 DISPATCHER_SKILLS_ROOT = Path(__file__).resolve().parents[2]
+
+
+def complexity_band(score):
+    if isinstance(score, bool) or not isinstance(score, int) or not 0 <= score <= 100:
+        raise ValueError("complexity score must be an integer from 0 to 100")
+    if score <= 24:
+        return "small"
+    if score <= 49:
+        return "standard"
+    if score <= 74:
+        return "complex"
+    return "advanced"
+
+
+def score_role_pair(score):
+    band = complexity_band(score)
+    role = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}[band]
+    return MODEL_ROLE_PAIRS[role]
+
+
+def _dynamic_spark_eligible(node):
+    if node.get("phase") != "result":
+        return False
+    try:
+        score = node["complexity_score"]
+        if complexity_band(score) != "small":
+            return False
+    except (KeyError, ValueError):
+        return False
+    condition = node.get("routing_condition") if isinstance(node.get("routing_condition"), dict) else {}
+    if condition.get("modality", "text") != "text" or condition.get("risk", "low") != "low" or condition.get("ambiguity", "low") != "low":
+        return False
+    purpose = node.get("purpose")
+    task_family = condition.get("task_family")
+    eligible_purpose = purpose in PRIORITY_PRODUCER_CONFIG.get("task_segment_purposes", [])
+    eligible_family = task_family in {"tiny_text", "tiny_code", "command_generation"}
+    eligible_source = isinstance(node.get("source_allowlist"), list) and len(node["source_allowlist"]) == 1
+    return eligible_purpose or eligible_family or eligible_source
+
+
+def _priority_result_node(node):
+    if PRIORITY_PRODUCER_CONFIG.get("enabled") is not True or node.get("priority_producer") is not True or node.get("phase") != "result":
+        return False
+    if node.get("model") != PRIORITY_PRODUCER_CONFIG.get("id") or node.get("effort") not in PRIORITY_PRODUCER_CONFIG.get("adaptive_efforts", []):
+        return False
+    legacy_source_branch = node.get("skill") == "workflow-skill" and node.get("dependencies") == [] and node.get("sandbox", "read-only") == "read-only" and isinstance(node.get("source_allowlist"), list) and len(node["source_allowlist"]) == 1
+    dynamic_segment = _dynamic_spark_eligible(node) and node.get("selection_basis") == "spark_priority" and node.get("effort") == PRIORITY_PRODUCER_CONFIG["effort_by_complexity"]["easy"]
+    return legacy_source_branch or dynamic_segment
 
 
 def resolve_skills_root(skills_root=None):
@@ -184,6 +233,7 @@ def _model_memory_arguments(node, project_root):
         "operation": scope.get("operation") or condition.get("task_family") or "work",
         "modality": condition.get("modality") or "text",
         "complexity": condition.get("complexity") or "easy",
+        "complexity_score": node.get("complexity_score"),
         "risk": condition.get("risk") or "low",
         "ambiguity": condition.get("ambiguity") or "low",
         "task_summary": node.get("task_summary") or "",
@@ -248,6 +298,16 @@ def dependency_closure(node_id, node_by_id):
     return closure
 
 
+def dependency_wave(node_id, node_by_id, memo=None):
+    memo = {} if memo is None else memo
+    if node_id in memo:
+        return memo[node_id]
+    dependencies = node_by_id[node_id].get("dependencies", [])
+    result_dependencies = [dependency for dependency in dependencies if dependency in node_by_id and node_by_id[dependency].get("phase") == "result"]
+    memo[node_id] = 0 if not result_dependencies else max(dependency_wave(dependency, node_by_id, memo) for dependency in result_dependencies) + 1
+    return memo[node_id]
+
+
 def phase_verdict(path, pass_marker, fail_marker):
     if not path:
         return "unknown"
@@ -280,6 +340,17 @@ def validate_plan(
         failures.append(f"execution_domain registry is invalid: {error}")
     if plan.get("schema_version") != DISPATCH_SCHEMA_VERSION:
         failures.append(f"schema_version must be {DISPATCH_SCHEMA_VERSION}")
+    dynamic_graph = plan.get("routing_mode") == DYNAMIC_ROUTING_MODE
+    if "routing_mode" in plan and not dynamic_graph:
+        failures.append(f"routing_mode must be {DYNAMIC_ROUTING_MODE}")
+    if dynamic_graph:
+        try:
+            plan_score_band = complexity_band(plan.get("complexity_score"))
+        except ValueError as error:
+            failures.append(f"dynamic task graph {error}")
+        else:
+            if plan.get("complexity_band") != plan_score_band:
+                failures.append("dynamic task graph complexity_band does not match complexity_score")
     if plan.get("complexity") not in {"easy", "complex"}:
         failures.append("complexity must be easy or complex")
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
@@ -317,22 +388,11 @@ def validate_plan(
 
         model = node.get("model")
         effort = node.get("effort")
-        priority_branch = bool(
-            node.get("priority_producer") is True
-            and node.get("phase") == "result"
-            and node.get("skill") == "workflow-skill"
-            and node.get("dependencies") == []
-            and node.get("sandbox", "read-only") == "read-only"
-            and isinstance(node.get("source_allowlist"), list)
-            and len(node["source_allowlist"]) == 1
-            and PRIORITY_PRODUCER_CONFIG.get("enabled") is True
-            and model == PRIORITY_PRODUCER_CONFIG.get("id")
-            and effort in PRIORITY_PRODUCER_CONFIG.get("adaptive_efforts", [])
-        )
+        priority_branch = _priority_result_node(node)
         if not priority_branch and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
             failures.append(f"{node_id} must use a model/effort from the catalog quality ladder")
         if "priority_producer" in node and not priority_branch:
-            failures.append(f"{node_id} priority_producer is valid only for an admitted single-source read-only branch")
+            failures.append(f"{node_id} priority_producer is valid only for an eligible bounded task segment or single-source read-only branch")
         skill = node.get("skill")
         if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
@@ -349,6 +409,35 @@ def validate_plan(
             failures.append(f"{node_id} requests an unsafe automatic sandbox")
         if "load_user_config" in node and not isinstance(node["load_user_config"], bool):
             failures.append(f"{node_id} load_user_config must be a boolean")
+        if dynamic_graph:
+            try:
+                node_score_band = complexity_band(node.get("complexity_score"))
+            except ValueError as error:
+                failures.append(f"{node_id} {error}")
+                node_score_band = None
+            else:
+                if node.get("complexity_band") != node_score_band:
+                    failures.append(f"{node_id} complexity_band does not match complexity_score")
+            selection_basis = node.get("selection_basis")
+            if selection_basis not in {"spark_priority", "score_role", "adaptive_quality", "ending_score_role"}:
+                failures.append(f"{node_id} has invalid selection_basis")
+            if phase == "ending":
+                if selection_basis != "ending_score_role":
+                    failures.append(f"{node_id} Ending Task must use ending_score_role")
+                if node_score_band is not None and f"{model}|{effort}" != score_role_pair(node["complexity_score"]):
+                    failures.append(f"{node_id} Ending Task pair must match its node score")
+            elif priority_branch:
+                if selection_basis != "spark_priority":
+                    failures.append(f"{node_id} priority producer must use spark_priority")
+                if not node.get("allow_fallback"):
+                    failures.append(f"{node_id} Spark task segment requires a quality fallback pair")
+            else:
+                if selection_basis not in {"score_role", "adaptive_quality"}:
+                    failures.append(f"{node_id} result node must use score_role or adaptive_quality")
+                if selection_basis == "score_role" and node_score_band is not None and f"{model}|{effort}" != score_role_pair(node["complexity_score"]):
+                    failures.append(f"{node_id} score_role pair must match its node score")
+                if _dynamic_spark_eligible(node) and not node.get("spark_exception_reason"):
+                    failures.append(f"{node_id} eligible small task segment must use Spark or declare spark_exception_reason")
         timeout = node.get("timeout", 180)
         if not isinstance(timeout, int) or not 1 <= timeout <= 300:
             failures.append(f"{node_id} timeout must be 1 to 300 seconds")
@@ -369,7 +458,8 @@ def validate_plan(
         else:
             try:
                 node["allow_fallback"] = receipt_module.normalize_fallback_pairs(allow_fallbacks)
-                if any(model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS[model] for model, effort in node["allow_fallback"]):
+                parsed_fallbacks = [receipt_module.parse_model_effort_pair(pair) for pair in node["allow_fallback"]]
+                if any(model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS[model] for model, effort in parsed_fallbacks):
                     failures.append(f"{node_id} allow_fallback must stay inside the catalog quality ladder")
             except (TypeError, ValueError):
                 failures.append(f"{node_id} allow_fallback contains unsupported model|effort pairs")
@@ -761,6 +851,8 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     fallback_pairs = receipt_module.normalize_fallback_pairs(node.get("allow_fallback", []))
     selected_pair = f"{node['model']}|{node['effort']}"
     adaptive_recommendation = None
+    priority_node = _priority_result_node(node)
+    fixed_scored_node = node.get("phase") == "result" and node.get("selection_basis") == "score_role" and f"{node.get('model')}|{node.get('effort')}" == score_role_pair(node.get("complexity_score"))
     if node["phase"] == "result" and isinstance(node.get("routing_recommendation"), dict) and node.get("_project_root") and receipt_module.entry_context_active():
         try:
             adaptive_recommendation = validate_dispatcher_adaptive_result(node)
@@ -815,8 +907,11 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         try:
             if args.node_role == "result-producer":
                 if receipt_module.entry_context_active():
-                    current_recommendation = adaptive_recommendation or validate_dispatcher_adaptive_result(node)
-                    authorized_pairs = {current_recommendation.get("attempt_pair"), current_recommendation.get("selected_pair"), *fallback_pairs}
+                    if priority_node or fixed_scored_node:
+                        authorized_pairs = {selected_pair, *fallback_pairs}
+                    else:
+                        current_recommendation = adaptive_recommendation or validate_dispatcher_adaptive_result(node)
+                        authorized_pairs = {current_recommendation.get("attempt_pair"), current_recommendation.get("selected_pair"), *fallback_pairs}
                     if pair_text not in authorized_pairs:
                         raise receipt_module.ReceiptAuthorizationError("dispatcher_adaptive_recommendation_invalid")
                     with receipt_module.dispatcher_adaptive_result_authorization():
@@ -893,6 +988,10 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
 
         if status == "pass":
             failure_class = None
+        if "complexity_score" in node:
+            attempt_receipt["complexity_score"] = node["complexity_score"]
+            attempt_receipt["complexity_band"] = node.get("complexity_band")
+            attempt_receipt["selection_basis"] = node.get("selection_basis")
         attempt_receipt["result_published"] = bool(result_path.is_file() and result_path.stat().st_size > 0)
         attempt_receipt = receipt_module.annotate_operational_fallback(attempt_receipt)
         attempt_receipt_path.write_text(json.dumps(attempt_receipt, indent=2) + "\n", encoding="utf-8")
@@ -943,6 +1042,10 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         "worker_identity": worker_identity(receipt),
         "tokens": receipt.get("tokens"),
         "process_elapsed_ms": receipt.get("process_elapsed_ms"),
+        "complexity_score": node.get("complexity_score"),
+        "complexity_band": node.get("complexity_band"),
+        "selection_basis": node.get("selection_basis"),
+        "dependencies": list(node.get("dependencies", [])),
     }
 
 
@@ -1090,6 +1193,7 @@ def run_plan(
     running = {}
     active_producers = set()
     launch_order = []
+    launch_metadata = {}
     deadline_exhausted = False
     result_execution_failed = False
     main_result_node = plan["main_result_node"]
@@ -1143,6 +1247,7 @@ def run_plan(
                 running[node_id] = future
                 active_producers.add(node_id)
                 launch_order.append(node_id)
+                launch_metadata[node_id] = {"dependency_wave": dependency_wave(node_id, node_by_id), "launch_sequence": len(launch_order), "launched_monotonic_ns": time.monotonic_ns()}
                 runnable_ids.remove(node_id)
 
             if not running:
@@ -1178,6 +1283,8 @@ def run_plan(
             running.pop(node_id, None)
             active_producers.discard(node_id)
             record = future.result()
+            record.update(launch_metadata.get(node_id, {}))
+            record["settled_monotonic_ns"] = time.monotonic_ns()
             completed[node_id] = record
             if record.get("status") != "pass":
                 failures.append(f"node {node_id} failed")
@@ -1244,6 +1351,9 @@ def run_plan(
         "failures": failures,
         "entry": {"model": entry_model, "effort": entry_effort},
         "complexity": plan["complexity"],
+        "complexity_score": plan.get("complexity_score"),
+        "complexity_band": plan.get("complexity_band"),
+        "routing_mode": plan.get("routing_mode"),
         "topology": plan["topology"],
         "cache_dir": str(cache_dir),
         "nodes": ordered,

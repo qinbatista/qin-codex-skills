@@ -1,15 +1,17 @@
 ---
 name: workflow-skill
-description: "Execute one Obsidian-context catalog-derived producer or a performance-admitted multi-node route. Every task still launches the mandatory post-result Ending lifecycle."
+description: "Execute one Obsidian-context producer or a dynamically scored dependency graph. Every task still launches the mandatory post-result Ending lifecycle."
 ---
 
 # Workflow Skill
 
-Use result-producing Workflow for one Obsidian-context adaptive quality producer with a one-rung-stronger operational fallback, or after full `task-analyze-skill` returns a performance-admitted locked multi-node route. Ineligible ordinary work remains inline, and every task uses the universal Ending lifecycle after presentation. Continue in the same task; no hook is used; never print the private machine plan.
+Use result-producing Workflow for one Obsidian-context adaptive quality producer with a one-rung-stronger operational fallback, or after full `task-analyze-skill` returns a dynamically scored locked multi-node route. Ineligible ordinary work remains inline, and every task uses the universal Ending lifecycle after presentation. Continue in the same task; no hook is used; never print the private machine plan.
 
-## Admission Gate
+## Graph And Claim Gates
 
-Before a multi-node route or savings claim, confirm that Task Analyze supplied comparable end-to-end admission evidence:
+Admit a task graph when at least two bounded result segments have distinct owners, outputs, model needs, or safe dependency-ready concurrency. Each node must carry its own 0-100 score, band, exact model/effort, purpose, dependencies, sandbox, and stop condition. Do not split one dependency-coupled implementation by file count alone.
+
+Before making a savings claim, confirm that Task Analyze supplied comparable end-to-end evidence:
 
 - direct and Global cohorts share prompt/inputs, cwd, sandbox, user/project configuration, output contract, and acceptance;
 - public evidence compares exactly Direct task versus Auto task, then Direct task versus Auto task + Ending; entry/controller cost is a disclosed but excluded routing diagnostic;
@@ -17,7 +19,7 @@ Before a multi-node route or savings claim, confirm that Task Analyze supplied c
 - the selected pair is frozen, receipt-backed, Real-passing, and `trial=false`;
 - evidence is current, complete, and workload-comparable.
 
-If any item is missing, stale, cross-workload, incomplete, or negative, reject an open-ended multi-node route and its savings claim. Independent read-only sources are only graph candidates: byte-metadata cost admission keeps a fitting source set on one contextual quality producer, while context pressure or an explicit latency contract may admit disjoint branches plus an adaptive merge; exact-owned three-source graphs fuse the final source audit with that merge. It still cannot claim savings until the current matched benchmark passes. Separately, the generated shared ladder plus matching Obsidian broad `Model Switch.md` context admits one ordinary producer at cold start, one-rung downgrade/upgrade trial, or frozen reuse; missing Obsidian uses the shared cold start without learning and never blocks.
+If any performance item is missing, stale, cross-workload, incomplete, or negative, reject the savings claim, not a structurally valid task graph. Independent read-only sources keep their byte-cost admission and disjoint merge rules. Writable nodes must have non-overlapping ownership to run concurrently; shared files, mutable state, or output dependencies stay ordered. The generated shared ladder plus matching Obsidian broad `Model Switch.md` context still admits one ordinary producer at cold start, one-rung downgrade/upgrade trial, or frozen reuse; missing Obsidian uses the shared cold start without learning and never blocks.
 
 ## Authority
 
@@ -29,7 +31,7 @@ Every delegated model node needs a matching sanitized receipt. A route label is 
 
 Before side effects, confirm installed owning skills, exact pairs, dependencies, inputs, outputs, stop conditions, Main Result, and post-result Real Verify. Every active registry-owned code-domain node loads `code-skill` when delegated.
 
-Reject once to inline execution when the route invents a skill, breaks dependencies, omits a pair, bypasses `code-skill`, puts Ending work before Main Result, or lacks the required quality or multi-node performance admission.
+Reject once to inline execution when the route invents a skill, breaks dependencies, omits a node score/band/pair, bypasses `code-skill`, arbitrarily splits shared state, or puts Ending work before Main Result.
 
 Task Analyze owns route display only for admitted work:
 
@@ -40,18 +42,17 @@ Workflow reports only an actual fallback or post-result repair. It never adds a 
 
 ## Inline Boundary
 
-Eligible ordinary production tasks get one project/task/module/file/symbol/code lookup and must call `obsidian_adaptive_model_runner.py` once, including cold start. The saved contextual quality pair runs first, with exactly one stronger quality fallback only after zero-result operational failure. The catalog fast producer is used only inside a cost-admitted independent-source graph; small or dependent multi-file work remains one producer. It never launches foreground verification.
+Eligible single-node production tasks get one project/task/module/file/symbol/code lookup and call `obsidian_adaptive_model_runner.py` once, including cold start. A multi-node request instead materializes one `dynamic_task_graph` and calls the dispatcher once. The parent score never forces all nodes onto one pair. Spark-low is first for every eligible low-risk, low-ambiguity text/code/write/execute node scoring 0-24, including downstream nodes inside a complex graph; a concrete exception is required when it is unsuitable.
 
 Inline work uses one direct task action or direct execution surface, then shows the completed main result immediately. Ending Real Verify starts only afterward.
 
 ## Admitted Execution
 
 1. Execute only dependency-ready nodes. Parallelize safe independent branches; keep ordered, shared-state, irreversible, or output-dependent work sequential.
-2. Load each owning skill and only task-relevant references. Preserve user work and the smallest source allowlist.
+2. Require each result and Ending node to retain its own score, band, selected pair, selection basis, purpose, dependencies, and stop condition in its receipt. Load each owning skill and only task-relevant references.
 3. Use one execution surface per branch. Collaboration prompts start `LOCKED_ROUTE_NODE`; do not repeat that branch in a dispatcher.
 4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; ordinary text/code starts on its contextual quality pair. One Real PASS retains the pair, two Real PASS results trial one rung down, and quality FAIL upgrades one rung. Code completion includes one bounded Quick Check before presentation, never a separate verifier.
-5. Only a real graph with at least two model-executed nodes saves private schema-2 JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once.
-   The runner may materialize this graph only for a two-or-three independent-source read-only candidate whose byte/context or explicit latency gate admits fan-out; all source allowlists are disjoint, and the merge either reads only dependency results or safely fuses the final exact-owned source audit.
+5. Only a real graph with at least two model-executed result nodes saves private schema-2 `dynamic_task_graph` JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once. Independent writable nodes declare non-overlapping outputs; any shared target introduces an explicit dependency. Read-only source graphs additionally retain disjoint allowlists and dependency-only-or-fused merge rules.
 6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work without user authorization.
 
 The adaptive producer reads the saved shared contract unchanged and checks the matching Obsidian project context before execution. Ordinary tasks do not scan or refresh the local model cache. Only an explicit user model-update request may refresh the shared contract from local `models_cache.json`; never fetch models over the network, and preserve the saved contract when the local cache is unavailable. It never writes learning. Selected-pair launch/access/transport failure can use one stronger quality pair only before any published result and with zero tokens; all attempts stay in one route receipt. Explicit benchmark baselines remain outside entry context.
@@ -89,8 +90,8 @@ Savings claims count every session once and test simple, medium, and complex sep
 
 ## Prompt And Code Rules
 
-Delegated code nodes retain `code-skill`. Eligible small low-risk edits try the catalog Spark priority producer; other production executes the saved contextual quality pair, and Spark may also serve admitted disjoint source branches. Ending verifiers use score-derived quality pairs, never Spark. Local execution does not fabricate producer metadata.
+Delegated code nodes retain `code-skill`. Eligible small low-risk code, write, command, probe, transform, and execute segments use the catalog Spark priority producer from their node score, regardless of parent score; other production executes its score role or saved contextual quality pair. Ending verifiers use score-derived quality pairs, never Spark. Local execution does not fabricate producer metadata.
 
 ## Files And Verification
 
-Put plans, receipts, logs, and temporary outputs in active task `cache/` or `work/`; final deliverables go only to the requested location. After editing Workflow, run `scripts/validate_workflow_skill.py`, Task Analyze validators/tests, one inline contract check, and one admitted complex route check. Confirm no ordinary task loads Workflow, Main Result depends only on requested work, and Real Verify begins after presentation.
+Put plans, receipts, logs, and temporary outputs in active task `cache/` or `work/`; final deliverables go only to the requested location. After editing Workflow, run `scripts/validate_workflow_skill.py`, Task Analyze validators/tests, one single-node contract check, and real sequential, parallel, and mixed graph checks. Confirm every node score/pair is receipted, only dependency-ready nodes overlap, Main Result depends transitively on every result node, and Real Verify begins after presentation.

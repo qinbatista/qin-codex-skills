@@ -3,9 +3,9 @@
 This snapshot and the shared JSON registry come from the local Codex catalog. They change only when the user explicitly runs the manual update command; ordinary routing reads the saved registry without scanning the catalog.
 
 - Source: `~/.codex/models_cache.json`
-- Codex client version: `0.145.0`
-- Local catalog snapshot: `2026-07-22T21:08:59.211408Z`
-- Semantic catalog SHA-256: `26030aba39242af8a98e68e965d819c6cbb6c259d22fdc964d30daa021390e85`
+- Codex client version: `0.146.0`
+- Local catalog snapshot: `2026-07-25T18:45:01.563456Z`
+- Semantic catalog SHA-256: `ed69842c6a3023a23a83e32b315829bbc7788b6f0a8174dfae7482f8113fe36b`
 - Registry schema: `2`
 - Active quality family: `gpt-5.6` (highest numeric GPT family)
 
@@ -39,7 +39,7 @@ Catalog-only models remain documented but never enter adaptive upgrade/downgrade
 - Positioning: Ultra-fast coding model.
 - Inputs: text; API: no
 - Easy / complex effort: `low` / `high`
-- This producer is attempted before eligible text/code work and is not part of the weakest-to-strongest quality ladder.
+- This producer is attempted before eligible low-risk text/code/write/execute task segments scoring 0-24, regardless of parent score, and is not part of the weakest-to-strongest quality ladder.
 
 ## Private learning contract
 

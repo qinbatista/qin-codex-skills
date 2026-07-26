@@ -332,10 +332,10 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
 
     def test_route_contract_routes_eligible_production_and_keeps_exact_read_only_inline(self):
         route_text = (Path(__file__).resolve().parents[1] / "references" / "route-contract.md").read_text(encoding="utf-8")
-        self.assertIn("Eligible text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start", route_text)
-        self.assertIn("Other exact read-only work stays inline", route_text)
+        self.assertIn("Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start", route_text)
+        self.assertIn("Exact-scoped read-only work stays inline", route_text)
         self.assertIn("Apparent complexity alone does not create a dispatcher", route_text)
-        self.assertIn("An open-ended multi-node foreground exists only after comparable end-to-end evidence positively admits it", route_text)
+        self.assertIn("A bounded task graph does not require prior benchmark evidence", route_text)
 
     def test_fixed_sol_entry_contract_is_rejected(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
@@ -352,7 +352,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             route_path = temp_dir / "references" / "route-contract.md"
-            route_path.write_text(route_path.read_text(encoding="utf-8").replace("## Admitted Complex Graph: Mermaid Route", "## Admitted Complex Graph").replace("```mermaid", "```text"), encoding="utf-8")
+            route_path.write_text(route_path.read_text(encoding="utf-8").replace("## Dynamic Complex Graph: Mermaid Route", "## Dynamic Complex Graph").replace("```mermaid", "```text"), encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])
             self.assertTrue(any("Mermaid" in failure for failure in result["failures"]))
@@ -456,17 +456,17 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             bootstrap_text = global_agents.read_text(encoding="utf-8")
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
-            self.assertIn("Producer owns files/skills/Mini Test", bootstrap_text)
-            self.assertIn("one own scored/model End Task per independent real test/API/render", bootstrap_text)
-            self.assertIn("all End/Fix Tasks use global projectless threads", bootstrap_text)
-            self.assertIn("PASS records then self-archives;FAIL/BLOCKED stays visible", bootstrap_text)
-            self.assertIn("FAIL creates Fix Task with exact error then fresh End Task", bootstrap_text)
+            self.assertIn("Producer owns files/skills/Quick Check", bootstrap_text)
+            self.assertIn("score each independent real check", bootstrap_text)
+            self.assertIn("global projectless End/Fix Tasks", bootstrap_text)
+            self.assertIn("PASS records then self-archives", bootstrap_text)
+            self.assertIn("FAIL records exact evidence", bootstrap_text)
             self.assertIn("never same-task subtask/emulate/wait/self-verify", bootstrap_text)
             self.assertIn("all checks must PASS", bootstrap_text)
             self.assertIn("BLOCKED only unavailable/external/limit", bootstrap_text)
             self.assertIn("`gpt-5.6-sol|ultra`", bootstrap_text)
-            self.assertIn("before skills/memory/files", bootstrap_text)
-            self.assertIn("NEVER spawn/read", bootstrap_text)
+            self.assertIn("dynamic_task_graph", bootstrap_text)
+            self.assertIn("task_route_dispatcher.py run-plan", bootstrap_text)
             self.assertIn("task vs task+Ending", bootstrap_text)
             self.assertIn("no reread/full read/precheck", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)

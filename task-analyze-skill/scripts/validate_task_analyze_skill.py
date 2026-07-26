@@ -112,7 +112,9 @@ REQUIRED_SKILL_TEXT = [
     "Ordinary Inline Bootstrap",
     "must not read this full `SKILL.md`",
     "one direct task action",
-    "Every eligible text/code production task must run `scripts/obsidian_adaptive_model_runner.py`",
+    "A single eligible text/code result runs `scripts/obsidian_adaptive_model_runner.py`",
+    "every node has its own `complexity_score`",
+    "The parent score never chooses one model for every node",
     "one bounded `rg` per authoritative file",
     "every exact user-named target and direct definition",
     "Anchor named members directly",
@@ -121,7 +123,7 @@ REQUIRED_SKILL_TEXT = [
     "then answer once",
     "exact allowlist",
     "current model",
-    "regardless of apparent complexity",
+    "rather than the parent score",
     "no separate foreground self-review, Mini, or verification pass",
     "Show the requested result immediately after that check",
     "Quick Check (the user-facing Mini Test)",
@@ -131,7 +133,7 @@ REQUIRED_SKILL_TEXT = [
     "substitute a same-task subtask",
     "origin final is complete after the result presentation",
     "concurrent or missing evidence is terminal BLOCKED, not a user question",
-    "End-to-End Performance Admission",
+    "Task-Graph Admission And Performance Claims",
     "exactly two worlds",
     "frozen model-visible catalogs and memory snapshot",
     "lower cohort total and raw median",
@@ -160,9 +162,9 @@ REQUIRED_SKILL_TEXT = [
     "Auto starts from the same entry",
     "receipt-proven adaptive producer or scheduled graph",
     "parallel-source/fused-merge graph",
-    "180,000-byte single-producer budget",
-    "exact-owned final source fused with the adaptive merge",
-    "dependency-results-only merge",
+    "valid bounded task graph",
+    "Writable graphs",
+    "Any savings claim requires",
     "shared saved cold-start recommendation",
     "task + Ending check",
     "producers and ordinary runners never write learning",
@@ -178,7 +180,7 @@ REQUIRED_SKILL_TEXT = [
     "same simple, medium, and complex benchmark cohort",
     "controller-stamped sanitized `result-ready` event",
     "runner-owned receipt and evidence timestamps to match exactly",
-    "schema-version-2 JSON with only `result` and `ending` phases",
+    "schema-version-2 `dynamic_task_graph` JSON with only `result` and `ending` phases",
     "scripts/strategy_performance.py",
     "scripts/benchmark_suite_gate.py",
 ]
@@ -189,17 +191,17 @@ REQUIRED_ROUTE_TEXT = [
     "## Ordinary Entry Contract",
     "Complexity: N/100 (band)",
     "hard-required",
-    "Eligible text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start",
-    "explicit list of two or three independent read-only sources first records byte metadata",
-    "Sources within the saved single-producer budget",
+    "Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start",
+    "Every node has its own score, band, exact pair",
+    "Two or three independent read-only sources retain their byte-cost shortcut",
     "Exact/tool/image work uses the score-only script",
     "Design a website like YouTube",
     "Apparent complexity alone does not create a dispatcher",
-    "## Explicit Or Admitted Foreground Budget",
-    "An open-ended multi-node foreground exists only after comparable end-to-end evidence positively admits it",
+    "## Dynamic Foreground Budget",
+    "A bounded task graph does not require prior benchmark evidence",
     "## Admitted Single Node: Text Route",
     "Do not draw Mermaid for one admitted node",
-    "## Admitted Complex Graph: Mermaid Route",
+    "## Dynamic Complex Graph: Mermaid Route",
     "```mermaid",
     "Workflow with models",
     "Main Goal Done Gate",
@@ -236,7 +238,8 @@ REQUIRED_SELECTION_TEXT = [
     "task_complexity_score.py",
     "Exact read-only",
     "obsidian_adaptive_model_runner.py",
-    "Open-ended multi-node strategy and every savings claim remain separately performance-admitted",
+    "multi-node production task runs one `dynamic_task_graph`",
+    "based on its own score, not the parent task score",
 ]
 REQUIRED_RECEIPT_TEXT = [
     "requested model and effort",
@@ -292,7 +295,7 @@ REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_mod
 REQUIRED_MODEL_SWITCH_CATEGORIES = ["normal-script-update", "code-design", "finding-bugs", "tests-verification", "documentation-instructions", "general-work"]
 REQUIRED_MODEL_SWITCH_DIRECTIONS = ["initial", "upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"]
 REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "model-capability-ladder.json", "Model Switch.md", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "complexity_score", "complexity_band", "_priority_producer_pair", "_priority_history", "spark_verify_failure_suppresses_", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
-REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "complexity_scale", "small_edit_task_types", "small_edit_operations", "suppress_matching_complexity_band_and_upgrade", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
+REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "complexity_scale", "small_edit_task_types", "small_edit_operations", "TASK_SEGMENT_PURPOSES", "task_segment_maximum_complexity_score", "suppress_matching_complexity_band_and_upgrade", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
 REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
 REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "ENTRY_CONTEXT_ENV",
@@ -306,7 +309,7 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "pipe exact user text once non-TTY to `/usr/bin/python3", "obsidian_adaptive_model_runner.py", "before skills/memory/files", "Exact one-source/tool/image:use `task_complexity_score.py`", "Small low-risk edit score<=24:Spark-low first", "Ending quality FAIL suppresses Spark", "next task upgrades to saved quality pair", "2 Real PASS down 1 rung", "quality FAIL up 1", "zero-result failure one stronger fallback", "Missing Obsidian uses saved cold start", "2-3 independent read-only sources cost-admit before reads", "dependent multi-file one producer", "Producer owns files/skills/Mini Test", "heavy/API/large/side-effect checks syntax+names/references", "End Task hard-required", "scored local ledger", "all End/Fix Tasks use global projectless threads", "`ending_verification_plan.py`", "one own scored/model End Task per independent real test/API/render", "all checks must PASS", "PASS records then self-archives;FAIL/BLOCKED stays visible", "FAIL creates Fix Task with exact error then fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal events sync local history+Obsidian Model Switch", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "Dynamically split only distinct bounded work", "every result/Ending node gets its own score", "Parent score never forces one model", "small low-risk low-ambiguity text/code/write/execute segments score<=24 use Spark-low first", "even inside a larger task", "Dependency-ready independent nodes run in parallel", "shared writes,ordering,and output dependencies stay linear", "Single-node eligible text/code pipes exact user text once non-TTY", "obsidian_adaptive_model_runner.py", "multi-node work saves one `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark to execute a valid task graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses saved cold start", "Producer owns files/skills/Quick Check", "End Task hard-required after result", "score each independent real check", "global projectless End/Fix Tasks", "all checks must PASS", "PASS records then self-archives", "FAIL records exact evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal events sync local history+Obsidian Model Switch", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "build real proportional Ending checks", "Every required check must PASS", "separate scoped repair task", "fresh verifier"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "separate scored/modelled End Tasks", "All required checks must PASS", "fresh verifier"]
@@ -317,7 +320,7 @@ REQUIRED_VERIFY_SKILL_TEXT = ["execute a real proportional test", "ending_verifi
 REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "weak_default", "balanced_default", "balanced_complex", "frontier_complex", "separate_persistent_tasks", "THREAD_TARGET", "projectless", "TERMINAL_THREAD_POLICY", "record_pass_then_archive_self", "keep_unarchived", "subprocess.run", "create_repair_task_then_fresh_ending", "max_repair_attempts"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
-MAX_GLOBAL_BOOTSTRAP_BYTES = 2300
+MAX_GLOBAL_BOOTSTRAP_BYTES = 4000
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
     "The entry is a bounded controller",

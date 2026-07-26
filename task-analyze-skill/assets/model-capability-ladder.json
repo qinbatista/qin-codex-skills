@@ -4,9 +4,9 @@
   "scope": "shared_non_personal",
   "source": {
     "models_cache": "~/.codex/models_cache.json",
-    "client_version": "0.145.0",
-    "fetched_at": "2026-07-22T21:08:59.211408Z",
-    "catalog_sha256": "26030aba39242af8a98e68e965d819c6cbb6c259d22fdc964d30daa021390e85"
+    "client_version": "0.146.0",
+    "fetched_at": "2026-07-25T18:45:01.563456Z",
+    "catalog_sha256": "ed69842c6a3023a23a83e32b315829bbc7788b6f0a8174dfae7482f8113fe36b"
   },
   "active_family": {
     "id": "gpt-5.6",
@@ -238,6 +238,7 @@
     "freeze_lowest_verified_pair": true,
     "priority_producer_first_text_code": false,
     "priority_producer_first_small_edits": true,
+    "priority_producer_task_segments": true,
     "priority_producer_scheduled_sources": true,
     "priority_producer_scheduled_sources_only": false,
     "minimum_pair": "gpt-5.6-luna|low"
@@ -246,7 +247,7 @@
     "enabled": true,
     "id": "gpt-5.3-codex-spark",
     "display_name": "GPT-5.3-Codex-Spark",
-    "routing_role": "small_edit_priority_or_scheduled_source_branch",
+    "routing_role": "bounded_task_segment_or_small_edit_priority",
     "provider_priority": 26,
     "provider_positioning": "Ultra-fast coding model.",
     "supported_in_api": false,
@@ -303,6 +304,16 @@
       "write"
     ],
     "small_edit_maximum_complexity_score": 24,
+    "task_segment_purposes": [
+      "author-probe",
+      "command",
+      "edit",
+      "execute",
+      "implement",
+      "transform",
+      "write"
+    ],
+    "task_segment_maximum_complexity_score": 24,
     "excluded_operations": [
       "audit",
       "lookup",

@@ -83,6 +83,19 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         plan["main_result_node"] = "main-result"
         return plan
 
+    def dynamic_segment_plan(self, cache_dir):
+        plan = self.dependent_plan(cache_dir)
+        plan.update({"routing_mode": "dynamic_task_graph", "complexity_score": 70, "complexity_band": "complex", "topology": "sequential"})
+        upstream = plan["nodes"][0]
+        upstream.update({"skill": "code-skill", "model": module.PRIORITY_PRODUCER_CONFIG["id"], "effort": module.PRIORITY_PRODUCER_CONFIG["effort_by_complexity"]["easy"], "priority_producer": True, "purpose": "implement", "execution_domain": "python", "sandbox": "workspace-write", "complexity_score": 16, "complexity_band": "small", "selection_basis": "spark_priority", "allow_fallback": [module.MODEL_ROLE_PAIRS["weak_default"]], "routing_condition": {"task_family": "tiny_code", "artifact": "patch", "scope": "single", "ambiguity": "low", "modality": "text", "risk": "low", "complexity": "easy", "owning_skill": "code-skill", "project_family": "global", "verification_shape": "real", "execution_domain": "python"}})
+        main_node = plan["nodes"][1]
+        main_node.update({"complexity_score": 58, "complexity_band": "complex", "selection_basis": "adaptive_quality"})
+        ending = plan["nodes"][2]
+        ending_pair = module.score_role_pair(42)
+        ending["model"], ending["effort"] = ending_pair.split("|", 1)
+        ending.update({"complexity_score": 42, "complexity_band": "standard", "selection_basis": "ending_score_role"})
+        return plan
+
     def result_receipt(self, args, ready_monotonic_ns, status="pass", failure_class=None):
         pair = f"{args.model}|{args.effort}"
         return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": pair, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": pair, "status": status, "failure_class": failure_class, "route_attempts": [], "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}, "result_published": True, "result_ready_monotonic_ns": ready_monotonic_ns}
@@ -376,6 +389,36 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             })
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("priority_producer is valid only" in failure for failure in failures))
+
+    def test_dynamic_graph_accepts_dependent_spark_code_segment_with_own_score(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
+    def test_dynamic_graph_requires_score_and_band_on_every_node(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            plan["nodes"][0].pop("complexity_score")
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("complexity score" in failure for failure in failures))
+
+    def test_dynamic_graph_requires_spark_or_explicit_exception_for_eligible_small_segment(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            upstream = plan["nodes"][0]
+            upstream.pop("priority_producer")
+            upstream["model"], upstream["effort"] = module.score_role_pair(16).split("|", 1)
+            upstream["selection_basis"] = "score_role"
+            upstream["allow_fallback"] = []
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+            upstream["spark_exception_reason"] = "The node requires an unavailable non-text tool surface."
+            accepted = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("must use Spark" in failure for failure in failures))
+        self.assertEqual(accepted, [])
 
     def test_real_verify_rejects_management_only_ending(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -985,6 +1028,11 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(set(calls[:2]), {"branch-a", "branch-b"})
         self.assertEqual(calls[2:], ["merge"])
         self.assertEqual(manifest["status"], "pass")
+        records = {record["id"]: record for record in manifest["nodes"]}
+        self.assertEqual(records["branch-a"]["dependency_wave"], 0)
+        self.assertEqual(records["branch-b"]["dependency_wave"], 0)
+        self.assertEqual(records["merge"]["dependency_wave"], 1)
+        self.assertTrue(all(isinstance(record["launched_monotonic_ns"], int) and isinstance(record["settled_monotonic_ns"], int) for record in records.values()))
 
     def test_ending_handoff_runs_ending_optimization_then_targeted_verifier_by_wave(self):
         with tempfile.TemporaryDirectory() as temp_dir:

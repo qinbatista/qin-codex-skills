@@ -53,11 +53,12 @@ EXPECTED_ROUTE_PREFIXES = {
     "image-or-mixed": ["inline owning image/tool skill", "result"],
     "prompt-production": ["adaptive producer", "prompt-skill"],
     "ordinary-code-domain": ["adaptive producer", "code-skill"],
+    "dynamic-code-graph": ["Task Analyze", "scored dependency-ready nodes"],
     "independent-small-sources": ["entry bootstrap", "one adaptive producer"],
     "independent-large-sources": ["entry bootstrap", "admitted source graph"],
-    "dependent-multi-file": ["one adaptive producer", "owning skill"],
+    "dependent-multi-file": ["one adaptive producer or linear scored nodes", "owning skill"],
     "explicit-routing-no-graph": ["Task Analyze", "one contextual producer"],
-    "task-analyze-maintenance": ["adaptive producer", "Task Analyze"],
+    "task-analyze-maintenance": ["Task Analyze", "dynamically scored design/code/docs nodes"],
     "explicit-benchmark": ["Task Analyze", "fixed Direct and receipt-proven Auto arms"],
     "admitted-complex": ["Task Analyze", "Workflow"],
 }
@@ -68,15 +69,17 @@ PRIORITY_PRODUCER = MODEL_REGISTRY.get("priority_producer")
 PRIORITY_PRODUCER_MODEL = PRIORITY_PRODUCER.get("id") if isinstance(PRIORITY_PRODUCER, dict) else None
 REQUIRED_WORKFLOW = [
     "one Obsidian-context adaptive quality producer with a one-rung-stronger operational fallback",
-    "performance-admitted locked multi-node route",
+    "dynamically scored locked multi-node route",
     "Ineligible ordinary work remains inline",
     "universal Ending lifecycle after presentation",
-    "comparable end-to-end admission evidence",
+    "Before making a savings claim",
+    "reject the savings claim, not a structurally valid task graph",
     "Direct task versus Auto task",
     "Auto task + Ending",
     "excluded routing diagnostic",
     "frozen, receipt-backed, Real-passing, and `trial=false`",
-    "must call `obsidian_adaptive_model_runner.py` once, including cold start",
+    "single-node production tasks",
+    "multi-node request instead materializes one `dynamic_task_graph`",
     "reads the saved shared contract unchanged",
     "Ordinary tasks do not scan or refresh the local model cache",
     "Only an explicit user model-update request",
@@ -88,7 +91,9 @@ REQUIRED_WORKFLOW = [
     "Obsidian broad `Model Switch.md`",
     "project/task/module/file/symbol/code",
     "obsidian_adaptive_model_runner.py",
-    "Only a real graph with at least two model-executed nodes saves private schema-2 JSON",
+    "at least two model-executed result nodes saves private schema-2 `dynamic_task_graph` JSON",
+    "own score, band, selected pair",
+    "regardless of parent score",
     "initial-attempt evidence to Obsidian automatically",
     "sole current contextual experience authority",
     "End-to-end performance admission remains separate",
@@ -124,13 +129,13 @@ REQUIRED_WORKFLOW = [
     "emits BLOCKED handoffs for the outer host",
 ]
 REQUIRED_TEMPLATE = ["Admitted Workflow Display Templates", "Eligible ordinary production uses the compact adaptive runner but shows no pre-result route", "Exact one-source, tool-only, and image/mixed work stay inline", "## Admitted Single Node: Text Only", "## Admitted Complex Graph: Mermaid", "current selected model | current selected effort", "Show main result now", "Dispatch Ending Task", "Real Verify", "Independent optimization verification", "Main Result always precedes Ending Task", "Workflow With Models", "creates a separate repair task", "fresh Ending verifier"]
-REQUIRED_MATRIX = ["# Adaptive And Admitted Routing Matrix", "Eligible ordinary text/code production enters the compact adaptive runner exactly once", "Two or three independent read-only sources first cost-admit one contextual producer versus a graph", "`workflow-skill` executes only a positively admitted multi-node or locked route", "ordinary-production", "independent-small-sources", "independent-large-sources", "dependent-multi-file", "explicit-routing-no-graph", "explicit-benchmark", "admitted-complex", "One receipt-valid Real PASS retains the selected pair", "two matched PASS outcomes try one lower rung", "quality failure upgrades one rung", "Spark is first priority for eligible small low-risk edits", "all checks must PASS", "separate repair task and fresh verifier", "Direct uses the exact raw prompt", "public two-world comparison", "dispatcher/controller is disclosed but excluded", "--direct-task", "--bootstrap-task"]
-REQUIRED_CODE = ["Obsidian-context catalog-derived quality pair", "Obsidian broad `Model Switch.md`", "project/task/module/file/symbol/code", "One Real PASS retains a quality pair", "two PASS results downgrade one rung", "quality FAIL upgrades one rung", "small band tries Spark first", "zero-result, zero-token Spark operational failure", "Old local `model_experience.json` remains legacy read-only", "mandatory post-result Ending lifecycle still runs", "ending_verification_plan.py", "global projectless", "PASS records durable evidence then self-archives", "All checks must PASS", "separate projectless `Fix Task-{task}-{check}`", "fresh Ending check", "same-task Ending subagent", "different `verify-skill` worker performs independent verification"]
+REQUIRED_MATRIX = ["# Adaptive And Admitted Routing Matrix", "Eligible single-node text/code production enters the compact adaptive runner exactly once", "Multi-segment work creates one dynamically scored dependency graph", "dynamic-code-graph", "ordinary-production", "independent-small-sources", "independent-large-sources", "dependent-multi-file", "explicit-routing-no-graph", "explicit-benchmark", "admitted-complex", "One receipt-valid Real PASS retains the selected pair", "two matched PASS outcomes try one lower rung", "quality failure upgrades one rung", "eligible 0-24 code/write/execute nodes use Spark", "all checks must PASS", "separate repair task and fresh verifier", "Direct uses the exact raw prompt", "public two-world comparison", "dispatcher/controller is disclosed but excluded", "--direct-task", "--bootstrap-task"]
+REQUIRED_CODE = ["score role or Obsidian-context quality pair", "Obsidian broad `Model Switch.md`", "project/task/module/file/symbol/code", "One Real PASS retains a quality pair", "two PASS results downgrade one rung", "quality FAIL upgrades one rung", "small band tries Spark first", "zero-result, zero-token Spark operational failure", "Old local `model_experience.json` remains legacy read-only", "mandatory post-result Ending lifecycle still runs", "ending_verification_plan.py", "global projectless", "PASS records durable evidence then self-archives", "All checks must PASS", "separate projectless `Fix Task-{task}-{check}`", "fresh Ending check", "same-task Ending subagent", "different `verify-skill` worker performs independent verification"]
 REQUIRED_VERIFY = ["Verification has two scopes", "post-result Ending Real Verify", "execute a real proportional test", "ending_verification_plan.py", "own `0-100` check score", "All required checks must PASS", "{\"type\":\"projectless\"}", "set_thread_archived", "FAIL and BLOCKED workers remain unarchived", "create `Fix Task-{task}-{check}`", "fresh Ending task", "BLOCKED does not count as verified"]
 REQUIRED_OPTIMIZATION = ["Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "Use this skill directly only when the user requests optimization", "catalog-derived adaptive producer", "positively admitted", "different verifier", "before/after", "producer receipt", "--direct-task", "--bootstrap-task", "neither arm enters Task Analyze context"]
 REQUIRED_MANAGEMENT = ["Do not load this skill for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms", "directly only for an explicit routing-record", "admitted a delegated route", "broad Model Switch.md", "Every task stores a `0-100` score", "Eligible small low-risk edits try Spark first", "Spark quality failure suppresses", "two PASS results trial one rung down", "obsidian_model_memory.py", "Ending Real starts with the producer receipt", "terminal ledger event records the result automatically", "legacy read-only", "Never push/sync/publish unless the user explicitly requested publishing"]
-REQUIRED_ENTRY = ["# Task Lifecycle", "Merge this section into `~/.codex/AGENTS.md`", "Score every submission 0-100", "obsidian_adaptive_model_runner.py", "before skills/memory/files", "task_complexity_score.py", "Spark-low first", "2 Real PASS down 1 rung", "quality FAIL up 1", "all End/Fix Tasks use global projectless threads", "ending_verification_plan.py", "one own scored/model End Task per independent real test/API/render", "all checks must PASS", "PASS records then self-archives;FAIL/BLOCKED stays visible", "FAIL creates Fix Task with exact error then fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "Terminal events sync local history+Obsidian Model Switch", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
-REQUIRED_SELECTION = ["# Catalog-Generated Model Selection", "assets/model-capability-ladder.json", "scripts/model_registry.py", "`~/.codex/models_cache.json`", "bootstrap it once", "Only an explicit user model-update request", "highest numeric GPT family", "Older numeric families remain catalog-only", "Obsidian broad `Model Switch.md`", "matching Obsidian broad `Model Switch.md` context", "terminal Ending event automatically records the matched producer verdict", "optional priority producer", "sole current contextual model evidence authority", "Exact read-only", "task_complexity_score.py", "obsidian_adaptive_model_runner.py", "Open-ended multi-node strategy and every savings claim remain separately performance-admitted"]
+REQUIRED_ENTRY = ["# Task Lifecycle", "Merge this section into `~/.codex/AGENTS.md`", "Score every submission 0-100", "Dynamically split only distinct bounded work", "every result/Ending node gets its own score", "Parent score never forces one model", "Spark-low first", "Dependency-ready independent nodes run in parallel", "shared writes,ordering,and output dependencies stay linear", "obsidian_adaptive_model_runner.py", "dynamic_task_graph", "task_route_dispatcher.py run-plan", "task_complexity_score.py", "2 Real PASS down 1 rung", "quality FAIL up 1", "global projectless End/Fix Tasks", "all checks must PASS", "PASS records then self-archives", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "Terminal events sync local history+Obsidian Model Switch", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
+REQUIRED_SELECTION = ["# Catalog-Generated Model Selection", "assets/model-capability-ladder.json", "scripts/model_registry.py", "`~/.codex/models_cache.json`", "bootstrap it once", "Only an explicit user model-update request", "highest numeric GPT family", "Older numeric families remain catalog-only", "Obsidian broad `Model Switch.md`", "matching Obsidian broad `Model Switch.md` context", "terminal Ending event automatically records the matched producer verdict", "optional priority producer", "sole current contextual model evidence authority", "Exact read-only", "task_complexity_score.py", "obsidian_adaptive_model_runner.py", "multi-node production task runs one `dynamic_task_graph`", "based on its own score, not the parent task score"]
 REQUIRED_ADAPTIVE = ["project/task/module/file/symbol/code context", "assets/model-capability-ladder.json", "last explicitly refreshed local Codex model order", "source digest", "Obsidian broad `Model Switch.md`", "sole active private authority", "deterministic `0-100` score and band", "scoring `0-24` tries Spark first", "zero-result, zero-token Spark operational failure", "atomically bootstrapped from the local cache when missing", "Only an explicit user model-update request", "preserve the last valid registry", "Evidence never crosses project keys", "`strategy_performance.py` remains the separate authority", "automatically writes a receipt-backed producer outcome"]
 REQUIRED_OBSIDIAN_RUNNER = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status", "resolve_fast_path_args", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "scheduled_result_node_count", "parallel_branch_count"]
 REQUIRED_OBSIDIAN_MEMORY = ["DEFAULT_LADDER", "model-capability-ladder.json", "Model Switch.md", "task_type", "module", "file", "symbol", "code_kind", "modality", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"]
@@ -433,8 +438,8 @@ def validate(skill_dir):
     for label in ("workflow", "code", "management", "task_analyze", "task_analyze_selection", "task_analyze_adaptive"):
         failures.extend(legacy_only_failures(label, texts[label]))
     entry_body = texts["task_analyze_entry_rule"].replace("Merge this section into `~/.codex/AGENTS.md`.\n\n", "", 1)
-    if len(entry_body.encode("utf-8")) > 2300:
-        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 2300 bytes")
+    if len(entry_body.encode("utf-8")) > 4000:
+        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 4000 bytes")
     if entry_body != texts["global_agents"]:
         failures.append("global entry asset does not exactly match global AGENTS after removing its merge directive")
     live_text = "\n".join(texts.values())

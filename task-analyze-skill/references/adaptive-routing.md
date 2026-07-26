@@ -11,8 +11,8 @@ The shared registry may be atomically bootstrapped from the local cache when mis
 
 ## Start And End Flow
 
-1. Every submission receives a deterministic `0-100` score and band. Eligible text/code production also reads the generated registry and its matching Obsidian context.
-2. A low-risk, low-ambiguity text/code edit scoring `0-24` tries Spark first. Other production runs the contextual quality pair directly. Spark may also serve an admitted disjoint source branch.
+1. Every submission and every dynamic graph node receives a deterministic `0-100` score and band. Eligible text/code production also reads the generated registry and its matching Obsidian context.
+2. A low-risk, low-ambiguity text/code/write/execute node scoring `0-24` tries Spark first even when its parent task has a higher score. Other nodes run their score role or contextual quality pair directly. Spark may also serve an admitted disjoint source branch.
 3. A zero-result, zero-token Spark operational failure may run the contextual quality pair in the same receipt. A quality-pair operational failure may run one stronger quality pair.
 4. The result is presented immediately.
 5. The hard-required lifecycle starts with score/band and `--producer-receipt` when present; its Ending PASS/FAIL event stores the score locally and automatically writes a receipt-backed producer outcome, switch direction, and next pair to Obsidian.
@@ -33,4 +33,4 @@ Each terminal write rebuilds the six sections on that same broad `Model Switch.m
 
 Evidence never crosses project keys merely because two tasks share a broad page or display name. The broad `Model Switch.md` page is the sole active private authority. `strategy_performance.py` remains the separate authority for multi-node Global-versus-Direct admission and savings claims.
 
-An unavailable vault or unregistered project owner disables private learning but does not disable execution. The runner uses the shared cold-start pair and marks `memory_available=false`; dispatcher proof uses `selection_basis=shared_cold_start`. A read-only list of two or three independent project-relative sources first cost-admits a single contextual quality producer versus a graph from source byte metadata. Only context pressure or an explicit latency contract admits schedule-producer branches plus an adaptive merge. Exact-owned three-source graphs fuse the final source audit into that merge; other graphs use a dependency-results-only merge. Exact-expression or dependency-coupled work remains one producer. Open-ended graphs and public savings claims still require `strategy_performance.py` evidence.
+An unavailable vault or unregistered project owner disables private learning but does not disable execution. The runner uses the shared cold-start pair and marks `memory_available=false`; dispatcher proof uses `selection_basis=shared_cold_start`. A structurally valid bounded task graph may execute without performance history. Dependency-ready independent nodes run concurrently; shared-state and output-dependent nodes remain linear. A read-only list of two or three independent project-relative sources retains its source-byte admission and dependency-only-or-fused merge constraints. Public savings claims still require `strategy_performance.py` evidence.

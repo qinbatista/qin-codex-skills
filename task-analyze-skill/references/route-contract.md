@@ -6,13 +6,13 @@ Finish the requested task. Every submission reports `Complexity: N/100 (band)` a
 
 ## Ordinary Entry Contract
 
-The hookless always-loaded bootstrap, not this full skill, owns ordinary work. It scores every submission `0-100`. Eligible text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start, so a real receipt can be learned after Ending. A low-risk, low-ambiguity text/code edit scoring `0-24` tries the catalog Spark priority producer first; an Ending quality failure suppresses Spark for that contextual band and upgrades the next matching task to the quality pair. Exact/tool/image work uses the score-only script and creates no fake model learning. Other exact read-only work stays inline. The runner normally uses one producer. An explicit list of two or three independent read-only sources first records byte metadata and cost-admits one producer versus a graph. Sources within the saved single-producer budget remain one contextual quality session; context pressure or an explicit parallel-latency contract may admit disjoint source nodes plus an adaptive merge. Exact-owned three-source graphs fuse the last source audit into that merge. Neither path adds foreground verification; Ending Real begins only after presentation.
+The hookless always-loaded bootstrap scores every submission `0-100`, then chooses a single producer or a real task graph. Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start. A graph is used only when the request contains at least two distinct bounded result segments with different ownership, model needs, outputs, or dependency-ready concurrency. Every node has its own score, band, exact pair, purpose, dependencies, and stop condition. A low-risk, low-ambiguity text/code/write/execute node scoring `0-24` tries Spark even inside a larger task; an Ending quality failure suppresses Spark for that contextual band. Exact/tool/image work uses the score-only script and creates no fake model learning. Two or three independent read-only sources retain their byte-cost shortcut. Neither path adds foreground verification; Ending Real begins only after presentation.
 
 - One obvious reversible action uses one tool action and presents the observed result immediately.
 - Exact-scoped read-only work stays inline with no subagent or route. An exact named-source audit first runs one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answers once. Anchor named members directly; enclosing-class or call-site anchors, guessed identifier families, separate planning, broad searches, whole-file reads, rereads, and pre-result checks are forbidden. Present immediately.
 - An exact bounded multi-file allowlist uses one boundary-labelled broad search, not parallel agents, separate locator/read rounds, or one full read per file.
 - Requested text/code production uses the smallest adaptive producer surface. Code runs one proportional Quick Check before presentation. Detached Ending Real runs the proportional real tests needed for the changed result; independent checks are separate tasks, and failures route through repair then fresh verification.
-- A dependency-coupled task that merely appears complex still avoids multi-node routing unless the user explicitly asks for routing/benchmarking/maintenance or current comparable evidence positively admits a graph. It keeps the single adaptive producer. Independent sources remain one producer unless the byte/context or explicit latency gate admits scheduling.
+- A dependency-coupled task stays one producer or a linear chain; it is never split by file count alone. Distinct nodes with shared writes stay ordered. Independent nodes with disjoint ownership run in the same dependency-ready wave.
 
 The graduated examples are therefore inline by default:
 
@@ -21,9 +21,9 @@ The graduated examples are therefore inline by default:
 - Open Chrome, open YouTube, and search CCTV: perform the action, present completion, then inspect the query/results in Ending Real.
 - Design a website like YouTube: use one adaptive producer, present the completed draft, then run render and interaction checks in Ending Real. Apparent complexity alone does not create a dispatcher.
 
-## Explicit Or Admitted Foreground Budget
+## Dynamic Foreground Budget
 
-Load full Task Analyze only for explicit model routing/benchmarking, Task Analyze maintenance, or a real dependency graph under consideration. Full activation still defaults to one adaptive producer or inline ineligible work. An open-ended multi-node foreground exists only after comparable end-to-end evidence positively admits it. The independent-source candidate is bounded by byte/context or explicit latency admission, disjoint allowlists, read-only execution, and either a dependency-results-only merge or one exact-owned final source fused with the merge; current matched evidence is still required before claiming savings.
+Load full Task Analyze for explicit model routing/benchmarking, Task Analyze maintenance, or a real dependency graph. Full activation still defaults to one producer when segmentation would only duplicate context. A bounded task graph does not require prior benchmark evidence; only a claim that it saves time or tokens does. Read-only source graphs retain byte/context admission, disjoint allowlists, and dependency-only-or-fused merge rules. Writable graphs declare non-overlapping ownership for parallel nodes and explicit dependencies for shared targets.
 
 For an admitted route, the entry model may coordinate the route but must not duplicate a child's source inspection. Every collaboration child starts with `LOCKED_ROUTE_NODE`, and collaboration plus dispatcher must never execute the same branch twice.
 
@@ -50,16 +50,16 @@ Why this route is admitted: <one sentence naming current comparable end-to-end e
 
 During the admitted preflight call `resolve_entry_model.py`; use `unverified` only when exact entry resolution fails. After showing the route, continue through Workflow and return the requested result in the same task. If admission is absent, execute inline with no route display.
 
-## Admitted Complex Graph: Mermaid Route
+## Dynamic Complex Graph: Mermaid Route
 
-Use this only for an explicitly activated, positively admitted dependency graph. Show real dependencies and concurrency. Label every model-executed node with exact model and effort; direct tool-only nodes name their installed skill and observable stop condition instead.
+Use this for an explicitly activated dependency graph. Show real dependencies and concurrency. Label every model-executed node with its own score, band, exact model and effort; direct tool-only nodes name their installed skill and observable stop condition instead.
 
 ```mermaid
 flowchart TD
   U["User request"] --> A["Task Analyze<br/>[observable entry model | observable entry effort]"]
-  A --> B["<source/plan task><br/>[<model> | <effort> · <skill>]"]
-  B --> C1["<branch A><br/>[<model> | <effort> · <skill>]"]
-  B --> C2["<branch B><br/>[<model> | <effort> · <skill>]"]
+  A --> B["<source/plan task><br/>[score · model | effort · skill]"]
+  B --> C1["<branch A><br/>[score · model | effort · skill]"]
+  B --> C2["<branch B><br/>[score · model | effort · skill]"]
   C1 --> M["Merge/integrate<br/>[<model> | <effort>]"]
   C2 --> M
   M --> G{"Main Goal Done Gate<br/>[<model> | <effort>]"}
@@ -81,15 +81,15 @@ The user sees only the human route. A structured plan is an internal execution a
 
 When a dispatcher is useful, save schema version 2 JSON inside the active task cache with:
 
-- `complexity` and `topology`;
+- `routing_mode=dynamic_task_graph`, parent `complexity_score`/band, `complexity`, and `topology`;
 - an absolute cache directory inside the active task root;
 - observable entry metadata;
 - bounded result and Ending nodes;
-- installed skill, exact model, effort, dependencies, prompt, safe sandbox, and routing profile per node;
+- installed skill, node `complexity_score`/band, exact model, effort, `selection_basis`, purpose, dependencies, prompt, safe sandbox, ownership, stop condition, and routing profile per node;
 - main-producer `model_memory_scope` with module plus file/symbol/code/operation when known; omitted file/symbol values intentionally fall back to module-level project evidence;
 - `main_result_node` and one post-result Real verifier.
 
-The internal main producer carries a complete `routing_recommendation` matching its selected catalog-derived quality `model|effort`, `trial`, and profile fingerprint. The controller recomputes it and rejects stale or self-authored plans. The optional schedule producer is never an ordinary schema-version-2 quality node; the dispatcher admits it only for disjoint one-source read-only branches and records every branch pair in the schedule receipt.
+The internal main producer carries a complete `routing_recommendation` matching its selected catalog-derived quality `model|effort`, `trial`, and profile fingerprint. The controller recomputes it and rejects stale or self-authored plans. The optional priority producer remains outside the quality ladder but is a valid dynamic result node for an eligible score-0-24 text/code/write/execute segment, including a downstream segment. It needs `selection_basis=spark_priority` and a quality fallback. A non-Spark eligible small node must include a concrete `spark_exception_reason`.
 
 The plan also carries `first_result_timeout_seconds`. Dispatcher stdout is a compact locator only; the full manifest remains on disk. Read-only locked nodes omit broad user configuration by default because their prompt already includes the exact owning skill path and domain reference; set `load_user_config=true` only when a configured plugin/tool surface is genuinely required.
 
@@ -112,7 +112,7 @@ Admitted dispatcher fixtures are topology-only portable templates, not execution
 - A later correctness failure notifies and reopens.
 - No lifecycle hook or chat-visible machine plan is required.
 - Ending wave scheduling requires dependency-ready batches with a three-node concurrency cap.
-- Grounded low-risk text-answer plans use one result node unless disjoint source allowlists plus a dependency-only or exact-owned fused-final merge prove non-duplicated fan-out.
+- Grounded low-risk text-answer plans use one result node unless disjoint source allowlists plus a dependency-only or exact-owned fused-final merge prove non-duplicated fan-out. Writable dynamic graphs instead prove ownership through non-overlapping targets and dependencies.
 - First-result deadline gates every foreground wave and fallback. Deadline exhaustion cannot launch another plan.
 - For Ending Task, each `optimization-skill` node must have exactly one `verify-skill` ending node with `verifies_node` equal to that optimization node ID.
 - A targeted optimization verifier must depend directly on Main Result and on its target node; only this verifier may depend on another Ending node.
