@@ -80,6 +80,10 @@ Use the maintained scripts instead of ad hoc profile or mirror logic:
 
 Use snapshot/dry-run/status modes for testing. Do not call `sync` or `push` in a task that was authorized only to edit/test local skills.
 
+## Skill runtime platform gate
+
+When a management action touches Skill runtime code (including managed Skill helper scripts), treat it as Skill runtime surface and require publish-time checker execution with `python3 skills/code-skill/scripts/skill_platform_check.py check --skills-root skills --baseline skills/code-skill/assets/skill-platform-baseline.json` before mutation completion.
+
 ## Generated File Placement
 
 Put local snapshots, diffs, test repositories, logs, and status evidence in the active task `cache/` or `work/` area. Never place private auth/profile artifacts in a public snapshot or user-facing output.

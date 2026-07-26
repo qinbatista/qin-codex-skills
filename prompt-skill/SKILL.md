@@ -112,6 +112,34 @@ Examples:
 
 The headings are a design aid, not a mandatory ceremony. Preserve a project's established prompt style when the same contract is explicit and testable.
 
+## Skill platform contract for functional runtime code
+
+This gate applies when creating or changing functional code shipped inside a Skill or used by a Skill. It does not impose platform policy on ordinary project code.
+
+When code may run on more than one platform, require the author to declare supported platforms, use portable APIs, guard intentional OS-specific behavior, and provide a fallback or explicit unsupported-platform error. Non-target platforms must not execute an unsupported path silently.
+
+When touching functional Skill code, run the checker on the changed scope before publish/merge from the `.codex` directory:
+
+```sh
+# macOS/Linux
+python3 skills/code-skill/scripts/skill_platform_check.py check --skills-root skills --baseline skills/code-skill/assets/skill-platform-baseline.json
+```
+
+```powershell
+# Windows PowerShell
+py -3 skills/code-skill/scripts/skill_platform_check.py check --skills-root skills --baseline skills/code-skill/assets/skill-platform-baseline.json
+```
+
+`python` is acceptable only when it resolves to the intended Python 3 environment.
+
+Portable behavior requirements:
+
+1. Use `pathlib.Path`, `Path.home()`, `Path.cwd()`, `tempfile`, and environment discovery (`os.environ` / `os.getenv`) for files, state, cache, and temp locations unless explicitly bounded.
+2. Resolve external executables with PATH-aware lookup (`shutil.which`, `Get-Command`, `command -v`, or equivalent) before launch.
+3. Fail with a clear unsupported-platform error for unsupported targets.
+
+Reference guard patterns are tracked in `references/skill-platform-compatibility.md` and required for Python, shell, PowerShell, JavaScript, and TypeScript.
+
 ## Image And Multimodal Prompts
 
 - Assign every attachment one role: subject/structure, style, context, data-channel, or edit target. State what must not be copied from each reference.

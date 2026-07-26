@@ -52,6 +52,10 @@ Active registry-owned code domains share this executor while retaining separate 
 
 For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems -> smallest complete solution` as an internal reasoning checklist, inspect the existing prompt and validators, and apply the complete `prompt-skill` contract plus only the conditional controls that materially improve behavior before the language-specific reference. Do not show a planning preamble; apply the Quick Check boundary below before presenting the completed change.
 
+### Platform compatibility for Skill runtime code
+
+When this skill task writes functional code in a Skill’s runtime surface (`scripts`, `bin`, `tools`), route platform compatibility through the Skill platform contract and require checker execution before publish- or mirror-style completion.
+
 ## Model Contract
 
 - Adaptive code work reads the catalog-generated quality contract and matching Obsidian broad `Model Switch.md` by project/task/module/file/symbol/code context. Score bands are `0-24` small, `25-49` standard, `50-74` complex, and `75-100` advanced. One Real PASS retains a quality pair, two PASS results downgrade one rung, and quality FAIL upgrades one rung.

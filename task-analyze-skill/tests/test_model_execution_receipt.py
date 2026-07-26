@@ -23,7 +23,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Windows executable resolution")
     def test_windows_default_codex_prefers_desktop_executable(self):
         desktop_executable = r"C:\Program Files\WindowsApps\OpenAI.Codex\codex.exe"
-        with patch.object(module.shutil, "which", side_effect=lambda command: desktop_executable if command == "codex.exe" else r"C:\Users\example\AppData\Roaming\npm\codex"):
+        with patch.object(module.shutil, "which", side_effect=lambda command: desktop_executable if command == "codex.exe" else r"C:\Temp\npm\codex"):
             self.assertEqual(module.resolve_codex_command("codex"), desktop_executable)
             self.assertEqual(module.codex_command_prefix("codex"), [desktop_executable])
 

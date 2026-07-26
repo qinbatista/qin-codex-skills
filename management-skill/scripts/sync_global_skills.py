@@ -13,6 +13,16 @@ import time
 from pathlib import Path
 
 
+def load_skill_platform_checker(skills_dir):
+    checker_path = Path(skills_dir) / "code-skill" / "scripts" / "skill_platform_check.py"
+    module_spec = importlib.util.spec_from_file_location("skill_platform_check", checker_path)
+    if module_spec is None or module_spec.loader is None:
+        raise RuntimeError(f"Refusing to publish because the skill platform gate is unavailable: {checker_path}")
+    checker_module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(checker_module)
+    return checker_module
+
+
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
 DEFAULT_STATE_FILE = Path.home() / ".codex" / "state" / "management-skill-sync.json"
 GITIGNORE_TEXT = """.DS_Store
@@ -839,6 +849,8 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
     assert_no_symlinks(skill_paths, "approved source skill trees")
     load_staged_routing_policy(skill_paths)
     assert_public_safe(skill_paths)
+    checker_module = load_skill_platform_checker(skills_dir)
+    checker_module.assert_skill_platform_safe(skills_dir, Path(skills_dir) / "code-skill" / "assets" / "skill-platform-baseline.json")
     for path in repository_dir.iterdir():
         if path.name == ".git":
             continue

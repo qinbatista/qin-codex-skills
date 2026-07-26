@@ -1,0 +1,177 @@
+{
+  "findings": [
+    {
+      "column": 97,
+      "fingerprint": "8fd693fdc218724e132b9110cf6a1ae901d64f3ee6df83fc802597e611b0e925",
+      "language": "python",
+      "line": 19,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "code-skill/scripts/skill_platform_check.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 27,
+      "fingerprint": "00b97518332abc8af64fa29d877bf427aa98b1c6d83fbb469b30f93a2988bddc",
+      "language": "python",
+      "line": 65,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "code-skill/scripts/skill_platform_check.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 43,
+      "fingerprint": "25ac1c6bbda978169084828403476398560bf91e7ab6bd9c0080079b639ec3ef",
+      "language": "python",
+      "line": 154,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "hatch-pet/scripts/validate_atlas.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 35,
+      "fingerprint": "ab87c243c38166f2c5d3514c37add736944cc851af8fff590614ec7bb0049273",
+      "language": "python",
+      "line": 143,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "management-skill/scripts/sync_global_skills.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 23,
+      "fingerprint": "cdf64477bb0b6660edad215ffcfefb046de402dd8604687bab65c4f4d7c3781e",
+      "language": "python",
+      "line": 88,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "optimization-skill/scripts/audit_global_skills.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 35,
+      "fingerprint": "c4639887891254f03bd251922efd2d6a1a0f82003c7351af71d2ba15501fac4c",
+      "language": "python",
+      "line": 362,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "optimization-skill/scripts/skill_optimizer.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 55,
+      "fingerprint": "5191a2af2fe3a6d06768e1441254b21edce26caf001c3645b00a19a06d7a0a69",
+      "language": "python",
+      "line": 362,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "optimization-skill/scripts/skill_optimizer.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 40,
+      "fingerprint": "be458ef09da05d7f1600b86da4b4a3ee1d925bd2f32a60fc2a0d453e401fc264",
+      "language": "python",
+      "line": 91,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "task-analyze-skill/scripts/benchmark_suite_gate.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 26,
+      "fingerprint": "53ec7a13cc073d120fffcc8a1ba8d6e7003b69a2538020c78af98e26289b6e7f",
+      "language": "python",
+      "line": 297,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/benchmark_suite_runner.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 39,
+      "fingerprint": "7d21a601fa83abf94cdaffe43a3abfe1c1d1146bcae9005d00261fb4d556110b",
+      "language": "python",
+      "line": 218,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "task-analyze-skill/scripts/obsidian_adaptive_model_runner.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 19,
+      "fingerprint": "c3e1595b28efd0f96f574e935210fdde4f2fb1039826561648b38da94d55c029",
+      "language": "python",
+      "line": 13,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/validate_graduated_routes.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 34,
+      "fingerprint": "752ac5ca2d427544fccaff9d08b107abd458060f0a9ebb9b6d2c578951a02d07",
+      "language": "python",
+      "line": 13,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/validate_graduated_routes.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 66,
+      "fingerprint": "b8df495f7e13a724cb175f26eb6257ddae34d4461578ec1c08eacf433eceb747",
+      "language": "python",
+      "line": 13,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/validate_graduated_routes.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 27,
+      "fingerprint": "8912b71ad2d994393f9a611ac5c8bbeeab52d39a14d6739d5947732e81a8e011",
+      "language": "python",
+      "line": 15,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/validate_graduated_routes.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 42,
+      "fingerprint": "8c49a39e12c1c1341a5181c4febb2c8f95a8c167e0a9fc8af15b28c3e1dc3011",
+      "language": "python",
+      "line": 15,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/validate_graduated_routes.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 60,
+      "fingerprint": "2140d1859a96bfbc43eb8db87f4975e2215b5285cb534ddb213486c0f6bbc395",
+      "language": "python",
+      "line": 15,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/validate_graduated_routes.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 117,
+      "fingerprint": "47556f5636067bc2b00ceed4e371c53423a97439d85f34c7702a30c20a5fad16",
+      "language": "python",
+      "line": 15,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "task-analyze-skill/scripts/validate_graduated_routes.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 22,
+      "fingerprint": "afd50477b0cedd955b057ee3d9ec20af8dca563ea181d3b25ce7987e4c81dbf8",
+      "language": "python",
+      "line": 380,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "task-analyze-skill/scripts/validate_task_analyze_skill.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 22,
+      "fingerprint": "a7ad0cc0986fcd6198466151422ca40b82e5fbb793169c0a344dc16ad53893f3",
+      "language": "python",
+      "line": 153,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "workflow-skill/scripts/validate_workflow_skill.py",
+      "rule": "SPG001"
+    }
+  ],
+  "generated_by": "skill-platform-check/v1",
+  "schema_version": 1
+}
