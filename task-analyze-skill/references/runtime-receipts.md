@@ -29,6 +29,16 @@ When an orchestrating parent needs the routed node's user-facing result, `model_
 
 After that result is shown, start Ending with `ending_task_ledger.py start --producer-receipt <receipt-path>`. The ledger validates and privately binds the learning context. A producer-bound `event pass` writes the matched Obsidian Model Switch record before terminal PASS; a producer-bound `event fail --failure-class <class>` writes lifecycle FAIL first and then the failed model outcome. Lifecycles without a producer receipt keep the ordinary non-learning behavior. Duplicate receipt/verdict records are idempotent success.
 
+## Lifecycle Model Disclosure
+
+Every lifecycle start stores a local audit-only `model_disclosure` record. It contains the assigned and current pairs, one `model_evidence` level (`runtime_receipt`, `verified_entry`, `task_assignment`, `configured_selection`, or `unavailable`), requested/resolved/effective pairs, `effective_evidence_level`, previous pair, route change, switch summary, and bounded reason. This record does not select a future model.
+
+`--selected-pair` remains visible as the assigned pair without a runtime receipt. Its requested, resolved, and effective values stay concrete when known, with `effective_evidence_level` set to `UNVERIFIED (no runtime receipt)`. This is the known assigned/configured/verified-entry pair, never `unverified | unverified`. A no-switch assignment records `previous_pair=\"same as current\"`, `route_change=no_switch`, and `switch_summary=\"No model switch\"`.
+
+When a validated producer receipt is bound, its executed pair is the receipt-backed current/effective identity. The ledger retains the resolved pair for audit history. If those pairs conflict, it records `runtime_receipt` evidence, `operational_fallback`, and a conflict reason instead of discarding either value. With no assignment or receipt, the lifecycle records `unknown|unknown` (displayed as `unknown | unknown`) for every pair, `model_evidence=unavailable`, `effective_evidence_level=unavailable`, and `previous_pair=none`.
+
+The ledger stores only bounded model labels and sanitized reasons. It never stores raw prompts, results, stdout, stderr, secrets, or receipt payloads.
+
 On timeout, preserve the prompt/workload hashes, measured elapsed time, partial thread identity, resolved/effective pair, last allowlisted token count, and availability when recoverable. Partial tokens are a lower bound, never a completed-run total. Do not replace recoverable evidence with an empty generic receipt.
 
 ## Local Evidence Level

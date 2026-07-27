@@ -82,6 +82,17 @@ DISPATCH_SCHEMA_VERSION = 2
 DYNAMIC_ROUTING_MODE = "dynamic_task_graph"
 ALLOWED_PHASES = {"result", "ending"}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
+DECOMPOSITION_POLICY = "max_safe"
+ALLOWED_OPERATIONS = {"text", "code", "write", "execute", "other"}
+ALLOWED_DECOMPOSITION_COUPLINGS = {"linear", "independent"}
+ALLOWED_SPARK_EXCEPTION_CATEGORIES = {
+    "ambiguity",
+    "safety",
+    "policy",
+    "integration",
+    "external_dependency",
+    "quality_failure",
+}
 ENDING_SKILLS = {"verify-skill", "optimization-skill", "management-skill"}
 
 CONTROLLED_FIELDS = [
@@ -120,7 +131,69 @@ def score_role_pair(score):
     return MODEL_ROLE_PAIRS[role]
 
 
-def _dynamic_spark_eligible(node):
+def _get_node_decomposition(node, decomposition):
+    if not isinstance(decomposition, dict):
+        return None
+    node_id = node.get("id")
+    for stage in decomposition.get("stage_inventory", []):
+        if not isinstance(stage, dict):
+            continue
+        if stage.get("node_id") == node_id:
+            return stage
+    return None
+
+
+def _stage_id_by_node(node, decomposition):
+    stage = _get_node_decomposition(node, decomposition)
+    return stage.get("stage_id") if isinstance(stage, dict) else None
+
+
+def _stage_for_node_id(plan, node_id):
+    if not isinstance(plan, dict) or not isinstance(node_id, str):
+        return None
+    return _get_node_decomposition({"id": node_id}, plan.get("decomposition", {}))
+
+
+def normalize_legacy_dynamic_plan(plan):
+    if plan.get("routing_mode") != DYNAMIC_ROUTING_MODE:
+        return plan
+    decomposition = plan.get("decomposition")
+    stage_inventory = decomposition.get("stage_inventory") if isinstance(decomposition, dict) else None
+    nodes = plan.get("nodes")
+    if not isinstance(decomposition, dict) or decomposition.get("policy") != DECOMPOSITION_POLICY or not isinstance(stage_inventory, list) or not isinstance(nodes, list):
+        return plan
+    result_nodes = [node for node in nodes if isinstance(node, dict) and node.get("phase") == "result" and isinstance(node.get("id"), str)]
+    stage_by_node = {stage.get("node_id"): stage for stage in stage_inventory if isinstance(stage, dict) and isinstance(stage.get("node_id"), str)}
+    if set(stage_by_node) != {node["id"] for node in result_nodes}:
+        return plan
+    if any(not isinstance(stage.get("logical_stage_ids"), list) or stage.get("logical_stage_ids") != [stage.get("stage_id")] for stage in stage_inventory):
+        return plan
+    node_by_id = {node["id"]: node for node in result_nodes}
+    for node_id, stage in stage_by_node.items():
+        stage["dependencies"] = list(node_by_id[node_id].get("dependencies", []))
+    wave_by_node = _summary_dependency_wave(node_by_id)
+    waves = {}
+    for node_id, wave in wave_by_node.items():
+        waves.setdefault(wave, []).append(node_id)
+    for members in waves.values():
+        if len(members) < 2:
+            continue
+        stages = [stage_by_node[member] for member in members]
+        if any(stage.get("coupling") != "linear" or stage.get("parallelizable") is not False or stage.get("deterministic_merge_node") for stage in stages):
+            continue
+        common_dependents = sorted(node_id for node_id, node in node_by_id.items() if set(members).issubset(set(node.get("dependencies", []))))
+        if len(common_dependents) != 1:
+            continue
+        if any(set(stage.get("inputs", [])).intersection(other.get("inputs", [])) or set(stage.get("mutable_state", [])).intersection(other.get("mutable_state", [])) for index, stage in enumerate(stages) for other in stages[index + 1 :]):
+            continue
+        for stage in stages:
+            stage["coupling"] = "independent"
+            stage["parallelizable"] = True
+            stage["deterministic_merge_node"] = common_dependents[0]
+    return plan
+
+
+def _dynamic_spark_eligible(node, stage=None):
     if node.get("phase") != "result":
         return False
     try:
@@ -132,6 +205,8 @@ def _dynamic_spark_eligible(node):
     condition = node.get("routing_condition") if isinstance(node.get("routing_condition"), dict) else {}
     if condition.get("modality", "text") != "text" or condition.get("risk", "low") != "low" or condition.get("ambiguity", "low") != "low":
         return False
+    if stage is not None:
+        return stage.get("operation") in {"text", "code", "write", "execute"} and stage.get("external_side_effects") is False
     purpose = node.get("purpose")
     task_family = condition.get("task_family")
     eligible_purpose = purpose in PRIORITY_PRODUCER_CONFIG.get("task_segment_purposes", [])
@@ -140,13 +215,13 @@ def _dynamic_spark_eligible(node):
     return eligible_purpose or eligible_family or eligible_source
 
 
-def _priority_result_node(node):
+def _priority_result_node(node, stage=None):
     if PRIORITY_PRODUCER_CONFIG.get("enabled") is not True or node.get("priority_producer") is not True or node.get("phase") != "result":
         return False
     if node.get("model") != PRIORITY_PRODUCER_CONFIG.get("id") or node.get("effort") not in PRIORITY_PRODUCER_CONFIG.get("adaptive_efforts", []):
         return False
     legacy_source_branch = node.get("skill") == "workflow-skill" and node.get("dependencies") == [] and node.get("sandbox", "read-only") == "read-only" and isinstance(node.get("source_allowlist"), list) and len(node["source_allowlist"]) == 1
-    dynamic_segment = _dynamic_spark_eligible(node) and node.get("selection_basis") == "spark_priority" and node.get("effort") == PRIORITY_PRODUCER_CONFIG["effort_by_complexity"]["easy"]
+    dynamic_segment = _dynamic_spark_eligible(node, stage) and node.get("selection_basis") == "spark_priority" and node.get("effort") == PRIORITY_PRODUCER_CONFIG["effort_by_complexity"]["easy"]
     return legacy_source_branch or dynamic_segment
 
 
@@ -308,6 +383,216 @@ def dependency_wave(node_id, node_by_id, memo=None):
     return memo[node_id]
 
 
+def _summary_dependency_wave(node_by_id):
+    remaining = set(node_by_id)
+    waves = {}
+    while remaining:
+        ready = sorted(node_id for node_id in remaining if all(dependency in waves for dependency in node_by_id[node_id].get("dependencies", []) if dependency in node_by_id))
+        if not ready:
+            for node_id in sorted(remaining):
+                waves[node_id] = None
+            break
+        for node_id in ready:
+            dependency_waves = [waves[dependency] for dependency in node_by_id[node_id].get("dependencies", []) if dependency in waves]
+            waves[node_id] = 0 if not dependency_waves else max(dependency_waves) + 1
+            remaining.remove(node_id)
+    return waves
+
+
+def validate_dynamic_decomposition(plan, node_by_id):
+    failures = []
+    if plan.get("routing_mode") != DYNAMIC_ROUTING_MODE:
+        return failures
+    decomposition = plan.get("decomposition")
+    if not isinstance(decomposition, dict):
+        failures.append("decomposition is required for dynamic_task_graph plans")
+        return failures
+
+    policy = decomposition.get("policy")
+    if policy != DECOMPOSITION_POLICY:
+        failures.append(f"decomposition.policy must be {DECOMPOSITION_POLICY}")
+
+    stage_inventory = decomposition.get("stage_inventory")
+    if not isinstance(stage_inventory, list):
+        failures.append("decomposition.stage_inventory must be a non-empty list")
+        return failures
+    if not stage_inventory:
+        failures.append("decomposition.stage_inventory must contain at least one entry")
+
+    stage_by_node = {}
+    stage_ids = set()
+    stage_nodes = set()
+    for index, stage in enumerate(stage_inventory, start=1):
+        if not isinstance(stage, dict):
+            failures.append(f"decomposition stage #{index} must be an object")
+            continue
+        stage_id = stage.get("stage_id")
+        node_id = stage.get("node_id")
+        if not isinstance(stage_id, str) or not stage_id:
+            failures.append(f"decomposition stage #{index} is missing stage_id")
+            continue
+        if stage_id in stage_ids:
+            failures.append(f"decomposition stage_id must be unique: {stage_id}")
+        stage_ids.add(stage_id)
+
+        if not isinstance(node_id, str) or not node_id:
+            failures.append(f"decomposition stage {stage_id} is missing node_id")
+            continue
+        if node_id in stage_nodes:
+            failures.append(f"decomposition covers result node more than once: {node_id}")
+            continue
+        stage_nodes.add(node_id)
+        stage_by_node[node_id] = stage
+
+        if node_id not in node_by_id:
+            failures.append(f"decomposition node_id does not exist: {node_id}")
+            continue
+        if node_by_id[node_id].get("phase") != "result":
+            failures.append(f"decomposition node_id must be a result node: {node_id}")
+            continue
+        node = node_by_id[node_id]
+        stage_node_id = stage.get("node_id")
+        if stage_node_id != node_id:
+            failures.append(f"decomposition stage {stage_id} node_id mismatch while validating result mapping")
+
+        required_fields = (
+            "logical_stage_ids",
+            "purpose",
+            "score",
+            "band",
+            "model_intent",
+            "operation",
+            "dependencies",
+            "inputs",
+            "outputs",
+            "stop_condition",
+            "coupling",
+            "parallelizable",
+            "objective_scope",
+            "mutable_state",
+            "failure_escalation",
+            "external_side_effects",
+        )
+        for required in required_fields:
+            if required not in stage:
+                failures.append(f"decomposition stage {stage_id} is missing required field {required}")
+        logical_stage_ids = stage.get("logical_stage_ids")
+        if not isinstance(logical_stage_ids, list) or len(logical_stage_ids) == 0:
+            failures.append(f"decomposition stage {stage_id} requires logical_stage_ids")
+            logical_stage_ids = []
+        elif any(not isinstance(logical_stage_id, str) or not logical_stage_id for logical_stage_id in logical_stage_ids) or len(set(logical_stage_ids)) != len(logical_stage_ids):
+            failures.append(f"decomposition stage {stage_id} logical_stage_ids must be unique non-empty strings")
+        elif stage_id not in logical_stage_ids:
+            failures.append(f"decomposition stage {stage_id} logical_stage_ids must include stage_id")
+        if len(logical_stage_ids) > 1:
+            if stage.get("coupling") != "linear":
+                failures.append(f"decomposition stage {stage_id} must use coupling=linear when logical_stage_ids has multiple entries")
+            if stage.get("parallelizable") is not False:
+                failures.append(f"decomposition stage {stage_id} requires parallelizable=false when logical_stage_ids are split")
+            if not isinstance(stage.get("continuity_reason"), str) or not stage.get("continuity_reason").strip():
+                failures.append(f"decomposition stage {stage_id} requires continuity_reason when logical_stage_ids has multiple entries")
+
+        if stage.get("operation") not in ALLOWED_OPERATIONS:
+            failures.append(f"decomposition stage {stage_id} operation must be one of {', '.join(sorted(ALLOWED_OPERATIONS))}")
+        if stage.get("score") != node.get("complexity_score"):
+            failures.append(f"decomposition stage {stage_id} score must match node {node_id} complexity_score")
+        if stage.get("band") != node.get("complexity_band"):
+            failures.append(f"decomposition stage {stage_id} band must match node {node_id} complexity_band")
+        try:
+            if not isinstance(stage.get("model_intent"), str):
+                raise ValueError
+            model_intent_model, model_intent_effort = stage["model_intent"].split("|")
+            if model_intent_model != node.get("model") or model_intent_effort != node.get("effort"):
+                failures.append(f"decomposition stage {stage_id} model_intent must match node {node_id} model/effort")
+        except ValueError:
+            failures.append(f"decomposition stage {stage_id} model_intent must be model|effort")
+        if not isinstance(stage.get("dependencies"), list):
+            failures.append(f"decomposition stage {stage_id} dependencies must be a list")
+        elif stage.get("dependencies") != node.get("dependencies", []):
+            failures.append(f"decomposition stage {stage_id} dependencies must match node {node_id} dependencies")
+        if not isinstance(stage.get("inputs"), list):
+            failures.append(f"decomposition stage {stage_id} inputs must be a list")
+        elif any(not isinstance(value, str) or not value for value in stage["inputs"]):
+            failures.append(f"decomposition stage {stage_id} inputs must contain concrete artifact ids")
+        if not isinstance(stage.get("outputs"), list):
+            failures.append(f"decomposition stage {stage_id} outputs must be a list")
+        elif any(not isinstance(value, str) or not value for value in stage["outputs"]):
+            failures.append(f"decomposition stage {stage_id} outputs must contain concrete artifact ids")
+        if not isinstance(stage.get("mutable_state"), list):
+            failures.append(f"decomposition stage {stage_id} mutable_state must be a list")
+        elif any(not isinstance(value, str) or not value for value in stage["mutable_state"]):
+            failures.append(f"decomposition stage {stage_id} mutable_state must contain state ids")
+        if not isinstance(stage.get("external_side_effects"), bool):
+            failures.append(f"decomposition stage {stage_id} external_side_effects must be a boolean")
+        if not isinstance(stage.get("stop_condition"), str) or not stage.get("stop_condition"):
+            failures.append(f"decomposition stage {stage_id} requires stop_condition")
+        if not isinstance(stage.get("purpose"), str) or not stage.get("purpose").strip():
+            failures.append(f"decomposition stage {stage_id} requires purpose")
+        if not isinstance(stage.get("objective_scope"), str) or not stage.get("objective_scope").strip():
+            failures.append(f"decomposition stage {stage_id} requires objective_scope")
+        if stage.get("failure_escalation") != "quality_upgrade_one_notch":
+            failures.append(f"decomposition stage {stage_id} requires failure_escalation=quality_upgrade_one_notch")
+        coupling = stage.get("coupling")
+        if coupling not in ALLOWED_DECOMPOSITION_COUPLINGS:
+            failures.append(f"decomposition stage {stage_id} coupling must be one of {', '.join(sorted(ALLOWED_DECOMPOSITION_COUPLINGS))}")
+        if coupling == "independent" and stage.get("parallelizable") is not True:
+            failures.append(f"decomposition stage {stage_id} coupling=independent requires parallelizable=true")
+        if coupling == "linear" and stage.get("parallelizable") is not False:
+            failures.append(f"decomposition stage {stage_id} coupling=linear requires parallelizable=false")
+        if not isinstance(stage.get("parallelizable"), bool):
+            failures.append(f"decomposition stage {stage_id} parallelizable must be a boolean")
+
+    result_nodes = [node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"]
+    missing = sorted(set(result_nodes) - set(stage_by_node.keys()))
+    if missing:
+        failures.append("decomposition must cover every result node: " + ", ".join(missing))
+    extra = sorted(set(stage_by_node.keys()) - set(result_nodes))
+    if extra:
+        failures.append("decomposition includes non-result nodes: " + ", ".join(extra))
+    if set(result_nodes) != set(stage_by_node.keys()):
+        return failures
+
+    node_wave_by_id = _summary_dependency_wave(node_by_id)
+    waves = {}
+    for node_id in result_nodes:
+        waves.setdefault(node_wave_by_id.get(node_id), []).append(node_id)
+    for wave, members in waves.items():
+        if len(members) < 2:
+            continue
+        stage_members = [stage_by_node.get(member) for member in members]
+        if any(stage_member.get("coupling") != "independent" or stage_member.get("parallelizable") is not True for stage_member in stage_members if isinstance(stage_member, dict)):
+            failures.append(f"decomposition same-wave entries in wave {wave} must use coupling=independent and parallelizable=true")
+        objective_scopes = {member.get("objective_scope") for member in stage_members if member is not None}
+        if len(objective_scopes) != 1:
+            failures.append(f"decomposition same-wave independent entries in wave {wave} require shared objective_scope")
+        if len({member.get("deterministic_merge_node") for member in stage_members}) != 1:
+            failures.append(f"decomposition same-wave independent entries in wave {wave} must share deterministic_merge_node")
+            deterministic_merge_node = None
+        else:
+            deterministic_merge_node = stage_members[0].get("deterministic_merge_node")
+
+        if not isinstance(deterministic_merge_node, str) or not deterministic_merge_node:
+            failures.append(f"decomposition same-wave independent entries in wave {wave} require a deterministic_merge_node")
+        elif deterministic_merge_node not in node_by_id:
+            failures.append(f"decomposition deterministic_merge_node does not exist: {deterministic_merge_node}")
+        elif deterministic_merge_node in members:
+            failures.append(f"decomposition deterministic_merge_node {deterministic_merge_node} must be outside wave {wave}")
+        else:
+            closure = dependency_closure(deterministic_merge_node, node_by_id)
+            if not set(members).issubset(closure):
+                failures.append(f"decomposition requires deterministic_merge_node {deterministic_merge_node} to depend on every sibling in wave {wave}")
+
+        for i, stage_member in enumerate(stage_members):
+            for next_stage in stage_members[i + 1 :]:
+                if not isinstance(stage_member, dict) or not isinstance(next_stage, dict):
+                    continue
+                if set(stage_member.get("inputs", [])).intersection(next_stage.get("inputs", [])):
+                    failures.append(f"decomposition same-wave independent entries in wave {wave} must have disjoint inputs")
+                if set(stage_member.get("mutable_state", [])).intersection(next_stage.get("mutable_state", [])):
+                    failures.append(f"decomposition same-wave independent entries in wave {wave} must have disjoint mutable_state")
+    return failures
+
+
 def phase_verdict(path, pass_marker, fail_marker):
     if not path:
         return "unknown"
@@ -388,7 +673,8 @@ def validate_plan(
 
         model = node.get("model")
         effort = node.get("effort")
-        priority_branch = _priority_result_node(node)
+        stage = _get_node_decomposition(node, plan.get("decomposition")) if dynamic_graph else None
+        priority_branch = _priority_result_node(node, stage)
         if not priority_branch and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
             failures.append(f"{node_id} must use a model/effort from the catalog quality ladder")
         if "priority_producer" in node and not priority_branch:
@@ -427,6 +713,8 @@ def validate_plan(
                 if node_score_band is not None and f"{model}|{effort}" != score_role_pair(node["complexity_score"]):
                     failures.append(f"{node_id} Ending Task pair must match its node score")
             elif priority_branch:
+                if not _dynamic_spark_eligible(node, stage):
+                    failures.append(f"{node_id} Spark task segment must have eligible stage operation and no external side effects")
                 if selection_basis != "spark_priority":
                     failures.append(f"{node_id} priority producer must use spark_priority")
                 if not node.get("allow_fallback"):
@@ -436,8 +724,21 @@ def validate_plan(
                     failures.append(f"{node_id} result node must use score_role or adaptive_quality")
                 if selection_basis == "score_role" and node_score_band is not None and f"{model}|{effort}" != score_role_pair(node["complexity_score"]):
                     failures.append(f"{node_id} score_role pair must match its node score")
-                if _dynamic_spark_eligible(node) and not node.get("spark_exception_reason"):
-                    failures.append(f"{node_id} eligible small task segment must use Spark or declare spark_exception_reason")
+                if _dynamic_spark_eligible(node, stage):
+                    if selection_basis == "spark_priority":
+                        if node.get("spark_exception_reason") or node.get("spark_exception_category"):
+                            failures.append(f"{node_id} should not use spark exception fields when Spark is selected")
+                    else:
+                        valid_exception_reason = isinstance(node.get("spark_exception_reason"), str) and bool(node["spark_exception_reason"].strip())
+                        valid_exception_category = isinstance(node.get("spark_exception_category"), str) and node.get("spark_exception_category") in ALLOWED_SPARK_EXCEPTION_CATEGORIES
+                        if not valid_exception_reason or not valid_exception_category:
+                            failures.append(f"{node_id} eligible small task segment must use Spark or declare a valid Spark exception")
+                        if not valid_exception_reason:
+                            failures.append(f"{node_id} eligible small task segment must use Spark or declare spark_exception_reason")
+                        if not isinstance(node.get("spark_exception_category"), str) or not node["spark_exception_category"].strip():
+                            failures.append(f"{node_id} spark exception category must be declared when Spark is not used")
+                        elif node.get("spark_exception_category") not in ALLOWED_SPARK_EXCEPTION_CATEGORIES:
+                            failures.append(f"{node_id} spark exception category must be one of {', '.join(sorted(ALLOWED_SPARK_EXCEPTION_CATEGORIES))}")
         timeout = node.get("timeout", 180)
         if not isinstance(timeout, int) or not 1 <= timeout <= 300:
             failures.append(f"{node_id} timeout must be 1 to 300 seconds")
@@ -467,6 +768,8 @@ def validate_plan(
         spark_exception = node.get("spark_exception_reason", "")
         if not isinstance(spark_exception, str) or len(spark_exception) > 240:
             failures.append(f"{node_id} spark_exception_reason must be a string of at most 240 characters")
+        if dynamic_graph and "spark_exception_category" in node and node.get("spark_exception_category") not in ALLOWED_SPARK_EXCEPTION_CATEGORIES:
+            failures.append(f"{node_id} spark exception category must be one of {', '.join(sorted(ALLOWED_SPARK_EXCEPTION_CATEGORIES))}")
 
         try:
             execution_domain, explicitly_explicit = _resolve_execution_domain_with_flag(node)
@@ -710,6 +1013,8 @@ def validate_plan(
                 if fallback_pair not in candidate_pair_text:
                     failures.append(f"{node_id} allow_fallback pair must be in main candidate_ladder: {fallback_pair}")
 
+    failures.extend(validate_dynamic_decomposition(plan, node_by_id))
+
     return failures
 
 
@@ -771,6 +1076,185 @@ def _normalize_route_attempt(attempt_receipt, fallback_pair, status, phase_failu
     }
 
 
+def _pair_text(record):
+    if not isinstance(record, dict):
+        return None
+    requested = record.get("requested_pair")
+    if isinstance(requested, str) and requested:
+        return requested
+    requested_model = record.get("requested_model")
+    requested_effort = record.get("requested_effort")
+    if requested_model and requested_effort:
+        return f"{requested_model}|{requested_effort}"
+    return None
+
+
+def _pair_compare(left_pair, right_pair):
+    if not left_pair or not right_pair:
+        return 0
+    try:
+        left = receipt_module.parse_model_effort_pair(left_pair)
+        right = receipt_module.parse_model_effort_pair(right_pair)
+    except (TypeError, ValueError):
+        return 0
+    return routing_history_module.compare_pair(left, right)
+
+
+def _route_change_for_node(record, requested_pair):
+    if isinstance(record, dict) and record.get("failure_class") == "quality":
+        return "upgrade", "Verified quality failure requires a one-notch upgrade."
+    if isinstance(record, dict) and record.get("operational_fallback") is True:
+        return "operational_fallback", "Runtime receipt recorded operational fallback."
+    if not isinstance(record, dict) or record.get("evidence_level") != "runtime_receipt":
+        return "freeze", "Known assignment has no runtime receipt."
+    effective_pair = record.get("effective_pair")
+    if not requested_pair or not effective_pair:
+        return "freeze", "Runtime receipt lacks a complete pair."
+    pair_comparison = _pair_compare(effective_pair, requested_pair)
+    if pair_comparison > 0:
+        return "upgrade", "Runtime receipt used a higher quality pair."
+    if pair_comparison < 0:
+        return "downgrade", "Runtime receipt used a lower quality pair."
+    return "no_switch", "Runtime receipt confirmed the requested pair."
+
+
+def build_model_switch_summary(plan, records, entry, *, ending_quality_failure_nodes=()):
+    node_records = {
+        record.get("id"): record
+        for record in records
+        if isinstance(record, dict) and record.get("id")
+    }
+    planned_nodes = [node for node in (plan.get("nodes") or []) if isinstance(node, dict) and node.get("id")]
+    node_by_id = {node["id"]: node for node in planned_nodes}
+    wave_by_node = _summary_dependency_wave(node_by_id)
+    entry_pair = f"{entry.get('model')}|{entry.get('effort')}" if isinstance(entry, dict) and entry.get("model") and entry.get("effort") else None
+    decomposition = plan.get("decomposition") if isinstance(plan.get("decomposition"), dict) else {}
+    stage_inventory = (
+        decomposition.get("stage_inventory")
+        if isinstance(decomposition, dict) and isinstance(decomposition.get("stage_inventory"), list)
+        else []
+    )
+    unsplit_continuity_groups = sum(
+        1
+        for stage in stage_inventory
+        if isinstance(stage, dict) and stage.get("coupling") == "linear" and isinstance(stage.get("logical_stage_ids"), list) and len(stage["logical_stage_ids"]) > 1
+    )
+
+    result_waves = {}
+    for node in planned_nodes:
+        if node.get("phase") != "result":
+            continue
+        result_waves.setdefault(wave_by_node.get(node["id"]), []).append(node["id"])
+
+    node_summary = []
+    quality_failure_node_ids = set(ending_quality_failure_nodes)
+    for node in planned_nodes:
+        node_id = node["id"]
+        record = node_records.get(node_id, {})
+        planned_pair = f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None
+        requested_pair = record.get("requested_pair") if isinstance(record.get("requested_pair"), str) and record.get("requested_pair") else planned_pair
+        requested_model = record.get("requested_model") or node.get("model")
+        requested_effort = record.get("requested_effort") or node.get("effort")
+        if requested_pair is None and requested_model and requested_effort:
+            requested_pair = f"{requested_model}|{requested_effort}"
+        resolved_pair = record.get("resolved_pair") if isinstance(record.get("resolved_pair"), str) and record.get("resolved_pair") else None
+        resolved_model = record.get("resolved_model")
+        resolved_effort = record.get("resolved_effort")
+        if resolved_pair is None and resolved_model and resolved_effort:
+            resolved_pair = f"{resolved_model}|{resolved_effort}"
+        if resolved_pair is None:
+            resolved_pair = requested_pair
+        effective_pair = record.get("effective_pair") if isinstance(record.get("effective_pair"), str) and record.get("effective_pair") else None
+        effective_model = record.get("effective_model")
+        effective_effort = record.get("effective_effort")
+        if effective_pair is None and effective_model and resolved_effort:
+            effective_pair = f"{effective_model}|{resolved_effort}"
+        if effective_pair is None:
+            effective_pair = resolved_pair
+        if isinstance(requested_pair, str) and "|" in requested_pair:
+            requested_model, requested_effort = requested_pair.split("|", 1)
+        if isinstance(resolved_pair, str) and "|" in resolved_pair:
+            resolved_model, resolved_effort = resolved_pair.split("|", 1)
+        if isinstance(effective_pair, str) and "|" in effective_pair:
+            effective_model, effective_effort = effective_pair.split("|", 1)
+        evidence_source = record.get("model_evidence_source") if isinstance(record, dict) else None
+        evidence_level = record.get("evidence_level") if isinstance(record, dict) else None
+        status = record.get("status") or "pending"
+        failure_class = record.get("failure_class") if isinstance(record, dict) else None
+        if node_id in quality_failure_node_ids:
+            status = "fail"
+            failure_class = "quality"
+        if evidence_level != "runtime_receipt":
+            evidence_level = "UNVERIFIED (no runtime receipt)"
+            if not evidence_source or evidence_source == "unavailable":
+                evidence_source = "task_assignment" if requested_pair else "unavailable"
+        elif not evidence_source:
+            evidence_source = "runtime_receipt"
+        summary_record = dict(record)
+        summary_record.update({"effective_pair": effective_pair, "evidence_level": evidence_level, "failure_class": failure_class})
+        route_change, reason = _route_change_for_node(summary_record, requested_pair)
+        same_wave_node_ids = sorted(result_waves.get(wave_by_node.get(node_id), []))
+        same_wave_siblings = [sibling for sibling in same_wave_node_ids if sibling != node_id]
+        if not node.get("dependencies"):
+            assignment = "entry_to_root_assignment"
+        elif same_wave_siblings:
+            assignment = "parallel_independent_assignment"
+        else:
+            assignment = "dependency_transition"
+        summary_entry = {
+            "node_id": node_id,
+            "score": node.get("complexity_score"),
+            "band": node.get("complexity_band"),
+            "requested_model": requested_model,
+            "requested_effort": requested_effort,
+            "requested_pair": requested_pair,
+            "resolved_pair": resolved_pair,
+            "resolved_model": resolved_model,
+            "resolved_effort": resolved_effort,
+            "effective_pair": effective_pair,
+            "effective_model": effective_model,
+            "effective_effort": effective_effort,
+            "model_evidence_source": evidence_source,
+            "evidence_level": evidence_level,
+            "dependency_wave": wave_by_node.get(node_id),
+            "relations": {
+                "entry_pair": entry_pair,
+                "dependencies": list(node.get("dependencies") or []),
+                "same_wave_siblings": same_wave_siblings,
+                "assignment": assignment,
+            },
+            "route_change": route_change,
+            "reason": reason,
+            "tokens": dict(record.get("tokens")) if isinstance(record.get("tokens"), dict) else {},
+            "process_elapsed_ms": record.get("process_elapsed_ms"),
+            "elapsed_ms": record.get("process_elapsed_ms"),
+            "time": {"process_elapsed_ms": record.get("process_elapsed_ms"), "model_turn_duration_ms": record.get("model_turn_duration_ms"), "time_to_first_token_ms": record.get("time_to_first_token_ms")},
+            "status": status,
+            "failure_class": failure_class,
+            "operational_fallback": bool(record.get("operational_fallback")) if isinstance(record, dict) else False,
+        }
+        if node_id in quality_failure_node_ids:
+            summary_entry["quality_failure_attributed"] = True
+        node_summary.append(summary_entry)
+
+    stage_by_node = {stage.get("node_id"): stage for stage in stage_inventory if isinstance(stage, dict) and isinstance(stage.get("node_id"), str)}
+    parallel_waves = sum(1 for members in result_waves.values() if len(members) > 1 and all(stage_by_node.get(node_id, {}).get("coupling") == "independent" and stage_by_node.get(node_id, {}).get("parallelizable") is True for node_id in members))
+    spark_usage_nodes = sum(1 for summary_entry in node_summary if summary_entry["evidence_level"] == "runtime_receipt" and isinstance(summary_entry["effective_pair"], str) and "spark" in summary_entry["effective_pair"])
+    quality_pair_nodes = sum(1 for summary_entry in node_summary if summary_entry["evidence_level"] == "runtime_receipt" and isinstance(summary_entry["effective_pair"], str) and "spark" not in summary_entry["effective_pair"])
+    operational_fallback_nodes = sum(1 for summary_entry in node_summary if summary_entry["operational_fallback"])
+    quality_failure_nodes = sum(1 for summary_entry in node_summary if summary_entry["failure_class"] == "quality")
+
+    aggregate = {
+        "spark_usage_nodes": spark_usage_nodes,
+        "quality_pair_nodes": quality_pair_nodes,
+        "operational_fallback_nodes": operational_fallback_nodes,
+        "quality_failure_nodes": quality_failure_nodes,
+        "parallel_waves": parallel_waves,
+        "unsplit_continuity_groups": unsplit_continuity_groups,
+    }
+    return {"nodes": node_summary, "aggregate": aggregate}
+
+
 def _aggregate_attempt_metrics(route_attempts):
     strategy_tokens = receipt_module.aggregate_token_maps([attempt.get("tokens", {}) for attempt in route_attempts])
     elapsed_values = [attempt.get("process_elapsed_ms") for attempt in route_attempts]
@@ -801,7 +1285,10 @@ def _write_release_record(path, record):
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(record, indent=2) + "\n"
     path.write_text(payload, encoding="utf-8")
-    path.chmod(0o600)
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def _read_release_record(path):
@@ -851,7 +1338,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     fallback_pairs = receipt_module.normalize_fallback_pairs(node.get("allow_fallback", []))
     selected_pair = f"{node['model']}|{node['effort']}"
     adaptive_recommendation = None
-    priority_node = _priority_result_node(node)
+    priority_node = _priority_result_node(node, node.get("_decomposition_stage"))
     fixed_scored_node = node.get("phase") == "result" and node.get("selection_basis") == "score_role" and f"{node.get('model')}|{node.get('effort')}" == score_role_pair(node.get("complexity_score"))
     if node["phase"] == "result" and isinstance(node.get("routing_recommendation"), dict) and node.get("_project_root") and receipt_module.entry_context_active():
         try:
@@ -1012,6 +1499,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         for attempted_pair, attempted_receipt in zip(planned_pairs, route_attempts)
         if attempted_receipt.get("fallback_eligible") is True
     ]
+    receipt["operational_fallback"] = len(route_attempts) > 1 and any(attempt.get("fallback_eligible") is True for attempt in route_attempts[:-1])
     receipt["last_attempt_tokens"] = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     receipt["last_attempt_process_elapsed_ms"] = receipt.get("process_elapsed_ms")
     receipt["strategy_tokens"] = attempt_metrics["strategy_tokens"]
@@ -1024,14 +1512,59 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     result_ready_monotonic_ns = receipt.get("result_ready_monotonic_ns")
     if result_published and not isinstance(result_ready_monotonic_ns, int):
         result_ready_monotonic_ns = time.monotonic_ns()
+    requested_pair = f"{node['model']}|{node['effort']}"
+    resolved_pair = receipt.get("resolved_pair") if isinstance(receipt, dict) else None
+    effective_pair = receipt.get("effective_pair") if isinstance(receipt, dict) else None
+    receipt_resolved_model = receipt.get("resolved_model") if isinstance(receipt, dict) else None
+    receipt_resolved_effort = receipt.get("resolved_effort") if isinstance(receipt, dict) else None
+    receipt_effective_model = receipt.get("effective_model") if isinstance(receipt, dict) else None
+    if not resolved_pair:
+        if receipt_resolved_model and receipt_resolved_effort:
+            resolved_pair = f"{receipt_resolved_model}|{receipt_resolved_effort}"
+    if not resolved_pair:
+        resolved_pair = receipt.get("last_attempt_pair") if isinstance(receipt, dict) else None
+    if not effective_pair and receipt_effective_model and receipt_resolved_effort:
+        effective_pair = f"{receipt_effective_model}|{receipt_resolved_effort}"
+    if not resolved_pair:
+        resolved_pair = requested_pair
+    if not effective_pair:
+        effective_pair = resolved_pair
+    resolved_model = None
+    resolved_effort = None
+    effective_model = None
+    effective_effort = None
+    if isinstance(resolved_pair, str) and "|" in resolved_pair:
+        resolved_model, resolved_effort = resolved_pair.split("|", 1)
+    if isinstance(effective_pair, str) and "|" in effective_pair:
+        effective_model, effective_effort = effective_pair.split("|", 1)
+    runtime_identity = any(receipt.get(field) for field in ("resolved_model", "resolved_pair", "effective_model", "effective_pair"))
+    model_evidence_source = "runtime_receipt" if runtime_identity else "task_assignment"
+    evidence_level = "runtime_receipt" if runtime_identity else "UNVERIFIED (no runtime receipt)"
+    if receipt.get("model_memory_pair") is not None or receipt.get("routing_recommendation") is not None:
+        model_evidence_source = "obsidian"
+    if node.get("phase") == "ending":
+        model_evidence_source = "entry" if runtime_identity else "task_assignment"
+    operational_fallback = bool(receipt.get("operational_fallback"))
+
     return {
         "id": node_id,
         "phase": node["phase"],
         "skill": node["skill"],
-        "requested_model": receipt.get("requested_model", node["model"]),
-        "requested_effort": receipt.get("requested_effort", node["effort"]),
-        "model": receipt.get("effective_model") or receipt.get("requested_model"),
-        "effort": receipt.get("resolved_effort") or receipt.get("requested_effort"),
+        "requested_model": node["model"],
+        "requested_effort": node["effort"],
+        "requested_pair": requested_pair,
+        "resolved_model": resolved_model,
+        "resolved_effort": resolved_effort,
+        "resolved_pair": resolved_pair,
+        "effective_model": effective_model,
+        "effective_effort": effective_effort,
+        "effective_pair": effective_pair,
+        "model_evidence_source": model_evidence_source,
+        "evidence_level": evidence_level,
+        "failure_class": failure_class,
+        "operational_fallback": operational_fallback,
+        "model": effective_model or node["model"],
+        "effort": effective_effort or node["effort"],
         "workload_id": f"task-route-{node_id}",
         "status": status,
         "receipt_path": str(receipt_path),
@@ -1042,6 +1575,8 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         "worker_identity": worker_identity(receipt),
         "tokens": receipt.get("tokens"),
         "process_elapsed_ms": receipt.get("process_elapsed_ms"),
+        "model_turn_duration_ms": receipt.get("model_turn_duration_ms"),
+        "time_to_first_token_ms": receipt.get("time_to_first_token_ms"),
         "complexity_score": node.get("complexity_score"),
         "complexity_band": node.get("complexity_band"),
         "selection_basis": node.get("selection_basis"),
@@ -1096,7 +1631,7 @@ def _release_main_result(handoff):
     if not isinstance(route_run_id, str) or not route_run_id:
         return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": None, "failures": ["ending handoff is missing route_run_id"]}
 
-    cache_dir = Path(handoff_data.get("cache_dir") or "/").expanduser().resolve()
+    cache_dir = Path(handoff_data.get("cache_dir") or Path.cwd()).expanduser().resolve()
     plan = handoff_data.get("plan") if isinstance(handoff_data.get("plan"), dict) else {}
     completed = {
         record.get("id"): record
@@ -1142,6 +1677,7 @@ def run_plan(
     history_path=None,
     result_ready_callback=None,
 ):
+    normalize_legacy_dynamic_plan(plan)
     first_result_started = time.monotonic()
     first_result_started_ns = time.monotonic_ns()
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
@@ -1151,7 +1687,7 @@ def run_plan(
         entry_effort,
         cwd,
         skills_root=skills_root,
-        enforce_current_recommendation=True,
+        enforce_current_recommendation=plan.get("routing_mode") != DYNAMIC_ROUTING_MODE,
         history_path=history_path,
     )
     cache_dir = Path(plan["cache_dir"]).expanduser().resolve() if not failures else cwd.resolve() / "work" / "cache" / "invalid-task-route"
@@ -1161,6 +1697,7 @@ def run_plan(
     route_run_id = _route_run_id()
 
     if failures:
+        summary_entry = {"model": entry_model, "effort": entry_effort}
         manifest = {
             "schema_version": DISPATCH_SCHEMA_VERSION,
             "stage": "validation",
@@ -1176,6 +1713,7 @@ def run_plan(
             "result_published": False,
             "notification_required": False,
             "reopen_required": False,
+            "model_switch_summary": build_model_switch_summary(plan, [], summary_entry),
         }
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         manifest["manifest_path"] = str(manifest_path)
@@ -1242,6 +1780,7 @@ def run_plan(
                 ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
                 ready_node["_project_root"] = str(cwd.resolve())
                 ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)
+                ready_node["_decomposition_stage"] = _stage_for_node_id(plan, node_id)
                 future = executor.submit(run_node, ready_node, cache_dir, dict(ready_records), state_db, cwd, codex_bin, skills_root)
                 future.add_done_callback(lambda settled_future, settled_node_id=node_id: result_events.put(("settled", settled_node_id, settled_future)))
                 running[node_id] = future
@@ -1344,6 +1883,45 @@ def run_plan(
         except OSError:
             pass
 
+    complete_summary_records = list(ordered)
+    for node in plan.get("nodes", []):
+        if not isinstance(node, dict) or node.get("phase") != "ending":
+            continue
+        if any(record.get("id") == node["id"] for record in ordered):
+            continue
+        complete_summary_records.append(
+            {
+                "id": node["id"],
+                "model": node.get("model"),
+                "effort": node.get("effort"),
+                "status": "pending",
+                "dependencies": list(node.get("dependencies", [])),
+                "complexity_score": node.get("complexity_score"),
+                "complexity_band": node.get("complexity_band"),
+                "requested_model": node.get("model"),
+                "requested_effort": node.get("effort"),
+                "requested_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
+                "resolved_model": node.get("model"),
+                "resolved_effort": node.get("effort"),
+                "resolved_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
+                "effective_model": node.get("model"),
+                "effective_effort": node.get("effort"),
+                "effective_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
+                "model_evidence_source": "task_assignment",
+                "evidence_level": "UNVERIFIED (no runtime receipt)",
+                "failure_class": None,
+                "operational_fallback": False,
+                "tokens": {},
+                "process_elapsed_ms": None,
+            }
+        )
+    model_switch_summary = build_model_switch_summary(
+        plan,
+        complete_summary_records,
+        {"model": entry_model, "effort": entry_effort},
+        ending_quality_failure_nodes=(),
+    )
+
     manifest = {
         "schema_version": DISPATCH_SCHEMA_VERSION,
         "stage": "execution",
@@ -1371,6 +1949,7 @@ def run_plan(
         "result_published": result_published,
         "notification_required": receipt_failure_after_result,
         "reopen_required": receipt_failure_after_result,
+        "model_switch_summary": model_switch_summary,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     manifest["manifest_path"] = str(manifest_path)
@@ -1381,10 +1960,11 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     try:
         handoff = json.loads(handoff_path.expanduser().resolve().read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"], "reopen_required": True, "notification_required": True}
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"], "model_switch_summary": build_model_switch_summary({}, [], {}), "reopen_required": True, "notification_required": True}
 
     plan = handoff.get("plan") if isinstance(handoff.get("plan"), dict) else {}
-    cwd = Path(handoff.get("cwd") or "/").expanduser().resolve()
+    normalize_legacy_dynamic_plan(plan)
+    cwd = Path(handoff.get("cwd") or Path.cwd()).expanduser().resolve()
     entry = handoff.get("entry") if isinstance(handoff.get("entry"), dict) else {}
     state_db = Path(handoff.get("state_db") or Path.home() / ".codex" / "state_5.sqlite").expanduser().resolve()
     route_run_id = handoff.get("route_run_id")
@@ -1525,6 +2105,52 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         if not failures and ordered and all(record.get("status") == "pass" for record in ordered)
         else "fail"
     )
+    summary_records = [record for record in completed_records if isinstance(record, dict)]
+    summary_records.extend(ordered)
+    completed_node_ids = {record.get("id") for record in summary_records if isinstance(record, dict) and record.get("id")}
+    for node in plan.get("nodes", []):
+        if not isinstance(node, dict) or not node.get("id") or node["id"] in completed_node_ids:
+            continue
+        summary_records.append(
+            {
+                "id": node["id"],
+                "model": node.get("model"),
+                "effort": node.get("effort"),
+                "status": "pending",
+                "dependencies": list(node.get("dependencies", [])),
+                "requested_model": node.get("model"),
+                "requested_effort": node.get("effort"),
+                "requested_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
+                "resolved_model": node.get("model"),
+                "resolved_effort": node.get("effort"),
+                "resolved_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
+                "effective_model": node.get("model"),
+                "effective_effort": node.get("effort"),
+                "effective_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
+                "model_evidence_source": "task_assignment",
+                "evidence_level": "UNVERIFIED (no runtime receipt)",
+                "failure_class": None,
+                "operational_fallback": False,
+                "tokens": {},
+                "process_elapsed_ms": None,
+            }
+        )
+    quality_failure_nodes = []
+    if ordered:
+        for ending_record in ordered:
+            ending_node = node_by_id.get(ending_record.get("id"), {})
+            ending_verdict = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
+            verified_quality_failure = ending_record.get("failure_class") == "quality" or ending_verdict == "fail"
+            if ending_node.get("skill") == "verify-skill" and not ending_node.get("verifies_node") and ending_record.get("status") != "pass" and verified_quality_failure:
+                if plan.get("main_result_node"):
+                    quality_failure_nodes.append(plan.get("main_result_node"))
+    model_switch_summary = build_model_switch_summary(
+        plan,
+        summary_records,
+        entry,
+        ending_quality_failure_nodes=quality_failure_nodes,
+    )
+
     manifest = {
         "schema_version": DISPATCH_SCHEMA_VERSION,
         "stage": "ending",
@@ -1532,6 +2158,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         "failures": failures,
         "entry": entry,
         "nodes": ordered,
+        "model_switch_summary": model_switch_summary,
         "reopen_required": status != "pass",
         "notification_required": status != "pass",
         "routing_learning": routing_learning,

@@ -9,7 +9,7 @@ Use result-producing Workflow for one Obsidian-context adaptive quality producer
 
 ## Graph And Claim Gates
 
-Admit a task graph when at least two bounded result segments have distinct owners, outputs, model needs, or safe dependency-ready concurrency. Each node must carry its own 0-100 score, band, exact model/effort, purpose, dependencies, sandbox, and stop condition. Do not split one dependency-coupled implementation by file count alone.
+Admit a task graph when at least two bounded result segments have distinct owners, outputs, model needs, or safe dependency-ready concurrency. Each node must carry its own 0-100 score, band, exact model/effort, purpose, dependencies, sandbox, and stop condition. Dynamic plans use `decomposition.policy=max_safe`, exactly one stage-inventory item per result node, and a concrete continuity reason whenever logically separate stages stay unsplit. Do not split one dependency-coupled implementation by file count alone.
 
 Before making a savings claim, confirm that Task Analyze supplied comparable end-to-end evidence:
 
@@ -25,7 +25,7 @@ If any performance item is missing, stale, cross-workload, incomplete, or negati
 
 The current entry model may execute inline or coordinate admitted work; it is not controller-only. Workflow receives an exact model and effort for each delegated node and must not silently substitute another pair.
 
-Every delegated model node needs a matching sanitized receipt. A route label is planned only until runtime metadata proves requested, resolved, effective pair, and completion. Tool-only/local inline work uses observable state rather than a fabricated receipt.
+Every delegated model node needs a matching sanitized receipt. A route label is planned only until runtime metadata proves requested, resolved, effective pair, and completion. Independent assigned nodes are not literal switches or fallbacks: before a receipt, disclose their concrete pair as `task_assignment`, `UNVERIFIED (no runtime receipt)`, and `no_switch`. Tool-only/local inline work uses observable state rather than a fabricated receipt.
 
 ## Locked Plan Gate
 
@@ -51,7 +51,7 @@ Inline work uses one direct task action or direct execution surface, then shows 
 1. Execute only dependency-ready nodes. Parallelize safe independent branches; keep ordered, shared-state, irreversible, or output-dependent work sequential.
 2. Require each result and Ending node to retain its own score, band, selected pair, selection basis, purpose, dependencies, and stop condition in its receipt. Load each owning skill and only task-relevant references.
 3. Use one execution surface per branch. Collaboration prompts start `LOCKED_ROUTE_NODE`; do not repeat that branch in a dispatcher.
-4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; ordinary text/code starts on its contextual quality pair. One Real PASS retains the pair, two Real PASS results trial one rung down, and quality FAIL upgrades one rung. Code completion includes one bounded Quick Check before presentation, never a separate verifier.
+4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; ordinary text/code starts on its contextual quality pair. One Real PASS retains the pair, two Real PASS results trial one rung down, and quality FAIL upgrades one rung. The final dynamic foreground and Ending manifests each carry `model_switch_summary`: every planned node is present, Ending nodes are pending before release then reconciled, and the aggregate names Spark use, quality/fallback/failure counts, parallel waves, and unsplit continuity groups. Code completion includes one bounded Quick Check before presentation, never a separate verifier.
 5. Only a real graph with at least two model-executed result nodes saves private schema-2 `dynamic_task_graph` JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once. Independent writable nodes declare non-overlapping outputs; any shared target introduces an explicit dependency. Read-only source graphs additionally retain disjoint allowlists and dependency-only-or-fused merge rules.
 6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work without user authorization.
 
@@ -68,7 +68,7 @@ When requested work is complete:
 
 ## Result Model Disclosure
 
-Every user-facing origin result and each result/Ending node includes `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>` (or `effective=UNVERIFIED (no runtime receipt)`), `Previous model: <model | effort|none|unverified>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, and `Reason:` in 20 words or fewer. `Current model` is actual user-visible execution; planned labels are not effective proof. Inline uses verified entry metadata or `unverified`, never guesses. A no-switch result includes every field.
+Every user-facing origin result and each result/Ending node includes `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model evidence:`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`, `Current model evidence-level:`, `Previous model: <model | effort|same as current|none>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, `Switch summary:`, and `Reason:` in 20 words or fewer. `Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. Keep known identity concrete, never `unverified | unverified`; only absent identity uses `unknown | unknown`. One pair uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`.
 
 For adaptive or dispatched execution, launch the CLI as an ongoing session and read its newline-delimited `stage=result-ready` event. That event is emitted only after the public result path has been atomically written. Read and show that file immediately while the receipt/session continues; then collect the final receipt/manifest. A post-presentation receipt or protocol failure must notify and reopen instead of retracting or silently replacing the presented result.
 

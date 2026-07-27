@@ -7,7 +7,7 @@ description: "Always use in the result-producing node for durable project-file c
 
 ## Objective
 
-Maintain a durable, file-level explanation of project changes so future AI work can recover what changed, why it changed, what constraints were intentional, and what result was verified. Organize every record as `project -> functional module -> concrete code/file` and use prior records to avoid repeating rejected approaches or undoing deliberate decisions.
+Maintain a durable, file-level explanation of project changes so future AI work can recover what changed, why it changed, what constraints were intentional, which historical bugs remain relevant, and what result was verified. Organize every record as `project -> functional module -> concrete code/file` and use prior records to avoid repeating rejected approaches, reintroducing known failures, or undoing deliberate decisions.
 
 ## Required Scope
 
@@ -63,6 +63,21 @@ python3 ~/.codex/skills/project-memory-skill/scripts/project_change_memory.py se
 
 Pass multiple `--file` values when needed. No match or unavailable Obsidian is not a blocker. Use matching records to preserve intentional invariants, recognize earlier failures, and avoid duplicating an already-completed change. Do not broaden this recall into repository archaeology.
 
+## Historical Bug Closeout
+
+Before reporting a durable project change complete, run one more bounded lookup for the same functional module and touched files, using the current symptom plus terms such as `bug`, `failure`, `error`, `regression`, `fix`, `repair`, and `archive`.
+
+Review only relevant matching records and classify each issue:
+
+- `ACTIVE`: present now or still unresolved.
+- `MONITORING`: changed, but the real acceptance path was unavailable or incomplete.
+- `RESOLVED`: the current relevant path passed observable verification.
+- `ARCHIVED`: verified architecture replacement makes the old path, owner, consumer, schema, or contract unreachable or nonexistent.
+
+Do not archive an issue merely because it did not reproduce once. Architecture-based archival requires concrete evidence such as a removed route with no remaining references, a replaced ownership/consumer contract, or a verified current call path that cannot reach the old behavior. Preserve the old record; never delete or rewrite history to make an obsolete bug disappear.
+
+For every final record, include one `--verification` value beginning `Historical review:` that names the relevant record IDs and classifications, or states that the bounded module/file search found no relevant historical issue. Put architecture/archive evidence in `--decision`. Put every `ACTIVE` or `MONITORING` issue in `--risk`. Use `--supersedes` only when intentionally replacing a prior decision or failed durable change, not merely to label an unrelated historical bug archived.
+
 ## After Editing: One Complete Change Record
 
 Present the completed artifact first. After proportional Ending Real verification, record one concise entry for the final task change set. Include every durable file actually touched by this task and exclude unrelated dirty files.
@@ -102,6 +117,7 @@ Every record must answer:
 9. Remaining risks or `none`.
 10. Every added, edited, renamed, moved, or deleted project-relative file.
 11. The superseded record ID when a prior decision was intentionally replaced.
+12. A bounded historical-bug review for the same module/files, with classifications, evidence, and any remaining active or monitoring risk.
 
 Reject a record that omits the reason, result, verification status, or touched files. Never infer touched files from the whole dirty worktree; record only files changed by the current task.
 
@@ -119,6 +135,10 @@ If a project has sufficient git working-line metadata, retrieval excludes ambigu
 - A record includes unrelated dirty files or omits a touched durable file.
 - The entry says only what changed but not why, result, or verification.
 - A failed or superseded approach is repeated without checking its prior record.
+- A relevant historical bug is not reviewed before completion.
+- An issue is marked resolved from source-only evidence when its failure mode is runtime, API, generation, visual, or artifact-based.
+- An issue is archived without evidence that the replacement architecture makes the old behavior unreachable or nonexistent.
+- An archived event is deleted or silently rewritten instead of preserved with a current classification record.
 - Obsidian unavailability blocks otherwise valid work.
 - Secrets, raw prompts, private reasoning, receipts, or unrelated content enter the ledger.
 

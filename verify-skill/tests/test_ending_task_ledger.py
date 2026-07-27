@@ -208,11 +208,57 @@ class EndingTaskLedgerTests(unittest.TestCase):
             plan = root / "ending-plan.json"
             plan.write_text(json.dumps({"verification_required": True}), encoding="utf-8")
             started = LEDGER.start_lifecycle("code", root, "Run real tests", complexity_score=60, complexity_band="complex", verification_required=True, verification_plan=plan, ending_check_id="unit", selected_pair="gpt-5.6-terra|ultra", store=root / "store")
+            LEDGER.record_event(started["lifecycle_id"], "note", "Model disclosure remains audit history", store=root / "store")
             state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
         self.assertTrue(started["verification_required"])
         self.assertEqual(started["verification_plan"], str(plan.resolve()))
         self.assertEqual(state["ending_check_id"], "unit")
         self.assertEqual(state["selected_pair"], "gpt-5.6-terra|ultra")
+        self.assertEqual(state["model_disclosure"], {"assigned_pair": "gpt-5.6-terra|ultra", "current_pair": "gpt-5.6-terra|ultra", "model_evidence": "task_assignment", "requested_pair": "gpt-5.6-terra|ultra", "resolved_pair": "gpt-5.6-terra|ultra", "effective_pair": "gpt-5.6-terra|ultra", "previous_pair": "same as current", "route_change": "no_switch", "switch_summary": "No model switch", "reason": "Best-known pair used; receipt not available.", "effective_evidence_level": "UNVERIFIED (no runtime receipt)"})
+        self.assertEqual(state["events"][0]["model_disclosure"], state["model_disclosure"])
+
+    def test_receipt_effective_pair_overrides_assignment_and_keeps_resolved_pair(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root)
+            receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
+            receipt_payload.update({"requested_pair": "gpt-5.6-sol|ultra", "resolved_pair": "gpt-5.6-sol|ultra", "executed_pair": "gpt-5.3-codex-spark|medium"})
+            receipt_payload["route_attempts"] = [{"status": "pass", "executed_pair": "gpt-5.3-codex-spark|medium", "model_match": True, "effort_match": True}]
+            receipt.write_text(json.dumps(receipt_payload), encoding="utf-8")
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, selected_pair="gpt-5.6-sol|ultra", producer_receipt=receipt, store=root / "store")
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        disclosure = state["model_disclosure"]
+        self.assertEqual(disclosure["assigned_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(disclosure["model_evidence"], "runtime_receipt")
+        self.assertEqual(disclosure["requested_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(disclosure["resolved_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(disclosure["effective_pair"], "gpt-5.3-codex-spark|medium")
+        self.assertEqual(disclosure["current_pair"], "gpt-5.3-codex-spark|medium")
+        self.assertEqual(disclosure["previous_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(disclosure["route_change"], "operational_fallback")
+        self.assertEqual(disclosure["reason"], "Runtime receipt conflicts with resolved pair.")
+        self.assertEqual(disclosure["effective_evidence_level"], "runtime_receipt")
+
+    def test_unknown_model_disclosure_uses_an_explicit_unknown_pair(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            started = LEDGER.start_lifecycle("code", root, "Result is ready", store=root / "store")
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        self.assertEqual(state["model_disclosure"]["current_pair"], "unknown|unknown")
+        self.assertEqual(state["model_disclosure"]["model_evidence"], "unavailable")
+        self.assertEqual(state["model_disclosure"]["requested_pair"], "unknown|unknown")
+        self.assertEqual(state["model_disclosure"]["resolved_pair"], "unknown|unknown")
+        self.assertEqual(state["model_disclosure"]["effective_pair"], "unknown|unknown")
+        self.assertEqual(state["model_disclosure"]["effective_evidence_level"], "unavailable")
+        self.assertEqual(state["model_disclosure"]["previous_pair"], "none")
+        self.assertEqual(state["model_disclosure"]["switch_summary"], "No model switch")
+        self.assertEqual(state["model_disclosure"]["reason"], "Previous-model provenance unavailable: no assignment or receipt.")
+
+    def test_runtime_receipt_evidence_requires_a_validated_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            with self.assertRaisesRegex(ValueError, "requires a validated producer receipt"):
+                LEDGER.start_lifecycle("code", root, "Result is ready", selected_pair="gpt-5.6-terra|ultra", model_evidence="runtime_receipt", store=root / "store")
 
     def test_unregistered_broad_model_switch_is_a_successful_learning_noop(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

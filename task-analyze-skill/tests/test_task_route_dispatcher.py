@@ -94,6 +94,51 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         ending_pair = module.score_role_pair(42)
         ending["model"], ending["effort"] = ending_pair.split("|", 1)
         ending.update({"complexity_score": 42, "complexity_band": "standard", "selection_basis": "ending_score_role"})
+        plan["decomposition"] = {
+            "policy": "max_safe",
+            "stage_inventory": [
+                {
+                    "stage_id": "upstream-segment",
+                    "node_id": upstream["id"],
+                    "logical_stage_ids": ["upstream-segment"],
+                    "purpose": upstream["purpose"],
+                    "score": upstream["complexity_score"],
+                    "band": upstream["complexity_band"],
+                    "model_intent": f"{upstream['model']}|{upstream['effort']}",
+                    "operation": "code",
+                    "dependencies": [],
+                    "inputs": ["upstream-source"],
+                    "outputs": ["upstream-output"],
+                    "mutable_state": [],
+                    "stop_condition": "Write output",
+                    "coupling": "linear",
+                    "parallelizable": False,
+                    "objective_scope": "dynamic-segment",
+                    "external_side_effects": False,
+                    "failure_escalation": "quality_upgrade_one_notch",
+                },
+                {
+                    "stage_id": "main-result-segment",
+                    "node_id": main_node["id"],
+                    "logical_stage_ids": ["main-result-segment"],
+                    "purpose": "author-prompt",
+                    "score": main_node["complexity_score"],
+                    "band": main_node["complexity_band"],
+                    "model_intent": f"{main_node['model']}|{main_node['effort']}",
+                    "operation": "write",
+                    "dependencies": [upstream["id"]],
+                    "inputs": ["upstream-output"],
+                    "outputs": ["main-output"],
+                    "mutable_state": [],
+                    "stop_condition": "Compute result",
+                    "coupling": "linear",
+                    "parallelizable": False,
+                    "objective_scope": "dynamic-segment",
+                    "external_side_effects": False,
+                    "failure_escalation": "quality_upgrade_one_notch",
+                },
+            ],
+        }
         return plan
 
     def result_receipt(self, args, ready_monotonic_ns, status="pass", failure_class=None):
@@ -397,6 +442,116 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
 
+    def _parallel_independent_dynamic_plan(self, cache_dir):
+        base_plan = self.dynamic_segment_plan(cache_dir)
+        upstream = base_plan["nodes"][0]
+        main_node = base_plan["nodes"][1]
+        sibling = deepcopy(upstream)
+        sibling.update(
+            {
+                "id": "upstream-sibling",
+                "prompt": "Return sibling result.",
+                "complexity_score": 16,
+                "complexity_band": "small",
+                "purpose": "implement",
+                "selection_basis": "spark_priority",
+            }
+        )
+        base_plan["nodes"].insert(1, sibling)
+        main_node["dependencies"] = [upstream["id"], sibling["id"]]
+        base_plan["decomposition"]["stage_inventory"].insert(
+            1,
+            {
+                "stage_id": "upstream-sibling-segment",
+                "node_id": sibling["id"],
+                "logical_stage_ids": ["upstream-sibling-segment"],
+                "purpose": sibling["purpose"],
+                "score": sibling["complexity_score"],
+                "band": sibling["complexity_band"],
+                "model_intent": f"{sibling['model']}|{sibling['effort']}",
+                "operation": "code",
+                "dependencies": [],
+                "inputs": ["shared-source"],
+                "outputs": ["upstream-sibling-output"],
+                "mutable_state": [],
+                "stop_condition": "Write sibling output",
+                "coupling": "independent",
+                "parallelizable": True,
+                "objective_scope": "dynamic-segment",
+                "external_side_effects": False,
+                "failure_escalation": "quality_upgrade_one_notch",
+                "deterministic_merge_node": main_node["id"],
+            },
+        )
+        for stage in base_plan["decomposition"]["stage_inventory"]:
+            if stage["node_id"] == upstream["id"]:
+                stage["coupling"] = "independent"
+                stage["parallelizable"] = True
+                stage["deterministic_merge_node"] = main_node["id"]
+            elif stage["node_id"] == main_node["id"]:
+                stage["dependencies"] = [upstream["id"], sibling["id"]]
+                stage["coupling"] = "linear"
+                stage["parallelizable"] = False
+        return base_plan
+
+    def test_dynamic_graph_rejects_missing_decomposition_coverage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            plan["decomposition"]["stage_inventory"] = plan["decomposition"]["stage_inventory"][:1]
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("decomposition must cover every result node" in failure for failure in failures))
+
+    def test_dynamic_graph_rejects_duplicate_stage_coverage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            plan["decomposition"]["stage_inventory"].append(deepcopy(plan["decomposition"]["stage_inventory"][0]))
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("decomposition covers result node more than once" in failure for failure in failures))
+
+    def test_dynamic_graph_rejects_non_max_safe_decomposition_policy(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            plan["decomposition"]["policy"] = "unsafe"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("decomposition.policy must be max_safe" in failure for failure in failures))
+
+    def test_dynamic_graph_rejects_parallel_wave_independent_without_deterministic_merge(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self._parallel_independent_dynamic_plan(root / "work" / "cache" / "route")
+            plan["decomposition"]["stage_inventory"][1].pop("deterministic_merge_node", None)
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("must share deterministic_merge_node" in failure for failure in failures))
+
+    def test_dynamic_graph_rejects_parallel_wave_independent_with_overlap_inputs_or_mutable_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self._parallel_independent_dynamic_plan(root / "work" / "cache" / "route")
+            plan["decomposition"]["stage_inventory"][0]["inputs"] = ["shared-input"]
+            plan["decomposition"]["stage_inventory"][1]["inputs"] = ["shared-input"]
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("must have disjoint inputs" in failure for failure in failures))
+
+    def test_dynamic_graph_rejects_linear_multi_logical_stage_without_continuity_reason(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            first_stage = plan["decomposition"]["stage_inventory"][0]
+            second_stage = plan["decomposition"]["stage_inventory"][1]
+            first_stage["logical_stage_ids"] = ["upstream-segment", "upstream-cross"]
+            second_stage["logical_stage_ids"] = ["main-result-segment", "main-cross"]
+            first_stage["coupling"] = "linear"
+            first_stage["parallelizable"] = False
+            second_stage["coupling"] = "linear"
+            second_stage["parallelizable"] = False
+            first_stage.pop("continuity_reason", None)
+            second_stage.pop("continuity_reason", None)
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertTrue(any("requires continuity_reason" in failure for failure in failures))
+
     def test_dynamic_graph_requires_score_and_band_on_every_node(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -414,10 +569,14 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             upstream["model"], upstream["effort"] = module.score_role_pair(16).split("|", 1)
             upstream["selection_basis"] = "score_role"
             upstream["allow_fallback"] = []
-            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+            plan["decomposition"]["stage_inventory"][0]["model_intent"] = f"{upstream['model']}|{upstream['effort']}"
             upstream["spark_exception_reason"] = "The node requires an unavailable non-text tool surface."
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
             accepted = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("must use Spark" in failure for failure in failures))
+        self.assertTrue(any("spark exception category must be declared" in failure for failure in failures))
+        upstream["spark_exception_category"] = "external_dependency"
+        accepted = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(accepted, [])
 
     def test_real_verify_rejects_management_only_ending(self):
@@ -540,7 +699,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}) as record_event:
                 manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
         self.assertEqual(calls, ["direct"])
-        self.assertEqual(manifest["status"], "pass")
+        self.assertEqual(manifest["status"], "pass", manifest["failures"])
         self.assertEqual(manifest["entry"], {"model": "gpt-5.6-terra", "effort": "low"})
         self.assertEqual(manifest["ending_nodes_pending"], ["ending-verify"])
         record_event.assert_not_called()
@@ -573,7 +732,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 self.assertFalse(future.done())
                 manifest = future.result(timeout=2)
         self.assertEqual(presented_result, "RESULT=12\n")
-        self.assertEqual(manifest["status"], "pass")
+        self.assertEqual(manifest["status"], "pass", manifest["failures"])
         self.assertTrue(manifest["result_published"])
         self.assertEqual(Path(ready_records[0][0]).resolve(), (cache_dir / "direct-result.md").resolve())
         self.assertLess(manifest["first_result_elapsed_ms"], 100)
@@ -1033,6 +1192,208 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(records["branch-b"]["dependency_wave"], 0)
         self.assertEqual(records["merge"]["dependency_wave"], 1)
         self.assertTrue(all(isinstance(record["launched_monotonic_ns"], int) and isinstance(record["settled_monotonic_ns"], int) for record in records.values()))
+
+    def test_foreground_manifest_includes_full_model_switch_summary(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            plan = self.dynamic_segment_plan(cache_dir)
+
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
+                pair = f"{node['model']}|{node['effort']}"
+                result_path = cache_dir / f"{node['id']}-result.md"
+                receipt_path = cache_dir / f"{node['id']}-receipt.json"
+                result_path.write_text(f"{node['id']}\n", encoding="utf-8")
+                receipt_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "requested_model": node["model"],
+                            "requested_effort": node["effort"],
+                            "requested_pair": pair,
+                            "resolved_model": node["model"],
+                            "resolved_effort": node["effort"],
+                            "effective_model": node["model"],
+                            "effective_pair": pair,
+                            "status": "pass",
+                            "route_attempts": [
+                                {
+                                    "requested_pair": pair,
+                                    "resolved_pair": pair,
+                                    "effective_pair": pair,
+                                    "executed_pair": pair,
+                                    "status": "pass",
+                                    "failure_class": None,
+                                    "model_match": True,
+                                    "effort_match": True,
+                                    "pair_match": True,
+                                    "process_elapsed_ms": 1,
+                                    "model_turn_duration_ms": 1,
+                                    "time_to_first_token_ms": 1,
+                                    "tokens": {"total_tokens": 1},
+                                    "thread_id": "worker-1",
+                                }
+                            ],
+                            "process_elapsed_ms": 1,
+                            "tokens": {"total_tokens": 1},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return {
+                    "id": node["id"],
+                    "phase": node["phase"],
+                    "status": "pass",
+                    "requested_model": node["model"],
+                    "requested_effort": node["effort"],
+                    "model": node["model"],
+                    "effort": node["effort"],
+                    "requested_pair": pair,
+                    "resolved_model": node["model"],
+                    "resolved_effort": node["effort"],
+                    "effective_model": node["model"],
+                    "effective_pair": pair,
+                    "model_evidence_source": "runtime_receipt",
+                    "evidence_level": "runtime_receipt",
+                    "failure_class": None,
+                    "operational_fallback": False,
+                    "receipt_path": str(receipt_path),
+                    "result_path": str(result_path),
+                    "tokens": {"total_tokens": 1},
+                    "process_elapsed_ms": 1,
+                    "dependencies": list(node.get("dependencies", [])),
+                }
+
+            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}):
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
+
+        self.assertEqual(manifest["status"], "pass")
+        self.assertIn("model_switch_summary", manifest)
+        summary = manifest["model_switch_summary"]
+        self.assertEqual({entry["node_id"] for entry in summary["nodes"]}, {node["id"] for node in plan["nodes"]})
+        ending_node = plan["nodes"][2]
+        ending_summary = {entry["node_id"]: entry for entry in summary["nodes"]}[ending_node["id"]]
+        self.assertEqual(ending_summary["status"], "pending")
+        self.assertEqual(ending_summary["model_evidence_source"], "task_assignment")
+        self.assertIsInstance(summary["aggregate"]["parallel_waves"], int)
+
+    def test_ending_manifest_reconciles_model_switch_summary_with_quality_failure_attribution(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            plan = self.dynamic_segment_plan(cache_dir)
+            main_node = plan["nodes"][1]
+            main_node_id = main_node["id"]
+            main_result_path = cache_dir / f"{main_node_id}-result.md"
+            main_result_receipt = cache_dir / f"{main_node_id}-receipt.json"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            main_result_path.write_text("RESULT=12\n", encoding="utf-8")
+            main_result_receipt.write_text(
+                json.dumps(
+                    {
+                        "status": "pass",
+                        "requested_pair": f"{main_node['model']}|{main_node['effort']}",
+                        "resolved_pair": f"{main_node['model']}|{main_node['effort']}",
+                        "effective_pair": f"{main_node['model']}|{main_node['effort']}",
+                        "status": "pass",
+                        "route_attempts": [
+                            {
+                                "requested_pair": f"{main_node['model']}|{main_node['effort']}",
+                                "resolved_pair": f"{main_node['model']}|{main_node['effort']}",
+                                "effective_pair": f"{main_node['model']}|{main_node['effort']}",
+                                "executed_pair": f"{main_node['model']}|{main_node['effort']}",
+                                "status": "pass",
+                                "failure_class": None,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            release = {
+                "schema_version": 2,
+                "route_run_id": "route-endsummary",
+                "main_result_node": main_node_id,
+                "main_result_receipt_path": str(main_result_receipt),
+                "main_result_path": str(main_result_path),
+                "cache_dir": str(cache_dir),
+                "released_at": "2026-01-01T00:00:00+00:00",
+                "released_by": "release-main-result",
+            }
+            release_path = cache_dir / "route-endsummary.ending-release.json"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            module._write_release_record(release_path, release)
+            handoff = {
+                "schema_version": 2,
+                "cwd": str(root),
+                "state_db": str(root / "state.sqlite"),
+                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
+                "route_run_id": "route-endsummary",
+                "plan": plan,
+                "main_result_node": main_node_id,
+                "completed": [
+                    {"id": "upstream", "status": "pass", "phase": "result", "model": "gpt-5.6-luna", "effort": "low", "receipt_path": str(cache_dir / "upstream-receipt.json"), "result_path": str(cache_dir / "upstream-result.md"), "worker_identity": "upstream"},
+                    {"id": main_node_id, "status": "pass", "phase": "result", "model": main_node["model"], "effort": main_node["effort"], "receipt_path": str(main_result_receipt), "result_path": str(main_result_path), "worker_identity": "main"},
+                ],
+                "release_path": str(release_path),
+                "released": True,
+                "ending_handoff_path": str(cache_dir / "ending-handoff.json"),
+                "ending_manifest_path": str(cache_dir / "ending-dispatch-manifest.json"),
+            }
+            handoff_path = cache_dir / "ending-handoff.json"
+            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+
+            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
+                result_path = cache_dir / f"{node['id']}-result.md"
+                receipt_path = cache_dir / f"{node['id']}-receipt.json"
+                result_path.write_text("ENDING_TASK=FAIL\n", encoding="utf-8")
+                receipt = {
+                    "schema_version": 1,
+                    "requested_model": node["model"],
+                    "requested_effort": node["effort"],
+                    "requested_pair": f"{node['model']}|{node['effort']}",
+                    "resolved_model": node["model"],
+                    "resolved_effort": node["effort"],
+                    "effective_model": node["model"],
+                    "effective_pair": f"{node['model']}|{node['effort']}",
+                    "status": "fail",
+                    "route_attempts": [],
+                    "tokens": {"total_tokens": 1},
+                    "process_elapsed_ms": 1,
+                }
+                receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+                return {
+                    "id": node["id"],
+                    "phase": "ending",
+                    "skill": node["skill"],
+                    "status": "fail",
+                    "requested_model": node["model"],
+                    "requested_effort": node["effort"],
+                    "requested_pair": f"{node['model']}|{node['effort']}",
+                    "resolved_model": node["model"],
+                    "resolved_effort": node["effort"],
+                    "effective_model": node["model"],
+                    "effective_pair": f"{node['model']}|{node['effort']}",
+                    "model_evidence_source": "runtime_receipt",
+                    "evidence_level": "runtime_receipt",
+                    "failure_class": "protocol",
+                    "operational_fallback": False,
+                    "tokens": {"total_tokens": 1},
+                    "process_elapsed_ms": 1,
+                    "result_path": str(result_path),
+                    "receipt_path": str(receipt_path),
+                }
+
+            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}):
+                ending_manifest = module.run_ending_handoff(handoff_path)
+
+        self.assertEqual(ending_manifest["status"], "fail")
+        summary = ending_manifest["model_switch_summary"]
+        self.assertEqual({entry["node_id"] for entry in summary["nodes"]}, {node["id"] for node in plan["nodes"]})
+        self.assertGreaterEqual(summary["aggregate"]["quality_failure_nodes"], 1)
+        main_summary = next(entry for entry in summary["nodes"] if entry["node_id"] == main_node_id)
+        self.assertEqual(main_summary["status"], "fail")
+        self.assertEqual(main_summary["failure_class"], "quality")
 
     def test_ending_handoff_runs_ending_optimization_then_targeted_verifier_by_wave(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2,25 +2,7 @@
 """Project-scoped adaptive model memory stored only as Obsidian Markdown."""
 
 import argparse
-try:
-    import fcntl
-except ModuleNotFoundError:
-    import msvcrt
-
-    class _FcntlCompat:
-        LOCK_EX = msvcrt.LK_LOCK
-        LOCK_UN = msvcrt.LK_UNLCK
-
-        @staticmethod
-        def flock(file_descriptor, operation):
-            original_offset = os.lseek(file_descriptor, 0, os.SEEK_CUR)
-            if os.lseek(file_descriptor, 0, os.SEEK_END) == 0:
-                os.write(file_descriptor, b"\0")
-            os.lseek(file_descriptor, 0, os.SEEK_SET)
-            msvcrt.locking(file_descriptor, operation, 1)
-            os.lseek(file_descriptor, original_offset, os.SEEK_SET)
-
-    fcntl = _FcntlCompat()
+import fcntl
 import hashlib
 import json
 import os

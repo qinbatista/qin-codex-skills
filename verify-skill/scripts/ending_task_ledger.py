@@ -1,27 +1,9 @@
 #!/usr/bin/env python3
 import argparse
-try:
-    import fcntl
-except ModuleNotFoundError:
-    import msvcrt
-
-    class _FcntlCompat:
-        LOCK_EX = msvcrt.LK_LOCK
-
-        @staticmethod
-        def flock(file_descriptor, operation):
-            original_offset = os.lseek(file_descriptor, 0, os.SEEK_CUR)
-            if os.lseek(file_descriptor, 0, os.SEEK_END) == 0:
-                os.write(file_descriptor, b"\0")
-            os.lseek(file_descriptor, 0, os.SEEK_SET)
-            msvcrt.locking(file_descriptor, operation, 1)
-            os.lseek(file_descriptor, original_offset, os.SEEK_SET)
-
-    fcntl = _FcntlCompat()
+import fcntl
 import hashlib
 import importlib.util
 import json
-import os
 import re
 import sys
 import uuid
@@ -35,6 +17,9 @@ SCHEMA_VERSION = 1
 TERMINAL_EVENTS = {"pass", "fail", "blocked"}
 ALL_EVENTS = TERMINAL_EVENTS | {"note"}
 FAILURE_CLASSES = {"none", "availability", "timeout", "protocol", "telemetry", "execution", "receipt", "quality", "correctness"}
+MODEL_EVIDENCE_LEVELS = {"runtime_receipt", "verified_entry", "task_assignment", "configured_selection", "unavailable"}
+ROUTE_CHANGES = {"upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"}
+UNKNOWN_MODEL_PAIR = "unknown|unknown"
 MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
 
 
@@ -96,6 +81,49 @@ def _append_event(store, event):
         handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
+def _model_pair(value, field_name):
+    pair = _single_line(value, field_name, required=False, max_length=160)
+    return pair if pair and pair != UNKNOWN_MODEL_PAIR else None
+
+
+def _model_disclosure(selected_pair, producer_binding, requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason=""):
+    assigned_pair = _model_pair(selected_pair, "selected_pair")
+    receipt_requested_pair = producer_binding.get("requested_pair") if producer_binding else None
+    receipt_resolved_pair = producer_binding.get("resolved_pair") if producer_binding else None
+    receipt_effective_pair = producer_binding.get("effective_pair") if producer_binding else None
+    requested_pair = _model_pair(requested_pair, "requested_pair") or receipt_requested_pair or assigned_pair
+    resolved_pair = _model_pair(resolved_pair, "resolved_pair") or receipt_resolved_pair or assigned_pair or requested_pair
+    effective_pair = receipt_effective_pair or _model_pair(effective_pair, "effective_pair") or resolved_pair or requested_pair or assigned_pair
+    known_pair = effective_pair or resolved_pair or requested_pair or assigned_pair
+    requested_pair = requested_pair or known_pair or UNKNOWN_MODEL_PAIR
+    resolved_pair = resolved_pair or known_pair or UNKNOWN_MODEL_PAIR
+    effective_pair = effective_pair or known_pair or UNKNOWN_MODEL_PAIR
+    model_evidence = _single_line(model_evidence, "model_evidence", required=False, max_length=40) or ("runtime_receipt" if producer_binding else "task_assignment" if assigned_pair else "configured_selection" if known_pair else "unavailable")
+    if model_evidence not in MODEL_EVIDENCE_LEVELS:
+        raise ValueError(f"model_evidence must be one of {', '.join(sorted(MODEL_EVIDENCE_LEVELS))}")
+    if producer_binding:
+        model_evidence = "runtime_receipt"
+    elif model_evidence == "runtime_receipt":
+        raise ValueError("runtime_receipt model_evidence requires a validated producer receipt")
+    elif not known_pair and model_evidence != "unavailable":
+        raise ValueError("model_evidence requires a known model identity")
+    elif known_pair and model_evidence == "unavailable":
+        raise ValueError("unavailable model_evidence requires no model identity")
+    current_pair = effective_pair
+    previous_pair = _model_pair(previous_pair, "previous_pair") or (resolved_pair if producer_binding and resolved_pair != current_pair else "same as current" if current_pair != UNKNOWN_MODEL_PAIR else "none")
+    route_change = _single_line(route_change, "route_change", required=False, max_length=40) or ("operational_fallback" if producer_binding and resolved_pair and resolved_pair != current_pair else "no_switch")
+    if route_change not in ROUTE_CHANGES:
+        raise ValueError(f"route_change must be one of {', '.join(sorted(ROUTE_CHANGES))}")
+    switch_summary = _single_line(switch_summary, "switch_summary", required=False, max_length=600) or ("No model switch" if route_change == "no_switch" else f"Switched from {previous_pair} to {current_pair} per switch rule.")
+    if route_change == "no_switch" and current_pair != UNKNOWN_MODEL_PAIR and (previous_pair != "same as current" or any(pair != current_pair for pair in (requested_pair, resolved_pair, effective_pair))):
+        raise ValueError("no_switch requires one concrete pair and previous_pair=same as current")
+    if route_change == "no_switch" and switch_summary != "No model switch":
+        raise ValueError("no_switch requires switch_summary=No model switch")
+    reason = _single_line(reason, "reason", required=False, max_length=600) or ("Runtime receipt conflicts with resolved pair." if producer_binding and resolved_pair != current_pair else "Runtime receipt identifies the effective pair." if producer_binding else "Best-known pair used; receipt not available." if current_pair != UNKNOWN_MODEL_PAIR else "Previous-model provenance unavailable: no assignment or receipt.")
+    evidence_level = "runtime_receipt" if producer_binding else "UNVERIFIED (no runtime receipt)" if current_pair != UNKNOWN_MODEL_PAIR else "unavailable"
+    return {"assigned_pair": assigned_pair, "current_pair": current_pair, "model_evidence": model_evidence, "requested_pair": requested_pair, "resolved_pair": resolved_pair, "effective_pair": effective_pair, "previous_pair": previous_pair, "route_change": route_change, "switch_summary": switch_summary, "reason": reason, "effective_evidence_level": evidence_level}
+
+
 def _producer_binding(receipt_value, project_root=None):
     if not receipt_value:
         return None
@@ -133,7 +161,7 @@ def _producer_binding(receipt_value, project_root=None):
     matched_route_attempt = next((attempt for attempt in route_attempts if isinstance(attempt, dict) and attempt.get("status") == "pass" and attempt.get("executed_pair") == executed_pair and attempt.get("model_match") is True and attempt.get("effort_match") is True), None) if isinstance(route_attempts, list) else None
     if receipt.get("status") != "pass" or receipt.get("result_published") is not True or receipt.get("turn_completed") is not True or receipt.get("model_match") is not True or receipt.get("effort_match") is not True or receipt.get("node_type") != "locked-route-node" or receipt.get("node_role") != "result-producer" or not isinstance(executed_pair, str) or not matched_route_attempt:
         raise ValueError("producer receipt must be a matched passing published producer receipt")
-    return {"receipt_path": str(receipt_path), "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(), "model_learning_context": sanitized, "executed_pair": executed_pair, "status": "pending"}
+    return {"receipt_path": str(receipt_path), "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(), "model_learning_context": sanitized, "executed_pair": executed_pair, "requested_pair": _model_pair(receipt.get("requested_pair"), "producer receipt requested_pair") or executed_pair, "resolved_pair": _model_pair(receipt.get("resolved_pair"), "producer receipt resolved_pair") or _model_pair(receipt.get("requested_pair"), "producer receipt requested_pair") or executed_pair, "effective_pair": executed_pair, "status": "pending"}
 
 
 def _load_model_memory_module():
@@ -191,7 +219,7 @@ def _normalize_root_attempts(store, root, descendants, repair_limit):
             _write_state(store, descendant)
 
 
-def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair=""):
+def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair="", requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason=""):
     cwd_path = Path(cwd).expanduser().resolve()
     if not cwd_path.is_dir():
         raise ValueError("cwd must be an existing directory")
@@ -251,8 +279,9 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
         verification_plan_path = Path(verification_plan).expanduser().resolve() if verification_plan else None
         if verification_required and (not verification_plan_path or not verification_plan_path.is_file()):
             raise ValueError("verification-required lifecycle requires an existing verification plan")
-        event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _single_line(selected_pair, "selected_pair", required=False, max_length=160) or None}
-        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "module": _single_line(module, "module", required=False, max_length=160), "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
+        model_disclosure = _model_disclosure(selected_pair, producer_binding, requested_pair, resolved_pair, effective_pair, previous_pair, model_evidence, route_change, switch_summary, reason)
+        event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _model_pair(selected_pair, "selected_pair"), "model_disclosure": model_disclosure}
+        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "module": _single_line(module, "module", required=False, max_length=160), "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
         if parent:
             parent_event = {"schema_version": SCHEMA_VERSION, "event": "repair_started", "recorded_at": created_at, "lifecycle_id": parent["lifecycle_id"], "child_lifecycle_id": lifecycle_id, "summary": f"Repair lifecycle {lifecycle_id} started"}
             parent["repair_children"].append(lifecycle_id)
@@ -262,7 +291,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
             _append_event(store_path, parent_event)
         state_path = _write_state(store_path, state)
         _append_event(store_path, event)
-    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
+    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
 
 
 def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none"):
@@ -345,6 +374,14 @@ def main():
     start_parser.add_argument("--verification-plan", type=Path)
     start_parser.add_argument("--ending-check-id", default="")
     start_parser.add_argument("--selected-pair", default="")
+    start_parser.add_argument("--requested-pair", default="")
+    start_parser.add_argument("--resolved-pair", default="")
+    start_parser.add_argument("--effective-pair", default="")
+    start_parser.add_argument("--previous-pair", default="")
+    start_parser.add_argument("--model-evidence", choices=sorted(MODEL_EVIDENCE_LEVELS), default="")
+    start_parser.add_argument("--route-change", choices=sorted(ROUTE_CHANGES), default="")
+    start_parser.add_argument("--switch-summary", default="")
+    start_parser.add_argument("--reason", default="")
     event_parser = subparsers.add_parser("event")
     event_parser.add_argument("--lifecycle-id", required=True)
     event_parser.add_argument("--event", choices=sorted(ALL_EVENTS), required=True)
@@ -356,7 +393,7 @@ def main():
     audit_parser.add_argument("--lifecycle-id", required=True)
     args = parser.parse_args()
     if args.command == "start":
-        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair)
+        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair, args.requested_pair, args.resolved_pair, args.effective_pair, args.previous_pair, args.model_evidence, args.route_change, args.switch_summary, args.reason)
     elif args.command == "event":
         output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class)
     else:

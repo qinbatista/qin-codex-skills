@@ -54,7 +54,7 @@ The origin final is complete after result presentation. After recording lifecycl
 
 ## Result Model Disclosure
 
-Every user-facing origin result and each result/Ending node prints `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>` (or `effective=UNVERIFIED (no runtime receipt)`), `Previous model: <model | effort|none|unverified>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, and `Reason:` in 20 words or fewer. Current is actual user-visible execution; planned labels are not effective proof. Inline uses verified entry metadata or `unverified`, never guesses. A no-switch result never omits a model field.
+Every user-facing origin result and each result/Ending node prints `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model evidence:`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`, `Current model evidence-level:`, `Previous model: <model | effort|same as current|none>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, `Switch summary:`, and `Reason:` in 20 words or fewer. `Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. Keep known identity concrete, never `unverified | unverified`; only absent identity uses `unknown | unknown`. One pair uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`.
 
 ## Real Verify Scope
 
@@ -141,7 +141,7 @@ Create a formal report only when requested or when evidence is long, visual, com
 - Never hide task state behind repeated waits or ask the user to fix a verified code defect manually. Report `PASS`, `FAIL` with repair handoff, or `BLOCKED` with the exact external reason.
 - Verify the user's observable result, not only the attempted method.
 - Do not hide uncertainty or a blocked environment.
-- Do not claim a model ran without runtime evidence.
+- Do not claim runtime receipt proof without a receipt; display a known assignment with explicit unverified evidence.
 - Do not let the failing Ending verifier alter the result. Create a separate repair task, then a fresh verifier task.
 - Do not let an optimization implementer verify its own work.
 - Do not push, deploy, or send external messages without authorization.

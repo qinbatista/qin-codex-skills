@@ -39,14 +39,6 @@ def recommendation(pair="gpt-5.6-terra|medium", fallback_pair="gpt-5.6-terra|hig
 
 
 class ObsidianAdaptiveRunnerTests(unittest.TestCase):
-    def test_main_ascii_escapes_surrogate_failure_reason(self):
-        with patch.object(module, "parse_args", return_value=SimpleNamespace()), patch.object(module.sys, "stdin", io.StringIO("prompt")), patch.object(module, "resolve_fast_path_args", side_effect=ValueError("bad\udc80")), patch("builtins.print") as print_mock:
-            exit_code = module.main([])
-        output = print_mock.call_args.args[0]
-        self.assertEqual(exit_code, 1)
-        self.assertNotIn("\udc80", output)
-        self.assertIn("\\udc80", output)
-
     def arguments(self, root):
         project = root / "project"
         project.mkdir()

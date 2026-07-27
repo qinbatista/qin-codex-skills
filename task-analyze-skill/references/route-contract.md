@@ -2,11 +2,11 @@
 
 ## First Result Principle
 
-Finish the requested task. Every user-facing origin result and result/Ending node prints `Complexity: <int>/100 (<band>)` (shown as `Complexity: N/100 (band)`), `Current model: <model> | <effort>`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>` (or `effective=UNVERIFIED (no runtime receipt)`), `Previous model: <model | effort|none|unverified>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, and `Reason:` in 20 words or fewer. Current is the actual user-visible execution; planned labels are not effective proof. Inline uses verified entry metadata or `unverified`, never guesses. A no-switch result still prints every model field. For code, run one bounded producer Quick Check before presentation. Do not run Mini/Fast Verify before first presentation; show the completed result immediately after Quick Check. End Task is hard-required. Then build real observable Ending checks when verification is applicable. Each independent check gets its own persistent global projectless `End Task-{task}-{check}`, complexity score, and quality-ladder model/effort; absolute project paths are passed in its prompt. The task executes the real unit/integration/API/build/render/state command; all required checks must PASS. A durable PASS archives its own thread and may terminate the turn; FAIL/BLOCKED remains visible. FAIL creates a separate projectless repair task with exact evidence and then a fresh Ending check. Missing task creation or exhausted repair attempts is BLOCKED, never verified; each terminal verdict is recorded automatically.
+Finish the requested task. Every user-facing origin result and result/Ending node prints `Complexity: <int>/100 (<band>)` (shown as `Complexity: N/100 (band)`), `Current model: <model> | <effort>`, `Model evidence: <runtime_receipt|verified_entry|task_assignment|configured_selection|unavailable>`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`, `Current model evidence-level: <runtime_receipt|UNVERIFIED (no runtime receipt)|unavailable>`, `Previous model: <model | effort|same as current|none>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, `Switch summary:`, and `Reason:` in 20 words or fewer. `Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. Evidence strength is separate: keep known pairs concrete, never `unverified | unverified`; only absent identity uses `unknown | unknown`. One-pair execution uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`. For code, run one bounded producer Quick Check before presentation. Do not run Mini/Fast Verify before first presentation; show the completed result immediately after Quick Check. End Task is hard-required. Then build real observable Ending checks when verification is applicable. Each independent check gets its own persistent global projectless `End Task-{task}-{check}`, complexity score, and quality-ladder model/effort; absolute project paths are passed in its prompt. The task executes the real unit/integration/API/build/render/state command; all required checks must PASS. A durable PASS archives its own thread and may terminate the turn; FAIL/BLOCKED remains visible. FAIL creates a separate projectless repair task with exact evidence and then a fresh Ending check. Missing task creation or exhausted repair attempts is BLOCKED, never verified; each terminal verdict is recorded automatically.
 
 ## Ordinary Entry Contract
 
-The hookless always-loaded bootstrap scores every submission `0-100`, then chooses a single producer or a real task graph. Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start. A graph is used only when the request contains at least two distinct bounded result segments with different ownership, model needs, outputs, or dependency-ready concurrency. Every node has its own score, band, exact pair, purpose, dependencies, and stop condition. A low-risk, low-ambiguity text/code/write/execute node scoring `0-24` tries Spark even inside a larger task; an Ending quality failure suppresses Spark for that contextual band. Exact/tool/image work uses the score-only script and creates no fake model learning. Two or three independent read-only sources retain their byte-cost shortcut. Neither path adds foreground verification; Ending Real begins only after presentation.
+The hookless always-loaded bootstrap scores every submission `0-100`, then chooses a single producer or a real task graph. Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start. A graph is used only when the request contains at least two distinct bounded result segments with different ownership, model needs, outputs, or dependency-ready concurrency. Every node has its own score, band, exact pair, purpose, dependencies, and stop condition. A low-risk, low-ambiguity text/code/write/execute node scoring `0-24` tries Spark-low even inside a larger task; a non-Spark eligible node states its exception category and concrete reason, and an Ending quality failure suppresses Spark for that contextual band. Exact/tool/image work uses the score-only script and creates no fake model learning. Two or three independent read-only sources retain their byte-cost shortcut. Neither path adds foreground verification; Ending Real begins only after presentation.
 
 - One obvious reversible action uses one tool action and presents the observed result immediately.
 - Exact-scoped read-only work stays inline with no subagent or route. An exact named-source audit first runs one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answers once. Anchor named members directly; enclosing-class or call-site anchors, guessed identifier families, separate planning, broad searches, whole-file reads, rereads, and pre-result checks are forbidden. Present immediately.
@@ -92,6 +92,43 @@ When a dispatcher is useful, save schema version 2 JSON inside the active task c
 The internal main producer carries a complete `routing_recommendation` matching its selected catalog-derived quality `model|effort`, `trial`, and profile fingerprint. The controller recomputes it and rejects stale or self-authored plans. The optional priority producer remains outside the quality ladder but is a valid dynamic result node for an eligible score-0-24 text/code/write/execute segment, including a downstream segment. It needs `selection_basis=spark_priority` and a quality fallback. A non-Spark eligible small node must include a concrete `spark_exception_reason`.
 
 The plan also carries `first_result_timeout_seconds`. Dispatcher stdout is a compact locator only; the full manifest remains on disk. Read-only locked nodes omit broad user configuration by default because their prompt already includes the exact owning skill path and domain reference; set `load_user_config=true` only when a configured plugin/tool surface is genuinely required.
+
+## Dynamic decomposition requirements
+
+For `routing_mode=dynamic_task_graph` plans, `decomposition` is required and must be:
+
+- `policy: "max_safe"`, meaning split every safely independent bounded stage and retain a coupled stage only with stated continuity evidence.
+- `stage_inventory` contains exactly one item per result node and no ending nodes.
+
+Each `stage_inventory` item must include at least:
+
+- `stage_id`, `node_id`, `logical_stage_ids`, `purpose`, `score`, `band`, `model_intent`, `operation`,
+  `dependencies`, `inputs`, `outputs`, `stop_condition`, `coupling`, `parallelizable`, `objective_scope`,
+  `mutable_state`, `failure_escalation`, `external_side_effects`.
+- `score`, `band`, `model_intent`, and `dependencies` match the mapped node.
+- `logical_stage_ids` must be a single item except when continuity is declared; multi-item items require
+  `coupling: linear`, `parallelizable: false`, and a concrete `continuity_reason` naming shared state, coherent reasoning,
+  prompt/context mutation, or cumulative verification.
+- `operation`/`coupling` must match node role constraints.
+- Small text/code/write/execute/side-effect-safe result nodes without Spark must include both
+  `spark_exception_category` and `spark_exception_reason` when applicable.
+- Same-wave `independent` stages must set a shared `objective_scope`, disjoint `inputs`, disjoint `mutable_state`,
+  and a shared `deterministic_merge_node` whose dependency closure covers every sibling in that wave.
+
+Full foreground and ending manifests for dynamic runs include `model_switch_summary` with:
+
+- `nodes`: one summary entry for each planned node (ending nodes are `pending` in the foreground manifest and
+  reconciled to executed outcomes in the ending manifest).
+- For each entry: `requested_pair`, `resolved_pair`, `effective_pair`, `model_evidence_source`, `evidence_level`,
+  `dependency_wave`, `relations.{entry_pair,dependencies,same_wave_siblings}`, `route_change`, `reason`,
+  `tokens`, `elapsed_ms`, `status`, `failure_class`, and `operational_fallback`.
+- `aggregate`: integer counters `spark_usage_nodes`, `quality_pair_nodes`, `operational_fallback_nodes`,
+  `quality_failure_nodes`, `parallel_waves`, and `unsplit_continuity_groups`.
+- For a verified non-targeted Ending failure, `main_result_node` is marked as `quality` failure.
+- This final `model_switch_summary` distinguishes independent task assignment from a literal fallback or switch: an
+  unreceipted assigned pair is concrete with `model_evidence_source=task_assignment`, `evidence_level=UNVERIFIED (no runtime receipt)`,
+  `route_change=no_switch`, and an explicit no-runtime-switch reason. Only the one zero-token operational fallback, a verified quality
+  failure upgrade, or verified-success downgrade changes the route.
 
 Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher executes only result nodes before release. After the main result is shown, invoke its Ending handoff separately so Real Verify and records remain post-result work.
 

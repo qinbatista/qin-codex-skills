@@ -272,6 +272,11 @@ REQUIRED_RECEIPT_TEXT = [
     "model_learning_context",
     "ending_task_ledger.py start --producer-receipt",
     "producer-bound `event pass` writes the matched Obsidian Model Switch record",
+    "Lifecycle Model Disclosure",
+    "model_disclosure",
+    "effective_evidence_level",
+    "unknown|unknown",
+    "No model switch",
 ]
 REQUIRED_ADAPTIVE_TEXT = [
     "project/task/module/file/symbol/code context",
@@ -312,7 +317,7 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
 ]
 REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "Dynamically split only distinct bounded work", "every result/Ending node gets its own score", "Parent score never forces one model", "small low-risk low-ambiguity text/code/write/execute segments score<=24 use Spark-low first", "even inside a larger task", "Dependency-ready independent nodes run in parallel", "shared writes,ordering,and output dependencies stay linear", "Single-node eligible text/code pipes exact user text once non-TTY", "obsidian_adaptive_model_runner.py", "multi-node work saves one `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark to execute a valid task graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses saved cold start", "Producer owns files/skills/Quick Check", "End Task hard-required after result", "score each independent real check", "global projectless End/Fix Tasks", "all checks must PASS", "PASS records then self-archives", "FAIL records exact evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal events sync local history+Obsidian Model Switch", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
-RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "Current model:", "Model pairs (requested / resolved / effective):", "Previous model:", "Route change: upgrade|downgrade|freeze|no_switch|operational_fallback", "Reason:", "effective=UNVERIFIED (no runtime receipt)", "planned labels", "verified entry metadata or `unverified`", "no-switch"]
+RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "Current model:", "Model evidence:", "Model pairs (requested / resolved / effective):", "Current model evidence-level:", "Previous model:", "Route change: upgrade|downgrade|freeze|no_switch|operational_fallback", "Switch summary:", "Reason:", "known assigned/configured/verified-entry pair", "unverified | unverified", "unknown | unknown", "No model switch"]
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "build real proportional Ending checks", "Every required check must PASS", "separate scoped repair task", "fresh verifier"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "separate scored/modelled End Tasks", "All required checks must PASS", "fresh verifier"]
@@ -407,11 +412,36 @@ def missing_terms(label, text, required):
 
 def validate_result_model_disclosure(disclosure_text):
     failures = []
-    required_patterns = {"Complexity": r"^Complexity:\s*\d+/100 \((?:small|standard|complex|advanced)\)$", "Current model": r"^Current model:\s*.+ \| .+$", "Model pairs": r"^Model pairs \(requested / resolved / effective\): requested=.+\|.+ -> resolved=.+\|.+ -> effective=(?:.+\|.+|UNVERIFIED \(no runtime receipt\))$", "Previous model": r"^Previous model:\s*(?:.+ \| .+|none|unverified)$", "Route change": r"^Route change:\s*(?:upgrade|downgrade|freeze|no_switch|operational_fallback)$", "Reason": r"^Reason:\s*.+$"}
-    for label, pattern in required_patterns.items():
-        if not re.search(pattern, disclosure_text, flags=re.MULTILINE):
+    required_patterns = {"Complexity": r"^Complexity:\s*\d+/100 \((?:small|standard|complex|advanced)\)$", "Current model": r"^Current model:\s*([^|\n]+?)\s+\|\s+([^|\n]+?)\s*$", "Model evidence": r"^Model evidence:\s*(runtime_receipt|verified_entry|task_assignment|configured_selection|unavailable)\s*$", "Model pairs": r"^Model pairs \(requested / resolved / effective\): requested=([^\s|]+\|[^\s|]+) -> resolved=([^\s|]+\|[^\s|]+) -> effective=([^\s|]+\|[^\s|]+)\s*$", "Current model evidence-level": r"^Current model evidence-level:\s*(runtime_receipt|UNVERIFIED \(no runtime receipt\)|unavailable)\s*$", "Previous model": r"^Previous model:\s*(same as current|none|unverified|[^|\n]+?\s+\|\s+[^|\n]+?)\s*$", "Route change": r"^Route change:\s*(upgrade|downgrade|freeze|no_switch|operational_fallback)\s*$", "Switch summary": r"^Switch summary:\s*(.+)$", "Reason": r"^Reason:\s*(.+)$"}
+    matches = {label: re.search(pattern, disclosure_text, flags=re.MULTILINE) for label, pattern in required_patterns.items()}
+    for label, match in matches.items():
+        if not match:
             failures.append(f"missing or invalid {label} disclosure")
-    reason_match = re.search(r"^Reason:\s*(.+)$", disclosure_text, flags=re.MULTILINE)
+    if all(matches.values()):
+        current_pair = f"{matches['Current model'].group(1).strip()}|{matches['Current model'].group(2).strip()}"
+        requested_pair, resolved_pair, effective_pair = matches["Model pairs"].groups()
+        model_evidence = matches["Model evidence"].group(1)
+        evidence_level = matches["Current model evidence-level"].group(1)
+        previous_pair = matches["Previous model"].group(1).strip()
+        route_change = matches["Route change"].group(1)
+        switch_summary = matches["Switch summary"].group(1).strip()
+        if current_pair == "unverified|unverified":
+            failures.append("Current model must retain a known pair instead of unverified | unverified")
+        if current_pair == "unknown|unknown":
+            if model_evidence != "unavailable" or evidence_level != "unavailable" or any(pair != "unknown|unknown" for pair in (requested_pair, resolved_pair, effective_pair)):
+                failures.append("unknown | unknown is valid only when every model identity source is unavailable")
+        elif model_evidence == "unavailable" or evidence_level == "unavailable":
+            failures.append("known Current model requires separate non-unavailable evidence")
+        elif model_evidence == "runtime_receipt" and evidence_level != "runtime_receipt":
+            failures.append("runtime receipt evidence requires runtime_receipt evidence-level")
+        elif model_evidence != "runtime_receipt" and evidence_level != "UNVERIFIED (no runtime receipt)":
+            failures.append("known non-receipt model requires UNVERIFIED (no runtime receipt) evidence-level")
+        if current_pair != effective_pair:
+            failures.append("Current model must match the effective model pair")
+        expected_previous_pair = "none" if current_pair == "unknown|unknown" else "same as current"
+        if route_change == "no_switch" and (previous_pair != expected_previous_pair or switch_summary != "No model switch" or any(pair != current_pair for pair in (requested_pair, resolved_pair, effective_pair))):
+            failures.append("no_switch requires one pair, Previous model: same as current (or none when unknown), and Switch summary: No model switch")
+    reason_match = matches.get("Reason")
     if reason_match and len(reason_match.group(1).split()) > 20:
         failures.append("Reason disclosure exceeds 20 words")
     return failures
