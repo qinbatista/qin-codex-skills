@@ -31,6 +31,14 @@ class ResolveEntryModelTests(unittest.TestCase):
                 {"status": "unverified"},
             )
 
+    def test_missing_sessions_root_is_explicitly_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            missing_root = Path(temporary) / "missing"
+            self.assertEqual(
+                module.resolve_entry_model("12345678-1234-1234-1234-1234567890ab", missing_root),
+                {"status": "unavailable"},
+            )
+
     def test_near_id_match_does_not_leak_result(self):
         with tempfile.TemporaryDirectory() as temporary:
             thread_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"

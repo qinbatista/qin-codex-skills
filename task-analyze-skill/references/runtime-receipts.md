@@ -1,6 +1,6 @@
 # Runtime Model Receipts
 
-A diagram label or CLI request proves intent only. A useful local receipt combines the request, Codex runtime metadata, token events, and measured elapsed time without storing prompts or secrets.
+A diagram label or CLI request proves intent only. A useful local receipt combines the request, Codex runtime metadata, token events, and measured elapsed time without storing prompts or secrets. Deterministic model disclosure text comes from `scripts/model_identity_disclosure.py`; do not handcraft disclosure text to bypass the parser.
 
 ## Required Fields
 
@@ -35,7 +35,7 @@ Every lifecycle start stores a local audit-only `model_disclosure` record. It co
 
 `--selected-pair` remains visible as the assigned pair without a runtime receipt. Its requested, resolved, and effective values stay concrete when known, with `effective_evidence_level` set to `UNVERIFIED (no runtime receipt)`. This is the known assigned/configured/verified-entry pair, never `unverified | unverified`. A no-switch assignment records `previous_pair=\"same as current\"`, `route_change=no_switch`, and `switch_summary=\"No model switch\"`.
 
-When a validated producer receipt is bound, its executed pair is the receipt-backed current/effective identity. The ledger retains the resolved pair for audit history. If those pairs conflict, it records `runtime_receipt` evidence, `operational_fallback`, and a conflict reason instead of discarding either value. With no assignment or receipt, the lifecycle records `unknown|unknown` (displayed as `unknown | unknown`) for every pair, `model_evidence=unavailable`, `effective_evidence_level=unavailable`, and `previous_pair=none`.
+When a validated producer receipt is bound, its executed pair is the receipt-backed current/effective identity. The ledger retains the resolved pair for audit history. If those pairs conflict, it records `runtime_receipt` evidence, `operational_fallback`, and a conflict reason instead of discarding either value. With no assignment or receipt, the lifecycle records `unknown|unknown` (displayed as `unknown | unknown`) for every pair, `model_evidence=unavailable`, `effective_evidence_level=unavailable`, and `previous_pair=none` only when the resolver explicitly reports unavailable identity.
 
 The ledger stores only bounded model labels and sanitized reasons. It never stores raw prompts, results, stdout, stderr, secrets, or receipt payloads.
 

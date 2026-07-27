@@ -130,7 +130,7 @@ For code, producer completion includes the bounded Quick Check; it is not indepe
 
 ## Result Model Disclosure
 
-Every user-facing origin result and each result/Ending node prints this complete block:
+Every user-facing origin result and each result/Ending node prints this complete block from `scripts/model_identity_disclosure.py`:
 
 - `Complexity: <int>/100 (<band>)`
 - `Current model: <model> | <effort>`
@@ -143,6 +143,7 @@ Every user-facing origin result and each result/Ending node prints this complete
 - `Reason: <concise sentence of 20 words or fewer>`
 
 `Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. `Model evidence` names the identity source and `Current model evidence-level` names its proof strength. Keep every known requested/resolved/effective pair concrete; never replace it with `unverified | unverified`. Only absent identity uses `unknown | unknown` with unavailable evidence. One-pair execution uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`.
+Runtime receipt is authoritative when present; verified-entry identity is the fallback. Generic `GPT-5`, `configured system identity`, invented evidence labels, and known models with `unknown` are invalid in this block.
 
 For dispatched or ordinary work, enforce result -> bounded Quick Check for code -> show result -> `release-main-result` -> scored lifecycle -> real-test plan when verification applies -> one persistent Ending task per independent check. Each check uses its own score-derived quality pair. The origin links them and returns without polling. PASS requires every real check. FAIL records exact evidence, launches a separate repair task, and launches fresh verification after repair; a failing verifier never edits its own target. Thread-tool absence, external state, timeout, or three failed repairs records BLOCKED. Receipt-backed producer PASS/FAIL writes to Obsidian after local lifecycle evidence is durable.
 

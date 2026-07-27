@@ -27,6 +27,7 @@ SKILLS_ROOT = Path(__file__).resolve().parents[2]
 model_execution_receipt = _load_file("obsidian_adaptive_receipt", SCRIPT_DIR / "model_execution_receipt.py")
 task_route_dispatcher = _load_file("obsidian_adaptive_dispatcher", SCRIPT_DIR / "task_route_dispatcher.py")
 resolve_entry_model = _load_file("obsidian_adaptive_entry", SCRIPT_DIR / "resolve_entry_model.py")
+model_identity_disclosure = _load_file("obsidian_adaptive_identity_disclosure", SCRIPT_DIR / "model_identity_disclosure.py")
 obsidian_model_memory = _load_file(
     "obsidian_adaptive_memory",
     SKILLS_ROOT / "project-memory-skill" / "scripts" / "obsidian_model_memory.py",
@@ -242,9 +243,9 @@ def _resolved_entry_pair(args):
         return explicit_model, explicit_effort, "explicit"
     sessions_root = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
     resolved = resolve_entry_model.resolve_entry_model(os.environ.get("CODEX_THREAD_ID"), sessions_root)
-    if resolved.get("status") == "verified":
-        return resolved["model"], resolved["effort"], "runtime_receipt"
-    return "gpt-5.6-sol", "ultra", "sol_ultra_default"
+    identity = model_identity_disclosure.resolve_disclosure_identity(entry_resolution=resolved)
+    model, effort = identity["effective_pair"].split("|", 1)
+    return model, effort, identity["source"]
 
 
 def _owned_source_contract(prompt, source):

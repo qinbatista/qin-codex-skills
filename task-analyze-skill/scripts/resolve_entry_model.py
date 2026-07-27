@@ -48,6 +48,8 @@ def resolve_entry_model(thread_id=None, sessions_dir=DEFAULT_SESSIONS_DIR):
     if not _is_valid_thread_id(thread_id):
         return {"status": "unverified"}
     root = Path(sessions_dir).expanduser().resolve()
+    if not root.is_dir():
+        return {"status": "unavailable"}
     resolved = None
     normalized_id = thread_id.lower()
     for path in _candidate_paths_for_thread(root, normalized_id):

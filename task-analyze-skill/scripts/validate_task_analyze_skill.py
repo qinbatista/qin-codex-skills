@@ -63,6 +63,15 @@ except ModuleNotFoundError:
     registry_matches_catalog = _model_registry.registry_matches_catalog
     validate_registry = _model_registry.validate_registry
 
+try:
+    from model_identity_disclosure import validate_disclosure
+except ModuleNotFoundError:
+    _model_identity_path = Path(__file__).with_name("model_identity_disclosure.py")
+    _model_identity_spec = importlib.util.spec_from_file_location("task_analyze_model_identity_disclosure", _model_identity_path)
+    _model_identity = importlib.util.module_from_spec(_model_identity_spec)
+    _model_identity_spec.loader.exec_module(_model_identity)
+    validate_disclosure = _model_identity.validate_disclosure
+
 MODEL_REGISTRY = load_registry()
 ACTIVE_MODEL_ORDER = tuple(model["id"] for model in MODEL_REGISTRY["models"])
 ACTIVE_MODEL_EFFORTS = {model["id"]: tuple(model["codex_efforts"]) for model in MODEL_REGISTRY["models"]}
@@ -82,6 +91,7 @@ REQUIRED_FILES = [
     "references/model-capabilities.md",
     "references/related-memory.md",
     "scripts/resolve_entry_model.py",
+    "scripts/model_identity_disclosure.py",
     "scripts/model_execution_receipt.py",
     "scripts/obsidian_adaptive_model_runner.py",
     "scripts/task_complexity_score.py",
@@ -445,6 +455,8 @@ def validate_result_model_disclosure(disclosure_text):
     reason_match = matches.get("Reason")
     if reason_match and len(reason_match.group(1).split()) > 20:
         failures.append("Reason disclosure exceeds 20 words")
+    if not failures:
+        failures.extend(validate_disclosure(disclosure_text, MODEL_REGISTRY))
     return failures
 
 
