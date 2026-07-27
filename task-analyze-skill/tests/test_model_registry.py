@@ -112,11 +112,13 @@ class ModelRegistryTests(unittest.TestCase):
         self.assertEqual(registry["cold_start_defaults"]["finding-bugs"], registry["cold_start_defaults"]["debug"])
         self.assertEqual(registry["cold_start_defaults"]["documentation-instructions"], registry["cold_start_defaults"]["document"])
 
-    def test_private_learning_contract_is_broad_model_switch_authority(self):
+    def test_private_learning_contract_is_dual_local_and_obsidian(self):
         registry = model_registry.build_registry(self.current_catalog(), "h" * 64)
         contract = registry["private_learning_contract"]
-        self.assertEqual(contract["authority"], "obsidian_broad_model_switch")
-        self.assertEqual(contract["path_template"], "Model Switch.md")
+        self.assertEqual(contract["authority"], "dual_local_and_obsidian")
+        self.assertEqual(contract["local_path_template"], "~/.codex/model-routing-memory/events.jsonl")
+        self.assertEqual(contract["projection_path_template"], "Model Switch.md")
+        self.assertTrue(contract["event_id_dedupe"])
         self.assertEqual(contract["specificity_order"], ["project_task", "module", "file", "symbol"])
         self.assertTrue(contract["fields_only"])
         self.assertFalse(contract["hierarchy_notes"])

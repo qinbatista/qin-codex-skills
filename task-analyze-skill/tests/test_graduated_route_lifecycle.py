@@ -45,7 +45,7 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
             entry_model, entry_effort = dispatcher.routing_history_module.parse_pair(dispatcher.MODEL_ROLE_PAIRS["floor"])
             plan = validator.materialize_dispatcher_plan(template, cache_dir, entry_model, entry_effort)
             implementation = next(node for node in plan["nodes"] if node["id"] == "implementation")
-            self.assertEqual(implementation["routing_recommendation"]["selection_basis"], "obsidian_broad_model_switch")
+            self.assertEqual(implementation["routing_recommendation"]["selection_basis"], "dual_model_history")
             locked_proof = implementation["routing_recommendation"]
             current_recommendation = {"selected_pair": locked_proof["selected_pair"], "trial": locked_proof["trial"]}
             calls = []

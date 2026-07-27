@@ -27,7 +27,7 @@ class TestSmartTaskSegmentation(unittest.TestCase):
             return self.fixture_owner_roots.get(root, self.original_registered_owner(record_root))
 
         self.owner_patch = patch.object(module.obsidian_model_memory.project_change_memory, "_registered_owner", side_effect=fixture_registered_owner)
-        self.vault_patch = patch.dict(os.environ, {"CODEX_OBSIDIAN_VAULT": self.fixture_vault.name}, clear=False)
+        self.vault_patch = patch.dict(os.environ, {"CODEX_OBSIDIAN_VAULT": self.fixture_vault.name, "CODEX_MODEL_ROUTING_MEMORY": str(Path(self.fixture_vault.name) / "model-routing-memory" / "events.jsonl")}, clear=False)
         self.owner_patch.start()
         self.vault_patch.start()
 
@@ -46,7 +46,7 @@ class TestSmartTaskSegmentation(unittest.TestCase):
         static_pair = module.routing_history_module.parse_pair(node["static_suggestion"])
         hard_floor = module.routing_history_module.parse_pair(node["hard_floor"])
         fingerprint = module.routing_history_module.profile_fingerprint(node["routing_condition"], pairs, static_pair, hard_floor)
-        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"}
+        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"}
 
     def _result_node(self, cache_dir, node_id="work", *, complexity_score=16, complexity_band="small", purpose="implement"):
         return {
@@ -83,7 +83,7 @@ class TestSmartTaskSegmentation(unittest.TestCase):
             "complexity_band": complexity_band,
             "refresh": True,
             "source_allowlist": ["a.txt"],
-            "routing_recommendation": {"selected_pair": f"{module.PRIORITY_PRODUCER_CONFIG['id']}|{module.PRIORITY_PRODUCER_CONFIG['effort_by_complexity']['easy']}", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "legacy", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"},
+            "routing_recommendation": {"selected_pair": f"{module.PRIORITY_PRODUCER_CONFIG['id']}|{module.PRIORITY_PRODUCER_CONFIG['effort_by_complexity']['easy']}", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "legacy", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"},
         }
 
     def _build_dynamic_plan(self, cache_dir):

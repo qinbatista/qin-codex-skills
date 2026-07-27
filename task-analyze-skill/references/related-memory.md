@@ -14,7 +14,7 @@ Run `scripts/obsidian_memory_bridge.py search --query <generalized task summary>
 - Recheck live source when memory may be stale.
 - If the bridge returns `unavailable` or `no_matches`, continue normally without warning, setup work, or a blocked route.
 
-Exact model/effort learning is separate from this broad advisory search. Its sole active private authority is a broad Obsidian `Model Switch.md` page, read through `project-memory-skill/scripts/obsidian_model_memory.py`; the shared ladder supplies cold starts.
+Exact model/effort learning is separate from this broad advisory search. `project-memory-skill/scripts/obsidian_model_memory.py` merges the receipt-backed local event ledger with the broad Obsidian `Model Switch.md` projection and deduplicates their stable event IDs; the shared ladder supplies cold starts only when both histories are empty.
 
 ## Obsidian Vault Routing
 
@@ -37,4 +37,4 @@ When `Knowledge/` exists, it is the sole active knowledge root and stale `Knowle
 
 After the completed result is shown, Ending Task may update only memory related to the work. Write model-switch experience only after Real Verify has produced a durable `pass` or `fail` verdict, using `project-memory-skill/scripts/obsidian_model_memory.py record` with the same project/task/module/file/symbol/code context and matched producer receipt. New records never accept or write a Mini status; central legacy entries remain read-only and are not migrated.
 
-Never store raw prompts, results, absolute paths, thread/session IDs, receipt bodies, credentials, secrets, or unrelated task history. Missing Obsidian remains a successful no-op.
+Never store raw prompts, results, absolute paths, thread/session IDs, receipt bodies, credentials, secrets, or unrelated task history. Missing Obsidian leaves a local record with pending projection and never blocks routing.

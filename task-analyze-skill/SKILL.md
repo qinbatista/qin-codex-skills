@@ -95,7 +95,7 @@ Every adaptive profile reads `assets/model-capability-ladder.json`. The file is 
 
 ## Obsidian Adaptive Routing
 
-The mechanism has two distinct authorities. `assets/model-capability-ladder.json` is shared and mirrorable: the last explicitly refreshed local Codex model catalog, ranks, supported efforts, source digest, and movement policy only. It may bootstrap locally when missing, but ordinary task loading never refreshes it. Only an explicit user model-update request may replace it from the local cache; no network fetch is allowed, and an unavailable cache preserves the last valid ladder. Obsidian broad `Model Switch.md` pages are the sole current contextual experience authority, keyed by project/task/module/file/symbol/code context as record fields only.
+The mechanism has a shared policy plus dual private experience. `assets/model-capability-ladder.json` is shared and mirrorable policy only. Receipt-backed experience writes first to `~/.codex/model-routing-memory/events.jsonl` and projects the same stable event ID to the matching broad Obsidian `Model Switch.md`; recommendations merge and deduplicate both by project/task/module/file/symbol/code context. An unavailable vault leaves pending projection without losing local learning.
 
 Model-quality learning is keyed by exact project/task/module/file/symbol/code context, with artifact, scope, ambiguity, modality, risk, 0-100 complexity score and band, execution domain, owning skill, and verification shape retained as supporting context. End-to-end performance admission remains a separate evidence system for strategy-level multi-node JSON and speed/token claims.
 
@@ -106,7 +106,7 @@ Model-quality learning is keyed by exact project/task/module/file/symbol/code co
 - A frozen matching project/code-context profile reuses its lowest Real-passing pair with `trial=false` until verified failure or material profile/policy drift.
 - Cost ranking between child pairs still requires complete Real-passing evidence in the same workload cohort, but that ranking does not itself admit delegation.
 
-Ending Real alone records receipt-backed producer pass/fail evidence, complexity score/band, switch direction/reason, and next pair to the canonical broad Obsidian `Model Switch.md`; the local Ending ledger stores the same score and terminal change. Producers and ordinary runners never write learning. Operational failures remain neutral and inline execution never fabricates a receipt.
+Ending Real alone records receipt-backed producer PASS/FAIL, outcome reason, complexity score/band, attempt/effective/next/recovery pair, and switch direction. It writes the local routing event before the canonical broad Obsidian projection. Producers and ordinary runners never write learning. Operational failures remain quality-neutral and inline execution never fabricates a receipt.
 
 Each receipt-backed Ending terminal record is rendered once under the matching category in a broad page. The six categories are `normal-script-update`, `code-design`, `finding-bugs`, `tests-verification`, `documentation-instructions`, and `general-work`; switch direction remains one of `initial`, `upgrade`, `downgrade`, `freeze`, `no_switch`, or `operational_fallback`, and context remains fields, never pages or wikilinks.
 
@@ -115,7 +115,7 @@ Each receipt-backed Ending terminal record is rendered once under the matching c
 After admission, continue through `workflow-skill` in the same task.
 
 - One result producer uses its resolved Obsidian context through `scripts/obsidian_adaptive_model_runner.py` and `scripts/model_execution_receipt.py`; eligible small edits attempt Spark-low with the contextual quality pair as operational fallback, other work executes the recommended quality pair with at most one stronger operational fallback, and every route emits score and switch change with the first completed result.
-- The same runner owns independent-source cost admission. Small source sets use one contextual quality producer; an admitted large/latency graph uses `task_route_dispatcher.py` once, launches disjoint source nodes in parallel, starts the adaptive merge only from completed dependency results, fuses the final exact-owned source audit with that merge when safe, and emits one aggregate scheduled receipt. Missing Obsidian changes the selection basis to `shared_cold_start`; it does not abort execution.
+- The same runner owns independent-source cost admission. Small source sets use one contextual quality producer; an admitted large/latency graph uses `task_route_dispatcher.py` once, launches disjoint source nodes in parallel, starts the adaptive merge only from completed dependency results, fuses the final exact-owned source audit with that merge when safe, and emits one aggregate scheduled receipt. Missing Obsidian uses local history, or shared cold start when local history is also empty; it does not abort execution.
 - `obsidian_adaptive_model_runner.py` reads learning but never writes it. Spark is a small-edit priority attempt outside schema-version-2 quality nodes and may also serve admitted disjoint source branches; a contextual Ending quality failure suppresses that priority attempt. `strategy_performance.py` separately gates multi-node strategy JSON routing and Auto-versus-Direct claims.
 - A true multi-node dependency graph saves one private schema-version-2 `dynamic_task_graph` JSON with only `result` and `ending` phases, per-node scores/bands/pairs, and calls `scripts/task_route_dispatcher.py run-plan <plan-file>` once.
 - Use exactly one execution surface per branch. Do not combine collaboration and dispatcher execution for the same work.
@@ -160,7 +160,7 @@ Any structural change to this routing/skill contract reruns the same simple, med
 
 ## Generated Files
 
-Put plans, prompts, receipts, logs, and benchmarks in active task/project `cache/` or `work/`. Current contextual model evidence belongs only in the canonical broad Obsidian `Model Switch.md` page. The generated shared ladder contains no personal evidence and is safe to mirror. Put final deliverables only in the requested output location.
+Put plans, prompts, receipts, logs, and benchmarks in active task/project `cache/` or `work/`. Private contextual model evidence belongs in the local routing ledger and its broad Obsidian projection only. The generated shared ladder contains no personal evidence and is safe to mirror. Put final deliverables only in the requested output location.
 
 ## Verification
 

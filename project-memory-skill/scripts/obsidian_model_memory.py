@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
-"""Project-scoped adaptive model memory stored only as Obsidian Markdown."""
+"""Dual local and Obsidian adaptive model-routing memory.
+
+Supported platforms: Windows, macOS, and Linux.
+"""
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
 import re
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from tempfile import mkstemp
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 try:
     import project_change_memory
@@ -33,9 +41,11 @@ except ModuleNotFoundError:
 
 
 SCHEMA_VERSION = 1
+LOCAL_MEMORY_SCHEMA_VERSION = 1
 MIN_REAL_PASSES_BEFORE_DOWNGRADE = 2
 DEFAULT_VAULT = project_change_memory.DEFAULT_VAULT
 DEFAULT_LADDER = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "assets" / "model-capability-ladder.json"
+DEFAULT_LOCAL_STORE = Path.home() / ".codex" / "model-routing-memory" / "events.jsonl"
 QUALITY_FAILURES = {"quality", "correctness"}
 OPERATIONAL_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
 FAILURE_CLASSES = {"none"} | QUALITY_FAILURES | OPERATIONAL_FAILURES
@@ -63,6 +73,7 @@ MODEL_SWITCH_CATEGORY_MARKER = "<!-- generated:model-switch-category -->"
 FRONTMATTER_FIELDS = (
     "model_experience_schema",
     "record_id",
+    "event_id",
     "recorded_at",
     "project_name",
     "project_key",
@@ -90,6 +101,8 @@ FRONTMATTER_FIELDS = (
     "operational_failure_pairs",
     "real_status",
     "failure_class",
+    "outcome_reason",
+    "verification_count",
     "receipt_status",
     "model_match",
     "effort_match",
@@ -108,6 +121,9 @@ FRONTMATTER_FIELDS = (
     "switch_direction",
     "switch_reason",
     "next_pair",
+    "completed_pair",
+    "recovery_from_pair",
+    "attempt_chain",
 )
 
 
@@ -546,13 +562,15 @@ def _operational_fallback_pair(selected_pair, pairs):
     return pairs[selected_index + 1] if selected_index + 1 < len(pairs) else None
 
 
-def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", vault=None, ladder=DEFAULT_LADDER):
+def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", vault=None, ladder=DEFAULT_LADDER, local_store=None):
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary)
     vault_path, memory_root = _memory_root(query, vault)
     owner = project_change_memory._registered_owner(query["project"]["root"])
-    memory_configured = _is_configured_owner(vault_path, owner)
-    project_records = [record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])]
+    obsidian_configured = _is_configured_owner(vault_path, owner)
+    local_records = [record for record in _read_local_records(local_store) if project_change_memory._record_matches_project(record, query["project"])]
+    obsidian_records = [record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])]
+    project_records = _merge_model_records(local_records, obsidian_records)
     records, specificity, score = _best_scope_records(project_records, query)
     active = _active_recommendation(shared, pairs, query, records)
     selected_pair = active["selected_pair"]
@@ -588,8 +606,11 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     selected_model, selected_effort = selected_pair.split("|", 1) if selected_pair else (None, None)
     return {
         "schema_version": SCHEMA_VERSION,
-        "source": "obsidian_broad_model_switch",
-        "memory_available": memory_configured,
+        "source": "local_and_obsidian_model_history",
+        "memory_available": True,
+        "local_memory_available": True,
+        "obsidian_memory_available": obsidian_configured,
+        "selection_basis": "local_and_obsidian" if local_records and obsidian_records else "local_history" if local_records else "obsidian_history" if obsidian_records else "shared_cold_start",
         "shared_model_registry": shared["registry_id"],
         "project_key": query["project"]["key"],
         "task_type": query["task_type"],
@@ -605,6 +626,10 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "specificity": specificity,
         "specificity_score": score,
         "matched_records": len(records),
+        "local_record_count": len(local_records),
+        "obsidian_record_count": len(obsidian_records),
+        "merged_record_count": len(project_records),
+        "pending_projection_count": _pending_projection_count(local_store, query["project"]),
         "quality_samples": active["quality_samples"],
         "selected_pair": selected_pair,
         "selected_model": selected_model,
@@ -654,6 +679,120 @@ def _atomic_write(path, text):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def _resolve_local_store(local_store=None):
+    configured = local_store or os.getenv("CODEX_MODEL_ROUTING_MEMORY") or DEFAULT_LOCAL_STORE
+    return Path(configured).expanduser().resolve()
+
+
+def _projection_state_path(local_store=None):
+    return _resolve_local_store(local_store).with_name("projection-state.json")
+
+
+@contextmanager
+def _exclusive_file_lock(lock_path):
+    path = Path(lock_path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        if os.name == "nt":
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _model_event_key(record):
+    event_id = record.get("event_id")
+    if isinstance(event_id, str) and event_id:
+        return event_id
+    return "|".join(str(record.get(field) or "") for field in ("project_key", "receipt_sha256", "real_status", "failure_class"))
+
+
+def _read_local_records(local_store=None):
+    path = _resolve_local_store(local_store)
+    if not path.exists():
+        return []
+    records = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in lines:
+        try:
+            envelope = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if envelope.get("local_model_memory_schema") != LOCAL_MEMORY_SCHEMA_VERSION or envelope.get("event") != "model-result":
+            continue
+        record = envelope.get("record")
+        if isinstance(record, dict) and record.get("model_experience_schema") == SCHEMA_VERSION:
+            records.append(_json_safe(record))
+    return records
+
+
+def _merge_model_records(local_records, obsidian_records):
+    merged = {}
+    for record in [*obsidian_records, *local_records]:
+        key = _model_event_key(record)
+        if key:
+            merged[key] = _json_safe(record)
+    return sorted(merged.values(), key=lambda record: (record.get("recorded_at") or "", _model_event_key(record)))
+
+
+def _read_projection_state(local_store=None):
+    path = _projection_state_path(local_store)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload.get("events", {}) if payload.get("schema_version") == LOCAL_MEMORY_SCHEMA_VERSION and isinstance(payload.get("events"), dict) else {}
+
+
+def _write_projection_state(states, local_store=None):
+    payload = {"schema_version": LOCAL_MEMORY_SCHEMA_VERSION, "events": states}
+    _atomic_write(_projection_state_path(local_store), json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+
+
+def _pending_projection_count(local_store, project):
+    states = _read_projection_state(local_store)
+    event_ids = {_model_event_key(record) for record in _read_local_records(local_store) if project_change_memory._record_matches_project(record, project)}
+    return sum(1 for event_id in event_ids if states.get(event_id, {}).get("status") != "written")
+
+
+def _append_local_record(record, local_store=None):
+    path = _resolve_local_store(local_store)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with _exclusive_file_lock(lock_path):
+        duplicate = next((item for item in _read_local_records(path) if _model_event_key(item) == _model_event_key(record)), None)
+        if duplicate is not None:
+            return {"status": "duplicate", "written": True, "path": str(path), "record": duplicate}
+        envelope = {"local_model_memory_schema": LOCAL_MEMORY_SCHEMA_VERSION, "event": "model-result", "event_id": record["event_id"], "record": _json_safe(record)}
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        _atomic_write(path, existing + json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+        try:
+            os.chmod(path.parent, 0o700)
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        states = _read_projection_state(path)
+        states.setdefault(record["event_id"], {"status": "pending", "reason": "not_projected"})
+        _write_projection_state(states, path)
+    return {"status": "written", "written": True, "path": str(path), "record": record}
 
 
 def _vault_relative_path(vault_path, path):
@@ -730,14 +869,16 @@ def rebuild_model_switches(project_root, *, vault=None):
         project_record_count = len(records)
         heading = "# Model Switch\n\n"
         sections = {"normal-script-update": "Normal Script Update", "code-design": "Code Design", "finding-bugs": "Finding Bugs", "documentation-instructions": "Documentation and Instructions", "tests-verification": "Tests and Verification", "general-work": "General Work"}
-        lines = [heading.rstrip(), "", "This page is the private adaptive-learning authority. Structured records are embedded below.", ""]
+        lines = [heading.rstrip(), "", "This page is the global human-readable projection of the local receipt-backed routing history. Structured records are embedded below.", ""]
         for category, label in sections.items():
-            lines.extend(["## " + label, "", "| Task type | Score | Module | File / symbol | Model | Prior / selected / effective / next | Direction / reason | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
+            lines.extend(["## " + label, "", "| Task type | Score | Module | File / symbol | Model | Prior / selected / effective / next | Direction / reason | Outcome / recovery | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
             for record in records:
                 if _task_category(record) != category:
                     continue
                 detail = _switch_details(record)
-                lines.append(f"| {record.get('task_type','')} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('model','')} / {record.get('effort','')} | {detail['prior_pair'] or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
+                outcome_reason = str(record.get("outcome_reason") or record.get("failure_class") or "—").replace("|", "/")
+                recovery = record.get("recovery_from_pair") or "—"
+                lines.append(f"| {record.get('task_type','')} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('model','')} / {record.get('effort','')} | {detail['prior_pair'] or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
                 lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
             lines.append("")
         # Preserve unexpected records byte-semantically without displaying them
@@ -754,7 +895,52 @@ def relink_project(project_root, *, vault=None):
     return {"status": "disabled", "written": False, "project_key": project["key"], "reason": "legacy_hierarchy_relink_disabled"}
 
 
-def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None):
+def _project_record_to_obsidian(project_root, record, vault=None, local_store=None):
+    project = project_change_memory._project_identity(project_root)
+    vault_path = project_change_memory._resolve_vault(vault)
+    if vault_path is None:
+        return {"status": "unavailable", "written": False, "reason": "obsidian_vault_unavailable"}
+    owner = project_change_memory._registered_owner(project["root"])
+    memory_root = _memory_root_owner(vault_path, owner)
+    if memory_root is None or not _is_configured_owner(vault_path, owner):
+        return {"status": "pending", "written": False, "reason": "unregistered_or_unknown_project_root"}
+    lock_path = _resolve_local_store(local_store).with_name("obsidian-projection.lock")
+    with _exclusive_file_lock(lock_path):
+        records = _read_project_records(memory_root)
+        duplicate = next((item for item in records if project_change_memory._record_matches_project(item, project) and _model_event_key(item) == _model_event_key(record)), None)
+        if duplicate is None:
+            records.append(_json_safe(record))
+            _atomic_write(memory_root, "# Model Switch\n\n" + "\n".join("<!-- model-experience: " + json.dumps(_json_safe(item), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->" for item in records) + "\n")
+            _ensure_model_switch_index_link(vault_path, owner, memory_root)
+        model_switch = rebuild_model_switches(project_root, vault=vault)
+    return {"status": "duplicate" if duplicate is not None else "written", "written": True, "record_id": (duplicate or record).get("record_id"), "obsidian_note": _vault_relative_path(vault_path, memory_root).as_posix(), "model_switch": model_switch}
+
+
+def reconcile_local_model_history(project_root, *, vault=None, local_store=None):
+    project = project_change_memory._project_identity(project_root)
+    local_path = _resolve_local_store(local_store)
+    with _exclusive_file_lock(local_path.with_suffix(local_path.suffix + ".lock")):
+        records = [record for record in _read_local_records(local_path) if project_change_memory._record_matches_project(record, project)]
+        states = _read_projection_state(local_path)
+        projected = 0
+        latest = None
+        for record in records:
+            event_id = _model_event_key(record)
+            if states.get(event_id, {}).get("status") == "written":
+                continue
+            result = _project_record_to_obsidian(project_root, record, vault, local_path)
+            latest = result
+            if result.get("written") is True:
+                states[event_id] = {"status": "written", "reason": result["status"], "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")}
+                projected += 1
+            else:
+                states[event_id] = {"status": "pending", "reason": result.get("reason") or result.get("status") or "projection_failed"}
+        _write_projection_state(states, local_path)
+    pending = _pending_projection_count(local_store, project)
+    return {"status": "written" if projected else "pending" if pending else "up-to-date", "written": projected > 0, "projected": projected, "pending": pending, "latest": latest}
+
+
+def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0):
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary)
     if real_status not in {"pass", "fail"} or failure_class not in FAILURE_CLASSES:
@@ -782,31 +968,10 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         raise ValueError("a quality failure requires Real=fail and a matched passing producer receipt")
     if failure_class in OPERATIONAL_FAILURES and real_status != "fail":
         raise ValueError("an operational failure requires Real=fail")
-    vault_path, memory_root = _memory_root(query, vault)
-    if vault_path is None:
-        return {"status": "unavailable", "written": False, "reason": "obsidian_vault_unavailable"}
-    if memory_root is None:
-        return {"status": "no-op", "written": False, "reason": "unregistered_or_unknown_project_root"}
     owner = project_change_memory._registered_owner(query["project"]["root"])
-    if not _is_configured_owner(vault_path, owner):
-        return {
-            "status": "no-op",
-            "written": False,
-            "reason": "unregistered_or_unknown_project_root",
-        }
-    duplicate = next(
-        (
-            record
-            for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])
-            if record.get("receipt_sha256") == receipt_sha256
-            and record.get("real_status") == real_status
-            and record.get("failure_class") == failure_class
-        ),
-        None,
-    )
-    if duplicate is not None:
-        model_switch = rebuild_model_switches(project_root, vault=vault)
-        return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "complexity_score": duplicate.get("complexity_score", query["complexity_score"]), "complexity_band": duplicate.get("complexity_band", _record_complexity_band(duplicate)), "switch_direction": duplicate.get("switch_direction", _switch_details(duplicate)["switch_direction"]), "switch_reason": duplicate.get("switch_reason", _switch_details(duplicate)["switch_reason"]), "next_pair": duplicate.get("next_pair"), "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
+    outcome_reason = _single_line(outcome_reason or ("Real verification passed." if real_status == "pass" else f"Real verification failed: {failure_class}."), "outcome_reason", maximum=280)
+    if isinstance(verification_count, bool) or not isinstance(verification_count, int) or verification_count < 0:
+        raise ValueError("verification_count must be a non-negative integer")
     recommendation = recommend_model(
         project_root,
         task_type,
@@ -823,12 +988,13 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         task_summary=task_summary,
         vault=vault,
         ladder=ladder,
+        local_store=local_store,
     )
     priority_attempt_pair = receipt.get("priority_attempt_pair") or receipt.get("requested_pair")
     operational_failure_pairs = receipt.get("operational_failure_pairs") if isinstance(receipt.get("operational_failure_pairs"), list) else []
     operational_failure_pairs = [value for value in operational_failure_pairs if value in set(pairs) | priority_pairs]
     if valid_receipt and not historical_binding and recommendation.get("attempt_pair") != priority_attempt_pair:
-        raise ValueError("receipt attempt does not match the current Obsidian recommendation")
+        raise ValueError("receipt attempt does not match the current dual-history recommendation")
     if valid_receipt and not historical_binding and pair not in {recommendation.get("attempt_pair"), recommendation.get("active_fallback_pair")}:
         raise ValueError("receipt result is outside the authorized priority/quality route")
     if valid_receipt and not historical_binding and pair != recommendation.get("attempt_pair") and recommendation.get("attempt_pair") not in operational_failure_pairs:
@@ -839,12 +1005,27 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     if not isinstance(workload_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", workload_hash):
         workload_hash = None
     priority_failure = pair in priority_pairs and real_status == "fail" and failure_class in QUALITY_FAILURES
-    recorded_switch_direction = "upgrade" if priority_failure else recommendation["switch_direction"]
-    recorded_switch_reason = f"spark_verify_failure_suppresses_{query['complexity_band']}_band" if priority_failure else recommendation["attempt_reason"]
-    next_pair = recommendation["active_fallback_pair"] if priority_failure else recommendation["attempt_pair"]
+    quality_failure = real_status == "fail" and failure_class in QUALITY_FAILURES
+    operational_failure = real_status == "fail" and failure_class in OPERATIONAL_FAILURES
+    recorded_switch_direction = "upgrade" if quality_failure else "operational_fallback" if operational_failure else recommendation["switch_direction"]
+    recorded_switch_reason = f"spark_verify_failure_suppresses_{query['complexity_band']}_band" if priority_failure else f"{failure_class}_failure_one_rung_up" if quality_failure else f"{failure_class}_before_result_use_contextual_pair" if operational_failure else recommendation["attempt_reason"]
+    next_pair = recommendation["active_fallback_pair"] if priority_failure else pairs[pairs.index(pair) + 1] if quality_failure and pair in pairs and pairs.index(pair) + 1 < len(pairs) else recommendation["attempt_pair"]
+    attempt_chain = []
+    for attempt in receipt.get("route_attempts", []) if isinstance(receipt.get("route_attempts"), list) else []:
+        if not isinstance(attempt, dict):
+            continue
+        attempt_pair = attempt.get("executed_pair") or attempt.get("effective_pair") or attempt.get("requested_pair")
+        if attempt_pair not in set(pairs) | priority_pairs:
+            continue
+        attempt_chain.append({"pair": attempt_pair, "status": str(attempt.get("status") or "unknown")[:32], "failure_class": str(attempt.get("failure_class") or "none")[:32]})
+        if len(attempt_chain) == 8:
+            break
+    event_payload = f"{query['project']['key']}|{receipt_sha256}|{real_status}|{failure_class}"
+    event_id = hashlib.sha256(event_payload.encode()).hexdigest()
     base = {
         "model_experience_schema": SCHEMA_VERSION,
         "record_id": "",
+        "event_id": event_id,
         "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "project_name": query["project"]["name"],
         "project_key": query["project"]["key"],
@@ -872,6 +1053,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "operational_failure_pairs": operational_failure_pairs,
         "real_status": real_status,
         "failure_class": failure_class,
+        "outcome_reason": outcome_reason,
+        "verification_count": verification_count,
         "receipt_status": "pass" if valid_receipt else "fail",
         "model_match": receipt.get("model_match") is True,
         "effort_match": receipt.get("effort_match") is True,
@@ -890,36 +1073,59 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "switch_direction": recorded_switch_direction,
         "switch_reason": recorded_switch_reason,
         "next_pair": next_pair,
+        "completed_pair": pair,
+        "recovery_from_pair": recommendation.get("failed_model") if real_status == "pass" else None,
+        "attempt_chain": attempt_chain,
     }
     base = _json_safe(base)
     fingerprint_payload = _json_safe({key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}})
     fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     base["record_id"] = f"{timestamp.strftime('%Y%m%dT%H%M%SZ')}-{fingerprint[:12]}"
-    lock_path = Path.home() / ".codex" / "project-change-memory" / ".model-experience.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a", encoding="utf-8") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        duplicate = next((record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"]) and record.get("receipt_sha256") == base["receipt_sha256"] and record.get("real_status") == real_status and record.get("failure_class") == failure_class), None)
-        if duplicate is not None:
-            model_switch = rebuild_model_switches(project_root, vault=vault)
-            return {"status": "duplicate", "written": True, "record_id": duplicate["record_id"], "project_key": query["project"]["key"], "complexity_score": duplicate.get("complexity_score", query["complexity_score"]), "complexity_band": duplicate.get("complexity_band", _record_complexity_band(duplicate)), "switch_direction": duplicate.get("switch_direction", _switch_details(duplicate)["switch_direction"]), "switch_reason": duplicate.get("switch_reason", _switch_details(duplicate)["switch_reason"]), "next_pair": duplicate.get("next_pair"), "shared_model_registry": shared["registry_id"], "model_switch": model_switch}
-        record_path = memory_root
-        records = _read_project_records(record_path)
-        records.append(_json_safe(base))
-        _atomic_write(record_path, "# Model Switch\n\n" + "\n".join("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->" for record in records) + "\n")
-        _ensure_model_switch_index_link(vault_path, owner, record_path)
+    local_result = _append_local_record(base, local_store)
+    stored_record = local_result["record"]
+    reconcile_result = reconcile_local_model_history(project_root, vault=vault, local_store=local_store)
+    states = _read_projection_state(local_store)
+    projection_state = states.get(event_id, {"status": "pending", "reason": "projection_state_missing"})
+    latest_projection = reconcile_result.get("latest") if isinstance(reconcile_result, dict) else None
+    model_switch = latest_projection.get("model_switch") if isinstance(latest_projection, dict) else None
+    vault_path, memory_root = _memory_root(query, vault)
+    obsidian_note = _vault_relative_path(vault_path, memory_root).as_posix() if projection_state.get("status") == "written" and vault_path is not None and memory_root is not None else None
+    if model_switch is None and obsidian_note:
         model_switch = rebuild_model_switches(project_root, vault=vault)
-        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-    return {"status": "written", "written": True, "record_id": base["record_id"], "project_key": query["project"]["key"], "pair": pair, "real_status": real_status, "failure_class": failure_class, "complexity_score": query["complexity_score"], "complexity_band": query["complexity_band"], "switch_direction": recorded_switch_direction, "switch_reason": recorded_switch_reason, "next_pair": next_pair, "shared_model_registry": shared["registry_id"], "obsidian_note": _vault_relative_path(vault_path, record_path).as_posix(), "model_switch": model_switch}
+    return {
+        "status": "duplicate" if local_result["status"] == "duplicate" else "written",
+        "written": True,
+        "record_id": stored_record["record_id"],
+        "event_id": stored_record["event_id"],
+        "project_key": query["project"]["key"],
+        "pair": stored_record["pair"],
+        "real_status": stored_record["real_status"],
+        "failure_class": stored_record["failure_class"],
+        "outcome_reason": stored_record["outcome_reason"],
+        "complexity_score": stored_record["complexity_score"],
+        "complexity_band": stored_record["complexity_band"],
+        "switch_direction": stored_record["switch_direction"],
+        "switch_reason": stored_record["switch_reason"],
+        "next_pair": stored_record["next_pair"],
+        "recovery_from_pair": stored_record["recovery_from_pair"],
+        "shared_model_registry": shared["registry_id"],
+        "local": {"status": local_result["status"], "written": True, "path": local_result["path"]},
+        "obsidian": projection_state,
+        "obsidian_note": obsidian_note,
+        "pending_projection_count": reconcile_result["pending"],
+        "model_switch": model_switch or {"status": projection_state.get("status"), "written": projection_state.get("status") == "written", "reason": projection_state.get("reason")},
+    }
 
 
-def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER):
+def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local_store=None):
     shared, pairs = load_shared_ladder(ladder)
     vault_path = project_change_memory._resolve_vault(vault)
+    local_path = _resolve_local_store(local_store)
+    local_records = _read_local_records(local_path)
     priority_producer = shared.get("priority_producer")
     priority_pair_count = len(priority_producer["adaptive_efforts"]) if isinstance(priority_producer, dict) and priority_producer.get("enabled") is True else 0
-    output = {"status": "ready" if vault_path else "unavailable", "authority": "obsidian_broad_model_switch", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "vault": str(vault_path) if vault_path else ""}
-    if project_root and vault_path:
+    output = {"status": "ready", "authority": "dual_local_and_obsidian", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "local_store": str(local_path), "local_records": len(local_records), "vault": str(vault_path) if vault_path else "", "obsidian_available": vault_path is not None}
+    if project_root:
         project = project_change_memory._project_identity(project_root)
         owner = project_change_memory._registered_owner(project["root"])
         _, page = _memory_root(_query(project_root, "script", "general"), vault)
@@ -938,6 +1144,8 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER):
                 "memory_available": memory_available,
                 "broad_page_owner": owner,
                 "records": 0 if page is None else len(_read_project_records(page)),
+                "project_local_records": len([record for record in local_records if project_change_memory._record_matches_project(record, project)]),
+                "pending_projection_count": _pending_projection_count(local_path, project),
                 "page": "" if page is None else _vault_relative_path(vault_path, page).as_posix(),
                 "reason": reason,
             }
@@ -962,9 +1170,10 @@ def _add_scope_arguments(parser, *, summary_required=False):
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="Read and write project-scoped adaptive model memory in Obsidian")
+    parser = argparse.ArgumentParser(description="Read and write dual local and Obsidian adaptive model memory")
     parser.add_argument("--vault", type=Path)
     parser.add_argument("--ladder", type=Path, default=DEFAULT_LADDER)
+    parser.add_argument("--local-store", type=Path)
     commands = parser.add_subparsers(dest="command", required=True)
     recommend = commands.add_parser("recommend")
     _add_scope_arguments(recommend)
@@ -974,30 +1183,36 @@ def parse_args(argv=None):
     record.add_argument("--real-status", choices=("pass", "fail"), required=True)
     record.add_argument("--failure-class", choices=sorted(FAILURE_CLASSES), default="none")
     record.add_argument("--trial", action="store_true")
+    record.add_argument("--outcome-reason", default="")
+    record.add_argument("--verification-count", type=int, default=0)
     status = commands.add_parser("status")
     status.add_argument("--project-root", type=Path)
     relink = commands.add_parser("relink")
     relink.add_argument("--project-root", type=Path, required=True)
     rebuild = commands.add_parser("rebuild-model-switches")
     rebuild.add_argument("--project-root", type=Path, required=True)
+    reconcile = commands.add_parser("reconcile")
+    reconcile.add_argument("--project-root", type=Path, required=True)
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    common = {"vault": args.vault, "ladder": args.ladder}
+    common = {"vault": args.vault, "ladder": args.ladder, "local_store": args.local_store}
     if args.command == "status":
         output = memory_status(args.project_root, **common)
     elif args.command == "relink":
         output = relink_project(args.project_root, vault=args.vault)
     elif args.command == "rebuild-model-switches":
         output = rebuild_model_switches(args.project_root, vault=args.vault)
+    elif args.command == "reconcile":
+        output = reconcile_local_model_history(args.project_root, vault=args.vault, local_store=args.local_store)
     else:
         scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, **common}
         if args.command == "recommend":
             output = recommend_model(args.project_root, args.task_type, args.module, **scope)
         else:
-            output = record_model_result(args.project_root, args.task_type, args.module, args.receipt, args.real_status, args.failure_class, trial=args.trial, **scope)
+            output = record_model_result(args.project_root, args.task_type, args.module, args.receipt, args.real_status, args.failure_class, trial=args.trial, outcome_reason=args.outcome_reason, verification_count=args.verification_count, **scope)
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
     return 0 if output.get("status") not in {"unavailable"} and output.get("calibration_state") != "blocked" else 1
 

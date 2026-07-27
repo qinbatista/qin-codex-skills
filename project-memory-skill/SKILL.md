@@ -31,13 +31,13 @@ This skill supplements the file type's owning skill. It does not replace `code-s
 
 Adaptive model learning is a distinct system; it never uses the project change-memory JSONL ledger above.
 
-- The active private model-learning authority is an Obsidian broad `Model Switch.md` page, keyed by project while retaining task, module, file, symbol, code, and operation as structured fields.
-- There is no local model-learning JSON fallback. Never create or reuse a local JSON, JSONL, database, cache, or substitute ledger for adaptive model learning.
+- The receipt-backed local event ledger at `~/.codex/model-routing-memory/events.jsonl` is the durable fast history. The matching broad Obsidian `Model Switch.md` is its global human-readable projection. Project change-memory remains a separate system.
+- Every terminal producer PASS/FAIL writes the sanitized local event first, then projects the same stable event ID to Obsidian. An unavailable vault leaves a pending projection; `obsidian_model_memory.py reconcile` or the next terminal write retries it.
 - The shared cold-start ladder remains `~/.codex/skills/task-analyze-skill/assets/model-capability-ladder.json`; it is shared policy, not learned project experience. Ordinary tasks only read the saved ladder. It may bootstrap from the local Codex cache when missing, but only an explicit user model-update request may refresh an existing ladder; never fetch models over the network, and preserve the last valid ladder when the local cache is unavailable.
 - Model records belong to the existing broad project or Skills page. Never create a date, task, module, file, symbol, receipt, hash, or hierarchy note; records are one-line HTML comments plus concise table rows in the same page.
 - Registered old and current roots share the same broad owner page and model experience. Preserve unexpected foreign structured records during rebuild, but never display or use them for the current owner's recommendation.
-- Before every eligible producer route, read only the relevant project-scoped broad `Model Switch.md` records and use them for recommendation, including cold start. Every submission stores a `0-100` score and band in the local Ending lifecycle. The producer receipt carries a sanitized learning context; after presentation, bind it to the Ending lifecycle so the terminal Real verdict records the score, route direction, next pair, and new entry automatically.
-- If the Obsidian vault or project owner is unavailable, model learning is unavailable: use the shared ladder and shared cold start without blocking, and do not create a local substitute. A safe independent-source scheduled graph may still run with `selection_basis=shared_cold_start`.
+- Before every eligible producer route, merge relevant local and project-scoped broad `Model Switch.md` records, deduplicate by stable event ID, and use the best matching task/module/file/symbol/code/operation/score-band history. Every terminal record retains PASS/FAIL, concise outcome reason, failure class, attempted/effective/next pair, recovery pair, score/band, tokens, and time.
+- If Obsidian or its owner is unavailable, continue from local learned history; if both histories are empty, use the shared cold start. Missing Obsidian never blocks execution or discards learning.
 - `Model Switch.md` uses exactly six stable sections: Normal Script Update, Code Design, Finding Bugs, Documentation and Instructions, Tests and Verification, and General Work. Every receipt-backed Ending terminal record remains a machine-readable one-line comment and a concise row with score/band, model/effort, prior/selected/effective/next pair, route direction, reason, receipt SHA, tokens/time, and Ending PASS/FAIL. It never creates a timestamp hub.
 - Central `TaskModelExperience/` notes and monthly entries are legacy archive evidence. Do not migrate them, search them in ordinary recall, or invent project mappings from their summaries.
 
@@ -48,6 +48,7 @@ Use the maintained helper instead of editing broad Model Switch records manually
 ```bash
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py recommend --project-root <root> --task-type <type> --module <module> --file <relative-file> --symbol <method-or-symbol> --code-kind <kind> --operation <operation> --complexity-score <0-100>
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py record --project-root <root> --task-type <type> --module <module> --file <relative-file> --symbol <method-or-symbol> --code-kind <kind> --operation <operation> --complexity-score <0-100> --task-summary <sanitized-summary> --receipt <producer-receipt> --real-status <pass|fail> --failure-class <class>
+python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py reconcile --project-root <root>
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py rebuild-model-switches --project-root <root>
 ```
 

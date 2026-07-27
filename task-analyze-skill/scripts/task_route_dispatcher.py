@@ -331,7 +331,7 @@ def _obsidian_recommendation_and_proof(node, project_root):
         "profile_fingerprint": fingerprint,
         "calibration_state": recommendation.get("calibration_state"),
         "best_pair": recommendation.get("success_model"),
-        "selection_basis": "obsidian_broad_model_switch" if recommendation.get("memory_available") is True else "shared_cold_start",
+        "selection_basis": "dual_model_history" if recommendation.get("memory_available") is True else "shared_cold_start",
     }
     return recommendation, proof
 
@@ -882,15 +882,15 @@ def validate_plan(
                         try:
                             current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, cwd)
                         except (OSError, TypeError, ValueError) as error:
-                            failures.append(f"{node_id} current Obsidian recommendation could not be verified: {type(error).__name__}")
+                            failures.append(f"{node_id} current dual-history recommendation could not be verified: {type(error).__name__}")
                         else:
                             if current_recommendation.get("selected_pair") is None:
-                                failures.append(f"{node_id} current Obsidian recommendation is exhausted")
+                                failures.append(f"{node_id} current dual-history recommendation is exhausted")
                             if current_proof.get("selected_pair") != routing_history_module.pair_text(model, effort) or current_proof.get("trial") is not node.get("trial"):
-                                failures.append(f"{node_id} selected pair/trial does not match current Obsidian recommendation")
+                                failures.append(f"{node_id} selected pair/trial does not match current dual-history recommendation")
                             stale_fields = [field for field in RECOMMENDATION_PROOF_FIELDS if recommendation.get(field) != current_proof.get(field)]
                             if stale_fields:
-                                failures.append(f"{node_id} routing_recommendation is stale or not Obsidian-derived: {', '.join(stale_fields)}")
+                                failures.append(f"{node_id} routing_recommendation is stale or not dual-history-derived: {', '.join(stale_fields)}")
 
             for field in CONTROLLED_FIELDS:
                 if field not in node.get("routing_condition", {}):
@@ -1588,6 +1588,31 @@ def _route_run_id():
     return f"route-{uuid.uuid4().hex}"
 
 
+def _record_pre_result_operational_failures(plan, completed_records, project_root):
+    node_by_id = {node["id"]: node for node in plan.get("nodes", []) if isinstance(node, dict) and isinstance(node.get("id"), str)}
+    learning = []
+    for record in completed_records:
+        node = node_by_id.get(record.get("id"))
+        failure_class = record.get("failure_class")
+        if not node or node.get("phase") != "result" or record.get("status") == "pass" or record.get("result_published") is True or failure_class not in obsidian_model_memory.OPERATIONAL_FAILURES:
+            continue
+        receipt_path = record.get("receipt_path")
+        if not isinstance(receipt_path, str) or not Path(receipt_path).is_file():
+            continue
+        memory_args = _model_memory_arguments(node, project_root)
+        memory_project_root = memory_args.pop("project_root")
+        memory_task_type = memory_args.pop("task_type")
+        memory_module = memory_args.pop("module")
+        reason = f"Dispatched node {record['id']} ended with {failure_class} before result publication."
+        try:
+            recorded = obsidian_model_memory.record_model_result(memory_project_root, memory_task_type, memory_module, receipt_path, "fail", failure_class, trial=bool(node.get("trial")), outcome_reason=reason, verification_count=0, **memory_args)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+            learning.append({"node_id": record["id"], "status": "fail", "reason": f"dual_model_history_record_failed:{type(error).__name__}"})
+        else:
+            learning.append({"node_id": record["id"], "status": recorded.get("status"), "event_id": recorded.get("event_id"), "local": recorded.get("local"), "obsidian": recorded.get("obsidian")})
+    return learning
+
+
 def _run_record(result_path, verify_level, verify_status, main_result_receipt_path, route_run_id, main_node, project_root, execution_domain=None):
     if not main_result_receipt_path:
         return {"status": "skipped", "reason": "missing-main-result-receipt"}
@@ -1621,7 +1646,7 @@ def _run_record(result_path, verify_level, verify_status, main_result_receipt_pa
             **memory_args,
         )
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
-        return {"status": "fail", "reason": f"obsidian_model_memory_record_failed:{type(error).__name__}"}
+        return {"status": "fail", "reason": f"dual_model_history_record_failed:{type(error).__name__}"}
     return {"status": recorder_result.get("status"), "recorder_result": recorder_result, "recommendation": recommendation}
 
 
@@ -1921,6 +1946,7 @@ def run_plan(
         {"model": entry_model, "effort": entry_effort},
         ending_quality_failure_nodes=(),
     )
+    operational_model_learning = _record_pre_result_operational_failures(plan, ordered, cwd)
 
     manifest = {
         "schema_version": DISPATCH_SCHEMA_VERSION,
@@ -1950,6 +1976,7 @@ def run_plan(
         "notification_required": receipt_failure_after_result,
         "reopen_required": receipt_failure_after_result,
         "model_switch_summary": model_switch_summary,
+        "operational_model_learning": operational_model_learning,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     manifest["manifest_path"] = str(manifest_path)

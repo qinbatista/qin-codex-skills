@@ -191,14 +191,14 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         if module.PRIORITY_PRODUCER_MODEL is not None:
             self.assertNotIn(module.PRIORITY_PRODUCER_MODEL, {model for model, _ in entry_pairs})
 
-    def test_adaptive_contract_uses_shared_ladder_and_obsidian_authority(self):
+    def test_adaptive_contract_uses_shared_ladder_and_dual_private_history(self):
         self.assertIn("assets/model-capability-ladder.json", module.REQUIRED_FILES)
         self.assertIn("scripts/model_registry.py", module.REQUIRED_FILES)
         self.assertIn("scripts/sync_model_capabilities.py", module.REQUIRED_FILES)
         self.assertIn("scripts/obsidian_adaptive_model_runner.py", module.REQUIRED_FILES)
         self.assertNotIn("scripts/adaptive_model_runner.py", module.REQUIRED_FILES)
-        self.assertIn("Obsidian broad `Model Switch.md`", module.REQUIRED_ADAPTIVE_TEXT)
-        self.assertIn("sole active private authority", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("receipt-backed local event ledger is the durable fast history", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("deduplicate their stable event IDs", module.REQUIRED_ADAPTIVE_TEXT)
         self.assertEqual(tuple(module.ACTIVE_MODEL_EFFORTS), module.ACTIVE_MODEL_ORDER)
 
     def test_shared_registry_contains_only_the_highest_numeric_gpt_family_and_source_digest(self):
@@ -460,18 +460,18 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Producer owns files/skills/Quick Check", bootstrap_text)
-            self.assertIn("score each independent real check", bootstrap_text)
+            self.assertIn("score each check", bootstrap_text)
             self.assertIn("global projectless End/Fix Tasks", bootstrap_text)
             self.assertIn("PASS records then self-archives", bootstrap_text)
-            self.assertIn("FAIL records exact evidence", bootstrap_text)
+            self.assertIn("FAIL records evidence", bootstrap_text)
             self.assertIn("never same-task subtask/emulate/wait/self-verify", bootstrap_text)
-            self.assertIn("all checks must PASS", bootstrap_text)
+            self.assertIn("all checks PASS", bootstrap_text)
             self.assertIn("BLOCKED only unavailable/external/limit", bootstrap_text)
             self.assertIn("`gpt-5.6-sol|ultra`", bootstrap_text)
             self.assertIn("dynamic_task_graph", bootstrap_text)
             self.assertIn("task_route_dispatcher.py run-plan", bootstrap_text)
             self.assertIn("task vs task+Ending", bootstrap_text)
-            self.assertIn("no reread/full read/precheck", bootstrap_text)
+            self.assertIn("no reread/full-read/precheck", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)
             global_agents.write_text(bootstrap_text.replace("task_complexity_score.py", "task_score.py", 1), encoding="utf-8")
             validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")

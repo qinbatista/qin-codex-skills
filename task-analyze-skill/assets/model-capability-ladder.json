@@ -326,8 +326,10 @@
     "quality_failure": "suppress_matching_complexity_band_and_upgrade"
   },
   "private_learning_contract": {
-    "authority": "obsidian_broad_model_switch",
-    "path_template": "Model Switch.md",
+    "authority": "dual_local_and_obsidian",
+    "local_path_template": "~/.codex/model-routing-memory/events.jsonl",
+    "projection_path_template": "Model Switch.md",
+    "event_id_dedupe": true,
     "specificity_order": [
       "project_task",
       "module",

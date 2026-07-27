@@ -77,7 +77,7 @@ For receipt-backed grounded JSON, Ending Real may use `../task-analyze-skill/scr
 
 An admitted verification node preserves the locked model, effort, dependencies, input, output, and stop condition. Runtime labels are not proof; use the sanitized receipt contract in `../task-analyze-skill/references/runtime-receipts.md`. Ordinary inline Real Verify uses the current user-selected model and needs no fabricated child receipt.
 
-Routing quality learning records only the producer pair after Real. Every lifecycle stores complexity score/band locally. The adaptive receipt carries its project/task/module/file/symbol/code/operation/score-band context; start the lifecycle with `--producer-receipt`, then the terminal ledger event invokes `obsidian_model_memory.py record` automatically. Obsidian broad `Model Switch.md` pages are the sole active private model-learning authority. A small `0-24`, low-risk text/code edit tries Spark-low first. Operational failure is neutral and falls back to the contextual quality pair; Spark correctness/quality failure suppresses Spark for the matching context and upgrades the next matching task. Other quality pairs retain after one Real PASS, downgrade after two, and upgrade after quality FAIL. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
+Routing quality learning records only the producer pair after Real. The adaptive receipt carries its project/task/module/file/symbol/code/operation/score-band context; the terminal ledger event invokes `obsidian_model_memory.py record`, which writes the local routing event first and then projects the same stable event ID to broad Obsidian `Model Switch.md`. Both copies retain outcome reason, attempts, score/band, next pair, and recovery pair and are deduplicated during recommendation. A small `0-24`, low-risk text/code edit tries Spark-low first. Operational failure is quality-neutral; correctness/quality failure upgrades the next matching task. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
 
 ## Real Verify Workflow
 
@@ -114,7 +114,7 @@ Execute the real interaction path, inspect errors and side effects, and confirm 
 
 ## Obsidian And Optimization
 
-For connected projects or repeated failures, Ending Real may read only directly related Obsidian pages and prior failure lessons. Missing memory is a successful no-op: no local model-learning substitute is created, and future selection remains shared cold-start/inline. Save sanitized lessons only; never store secrets or raw private transcripts.
+For connected projects or repeated failures, Ending Real reads only the directly related merged local/Obsidian routing history and failure lessons. Missing Obsidian leaves a pending projection; future selection still uses the local receipt-backed event. Save sanitized reasons only; never store secrets or raw private transcripts.
 
 Optimization verification is independent Ending Real. Require different optimizer/verifier identities, raw before/after inputs and outputs, same-behavior acceptance, token and first-result measurements when claimed, and dependency/order/side-effect/error checks. If no independent verifier is callable, report it as blocked; do not self-certify.
 

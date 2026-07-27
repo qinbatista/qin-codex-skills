@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
+"""Ending lifecycle ledger for Windows, macOS, and Linux."""
+
 import argparse
-import fcntl
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import sys
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 
 DEFAULT_STORE = Path.home() / ".codex" / "ending-task-memory"
@@ -79,6 +87,30 @@ def _append_event(store, event):
     index_path.parent.mkdir(parents=True, exist_ok=True)
     with index_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+@contextmanager
+def _exclusive_file_lock(lock_path):
+    path = Path(lock_path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        if os.name == "nt":
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _model_pair(value, field_name):
@@ -173,13 +205,13 @@ def _load_model_memory_module():
     return module
 
 
-def _record_bound_model_result(binding, real_status, failure_class):
+def _record_bound_model_result(binding, real_status, failure_class, outcome_reason="", verification_count=0):
     receipt_path = Path(binding["receipt_path"])
     if hashlib.sha256(receipt_path.read_bytes()).hexdigest() != binding["receipt_sha256"]:
         raise ValueError("bound producer receipt changed after lifecycle start")
     context = binding["model_learning_context"]
     memory = _load_model_memory_module()
-    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], bound_receipt=binding)
+    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], bound_receipt=binding, outcome_reason=outcome_reason, verification_count=verification_count)
 
 
 def _successful_model_learning_noop(result):
@@ -249,8 +281,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
     store_path = Path(store).expanduser().resolve()
     store_path.mkdir(parents=True, exist_ok=True)
     lock_path = store_path / ".lock"
-    with lock_path.open("a", encoding="utf-8") as lock_handle:
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+    with _exclusive_file_lock(lock_path):
         parent = None
         root = None
         attempt_index = 0
@@ -301,8 +332,7 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         raise ValueError(f"failure_class must be one of {', '.join(sorted(FAILURE_CLASSES))}")
     store_path = Path(store).expanduser().resolve()
     lock_path = store_path / ".lock"
-    with lock_path.open("a", encoding="utf-8") as lock_handle:
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+    with _exclusive_file_lock(lock_path):
         state = _read_state(store_path, lifecycle_id)
         if state["status"] != "running" and event_name != "note":
             prior_terminal = next((item for item in reversed(state["events"]) if item.get("event") in TERMINAL_EVENTS), None)
@@ -316,7 +346,7 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
                 raise ValueError("a bound Ending pass requires failure_class=none")
             if event_name == "fail" and failure_class == "none":
                 raise ValueError("a bound Ending fail requires an explicit failure_class")
-            model_learning = _record_bound_model_result(binding, event_name, failure_class)
+            model_learning = _record_bound_model_result(binding, event_name, failure_class, _single_line(summary, "summary", max_length=280), len(verification or []))
             state["model_learning"] = model_learning
             state["producer_binding"]["status"] = "no-op" if _successful_model_learning_noop(model_learning) else "recorded" if model_learning.get("written") is True else "unavailable"
         recorded_at = _now()

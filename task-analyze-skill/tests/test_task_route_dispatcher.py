@@ -32,7 +32,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             return self.fixture_owner_roots.get(root, self.original_registered_owner(record_root))
 
         self.owner_patch = patch.object(module.obsidian_model_memory.project_change_memory, "_registered_owner", side_effect=fixture_registered_owner)
-        self.vault_patch = patch.dict(os.environ, {"CODEX_OBSIDIAN_VAULT": self.fixture_vault.name}, clear=False)
+        self.vault_patch = patch.dict(os.environ, {"CODEX_OBSIDIAN_VAULT": self.fixture_vault.name, "CODEX_MODEL_ROUTING_MEMORY": str(Path(self.fixture_vault.name) / "model-routing-memory" / "events.jsonl")}, clear=False)
         self.owner_patch.start()
         self.vault_patch.start()
 
@@ -49,7 +49,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
     def refresh_recommendation(self, node):
         pairs = module.routing_history_module.canonical_pairs(node["candidate_ladder"])
         fingerprint = module.routing_history_module.profile_fingerprint(node["routing_condition"], pairs, module.routing_history_module.parse_pair(node["static_suggestion"]), module.routing_history_module.parse_pair(node["hard_floor"]))
-        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"}
+        node["routing_recommendation"] = {"selected_pair": f"{node['model']}|{node['effort']}", "trial": node["trial"], "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"}
 
     def plan(self, cache_dir):
         self.register_fixture_owner(cache_dir)
@@ -70,7 +70,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         floor_pair = module.MODEL_ROLE_PAIRS["floor"]
         floor_model, floor_effort = module.routing_history_module.parse_pair(floor_pair)
         fingerprint = module.routing_history_module.profile_fingerprint(condition, module.routing_history_module.canonical_pairs(ladder), (floor_model, floor_effort), (floor_model, floor_effort))
-        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "sandbox": "read-only"}], "main_result_node": "direct"}
+        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "sandbox": "read-only"}], "main_result_node": "direct"}
 
     def dependent_plan(self, cache_dir):
         plan = self.plan(cache_dir)
@@ -185,7 +185,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                     "static_suggestion": floor_pair,
                     "hard_floor": floor_pair,
                     "trial": False,
-                    "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "obsidian_broad_model_switch"},
+                    "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"},
                 },
                 {"id": "optimization", "phase": "ending", "skill": "optimization-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Optimize this result independently.", "sandbox": "read-only"},
                 {
@@ -341,8 +341,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 enforce_current_recommendation=True,
                 history_path=root / "history.json",
             )
-        self.assertTrue(any("does not match current Obsidian recommendation" in failure for failure in failures))
-        self.assertTrue(any("stale or not Obsidian-derived" in failure for failure in failures))
+        self.assertTrue(any("does not match current dual-history recommendation" in failure for failure in failures))
+        self.assertTrue(any("stale or not dual-history-derived" in failure for failure in failures))
 
     def test_initial_dispatch_rejects_forged_recommendation_reason(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -357,7 +357,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 enforce_current_recommendation=True,
                 history_path=root / "history.json",
             )
-        self.assertTrue(any("stale or not Obsidian-derived: reason" in failure for failure in failures))
+        self.assertTrue(any("stale or not dual-history-derived: reason" in failure for failure in failures))
 
     def test_plan_rejects_selected_pair_below_hard_floor(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -987,6 +987,20 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(completed["status"], "fail")
         self.assertEqual(receipt["strategy_tokens"]["total_tokens"], 25)
         self.assertEqual(receipt["strategy_elapsed_ms"], 70)
+
+    def test_pre_result_operational_failure_is_written_to_dual_model_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            receipt = root / "timeout-receipt.json"
+            receipt.write_text("{}", encoding="utf-8")
+            node = {"id": "architecture", "phase": "result", "skill": "code-skill", "model": "gpt-5.6-sol", "effort": "high", "complexity_score": 82, "complexity_band": "advanced", "trial": False, "routing_condition": {"task_family": "integration", "artifact": "patch", "scope": "multi", "ambiguity": "high", "modality": "text", "risk": "high", "complexity": "complex", "owning_skill": "code-skill", "project_family": "global", "verification_shape": "real", "execution_domain": "python"}, "model_memory_scope": {"task_type": "code-design", "module": "adaptive-model-routing", "file": "skills/project-memory-skill/scripts/obsidian_model_memory.py", "symbol": "dual_authority_protocol", "code_kind": "python", "operation": "design"}, "task_summary": "Design dual local and Obsidian routing history."}
+            completed = [{"id": "architecture", "phase": "result", "status": "fail", "failure_class": "timeout", "result_published": False, "receipt_path": str(receipt)}]
+            learned = {"status": "written", "event_id": "event-1", "local": {"written": True}, "obsidian": {"status": "written"}}
+            with patch.object(module.obsidian_model_memory, "record_model_result", return_value=learned) as recorder:
+                result = module._record_pre_result_operational_failures({"nodes": [node]}, completed, root)
+        self.assertEqual(result[0]["event_id"], "event-1")
+        self.assertEqual(recorder.call_args.args[4:6], ("fail", "timeout"))
+        self.assertIn("before result publication", recorder.call_args.kwargs["outcome_reason"])
 
     def test_run_node_does_not_retry_ending_on_verdict_phase_failure(self):
         with tempfile.TemporaryDirectory() as temp_dir:

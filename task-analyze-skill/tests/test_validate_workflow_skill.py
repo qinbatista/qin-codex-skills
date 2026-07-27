@@ -171,7 +171,7 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         self.assertIn("task vs task+Ending", required)
         self.assertIn("controller excluded", required)
         self.assertIn("global projectless End/Fix Tasks", required)
-        self.assertIn("all checks must PASS", required)
+        self.assertIn("all checks PASS", required)
         self.assertIn("fresh End Task", required)
         self.assertIn("up to 3 repairs", required)
         self.assertIn("BLOCKED only unavailable/external/limit", required)

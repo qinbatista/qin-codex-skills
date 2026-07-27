@@ -156,8 +156,8 @@ REQUIRED_SKILL_TEXT = [
     "two receipt-matched Real passes",
     "rank median logical tokens first",
     "two receipt-matched Real passes",
-    "Ending Real alone records receipt-backed producer pass/fail evidence",
-    "Ending Real alone records receipt-backed producer pass/fail evidence",
+    "Ending Real alone records receipt-backed producer PASS/FAIL",
+    "writes the local routing event before the canonical broad Obsidian projection",
     "Every benchmark entry starts from the user-selected `gpt-5.6-sol|ultra` pair",
     "Direct remains on that fixed pair",
     "Auto starts from the same entry",
@@ -232,10 +232,10 @@ REQUIRED_SELECTION_TEXT = [
     "## Cold Start, Score, And Spark Priority",
     "## Learning Boundary",
     "Obsidian broad `Model Switch.md`",
-    "matching Obsidian broad `Model Switch.md` context",
+    "merged local and Obsidian broad `Model Switch.md` context",
     "terminal Ending event automatically records the matched producer verdict",
     "optional priority producer",
-    "sole current contextual model evidence authority",
+    "local event ledger and broad project-scoped `Model Switch.md` projection",
     "task_complexity_score.py",
     "Exact read-only",
     "obsidian_adaptive_model_runner.py",
@@ -288,7 +288,8 @@ REQUIRED_ADAPTIVE_TEXT = [
     "atomically bootstrapped from the local cache when missing",
     "Only an explicit user model-update request",
     "preserve the last valid registry",
-    "sole active private authority",
+    "receipt-backed local event ledger is the durable fast history",
+    "deduplicate their stable event IDs",
     "deterministic `0-100` score and band",
     "scoring `0-24` tries Spark first",
     "suppress Spark for the matching project/task/operation/code-kind/score-band context",
@@ -300,7 +301,7 @@ REQUIRED_ADAPTIVE_TEXT = [
 REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status", "pending", "resolve_fast_path_args", "infer_complexity_score", "complexity_score", "complexity_band", "switch_direction", "switch_change", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "scheduled_result_node_count", "parallel_branch_count"]
 REQUIRED_MODEL_SWITCH_CATEGORIES = ["normal-script-update", "code-design", "finding-bugs", "tests-verification", "documentation-instructions", "general-work"]
 REQUIRED_MODEL_SWITCH_DIRECTIONS = ["initial", "upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"]
-REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "model-capability-ladder.json", "Model Switch.md", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "complexity_score", "complexity_band", "_priority_producer_pair", "_priority_history", "spark_verify_failure_suppresses_", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
+REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "DEFAULT_LOCAL_STORE", "model-routing-memory", "model-capability-ladder.json", "Model Switch.md", "_read_local_records", "_merge_model_records", "reconcile_local_model_history", "event_id", "outcome_reason", "recovery_from_pair", "attempt_chain", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "complexity_score", "complexity_band", "_priority_producer_pair", "_priority_history", "spark_verify_failure_suppresses_", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
 REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "complexity_scale", "small_edit_task_types", "small_edit_operations", "TASK_SEGMENT_PURPOSES", "task_segment_maximum_complexity_score", "suppress_matching_complexity_band_and_upgrade", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
 REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
 REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
@@ -315,7 +316,7 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "Dynamically split only distinct bounded work", "every result/Ending node gets its own score", "Parent score never forces one model", "small low-risk low-ambiguity text/code/write/execute segments score<=24 use Spark-low first", "even inside a larger task", "Dependency-ready independent nodes run in parallel", "shared writes,ordering,and output dependencies stay linear", "Single-node eligible text/code pipes exact user text once non-TTY", "obsidian_adaptive_model_runner.py", "multi-node work saves one `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark to execute a valid task graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses saved cold start", "Producer owns files/skills/Quick Check", "End Task hard-required after result", "score each independent real check", "global projectless End/Fix Tasks", "all checks must PASS", "PASS records then self-archives", "FAIL records exact evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal events sync local history+Obsidian Model Switch", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "Split distinct work only", "each result/Ending records score,band,pair,purpose,deps,stop", "parent score never fixes the project model", "Eligible low-risk low-ambiguity text/code/write/execute score<=24 uses Spark-low first", "inside larger work", "Dependency-ready independent nodes run in parallel", "shared writes/order/output deps stay linear", "Single-node eligible text/code pipes exact user text once", "obsidian_adaptive_model_runner.py", "multi-node work saves one schema-2 `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark for a valid graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses local history,queues projection,no block", "Producer owns files/skills/Quick Check", "End Task required after result", "score each check", "global projectless End/Fix Tasks", "all checks PASS", "PASS records then self-archives", "FAIL records evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal receipt events write local routing history first", "same event ID to Obsidian", "future routes merge/dedupe both", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "Current model:", "Model evidence:", "Model pairs (requested / resolved / effective):", "Current model evidence-level:", "Previous model:", "Route change: upgrade|downgrade|freeze|no_switch|operational_fallback", "Switch summary:", "Reason:", "known assigned/configured/verified-entry pair", "unverified | unverified", "unknown | unknown", "No model switch"]
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
@@ -496,7 +497,7 @@ def validate_shared_ladder(text):
     if not isinstance(payload.get("source", {}).get("catalog_sha256"), str):
         failures.append("shared model-capability ladder must include the catalog source digest")
     private_contract = payload.get("private_learning_contract")
-    if not isinstance(private_contract, dict) or private_contract.get("authority") != "obsidian_broad_model_switch" or private_contract.get("path_template") != "Model Switch.md" or private_contract.get("specificity_order") != ["project_task", "module", "file", "symbol"] or private_contract.get("fields_only") is not True or private_contract.get("hierarchy_notes") is not False or private_contract.get("legacy_local_json") != "read_only_inactive":
+    if not isinstance(private_contract, dict) or private_contract.get("authority") != "dual_local_and_obsidian" or private_contract.get("local_path_template") != "~/.codex/model-routing-memory/events.jsonl" or private_contract.get("projection_path_template") != "Model Switch.md" or private_contract.get("event_id_dedupe") is not True or private_contract.get("specificity_order") != ["project_task", "module", "file", "symbol"] or private_contract.get("fields_only") is not True or private_contract.get("hierarchy_notes") is not False or private_contract.get("legacy_local_json") != "read_only_inactive":
         failures.append("shared model-capability ladder private learning contract is invalid")
     return failures
 

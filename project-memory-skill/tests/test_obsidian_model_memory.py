@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -19,6 +20,9 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.home = self.root / "home"
         self.home.mkdir()
+        self.local_store = self.root / "model-routing-memory" / "events.jsonl"
+        self.local_store_patcher = mock.patch.dict(os.environ, {"CODEX_MODEL_ROUTING_MEMORY": str(self.local_store)})
+        self.local_store_patcher.start()
         self.path_home_patcher = mock.patch.object(module.Path, "home", lambda: self.home)
         self.path_home_patcher.start()
         self.project = self.home / "Documents" / "YofaGames" / "ThisIsMyOregon" / "ExampleProject"
@@ -35,6 +39,7 @@ class ObsidianModelMemoryTests(unittest.TestCase):
 
     def tearDown(self):
         self.path_home_patcher.stop()
+        self.local_store_patcher.stop()
         self.temporary.cleanup()
 
     def write_receipt(self, pair, path=None, context=None):
@@ -104,6 +109,59 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
         self.assertEqual(recommendation["matched_records"], 1)
         self.assertEqual(recommendation["specificity"], "symbol")
+        self.assertEqual(recommendation["local_record_count"], 1)
+        self.assertEqual(recommendation["obsidian_record_count"], 1)
+        self.assertEqual(recommendation["merged_record_count"], 1)
+        self.assertEqual(recommendation["selection_basis"], "local_and_obsidian")
+
+    def test_local_first_write_survives_vault_outage_and_reconciles_later(self):
+        unavailable_vault = self.root / "unavailable-vault"
+        recommendation = module.recommend_model(self.project, "code", "offline-routing", file_value="src/example.py", symbol="Example.offline", code_kind="python", operation="edit", modality="text", complexity_score=35, risk="low", ambiguity="low", task_summary="Record offline model routing result.", vault=unavailable_vault)
+        self.write_receipt(recommendation["attempt_pair"])
+        written = module.record_model_result(self.project, "code", "offline-routing", self.receipt, "pass", "none", file_value="src/example.py", symbol="Example.offline", code_kind="python", operation="edit", modality="text", complexity_score=35, risk="low", ambiguity="low", task_summary="Record offline model routing result.", vault=unavailable_vault, outcome_reason="Focused offline verification passed.", verification_count=1)
+        self.assertTrue(written["local"]["written"])
+        self.assertEqual(written["obsidian"]["status"], "pending")
+        self.assertEqual(written["pending_projection_count"], 1)
+        self.assertEqual(len(module._read_local_records()), 1)
+        reconciled = module.reconcile_local_model_history(self.project, vault=self.vault)
+        self.assertEqual(reconciled["projected"], 1)
+        self.assertEqual(reconciled["pending"], 0)
+        projected = module._read_project_records(self.broad_page)
+        self.assertEqual(len(projected), 1)
+        self.assertEqual(projected[0]["event_id"], written["event_id"])
+        self.assertEqual(projected[0]["outcome_reason"], "Focused offline verification passed.")
+
+    def test_failure_then_stronger_pass_records_recovery_route_and_reasons(self):
+        context = {"file_value": "src/example.py", "symbol": "Example.recover", "code_kind": "python", "operation": "feature", "modality": "text", "complexity_score": 35, "risk": "medium", "ambiguity": "low", "task_summary": "Recover a failed model routing task.", "vault": self.vault}
+        first = module.recommend_model(self.project, "code", "recovery-routing", **context)
+        self.write_receipt(first["attempt_pair"])
+        failed = module.record_model_result(self.project, "code", "recovery-routing", self.receipt, "fail", "correctness", outcome_reason="Focused verification found an incorrect result.", verification_count=1, **context)
+        second = module.recommend_model(self.project, "code", "recovery-routing", **context)
+        self.assertEqual(second["attempt_reason"], "quality_failure_one_rung_up")
+        self.assertNotEqual(second["attempt_pair"], first["attempt_pair"])
+        second_receipt = self.root / "second-receipt.json"
+        self.write_receipt(second["attempt_pair"], path=second_receipt)
+        passed = module.record_model_result(self.project, "code", "recovery-routing", second_receipt, "pass", "none", outcome_reason="Regression verification passed after the model upgrade.", verification_count=2, **context)
+        records = [record for record in module._read_local_records() if record["module"] == "recovery-routing"]
+        self.assertEqual(len(records), 2)
+        self.assertEqual(failed["next_pair"], second["attempt_pair"])
+        self.assertEqual(passed["recovery_from_pair"], first["attempt_pair"])
+        self.assertEqual(records[-1]["completed_pair"], second["attempt_pair"])
+        self.assertEqual(records[-1]["outcome_reason"], "Regression verification passed after the model upgrade.")
+        recommendation = module.recommend_model(self.project, "code", "recovery-routing", **context)
+        self.assertEqual(recommendation["local_record_count"], 2)
+        self.assertEqual(recommendation["obsidian_record_count"], 2)
+        self.assertEqual(recommendation["merged_record_count"], 2)
+
+    def test_pre_result_timeout_records_neutral_operational_fallback(self):
+        context = {"file_value": "src/example.py", "symbol": "Example.timeout", "code_kind": "python", "operation": "design", "modality": "text", "complexity_score": 82, "risk": "high", "ambiguity": "high", "task_summary": "Record a timed out routing stage.", "vault": self.vault}
+        recommendation = module.recommend_model(self.project, "code-design", "timeout-routing", **context)
+        receipt = {"status": "fail", "turn_completed": False, "model_match": False, "effort_match": False, "requested_pair": "gpt-5.6-sol|high", "tokens": {"total_tokens": 20}, "process_elapsed_ms": 300000}
+        self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        recorded = module.record_model_result(self.project, "code-design", "timeout-routing", self.receipt, "fail", "timeout", outcome_reason="The routed stage timed out before publishing.", **context)
+        self.assertEqual(recorded["switch_direction"], "operational_fallback")
+        self.assertEqual(recorded["next_pair"], recommendation["attempt_pair"])
+        self.assertEqual(recorded["outcome_reason"], "The routed stage timed out before publishing.")
 
     def test_shared_page_ignores_another_project_record(self):
         foreign = {"model_experience_schema": 1, "project_key": "other-project", "task_type": "code", "module": "example-module", "file": "src/example.py", "symbol": "Example.run", "code_kind": "python", "operation": "edit", "modality": "text", "complexity": "easy", "risk": "low", "ambiguity": "low", "pair": "gpt-5.6-terra|high", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none"}

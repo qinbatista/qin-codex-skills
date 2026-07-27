@@ -19,7 +19,7 @@ SPEC.loader.exec_module(module)
 def recommendation(pair="gpt-5.6-terra|medium", fallback_pair="gpt-5.6-terra|high"):
     model, effort = pair.split("|", 1)
     return {
-        "source": "obsidian_broad_model_switch",
+        "source": "local_and_obsidian_model_history",
         "memory_available": True,
         "selected_pair": pair,
         "selected_model": model,
@@ -85,7 +85,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["memory_source"], "obsidian_broad_model_switch")
+        self.assertEqual(result["memory_source"], "local_and_obsidian_model_history")
         self.assertEqual(result["selected_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(result["result"], "RESULT")
 

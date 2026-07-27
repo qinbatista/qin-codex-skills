@@ -43,8 +43,10 @@ Catalog-only models remain documented but never enter adaptive upgrade/downgrade
 
 ## Private learning contract
 
-- Authority: `obsidian_broad_model_switch`
-- Path template: `Model Switch.md`
+- Authority: `dual_local_and_obsidian`
+- Local path: `~/.codex/model-routing-memory/events.jsonl`
+- Obsidian projection: `Model Switch.md`
+- Stable event dedupe: `true`
 - Specificity: project_task / module / file / symbol
 - Fields only: `true`; hierarchy notes: `false`; legacy local JSON: `read_only_inactive`.
 

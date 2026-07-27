@@ -134,7 +134,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
                 duplicate = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Test passed"], store=store)
             state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
         record.assert_called_once()
-        self.assertEqual(record.call_args.args[1:], ("pass", "none"))
+        self.assertEqual(record.call_args.args[1:], ("pass", "none", "Real verification passed", 1))
         self.assertEqual(passed["model_learning"], learned)
         self.assertEqual(passed["model_learning"]["model_switch"]["status"], "rebuilt")
         self.assertEqual(state["events"][-1]["model_learning"], learned)
@@ -153,7 +153,9 @@ class EndingTaskLedgerTests(unittest.TestCase):
             (vault / "Projects" / "MuseAI").mkdir(parents=True)
             (vault / "Projects" / "MuseAI" / "Model Switch.md").write_text("# Model Switch\n", encoding="utf-8")
             previous_vault = os.environ.get("CODEX_OBSIDIAN_VAULT")
+            previous_local_store = os.environ.get("CODEX_MODEL_ROUTING_MEMORY")
             os.environ["CODEX_OBSIDIAN_VAULT"] = str(vault)
+            os.environ["CODEX_MODEL_ROUTING_MEMORY"] = str(root / "model-routing-memory" / "events.jsonl")
             try:
                 with patch("pathlib.Path.home", return_value=home):
                     started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, producer_receipt=receipt)
@@ -178,6 +180,10 @@ class EndingTaskLedgerTests(unittest.TestCase):
                     os.environ.pop("CODEX_OBSIDIAN_VAULT", None)
                 else:
                     os.environ["CODEX_OBSIDIAN_VAULT"] = previous_vault
+                if previous_local_store is None:
+                    os.environ.pop("CODEX_MODEL_ROUTING_MEMORY", None)
+                else:
+                    os.environ["CODEX_MODEL_ROUTING_MEMORY"] = previous_local_store
 
     def test_bound_fail_requires_class_and_unavailable_memory_still_records_local_failure(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -192,7 +198,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
                 result = LEDGER.record_event(started["lifecycle_id"], "fail", "Verification found an error", ["Mismatch"], store=store, failure_class="correctness")
             state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
         record.assert_called_once()
-        self.assertEqual(record.call_args.args[1:], ("fail", "correctness"))
+        self.assertEqual(record.call_args.args[1:], ("fail", "correctness", "Verification found an error", 1))
         self.assertEqual(result["status"], "written")
         self.assertEqual(result["lifecycle_status"], "failed")
         self.assertTrue(result["repair_required"])
