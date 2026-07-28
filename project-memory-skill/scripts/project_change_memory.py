@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -8,6 +7,11 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 
 DEFAULT_STORE = Path.home() / ".codex" / "project-change-memory"
@@ -18,6 +22,19 @@ CHANGE_KIND_VALUES = ("add", "edit", "rename", "move", "delete", "mixed")
 VERIFICATION_STATUS_VALUES = ("passed", "partial", "failed", "not-run")
 CANONICAL_KNOWLEDGE_FOLDER = "Knowledge"
 LEGACY_KNOWLEDGE_FOLDER = "KnowledgeAreas"
+
+
+def _lock_file(lock_handle):
+    """Lock project memory with Windows msvcrt or POSIX fcntl."""
+    if os.name == "nt":
+        lock_handle.seek(0, os.SEEK_END)
+        if lock_handle.tell() == 0:
+            lock_handle.write("\0")
+            lock_handle.flush()
+        lock_handle.seek(0)
+        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
 
 
 def _single_line(value, field_name, required=True, max_length=1200):
@@ -472,7 +489,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     store_path.mkdir(parents=True, exist_ok=True)
     lock_path = store_path / ".lock"
     with lock_path.open("a", encoding="utf-8") as lock_handle:
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        _lock_file(lock_handle)
         existing_records = _read_records(store_path / "index.jsonl")
         if record["supersedes"]:
             superseded = next((existing for existing in existing_records if existing.get("id") == record["supersedes"]), None)

@@ -102,6 +102,13 @@ def parse_profile_args(argv):
 
 
 class ModelRoutingHistoryTests(unittest.TestCase):
+    def test_platform_lock_roundtrip_uses_the_available_host_api(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            lock_path = Path(temporary) / "history.lock"
+            with lock_path.open("a+", encoding="utf-8") as lock:
+                module._lock_file(lock)
+                module._unlock_file(lock)
+
     def test_default_local_model_experience_is_read_only(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

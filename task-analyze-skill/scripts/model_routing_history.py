@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -8,6 +7,11 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import mkstemp
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 try:
     from routing_policy import (
@@ -100,6 +104,28 @@ PLUGIN_SKILL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}:[a-z0-9][a-z0-9-]{0
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 FORBIDDEN_SUMMARY = [re.compile(r"```"), re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://"), re.compile(r"(?:^|\s)/[^\s]+"), re.compile(r"\b(?:api|auth|secret|password|token)[_-]?(?:key|token|secret|password)?\s*[:=]", re.I)]
+
+
+def _lock_file(lock):
+    """Lock the history file with Windows msvcrt or POSIX fcntl."""
+    if os.name == "nt":
+        lock.seek(0, os.SEEK_END)
+        if lock.tell() == 0:
+            lock.write("\0")
+            lock.flush()
+        lock.seek(0)
+        msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock_file(lock):
+    """Unlock the history file with the matching platform API."""
+    if os.name == "nt":
+        lock.seek(0)
+        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def sanitize_slug(value, *, field=None):
@@ -557,7 +583,7 @@ def _history_locked(path, mutate=None):
     migrated = None
     with lock_path.open("a+", encoding="utf-8") as lock:
         os.chmod(lock_path, 0o600)
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        _lock_file(lock)
         history = _read_json(path)
         if isinstance(history, dict) and history.get("schema_version") == SCHEMA_VERSION and isinstance(history.get("conditions"), dict):
             migrated = history
@@ -569,7 +595,7 @@ def _history_locked(path, mutate=None):
         value = mutate(migrated) if mutate else None
         if mutate is not None:
             _write_locked(path, migrated)
-        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        _unlock_file(lock)
     return migrated, value
 
 
