@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -45,6 +46,13 @@ class ReceiptAuthorizationError(ValueError):
     def __init__(self, code):
         super().__init__(code)
         self.code = code
+
+
+def resolve_codex_command(command):
+    """Resolve the default Windows launcher while preserving explicit and POSIX commands."""
+    if os.name == "nt" and command == "codex":
+        return shutil.which(command) or command
+    return command
 
 
 def entry_context_active():
@@ -618,7 +626,7 @@ def run_receipt(args, prompt_text):
     requested_pair = requested_pair_tuple
     allowed_pairs = [requested_pair] + [parse_model_effort_pair(value) for value in allowed_fallback_pairs]
     command = [
-        args.codex_bin,
+        resolve_codex_command(args.codex_bin),
         "exec",
         "--model",
         args.model,

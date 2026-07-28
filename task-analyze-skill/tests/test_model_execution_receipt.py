@@ -20,6 +20,21 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class ModelExecutionReceiptTests(unittest.TestCase):
+    def test_default_windows_codex_command_prefers_the_runnable_path_launcher(self):
+        launcher = r"C:\Users\qinba\AppData\Roaming\npm\codex.CMD"
+        with patch.object(module.os, "name", "nt"), patch.object(module.shutil, "which", return_value=launcher) as which_mock:
+            self.assertEqual(module.resolve_codex_command("codex"), launcher)
+        which_mock.assert_called_once_with("codex")
+
+    def test_explicit_codex_path_and_non_windows_command_are_unchanged(self):
+        explicit = r"C:\tools\codex.exe"
+        with patch.object(module.os, "name", "nt"), patch.object(module.shutil, "which") as which_mock:
+            self.assertEqual(module.resolve_codex_command(explicit), explicit)
+        which_mock.assert_not_called()
+        with patch.object(module.os, "name", "posix"), patch.object(module.shutil, "which") as which_mock:
+            self.assertEqual(module.resolve_codex_command("codex"), "codex")
+        which_mock.assert_not_called()
+
     def test_immediate_operational_fallback_requires_zero_token_unpublished_failure(self):
         eligible = module.annotate_operational_fallback({"status": "fail", "failure_class": "availability", "turn_completed": False, "tokens": {"total_tokens": 0}, "result_published": False, "route_attempts": [{}]})
         published = dict(eligible, result_published=True)
@@ -195,7 +210,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="route-attempt", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
-        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "-c", "features.multi_agent=false", "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
+        self.assertEqual(run_mock.call_args.args[0], [module.resolve_codex_command("codex"), "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "-c", "features.multi_agent=false", "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
         attempt = receipt["route_attempts"][0]
         self.assertEqual(attempt["requested_pair"], "gpt-5.6-luna|low")
         self.assertEqual(attempt["resolved_pair"], "gpt-5.6-luna|low")
@@ -218,7 +233,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         args = argparse.Namespace(model="gpt-5.3-codex-spark", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="runtime-fail", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
-        self.assertEqual(run_mock.call_args.args[0][0], "codex")
+        self.assertEqual(run_mock.call_args.args[0][0], module.resolve_codex_command("codex"))
         attempt = receipt["route_attempts"][0]
         self.assertEqual(attempt["status"], "fail")
         self.assertEqual(attempt["failure_class"], "execution")
