@@ -3,15 +3,16 @@ import argparse
 import hashlib
 import json
 import os
+if os.name == "nt":
+    import msvcrt
+elif os.name == "posix":
+    import fcntl
+else:
+    raise RuntimeError(f"Unsupported host OS for project memory locking: {os.name}")
 import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-
-if os.name == "nt":
-    import msvcrt
-else:
-    import fcntl
 
 
 DEFAULT_STORE = Path.home() / ".codex" / "project-change-memory"
@@ -24,8 +25,7 @@ CANONICAL_KNOWLEDGE_FOLDER = "Knowledge"
 LEGACY_KNOWLEDGE_FOLDER = "KnowledgeAreas"
 
 
-def _lock_file(lock_handle):
-    """Lock project memory with Windows msvcrt or POSIX fcntl."""
+def _acquire_file_lock(lock_handle):
     if os.name == "nt":
         lock_handle.seek(0, os.SEEK_END)
         if lock_handle.tell() == 0:
@@ -489,7 +489,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     store_path.mkdir(parents=True, exist_ok=True)
     lock_path = store_path / ".lock"
     with lock_path.open("a", encoding="utf-8") as lock_handle:
-        _lock_file(lock_handle)
+        _acquire_file_lock(lock_handle)
         existing_records = _read_records(store_path / "index.jsonl")
         if record["supersedes"]:
             superseded = next((existing for existing in existing_records if existing.get("id") == record["supersedes"]), None)

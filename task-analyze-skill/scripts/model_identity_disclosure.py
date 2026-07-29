@@ -27,10 +27,9 @@ def _load_model_registry():
 
 
 load_registry = _load_model_registry()
-DISCLOSURE_EVIDENCE = {"runtime_receipt", "verified_entry", "task_assignment", "configured_selection", "unavailable"}
-DISCLOSURE_LEVELS = {"runtime_receipt", "UNVERIFIED (no runtime receipt)", "unavailable"}
-DISCLOSURE_ROUTE_CHANGES = {"upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"}
-DISCLOSURE_PATTERN = re.compile(r"^Complexity:\s*(?P<score>\d+)/100 \((?P<band>small|standard|complex|advanced)\)$\n^Current model:\s*(?P<current_model>[^|\n]+?)\s+\|\s+(?P<current_effort>[^|\n]+?)\s*$\n^Model evidence:\s*(?P<evidence>[^\n]+?)\s*$\n^Model pairs \(requested / resolved / effective\): requested=(?P<requested>[^\s|]+\|[^\s|]+) -> resolved=(?P<resolved>[^\s|]+\|[^\s|]+) -> effective=(?P<effective>[^\s|]+\|[^\s|]+)\s*$\n^Current model evidence-level:\s*(?P<evidence_level>[^\n]+?)\s*$\n^Previous model:\s*(?P<previous>[^\n]+?)\s*$\n^Route change:\s*(?P<route_change>[^\n]+?)\s*$\n^Switch summary:\s*(?P<switch_summary>.+?)\s*$\n^Reason:\s*(?P<reason>.+?)\s*$", re.MULTILINE)
+DISCLOSURE_EVIDENCE_LABELS = {"runtime receipt": ("runtime_receipt", "runtime_receipt"), "verified entry (no runtime receipt)": ("verified_entry", "UNVERIFIED (no runtime receipt)"), "task assignment (no runtime receipt)": ("task_assignment", "UNVERIFIED (no runtime receipt)"), "configured selection (no runtime receipt)": ("configured_selection", "UNVERIFIED (no runtime receipt)"), "unavailable": ("unavailable", "unavailable")}
+DISCLOSURE_ROUTE_LABELS = {"upgrade": "upgrade", "downgrade": "downgrade", "frozen": "freeze", "no switch": "no_switch", "fallback": "operational_fallback"}
+DISCLOSURE_PATTERN = re.compile(r"^Complexity:\s*(?P<score>\d+)/100 \((?P<band>small|standard|complex|advanced)\) · Model:\s*(?P<current_model>[^|\s]+)\|(?P<current_effort>[^|\s]+) · Route:\s*(?P<route_label>upgrade|downgrade|frozen|no switch|fallback)\s*$(?:\n^Model path:\s*(?P<model_path>[^\n]+?)\s*$)?\n^Evidence:\s*(?P<evidence_label>runtime receipt|verified entry \(no runtime receipt\)|task assignment \(no runtime receipt\)|configured selection \(no runtime receipt\)|unavailable)\s*$", re.MULTILINE)
 
 
 def _allowed_pairs(registry=None):
@@ -104,32 +103,65 @@ def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=N
     requested_pair = identity["requested_pair"]
     resolved_pair = identity["resolved_pair"]
     effective_pair = identity["effective_pair"]
-    current_model, current_effort = effective_pair.split("|", 1)
+    model_path = []
     if identity["source"] == "runtime_receipt":
-        evidence_level = "runtime_receipt"
-        route_change = "no_switch" if requested_pair == effective_pair else "operational_fallback"
-        previous_model = "same as current" if route_change == "no_switch" else requested_pair.replace("|", " | ")
-        switch_summary = "No model switch" if route_change == "no_switch" else f"Runtime receipt selected {effective_pair}."
-        reason = "Runtime receipt is the highest available identity authority."
+        evidence_label = "runtime receipt"
+        if requested_pair != resolved_pair or resolved_pair != effective_pair:
+            route_label = "fallback"
+            for pair in (requested_pair, resolved_pair, effective_pair):
+                if not model_path or model_path[-1] != pair:
+                    model_path.append(pair)
+        else:
+            switch_direction = runtime_receipt.get("switch_direction") if isinstance(runtime_receipt, dict) else None
+            switch_change = runtime_receipt.get("switch_change") if isinstance(runtime_receipt, dict) else None
+            switch_pairs = [pair.strip() for pair in switch_change.split("->")] if isinstance(switch_change, str) else []
+            valid_switch = (
+                switch_direction in {"upgrade", "downgrade"}
+                and len(switch_pairs) >= 2
+                and switch_pairs[-1] == effective_pair
+                and all(pair in _allowed_pairs(registry) for pair in switch_pairs)
+            )
+            if valid_switch:
+                route_label = switch_direction
+                for pair in switch_pairs:
+                    if not model_path or model_path[-1] != pair:
+                        model_path.append(pair)
+            else:
+                route_label = "frozen" if switch_direction == "freeze" else "no switch"
     elif identity["source"] == "verified_entry":
-        evidence_level = "UNVERIFIED (no runtime receipt)"
-        route_change = "no_switch"
-        previous_model = "same as current"
-        switch_summary = "No model switch"
-        reason = "Verified entry context supplied the current model identity."
+        evidence_label = "verified entry (no runtime receipt)"
+        route_label = "no switch"
     else:
-        evidence_level = "unavailable"
-        route_change = "no_switch"
-        previous_model = "none"
-        switch_summary = "No model switch"
-        reason = "The entry resolver explicitly reported model identity unavailable."
-    return "\n".join([f"Complexity: {complexity_score}/100 ({_complexity_band(complexity_score)})", f"Current model: {current_model} | {current_effort}", f"Model evidence: {identity['source']}", f"Model pairs (requested / resolved / effective): requested={requested_pair} -> resolved={resolved_pair} -> effective={effective_pair}", f"Current model evidence-level: {evidence_level}", f"Previous model: {previous_model}", f"Route change: {route_change}", f"Switch summary: {switch_summary}", f"Reason: {reason}"])
+        evidence_label = "unavailable"
+        route_label = "no switch"
+    lines = [f"Complexity: {complexity_score}/100 ({_complexity_band(complexity_score)}) · Model: {effective_pair} · Route: {route_label}"]
+    if model_path:
+        lines.append(f"Model path: {' -> '.join(model_path)}")
+    lines.append(f"Evidence: {evidence_label}")
+    return "\n".join(lines)
+
+
+def normalize_result_disclosure(result_text, complexity_score, runtime_receipt=None, entry_resolution=None, registry=None):
+    canonical = render_disclosure(
+        complexity_score,
+        runtime_receipt=runtime_receipt,
+        entry_resolution=entry_resolution,
+        registry=registry,
+    )
+    text = str(result_text or "").lstrip("\ufeff")
+    compact_match = DISCLOSURE_PATTERN.search(text)
+    if compact_match:
+        return text[:compact_match.start()] + canonical + text[compact_match.end():]
+    if text.startswith("Complexity:"):
+        paragraph_end = text.find("\n\n")
+        return canonical if paragraph_end < 0 else canonical + text[paragraph_end:]
+    return canonical + ("\n\n" + text if text else "")
 
 
 def validate_disclosure(disclosure_text, registry=None):
     match = DISCLOSURE_PATTERN.search(disclosure_text)
     if not match:
-        return ["missing or invalid complete model disclosure"]
+        return ["missing or invalid compact model disclosure"]
     values = match.groupdict()
     failures = []
     if int(values["score"]) > 100:
@@ -138,18 +170,11 @@ def validate_disclosure(disclosure_text, registry=None):
     if expected_band and values["band"] != expected_band:
         failures.append("Complexity band must match the score")
     current_pair = f"{values['current_model'].strip()}|{values['current_effort'].strip()}"
-    requested_pair = values["requested"]
-    resolved_pair = values["resolved"]
-    effective_pair = values["effective"]
-    evidence = values["evidence"]
-    evidence_level = values["evidence_level"]
-    if evidence not in DISCLOSURE_EVIDENCE:
-        failures.append("Model evidence uses an unsupported label")
-    if evidence_level not in DISCLOSURE_LEVELS:
-        failures.append("Current model evidence-level uses an unsupported label")
-    if values["route_change"] not in DISCLOSURE_ROUTE_CHANGES:
-        failures.append("Route change uses an unsupported label")
-    known_pairs = (current_pair, requested_pair, resolved_pair, effective_pair)
+    evidence, evidence_level = DISCLOSURE_EVIDENCE_LABELS[values["evidence_label"]]
+    route_change = DISCLOSURE_ROUTE_LABELS[values["route_label"]]
+    model_path = values.get("model_path")
+    path_pairs = [pair.strip() for pair in model_path.split("->")] if model_path else []
+    known_pairs = (current_pair, *path_pairs)
     if "unknown|unknown" in known_pairs:
         if any(pair != "unknown|unknown" for pair in known_pairs) or evidence != "unavailable" or evidence_level != "unavailable":
             failures.append("unknown | unknown is valid only when the resolver explicitly reports unavailable")
@@ -164,14 +189,15 @@ def validate_disclosure(disclosure_text, registry=None):
             failures.append("runtime receipt evidence requires runtime_receipt evidence-level")
         if evidence != "runtime_receipt" and evidence != "unavailable" and evidence_level != "UNVERIFIED (no runtime receipt)":
             failures.append("non-receipt model evidence requires UNVERIFIED (no runtime receipt) evidence-level")
-    if current_pair != effective_pair:
-        failures.append("Current model must match the effective model pair")
-    if values["route_change"] == "no_switch":
-        expected_previous = "none" if current_pair == "unknown|unknown" else "same as current"
-        if values["previous"].strip() != expected_previous or values["switch_summary"].strip() != "No model switch" or any(pair != current_pair for pair in (requested_pair, resolved_pair, effective_pair)):
-            failures.append("no_switch requires one pair, Previous model: same as current (or none when unknown), and Switch summary: No model switch")
-    if len(values["reason"].split()) > 20:
-        failures.append("Reason disclosure exceeds 20 words")
+    if route_change in {"no_switch", "freeze"} and path_pairs:
+        failures.append("no switch or frozen route must omit Model path")
+    if route_change in {"upgrade", "downgrade", "operational_fallback"}:
+        if len(path_pairs) < 2:
+            failures.append("a changed route requires a Model path with at least two distinct pairs")
+        elif path_pairs[-1] != current_pair:
+            failures.append("Model must match the final Model path pair")
+        elif any(left == right for left, right in zip(path_pairs, path_pairs[1:])):
+            failures.append("Model path must collapse consecutive duplicate pairs")
     return failures
 
 

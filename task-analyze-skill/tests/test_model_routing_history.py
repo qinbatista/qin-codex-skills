@@ -13,7 +13,7 @@ from contextlib import contextmanager, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "model_routing_history.py"
@@ -48,6 +48,20 @@ FULL_SOL_LADDER = [
     "gpt-5.6-sol|max",
     "gpt-5.6-sol|ultra",
 ]
+
+
+class FileLockPlatformTests(unittest.TestCase):
+    def test_windows_file_lock_uses_msvcrt_and_releases_same_byte(self):
+        lock_handle = Mock()
+        lock_handle.tell.return_value = 0
+        windows_lock = Mock()
+        windows_lock.LK_LOCK = 1
+        windows_lock.LK_UNLCK = 2
+        with patch.object(module.os, "name", "nt"), patch.object(module, "msvcrt", windows_lock, create=True):
+            module._acquire_file_lock(lock_handle)
+            module._release_file_lock(lock_handle)
+        lock_handle.write.assert_called_once_with("\0")
+        self.assertEqual(windows_lock.locking.call_args_list, [call(lock_handle.fileno(), windows_lock.LK_LOCK, 1), call(lock_handle.fileno(), windows_lock.LK_UNLCK, 1)])
 
 
 def arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-one"):
@@ -102,13 +116,6 @@ def parse_profile_args(argv):
 
 
 class ModelRoutingHistoryTests(unittest.TestCase):
-    def test_platform_lock_roundtrip_uses_the_available_host_api(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            lock_path = Path(temporary) / "history.lock"
-            with lock_path.open("a+", encoding="utf-8") as lock:
-                module._lock_file(lock)
-                module._unlock_file(lock)
-
     def test_default_local_model_experience_is_read_only(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -3,15 +3,16 @@ import argparse
 import hashlib
 import json
 import os
+if os.name == "nt":
+    import msvcrt
+elif os.name == "posix":
+    import fcntl
+else:
+    raise RuntimeError(f"Unsupported host OS for routing-history locking: {os.name}")
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import mkstemp
-
-if os.name == "nt":
-    import msvcrt
-else:
-    import fcntl
 
 try:
     from routing_policy import (
@@ -102,30 +103,28 @@ RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "executi
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 PLUGIN_SKILL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}:[a-z0-9][a-z0-9-]{0,63}$")
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _acquire_file_lock(lock_handle):
+    if os.name == "nt":
+        lock_handle.seek(0, os.SEEK_END)
+        if lock_handle.tell() == 0:
+            lock_handle.write("\0")
+            lock_handle.flush()
+        lock_handle.seek(0)
+        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+
+
+def _release_file_lock(lock_handle):
+    if os.name == "nt":
+        lock_handle.seek(0)
+        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 FORBIDDEN_SUMMARY = [re.compile(r"```"), re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://"), re.compile(r"(?:^|\s)/[^\s]+"), re.compile(r"\b(?:api|auth|secret|password|token)[_-]?(?:key|token|secret|password)?\s*[:=]", re.I)]
-
-
-def _lock_file(lock):
-    """Lock the history file with Windows msvcrt or POSIX fcntl."""
-    if os.name == "nt":
-        lock.seek(0, os.SEEK_END)
-        if lock.tell() == 0:
-            lock.write("\0")
-            lock.flush()
-        lock.seek(0)
-        msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
-    else:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-
-
-def _unlock_file(lock):
-    """Unlock the history file with the matching platform API."""
-    if os.name == "nt":
-        lock.seek(0)
-        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
-    else:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def sanitize_slug(value, *, field=None):
@@ -578,12 +577,14 @@ def _history_from_schema2(raw_history):
 def _history_locked(path, mutate=None):
     path = Path(path).expanduser().resolve()
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
-    os.chmod(path.parent, 0o700)
+    if os.name != "nt":
+        os.chmod(path.parent, 0o700)
     lock_path = path.with_suffix(path.suffix + ".lock")
     migrated = None
     with lock_path.open("a+", encoding="utf-8") as lock:
-        os.chmod(lock_path, 0o600)
-        _lock_file(lock)
+        if os.name != "nt":
+            os.chmod(lock_path, 0o600)
+        _acquire_file_lock(lock)
         history = _read_json(path)
         if isinstance(history, dict) and history.get("schema_version") == SCHEMA_VERSION and isinstance(history.get("conditions"), dict):
             migrated = history
@@ -595,7 +596,7 @@ def _history_locked(path, mutate=None):
         value = mutate(migrated) if mutate else None
         if mutate is not None:
             _write_locked(path, migrated)
-        _unlock_file(lock)
+        _release_file_lock(lock)
     return migrated, value
 
 

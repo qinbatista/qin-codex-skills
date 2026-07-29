@@ -7,9 +7,13 @@ This gate applies when creating/changing functional code inside a Skill or used 
 ## Required author declarations
 
 - Declare target supported platforms in code docs/comments.
+- For host-run local automation, prefer one portable Python entry point over paired `.cmd` and `.sh` implementations; a necessary native wrapper forwards arguments and exit codes without owning business logic.
 - Require a clear unsupported-platform error or fallback for targets outside supported set.
 - Use `pathlib.Path`, `Path.home()`, `Path.cwd()`, `tempfile`, and env discovery (`os.environ` / `os.getenv`) for portable file/dir logic.
 - Resolve executables via PATH-aware checks before launch.
+- Launch child Python code with `sys.executable`, never a hard-coded `python`, `python3`, or `py` command.
+- Guard platform-only Python modules and APIs such as `fcntl`, `msvcrt`, `os.killpg`, `os.startfile`, `start_new_session`, and Windows `creationflags`.
+- Avoid `shell=True` in shared code; build subprocess commands as argument arrays.
 
 ## Guard examples
 
@@ -63,6 +67,8 @@ if (process.platform === "darwin") {
 ## Minimal required checks
 
 - Ensure every OS-specific command path is inside explicit platform guard.
+- Ensure every platform-only Python import, API, and subprocess option is guarded.
+- Ensure Python child processes use `sys.executable`.
 - Ensure portable branches include concrete fallback or explicit `UnsupportedPlatformError`/`RuntimeError`/`throw`/exit code.
 - Run the checker on changed functional files and include results in project completion flow. From the `.codex` directory, use the launcher appropriate to the host:
 

@@ -419,10 +419,11 @@ def priority_first_pair(task_type, modality="text", operation="work", complexity
     maximum_score = PRIORITY_PRODUCER_CONFIG.get("task_segment_maximum_complexity_score", PRIORITY_PRODUCER_CONFIG.get("small_edit_maximum_complexity_score", 24))
     if complexity_score is None or isinstance(complexity_score, bool) or not isinstance(complexity_score, int) or not 0 <= complexity_score <= maximum_score:
         return None
-    eligible_task = task_type in PRIORITY_PRODUCER_CONFIG.get("small_edit_task_types", [])
-    eligible_operation = operation in PRIORITY_PRODUCER_CONFIG.get("small_edit_operations", [])
+    eligible_task = task_type in PRIORITY_PRODUCER_CONFIG.get("eligible_task_types", [])
+    eligible_operation = operation in PRIORITY_PRODUCER_CONFIG.get("eligible_operations", [])
+    excluded_operation = operation in PRIORITY_PRODUCER_CONFIG.get("excluded_operations", [])
     eligible_segment = purpose in PRIORITY_PRODUCER_CONFIG.get("task_segment_purposes", [])
-    if not ((eligible_task and eligible_operation) or eligible_segment):
+    if excluded_operation or not ((eligible_task and eligible_operation) or eligible_segment):
         return None
     effort = PRIORITY_PRODUCER_CONFIG["effort_by_complexity"]["easy"]
     return (PRIORITY_PRODUCER_MODEL, effort)

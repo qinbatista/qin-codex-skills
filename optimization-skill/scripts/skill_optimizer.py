@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import py_compile
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -355,13 +357,27 @@ def validate_script(script_path: Path) -> list[str]:
         except py_compile.PyCompileError as _error:
             _errors.append(f"Python syntax check failed for {script_path}: {_error.msg}")
     elif script_path.suffix == ".sh":
-        _result = subprocess.run(["bash", "-n", str(script_path)], capture_output=True, text=True)
+        _shell = shutil.which("bash")
+        if not _shell:
+            _errors.append(f"Shell syntax check unavailable on {sys.platform}: bash is not on PATH.")
+            return _errors
+        _result = subprocess.run([_shell, "-n", str(script_path)], capture_output=True, text=True)
         if _result.returncode != 0:
             _errors.append(f"Shell syntax check failed for {script_path}: {_result.stderr.strip() or _result.stdout.strip()}")
     elif script_path.suffix == ".applescript":
-        _result = subprocess.run(["osacompile", "-o", "/tmp/skill_optimizer_compile.scpt", str(script_path)], capture_output=True, text=True)
-        if _result.returncode != 0:
-            _errors.append(f"AppleScript compile failed for {script_path}: {_result.stderr.strip() or _result.stdout.strip()}")
+        if sys.platform == "darwin":
+            _compiler = shutil.which("osacompile")
+            if not _compiler:
+                _errors.append("AppleScript syntax check unavailable: osacompile is not on PATH.")
+                return _errors
+            with tempfile.TemporaryDirectory() as _temporary_directory:
+                _output_path = Path(_temporary_directory) / "skill_optimizer_compile.scpt"
+                _result = subprocess.run([_compiler, "-o", str(_output_path), str(script_path)], capture_output=True, text=True)
+                if _result.returncode != 0:
+                    _errors.append(f"AppleScript compile failed for {script_path}: {_result.stderr.strip() or _result.stdout.strip()}")
+        else:
+            _errors.append(f"AppleScript syntax check is unsupported on {sys.platform}; run it on macOS.")
+            return _errors
     return _errors
 
 

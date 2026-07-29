@@ -91,7 +91,7 @@ Apply owner/domain and safety floors before private experience:
 - Use the catalog's strongest quality model for missing context, open-ended architecture, or difficult cross-system judgment.
 - Use the catalog's balanced quality model for grounded repository, integration, testing, and evidence work.
 - Use weaker catalog models only for bounded work after cold-start policy or verified descent permits them.
-Every adaptive profile reads `assets/model-capability-ladder.json`. The file is the saved local-catalog snapshot, and only its highest numeric GPT family participates in ordinary quality movement. The catalog fast producer remains outside that quality ladder: eligible small edits attempt Spark-low before the contextual quality pair, while larger work executes the quality recommendation directly. Move effort before model while downgrading and reverse that order while upgrading.
+Every adaptive profile reads `assets/model-capability-ladder.json`. The file is the saved local-catalog snapshot, and only its highest numeric GPT family participates in ordinary quality movement. The catalog fast producer remains outside that quality ladder: eligible bounded text/code work, including tiny questions and local value edits, attempts Spark-low before the contextual quality pair, while larger work executes the quality recommendation directly. Move effort before model while downgrading and reverse that order while upgrading.
 
 ## Obsidian Adaptive Routing
 
@@ -99,8 +99,8 @@ The mechanism has a shared policy plus dual private experience. `assets/model-ca
 
 Model-quality learning is keyed by exact project/task/module/file/symbol/code context, with artifact, scope, ambiguity, modality, risk, 0-100 complexity score and band, execution domain, owning skill, and verification shape retained as supporting context. End-to-end performance admission remains a separate evidence system for strategy-level multi-node JSON and speed/token claims.
 
-- Eligible small-edit priority: score 0-24, text modality, low risk, low ambiguity, and an edit-like operation attempts Spark-low. A prior Spark quality failure for the same project/task/operation/code/band disables Spark and records an upgrade to the contextual quality pair.
-- No prior quality success outside that small-edit priority: eligible production runs the catalog cold-start pair with `trial=true`; this bootstrap sample is what allows later descent, ascent, or freezing. Ineligible/tool-only/exact-read-only work remains inline after score-only classification.
+- Eligible bounded text/code priority: score 0-24, text modality, low risk, low ambiguity, an eligible task type, and a non-excluded answer/work/edit/write/execute operation attempts Spark-low. A prior Spark quality failure for the same project/task/operation/code/band disables Spark and records an upgrade to the contextual quality pair.
+- No prior quality success outside that bounded priority: eligible production runs the catalog cold-start pair with `trial=true`; this bootstrap sample is what allows later descent, ascent, or freezing. Ineligible/tool-only/exact-read-only work remains inline after score-only classification.
 - One receipt-matched Real pass keeps the current pair and collects evidence. Two receipt-matched Real passes at that pair trial exactly one lower effort on the same model before moving to a weaker model; a quality failure immediately reverses that order by one rung.
 - Like-for-like cost selection is allowed only when at least two Real-passing pairs share an exact `workload_prompt_sha256`; rank median logical tokens first, median process time second, then the weaker rung. Operational failure is quality-neutral and may use one stronger fallback only before any result with zero tokens.
 - A frozen matching project/code-context profile reuses its lowest Real-passing pair with `trial=false` until verified failure or material profile/policy drift.
@@ -114,9 +114,9 @@ Each receipt-backed Ending terminal record is rendered once under the matching c
 
 After admission, continue through `workflow-skill` in the same task.
 
-- One result producer uses its resolved Obsidian context through `scripts/obsidian_adaptive_model_runner.py` and `scripts/model_execution_receipt.py`; eligible small edits attempt Spark-low with the contextual quality pair as operational fallback, other work executes the recommended quality pair with at most one stronger operational fallback, and every route emits score and switch change with the first completed result.
+- One result producer uses its resolved Obsidian context through `scripts/obsidian_adaptive_model_runner.py` and `scripts/model_execution_receipt.py`; eligible tiny questions and bounded text/code edits attempt Spark-low with the contextual quality pair as operational fallback, other work executes the recommended quality pair with at most one stronger operational fallback, and every route emits score and switch change with the first completed result.
 - The same runner owns independent-source cost admission. Small source sets use one contextual quality producer; an admitted large/latency graph uses `task_route_dispatcher.py` once, launches disjoint source nodes in parallel, starts the adaptive merge only from completed dependency results, fuses the final exact-owned source audit with that merge when safe, and emits one aggregate scheduled receipt. Missing Obsidian uses local history, or shared cold start when local history is also empty; it does not abort execution.
-- `obsidian_adaptive_model_runner.py` reads learning but never writes it. Spark is a small-edit priority attempt outside schema-version-2 quality nodes and may also serve admitted disjoint source branches; a contextual Ending quality failure suppresses that priority attempt. `strategy_performance.py` separately gates multi-node strategy JSON routing and Auto-versus-Direct claims.
+- `obsidian_adaptive_model_runner.py` reads learning but never writes it. Spark is a bounded text/code priority attempt outside schema-version-2 quality nodes and may also serve admitted disjoint source branches; a contextual Ending quality failure suppresses that priority attempt. `strategy_performance.py` separately gates multi-node strategy JSON routing and Auto-versus-Direct claims.
 - A true multi-node dependency graph saves one private schema-version-2 `dynamic_task_graph` JSON with only `result` and `ending` phases, per-node scores/bands/pairs, and calls `scripts/task_route_dispatcher.py run-plan <plan-file>` once.
 - Use exactly one execution surface per branch. Do not combine collaboration and dispatcher execution for the same work.
 - Registry-owned delegated Python, C#, and Unity C# implementation or authored probes load `code-skill` and their domain rules.
@@ -130,20 +130,16 @@ For code, producer completion includes the bounded Quick Check; it is not indepe
 
 ## Result Model Disclosure
 
-Every user-facing origin result and each result/Ending node prints this complete block from `scripts/model_identity_disclosure.py`:
+Every user-facing origin result and result/Ending node prints the compact block generated by `scripts/model_identity_disclosure.py`:
 
-- `Complexity: <int>/100 (<band>)`
-- `Current model: <model> | <effort>`
-- `Model evidence: runtime_receipt|verified_entry|task_assignment|configured_selection|unavailable`
-- `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`
-- `Current model evidence-level: runtime_receipt|UNVERIFIED (no runtime receipt)|unavailable`
-- `Previous model: <model | effort|same as current|none>`
-- `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`
-- `Switch summary: <one concise switch description>`
-- `Reason: <concise sentence of 20 words or fewer>`
+```text
+Complexity: <int>/100 (<band>) · Model: <model>|<effort> · Route: no switch|upgrade|downgrade|frozen|fallback
+Evidence: runtime receipt|verified entry (no runtime receipt)|task assignment (no runtime receipt)|configured selection (no runtime receipt)|unavailable
+```
 
-`Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. `Model evidence` names the identity source and `Current model evidence-level` names its proof strength. Keep every known requested/resolved/effective pair concrete; never replace it with `unverified | unverified`. Only absent identity uses `unknown | unknown` with unavailable evidence. One-pair execution uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`.
-Runtime receipt is authoritative when present; verified-entry identity is the fallback. Generic `GPT-5`, `configured system identity`, invented evidence labels, and known models with `unknown` are invalid in this block.
+Add `Model path: <prior/selected> -> <requested/resolved> -> <effective>` between those lines only when the changed route has a distinct model path; collapse consecutive duplicate pairs. Do not print separate current model, previous model, evidence-level, switch-summary, or reason lines. The effective pair appears once in the default block, while full routing data remains in receipts, manifests, and lifecycle ledgers.
+
+Runtime receipt is authoritative when present; otherwise use the known assigned, configured, or verified-entry pair. Generic `GPT-5`, invented evidence labels, known models with an unknown effort, and `unverified|unverified` are invalid. Only absent identity may use `unknown|unknown` with unavailable evidence.
 
 For dispatched or ordinary work, enforce result -> bounded Quick Check for code -> show result -> `release-main-result` -> scored lifecycle -> real-test plan when verification applies -> one persistent Ending task per independent check. Each check uses its own score-derived quality pair. The origin links them and returns without polling. PASS requires every real check. FAIL records exact evidence, launches a separate repair task, and launches fresh verification after repair; a failing verifier never edits its own target. Thread-tool absence, external state, timeout, or three failed repairs records BLOCKED. Receipt-backed producer PASS/FAIL writes to Obsidian after local lifecycle evidence is durable.
 

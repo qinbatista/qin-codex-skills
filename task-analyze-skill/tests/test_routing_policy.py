@@ -112,12 +112,15 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(module.priority_first_pair("code", "text", "edit", "easy", 18), (priority["id"], priority["effort_by_complexity"]["easy"]))
         self.assertIsNone(module.priority_first_pair("code", "text", "edit", "complex"))
         self.assertEqual(module.spark_first_pair("document", "text", "write", "easy", 12), (priority["id"], priority["effort_by_complexity"]["easy"]))
+        self.assertEqual(module.priority_first_pair("question", "text", "answer", "easy", 8), (priority["id"], priority["effort_by_complexity"]["easy"]))
+        self.assertEqual(module.priority_first_pair("summary", "text", "work", "easy", 10), (priority["id"], priority["effort_by_complexity"]["easy"]))
         self.assertEqual(module.priority_first_pair("question", "text", "work", "easy", 16, "execute"), (priority["id"], priority["effort_by_complexity"]["easy"]))
         self.assertIsNone(module.priority_first_pair("code", "text", "edit", "easy", 25))
         self.assertEqual(module.scheduled_source_pair("easy"), (priority["id"], priority["effort_by_complexity"]["easy"]))
         self.assertEqual(module.scheduled_source_pair("complex"), (priority["id"], priority["effort_by_complexity"]["complex"]))
         self.assertIsNone(module.priority_first_pair("code", "mixed", "edit", "easy"))
         self.assertIsNone(module.priority_first_pair("code", "text", "review", "easy"))
+        self.assertIsNone(module.priority_first_pair("question", "text", "audit", "easy", 8, "execute"))
 
     def test_documentation_instructions_uses_spark_only_for_small_edit_segments(self):
         self.assertEqual(module.priority_first_pair("documentation-instructions", "text", "edit", "easy", 14), module.SPARK_LOW_PAIR)

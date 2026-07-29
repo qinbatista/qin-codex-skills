@@ -20,6 +20,12 @@ SUFFIX_LANGUAGES = {".py": "python", ".sh": "shell", ".bash": "shell", ".zsh": "
 PATH_PATTERN = re.compile(r"(?:/(?:Users|Applications|tmp)/|~/(?:Library|Applications)|[A-Za-z]:\\(?:Users|Program Files)\\|\\\\|(?:^|[^:])\\[A-Za-z0-9_.-]+\\)")
 COMMAND_PATTERN = re.compile(r"\b(osascript|osacompile|cmd\.exe|powershell(?:\.exe)?|open)\b", re.IGNORECASE)
 PLATFORM_GUARDS = {"darwin": ("darwin", "Darwin", "$IsMacOS"), "windows": ("win32", "nt", "Windows", "$IsWindows"), "linux": ("linux", "Linux", "$IsLinux")}
+PLATFORM_ONLY_MODULES = {"fcntl", "grp", "msvcrt", "pty", "pwd", "resource", "termios"}
+PLATFORM_ONLY_CALLS = {"os.fork", "os.getegid", "os.geteuid", "os.getgid", "os.getpgid", "os.getuid", "os.killpg", "os.setpgid", "os.setsid", "os.startfile"}
+SUBPROCESS_CALLS = {"subprocess.call", "subprocess.check_call", "subprocess.check_output", "subprocess.Popen", "subprocess.run"}
+PYTHON_COMMANDS = {"py", "python", "python3", "python.exe", "python3.exe"}
+EXECUTABLE_LITERAL_CALLS = SUBPROCESS_CALLS | {"os.popen", "os.system", "shutil.which"}
+PATH_LITERAL_CALLS = EXECUTABLE_LITERAL_CALLS | {"open", "Path", "pathlib.Path"}
 
 
 def _relative_path(skills_root, path):
@@ -28,7 +34,7 @@ def _relative_path(skills_root, path):
 
 def _candidate_files(skills_root, selected_files=None):
     skills_root = Path(skills_root).resolve()
-    requested_paths = [Path(path).resolve() for path in selected_files] if selected_files else None
+    requested_paths = [(Path(path) if Path(path).is_absolute() else skills_root / path).resolve() for path in selected_files] if selected_files else None
     candidates = []
     for skill_path in sorted(skills_root.iterdir(), key=lambda path: path.name) if skills_root.is_dir() else []:
         if not skill_path.is_dir() or skill_path.name.startswith(".") or not (skill_path / "SKILL.md").is_file():
@@ -62,11 +68,13 @@ def _finding(relative_path, language, rule, line, column, message, marker, occur
 
 def _is_platform_guard(test):
     text = ast.unparse(test) if hasattr(ast, "unparse") else ""
-    return bool(re.search(r"(?:sys\.platform\s*==\s*['\"](?:darwin|win32)['\"]|sys\.platform\.startswith\(['\"]linux['\"]\)|os\.name\s*==\s*['\"](?:nt|posix)['\"]|platform\.system\(\)\s*==\s*['\"](?:Darwin|Windows|Linux)['\"])", text))
+    native_guard = r"(?:sys\.platform\s*==\s*['\"](?:darwin|win32)['\"]|sys\.platform\.startswith\(['\"]linux['\"]\)|os\.name\s*==\s*['\"](?:nt|posix)['\"]|platform\.system\(\)\s*==\s*['\"](?:Darwin|Windows|Linux)['\"])"
+    normalized_guard = r"(?:platform_name|host_platform\([^)]*\))\s*==\s*['\"](?:windows|macos|linux)['\"]"
+    return bool(re.search(f"(?:{native_guard}|{normalized_guard})", text))
 
 
 def _has_fallback(node):
-    return bool(node.orelse) and any(isinstance(item, (ast.Raise, ast.If)) or (isinstance(item, ast.Expr) and isinstance(item.value, ast.Call) and getattr(item.value.func, "id", "") == "exit") for item in node.orelse)
+    return bool(node.orelse) and any(isinstance(item, (ast.Raise, ast.If, ast.Return)) or (isinstance(item, ast.Expr) and isinstance(item.value, ast.Call) and getattr(item.value.func, "id", "") == "exit") for item in node.orelse)
 
 
 def _contains_resolver(nodes):
@@ -75,6 +83,49 @@ def _contains_resolver(nodes):
 
 def _contains_platform_sensitive_literal(nodes):
     return any(isinstance(item, ast.Constant) and isinstance(item.value, str) and (PATH_PATTERN.search(item.value) or COMMAND_PATTERN.search(item.value)) for node in nodes for item in ast.walk(node))
+
+
+def _qualified_name(node):
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        owner = _qualified_name(node.value)
+        return f"{owner}.{node.attr}" if owner else node.attr
+    return ""
+
+
+def _truthy_keyword(call, name):
+    return any(keyword.arg == name and isinstance(keyword.value, ast.Constant) and keyword.value.value is True for keyword in call.keywords)
+
+
+def _subprocess_command(call):
+    if not call.args:
+        return ""
+    command = call.args[0]
+    if isinstance(command, (ast.List, ast.Tuple)) and command.elts:
+        command = command.elts[0]
+    return command.value.strip().lower() if isinstance(command, ast.Constant) and isinstance(command.value, str) else ""
+
+
+def _ancestor_call(node, parents):
+    current = node
+    while current in parents:
+        current = parents[current]
+        if isinstance(current, ast.Call):
+            return current
+    return None
+
+
+def _literal_used_as_path(node, parents):
+    if isinstance(node, ast.Constant) and isinstance(node.value, str) and any(token in node.value for token in ("(?:", "\\b", "\\s")):
+        return False
+    call = _ancestor_call(node, parents)
+    return call is None or _qualified_name(call.func) in PATH_LITERAL_CALLS
+
+
+def _literal_used_as_command(node, parents):
+    call = _ancestor_call(node, parents)
+    return call is not None and _qualified_name(call.func) in EXECUTABLE_LITERAL_CALLS
 
 
 def _python_findings(path, relative_path):
@@ -99,10 +150,28 @@ def _python_findings(path, relative_path):
         if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Attribute) and parent.func.attr == "compile":
             continue
         marker = node.value
-        if PATH_PATTERN.search(marker) and node.lineno not in guarded_lines:
+        if PATH_PATTERN.search(marker) and node.lineno not in guarded_lines and _literal_used_as_path(node, parents):
             findings.append(_finding(relative_path, "python", "SPG001", node.lineno, node.col_offset + 1, "platform-rooted or separator-specific path is not guarded", marker, counts))
-        if COMMAND_PATTERN.search(marker) and node.lineno not in guarded_lines:
+        if COMMAND_PATTERN.search(marker) and node.lineno not in guarded_lines and _literal_used_as_command(node, parents):
             findings.append(_finding(relative_path, "python", "SPG002", node.lineno, node.col_offset + 1, "platform-only command is not inside an explicit platform guard", marker, counts))
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            modules = [alias.name.split(".", 1)[0] for alias in node.names] if isinstance(node, ast.Import) else [str(node.module or "").split(".", 1)[0]]
+            for module in modules:
+                if module in PLATFORM_ONLY_MODULES and node.lineno not in guarded_lines:
+                    findings.append(_finding(relative_path, "python", "SPG004", node.lineno, node.col_offset + 1, "platform-only Python module is not inside an explicit platform guard", module, counts))
+        if not isinstance(node, ast.Call):
+            continue
+        qualified_name = _qualified_name(node.func)
+        if qualified_name in PLATFORM_ONLY_CALLS and node.lineno not in guarded_lines:
+            findings.append(_finding(relative_path, "python", "SPG004", node.lineno, node.col_offset + 1, "platform-only Python API is not inside an explicit platform guard", qualified_name, counts))
+        if qualified_name in SUBPROCESS_CALLS and node.lineno not in guarded_lines and (_truthy_keyword(node, "start_new_session") or any(keyword.arg in {"creationflags", "preexec_fn"} for keyword in node.keywords)):
+            findings.append(_finding(relative_path, "python", "SPG004", node.lineno, node.col_offset + 1, "platform-only subprocess option is not inside an explicit platform guard", qualified_name, counts))
+        if qualified_name in SUBPROCESS_CALLS and node.lineno not in guarded_lines and _truthy_keyword(node, "shell"):
+            findings.append(_finding(relative_path, "python", "SPG005", node.lineno, node.col_offset + 1, "shell=True is not portable shared-process behavior", qualified_name, counts))
+        command = _subprocess_command(node) if qualified_name in SUBPROCESS_CALLS else ""
+        if command in PYTHON_COMMANDS:
+            findings.append(_finding(relative_path, "python", "SPG006", node.lineno, node.col_offset + 1, "child Python process must use sys.executable", command, counts))
     for line in sorted(bad_guard_lines):
         findings.append(_finding(relative_path, "python", "SPG003", line, 1, "platform guard needs an explicit non-target outcome and in-branch executable resolver", "platform-guard", counts))
     return findings

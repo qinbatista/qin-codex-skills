@@ -30,6 +30,12 @@ RECEIPT_SPEC = importlib.util.spec_from_file_location(
 )
 receipt_module = importlib.util.module_from_spec(RECEIPT_SPEC)
 RECEIPT_SPEC.loader.exec_module(receipt_module)
+DISCLOSURE_PATH = Path(__file__).resolve().parent / "model_identity_disclosure.py"
+DISCLOSURE_SPEC = importlib.util.spec_from_file_location(
+    "task_analyze_model_identity_disclosure", DISCLOSURE_PATH
+)
+model_identity_disclosure = importlib.util.module_from_spec(DISCLOSURE_SPEC)
+DISCLOSURE_SPEC.loader.exec_module(model_identity_disclosure)
 try:
     from routing_policy import (
         ACTIVE_MODEL_EFFORTS,
@@ -1507,6 +1513,18 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     receipt["attempt_metrics_complete"] = attempt_metrics["metrics_complete"]
     receipt["tokens"] = attempt_metrics["strategy_tokens"]
     receipt["process_elapsed_ms"] = attempt_metrics["strategy_elapsed_ms"]
+    if status == "pass" and node["phase"] == "result" and result_path.is_file() and result_path.stat().st_size > 0:
+        result_text = result_path.read_text(encoding="utf-8", errors="replace")
+        try:
+            normalized_result = model_identity_disclosure.normalize_result_disclosure(
+                result_text,
+                node.get("complexity_score", 35),
+                runtime_receipt=receipt,
+            )
+        except ValueError:
+            pass
+        else:
+            result_path.write_text(normalized_result.rstrip("\n") + "\n", encoding="utf-8")
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     result_published = bool(node["phase"] == "result" and result_path.is_file() and result_path.stat().st_size > 0)
     result_ready_monotonic_ns = receipt.get("result_ready_monotonic_ns")

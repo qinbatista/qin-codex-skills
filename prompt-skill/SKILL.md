@@ -138,7 +138,7 @@ Portable behavior requirements:
 2. Resolve external executables with PATH-aware lookup (`shutil.which`, `Get-Command`, `command -v`, or equivalent) before launch.
 3. Fail with a clear unsupported-platform error for unsupported targets.
 
-Reference guard patterns are tracked in `references/skill-platform-compatibility.md` and required for Python, shell, PowerShell, JavaScript, and TypeScript.
+Reference guard patterns are tracked in `../code-skill/references/skill-platform-compatibility.md` and required for Python, shell, PowerShell, JavaScript, and TypeScript.
 
 ## Image And Multimodal Prompts
 
@@ -183,4 +183,4 @@ Before accepting a production prompt, confirm:
 
 ## Handoff
 
-Return the updated prompt or instruction artifact first, followed by a compact change summary, test cohort, pass/fail results, and known remaining risks. Every user-facing origin result and result/Ending node includes `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model evidence:`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`, `Current model evidence-level:`, `Previous model: <model | effort|same as current|none>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, `Switch summary:`, and `Reason:` in 20 words or fewer. `Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. Keep known identity concrete, never `unverified | unverified`; only absent identity uses `unknown | unknown`. One pair uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`. If the prompt is embedded in executable code, also follow the owning code executor; use `code-skill` and its language-specific rules for Python and C#.
+Return the updated prompt or instruction artifact first, followed by a compact change summary, test cohort, pass/fail results, and known remaining risks. Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines. If the prompt is embedded in executable code, also follow the owning code executor; use `code-skill` and its language-specific rules for Python and C#.

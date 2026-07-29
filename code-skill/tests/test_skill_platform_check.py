@@ -60,6 +60,12 @@ class SkillPlatformCheckTest(unittest.TestCase):
         self.assertEqual([finding["rule"] for finding in findings], ["SPG003"])
         self.assertEqual([finding["line"] for finding in findings], [3])
 
+    def test_guarded_platform_command_with_explicit_return_fallback_passes(self):
+        source = "import shutil\nimport subprocess\nimport sys\ndef validate():\n    if sys.platform == 'darwin':\n        tool = shutil.which('osacompile')\n        subprocess.run([tool])\n    else:\n        return 'unsupported'\n"
+        temporary_directory, root = self.fixture_root(source)
+        with temporary_directory:
+            self.assertEqual(skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline()), [])
+
     def test_unguarded_macos_command_fails(self):
         temporary_directory, root = self.fixture_root("import subprocess\nsubprocess.run(['osascript', '-e', 'beep'])\n")
         with temporary_directory:
@@ -73,6 +79,52 @@ class SkillPlatformCheckTest(unittest.TestCase):
             findings = skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline())
         self.assertEqual([finding["rule"] for finding in findings], ["SPG002"])
         self.assertEqual([finding["line"] for finding in findings], [2])
+
+    def test_command_words_in_help_and_error_text_pass(self):
+        source = "import argparse\nparser = argparse.ArgumentParser()\nparser.add_argument('--open', help='Open the file')\nraise RuntimeError('Run python3 tool.py on macOS or py -3 tool.py on Windows')\n"
+        temporary_directory, root = self.fixture_root(source)
+        with temporary_directory:
+            self.assertEqual(skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline()), [])
+
+    def test_unguarded_posix_process_api_fails(self):
+        source = "import os\nimport signal\nos.killpg(42, signal.SIGTERM)\n"
+        temporary_directory, root = self.fixture_root(source)
+        with temporary_directory:
+            findings = skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline())
+        self.assertEqual([finding["rule"] for finding in findings], ["SPG004"])
+
+    def test_guarded_platform_modules_pass(self):
+        source = "import os\nif os.name == 'nt':\n    import msvcrt\nelse:\n    import fcntl\n"
+        temporary_directory, root = self.fixture_root(source)
+        with temporary_directory:
+            self.assertEqual(skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline()), [])
+
+    def test_unguarded_platform_subprocess_option_fails(self):
+        source = "import subprocess\nsubprocess.Popen(['tool'], start_new_session=True)\n"
+        temporary_directory, root = self.fixture_root(source)
+        with temporary_directory:
+            findings = skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline())
+        self.assertEqual([finding["rule"] for finding in findings], ["SPG004"])
+
+    def test_shell_true_fails(self):
+        source = "import subprocess\nsubprocess.run(['tool'], shell=True)\n"
+        temporary_directory, root = self.fixture_root(source)
+        with temporary_directory:
+            findings = skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline())
+        self.assertEqual([finding["rule"] for finding in findings], ["SPG005"])
+
+    def test_hard_coded_python_child_fails_and_sys_executable_passes(self):
+        source = "import subprocess\nimport sys\nsubprocess.run(['python3', 'child.py'])\nsubprocess.run([sys.executable, 'child.py'])\n"
+        temporary_directory, root = self.fixture_root(source)
+        with temporary_directory:
+            findings = skill_platform_check.new_findings(skill_platform_check.collect_findings(root), self.empty_baseline())
+        self.assertEqual([finding["rule"] for finding in findings], ["SPG006"])
+
+    def test_selected_file_may_be_relative_to_skills_root(self):
+        temporary_directory, root = self.fixture_root("import subprocess\nsubprocess.run(['python3', 'child.py'])\n")
+        with temporary_directory:
+            findings = skill_platform_check.collect_findings(root, [Path("sample-skill/scripts/helper.py")])
+        self.assertEqual([finding["rule"] for finding in findings], ["SPG006"])
 
     def test_baseline_suppresses_only_existing_occurrence(self):
         temporary_directory, root = self.fixture_root("import subprocess\nsubprocess.run(['osascript'])\n")

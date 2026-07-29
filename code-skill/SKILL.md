@@ -45,6 +45,7 @@ Read only what the inline request or admitted node needs:
 - plain C#: `references/csharp-rules.md`;
 - Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`;
 - prompt-in-code: always load the global `prompt-skill` first, then use `references/prompt-generation.md` for executable-string and language-specific details; a missing or skipped `prompt-skill` is a prompt-task routing failure, not a fallback condition;
+- code or commands that may execute on a developer or host operating system: load the global `cross-platform-execution` skill before editing, classify the project execution boundary, and apply its platform contract;
 - safe repeated/parallel registered-code work: `references/parallelization.md`;
 - active catalog-derived priority-producer boundary and legacy parsing notes: `references/spark-small-code.md`.
 
@@ -55,6 +56,12 @@ For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems ->
 ### Platform compatibility for Skill runtime code
 
 When this skill task writes functional code in a Skill’s runtime surface (`scripts`, `bin`, `tools`), route platform compatibility through the Skill platform contract and require checker execution before publish- or mirror-style completion.
+
+### Platform compatibility for project code
+
+For project scripts, CLIs, setup commands, build/deploy helpers, and developer tooling, use `cross-platform-execution` to decide the runtime boundary before implementation. Default host-run behavior to Windows, macOS, and Linux. Keep genuine platform differences in one explicit runtime dispatch instead of writing a macOS path first and leaving other platforms implicit.
+
+Do not add host branches inside a declared managed runtime merely because its repository can be checked out on multiple hosts. Examples include code that runs only inside a Linux container, Unity runtime/editor code that uses Unity APIs, and a service deployed only to a fixed server image. Apply portability to the host-side commands that enter those runtimes.
 
 ## Model Contract
 
@@ -82,7 +89,7 @@ The smallest safe syntax, existence, direct-reference, or focused local executio
 
 ## Result Model Disclosure
 
-Every user-facing origin result and each result/Ending node prints `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model evidence:`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`, `Current model evidence-level:`, `Previous model: <model | effort|same as current|none>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, `Switch summary:`, and `Reason:` in 20 words or fewer. `Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. Keep known identity concrete, never `unverified | unverified`; only absent identity uses `unknown | unknown`. One pair uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`.
+Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines.
 
 The mandatory post-result Ending lifecycle still runs. Return published code after Quick Check, then release the real-test Ending tasks. The origin does not poll them. A failing Ending verifier records exact evidence and launches a separate repair task; the repaired code gets a fresh different verifier. The lifecycle always records score/band, check evidence, selected verifier pair, and repair chain locally; a receipt-backed producer terminal event also records score, route direction, and next pair in Obsidian.
 

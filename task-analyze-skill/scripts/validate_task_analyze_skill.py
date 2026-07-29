@@ -162,7 +162,7 @@ REQUIRED_SKILL_TEXT = [
     "Ordinary work reads the saved ladder unchanged",
     "only an explicit user model-update request",
     "highest-version quality ladder",
-    "eligible small edits attempt Spark-low",
+    "eligible bounded text/code work, including tiny questions and local value edits, attempts Spark-low",
     "two receipt-matched Real passes",
     "rank median logical tokens first",
     "two receipt-matched Real passes",
@@ -326,9 +326,10 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show `Complexity:N/100 (band)` and route change", "Split distinct work only", "each result/Ending records score,band,pair,purpose,deps,stop", "parent score never fixes the project model", "Eligible low-risk low-ambiguity text/code/write/execute score<=24 uses Spark-low first", "inside larger work", "Dependency-ready independent nodes run in parallel", "shared writes/order/output deps stay linear", "Single-node eligible text/code pipes exact user text once", "obsidian_adaptive_model_runner.py", "multi-node work saves one schema-2 `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark for a valid graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses local history,queues projection,no block", "Producer owns files/skills/Quick Check", "End Task required after result", "score each check", "global projectless End/Fix Tasks", "all checks PASS", "PASS records then self-archives", "FAIL records evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal receipt events write local routing history first", "same event ID to Obsidian", "future routes merge/dedupe both", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show compact score/model/route status", "Split distinct work only", "each result/Ending records score,band,pair,purpose,deps,stop", "parent score never fixes the project model", "Eligible low-risk low-ambiguity text/code/write/execute score<=24", "including tiny questions/value changes", "executes Spark-low first", "the entry routes it instead of answering inline", "Dependency-ready independent nodes run in parallel", "shared writes/order/output deps stay linear", "Single-node eligible text/code pipes exact user text once", "obsidian_adaptive_model_runner.py", "multi-node work saves one schema-2 `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark for a valid graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses local history,queues projection,no block", "Producer owns files/skills/Quick Check", "End Task required after result", "score each check", "global projectless End/Fix Tasks", "all checks PASS", "PASS records then self-archives", "FAIL records evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal receipt events write local routing history first", "same event ID to Obsidian", "future routes merge/dedupe both", "Benchmark 3 tiers", "`gpt-5.6-sol|ultra`", "Direct fixed/no verify", "Auto receipt=child/graph", "task vs task+Ending", "controller excluded", "No hook", "Final PASS/BLOCKED Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
-RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "Current model:", "Model evidence:", "Model pairs (requested / resolved / effective):", "Current model evidence-level:", "Previous model:", "Route change: upgrade|downgrade|freeze|no_switch|operational_fallback", "Switch summary:", "Reason:", "known assigned/configured/verified-entry pair", "unverified | unverified", "unknown | unknown", "No model switch"]
+RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "· Model:", "· Route:", "Evidence:", "runtime receipt", "verified entry (no runtime receipt)", "task assignment (no runtime receipt)", "configured selection (no runtime receipt)", "Model path:", "changed route", "unknown|unknown", "full routing data"]
+RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS = ["compact Result Model Disclosure", "task-analyze-skill/references/route-contract.md", "Do not expand"]
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "build real proportional Ending checks", "Every required check must PASS", "separate scoped repair task", "fresh verifier"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "separate scored/modelled End Tasks", "All required checks must PASS", "fresh verifier"]
@@ -422,42 +423,7 @@ def missing_terms(label, text, required):
 
 
 def validate_result_model_disclosure(disclosure_text):
-    failures = []
-    required_patterns = {"Complexity": r"^Complexity:\s*\d+/100 \((?:small|standard|complex|advanced)\)$", "Current model": r"^Current model:\s*([^|\n]+?)\s+\|\s+([^|\n]+?)\s*$", "Model evidence": r"^Model evidence:\s*(runtime_receipt|verified_entry|task_assignment|configured_selection|unavailable)\s*$", "Model pairs": r"^Model pairs \(requested / resolved / effective\): requested=([^\s|]+\|[^\s|]+) -> resolved=([^\s|]+\|[^\s|]+) -> effective=([^\s|]+\|[^\s|]+)\s*$", "Current model evidence-level": r"^Current model evidence-level:\s*(runtime_receipt|UNVERIFIED \(no runtime receipt\)|unavailable)\s*$", "Previous model": r"^Previous model:\s*(same as current|none|unverified|[^|\n]+?\s+\|\s+[^|\n]+?)\s*$", "Route change": r"^Route change:\s*(upgrade|downgrade|freeze|no_switch|operational_fallback)\s*$", "Switch summary": r"^Switch summary:\s*(.+)$", "Reason": r"^Reason:\s*(.+)$"}
-    matches = {label: re.search(pattern, disclosure_text, flags=re.MULTILINE) for label, pattern in required_patterns.items()}
-    for label, match in matches.items():
-        if not match:
-            failures.append(f"missing or invalid {label} disclosure")
-    if all(matches.values()):
-        current_pair = f"{matches['Current model'].group(1).strip()}|{matches['Current model'].group(2).strip()}"
-        requested_pair, resolved_pair, effective_pair = matches["Model pairs"].groups()
-        model_evidence = matches["Model evidence"].group(1)
-        evidence_level = matches["Current model evidence-level"].group(1)
-        previous_pair = matches["Previous model"].group(1).strip()
-        route_change = matches["Route change"].group(1)
-        switch_summary = matches["Switch summary"].group(1).strip()
-        if current_pair == "unverified|unverified":
-            failures.append("Current model must retain a known pair instead of unverified | unverified")
-        if current_pair == "unknown|unknown":
-            if model_evidence != "unavailable" or evidence_level != "unavailable" or any(pair != "unknown|unknown" for pair in (requested_pair, resolved_pair, effective_pair)):
-                failures.append("unknown | unknown is valid only when every model identity source is unavailable")
-        elif model_evidence == "unavailable" or evidence_level == "unavailable":
-            failures.append("known Current model requires separate non-unavailable evidence")
-        elif model_evidence == "runtime_receipt" and evidence_level != "runtime_receipt":
-            failures.append("runtime receipt evidence requires runtime_receipt evidence-level")
-        elif model_evidence != "runtime_receipt" and evidence_level != "UNVERIFIED (no runtime receipt)":
-            failures.append("known non-receipt model requires UNVERIFIED (no runtime receipt) evidence-level")
-        if current_pair != effective_pair:
-            failures.append("Current model must match the effective model pair")
-        expected_previous_pair = "none" if current_pair == "unknown|unknown" else "same as current"
-        if route_change == "no_switch" and (previous_pair != expected_previous_pair or switch_summary != "No model switch" or any(pair != current_pair for pair in (requested_pair, resolved_pair, effective_pair))):
-            failures.append("no_switch requires one pair, Previous model: same as current (or none when unknown), and Switch summary: No model switch")
-    reason_match = matches.get("Reason")
-    if reason_match and len(reason_match.group(1).split()) > 20:
-        failures.append("Reason disclosure exceeds 20 words")
-    if not failures:
-        failures.extend(validate_disclosure(disclosure_text, MODEL_REGISTRY))
-    return failures
+    return validate_disclosure(disclosure_text, MODEL_REGISTRY)
 
 
 def legacy_only_failures(label, text):
@@ -814,7 +780,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
         if not disclosure_path.exists():
             failures.append(f"{disclosure_skill} missing result disclosure skill")
             continue
-        failures.extend(missing_terms(f"{disclosure_skill} result disclosure", read_text(disclosure_path), RESULT_MODEL_DISCLOSURE_TERMS))
+        failures.extend(missing_terms(f"{disclosure_skill} result disclosure", read_text(disclosure_path), RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
     failures.extend(missing_terms("runtime-receipts", receipt_text, REQUIRED_RECEIPT_TEXT))
     failures.extend(missing_terms("adaptive-routing", adaptive_text, REQUIRED_ADAPTIVE_TEXT))

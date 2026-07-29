@@ -157,6 +157,17 @@ def infer_complexity_score(prompt):
     if file_count > 1:
         score += min(20, (file_count - 1) * 5)
     word_count = len(text.split())
+    simple_question = (
+        scope_weight == 0
+        and word_count <= 24
+        and (
+            bool(re.match(r"^(?:what|who|when|where|which|why|how|calculate|convert|is|are|can|does|do)\b", text))
+            or text.endswith("?")
+        )
+        and not re.search(r"\b(?:edit|change|fix|modify|rename|replace|update|write|implement|file|script)\b", text)
+    )
+    if simple_question:
+        score = min(score, 12)
     if word_count >= 80:
         score += 8
     if word_count >= 160:
@@ -168,6 +179,17 @@ def infer_complexity(prompt):
     return "complex" if infer_complexity_score(prompt) >= 50 else "easy"
 
 
+def infer_task_type(prompt):
+    text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    if re.search(r"\b(?:edit|change|fix|modify|rename|replace|update|write|implement)\b", text):
+        return "code"
+    if re.search(r"[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)\b", text):
+        return "code"
+    if re.match(r"^(?:what|who|when|where|which|why|how|calculate|convert|is|are|can|does|do)\b", text) or text.endswith("?"):
+        return "question"
+    return "code"
+
+
 def infer_operation(prompt):
     text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
     for operation in ("rename", "replace", "update", "modify", "edit", "fix", "write"):
@@ -175,6 +197,8 @@ def infer_operation(prompt):
             return operation
     if re.search(r"\bchang(?:e|ing)\b", text):
         return "edit"
+    if infer_task_type(prompt) == "question":
+        return "answer"
     return "work"
 
 
@@ -500,6 +524,11 @@ def _merge_attempt_receipts(receipts, planned_pairs, attempt_pair, active_pair, 
     receipt["priority_attempt_pair"] = attempt_pair
     receipt["initial_attempt_pair"] = attempt_pair
     receipt["selected_pair"] = attempt_pair
+    if isinstance(attempt_pair, str) and "|" in attempt_pair:
+        requested_model, requested_effort = attempt_pair.split("|", 1)
+        receipt["requested_pair"] = attempt_pair
+        receipt["requested_model"] = requested_model
+        receipt["requested_effort"] = requested_effort
     receipt["active_fallback_pair"] = active_pair
     receipt["allowed_fallback_pairs"] = planned_pairs[1:]
     receipt["operational_failure_pairs"] = operational_failures
@@ -567,6 +596,18 @@ def run(args, prompt):
     receipt["model_learning_context"] = learning_context
     result_published = bool(receipt.get("result_published") is True and args.result_output.is_file() and args.result_output.stat().st_size > 0)
     receipt["result_published"] = result_published
+    if result_published:
+        result_text = args.result_output.read_text(encoding="utf-8", errors="replace")
+        try:
+            normalized_result = model_identity_disclosure.normalize_result_disclosure(
+                result_text,
+                args.complexity_score,
+                runtime_receipt=receipt,
+            )
+        except ValueError:
+            pass
+        else:
+            _atomic_write_text(args.result_output, normalized_result.rstrip("\n") + "\n")
     _atomic_write_json(args.receipt_output, receipt)
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     ready_ns = receipt.get("result_ready_monotonic_ns")
@@ -612,7 +653,7 @@ def resolve_fast_path_args(args, prompt):
     project_root = Path(args.project_root or os.environ.get("CODEX_PROJECT_ROOT") or workdir).expanduser().resolve()
     prompt_text = str(prompt or "")
     read_only_answer = bool(re.search(r"\b(?:read[- ]only|no edits?)\b", prompt_text, re.IGNORECASE) and re.search(r"[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)\b", prompt_text))
-    task_type = args.task_type or ("question" if read_only_answer else "code")
+    task_type = args.task_type or ("question" if read_only_answer else infer_task_type(prompt))
     module_name = args.module or project_root.name or "workspace"
     if args.complexity_score is None:
         args.complexity_score = 65 if args.complexity == "complex" else 35 if args.complexity == "easy" else infer_complexity_score(prompt) if fast_path else 35

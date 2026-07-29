@@ -530,9 +530,9 @@ def _priority_producer_pair(shared, query):
     if not isinstance(producer, dict) or producer.get("enabled") is not True:
         return None
     if (
-        query["task_type"] not in set(producer["small_edit_task_types"])
+        query["task_type"] not in set(producer["eligible_task_types"])
         or query["modality"] not in set(producer["eligible_modalities"])
-        or query["operation"] not in set(producer["small_edit_operations"])
+        or query["operation"] not in set(producer["eligible_operations"])
         or query["operation"] in set(producer["excluded_operations"])
         or query["complexity_score"] > producer["small_edit_maximum_complexity_score"]
         or query["risk"] != "low"
@@ -578,7 +578,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     priority_history = _priority_history(project_records, query, priority_pair) if priority_pair else {"verdict": None, "pass_count": 0, "matched_records": 0}
     if priority_pair and priority_history["verdict"] != "fail":
         attempt_pair = priority_pair
-        attempt_reason = "small_edit_spark_verified" if priority_history["verdict"] == "pass" else "small_edit_spark_priority"
+        attempt_reason = "bounded_text_code_spark_verified" if priority_history["verdict"] == "pass" else "bounded_text_code_spark_priority"
         attempt_state = "priority_verified" if priority_history["verdict"] == "pass" else "priority_trial"
         attempt_trial = priority_history["verdict"] != "pass"
         operational_fallback_pair = selected_pair
@@ -641,7 +641,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "priority_verdict": priority_history["verdict"],
         "priority_pass_count": priority_history["pass_count"],
         "priority_matched_records": priority_history["matched_records"],
-        "priority_producer_scope": "small_edits_and_scheduled_independent_sources",
+        "priority_producer_scope": "bounded_text_code_and_scheduled_independent_sources",
         "trial": active["trial"],
         "reason": active["reason"],
         "calibration_state": active["calibration_state"],

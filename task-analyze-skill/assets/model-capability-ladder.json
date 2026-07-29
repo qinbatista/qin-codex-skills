@@ -236,7 +236,7 @@
     "upgrade_after_quality_failure": true,
     "operational_failures_are_neutral": true,
     "freeze_lowest_verified_pair": true,
-    "priority_producer_first_text_code": false,
+    "priority_producer_first_text_code": true,
     "priority_producer_first_small_edits": true,
     "priority_producer_task_segments": true,
     "priority_producer_scheduled_sources": true,
@@ -285,6 +285,21 @@
     ],
     "eligible_modalities": [
       "text"
+    ],
+    "eligible_operations": [
+      "answer",
+      "command",
+      "edit",
+      "execute",
+      "fix",
+      "modify",
+      "rename",
+      "replace",
+      "respond",
+      "transform",
+      "update",
+      "work",
+      "write"
     ],
     "small_edit_task_types": [
       "document",

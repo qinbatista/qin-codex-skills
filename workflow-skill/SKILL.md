@@ -68,7 +68,7 @@ When requested work is complete:
 
 ## Result Model Disclosure
 
-Every user-facing origin result and each result/Ending node includes `Complexity: <int>/100 (<band>)`, `Current model: <model> | <effort>`, `Model evidence:`, `Model pairs (requested / resolved / effective): requested=<model>|<effort> -> resolved=<model>|<effort> -> effective=<model>|<effort>`, `Current model evidence-level:`, `Previous model: <model | effort|same as current|none>`, `Route change: upgrade|downgrade|freeze|no_switch|operational_fallback`, `Switch summary:`, and `Reason:` in 20 words or fewer. `Current model` uses the receipt-proven effective pair when available; otherwise it uses the known assigned/configured/verified-entry pair. Keep known identity concrete, never `unverified | unverified`; only absent identity uses `unknown | unknown`. One pair uses `Previous model: same as current`, `Route change: no_switch`, and `Switch summary: No model switch`.
+Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines.
 
 For adaptive or dispatched execution, launch the CLI as an ongoing session and read its newline-delimited `stage=result-ready` event. That event is emitted only after the public result path has been atomically written. Read and show that file immediately while the receipt/session continues; then collect the final receipt/manifest. A post-presentation receipt or protocol failure must notify and reopen instead of retracting or silently replacing the presented result.
 

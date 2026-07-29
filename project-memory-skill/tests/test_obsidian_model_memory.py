@@ -257,7 +257,7 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(recommendation["attempt_pair"], recommendation["selected_pair"])
         self.assertEqual(recommendation["active_fallback_pair"], "gpt-5.6-terra|high")
         self.assertEqual(recommendation["complexity_score"], 35)
-        self.assertEqual(recommendation["priority_producer_scope"], "small_edits_and_scheduled_independent_sources")
+        self.assertEqual(recommendation["priority_producer_scope"], "bounded_text_code_and_scheduled_independent_sources")
 
     def test_small_edit_score_uses_spark_priority_with_quality_fallback(self):
         recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity_score=12, risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
@@ -266,6 +266,12 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(recommendation["selected_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(recommendation["active_fallback_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(recommendation["switch_direction"], "downgrade")
+
+    def test_small_question_uses_spark_priority_with_quality_fallback(self):
+        recommendation = module.recommend_model(self.project, "question", "example-module", operation="answer", modality="text", complexity_score=8, risk="low", ambiguity="low", task_summary="What is seven times eight?", vault=self.vault)
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.3-codex-spark|low")
+        self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(recommendation["active_fallback_pair"], "gpt-5.6-luna|low")
 
     def test_spark_verify_failure_suppresses_matching_score_band_and_upgrades(self):
         project = module.project_change_memory._project_identity(self.project)
