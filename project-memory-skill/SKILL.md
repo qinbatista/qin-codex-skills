@@ -1,6 +1,6 @@
 ---
 name: project-memory-skill
-description: "Always use in the result-producing node for durable project-file changes. The Sol-ultra adaptive entry parent does not load memory before dispatch; the selected producer recalls prior project/module/file decisions before editing and records the completed change after Ending. Do not use for read-only work or disposable cache/work artifacts."
+description: "Always use in the result-producing node for durable project-file changes. The Sol-ultra adaptive entry parent does not load memory before dispatch; the selected producer recalls prior project/module/file decisions before editing and records the completed change after Ending. Do not use for read-only work or disposable Cache artifacts."
 ---
 
 # Project Memory Skill
@@ -13,9 +13,13 @@ Maintain a durable, file-level explanation of project changes so future AI work 
 
 Load this skill in the selected result-producing node whenever a task creates, edits, renames, moves, or deletes a durable project file, including source code, configuration, schemas, reusable prompts, tests, documentation, skill instructions, and source-controlled asset metadata. The Sol-ultra adaptive entry parent dispatches before memory recall and never loads this skill merely to route.
 
-Do not load it for read-only tasks, external actions with no durable project-file change, or disposable `work/`, `cache/`, build, render, receipt, and temporary artifacts unless the user explicitly accepts those files as project deliverables.
+Do not load it for read-only tasks, external actions with no durable project-file change, or disposable `Cache/`, build, render, receipt, and temporary artifacts unless the user explicitly accepts those files as project deliverables.
 
 This skill supplements the file type's owning skill. It does not replace `code-skill`, `prompt-skill`, document skills, repository instructions, or user authority.
+
+## Project Cache Artifact Policy
+
+All disposable project artifacts — local test outputs, debug logs/data, image inspection downloads/renders, generated images, transient fixtures, comparisons, and probes — go under `<project-root>/Cache/`. Before writing, inspect an existing `Cache/` and reuse its established top-level category and naming; otherwise create `Cache/tests/<task>`, `Cache/debug/<task>`, or `Cache/images/<task>` as appropriate. Never deliberately place them in `~/.codex/cache`, `~/.codex/tmp`, a generic global cache, a system temporary directory, or an ad hoc `tmp`/`work` path. This governs agent-selected destinations, not OS/tool-managed internal temporary files. Cleanup may delete only the current task's named Cache folder or explicitly identified disposable files; never delete an existing `Cache/` category or another task's artifacts without authorization.
 
 ## Project Change-Memory Authority And Storage
 

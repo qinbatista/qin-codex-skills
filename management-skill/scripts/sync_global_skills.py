@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -25,6 +26,7 @@ def load_skill_platform_checker(skills_dir):
 
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
 DEFAULT_STATE_FILE = Path.home() / ".codex" / "state" / "management-skill-sync.json"
+DEFAULT_CACHE_ROOT = Path.home() / ".codex" / "Cache" / "management-skill-sync"
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
 *.pyc
@@ -257,6 +259,14 @@ CHINESE_SKILL_CONTENTS = {
 
 def run_command(command, cwd=None):
     return subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True)
+
+
+@contextmanager
+def temporary_workspace(prefix):
+    cache_root = Path(os.environ.get("CODEX_PROJECT_CACHE_ROOT", DEFAULT_CACHE_ROOT)).expanduser()
+    cache_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=prefix, dir=cache_root) as workspace:
+        yield Path(workspace)
 
 
 def repository_git_url(repository):
@@ -769,8 +779,8 @@ def copy_skill_directory(source_dir, target_dir, preserve_local=False):
     local_source = target_dir / "local"
     if preserve_local and local_source.exists():
         assert_no_symlinks([local_source], "preserved local content")
-        with tempfile.TemporaryDirectory(prefix="qin-codex-private-local-") as sandbox_name:
-            preserved_local = Path(sandbox_name) / "local"
+        with temporary_workspace("qin-codex-private-local-") as sandbox:
+            preserved_local = sandbox / "local"
             shutil.copytree(local_source, preserved_local)
             shutil.rmtree(target_dir)
             shutil.copytree(source_dir, target_dir, ignore=ignored_names)
@@ -784,8 +794,7 @@ def copy_skill_directory(source_dir, target_dir, preserve_local=False):
 def path_differs(source_dir, target_dir):
     if not target_dir.exists():
         return True
-    with tempfile.TemporaryDirectory(prefix="qin-codex-skills-diff-") as sandbox_name:
-        sandbox = Path(sandbox_name)
+    with temporary_workspace("qin-codex-skills-diff-") as sandbox:
         copy_skill_directory(source_dir, sandbox / "source")
         copy_skill_directory(target_dir, sandbox / "target")
         return subprocess.run(["git", "diff", "--no-index", "--quiet", str(sandbox / "source"), str(sandbox / "target")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
@@ -816,8 +825,8 @@ def mirror_repository_to_local(repository_dir, skills_dir):
 
 
 def remote_changes(repository, skills_dir):
-    with tempfile.TemporaryDirectory(prefix="qin-codex-skills-") as sandbox_name:
-        repository_dir = clone_repository(repository, Path(sandbox_name))
+    with temporary_workspace("qin-codex-skills-") as sandbox:
+        repository_dir = clone_repository(repository, sandbox)
         remote_by_name = {path.name: path for path in skill_directories(repository_dir)}
         return [name for name in PRIMARY_SKILL_ORDER if name not in remote_by_name or path_differs(remote_by_name[name], skills_dir / name)]
 
@@ -832,8 +841,8 @@ def preuse(repository, skills_dir):
 
 
 def pull(repository, skills_dir):
-    with tempfile.TemporaryDirectory(prefix="qin-codex-skills-") as sandbox_name:
-        repository_dir = clone_repository(repository, Path(sandbox_name))
+    with temporary_workspace("qin-codex-skills-") as sandbox:
+        repository_dir = clone_repository(repository, sandbox)
         changed_names = mirror_repository_to_local(repository_dir, skills_dir)
         write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(repository_dir)))
         if changed_names:
@@ -869,8 +878,8 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
 
 
 def push(repository, skills_dir, message, dry_run):
-    with tempfile.TemporaryDirectory(prefix="qin-codex-skills-") as sandbox_name:
-        repository_dir = clone_repository(repository, Path(sandbox_name))
+    with temporary_workspace("qin-codex-skills-") as sandbox:
+        repository_dir = clone_repository(repository, sandbox)
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
         status_text = run_command(["git", "status", "--short"], cwd=repository_dir).stdout.strip()
         if dry_run:
@@ -891,8 +900,8 @@ def push(repository, skills_dir, message, dry_run):
 
 
 def sync(repository, skills_dir, message):
-    with tempfile.TemporaryDirectory(prefix="qin-codex-skills-") as sandbox_name:
-        repository_dir = clone_repository(repository, Path(sandbox_name))
+    with temporary_workspace("qin-codex-skills-") as sandbox:
+        repository_dir = clone_repository(repository, sandbox)
         local_paths = skill_directories(skills_dir)
         remote_paths = skill_directories(repository_dir)
         local_hash = snapshot_hash(local_paths)

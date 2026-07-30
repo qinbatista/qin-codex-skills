@@ -157,7 +157,9 @@ Any structural change to this routing/skill contract reruns the same simple, med
 
 ## Generated Files
 
-Put plans, prompts, receipts, logs, and benchmarks in active task/project `cache/` or `work/`. Private contextual model evidence belongs in the local routing ledger and its broad Obsidian projection only. The generated shared ladder contains no personal evidence and is safe to mirror. Put final deliverables only in the requested output location.
+### Project Cache Artifact Policy
+
+All disposable project artifacts — plans, prompts, receipts, logs, benchmarks, local test outputs, debug data, image inspection downloads/renders, generated images, transient fixtures, comparisons, and probes — go under `<project-root>/Cache/`. Before writing, inspect an existing `Cache/` and reuse its established top-level category and naming; otherwise create `Cache/tests/<task>`, `Cache/debug/<task>`, or `Cache/images/<task>` as appropriate. Never deliberately place them in `~/.codex/cache`, `~/.codex/tmp`, a generic global cache, a system temporary directory, or an ad hoc `tmp`/`work` path. This governs agent-selected destinations, not OS/tool-managed internal temporary files. Cleanup may delete only the current task's named Cache folder or explicitly identified disposable files; never delete an existing `Cache/` category or another task's artifacts without authorization. Private contextual model evidence belongs in the local routing ledger and its broad Obsidian projection only. The generated shared ladder contains no personal evidence and is safe to mirror. Put final deliverables only in the requested output location.
 
 ## Verification
 

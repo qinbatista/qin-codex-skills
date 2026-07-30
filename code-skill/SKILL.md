@@ -101,7 +101,9 @@ When optimization is not the requested result, report a discovered candidate ins
 
 ## Generated File Placement
 
-Put temporary code, fixtures, logs, receipts, and test outputs in the task/project `cache/` or `work/` area. Put final deliverables only in the requested location or active workspace `outputs/`.
+### Project Cache Artifact Policy
+
+All disposable project artifacts — temporary code, fixtures, logs, receipts, local test outputs, debug data, image inspection downloads/renders, generated images, comparisons, and probes — go under `<project-root>/Cache/`. Before writing, inspect an existing `Cache/` and reuse its established top-level category and naming; otherwise create `Cache/tests/<task>`, `Cache/debug/<task>`, or `Cache/images/<task>` as appropriate. Never deliberately place them in `~/.codex/cache`, `~/.codex/tmp`, a generic global cache, a system temporary directory, or an ad hoc `tmp`/`work` path. This governs agent-selected destinations, not OS/tool-managed internal temporary files. Cleanup may delete only the current task's named Cache folder or explicitly identified disposable files; never delete an existing `Cache/` category or another task's artifacts without authorization. Put final deliverables only in the requested location or active workspace `outputs/`.
 
 ## Guardrails
 

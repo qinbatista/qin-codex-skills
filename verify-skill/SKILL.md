@@ -130,7 +130,11 @@ Report:
 - `First-result time` and separate `Ending time`, when performance matters;
 - `Model receipt`, when routing is part of acceptance.
 
-Create a formal report only when requested or when evidence is long, visual, comparison-heavy, or repository-required. Put temporary evidence under task/project `cache/` or `work/`; final reports go only to the requested output location.
+Create a formal report only when requested or when evidence is long, visual, comparison-heavy, or repository-required.
+
+## Project Cache Artifact Policy
+
+All disposable project artifacts — temporary evidence, local test outputs, debug logs/data, image inspection downloads/renders, generated images, transient fixtures, comparisons, and probes — go under `<project-root>/Cache/`. Before writing, inspect an existing `Cache/` and reuse its established top-level category and naming; otherwise create `Cache/tests/<task>`, `Cache/debug/<task>`, or `Cache/images/<task>` as appropriate. Never deliberately place them in `~/.codex/cache`, `~/.codex/tmp`, a generic global cache, a system temporary directory, or an ad hoc `tmp`/`work` path. This governs agent-selected destinations, not OS/tool-managed internal temporary files. Cleanup may delete only the current task's named Cache folder or explicitly identified disposable files; never delete an existing `Cache/` category or another task's artifacts without authorization. Final reports go only to the requested output location.
 
 ## Guardrails
 

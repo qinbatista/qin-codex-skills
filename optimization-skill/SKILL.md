@@ -90,8 +90,11 @@ Do not claim savings from shorter text, different prompts, different inputs, or 
 - Move stable long context into `references/`.
 - Move deterministic repeatable mechanics into `scripts/`.
 - Put reusable fixtures/templates/media in `assets/`.
-- Put temporary evidence in `cache/` or the active task `work/` area.
 - Do not create new global skills unless the user explicitly authorizes that global skill change.
+
+### Project Cache Artifact Policy
+
+All disposable project artifacts — temporary evidence, local test outputs, debug logs/data, image inspection downloads/renders, generated images, transient fixtures, comparisons, and probes — go under `<project-root>/Cache/`. Before writing, inspect an existing `Cache/` and reuse its established top-level category and naming; otherwise create `Cache/tests/<task>`, `Cache/debug/<task>`, or `Cache/images/<task>` as appropriate. Never deliberately place them in `~/.codex/cache`, `~/.codex/tmp`, a generic global cache, a system temporary directory, or an ad hoc `tmp`/`work` path. This governs agent-selected destinations, not OS/tool-managed internal temporary files. Cleanup may delete only the current task's named Cache folder or explicitly identified disposable files; never delete an existing `Cache/` category or another task's artifacts without authorization.
 
 ## Guardrails
 

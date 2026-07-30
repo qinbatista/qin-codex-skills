@@ -170,6 +170,10 @@ Before accepting a production prompt, confirm:
 - verification checks the actual semantic, structural, file, visual, or side-effect requirements without requesting private chain-of-thought.
 - when final target-output validation matters, the prompt tells the target model to check missing fields, invalid format or JSON, unsupported claims, inconsistent terminology, and requirement violations before returning; it corrects a failed check when possible or follows the defined failure contract.
 
+## Project Cache Artifact Policy
+
+All disposable project artifacts created while developing or testing prompts — local test outputs, debug logs/data, image inspection downloads/renders, generated images, transient fixtures, comparisons, and probes — go under `<project-root>/Cache/`. Before writing, inspect an existing `Cache/` and reuse its established top-level category and naming; otherwise create `Cache/tests/<task>`, `Cache/debug/<task>`, or `Cache/images/<task>` as appropriate. Never deliberately place them in `~/.codex/cache`, `~/.codex/tmp`, a generic global cache, a system temporary directory, or an ad hoc `tmp`/`work` path. This governs agent-selected destinations, not OS/tool-managed internal temporary files. Cleanup may delete only the current task's named Cache folder or explicitly identified disposable files; never delete an existing `Cache/` category or another task's artifacts without authorization.
+
 ## Guardrails
 
 - Do not require a plan in the user-visible response unless the user asked for one or planning is itself the deliverable.
