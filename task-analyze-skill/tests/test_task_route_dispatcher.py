@@ -225,6 +225,14 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertEqual(f"{plan['nodes'][0]['model']}|{plan['nodes'][0]['effort']}", module.MODEL_ROLE_PAIRS["floor"])
 
+    def test_valid_plan_accepts_project_relative_cache_dir(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["cache_dir"] = "Cache/tests/relative-route"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
     def test_schema_two_rejects_legacy_foreground_mini(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

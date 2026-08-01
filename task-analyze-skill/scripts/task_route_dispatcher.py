@@ -655,9 +655,10 @@ def validate_plan(
     if entry.get("model") != entry_model or entry.get("effort") != entry_effort:
         failures.append("plan entry pair does not match the declared entrance pair")
     cache_dir_value = plan.get("cache_dir")
-    cache_dir = Path(cache_dir_value).expanduser().resolve() if isinstance(cache_dir_value, str) and cache_dir_value else None
+    cache_dir_input = Path(cache_dir_value).expanduser() if isinstance(cache_dir_value, str) and cache_dir_value else None
+    cache_dir = ((cwd / cache_dir_input).resolve() if not cache_dir_input.is_absolute() else cache_dir_input.resolve()) if cache_dir_input else None
     if cache_dir is None or not path_is_within(cache_dir, cwd.resolve()):
-        failures.append("cache_dir must be an absolute path inside the active cwd")
+        failures.append("cache_dir must resolve inside the active cwd")
 
     nodes = plan.get("nodes") if isinstance(plan.get("nodes"), list) else []
     if not 2 <= len(nodes) <= 12:

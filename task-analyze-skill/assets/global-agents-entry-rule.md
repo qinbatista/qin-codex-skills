@@ -8,9 +8,9 @@ Score every submission 0-100 before task files:small 0-24,standard 25-49,complex
 
 Benchmark 3 tiers from `gpt-5.6-sol|ultra`;Direct fixed/no verify;Auto receipt=child/graph;compare task vs task+Ending,controller excluded.
 
-Unity:report absolute path;read ProjectVersion.txt;list Editors;resolve `unity editors path <version>`;confirm binary;use CLI first.On unavailable/unsupported/one failed diagnosis,report then fallback.Never change/install/substitute without approval.
+Unity:report the project path relative to its root;read ProjectVersion.txt;list Editors;resolve `unity editors path <version>`;confirm binary;use CLI first.If the external Editor binary needs an absolute path,use a validated `Cache/cache_path.json` entry or discover it once and register it there.On unavailable/unsupported/one failed diagnosis,report then fallback.Never change/install/substitute without approval.
 
-Never control Obsidian UI.Resolve readable `CODEX_OBSIDIAN_VAULT`,then `obsidian.json` open-vault;read MyAILLM `AGENTS.md`+project `Knowledge.md` by connector/filesystem.One failed exact search stops work with paths.Cold start never waives context.
+Never control Obsidian UI.First validate the project's `Cache/cache_path.json` Obsidian entries;then try readable `CODEX_OBSIDIAN_VAULT`,then `obsidian.json` open-vault,then one exact bounded search.Cache each verified result in that registry;read MyAILLM `AGENTS.md`+project `Knowledge.md` by connector/filesystem.If unresolved,stop before work and report relative registry keys/search status.Cold start never waives context.
 
 Host code loads `cross-platform-execution`:portable Python for Windows/macOS/Linux;no `.cmd`/`.sh` selectors.Docker/Unity keep runtime.Skill code runs `prompt-skill` platform checks.
 
@@ -20,6 +20,9 @@ Before Codex project-support writes,resolve `<project-root>`;redirect test scrip
 
 All local-machine paths in skills/scripts/code/config/docs/commands—not only Cache paths—must be project-root-relative or runtime-derived from a discovered root;never hard-code user-specific POSIX-home or Windows-drive paths.Run from project root;use native path APIs.
 
+Only unavoidable machine-specific absolute paths for AI access to project-external resources may be stored in project-root `Cache/cache_path.json`.It is untracked AI-only state:project source/runtime/tests/build/CI/packages must never read or depend on it;never commit/mirror/publish it or store secrets.Ensure the file is ignored when `Cache/` is not already ignored.Validate a registered path's kind/existence/readability before use;when missing/stale,perform one bounded platform-aware discovery,update only that key via a sibling Cache write,and preserve unrelated keys.Absolute values never go into skills,source,docs,commands,logs,receipts,or memory.
+
 Project `AGENTS.md` is a compact structural contract,not a project notebook.Keep only stable structure,ownership boundaries,critical entry points,hard constraints,project-wide conventions,and short canonical-doc pointers.Do not write implementation details,task history,logs/receipts/test results/evidence,generated data,temporary notes,dependency walkthroughs,long commands,or troubleshooting.Add important Cache as one concise registry line:path+role+owner+retention/VCS;put details in owning source,project docs,or a Cache README.Update `AGENTS.md` only for structure/ownership/entrypoint/constraint changes.
 
 Important Cache:`Cache/management-skill-sync/`—untracked disposable mirror scratch owned by `sync_global_skills.py`;details stay with the script.
+Important Cache:`Cache/cache_path.json`—untracked AI-only external absolute-path registry;project code must never read it.

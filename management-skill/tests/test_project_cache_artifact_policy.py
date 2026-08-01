@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import shutil
 import unittest
@@ -55,6 +56,11 @@ REQUIRED_POLICY_TEXT = (
     "test results",
     "generated data",
     "troubleshooting",
+    "Cache/cache_path.json",
+    "AI-only",
+    "project-external",
+    "bounded",
+    "Obsidian",
 )
 REQUIRED_DETAILED_PATH_TEXT = (
     "POSIX home absolute path",
@@ -65,6 +71,16 @@ REQUIRED_DETAILED_AGENTS_TEXT = (
     "one concise registry entry",
     "owning source, project documentation, or a README",
     "Update `AGENTS.md` only when",
+)
+REQUIRED_DETAILED_REGISTRY_TEXT = (
+    "schema_version",
+    "scope",
+    "ai_only",
+    "file|directory|application",
+    "package scripts",
+    "credentials",
+    "replace the registry atomically",
+    "CODEX_OBSIDIAN_VAULT",
 )
 
 
@@ -78,6 +94,8 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             for required_text in REQUIRED_DETAILED_PATH_TEXT:
                 self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
             for required_text in REQUIRED_DETAILED_AGENTS_TEXT:
+                self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
+            for required_text in REQUIRED_DETAILED_REGISTRY_TEXT:
                 self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
 
     def test_global_agents_and_installable_entry_rule_have_the_same_contract(self):
@@ -155,6 +173,62 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             for directory in (task_root.parent, task_root.parent.parent):
                 if directory.is_dir() and not any(directory.iterdir()):
                     directory.rmdir()
+
+    def test_absolute_path_registry_is_ai_only_and_project_code_does_not_depend_on_it(self):
+        task_root = SKILLS_ROOT / "management-skill" / "Cache" / "tests" / "cache-path-registry-smoke"
+        project_root = task_root / "fixture-project"
+        registry_path = project_root / "Cache" / "cache_path.json"
+        external_target = task_root / "external" / "vault"
+        project_source = project_root / "src" / "app.py"
+        try:
+            external_target.mkdir(parents=True, exist_ok=True)
+            registry_path.parent.mkdir(parents=True, exist_ok=True)
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "scope": "ai_only",
+                        "paths": {
+                            "obsidian_vault": {
+                                "path": str(external_target.resolve()),
+                                "kind": "directory",
+                                "purpose": "AI-only vault access",
+                            }
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            project_source.parent.mkdir(parents=True, exist_ok=True)
+            project_source.write_text("def run():\n    return 'project-runtime-independent'\n", encoding="utf-8")
+
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            entry = registry["paths"]["obsidian_vault"]
+            self.assertEqual(registry["schema_version"], 1)
+            self.assertEqual(registry["scope"], "ai_only")
+            self.assertTrue(Path(entry["path"]).is_absolute())
+            self.assertTrue(Path(entry["path"]).is_dir())
+            self.assertTrue(registry_path.is_relative_to(project_root / "Cache"))
+            self.assertNotIn("cache_path.json", project_source.read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(task_root)
+            for directory in (task_root.parent, task_root.parent.parent):
+                if directory.is_dir() and not any(directory.iterdir()):
+                    directory.rmdir()
+
+    def test_project_handoffs_do_not_require_absolute_project_paths(self):
+        instruction_paths = (
+            SKILLS_ROOT / "task-analyze-skill" / "SKILL.md",
+            SKILLS_ROOT / "workflow-skill" / "SKILL.md",
+            SKILLS_ROOT / "code-skill" / "SKILL.md",
+            SKILLS_ROOT / "verify-skill" / "SKILL.md",
+            SKILLS_ROOT / "task-analyze-skill" / "references" / "route-contract.md",
+        )
+        for instruction_path in instruction_paths:
+            instruction_text = instruction_path.read_text(encoding="utf-8")
+            self.assertIn("project-root-relative paths", instruction_text, str(instruction_path))
+            self.assertNotIn("absolute project paths", instruction_text, str(instruction_path))
 
 
 if __name__ == "__main__":
