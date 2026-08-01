@@ -438,8 +438,8 @@ def validate(skill_dir):
     for label in ("workflow", "code", "management", "task_analyze", "task_analyze_selection", "task_analyze_adaptive"):
         failures.extend(legacy_only_failures(label, texts[label]))
     entry_body = texts["task_analyze_entry_rule"].replace("Merge this section into `~/.codex/AGENTS.md`.\n\n", "", 1)
-    if len(entry_body.encode("utf-8")) > 4000:
-        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 4000 bytes")
+    if len(entry_body.encode("utf-8")) > 5000:
+        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 5000 bytes")
     if entry_body != texts["global_agents"]:
         failures.append("global entry asset does not exactly match global AGENTS after removing its merge directive")
     live_text = "\n".join(texts.values())

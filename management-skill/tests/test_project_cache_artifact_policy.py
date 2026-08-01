@@ -42,6 +42,15 @@ REQUIRED_POLICY_TEXT = (
     "retention/cleanup",
     "important Cache",
     "explicit authorization",
+    "local-machine path",
+    "not only Cache paths",
+    "project-root-relative",
+    "runtime",
+    "native path APIs",
+)
+REQUIRED_DETAILED_PATH_TEXT = (
+    "POSIX home absolute path",
+    "Windows drive-letter absolute path",
 )
 
 
@@ -51,6 +60,8 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             skill_text = (SKILLS_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("Project Cache Artifact Policy", skill_text, skill_name)
             for required_text in REQUIRED_POLICY_TEXT:
+                self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
+            for required_text in REQUIRED_DETAILED_PATH_TEXT:
                 self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
 
     def test_global_agents_and_installable_entry_rule_have_the_same_contract(self):
@@ -94,6 +105,12 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             for directory in (task_root.parent, task_root.parent.parent):
                 if directory.is_dir() and not any(directory.iterdir()):
                     directory.rmdir()
+
+    def test_management_sync_default_paths_are_derived_from_the_project(self):
+        expected_project_root = SYNC_SCRIPT_PATH.resolve().parents[3]
+        self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, expected_project_root)
+        self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_project_root / "Cache" / "management-skill-sync")
+        self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_project_root / "state" / "management-skill-sync.json")
 
     def test_important_cache_content_is_registered_in_project_agents(self):
         task_root = SKILLS_ROOT / "management-skill" / "Cache" / "tests" / "cache-agents-registration-smoke"

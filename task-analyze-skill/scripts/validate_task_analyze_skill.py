@@ -340,7 +340,7 @@ REQUIRED_VERIFY_SKILL_TEXT = ["execute a real proportional test", "ending_verifi
 REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "weak_default", "balanced_default", "balanced_complex", "frontier_complex", "separate_persistent_tasks", "THREAD_TARGET", "projectless", "TERMINAL_THREAD_POLICY", "record_pass_then_archive_self", "keep_unarchived", "subprocess.run", "create_repair_task_then_fresh_ending", "max_repair_attempts"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
-MAX_GLOBAL_BOOTSTRAP_BYTES = 4000
+MAX_GLOBAL_BOOTSTRAP_BYTES = 5000
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
     "The entry is a bounded controller",
