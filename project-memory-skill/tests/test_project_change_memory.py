@@ -180,6 +180,22 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             self.assertEqual(str(descendant_target), "/tmp/vault/Skills/Global Codex Skills History.md")
             self.assertIsNone(clone_target)
 
+    def test_cache_descendants_do_not_inherit_registered_project_memory_owner(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            home = temporary / "home"
+            cache_fixture = home / ".codex" / "Cache" / "tests" / "fixture-project"
+            cache_fixture.mkdir(parents=True)
+            with mock.patch.object(MEMORY.Path, "home", lambda: home):
+                owner = MEMORY._registered_owner(cache_fixture)
+                target, title = MEMORY._canonical_history_target(
+                    {"project": {"root": str(cache_fixture)}},
+                    temporary / "vault",
+                )
+        self.assertIsNone(owner)
+        self.assertIsNone(target)
+        self.assertEqual(title, "")
+
     def test_exact_vault_root_uses_source_ingest_page_but_same_name_clone_is_unmatched(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
@@ -255,6 +271,37 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             self.assertEqual(search["matches"][0]["reason"], "Preserve the public contract while fixing the implementation")
             self.assertEqual(len((store / "index.jsonl").read_text(encoding="utf-8").splitlines()), 1)
             self.assertFalse((vault / "Projects" / "ExampleProject").exists())
+
+    def test_record_serialization_and_cli_result_do_not_expose_absolute_machine_paths(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "ExampleProject"
+            store = root / "store"
+            project.mkdir()
+            (project / "src.py").write_text("value = 1\n", encoding="utf-8")
+            result = MEMORY.record_change(
+                project,
+                "portable-paths",
+                "file",
+                "edit",
+                "Recorded portable project identity",
+                "Keep local paths out of AI memory",
+                "Record uses only relative path labels",
+                "passed",
+                ["src.py"],
+                ["focused serialization check passed"],
+                store=store,
+                vault=root / "missing-vault",
+            )
+            record_path = store / result["local"]["record"]
+            serialized = record_path.read_text(encoding="utf-8")
+            rendered_result = str(result)
+
+        self.assertEqual(result["project"]["root"], ".")
+        self.assertEqual(result["local"]["store"], "store")
+        self.assertFalse(Path(result["local"]["record"]).is_absolute())
+        self.assertNotIn(str(root), serialized)
+        self.assertNotIn(str(root), rendered_result)
 
     def test_search_is_scoped_to_current_working_line(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
