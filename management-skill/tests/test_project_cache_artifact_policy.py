@@ -38,8 +38,6 @@ REQUIRED_POLICY_TEXT = (
     "`work/`",
     "project-root `AGENTS.md`",
     "owner/source",
-    "regenerate",
-    "retention/cleanup",
     "important Cache",
     "explicit authorization",
     "local-machine path",
@@ -47,10 +45,26 @@ REQUIRED_POLICY_TEXT = (
     "project-root-relative",
     "runtime",
     "native path APIs",
+    "compact structural contract",
+    "not a project notebook",
+    "ownership boundaries",
+    "critical entry points",
+    "hard constraints",
+    "Do not write implementation details",
+    "task history",
+    "test results",
+    "generated data",
+    "troubleshooting",
 )
 REQUIRED_DETAILED_PATH_TEXT = (
     "POSIX home absolute path",
     "Windows drive-letter absolute path",
+)
+REQUIRED_DETAILED_AGENTS_TEXT = (
+    "retention/version-control status",
+    "one concise registry entry",
+    "owning source, project documentation, or a README",
+    "Update `AGENTS.md` only when",
 )
 
 
@@ -62,6 +76,8 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             for required_text in REQUIRED_POLICY_TEXT:
                 self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
             for required_text in REQUIRED_DETAILED_PATH_TEXT:
+                self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
+            for required_text in REQUIRED_DETAILED_AGENTS_TEXT:
                 self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
 
     def test_global_agents_and_installable_entry_rule_have_the_same_contract(self):
@@ -116,25 +132,24 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         task_root = SKILLS_ROOT / "management-skill" / "Cache" / "tests" / "cache-agents-registration-smoke"
         project_root = task_root / "fixture-project"
         important_path = project_root / "Cache" / "tests" / "logic-regression" / "run_check.py"
+        details_path = important_path.parent / "README.md"
         agents_path = project_root / "AGENTS.md"
         try:
             important_path.parent.mkdir(parents=True, exist_ok=True)
             important_path.write_text("print('project logic regression')\n", encoding="utf-8")
+            details_path.write_text("Run with the project Python runtime. Dependencies: standard library.\n", encoding="utf-8")
             agents_path.write_text(
-                "# Important Cache contents\n\n"
-                "- Path: `Cache/tests/logic-regression/`\n"
-                "- Purpose: checks project logic\n"
-                "- Owner/source of truth: project maintainers\n"
-                "- Run/use/regenerate: `python3 Cache/tests/logic-regression/run_check.py`\n"
-                "- Dependencies: Python 3 standard library\n"
-                "- Retention/cleanup: retained; do not delete as disposable output\n"
-                "- Version control: source-controlled\n",
+                "# Project structure\n\n"
+                "- `Cache/tests/logic-regression/` — retained, source-controlled regression entry point; owner: project test policy; details: `Cache/tests/logic-regression/README.md`.\n",
                 encoding="utf-8",
             )
             agents_text = agents_path.read_text(encoding="utf-8")
             self.assertTrue(important_path.is_relative_to(project_root / "Cache"))
-            for expected in ("Cache/tests/logic-regression/", "Purpose:", "Owner/source of truth:", "Run/use/regenerate:", "Dependencies:", "Retention/cleanup:", "Version control:"):
+            for expected in ("Cache/tests/logic-regression/", "regression entry point", "owner:", "retained", "source-controlled", "README.md"):
                 self.assertIn(expected, agents_text)
+            for forbidden in ("Dependencies:", "Run/use/regenerate:", "test result", "troubleshooting"):
+                self.assertNotIn(forbidden, agents_text)
+            self.assertIn("Dependencies:", details_path.read_text(encoding="utf-8"))
         finally:
             shutil.rmtree(task_root)
             for directory in (task_root.parent, task_root.parent.parent):

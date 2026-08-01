@@ -20,4 +20,6 @@ Before Codex project-support writes,resolve `<project-root>`;redirect test scrip
 
 All local-machine paths in skills/scripts/code/config/docs/commands—not only Cache paths—must be project-root-relative or runtime-derived from a discovered root;never hard-code user-specific POSIX-home or Windows-drive paths.Run from project root;use native path APIs.
 
-Important Cache:`Cache/management-skill-sync/`=untracked disposable mirror scratch;owner/source `sync_global_skills.py`;run/regenerate via status/sync/push;deps Python3+Git+gh;clean own run only.
+Project `AGENTS.md` is a compact structural contract,not a project notebook.Keep only stable structure,ownership boundaries,critical entry points,hard constraints,project-wide conventions,and short canonical-doc pointers.Do not write implementation details,task history,logs/receipts/test results/evidence,generated data,temporary notes,dependency walkthroughs,long commands,or troubleshooting.Add important Cache as one concise registry line:path+role+owner+retention/VCS;put details in owning source,project docs,or a Cache README.Update `AGENTS.md` only for structure/ownership/entrypoint/constraint changes.
+
+Important Cache:`Cache/management-skill-sync/`—untracked disposable mirror scratch owned by `sync_global_skills.py`;details stay with the script.
