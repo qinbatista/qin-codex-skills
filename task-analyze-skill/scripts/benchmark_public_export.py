@@ -13,11 +13,11 @@ from tempfile import mkstemp
 
 TASK_LABELS = {"simple": "simple constant lookup", "medium": "medium one-method audit", "complex": "complex multi-file workflow graph"}
 MINIMUM_PUBLIC_PAIR_COUNT = 2
-PUBLIC_SCHEMA_VERSION = 4
+PUBLIC_SCHEMA_VERSION = 6
 FORBIDDEN_PUBLIC_KEYS = frozenset({"prompt", "raw_prompt", "result", "raw_result", "thread_id", "thread_ids", "session_id", "session_ids", "receipt", "receipt_path", "receipt_paths", "receipt_session_ids", "codex_home", "config_path", "agents_path", "models_cache_path", "memories_root", "workdir", "source_root", "evidence_path", "skills_catalog_root", "plugins_catalog_root", "marketplace_catalog_sources"})
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SUMMARY_KEYS = frozenset({"schema_version", "suite_id", "plan_sha256", "repeat_count", "tier_repeat_counts", "overall_status", "overall_rule", "time_rule", "token_rule", "tiers"})
-MANIFEST_KEYS = frozenset({"schema_version", "suite_id", "plan_sha256", "run_id", "pair_id", "tier", "repeat_index", "arm", "order_index", "workload_prompt_sha256", "prompt_file_sha256", "expected_sha256", "source_snapshot_sha256", "environment_sha256", "selected_entry_pair", "entry_execution_mode", "result_producer_pair", "executed_pairs", "receipt_session_ids", "unexpected_receipt_session_ids", "unreceipted_descendant_count", "runtime_session_count", "runtime_root_session_count", "runtime_descendant_session_count", "completion", "retry_count", "fallback_count", "repair_count", "metrics_complete", "logical_total_tokens", "first_result_elapsed_ms", "producer_elapsed_ms", "ending_real_elapsed_ms", "total_wall_elapsed_ms", "presented_result_sha256", "presented_result_object_sha256", "ending_real", "acceptance_status", "gate"})
+MANIFEST_KEYS = frozenset({"schema_version", "suite_id", "plan_sha256", "run_id", "pair_id", "tier", "repeat_index", "arm", "order_index", "workload_prompt_sha256", "prompt_file_sha256", "expected_sha256", "source_snapshot_sha256", "environment_sha256", "selected_entry_pair", "entry_execution_mode", "result_producer_pair", "executed_pairs", "receipt_session_ids", "unexpected_receipt_session_ids", "unreceipted_descendant_count", "runtime_session_count", "runtime_root_session_count", "runtime_descendant_session_count", "task_session_count", "controller_tokens_excluded", "completion", "retry_count", "fallback_count", "repair_count", "metrics_complete", "logical_total_tokens", "first_result_elapsed_ms", "producer_elapsed_ms", "ending_real_elapsed_ms", "total_wall_elapsed_ms", "presented_result_sha256", "presented_result_object_sha256", "ending_real", "acceptance_status", "gate"})
 MANIFEST_GATE_KEYS = frozenset({"generated_by", "version", "evidence_sha256", "status", "failures", "source_files_checked"})
 ENDING_REAL_KEYS = frozenset({"method", "completed", "status"})
 
@@ -142,11 +142,22 @@ def validate_manifest(manifest, run_plan, suite_id, plan_sha256):
     runtime_session_count = manifest.get("runtime_session_count")
     runtime_root_session_count = manifest.get("runtime_root_session_count")
     runtime_descendant_session_count = manifest.get("runtime_descendant_session_count")
-    if isinstance(runtime_session_count, bool) or not isinstance(runtime_session_count, int) or runtime_session_count < 1 or isinstance(runtime_root_session_count, bool) or not isinstance(runtime_root_session_count, int) or runtime_root_session_count != 1 or isinstance(runtime_descendant_session_count, bool) or not isinstance(runtime_descendant_session_count, int) or runtime_descendant_session_count != runtime_session_count - runtime_root_session_count:
+    invalid_runtime_counts = isinstance(runtime_session_count, bool) or not isinstance(runtime_session_count, int) or runtime_session_count < 1 or isinstance(runtime_root_session_count, bool) or not isinstance(runtime_root_session_count, int) or runtime_root_session_count < 1 or isinstance(runtime_descendant_session_count, bool) or not isinstance(runtime_descendant_session_count, int) or runtime_descendant_session_count != runtime_session_count - runtime_root_session_count
+    if invalid_runtime_counts or run_plan["arm"] == "direct" and runtime_root_session_count != 1:
         raise PublicExportError("manifest_runtime_session_count_invalid")
     unreceipted_descendant_count = manifest.get("unreceipted_descendant_count")
     if isinstance(unreceipted_descendant_count, bool) or not isinstance(unreceipted_descendant_count, int) or not 0 <= unreceipted_descendant_count <= runtime_descendant_session_count:
         raise PublicExportError("manifest_session_coverage_failure")
+    task_session_count = manifest.get("task_session_count")
+    controller_tokens_excluded = manifest.get("controller_tokens_excluded")
+    if isinstance(task_session_count, bool) or not isinstance(task_session_count, int) or task_session_count < 1 or task_session_count > runtime_session_count:
+        raise PublicExportError("manifest_task_session_count_invalid")
+    if isinstance(controller_tokens_excluded, bool) or not isinstance(controller_tokens_excluded, int) or controller_tokens_excluded < 0:
+        raise PublicExportError("manifest_controller_tokens_invalid")
+    if run_plan["arm"] == "direct" and (task_session_count != runtime_session_count or controller_tokens_excluded != 0):
+        raise PublicExportError("manifest_controller_accounting_invalid")
+    if run_plan["arm"] == "global" and (task_session_count != runtime_session_count - 1 or controller_tokens_excluded <= 0):
+        raise PublicExportError("manifest_controller_accounting_invalid")
     executed_pairs = manifest.get("executed_pairs")
     if not isinstance(executed_pairs, list) or len(executed_pairs) != runtime_session_count or run_plan["selected_entry_pair"] not in executed_pairs or any(not isinstance(pair, str) or "|" not in pair for pair in executed_pairs):
         raise PublicExportError("manifest_runtime_pair_invalid")
@@ -282,8 +293,9 @@ def build_public_export(plan_path, summary_path, manifest_dir):
         regenerated_manifests.append(regenerated_manifest)
     manifests = regenerated_manifests
     tier_summaries = validate_summary(summary, plan, manifests, plan_sha256, tier_repeat_counts)
-    entry_pairs = {run_plan["selected_entry_pair"] for run_plan in plan["runs"]}
-    if len(entry_pairs) != 1:
+    entry_pairs = {arm: {run_plan["selected_entry_pair"] for run_plan in plan["runs"] if run_plan["arm"] == arm} for arm in benchmark_suite_gate.ARMS}
+    expected_entry_pairs = dict(benchmark_suite_gate.ARM_ENTRY_PAIRS)
+    if any(entry_pairs[arm] != {expected_entry_pairs[arm]} for arm in benchmark_suite_gate.ARMS):
         raise PublicExportError("entry_pair_mismatch")
     configuration = validate_configuration_hashes(plan)
     execution_integrity = {
@@ -292,7 +304,10 @@ def build_public_export(plan_path, summary_path, manifest_dir):
         "fallback_count": sum(manifest["fallback_count"] for manifest in manifests),
         "repair_count": sum(manifest["repair_count"] for manifest in manifests),
         "runtime_session_count": sum(manifest["runtime_session_count"] for manifest in manifests),
+        "runtime_root_count": sum(manifest["runtime_root_session_count"] for manifest in manifests),
         "runtime_descendant_count": sum(manifest["runtime_descendant_session_count"] for manifest in manifests),
+        "task_session_count": sum(manifest["task_session_count"] for manifest in manifests),
+        "controller_tokens_excluded": sum(manifest["controller_tokens_excluded"] for manifest in manifests),
         "multi_session_run_count": sum(manifest["runtime_session_count"] > 1 for manifest in manifests),
     }
     task_summaries = []
@@ -300,7 +315,7 @@ def build_public_export(plan_path, summary_path, manifest_dir):
         tier_summary = tier_summaries[tier]
         task_summaries.append({"tier": tier, "label": TASK_LABELS[tier], "status": tier_summary["status"], "failures": tier_summary["failures"], "pair_count": tier_summary["pair_count"], "run_count": tier_summary["run_count"], "direct_totals": tier_summary["direct_totals"], "global_totals": tier_summary["global_totals"], "direct_medians": tier_summary["direct_medians"], "global_medians": tier_summary["global_medians"], "paired_savings_percent_medians": tier_summary["paired_savings_percent_medians"], "paired_wins": tier_summary["paired_wins"], "metric_gates": tier_summary["metric_gates"]})
     cohort_result = "passing" if summary["overall_status"] == "pass" else "failed strategy-performance"
-    public_document = {"schema_version": PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Global empirical cohort", "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "overall_status": summary["overall_status"], "all_correct": True, "expected_run_count": expected_run_count, "entry_pair": next(iter(entry_pairs)), "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": TOKEN_RULE, "time": TIME_RULE, "overall": OVERALL_RULE, "minimum_pairs_per_tier": MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": execution_integrity, "tasks": task_summaries, "caveats": {"tokens": "Logical task tokens sum censused foreground root and descendant sessions through the first result, include cached input, and exclude post-result Ending/verification sessions. They are a usage proxy, not a billing-token or price claim.", "first_result": "First-result time ends when the completed result is first available. Post-result Ending Task Real Verify is excluded from user-visible return time and reported separately when present.", "generalization": f"This is a {cohort_result} empirical cohort for these frozen workloads and conditions, not a universal guarantee for every task or future runtime."}}
+    public_document = {"schema_version": PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Auto empirical cohort", "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "overall_status": summary["overall_status"], "all_correct": True, "expected_run_count": expected_run_count, "entry_pairs": expected_entry_pairs, "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": TOKEN_RULE, "time": TIME_RULE, "overall": OVERALL_RULE, "minimum_pairs_per_tier": MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": execution_integrity, "tasks": task_summaries, "caveats": {"tokens": "Direct task tokens include its fixed Sol-ultra producer. Auto task tokens include every adaptive child/graph session and exclude only the Luna-max entry controller; Ending/verification is separate. Logical tokens are a usage proxy, not a billing-token or price claim.", "first_result": "First-result time ends when the completed result is first available. Post-result Ending Task Real Verify is excluded from user-visible return time and reported separately when present.", "generalization": f"This is a {cohort_result} empirical cohort for these frozen workloads and conditions, not a universal guarantee for every task or future runtime."}}
     validate_public_privacy(public_document, private_strings_from_evidence(plan, manifests))
     return public_document
 

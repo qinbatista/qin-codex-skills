@@ -33,7 +33,7 @@ class RenderBenchmarkSvgTests(unittest.TestCase):
         tier_repeat_counts = {tier: module.benchmark_public_export.MINIMUM_PUBLIC_PAIR_COUNT for tier in module.benchmark_public_export.benchmark_suite_gate.TIERS}
         expected_run_count = sum(tier_repeat_counts.values()) * 2
         configuration = {"config_hash_equal": True, "config_sha256": "b" * 64, "agents_sha256": {"direct": "c" * 64, "global": "d" * 64}, "runtime_context_hash_equal": True, "models_cache_sha256": "3" * 64, "memories_sha256": "4" * 64, "catalog_hash_equal": True, "catalog_schema_version": 1, "catalog_sha256": {"skills": "e" * 64, "plugins": "f" * 64, "marketplaces": "1" * 64, "visible": "2" * 64}, "catalog_file_counts": {"skills": 10, "plugins": 20, "marketplaces": 30, "marketplace_sources": 2}}
-        return {"schema_version": module.benchmark_public_export.PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Global empirical cohort", "suite_id": "benchmark-suite-svg-test", "plan_sha256": "a" * 64, "overall_status": "pass", "all_correct": True, "expected_run_count": expected_run_count, "entry_pair": "gpt-5.6-sol|ultra", "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": module.benchmark_public_export.TOKEN_RULE, "time": module.benchmark_public_export.TIME_RULE, "overall": module.benchmark_public_export.OVERALL_RULE, "minimum_pairs_per_tier": module.benchmark_public_export.MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": {"complete_runs": expected_run_count, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "runtime_session_count": expected_run_count, "runtime_descendant_count": 0, "multi_session_run_count": 0}, "tasks": tasks, "caveats": {"tokens": "Logical runtime tokens are not billing tokens.", "first_result": "Ending Real is excluded from first-result time.", "generalization": "Empirical cohort, not a universal guarantee."}}
+        return {"schema_version": module.benchmark_public_export.PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Auto empirical cohort", "suite_id": "benchmark-suite-svg-test", "plan_sha256": "a" * 64, "overall_status": "pass", "all_correct": True, "expected_run_count": expected_run_count, "entry_pairs": module.benchmark_public_export.benchmark_suite_gate.ARM_ENTRY_PAIRS, "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": module.benchmark_public_export.TOKEN_RULE, "time": module.benchmark_public_export.TIME_RULE, "overall": module.benchmark_public_export.OVERALL_RULE, "minimum_pairs_per_tier": module.benchmark_public_export.MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": {"complete_runs": expected_run_count, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "runtime_session_count": 18, "runtime_root_count": 12, "runtime_descendant_count": 6, "task_session_count": expected_run_count, "controller_tokens_excluded": 300, "multi_session_run_count": 6}, "tasks": tasks, "caveats": {"tokens": "Logical runtime tokens are not billing tokens.", "first_result": "Ending Real is excluded from first-result time.", "generalization": "Empirical cohort, not a universal guarantee."}}
 
     def scalar_values(self, value):
         if isinstance(value, dict):
@@ -75,11 +75,11 @@ class RenderBenchmarkSvgTests(unittest.TestCase):
         self.assertIn(module.DIRECT_COLOR, desktop_text)
         self.assertIn(module.GLOBAL_COLOR, desktop_text)
         self.assertIn("Direct", desktop_text)
-        self.assertIn("Global", desktop_text)
+        self.assertIn("Auto", desktop_text)
         desktop_visible_text = " ".join("".join(element.itertext()) for element in desktop_root.findall(".//{http://www.w3.org/2000/svg}text"))
         mobile_visible_text = " ".join("".join(element.itertext()) for element in mobile_root.findall(".//{http://www.w3.org/2000/svg}text"))
-        self.assertIn("12 complete · 12 sessions (0 child) · 0 retry/fallback/repair", desktop_visible_text)
-        self.assertIn("12 complete · 12 sessions (0 child) · 0 retry/fallback/repair", mobile_visible_text)
+        self.assertIn("12 complete · 18 sessions (12 roots) · 0 retry/fallback/repair", desktop_visible_text)
+        self.assertIn("12 complete · 18 sessions (12 roots) · 0 retry/fallback/repair", mobile_visible_text)
         self.assertEqual(desktop_visible_text.count("PASS · 2 pairs · 4 runs"), 3)
         self.assertEqual(mobile_visible_text.count("PASS · 2 pairs · 4 runs"), 3)
         self.assertIn("tokens lower · Simple noise-aware · Medium strict · Complex time diagnostic", desktop_visible_text)
@@ -121,10 +121,11 @@ class RenderBenchmarkSvgTests(unittest.TestCase):
             mobile_text = mobile_path.read_text(encoding="utf-8")
         self.assertIn("Real A/B benchmark · FAIL", desktop_text)
         self.assertIn("FAIL · 2 pairs · 4 runs", desktop_text)
-        self.assertIn("Medium: first result majority loss", desktop_text)
+        self.assertIn("Medium: first-result", desktop_text)
+        self.assertNotIn("first result majority loss", " ".join("".join(element.itertext()) for element in ElementTree.fromstring(desktop_text).findall(".//{http://www.w3.org/2000/svg}text")))
         self.assertIn("Strategy gate FAIL", mobile_text)
 
-    def test_strict_v4_public_contract_rejects_schema_gate_and_integrity_drift(self):
+    def test_strict_v5_public_contract_rejects_schema_gate_and_integrity_drift(self):
         cases = (("top_level_extra", "public_json_schema"), ("rules_missing_minimum", "public_rule_contract"), ("rules_wrong_minimum", "public_rule_contract"), ("rules_wrong_token", "public_rule_contract"), ("rules_wrong_time", "public_rule_contract"), ("rules_wrong_overall", "public_rule_contract"), ("tier_pair_count", "public_pair_count_contract"), ("task_pair_count", "public_task_contract"), ("expected_run_count", "public_run_count_contract"), ("integrity_missing_field", "public_execution_integrity"), ("integrity_incomplete", "public_execution_integrity"), ("integrity_retry", "public_execution_integrity"), ("metric_gate_legacy", "public_metric_gate_contract"), ("metric_gate_threshold", "public_metric_gate_contract"), ("metric_gate_threshold_status", "public_metric_gate_contract"), ("metric_gate_majority_status", "public_metric_gate_contract"), ("time_floor_missing", "public_metric_gate_contract"), ("time_floor_wrong", "public_metric_gate_contract"), ("time_tail_required", "public_metric_gate_contract"), ("time_material_invalid", "public_metric_gate_contract"), ("time_tail_inconsistent", "public_metric_gate_contract"), ("time_material_exceeds_losses", "public_metric_gate_contract"), ("time_wins_tie", "public_metric_gate_contract"), ("raw_time_loss", "public_metric_gate_contract"), ("total_token_loss", "public_metric_gate_contract"), ("configuration_extra", "public_configuration_contract"), ("catalog_hash_false", "public_configuration_contract"), ("catalog_hash_invalid", "public_configuration_contract"), ("catalog_count_invalid", "public_configuration_contract"), ("caveat_missing", "public_caveat_contract"))
         for case_name, expected_error in cases:
             with self.subTest(case_name=case_name), tempfile.TemporaryDirectory() as temporary:

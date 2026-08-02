@@ -64,6 +64,16 @@ class ObsidianModelMemoryTests(unittest.TestCase):
             "process_ms": elapsed,
         }
 
+    def write_local_history(self, records, prefix="history"):
+        self.local_store.parent.mkdir(parents=True, exist_ok=True)
+        self.local_store.write_text(
+            "".join(
+                json.dumps({"local_model_memory_schema": 1, "event": "model-result", "event_id": f"{prefix}-{index}", "record": record}) + "\n"
+                for index, record in enumerate(records)
+            ),
+            encoding="utf-8",
+        )
+
     def active(self, records):
         shared, pairs = module.load_shared_ladder()
         query = {"task_type": "code", "complexity": "easy"}
@@ -258,6 +268,187 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(recommendation["active_fallback_pair"], "gpt-5.6-terra|high")
         self.assertEqual(recommendation["complexity_score"], 35)
         self.assertEqual(recommendation["priority_producer_scope"], "bounded_text_code_and_scheduled_independent_sources")
+
+    def test_sol_ultra_entry_routes_down_to_contextual_cold_start(self):
+        recommendation = module.recommend_model(self.project, "code", "entry-aware", operation="work", complexity_score=35, task_summary="Route from a frontier entry.", entry_model="gpt-5.6-sol", entry_effort="ultra", vault=self.vault)
+        self.assertEqual(recommendation["entry_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(recommendation["entry_anchor_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(recommendation["switch_direction"], "downgrade")
+        self.assertEqual(recommendation["reason"], "shared_cold_start")
+        self.assertEqual(recommendation["entry_route_reason"], "contextual_static_below_entry")
+
+    def test_luna_max_entry_starts_at_entry_without_history(self):
+        recommendation = module.recommend_model(self.project, "code", "entry-aware", operation="work", complexity_score=35, task_summary="Route from a lower entry.", entry_model="gpt-5.6-luna", entry_effort="max", vault=self.vault)
+        self.assertEqual(recommendation["entry_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(recommendation["switch_direction"], "no_switch")
+        self.assertEqual(recommendation["reason"], "entry_anchored_cold_start")
+
+    def test_matching_task_and_difficulty_reuse_local_boundary_across_project_roots(self):
+        foreign_project = self.root / "archived" / "ExampleProject"
+        foreign_project.mkdir(parents=True)
+        foreign_key = module.project_change_memory._project_identity(foreign_project)["key"]
+        common = {"model_experience_schema": 1, "project_key": foreign_key, "task_type": "code", "module": "portable-routing", "file": "", "symbol": "", "code_kind": "python", "operation": "work", "modality": "text", "complexity": "easy", "complexity_score": 42, "complexity_band": "standard", "risk": "low", "ambiguity": "low", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True}
+        records = [
+            {**common, "pair": "gpt-5.6-luna|max", "real_status": "fail", "failure_class": "correctness"},
+            {**common, "pair": "gpt-5.6-terra|low", "real_status": "fail", "failure_class": "correctness"},
+            {**common, "pair": "gpt-5.6-terra|medium", "real_status": "pass", "failure_class": "none"},
+        ]
+        self.local_store.parent.mkdir(parents=True)
+        self.local_store.write_text("".join(json.dumps({"local_model_memory_schema": 1, "event": "model-result", "event_id": f"transfer-{index}", "record": record}) + "\n" for index, record in enumerate(records)), encoding="utf-8")
+        recommendation = module.recommend_model(self.project, "code", "portable-routing", code_kind="python", operation="work", modality="text", complexity_score=42, risk="low", ambiguity="low", task_summary="Reuse a matching historical boundary.", entry_model="gpt-5.6-luna", entry_effort="max", vault=self.vault)
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(recommendation["selection_basis"], "local_transfer_history")
+        self.assertEqual(recommendation["specificity"], "cross_project_module")
+        self.assertEqual(recommendation["transfer_record_count"], 3)
+        self.assertEqual(recommendation["switch_direction"], "upgrade")
+
+    def test_cross_project_history_requires_matching_task_difficulty(self):
+        foreign = {"model_experience_schema": 1, "project_key": "foreign-project", "task_type": "code", "module": "portable-routing", "file": "", "symbol": "", "code_kind": "python", "operation": "work", "modality": "text", "complexity": "complex", "complexity_score": 68, "complexity_band": "complex", "risk": "low", "ambiguity": "low", "pair": "gpt-5.6-terra|high", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none"}
+        self.local_store.parent.mkdir(parents=True)
+        self.local_store.write_text(json.dumps({"local_model_memory_schema": 1, "event": "model-result", "event_id": "wrong-band", "record": foreign}) + "\n", encoding="utf-8")
+        recommendation = module.recommend_model(self.project, "code", "portable-routing", code_kind="python", operation="work", modality="text", complexity_score=42, risk="low", ambiguity="low", task_summary="Do not transfer a different difficulty.", entry_model="gpt-5.6-luna", entry_effort="max", vault=self.vault)
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(recommendation["transfer_record_count"], 0)
+
+    def test_verified_boundary_overrides_both_low_and_high_entries(self):
+        project = module.project_change_memory._project_identity(self.project)
+        context = {"model_experience_schema": 1, "project_key": project["key"], "project_owner": "ThisIsMyOregon", "task_type": "code", "module": "stable-entry-aware", "file": "src/example.py", "symbol": "Example.route", "code_kind": "python", "operation": "work", "modality": "text", "complexity": "easy", "complexity_score": 35, "complexity_band": "standard", "risk": "low", "ambiguity": "low", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True}
+        failed = {**context, "pair": "gpt-5.6-terra|medium", "real_status": "fail", "failure_class": "correctness"}
+        passed = {**context, "pair": "gpt-5.6-terra|high", "real_status": "pass", "failure_class": "none"}
+        self.broad_page.write_text("# Model Switch\n\n" + "\n".join("<!-- model-experience: " + json.dumps(record) + " -->" for record in (failed, passed)) + "\n", encoding="utf-8")
+        common = {"file_value": "src/example.py", "symbol": "Example.route", "code_kind": "python", "operation": "work", "complexity_score": 35, "task_summary": "Reuse the verified routing boundary.", "vault": self.vault}
+        low = module.recommend_model(self.project, "code", "stable-entry-aware", entry_model="gpt-5.6-luna", entry_effort="low", **common)
+        high = module.recommend_model(self.project, "code", "stable-entry-aware", entry_model="gpt-5.6-sol", entry_effort="ultra", **common)
+        self.assertEqual(low["attempt_pair"], "gpt-5.6-terra|high")
+        self.assertEqual(low["switch_direction"], "upgrade")
+        self.assertEqual(high["attempt_pair"], "gpt-5.6-terra|high")
+        self.assertEqual(high["switch_direction"], "downgrade")
+        self.assertEqual(low["calibration_state"], "frozen")
+
+    def test_similar_image_control_step_reuses_recovered_model_from_both_entries(self):
+        foreign_project = self.root / "archived" / "ImageController"
+        foreign_project.mkdir(parents=True)
+        profile = module.task_capability_profile(
+            "code", "python", "work", "mixed", 42, "low", "low",
+            "Control code that generates images through a local tool.",
+        )
+        common = {
+            "model_experience_schema": 1,
+            "project_key": module.project_change_memory._project_identity(foreign_project)["key"],
+            "task_type": "code",
+            "task_summary": "Control code that generates images through a local tool.",
+            "module": "legacy-image-controller",
+            "file": "",
+            "symbol": "",
+            "code_kind": "python",
+            "operation": "work",
+            "modality": "mixed",
+            "complexity": "easy",
+            "complexity_score": 42,
+            "complexity_band": "standard",
+            "risk": "low",
+            "ambiguity": "low",
+            "step_kind": profile["step_kind"],
+            "capability_tags": profile["capability_tags"],
+            "capability_fingerprint": profile["capability_fingerprint"],
+            "receipt_status": "pass",
+            "turn_completed": True,
+            "model_match": True,
+            "effort_match": True,
+        }
+        self.write_local_history([
+            {**common, "pair": "gpt-5.6-luna|max", "real_status": "fail", "failure_class": "correctness"},
+            {**common, "pair": "gpt-5.6-terra|medium", "real_status": "pass", "failure_class": "none"},
+        ], prefix="image-control")
+        scope = {
+            "code_kind": "python",
+            "operation": "work",
+            "modality": "mixed",
+            "complexity_score": 42,
+            "risk": "low",
+            "ambiguity": "low",
+            "task_summary": "用代码控制图片生成，并调用本地工具。",
+            "step_kind": "image-generation-control",
+            "capability_tags": ["image-generation", "tool-control"],
+            "vault": self.vault,
+        }
+        low_entry = module.recommend_model(self.project, "code", "new-image-controller", entry_model="gpt-5.6-luna", entry_effort="max", **scope)
+        high_entry = module.recommend_model(self.project, "code", "new-image-controller", entry_model="gpt-5.6-sol", entry_effort="ultra", **scope)
+        for recommendation in (low_entry, high_entry):
+            self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-terra|medium")
+            self.assertEqual(recommendation["reason"], "verified_quality_boundary")
+            self.assertEqual(recommendation["calibration_state"], "frozen")
+            self.assertEqual(recommendation["selection_basis"], "local_transfer_history")
+            self.assertEqual(recommendation["transfer_record_count"], 2)
+            self.assertEqual(recommendation["step_kind"], "image-generation-control")
+        self.assertEqual(low_entry["switch_direction"], "upgrade")
+        self.assertEqual(high_entry["switch_direction"], "downgrade")
+
+    def test_compound_implementation_and_local_test_steps_reuse_separate_models(self):
+        project = module.project_change_memory._project_identity(self.project)
+        implementation_profile = module.task_capability_profile("code", "python", "implement", "text", 38, "low", "low", "Implement the bounded parser change.")
+        test_profile = module.task_capability_profile("code", "python", "test", "text", 18, "low", "low", "Run the local pytest regression suite.")
+        common = {
+            "model_experience_schema": 1,
+            "project_key": project["key"],
+            "project_owner": "ThisIsMyOregon",
+            "task_type": "code",
+            "module": "compound-parser",
+            "file": "src/example.py",
+            "symbol": "",
+            "code_kind": "python",
+            "modality": "text",
+            "risk": "low",
+            "ambiguity": "low",
+            "receipt_status": "pass",
+            "turn_completed": True,
+            "model_match": True,
+            "effort_match": True,
+            "real_status": "pass",
+            "failure_class": "none",
+        }
+        implementation = {**common, "task_summary": "Implement the bounded parser change.", "operation": "implement", "complexity": "easy", "complexity_score": 38, "complexity_band": "standard", "pair": "gpt-5.6-terra|medium", "step_kind": implementation_profile["step_kind"], "capability_tags": implementation_profile["capability_tags"], "capability_fingerprint": implementation_profile["capability_fingerprint"]}
+        local_test = {**common, "task_summary": "Run the local pytest regression suite.", "operation": "test", "complexity": "easy", "complexity_score": 18, "complexity_band": "small", "pair": "gpt-5.6-luna|low", "step_kind": test_profile["step_kind"], "capability_tags": test_profile["capability_tags"], "capability_fingerprint": test_profile["capability_fingerprint"]}
+        self.write_local_history([implementation, local_test], prefix="compound")
+        implementation_route = module.recommend_model(self.project, "code", "compound-parser", file_value="src/example.py", code_kind="python", operation="implement", complexity_score=38, task_summary="Implement the bounded parser change.", entry_model="gpt-5.6-sol", entry_effort="ultra", vault=self.vault)
+        test_route = module.recommend_model(self.project, "code", "compound-parser", file_value="src/example.py", code_kind="python", operation="test", complexity_score=18, task_summary="Run the local pytest regression suite.", entry_model="gpt-5.6-sol", entry_effort="ultra", vault=self.vault)
+        self.assertEqual(implementation_route["attempt_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(implementation_route["step_kind"], "implementation")
+        self.assertEqual(test_route["attempt_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(test_route["step_kind"], "local-test")
+        self.assertNotEqual(implementation_route["capability_fingerprint"], test_route["capability_fingerprint"])
+        self.assertEqual(implementation_route["switch_direction"], "downgrade")
+        self.assertEqual(test_route["switch_direction"], "downgrade")
+
+    def test_nearby_but_different_capability_does_not_reuse_image_control_history(self):
+        foreign_project = self.root / "archived" / "ImageMetadata"
+        foreign_project.mkdir(parents=True)
+        profile = module.task_capability_profile("code", "python", "work", "text", 42, "low", "low", "Control code that generates images.")
+        foreign = {"model_experience_schema": 1, "project_key": module.project_change_memory._project_identity(foreign_project)["key"], "task_type": "code", "task_summary": "Control code that generates images.", "module": "image-pipeline", "file": "", "symbol": "", "code_kind": "python", "operation": "work", "modality": "text", "complexity": "easy", "complexity_score": 42, "complexity_band": "standard", "risk": "low", "ambiguity": "low", "pair": "gpt-5.6-terra|medium", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none", "step_kind": profile["step_kind"], "capability_tags": profile["capability_tags"], "capability_fingerprint": profile["capability_fingerprint"]}
+        self.write_local_history([foreign], prefix="nearby")
+        recommendation = module.recommend_model(self.project, "code", "image-pipeline", code_kind="python", operation="work", modality="text", complexity_score=42, task_summary="Update image metadata labels.", entry_model="gpt-5.6-luna", entry_effort="max", vault=self.vault)
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(recommendation["transfer_record_count"], 0)
+        self.assertEqual(recommendation["reason"], "entry_anchored_cold_start")
+
+    def test_record_projects_entry_pair_with_task_difficulty(self):
+        recommendation = module.recommend_model(self.project, "code", "record-entry", operation="work", complexity_score=35, task_summary="Record entry-aware routing.", entry_model="gpt-5.6-luna", entry_effort="max", vault=self.vault)
+        self.write_receipt(recommendation["attempt_pair"])
+        receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
+        receipt.update({"entry_model": "gpt-5.6-luna", "entry_effort": "max", "entry_pair": "gpt-5.6-luna|max", "entry_source": "explicit"})
+        self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        recorded = module.record_model_result(self.project, "code", "record-entry", self.receipt, "pass", "none", operation="work", complexity_score=35, task_summary="Record entry-aware routing.", vault=self.vault)
+        record = next(record for record in module._read_project_records(self.broad_page) if record["module"] == "record-entry")
+        self.assertEqual(recorded["entry_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(record["entry_anchor_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(record["complexity_band"], "standard")
+        self.assertEqual(record["step_kind"], "implementation")
+        self.assertRegex(record["capability_fingerprint"], r"^[0-9a-f]{64}$")
+        self.assertIn("code-authoring", record["capability_tags"])
+        self.assertIn("Step / capability", self.broad_page.read_text(encoding="utf-8"))
+        self.assertIn("gpt-5.6-luna|max / gpt-5.6-luna|max", self.broad_page.read_text(encoding="utf-8"))
 
     def test_small_edit_score_uses_spark_priority_with_quality_fallback(self):
         recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity_score=12, risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)

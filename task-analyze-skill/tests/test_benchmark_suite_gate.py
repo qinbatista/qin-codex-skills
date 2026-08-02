@@ -26,11 +26,18 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
     def relative(self, root, path):
         return path.relative_to(root).as_posix()
 
-    def make_receipt(self, path, thread_id, pair, role, result_message, total_tokens, workload_prompt_sha256, workload_id, arm, result_ready_monotonic_ns=1):
+    def make_receipt(self, path, thread_id, pair, role, result_message, total_tokens, workload_prompt_sha256, workload_id, arm, result_ready_monotonic_ns=1, raw_prompt_text=None):
         model, effort = pair.split("|", 1)
         node_type = "direct-task" if arm == "direct" else "bootstrap-task"
         authorization_source = "benchmark-direct" if arm == "direct" else "benchmark-global-inline"
-        receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": f"benchmark-{workload_id}", "workload_id": workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "child_result_ready_monotonic_ns": result_ready_monotonic_ns, "result_ready_clock": "benchmark-runner-monotonic", "result_ready_event_sequence": 1, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": workload_prompt_sha256}
+        execution_prompt = module.auto_benchmark_execution_prompt(raw_prompt_text) if arm == "global" and raw_prompt_text is not None else raw_prompt_text
+        execution_prompt_sha256 = hashlib.sha256(execution_prompt.encode("utf-8")).hexdigest() if execution_prompt is not None else workload_prompt_sha256
+        receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": f"benchmark-{workload_id}", "benchmark_result_source": "controller_final", "workload_id": workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "child_result_ready_monotonic_ns": result_ready_monotonic_ns, "result_ready_clock": "benchmark-runner-monotonic", "result_ready_event_sequence": 1, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": execution_prompt_sha256}
+        if arm == "global":
+            receipt["benchmark_prompt_file_verified"] = True
+            receipt["benchmark_auto_launch_verified"] = True
+            receipt["benchmark_auto_workspace_count"] = 1
+            receipt["benchmark_auto_bridge_result_verified"] = True
         self.write_json(path, receipt)
         return receipt
 
@@ -93,14 +100,17 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         runs = []
         run_paths = {}
         order_index = 1
-        selected_pair = "gpt-5.6-sol|ultra"
         resolved_repeat_counts = tier_repeat_counts or {tier: repeat_count for tier in module.TIERS}
         for tier in module.TIERS:
+            prompt_text = f"{tier} prompt"
+            prompt_path = root / "prompts" / f"{tier}.txt"
+            prompt_path.parent.mkdir(parents=True, exist_ok=True)
+            prompt_path.write_text(prompt_text, encoding="utf-8")
             expected_path = root / "expected" / f"{tier}.json"
             expected_document = {"tier": tier, "answer": "ok", "source_files": ["source.py"]}
             self.write_json(expected_path, expected_document)
             expected_sha256 = hashlib.sha256(expected_path.read_bytes()).hexdigest()
-            prompt_sha256 = hashlib.sha256(f"{tier} prompt".encode("utf-8")).hexdigest()
+            prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
             for repeat_index in range(1, resolved_repeat_counts[tier] + 1):
                 pair_id = f"{tier}-{repeat_index}"
                 arm_order = ["direct", "global"] if repeat_index % 2 == 1 else ["global", "direct"]
@@ -113,15 +123,20 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                     evidence_path = root / "raw" / run_id / "evidence.json"
                     receipt_path = root / "raw" / run_id / "receipt.json"
                     thread_id = f"session-{run_id}"
-                    pair = selected_pair
-                    tokens = 1000 + repeat_index if arm == "direct" else 400 + repeat_index
+                    pair = module.ARM_ENTRY_PAIRS[arm]
+                    tokens = 1000 + repeat_index if arm == "direct" else 50 + repeat_index
+                    task_tokens = tokens if arm == "direct" else 400 + repeat_index
                     first_result_ms = 200 + repeat_index if arm == "direct" else 80 + repeat_index
                     total_wall_ms = 300 + repeat_index if arm == "direct" else 120 + repeat_index
                     result_ready_monotonic_ns = 1_000_000_000 + first_result_ms * 1_000_000
-                    self.make_receipt(receipt_path, thread_id, pair, "result-producer", result_message, tokens, prompt_sha256, run_id, arm, result_ready_monotonic_ns)
-                    self.make_evidence(evidence_path, run_id, [thread_id], first_result_ms, total_wall_ms, pair, tokens)
+                    self.make_receipt(receipt_path, thread_id, pair, "result-producer", result_message, tokens, prompt_sha256, run_id, arm, result_ready_monotonic_ns, prompt_text)
+                    runtime_sessions = [self.make_runtime_session(thread_id, pair, tokens)]
+                    if arm == "global":
+                        runtime_sessions.append(self.make_runtime_session(f"{thread_id}-adaptive", "gpt-5.6-luna|max", task_tokens, thread_id, "subagent"))
+                    foreground_sessions = [self.make_foreground_session(runtime_session) for runtime_session in runtime_sessions]
+                    self.make_evidence(evidence_path, run_id, [runtime_session["thread_id"] for runtime_session in runtime_sessions], first_result_ms, total_wall_ms, pair, tokens, runtime_sessions, foreground_sessions, thread_id)
                     receipt_spec = {"path": self.relative(root, receipt_path), "pair": pair, "role": "result-producer", "bind_result": True, "workload_prompt_sha256": prompt_sha256}
-                    run_plan = {"run_id": run_id, "pair_id": pair_id, "tier": tier, "repeat_index": repeat_index, "arm": arm, "order_index": order_index, "prompt_sha256": prompt_sha256, "expected_result_path": self.relative(root, expected_path), "expected_sha256": expected_sha256, "result_path": self.relative(root, result_path), "evidence_path": self.relative(root, evidence_path), "receipts": [receipt_spec], "selected_entry_pair": selected_pair, "entry_execution_mode": "executed", "source_root": self.relative(root, source_root), "source_files_pointer": "/source_files", "source_snapshot_sha256": source_snapshot_sha256}
+                    run_plan = {"run_id": run_id, "pair_id": pair_id, "tier": tier, "repeat_index": repeat_index, "arm": arm, "order_index": order_index, "prompt_path": self.relative(root, prompt_path), "prompt_sha256": prompt_sha256, "expected_result_path": self.relative(root, expected_path), "expected_sha256": expected_sha256, "result_path": self.relative(root, result_path), "evidence_path": self.relative(root, evidence_path), "receipts": [receipt_spec], "selected_entry_pair": pair, "entry_execution_mode": "executed", "source_root": self.relative(root, source_root), "source_files_pointer": "/source_files", "source_snapshot_sha256": source_snapshot_sha256}
                     runs.append(run_plan)
                     run_paths[run_id] = {"result": result_path, "evidence": evidence_path, "receipt": receipt_path, "expected": expected_path}
                     order_index += 1
@@ -155,6 +170,77 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertEqual(summary["tiers"]["simple"]["direct_totals"]["logical_total_tokens"], 2003)
         self.assertEqual(summary["tiers"]["simple"]["global_totals"]["logical_total_tokens"], 803)
         self.assertEqual(summary["tiers"]["simple"]["metric_gates"]["first_result_elapsed_ms"]["status"], "pass")
+
+    def test_global_verified_adaptive_bridge_handoff_is_an_accepted_result_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path, _, run_paths = self.build_suite(root)
+            target_paths = run_paths["simple-1-global"]
+            receipt = json.loads(target_paths["receipt"].read_text(encoding="utf-8"))
+            receipt["benchmark_result_source"] = "adaptive_bridge_handoff"
+            receipt["benchmark_auto_bridge_result_verified"] = True
+            self.write_json(target_paths["receipt"], receipt)
+            module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
+            manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["acceptance_status"], "pass")
+        self.assertNotIn("receipt_result_source_invalid", manifest["gate"]["failures"])
+
+    def test_arm_pairs_and_auto_controller_exclusion_are_enforced(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path, plan, run_paths = self.build_suite(root)
+            summary = module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
+            direct = json.loads((root / "manifests" / "simple-1-direct.json").read_text(encoding="utf-8"))
+            global_manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
+            forged = dict(next(run for run in plan["runs"] if run["run_id"] == "simple-1-global"), selected_entry_pair="gpt-5.6-sol|ultra")
+        self.assertEqual(summary["overall_status"], "pass")
+        self.assertEqual(direct["selected_entry_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(direct["controller_tokens_excluded"], 0)
+        self.assertEqual(global_manifest["selected_entry_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(global_manifest["controller_tokens_excluded"], 51)
+        self.assertEqual(global_manifest["task_session_count"], 1)
+        self.assertEqual(global_manifest["logical_total_tokens"], 401)
+        with self.assertRaisesRegex(module.BenchmarkGateError, "plan_arm_entry_pair"):
+            module.validate_run_plan(forged, 2)
+
+    def test_auto_arm_without_adaptive_child_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path, _, run_paths = self.build_suite(root)
+            evidence_path = run_paths["simple-1-global"]["evidence"]
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            main_thread_id = evidence["foreground_main_thread_id"]
+            evidence["runtime_sessions"] = [session for session in evidence["runtime_sessions"] if session["thread_id"] == main_thread_id]
+            evidence["foreground_sessions"] = [session for session in evidence["foreground_sessions"] if session["thread_id"] == main_thread_id]
+            evidence["launched_session_ids"] = [main_thread_id]
+            for snapshot_name in ("state_snapshot", "foreground_state_snapshot"):
+                evidence[snapshot_name]["after_thread_count"] = 1
+                evidence[snapshot_name]["after_thread_ids_sha256"] = module.sha256_text(module.canonical_json([main_thread_id]))
+            self.write_json(evidence_path, evidence)
+            module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
+            manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["acceptance_status"], "fail")
+        self.assertFalse(manifest["metrics_complete"])
+        self.assertIn("global_adaptive_child_missing", manifest["gate"]["failures"])
+
+    def test_auto_arm_accepts_runtime_proven_adaptive_exec_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path, _, run_paths = self.build_suite(root)
+            target_paths = run_paths["simple-1-global"]
+            evidence = json.loads(target_paths["evidence"].read_text(encoding="utf-8"))
+            main_thread_id = evidence["foreground_main_thread_id"]
+            for session_group in (evidence["foreground_sessions"], evidence["runtime_sessions"]):
+                for session in session_group:
+                    if session["thread_id"] != main_thread_id:
+                        session["source_kind"] = "root"
+                        session["parent_thread_id"] = None
+            self.write_json(target_paths["evidence"], evidence)
+            module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
+            manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["acceptance_status"], "pass")
+        self.assertEqual(manifest["runtime_root_session_count"], 2)
+        self.assertEqual(manifest["task_session_count"], 1)
 
     def test_bound_receipt_ready_timestamp_must_exactly_match_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -615,7 +701,8 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                         receipt_path = root / run_plan["receipts"][0]["path"]
                         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
                         receipt["workload_prompt_sha256"] = prompt_sha256
-                        receipt["prompt_sha256"] = prompt_sha256
+                        execution_prompt = prompt_text if run_plan["arm"] == "direct" else module.auto_benchmark_execution_prompt(prompt_text)
+                        receipt["prompt_sha256"] = hashlib.sha256(execution_prompt.encode("utf-8")).hexdigest()
                         self.write_json(receipt_path, receipt)
             self.write_json(plan_path, plan)
             prompt_paths["simple"].write_text("changed simple prompt", encoding="utf-8")
@@ -637,7 +724,10 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             ("authorization", lambda evidence, receipt: receipt.update(authorization_source="benchmark-direct"), "receipt_authorization_source_mismatch"),
             ("benchmark_id", lambda evidence, receipt: receipt.update(benchmark_run_id="benchmark-other-run"), "receipt_benchmark_run_id_mismatch"),
             ("workload_id", lambda evidence, receipt: receipt.update(workload_id="other-run"), "receipt_workload_id_mismatch"),
-            ("raw_prompt", lambda evidence, receipt: receipt.update(prompt_sha256="0" * 64), "receipt_raw_prompt_mismatch"),
+            ("prompt_binding", lambda evidence, receipt: receipt.update(benchmark_prompt_file_verified=False), "receipt_benchmark_prompt_unverified"),
+            ("adaptive_launch", lambda evidence, receipt: receipt.update(benchmark_auto_workspace_count=2), "receipt_auto_launch_unverified"),
+            ("result_source", lambda evidence, receipt: receipt.update(benchmark_result_source="unverified_handoff"), "receipt_result_source_invalid"),
+            ("execution_prompt", lambda evidence, receipt: receipt.update(prompt_sha256="0" * 64), "receipt_execution_prompt_mismatch"),
             ("result_ready_event", lambda evidence, receipt: receipt.update(result_ready_clock="child-local"), "receipt_result_ready_event_invalid"),
             ("result_duplicate", lambda evidence, receipt: receipt.update(duplicate_result_detected=True), "receipt_result_not_frozen"),
         ]
@@ -703,11 +793,11 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
             manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["acceptance_status"], "pass")
-        self.assertEqual(manifest["runtime_session_count"], 2)
-        self.assertEqual(manifest["runtime_descendant_session_count"], 1)
-        self.assertEqual(manifest["unreceipted_descendant_count"], 1)
-        self.assertEqual(manifest["result_producer_pair"], "gpt-5.6-sol|ultra")
-        self.assertEqual(manifest["executed_pairs"], ["gpt-5.6-sol|ultra", "gpt-5.6-luna|low"])
+        self.assertEqual(manifest["runtime_session_count"], 3)
+        self.assertEqual(manifest["runtime_descendant_session_count"], 2)
+        self.assertEqual(manifest["unreceipted_descendant_count"], 2)
+        self.assertEqual(manifest["result_producer_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(manifest["executed_pairs"], ["gpt-5.6-luna|max", "gpt-5.6-luna|max", "gpt-5.6-luna|low"])
         self.assertEqual(manifest["logical_total_tokens"], 451)
 
     def test_receipt_backed_mixed_pair_ending_root_is_allowed_and_excluded_from_task_tokens(self):
@@ -735,11 +825,11 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
             manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["acceptance_status"], "pass")
-        self.assertEqual(manifest["result_producer_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(manifest["result_producer_pair"], "gpt-5.6-luna|max")
         self.assertEqual(manifest["runtime_root_session_count"], 2)
-        self.assertEqual(manifest["unreceipted_descendant_count"], 0)
+        self.assertEqual(manifest["unreceipted_descendant_count"], 1)
         self.assertEqual(manifest["logical_total_tokens"], 401)
-        self.assertEqual(manifest["executed_pairs"], ["gpt-5.6-sol|ultra", ending_pair])
+        self.assertEqual(manifest["executed_pairs"], ["gpt-5.6-luna|max", "gpt-5.6-luna|max", ending_pair])
 
     def test_foreground_census_rejects_incomplete_unknown_mismatched_and_excess_tokens(self):
         cases = ["incomplete", "unknown", "mismatched", "excess"]
@@ -765,7 +855,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                     evidence["foreground_sessions"][0]["tokens_used"] = evidence["runtime_sessions"][0]["tokens_used"] + 1
                     expected_failure = "evidence_foreground_tokens_exceed_final"
                 with self.assertRaisesRegex(module.BenchmarkGateError, expected_failure):
-                    module.validate_evidence(evidence, "simple-1-direct")
+                    module.validate_evidence(evidence, "simple-1-direct", "direct")
 
     def test_plan_and_evidence_cannot_supply_acceptance_status(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -777,7 +867,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             evidence = json.loads(run_paths["simple-1-direct"]["evidence"].read_text(encoding="utf-8"))
             evidence["acceptance_status"] = "pass"
             with self.assertRaisesRegex(module.BenchmarkGateError, "evidence_contract"):
-                module.validate_evidence(evidence, "simple-1-direct")
+                module.validate_evidence(evidence, "simple-1-direct", "direct")
 
     def test_legacy_simple_direct_and_global_outputs_fail_the_frozen_expected(self):
         for arm in module.ARMS:
@@ -791,9 +881,13 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                 result_message = json.dumps(LEGACY_SIMPLE_ACTUAL, separators=(",", ":"))
                 result_path.write_text(result_message + "\n", encoding="utf-8")
                 thread_id = f"legacy-{arm}"
-                pair = "gpt-5.6-sol|ultra"
+                pair = module.ARM_ENTRY_PAIRS[arm]
                 self.make_receipt(receipt_path, thread_id, pair, "result-producer", result_message, 100, "a" * 64, f"legacy-{arm}", arm, 1_000_000_000 + 10 * 1_000_000)
-                self.make_evidence(evidence_path, f"legacy-{arm}", [thread_id], 10, 20, pair, 100)
+                runtime_sessions = [self.make_runtime_session(thread_id, pair, 100)]
+                if arm == "global":
+                    runtime_sessions.append(self.make_runtime_session(f"{thread_id}-adaptive", "gpt-5.6-luna|max", 50, thread_id, "subagent"))
+                foreground_sessions = [self.make_foreground_session(runtime_session) for runtime_session in runtime_sessions]
+                self.make_evidence(evidence_path, f"legacy-{arm}", [runtime_session["thread_id"] for runtime_session in runtime_sessions], 10, 20, pair, 100, runtime_sessions, foreground_sessions, thread_id)
                 run_plan = {"run_id": f"legacy-{arm}", "pair_id": "legacy-simple", "tier": "simple", "repeat_index": 1, "arm": arm, "order_index": 1 if arm == "direct" else 2, "prompt_sha256": "a" * 64, "expected_result_path": "expected.json", "expected_sha256": hashlib.sha256(expected_path.read_bytes()).hexdigest(), "result_path": "result.json", "evidence_path": "evidence.json", "receipts": [{"path": "receipt.json", "pair": pair, "role": "result-producer", "bind_result": True, "workload_prompt_sha256": "a" * 64}], "selected_entry_pair": pair, "entry_execution_mode": "executed"}
                 manifest = module.evaluate_run(root, "legacy-suite", "b" * 64, run_plan)
             self.assertEqual(manifest["completion"], "complete")

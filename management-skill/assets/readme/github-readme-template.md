@@ -37,15 +37,15 @@ Main work and Ending verification are deliberately different task sessions. A su
   <img src="./management-skill/assets/readme/model-router.svg" alt="Task-strategy quality ladder that retains, downgrades, or upgrades one receipt-proven rung at a time">
 </picture>
 
-- **Cold start:** Task type and the 0–100 score select a saved Luna/Terra/Sol quality pair; small low-risk edits scoring 0–24 try Spark-low first.
-- **Learning:** One receipt-valid Real PASS retains the pair; two matched PASS outcomes try one weaker rung; a quality failure upgrades one rung immediately. A Spark quality failure suppresses Spark for the matching context and upgrades the next task.
+- **Cold start / entry-aware:** Exact step-capability fingerprint plus difficulty history chooses the lowest correct pair. Sol/high may route down; Luna-max/lower may route up. Without a match, start at or below entry; eligible 0–24 work still tries Spark-low.
+- **Learning:** A receipt-valid Real PASS retains the pair; two matched PASS outcomes may try one weaker rung; quality failure upgrades one rung. A recovered stronger pair is reused directly for the next exact match, while implementation and local-test steps keep separate histories.
 - **Operational:** A zero-result failure gets one stronger fallback and is not learned as a quality failure.
-- **Scheduling:** Two or three independent read-only sources are cost-admitted before reads; dependent multi-file work stays with one contextual producer.
+- **Scheduling:** Compound requests split into quantifiable owned steps; each step routes independently. Two or three read-only sources are cost-admitted before reads; dependent multi-file work stays with one contextual producer.
 - **Memory:** Ending outcomes update broad project/Skills `Model Switch.md` pages; project/task/module/file/symbol are fields only—no hierarchy notes.
 
 ## Rules
 
-- **Producer:** Show score/band + route change. Eligible 0–24 low-risk edits try Spark-low; otherwise use saved pair. Two PASS descend; quality FAIL ascends.
+- **Producer:** Show score/band and entry/selected route; reuse the frozen lowest-correct pair. Two PASS descend; quality FAIL ascends.
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Finish and return the completed main result before background verification.
@@ -57,22 +57,21 @@ Main work and Ending verification are deliberately different task sessions. A su
 
 ## 📊 Real adaptive benchmark: finish first, verify in background
 
-Both arms enter `gpt-5.6-sol | ultra`. **Without skill** finishes and stops; verification cost is **0**. **With skill** executes the task on the receipt-proven dynamic pair, returns it, then launches separate Ending verification. **Frozen evidence notice:** The table is the unchanged 2026-07-17 v34 cohort. Current score-based Spark priority and mandatory multi-Ending/repair can change future Auto outcomes; they do not rewrite these values, the fixed Direct arm, or task-versus-task-plus-Ending accounting.
+Current frozen v46 compares **Without skill** fixed at `gpt-5.6-sol | ultra` with **With skill** entering at `gpt-5.6-luna | max`, then routing each step from frozen history. Every adaptive child/graph is counted; only the Luna entry controller is excluded.
 
-![Six real A/B pairs comparing Direct task, Auto task, and striped Auto-only Ending cost](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
+<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Current Direct versus Auto benchmark: every result and Ending passes, while the strategy performance gate fails"></picture>
 
-| Tier | Auto task pair | Direct task | Auto task | Separate Ending | Auto task + check | Task savings | Whole savings |
-|---|---|---:|---:|---:|---:|---:|---:|
-| Simple · 4 tests | Terra-medium | 343,459 / 131.842s | 200,522 / 52.861s | 78,818 / 18.864s | 279,340 / 71.725s | **41.617% tokens / 59.906% time** | **18.669% / 45.598%** |
-| Medium · 6 tests | Terra-high | 472,575 / 199.180s | 211,128 / 56.713s | 94,741 / 23.940s | 305,869 / 80.653s | **55.324% tokens / 71.527% time** | **35.276% / 59.507%** |
-| Complex · 3 sources | Luna-low · one producer | 451,856 / 137.654s | 141,012 / 40.999s | 96,997 / 23.709s | 238,009 / 64.708s | **68.793% tokens / 70.216% time** | **47.326% / 52.992%** |
-| **All 6 pairs** | **receipt-proven dynamic pairs** | **1,267,890 / 468.676s** | **552,662 / 150.573s** | **270,556 / 66.513s** | **823,218 / 217.086s** | **56.411% tokens / 67.873% time** | **35.072% / 53.681%** |
+**6 A/B pairs · 12 runs · 12/12 exact results and 12/12 Endings PASS · 0 retries · 0 fallbacks · 0 repairs**
 
-**Why the complex win is now large:** v34 estimates session-context cost before reading sources. The 68,483-byte complex fixture estimated **53,121 input tokens** for one producer versus **125,121** for a three-session schedule, so Auto correctly chose one Luna-low producer. Fan-out remains available for context pressure above 180,000 bytes or an explicit latency-critical parallel contract.
+| Tier | Direct median tokens | Auto median tokens | Paired token savings | Direct first result | Auto first result | Paired time savings |
+|---|---:|---:|---:|---:|---:|---:|
+| Simple | 25,881.5 | 29,091.5 | -30.064% | 13.430s | 19.831s | -50.694% |
+| Medium | 16,366 | 36,632.5 | -123.834% | 10.545s | 34.323s | -225.472% |
+| Complex | 263,445.5 | 138,267 | **+44.428%** | 32.375s | 56.927s | -79.224% |
 
-**Correctness:** 12/12 exact results, all Mini Tests/gates, and 6/6 Ending audits passed, with 0 retry/fallback/repair. The common Sol-ultra dispatcher is excluded from the requested task/check worlds but disclosed in the full report as **404,598 tokens / 361.038s**. Two pairs per tier confirm this change, not performance admission. Logical tokens are not billing tokens.
+**Measured result: correctness PASS; strategy-performance FAIL.** Aggregate task tokens fell 33.269%, driven by complex work, but Auto was 97.127% slower overall and simple/medium both regressed. The evidence rejects a universal savings claim; logical tokens are not billing tokens.
 
-[Read the full benchmark report and every run.](./management-skill/assets/readme/lifecycle-skill-benchmark.md)
+[Read the exact v46 report.](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [Open sanitized benchmark evidence.](./task-analyze-skill/assets/model-routing-benchmark-example.json)
 
 ## 🧩 Eight public Skills
 

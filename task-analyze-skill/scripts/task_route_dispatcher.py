@@ -301,7 +301,7 @@ def _model_memory_task_type(node):
     return "question"
 
 
-def _model_memory_arguments(node, project_root):
+def _model_memory_arguments(node, project_root, entry_model=None, entry_effort=None):
     condition = node.get("routing_condition") or {}
     scope = node.get("model_memory_scope") if isinstance(node.get("model_memory_scope"), dict) else {}
     return {
@@ -318,11 +318,15 @@ def _model_memory_arguments(node, project_root):
         "risk": condition.get("risk") or "low",
         "ambiguity": condition.get("ambiguity") or "low",
         "task_summary": node.get("task_summary") or "",
+        "step_kind": scope.get("step_kind") or "",
+        "capability_tags": scope.get("capability_tags"),
+        "entry_model": entry_model or node.get("_entry_model") or "",
+        "entry_effort": entry_effort or node.get("_entry_effort") or "",
     }
 
 
-def _obsidian_recommendation_and_proof(node, project_root):
-    recommendation = obsidian_model_memory.recommend_model(**_model_memory_arguments(node, project_root))
+def _obsidian_recommendation_and_proof(node, project_root, entry_model=None, entry_effort=None):
+    recommendation = obsidian_model_memory.recommend_model(**_model_memory_arguments(node, project_root, entry_model, entry_effort))
     condition = routing_history_module.validate_condition(node.get("routing_condition"))
     candidate_pairs = routing_history_module.canonical_pairs(node.get("candidate_ladder"))
     static_pair = routing_history_module.parse_pair(node.get("static_suggestion"))
@@ -335,9 +339,15 @@ def _obsidian_recommendation_and_proof(node, project_root):
         "trial": recommendation.get("trial"),
         "reason": recommendation.get("reason"),
         "profile_fingerprint": fingerprint,
+        "capability_fingerprint": recommendation.get("capability_fingerprint"),
+        "step_kind": recommendation.get("step_kind"),
+        "capability_tags": recommendation.get("capability_tags"),
         "calibration_state": recommendation.get("calibration_state"),
         "best_pair": recommendation.get("success_model"),
         "selection_basis": "dual_model_history" if recommendation.get("memory_available") is True else "shared_cold_start",
+        "entry_pair": recommendation.get("entry_pair"),
+        "entry_anchor_pair": recommendation.get("entry_anchor_pair"),
+        "switch_direction": recommendation.get("switch_direction"),
     }
     return recommendation, proof
 
@@ -887,7 +897,7 @@ def validate_plan(
                         failures.append(f"{node_id} routing_recommendation profile fingerprint is invalid")
                     if enforce_current_recommendation and not missing_proof_keys:
                         try:
-                            current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, cwd)
+                            current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, cwd, entry_model, entry_effort)
                         except (OSError, TypeError, ValueError) as error:
                             failures.append(f"{node_id} current dual-history recommendation could not be verified: {type(error).__name__}")
                         else:
@@ -1499,6 +1509,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     attempt_metrics = _aggregate_attempt_metrics(route_attempts)
     receipt["route_attempts"] = route_attempts
     receipt["priority_attempt_pair"] = priority_attempt_pair
+    receipt["selected_pair"] = selected_pair
     receipt["active_fallback_pair"] = selected_pair if priority_attempt_pair != selected_pair else None
     receipt["allowed_fallback_pairs"] = planned_pairs[1:]
     receipt["operational_failure_pairs"] = [
@@ -1514,6 +1525,14 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     receipt["attempt_metrics_complete"] = attempt_metrics["metrics_complete"]
     receipt["tokens"] = attempt_metrics["strategy_tokens"]
     receipt["process_elapsed_ms"] = attempt_metrics["strategy_elapsed_ms"]
+    receipt["entry_model"] = node.get("_entry_model")
+    receipt["entry_effort"] = node.get("_entry_effort")
+    receipt["entry_pair"] = f"{node.get('_entry_model')}|{node.get('_entry_effort')}" if node.get("_entry_model") and node.get("_entry_effort") else None
+    receipt["entry_source"] = "plan_entry" if receipt["entry_pair"] else "unavailable"
+    receipt["selection_reason"] = adaptive_recommendation.get("attempt_reason") if adaptive_recommendation else node.get("selection_basis")
+    receipt["recommendation_state"] = adaptive_recommendation.get("attempt_calibration_state") if adaptive_recommendation else node.get("selection_basis")
+    receipt["trial"] = adaptive_recommendation.get("attempt_trial") if adaptive_recommendation else bool(node.get("trial"))
+    receipt["switch_direction"] = adaptive_recommendation.get("switch_direction") if adaptive_recommendation else (node.get("routing_recommendation") or {}).get("switch_direction", "no_switch")
     if status == "pass" and node["phase"] == "result" and result_path.is_file() and result_path.stat().st_size > 0:
         result_text = result_path.read_text(encoding="utf-8", errors="replace")
         try:
@@ -1643,7 +1662,12 @@ def _run_record(result_path, verify_level, verify_status, main_result_receipt_pa
     node["routing_condition"] = condition
     verified_status = verify_status if verify_status in {"pass", "fail"} else "fail"
     failure_class = "none" if verified_status == "pass" else ("quality" if verify_status == "fail" else "execution")
-    memory_args = _model_memory_arguments(node, project_root)
+    try:
+        main_receipt = json.loads(Path(main_result_receipt_path).read_text(encoding="utf-8"))
+        entry_model, entry_effort, _ = obsidian_model_memory._receipt_entry(main_receipt)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        entry_model, entry_effort = "", ""
+    memory_args = _model_memory_arguments(node, project_root, entry_model, entry_effort)
     memory_project_root = memory_args.pop("project_root")
     memory_task_type = memory_args.pop("task_type")
     memory_module = memory_args.pop("module")
@@ -1823,6 +1847,8 @@ def run_plan(
                 ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
                 ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
                 ready_node["_project_root"] = str(cwd.resolve())
+                ready_node["_entry_model"] = entry_model
+                ready_node["_entry_effort"] = entry_effort
                 ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)
                 ready_node["_decomposition_stage"] = _stage_for_node_id(plan, node_id)
                 future = executor.submit(run_node, ready_node, cache_dir, dict(ready_records), state_db, cwd, codex_bin, skills_root)
@@ -2073,11 +2099,17 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
                 failures.append("Ending Task sibling dependencies were not satisfied")
                 break
             completed_snapshot = dict(completed)
+            ready_nodes = {}
+            for node_id in ready:
+                ready_node = dict(node_by_id[node_id])
+                ready_node["_entry_model"] = entry.get("model")
+                ready_node["_entry_effort"] = entry.get("effort")
+                ready_nodes[node_id] = ready_node
             with ThreadPoolExecutor(max_workers=min(3, len(ready))) as executor:
                 futures = {
                     node_id: executor.submit(
                         run_node,
-                        node_by_id[node_id],
+                        ready_nodes[node_id],
                         cache_dir,
                         completed_snapshot,
                         state_db,

@@ -9,8 +9,19 @@ import re
 import statistics
 import sys
 import time
+import importlib.util
 from pathlib import Path, PureWindowsPath
 from tempfile import mkstemp
+
+
+try:
+    from benchmark_prompt_contract import auto_benchmark_execution_prompt
+except ModuleNotFoundError:
+    _benchmark_prompt_path = Path(__file__).with_name("benchmark_prompt_contract.py")
+    _benchmark_prompt_spec = importlib.util.spec_from_file_location("task_analyze_benchmark_prompt_contract", _benchmark_prompt_path)
+    _benchmark_prompt_contract = importlib.util.module_from_spec(_benchmark_prompt_spec)
+    _benchmark_prompt_spec.loader.exec_module(_benchmark_prompt_contract)
+    auto_benchmark_execution_prompt = _benchmark_prompt_contract.auto_benchmark_execution_prompt
 
 
 SCHEMA_VERSION = 4
@@ -25,9 +36,12 @@ CATALOG_REFRESH_RECENCY_SECONDS = 60.0
 CATALOG_STABILITY_RETRY_SECONDS = 0.25
 TIERS = ("simple", "medium", "complex")
 ARMS = ("direct", "global")
+DIRECT_BASELINE_PAIR = "gpt-5.6-sol|ultra"
+AUTO_ENTRY_PAIR = "gpt-5.6-luna|max"
+ARM_ENTRY_PAIRS = {"direct": DIRECT_BASELINE_PAIR, "global": AUTO_ENTRY_PAIR}
 GATED_METRICS = ("logical_total_tokens", "first_result_elapsed_ms")
 OVERALL_RULE = "simple AND medium AND complex"
-TOKEN_RULE = "For result-ready foreground logical task tokens: Global cohort total < Direct cohort total AND raw Global median < raw Direct median AND paired savings median is non-negative; mandatory post-result Ending sessions remain in the completion census but not the task-token metric"
+TOKEN_RULE = "For result-ready task execution tokens: Direct counts its fixed Sol Ultra producer; Auto excludes the Luna Max entry controller and counts its adaptive child/graph sessions. Global cohort total < Direct cohort total AND raw Global median < raw Direct median AND paired savings median is non-negative; mandatory post-result Ending sessions remain in the completion census but not the task-token metric"
 TIME_RULE = "For user-visible first-result time, including any required producer Quick Check: Simple must stay inside the Direct cohort's measured median-absolute-deviation noise envelope; Medium requires lower cohort total, lower raw median, non-negative paired savings median, and a strict majority of faster pairs; Complex time is diagnostic and cannot veto correctness plus token benefit. Detached post-result Ending thread time is excluded"
 ENTRY_EXECUTION_MODES = frozenset({"executed", "deterministic-pre-model"})
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -428,6 +442,8 @@ def validate_run_plan(run_plan, repeat_limit):
     require_string(run_plan["selected_entry_pair"], "plan_selected_entry_pair")
     if "|" not in run_plan["selected_entry_pair"] or run_plan["entry_execution_mode"] not in ENTRY_EXECUTION_MODES:
         raise BenchmarkGateError("plan_entry_contract")
+    if run_plan["selected_entry_pair"] != ARM_ENTRY_PAIRS[run_plan["arm"]]:
+        raise BenchmarkGateError("plan_arm_entry_pair")
     if not isinstance(run_plan["receipts"], list) or not 1 <= len(run_plan["receipts"]) <= 4:
         raise BenchmarkGateError("plan_receipts_invalid")
     for receipt_spec in run_plan["receipts"]:
@@ -480,7 +496,7 @@ def validate_plan(plan):
                 raise BenchmarkGateError("plan_pair_contract")
             direct_run = next(run_plan for run_plan in pair_runs if run_plan["arm"] == "direct")
             global_run = next(run_plan for run_plan in pair_runs if run_plan["arm"] == "global")
-            comparable_fields = ["prompt_path", "prompt_sha256", "expected_result_path", "expected_sha256", "source_root", "source_files_pointer", "source_snapshot_sha256", "selected_entry_pair"]
+            comparable_fields = ["prompt_path", "prompt_sha256", "expected_result_path", "expected_sha256", "source_root", "source_files_pointer", "source_snapshot_sha256"]
             if any(direct_run.get(field) != global_run.get(field) for field in comparable_fields):
                 raise BenchmarkGateError("plan_pair_mismatch")
             direct_environment = direct_run.get("environment")
@@ -575,7 +591,7 @@ def validate_state_snapshot(state_snapshot, failure_code):
     return state_snapshot
 
 
-def validate_evidence(evidence, run_id):
+def validate_evidence(evidence, run_id, arm):
     if not isinstance(evidence, dict) or set(evidence) != EVIDENCE_KEYS or evidence.get("schema_version") != SCHEMA_VERSION or evidence.get("run_id") != run_id:
         raise BenchmarkGateError("evidence_contract")
     for timestamp_key in ["started_monotonic_ns", "first_result_monotonic_ns", "producer_finished_monotonic_ns"]:
@@ -619,12 +635,13 @@ def validate_evidence(evidence, run_id):
     if foreground_state_snapshot["after_thread_count"] - foreground_state_snapshot["before_thread_count"] != len(foreground_sessions):
         raise BenchmarkGateError("evidence_foreground_state_snapshot_delta")
     foreground_by_id = {foreground_session["thread_id"]: foreground_session for foreground_session in foreground_sessions}
+    foreground_root_ids = {foreground_session["thread_id"] for foreground_session in foreground_sessions if foreground_session["source_kind"] == "root"}
     foreground_main_session = foreground_by_id.get(foreground_main_thread_id)
     if foreground_main_session is None or foreground_main_session["source_kind"] != "root" or foreground_main_session["parent_thread_id"] is not None:
         raise BenchmarkGateError("evidence_foreground_session_tree")
     for foreground_session in foreground_sessions:
         if foreground_session["source_kind"] == "root":
-            if foreground_session["thread_id"] != foreground_main_thread_id or foreground_session["parent_thread_id"] is not None:
+            if foreground_session["parent_thread_id"] is not None or arm == "direct" and foreground_session["thread_id"] != foreground_main_thread_id:
                 raise BenchmarkGateError("evidence_foreground_session_tree")
             continue
         parent_thread_id = foreground_session["parent_thread_id"]
@@ -632,7 +649,7 @@ def validate_evidence(evidence, run_id):
             raise BenchmarkGateError("evidence_foreground_session_tree")
         visited_thread_ids = {foreground_session["thread_id"]}
         current_thread_id = parent_thread_id
-        while current_thread_id != foreground_main_thread_id:
+        while current_thread_id not in foreground_root_ids:
             if current_thread_id in visited_thread_ids or current_thread_id not in foreground_by_id:
                 raise BenchmarkGateError("evidence_foreground_session_tree")
             visited_thread_ids.add(current_thread_id)
@@ -683,7 +700,7 @@ def validate_evidence(evidence, run_id):
     return evidence
 
 
-def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_session_pairs):
+def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_session_pairs, arm):
     failures = []
     runtime_sessions = evidence["runtime_sessions"]
     runtime_by_id = {runtime_session["thread_id"]: runtime_session for runtime_session in runtime_sessions}
@@ -693,8 +710,10 @@ def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_
     root_sessions = [runtime_session for runtime_session in runtime_sessions if runtime_session["source_kind"] == "root"]
     root_thread_ids = {root_session["thread_id"] for root_session in root_sessions}
     allowed_root_thread_ids = set(receipt_session_pairs)
+    foreground_thread_ids = {foreground_session["thread_id"] for foreground_session in evidence["foreground_sessions"]}
+    adaptive_root_thread_ids = foreground_thread_ids - {main_thread_id} if arm == "global" else set()
     main_session = runtime_by_id.get(main_thread_id)
-    if main_session is None or main_session["source_kind"] != "root" or main_session["parent_thread_id"] is not None or any(root_session["parent_thread_id"] is not None or root_session["thread_id"] not in allowed_root_thread_ids for root_session in root_sessions):
+    if main_session is None or main_session["source_kind"] != "root" or main_session["parent_thread_id"] is not None or any(root_session["parent_thread_id"] is not None or root_session["thread_id"] not in allowed_root_thread_ids | adaptive_root_thread_ids for root_session in root_sessions):
         failures.append("runtime_session_tree")
     for runtime_session in runtime_sessions:
         observed_pair = f"{runtime_session['model']}|{runtime_session['effort']}" if runtime_session["model"] and runtime_session["effort"] else None
@@ -728,13 +747,17 @@ def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_
                         failures.append("runtime_session_tree")
                     break
                 current_thread_id = current_session["parent_thread_id"]
-            if current_thread_id in runtime_by_id and current_thread_id not in allowed_root_thread_ids:
+            if current_thread_id in runtime_by_id and current_thread_id not in allowed_root_thread_ids | adaptive_root_thread_ids:
                 if "runtime_session_tree" not in failures:
                     failures.append("runtime_session_tree")
     if evidence["foreground_main_thread_id"] != main_thread_id:
         failures.append("foreground_main_thread_mismatch")
-    valid_token_values = [foreground_session["tokens_used"] for foreground_session in evidence["foreground_sessions"]]
-    return {"thread_ids": list(runtime_by_id), "sessions_by_id": runtime_by_id, "session_count": len(runtime_sessions), "root_session_count": len(root_sessions), "descendant_session_count": len(runtime_sessions) - len(root_sessions), "logical_total_tokens": sum(valid_token_values), "failures": failures}
+    task_foreground_sessions = [foreground_session for foreground_session in evidence["foreground_sessions"] if arm == "direct" or foreground_session["thread_id"] != main_thread_id]
+    if arm == "global" and not task_foreground_sessions:
+        failures.append("global_adaptive_child_missing")
+    valid_token_values = [foreground_session["tokens_used"] for foreground_session in task_foreground_sessions]
+    controller_tokens_excluded = next((foreground_session["tokens_used"] for foreground_session in evidence["foreground_sessions"] if arm == "global" and foreground_session["thread_id"] == main_thread_id), 0)
+    return {"thread_ids": list(runtime_by_id), "sessions_by_id": runtime_by_id, "session_count": len(runtime_sessions), "root_session_count": len(root_sessions), "descendant_session_count": len(runtime_sessions) - len(root_sessions), "task_session_count": len(task_foreground_sessions), "controller_tokens_excluded": controller_tokens_excluded, "logical_total_tokens": sum(valid_token_values), "failures": failures}
 
 
 def validate_environment_snapshot(environment):
@@ -784,7 +807,7 @@ def validate_environment_snapshot(environment):
     return sha256_text(canonical_json(environment))
 
 
-def validate_receipt(receipt, receipt_spec, result_message, run_plan):
+def validate_receipt(receipt, receipt_spec, result_message, run_plan, expected_execution_prompt_sha256=None):
     failures = []
     required_pass_fields = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized"}
     if any(receipt.get(field) != expected_value for field, expected_value in required_pass_fields.items()):
@@ -812,8 +835,20 @@ def validate_receipt(receipt, receipt_spec, result_message, run_plan):
             failures.append("receipt_benchmark_run_id_mismatch")
         if receipt.get("workload_id") != run_plan["run_id"]:
             failures.append("receipt_workload_id_mismatch")
-        if receipt.get("prompt_sha256") != run_plan["prompt_sha256"] or receipt.get("prompt_sha256") != receipt.get("workload_prompt_sha256"):
-            failures.append("receipt_raw_prompt_mismatch")
+        if run_plan["arm"] == "global" and receipt.get("benchmark_prompt_file_verified") is not True:
+            failures.append("receipt_benchmark_prompt_unverified")
+        if run_plan["arm"] == "global" and (receipt.get("benchmark_auto_launch_verified") is not True or receipt.get("benchmark_auto_workspace_count") != 1):
+            failures.append("receipt_auto_launch_unverified")
+        benchmark_result_source = receipt.get("benchmark_result_source")
+        if run_plan["arm"] == "direct" and benchmark_result_source != "controller_final":
+            failures.append("receipt_result_source_invalid")
+        if run_plan["arm"] == "global" and benchmark_result_source not in {"controller_final", "adaptive_bridge_handoff"}:
+            failures.append("receipt_result_source_invalid")
+        if run_plan["arm"] == "global" and benchmark_result_source == "adaptive_bridge_handoff" and receipt.get("benchmark_auto_bridge_result_verified") is not True:
+            failures.append("receipt_result_source_invalid")
+        expected_prompt_sha256 = expected_execution_prompt_sha256 or run_plan["prompt_sha256"]
+        if receipt.get("prompt_sha256") != expected_prompt_sha256:
+            failures.append("receipt_execution_prompt_mismatch")
     else:
         authorization_pair = (receipt.get("entry_context_active"), receipt.get("authorization_source"))
         if receipt.get("node_type") != "locked-route-node":
@@ -871,6 +906,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     presented_result_object_sha256 = None
     evidence_sha256 = None
     prompt_file_sha256 = None
+    expected_execution_prompt_sha256 = None
     source_files_checked = 0
     environment_sha256 = None
     result_message = ""
@@ -879,9 +915,11 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
             prompt_path = resolve_plan_path(plan_root, run_plan["prompt_path"], "prompt_path")
             prompt_bytes = prompt_path.read_bytes()
             prompt_file_sha256 = sha256_bytes(prompt_bytes)
-            prompt_bytes.decode("utf-8")
+            prompt_text = prompt_bytes.decode("utf-8")
             if prompt_file_sha256 != run_plan["prompt_sha256"]:
                 fail("prompt_hash_mismatch", True)
+            execution_prompt = prompt_text if run_plan["arm"] == "direct" else auto_benchmark_execution_prompt(prompt_text)
+            expected_execution_prompt_sha256 = sha256_text(execution_prompt)
         except (OSError, UnicodeError, BenchmarkGateError):
             fail("prompt_file_invalid", True)
     try:
@@ -920,7 +958,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     try:
         evidence, evidence_bytes = load_json_object(evidence_path, "evidence_invalid")
         evidence_sha256 = sha256_bytes(evidence_bytes)
-        validate_evidence(evidence, run_plan["run_id"])
+        validate_evidence(evidence, run_plan["run_id"], run_plan["arm"])
     except BenchmarkGateError as error:
         evidence = None
         fail(error.code, True)
@@ -929,7 +967,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
         receipt_path = resolve_plan_path(plan_root, receipt_spec["path"], "receipt_path")
         try:
             receipt, _ = load_json_object(receipt_path, "receipt_invalid")
-            receipt_summary = validate_receipt(receipt, receipt_spec, result_message, run_plan)
+            receipt_summary = validate_receipt(receipt, receipt_spec, result_message, run_plan, expected_execution_prompt_sha256)
             receipt_summary["bind_result"] = receipt_spec["bind_result"]
             receipt_summaries.append(receipt_summary)
             for receipt_failure in receipt_summary["failures"]:
@@ -950,7 +988,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     if len(bound_receipt_thread_ids) != 1:
         fail("runtime_main_receipt", True)
     receipt_session_pairs = {summary["thread_id"]: summary["pair"] for summary in receipt_summaries if summary["thread_id"] is not None and isinstance(summary["pair"], str)}
-    runtime_summary = summarize_runtime_sessions(evidence, main_thread_id, run_plan["selected_entry_pair"], receipt_session_pairs) if evidence is not None else {"thread_ids": [], "sessions_by_id": {}, "session_count": 0, "root_session_count": 0, "descendant_session_count": 0, "logical_total_tokens": 0, "failures": ["foreground_state_snapshot_incomplete", "runtime_state_snapshot_incomplete"]}
+    runtime_summary = summarize_runtime_sessions(evidence, main_thread_id, run_plan["selected_entry_pair"], receipt_session_pairs, run_plan["arm"]) if evidence is not None else {"thread_ids": [], "sessions_by_id": {}, "session_count": 0, "root_session_count": 0, "descendant_session_count": 0, "task_session_count": 0, "controller_tokens_excluded": 0, "logical_total_tokens": 0, "failures": ["foreground_state_snapshot_incomplete", "runtime_state_snapshot_incomplete"]}
     for runtime_failure in runtime_summary["failures"]:
         fail(runtime_failure, True)
     runtime_thread_ids = runtime_summary["thread_ids"]
@@ -975,7 +1013,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     if repair_count:
         fail("repair_not_allowed")
     logical_total_tokens = runtime_summary["logical_total_tokens"]
-    metrics_complete = not any(failure in failures for failure in ["receipt_invalid", "receipt_incomplete", "receipt_tokens", "receipt_thread_id", "receipt_route_attempts", "receipt_reroutes", "receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_raw_prompt_mismatch", "receipt_result_hash", "receipt_result_not_published", "receipt_result_not_frozen", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "receipt_session_duplicate", "unexpected_receipt", "runtime_main_receipt", "foreground_state_snapshot_incomplete", "foreground_main_thread_mismatch", "runtime_state_snapshot_incomplete", "runtime_session_tree", "runtime_session_pair_mismatch", "runtime_session_incomplete", "receipt_runtime_token_mismatch"])
+    metrics_complete = not any(failure in failures for failure in ["receipt_invalid", "receipt_incomplete", "receipt_tokens", "receipt_thread_id", "receipt_route_attempts", "receipt_reroutes", "receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_benchmark_prompt_unverified", "receipt_auto_launch_unverified", "receipt_result_source_invalid", "receipt_execution_prompt_mismatch", "receipt_result_hash", "receipt_result_not_published", "receipt_result_not_frozen", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "receipt_session_duplicate", "unexpected_receipt", "runtime_main_receipt", "foreground_state_snapshot_incomplete", "foreground_main_thread_mismatch", "runtime_state_snapshot_incomplete", "runtime_session_tree", "runtime_session_pair_mismatch", "runtime_session_incomplete", "receipt_runtime_token_mismatch", "global_adaptive_child_missing"])
     first_result_elapsed_ms = None
     producer_elapsed_ms = None
     total_wall_elapsed_ms = None
@@ -994,7 +1032,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     acceptance_status = "pass" if not failures and completion == "complete" else "fail"
     executed_pairs = [f"{runtime_session['model']}|{runtime_session['effort']}" for runtime_session in evidence["runtime_sessions"]] if evidence is not None else []
     ending_real = {"method": ENDING_REAL_METHOD, "completed": True, "status": "pass" if not failures else "fail"}
-    return {"schema_version": MANIFEST_SCHEMA_VERSION, "suite_id": suite_id, "plan_sha256": plan_sha256, "run_id": run_plan["run_id"], "pair_id": run_plan["pair_id"], "tier": run_plan["tier"], "repeat_index": run_plan["repeat_index"], "arm": run_plan["arm"], "order_index": run_plan["order_index"], "workload_prompt_sha256": run_plan["prompt_sha256"], "prompt_file_sha256": prompt_file_sha256, "expected_sha256": expected_sha256, "source_snapshot_sha256": source_snapshot_sha256, "environment_sha256": environment_sha256, "selected_entry_pair": run_plan["selected_entry_pair"], "entry_execution_mode": run_plan["entry_execution_mode"], "result_producer_pair": result_producer_pair, "executed_pairs": executed_pairs, "receipt_session_ids": receipt_session_ids, "unexpected_receipt_session_ids": unexpected_receipt_session_ids, "unreceipted_descendant_count": unreceipted_descendant_count, "runtime_session_count": runtime_summary["session_count"], "runtime_root_session_count": runtime_summary["root_session_count"], "runtime_descendant_session_count": runtime_summary["descendant_session_count"], "completion": completion, "retry_count": retry_count, "fallback_count": fallback_count, "repair_count": repair_count, "metrics_complete": metrics_complete, "logical_total_tokens": logical_total_tokens, "first_result_elapsed_ms": first_result_elapsed_ms, "producer_elapsed_ms": producer_elapsed_ms, "ending_real_elapsed_ms": ending_real_elapsed_ms, "total_wall_elapsed_ms": total_wall_elapsed_ms, "presented_result_sha256": presented_result_sha256, "presented_result_object_sha256": presented_result_object_sha256, "ending_real": ending_real, "acceptance_status": acceptance_status, "gate": {"generated_by": "benchmark_suite_gate", "version": SCHEMA_VERSION, "evidence_sha256": evidence_sha256, "status": acceptance_status, "failures": failures, "source_files_checked": source_files_checked}}
+    return {"schema_version": MANIFEST_SCHEMA_VERSION, "suite_id": suite_id, "plan_sha256": plan_sha256, "run_id": run_plan["run_id"], "pair_id": run_plan["pair_id"], "tier": run_plan["tier"], "repeat_index": run_plan["repeat_index"], "arm": run_plan["arm"], "order_index": run_plan["order_index"], "workload_prompt_sha256": run_plan["prompt_sha256"], "prompt_file_sha256": prompt_file_sha256, "expected_sha256": expected_sha256, "source_snapshot_sha256": source_snapshot_sha256, "environment_sha256": environment_sha256, "selected_entry_pair": run_plan["selected_entry_pair"], "entry_execution_mode": run_plan["entry_execution_mode"], "result_producer_pair": result_producer_pair, "executed_pairs": executed_pairs, "receipt_session_ids": receipt_session_ids, "unexpected_receipt_session_ids": unexpected_receipt_session_ids, "unreceipted_descendant_count": unreceipted_descendant_count, "runtime_session_count": runtime_summary["session_count"], "runtime_root_session_count": runtime_summary["root_session_count"], "runtime_descendant_session_count": runtime_summary["descendant_session_count"], "task_session_count": runtime_summary["task_session_count"], "controller_tokens_excluded": runtime_summary["controller_tokens_excluded"], "completion": completion, "retry_count": retry_count, "fallback_count": fallback_count, "repair_count": repair_count, "metrics_complete": metrics_complete, "logical_total_tokens": logical_total_tokens, "first_result_elapsed_ms": first_result_elapsed_ms, "producer_elapsed_ms": producer_elapsed_ms, "ending_real_elapsed_ms": ending_real_elapsed_ms, "total_wall_elapsed_ms": total_wall_elapsed_ms, "presented_result_sha256": presented_result_sha256, "presented_result_object_sha256": presented_result_object_sha256, "ending_real": ending_real, "acceptance_status": acceptance_status, "gate": {"generated_by": "benchmark_suite_gate", "version": SCHEMA_VERSION, "evidence_sha256": evidence_sha256, "status": acceptance_status, "failures": failures, "source_files_checked": source_files_checked}}
 
 
 def evaluate_paired_metric(direct_values, global_values, minimum_savings_percent=MINIMUM_PAIRED_SAVINGS_PERCENT, maximum_regression_percent=MAXIMUM_PAIRED_REGRESSION_PERCENT, require_strict_majority=True, maximum_absolute_regression=None, require_regression_bound=True):

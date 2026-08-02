@@ -71,6 +71,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             emit_result=True,
             entry_model="gpt-5.6-sol",
             entry_effort="ultra",
+            cache_root=project / "Cache" / "task-analyze",
         )
 
     def test_executes_exact_obsidian_selected_pair_and_returns_result(self):
@@ -86,8 +87,19 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
                 result = module.run(args, "Do the work")
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["memory_source"], "local_and_obsidian_model_history")
+        self.assertEqual(result["entry_pair"], "gpt-5.6-sol|ultra")
         self.assertEqual(result["selected_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(result["result"], "RESULT")
+
+    def test_recommendation_receives_resolved_entry_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.resolved_entry_model = "gpt-5.6-luna"
+            args.resolved_entry_effort = "max"
+            with patch.object(module.obsidian_model_memory, "recommend_model", return_value=recommendation()) as recommend:
+                module._recommend(args)
+        self.assertEqual(recommend.call_args.kwargs["entry_model"], "gpt-5.6-luna")
+        self.assertEqual(recommend.call_args.kwargs["entry_effort"], "max")
 
     def test_zero_argument_stdin_fast_path_derives_safe_defaults(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -391,10 +403,13 @@ source_files must list both sources."""
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "SECRET RAW PROMPT MUST NOT BE STORED")
             receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
-        expected_fields = {"project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary"}
+        expected_fields = {"project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary", "step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source"}
         self.assertEqual(set(result["model_learning_context"]), expected_fields)
         self.assertEqual(receipt["model_learning_context"], result["model_learning_context"])
         self.assertEqual(result["model_learning_context"]["task_summary"], "Edit one method. Keep behavior stable.")
+        self.assertEqual(result["model_learning_context"]["step_kind"], "implementation")
+        self.assertRegex(result["model_learning_context"]["capability_fingerprint"], r"^[0-9a-f]{64}$")
+        self.assertEqual(receipt["entry_pair"], "gpt-5.6-sol|ultra")
         self.assertNotIn("SECRET RAW PROMPT", json.dumps(receipt))
         self.assertNotIn("SECRET RAW PROMPT", json.dumps(result))
 

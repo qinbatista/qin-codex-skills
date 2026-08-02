@@ -110,6 +110,10 @@ def _recommend(args):
         risk=args.risk,
         ambiguity=args.ambiguity,
         task_summary=args.task_summary,
+        step_kind=getattr(args, "step_kind", ""),
+        capability_tags=getattr(args, "capability_tag", []),
+        entry_model=getattr(args, "resolved_entry_model", None) or getattr(args, "entry_model", None) or "",
+        entry_effort=getattr(args, "resolved_entry_effort", None) or getattr(args, "entry_effort", None) or "",
         vault=args.vault,
         ladder=args.ladder,
     )
@@ -365,7 +369,9 @@ def _scheduled_branch_pair(prompt, floor_pair):
 
 def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_recommendation=None):
     schedule_digest = hashlib.sha256((str(args.workdir) + "\0" + prompt).encode("utf-8")).hexdigest()[:16]
-    cache_dir = args.workdir / "work" / "cache" / f"adaptive-schedule-{schedule_digest}"
+    configured_cache_root = getattr(args, "cache_root", None)
+    cache_root = Path(configured_cache_root).expanduser().resolve() if configured_cache_root is not None else Path(args.project_root).expanduser().resolve() / "Cache" / "task-analyze"
+    cache_dir = cache_root / f"adaptive-schedule-{schedule_digest}"
     floor_pair = task_route_dispatcher.MODEL_ROLE_PAIRS["floor"]
     floor_model, floor_effort = floor_pair.split("|", 1)
     schedule_producer = task_route_dispatcher.PRIORITY_PRODUCER_CONFIG
@@ -382,13 +388,13 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
         nodes.append({"id": node_id, "phase": "result", "skill": "workflow-skill", "model": branch_model, "effort": branch_effort, "priority_producer": True, "dependencies": [], "prompt": _scheduled_branch_prompt(prompt, source), "sandbox": "read-only", "source_allowlist": [source], "execution_domain": "general", "timeout": min(args.timeout, 300)})
     condition = {"task_family": "grounded", "artifact": "answer", "scope": "multi", "ambiguity": args.ambiguity, "modality": "text", "risk": args.risk, "complexity": "complex", "owning_skill": "workflow-skill", "project_family": "global", "verification_shape": "real", "execution_domain": "general"}
     candidate_ladder = task_route_dispatcher.adaptive_pair_texts_for_profile("grounded", "text", args.risk, "complex", args.ambiguity)
-    main_node = {"id": "merge-result", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": branch_ids, "prompt": _scheduled_fused_final_prompt(prompt, fused_source) if fused_source else _scheduled_merge_prompt(prompt), "sandbox": "read-only", "execution_domain": "general", "routing_condition": condition, "task_summary": "Audit the final owned source and merge independent source results." if fused_source else "Merge independent source audits into one exact JSON manifest.", "candidate_ladder": candidate_ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "timeout": min(args.timeout, 300), "model_memory_scope": {"task_type": "question", "module": args.module, "code_kind": "general", "operation": "work"}}
+    main_node = {"id": "merge-result", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": branch_ids, "prompt": _scheduled_fused_final_prompt(prompt, fused_source) if fused_source else _scheduled_merge_prompt(prompt), "sandbox": "read-only", "execution_domain": "general", "routing_condition": condition, "task_summary": "Audit the final owned source and merge independent source results." if fused_source else "Merge independent source audits into one exact JSON manifest.", "candidate_ladder": candidate_ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "timeout": min(args.timeout, 300), "model_memory_scope": {"task_type": "question", "module": args.module, "code_kind": "general", "operation": "work", "step_kind": "integration", "capability_tags": ["dependency-merge", "grounded-source-audit"]}}
     if fused_source:
         main_node["source_allowlist"] = [fused_source]
         main_node["fuses_owned_source_with_dependencies"] = True
     else:
         main_node["reads_dependency_results_only"] = True
-    recommendation, proof = task_route_dispatcher._obsidian_recommendation_and_proof(main_node, args.workdir)
+    recommendation, proof = task_route_dispatcher._obsidian_recommendation_and_proof(main_node, args.workdir, entry_model, entry_effort)
     selected_pair = recommendation.get("selected_pair")
     if not selected_pair:
         raise ValueError("scheduled merge recommendation is exhausted")
@@ -401,7 +407,9 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
 
 
 def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admission=None):
-    entry_model, entry_effort, entry_source = _resolved_entry_pair(args)
+    entry_model = args.resolved_entry_model
+    entry_effort = args.resolved_entry_effort
+    entry_source = args.resolved_entry_source
     plan, merge_recommendation = _scheduled_plan(args, prompt, sources, entry_model, entry_effort, recommendation)
     ready = {}
 
@@ -435,6 +443,10 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["schedule_admission"] = admission
     receipt["result_published"] = True
     receipt["result_ready_monotonic_ns"] = ready.get("monotonic_ns", main_receipt.get("result_ready_monotonic_ns"))
+    receipt["entry_model"] = entry_model
+    receipt["entry_effort"] = entry_effort
+    receipt["entry_pair"] = f"{entry_model}|{entry_effort}"
+    receipt["entry_source"] = entry_source
     receipt["model_learning_context"] = _model_learning_context(args)
     receipt["complexity_score"] = args.complexity_score
     receipt["complexity_band"] = obsidian_model_memory.complexity_band(args.complexity_score)
@@ -452,7 +464,8 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
 def _model_learning_context(args):
     def clean(value, limit=600):
         return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
-    return {"project_root": clean(Path(args.project_root).expanduser().resolve(), 1200), "task_type": clean(args.task_type, 160), "module": clean(args.module, 160), "file": clean(args.file), "symbol": clean(args.symbol), "code_kind": clean(args.code_kind, 80), "operation": clean(args.operation, 80), "modality": clean(args.modality, 40), "complexity": clean(args.complexity, 40), "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "risk": clean(args.risk, 40), "ambiguity": clean(args.ambiguity, 40), "task_summary": clean(args.task_summary)}
+    capability = obsidian_model_memory.task_capability_profile(args.task_type, args.code_kind, args.operation, args.modality, args.complexity_score, args.risk, args.ambiguity, args.task_summary, getattr(args, "step_kind", ""), getattr(args, "capability_tag", []))
+    return {"project_root": clean(Path(args.project_root).expanduser().resolve(), 1200), "task_type": clean(args.task_type, 160), "module": clean(args.module, 160), "file": clean(args.file), "symbol": clean(args.symbol), "code_kind": clean(args.code_kind, 80), "operation": clean(args.operation, 80), "modality": clean(args.modality, 40), "complexity": clean(args.complexity, 40), "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "risk": clean(args.risk, 40), "ambiguity": clean(args.ambiguity, 40), "task_summary": clean(args.task_summary), "step_kind": capability["step_kind"], "capability_tags": capability["capability_tags"], "capability_fingerprint": capability["capability_fingerprint"], "entry_model": clean(getattr(args, "resolved_entry_model", ""), 120), "entry_effort": clean(getattr(args, "resolved_entry_effort", ""), 40), "entry_pair": clean(f"{getattr(args, 'resolved_entry_model', '')}|{getattr(args, 'resolved_entry_effort', '')}", 180), "entry_source": clean(getattr(args, "resolved_entry_source", ""), 80)}
 
 
 def _pre_execution_failure(receipt_args):
@@ -549,6 +562,7 @@ def run(args, prompt):
         raise ValueError("prompt_required")
     if not hasattr(args, "complexity_score") or args.complexity_score is None:
         args.complexity_score = 65 if args.complexity == "complex" else 35
+    args.resolved_entry_model, args.resolved_entry_effort, args.resolved_entry_source = _resolved_entry_pair(args)
     recommendation = _exact_contract_recommendation(prompt, _recommend(args))
     sources = scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None
@@ -592,6 +606,10 @@ def run(args, prompt):
     receipt["complexity_band"] = obsidian_model_memory.complexity_band(args.complexity_score)
     receipt["switch_direction"] = recommendation.get("switch_direction", "no_switch")
     receipt["switch_change"] = recommendation.get("switch_change", f"initial->{pair}")
+    receipt["entry_model"] = args.resolved_entry_model
+    receipt["entry_effort"] = args.resolved_entry_effort
+    receipt["entry_pair"] = f"{args.resolved_entry_model}|{args.resolved_entry_effort}"
+    receipt["entry_source"] = args.resolved_entry_source
     learning_context = _model_learning_context(args)
     receipt["model_learning_context"] = learning_context
     result_published = bool(receipt.get("result_published") is True and args.result_output.is_file() and args.result_output.stat().st_size > 0)
@@ -618,6 +636,9 @@ def run(args, prompt):
         "schedule_admission": admission,
         "memory_source": recommendation["source"],
         "memory_available": recommendation["memory_available"],
+        "entry_pair": receipt["entry_pair"],
+        "entry_source": receipt["entry_source"],
+        "entry_anchor_pair": recommendation.get("entry_anchor_pair"),
         "selected_pair": pair,
         "active_fallback_pair": active_pair,
         "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"),
@@ -664,7 +685,7 @@ def resolve_fast_path_args(args, prompt):
         args.operation = infer_operation(prompt)
     complexity_band = obsidian_model_memory.complexity_band(args.complexity_score)
     args.complexity_band = complexity_band
-    identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, prompt))
+    identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, getattr(args, "step_kind", ""), ",".join(getattr(args, "capability_tag", [])), prompt))
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
     default_output_root = codex_home / "tmp" / "adaptive-producer" / f"fast-{digest}"
@@ -676,6 +697,7 @@ def resolve_fast_path_args(args, prompt):
     args.workload_id = args.workload_id or f"fast-{digest}"
     args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
     args.result_output = Path(args.result_output) if args.result_output is not None else default_output_root / "result.txt"
+    args.cache_root = Path(args.cache_root).expanduser().resolve() if args.cache_root is not None else project_root / "Cache" / "task-analyze"
     args.sandbox = args.sandbox or ("workspace-write" if fast_path else "read-only")
     args.emit_result = bool(args.emit_result or fast_path)
     if args.timeout <= 0 or args.receipt_output == args.result_output:
@@ -700,9 +722,12 @@ def parse_args(argv=None):
     parser.add_argument("--risk", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--ambiguity", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--task-summary", default="")
+    parser.add_argument("--step-kind", choices=sorted(obsidian_model_memory.STEP_KINDS), default="")
+    parser.add_argument("--capability-tag", action="append", default=[])
     parser.add_argument("--workload-id")
     parser.add_argument("--receipt-output", type=Path)
     parser.add_argument("--result-output", type=Path)
+    parser.add_argument("--cache-root", type=Path, help="Runtime-derived root for scheduled graph support artifacts; defaults to project Cache/task-analyze.")
     parser.add_argument("--workdir", type=Path, default=Path.cwd())
     parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "state_5.sqlite")
     parser.add_argument("--codex-bin", default="codex")

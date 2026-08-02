@@ -493,24 +493,98 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(receipt["failure_class"], "protocol")
         self.assertTrue(receipt["duplicate_result_detected"])
 
-    def test_bootstrap_task_runs_raw_prompt_without_entry_context(self):
+    def test_bootstrap_task_runs_frozen_auto_wrapper_without_entry_context(self):
         raw_prompt = "exact Global inline-bootstrap benchmark prompt"
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "bootstrap-thread"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0}})])
         process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
         thread_state = {"rollout_path": Path("/tmp/bootstrap-rollout"), "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
         rollout = {"turn_context": {"turn_id": "bootstrap-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
-        args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-benchmark", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="bootstrap-benchmark", allow_fallback=[])
-        with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
-            os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
-            receipt = module.run_receipt(args, raw_prompt)
-        self.assertEqual(run_mock.call_args.kwargs["input"], raw_prompt)
+        with tempfile.TemporaryDirectory() as temporary:
+            prompt_path = Path(temporary) / "prompt.txt"
+            prompt_path.write_text(raw_prompt, encoding="utf-8")
+            args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-benchmark", benchmark_prompt_path=prompt_path, result_output=None, timeout=30, workdir=Path(temporary), state_db=Path(temporary) / "state.sqlite", workload_id="bootstrap-benchmark", allow_fallback=[])
+            with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
+                os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+                receipt = module.run_receipt(args, raw_prompt)
+        execution_prompt = module.auto_benchmark_execution_prompt(raw_prompt)
+        self.assertEqual(run_mock.call_args.kwargs["input"], execution_prompt)
+        self.assertIn("AUTO_BENCHMARK_ENTRY", execution_prompt)
+        self.assertIn("benchmark_auto_entry_bridge.py", execution_prompt)
+        self.assertIn("Launch exactly one bridge process", execution_prompt)
+        self.assertIn("poll that same session until exit", execution_prompt)
+        self.assertIn("must never launch a second process", execution_prompt)
+        self.assertEqual(execution_prompt.count(raw_prompt), 0)
+        self.assertIn(module.sha256_text(raw_prompt), execution_prompt)
         self.assertNotIn(module.ENTRY_CONTEXT_ENV, run_mock.call_args.kwargs["env"])
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PROMPT_PATH"], str(prompt_path.resolve()))
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_WORKLOAD_SHA256"], module.sha256_text(raw_prompt))
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PYTHON"], str(Path(module.sys.executable).resolve()))
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_CACHE_ROOT"], str(args.workdir / "Cache" / "task-analyze" / args.workload_id))
         self.assertEqual(receipt["node_type"], "bootstrap-task")
         self.assertEqual(receipt["node_role"], "result-producer")
         self.assertFalse(receipt["entry_context_active"])
         self.assertEqual(receipt["authorization_source"], "benchmark-global-inline")
         self.assertEqual(receipt["benchmark_run_id"], "benchmark-bootstrap-benchmark")
-        self.assertEqual(receipt["prompt_sha256"], receipt["workload_prompt_sha256"])
+        self.assertTrue(receipt["benchmark_prompt_file_verified"])
+        self.assertEqual(receipt["workload_prompt_sha256"], module.sha256_text(raw_prompt))
+        self.assertEqual(receipt["prompt_sha256"], module.sha256_text(execution_prompt))
+        self.assertNotEqual(receipt["prompt_sha256"], receipt["workload_prompt_sha256"])
+
+    def test_bootstrap_uses_verified_bridge_result_only_when_controller_final_is_empty(self):
+        raw_prompt = "exact adaptive bridge handoff prompt"
+        bridge_result = '{"answer":1}'
+        bridge_receipt_result = "Complexity: 18/100 (small) · Model: gpt-5.3-codex-spark|low · Route: downgrade\nEvidence: runtime receipt\n\n" + bridge_result
+        for terminal_message, handoff_expected in (("", True), ("wrong non-json final", False)):
+            with self.subTest(terminal_message=terminal_message), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                prompt_path = root / "prompt.txt"
+                result_path = root / "result.json"
+                prompt_path.write_text(raw_prompt, encoding="utf-8")
+                fake_codex = root / "fake-codex"
+                fake_codex.write_text(textwrap.dedent("""\
+                    #!/usr/bin/env python3
+                    import json
+                    import sys
+
+                    terminal_message = __TERMINAL_MESSAGE__
+                    sys.stdin.read()
+                    def emit(value):
+                        print(json.dumps(value), flush=True)
+
+                    emit({"type": "thread.started", "thread_id": "bootstrap-handoff-thread"})
+                    emit({"type": "item.completed", "item": {"type": "agent_message", "text": "bridge launched"}})
+                    emit({"type": "item.completed", "item": {"type": "agent_message", "text": terminal_message}})
+                    emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
+                """).replace("__TERMINAL_MESSAGE__", repr(terminal_message)), encoding="utf-8")
+                fake_codex.chmod(0o755)
+                cache_root = result_path.parent / "auto-route-cache"
+                workspace = cache_root / "source-copy-one"
+                output_root = workspace / "Cache" / "task-analyze" / "bridge-output"
+                output_root.mkdir(parents=True)
+                (cache_root / "adaptive-entry-launch.json").write_text(json.dumps({"schema_version": 1, "workload_sha256": module.sha256_text(raw_prompt)}) + "\n", encoding="utf-8")
+                (output_root / "result.json").write_text(bridge_receipt_result + "\n", encoding="utf-8")
+                (output_root / "receipt.json").write_text(json.dumps({"status": "pass", "result_published": True, "duplicate_result_detected": False, "output_sha256": module.sha256_text(bridge_result)}) + "\n", encoding="utf-8")
+                thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "max", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+                rollout = {"turn_context": {"turn_id": "bootstrap-handoff-turn", "model": "gpt-5.6-luna", "effort": "max"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+                args = argparse.Namespace(model="gpt-5.6-luna", effort="max", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-handoff", benchmark_prompt_path=prompt_path, result_output=result_path, timeout=30, workdir=root, state_db=root / "state.sqlite", workload_id="bootstrap-handoff", allow_fallback=[])
+                with patch.dict(os.environ, {}, clear=False), patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), patch("builtins.print") as print_mock:
+                    os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
+                    receipt = module.run_receipt(args, raw_prompt)
+                self.assertTrue(receipt["benchmark_auto_launch_verified"])
+                self.assertTrue(receipt["benchmark_auto_bridge_result_verified"])
+                if handoff_expected:
+                    self.assertEqual(result_path.read_text(encoding="utf-8"), bridge_result + "\n")
+                    self.assertEqual(receipt["benchmark_result_source"], "adaptive_bridge_handoff")
+                    self.assertEqual(receipt["output_sha256"], module.sha256_text(bridge_result))
+                    self.assertTrue(receipt["result_published"])
+                    self.assertEqual(receipt["status"], "pass")
+                    self.assertEqual(json.loads(print_mock.call_args.args[0])["main_thread_id"], "bootstrap-handoff-thread")
+                else:
+                    self.assertFalse(result_path.exists())
+                    self.assertIsNone(receipt["benchmark_result_source"])
+                    self.assertFalse(receipt["result_published"])
+                    self.assertEqual(receipt["status"], "fail")
+                    print_mock.assert_not_called()
 
     def test_direct_task_requires_benchmark_id_and_is_forbidden_in_entry_context(self):
         missing_id = argparse.Namespace(entry_task=False, direct_task=True, benchmark_run_id=None, workload_id="direct-missing", route_marker="LOCKED_ROUTE_NODE")

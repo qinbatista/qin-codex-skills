@@ -229,13 +229,17 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("FAIL/BLOCKED stays visible", readme)
         self.assertIn("## Rules", readme)
         self.assertIn("## 📊 Real adaptive benchmark: finish first, verify in background", readme)
-        self.assertIn("56.411% tokens / 67.873% time", readme)
-        self.assertIn("35.072% / 53.681%", readme)
+        self.assertIn("12/12 exact results and 12/12 Endings PASS", readme)
+        self.assertIn("correctness PASS; strategy-performance FAIL", readme)
+        self.assertIn("+44.428%", readme)
+        self.assertIn("97.127% slower overall", readme)
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
         self.assertIn("every publish runs a safety scan", readme)
-        self.assertEqual(readme.count("./management-skill/assets/readme/lifecycle-skill-benchmark.svg"), 1)
-        self.assertEqual(readme.count("./management-skill/assets/readme/lifecycle-skill-benchmark.md"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example.svg"), 1)
+        self.assertEqual(readme.count("./management-skill/assets/readme/model-benchmark-example-mobile.svg"), 1)
+        self.assertEqual(readme.count("./task-analyze-skill/TEST_AND_BENCHMARK.md"), 1)
+        self.assertEqual(readme.count("./task-analyze-skill/assets/model-routing-benchmark-example.json"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-mobile.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/model-router.svg"), 1)
@@ -293,8 +297,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("FAIL/BLOCKED 保持可见", readme)
         self.assertIn("## 规则", readme)
         self.assertIn("## 📊 真实自适应 Benchmark：先完成，再后台验证", readme)
-        self.assertIn("56.411% token / 67.873% 时间", readme)
-        self.assertIn("35.072% / 53.681%", readme)
+        self.assertIn("12/12 精确结果与 12/12 Ending PASS", readme)
+        self.assertIn("正确率 PASS；性能策略 FAIL", readme)
+        self.assertIn("+44.428%", readme)
+        self.assertIn("总体慢 97.127%", readme)
         self.assertIn("## 🧩 八个公开 Skill", readme)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh-mobile.svg"), 1)
@@ -331,25 +337,36 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertLessEqual(len(description_match.group(1)), 64, agent_path)
 
     def test_public_benchmark_asset_satisfies_current_strict_contract(self):
-        report = (README_ASSET_DIR / "lifecycle-skill-benchmark.md").read_text(encoding="utf-8")
-        self.assertIn("Entry model in both arms: `gpt-5.6-sol | ultra`", report)
-        self.assertIn("12/12 main runs", report)
-        self.assertIn("56.411% fewer logical tokens", report)
-        self.assertIn("35.072% fewer tokens", report)
-        self.assertIn("404,598 tokens / 361.038s", report)
-        self.assertIn("finish the job first", report.lower())
+        evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
+        evidence = benchmark_renderer.load_public_json(evidence_path)
+        self.assertEqual(evidence["schema_version"], 6)
+        self.assertEqual(evidence["entry_pairs"], {"direct": "gpt-5.6-sol|ultra", "global": "gpt-5.6-luna|max"})
+        self.assertEqual(evidence["expected_run_count"], 12)
+        self.assertEqual(evidence["execution_integrity"]["complete_runs"], 12)
+        self.assertEqual(evidence["execution_integrity"]["retry_count"], 0)
+        self.assertEqual(evidence["execution_integrity"]["fallback_count"], 0)
+        self.assertEqual(evidence["execution_integrity"]["repair_count"], 0)
+        self.assertIs(evidence["all_correct"], True)
+        self.assertEqual(evidence["overall_status"], "fail")
 
     def test_readme_benchmark_is_sanitized_and_matches_public_evidence(self):
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
-        report = (README_ASSET_DIR / "lifecycle-skill-benchmark.md").read_text(encoding="utf-8")
-        for text in (readme, report):
-            self.assertNotIn("/Users/", text)
-            self.assertNotIn('"thread_id"', text)
-            self.assertNotIn('"receipt_path"', text)
-        self.assertIn("1,267,890", readme)
-        self.assertIn("552,662", readme)
-        self.assertIn("270,556", readme)
-        self.assertIn("Direct rows have no verifier", report)
+        evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
+        evidence_text = evidence_path.read_text(encoding="utf-8")
+        evidence = benchmark_renderer.load_public_json(evidence_path)
+        self.assertNotIn("/Users/", readme)
+        self.assertNotIn('"thread_id"', readme)
+        self.assertNotIn('"receipt_path"', readme)
+        self.assertIn("25,881.5", readme)
+        self.assertIn("138,267", readme)
+        self.assertIn("33.269%", readme)
+        self.assertIn("97.127%", readme)
+        self.assertIn("strategy-performance FAIL", readme)
+        self.assertEqual(evidence["overall_status"], "fail")
+        self.assertIs(evidence["all_correct"], True)
+        for forbidden in ("/Users/", "thread_id", "session_id", "workload_prompt_sha256", "producer_run_id", '"prompt"', '"result"', '"receipt"', '"source_path"', '"plan_path"'):
+            self.assertNotIn(forbidden, evidence_text)
+        self.assertNotIn("timeout", evidence_text.lower())
         return
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
@@ -482,16 +499,20 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 self.assertNotIn(forbidden, svg_text)
 
     def test_desktop_benchmark_keeps_right_values_and_verdict_inside_viewbox(self):
-        svg_path = README_ASSET_DIR / "lifecycle-skill-benchmark.svg"
+        svg_path = README_ASSET_DIR / "model-benchmark-example.svg"
         root = ElementTree.parse(svg_path).getroot()
-        self.assertEqual(root.attrib.get("viewBox"), "0 0 1800 1550")
+        self.assertEqual(root.attrib.get("viewBox"), "0 0 1200 760")
+        namespace = {"svg": "http://www.w3.org/2000/svg"}
+        metadata = root.find("svg:metadata", namespace)
+        evidence = benchmark_renderer.load_public_json(SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json")
+        self.assertIsNotNone(metadata)
+        self.assertEqual(json.loads(metadata.text), evidence)
         text = " ".join("".join(element.itertext()) for element in root.iter() if element.tag.rsplit("}", 1)[-1] in {"title", "desc", "text"})
-        self.assertIn("56.411% fewer task tokens", text)
-        self.assertIn("67.873% faster first result", text)
-        self.assertIn("Ending evidence cost", text)
-        self.assertIn("270,556 tokens / 66.513s", text)
-        self.assertIn("Task + Ending still wins", text)
-        self.assertIn("68.793% task · 47.326% task + check saved", text)
+        self.assertIn("Real A/B benchmark · FAIL", text)
+        self.assertIn("all runs correctness/evidence PASS", text)
+        self.assertIn("simple constant lookup", text)
+        self.assertIn("medium one-method audit", text)
+        self.assertIn("complex multi-file workflow graph", text)
         self.assertEqual(svg_bounds_issues(svg_path), [])
         return
         svg_path = README_ASSET_DIR / "model-benchmark-example.svg"
@@ -619,7 +640,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             repository_dir.mkdir()
             copied_names = sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
             self.assertEqual(copied_names, sync_global_skills.PRIMARY_SKILL_ORDER)
-            expected_svg_references = {"README.md": {"./management-skill/assets/readme/core-flow.svg", "./management-skill/assets/readme/core-flow-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/lifecycle-skill-benchmark.svg"}, "README.zh.md": {"./management-skill/assets/readme/core-flow-zh.svg", "./management-skill/assets/readme/core-flow-zh-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/lifecycle-skill-benchmark.svg"}}
+            expected_svg_references = {"README.md": {"./management-skill/assets/readme/core-flow.svg", "./management-skill/assets/readme/core-flow-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}, "README.zh.md": {"./management-skill/assets/readme/core-flow-zh.svg", "./management-skill/assets/readme/core-flow-zh-mobile.svg", "./management-skill/assets/readme/model-router.svg", "./management-skill/assets/readme/model-router-mobile.svg", "./management-skill/assets/readme/model-benchmark-example.svg", "./management-skill/assets/readme/model-benchmark-example-mobile.svg"}}
             for readme_name, expected_references in expected_svg_references.items():
                 readme = (repository_dir / readme_name).read_text(encoding="utf-8")
                 local_references = set(re.findall(r'(?:src="|srcset="|\]\()(\./[^\"#)]+)', readme))

@@ -15,7 +15,7 @@ For code, run one bounded producer Quick Check before presentation. Do not run M
 
 ## Ordinary Entry Contract
 
-The hookless always-loaded bootstrap scores every submission `0-100`, then chooses a single producer or a real task graph. Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start. A graph is used only when the request contains at least two distinct bounded result segments with different ownership, model needs, outputs, or dependency-ready concurrency. Every node has its own score, band, exact pair, purpose, dependencies, and stop condition. A low-risk, low-ambiguity text/code/write/execute node scoring `0-24` tries Spark-low even inside a larger task; a non-Spark eligible node states its exception category and concrete reason, and an Ending quality failure suppresses Spark for that contextual band. Exact/tool/image work uses the score-only script and creates no fake model learning. Two or three independent read-only sources retain their byte-cost shortcut. Neither path adds foreground verification; Ending Real begins only after presentation.
+The hookless always-loaded bootstrap scores every submission `0-100`, resolves its observable entry pair, then chooses a single producer or a real task graph. Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start. Matching step-capability fingerprint and difficulty history selects the proven boundary first; absent history, routing chooses the weaker of the contextual cold start and entry anchor. Therefore high/Sol entries can downgrade, Luna-max/lower entries can upgrade, and a recovered or frozen lowest-correct pair is reused from either direction. A graph is used only when the request contains at least two distinct bounded result segments with different ownership, model needs, outputs, or dependency-ready concurrency. Every node has its own score, band, exact pair, purpose, dependencies, stop condition, step kind, and controlled capability tags; implementation and local-test history never collapse into one model decision. A low-risk, low-ambiguity text/code/write/execute node scoring `0-24` tries Spark-low even inside a larger task; a non-Spark eligible node states its exception category and concrete reason, and an Ending quality failure suppresses Spark for that fingerprint. Exact/tool/image work uses the score-only script and creates no fake model learning. Two or three independent read-only sources retain their byte-cost shortcut. Neither path adds foreground verification; Ending Real begins only after presentation.
 
 - One obvious reversible action uses one tool action and presents the observed result immediately.
 - Exact-scoped read-only work stays inline with no subagent or route. An exact named-source audit first runs one bounded `rg` per authoritative file for every exact user-named target and direct definition, then answers once. Anchor named members directly; enclosing-class or call-site anchors, guessed identifier families, separate planning, broad searches, whole-file reads, rereads, and pre-result checks are forbidden. Present immediately.
@@ -92,7 +92,7 @@ When a dispatcher is useful, save schema version 2 JSON inside the active task c
 
 - `routing_mode=dynamic_task_graph`, parent `complexity_score`/band, `complexity`, and `topology`;
 - an absolute cache directory inside the active task root;
-- observable entry metadata;
+- observable entry metadata propagated into every adaptive recommendation and result/Ending receipt;
 - bounded result and Ending nodes;
 - installed skill, node `complexity_score`/band, exact model, effort, `selection_basis`, purpose, dependencies, prompt, safe sandbox, ownership, stop condition, and routing profile per node;
 - main-producer `model_memory_scope` with module plus file/symbol/code/operation when known; omitted file/symbol values intentionally fall back to module-level project evidence;
@@ -115,6 +115,7 @@ Each `stage_inventory` item must include at least:
   `dependencies`, `inputs`, `outputs`, `stop_condition`, `coupling`, `parallelizable`, `objective_scope`,
   `mutable_state`, `failure_escalation`, `external_side_effects`.
 - `score`, `band`, `model_intent`, and `dependencies` match the mapped node.
+- Each result node's `model_memory_scope` may declare a controlled `step_kind` and stable `capability_tags`; otherwise the runner derives them from bounded categorical fields and `task_summary`. Distinctive tool/image/test/browser/API/visual stages should declare them explicitly.
 - `logical_stage_ids` must be a single item except when continuity is declared; multi-item items require
   `coupling: linear`, `parallelizable: false`, and a concrete `continuity_reason` naming shared state, coherent reasoning,
   prompt/context mutation, or cumulative verification.
@@ -146,7 +147,7 @@ Invoke `scripts/task_route_dispatcher.py run-plan <plan-file>`. The dispatcher e
 Admitted dispatcher fixtures are topology-only portable templates, not execution authorization: materialization injects only the active cache directory and observed entry model|effort, then the real dispatcher validator runs them for every supported entry pair. Ordinary graduated fixtures remain inline and contain no dispatcher plan. Current positive performance admission plus a fresh frozen recommendation is still required before open-ended execution. A runner-generated independent-source plan must retain its cost-admission receipt, source-count, disjointness, read-only, and dependency-only-or-fused-final merge gates. Downstream node pairs, dependencies, roles, adaptive producer, Ending checks, and controller transitions remain fixture-controlled only inside admitted templates.
 
 - Task Analyze appears first only in the human route for explicitly activated work and uses the selected entry pair; schema-version-2 dispatcher nodes begin with result work and carry entry metadata separately.
-- Bounded preflight resolves that pair with `resolve_entry_model.py`; no fixed entry model is implied.
+- Bounded preflight resolves that pair with `resolve_entry_model.py`; no fixed entry model is implied, and each downstream history lookup uses it only as a cold-start anchor or route-direction reference.
 - The current pair performs ordinary inline work. In an admitted route, downstream nodes use their locked pairs rather than silently inheriting the entry pair.
 - Every downstream model and effort is supported and receipt-backed when execution proof is required.
 - Every owning skill is installed.

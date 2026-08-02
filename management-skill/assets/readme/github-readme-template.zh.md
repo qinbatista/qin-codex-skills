@@ -37,15 +37,15 @@
   <img src="./management-skill/assets/readme/model-router.svg" alt="任务策略质量梯级：按 receipt 证据保留、降级或升级一个档位">
 </picture>
 
-- **冷启动：** task type 与 0–100 分数从已保存的 Luna/Terra/Sol 质量梯级选档；0–24 分的小型低风险编辑先试 Spark-low。
-- **学习：** 一次 receipt 有效的 Real PASS 保留当前档；两次匹配 PASS 才向下降一级；质量失败立即向上升一级。Spark 质量失败会在匹配上下文中禁用 Spark，并升级下一个任务。
+- **入口感知启动：** 用步骤能力 fingerprint 与难度历史选择最低正确档。Sol/高入口可向下降；Luna-max/更低入口可向上升。没有匹配历史时从不高于入口冷启动；0–24 分的小型低风险编辑仍先试 Spark-low。
+- **学习：** receipt 有效的 Real PASS 保留当前档；两次匹配 PASS 才可向下降一级；质量失败向上升一级。失败后恢复成功的强档会被下一次精确匹配直接复用；实现与本地测试分别记忆。
 - **操作故障：** 零结果故障只允许一次更强 fallback，不把它当质量失败学习。
-- **Schedule：** 两到三个独立只读 source 在读取前进行成本准入；有依赖的多文件工作只使用一个上下文 producer。
+- **Schedule：** 复合任务拆成可量化、责任明确的步骤并逐步选模；两到三个独立只读 source 先做成本准入，有依赖的多文件工作使用一个上下文 producer。
 - **记忆：** Ending 结果更新宽泛项目/Skills `Model Switch.md` 页面；project/task/module/file/symbol 仅是字段，不创建层级笔记。
 
 ## 规则
 
-- **Producer：** 显示分数、band 与 route change；0–24 分低风险编辑先试 Spark-low，否则用已保存档。
+- **Producer：** 显示分数、band、entry/selected；复用最低正确档。两次 PASS 降级；质量 FAIL 升级。
 - **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
 - **路由：** 只有明确要求或当前端到端证据成立时才委派。
 - **交付：** 先完成并返回主任务结果，再进行后台验证。
@@ -57,22 +57,21 @@
 
 ## 📊 真实自适应 Benchmark：先完成，再后台验证
 
-两边都从 `gpt-5.6-sol | ultra` 开始。**无 Skill** 完成主任务后停止，验证成本为 **0**；**有 Skill** 用 receipt 证明的动态档完成主任务并返回，再启动独立 Ending。**冻结证据说明：** 下表是不改数值的 2026-07-17 v34 cohort。当前按分数优先 Spark 和强制多 Ending/修复会影响未来 Auto 结果；不会改写历史数值、固定 Direct arm 或“task 与 task+Ending”计量方法。
+当前冻结 v46 比较：**无 Skill** 固定使用 `gpt-5.6-sol | ultra`；**有 Skill** 从 `gpt-5.6-luna | max` 进入，再按冻结历史逐步骤选模。所有 adaptive child/graph 都计入，只排除 Luna 入口 controller。
 
-![六组真实 A/B：比较无 Skill 主任务、有 Skill 主任务，以及仅属于 Auto 的条纹 Ending 成本](./management-skill/assets/readme/lifecycle-skill-benchmark.svg)
+<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="当前 Direct 与 Auto 基准：所有结果和 Ending 正确，但性能策略门槛失败"></picture>
 
-| 档位 | Auto 主任务档位 | 无 Skill 主任务 | 有 Skill 主任务 | 独立 Ending | 主任务 + Check | 主任务节省 | 全世界节省 |
-|---|---|---:|---:|---:|---:|---:|---:|
-| 简单 · 4 tests | Terra-medium | 343,459 / 131.842s | 200,522 / 52.861s | 78,818 / 18.864s | 279,340 / 71.725s | **41.617% token / 59.906% 时间** | **18.669% / 45.598%** |
-| 中等 · 6 tests | Terra-high | 472,575 / 199.180s | 211,128 / 56.713s | 94,741 / 23.940s | 305,869 / 80.653s | **55.324% token / 71.527% 时间** | **35.276% / 59.507%** |
-| 复杂 · 3 sources | Luna-low · 单 producer | 451,856 / 137.654s | 141,012 / 40.999s | 96,997 / 23.709s | 238,009 / 64.708s | **68.793% token / 70.216% 时间** | **47.326% / 52.992%** |
-| **全部 6 组** | **receipt 证明的动态档位** | **1,267,890 / 468.676s** | **552,662 / 150.573s** | **270,556 / 66.513s** | **823,218 / 217.086s** | **56.411% token / 67.873% 时间** | **35.072% / 53.681%** |
+**6 组 A/B · 12 次运行 · 12/12 精确结果与 12/12 Ending PASS · 0 retry · 0 fallback · 0 repair**
 
-**复杂任务为什么终于大幅获胜：** v34 在读取 source 前先估算会话上下文成本。68,483-byte fixture 的单 producer 估算为 **53,121 input tokens**，三会话 schedule 为 **125,121**，因此 Auto 正确选择 Luna-low 单 producer。只有 source 超过 180,000 bytes 或 Prompt 明确要求 latency-critical parallel 时才 fan-out。
+| 档位 | Direct token 中位数 | Auto token 中位数 | 配对 token 节省 | Direct 首结果 | Auto 首结果 | 配对时间节省 |
+|---|---:|---:|---:|---:|---:|---:|
+| 简单 | 25,881.5 | 29,091.5 | -30.064% | 13.430s | 19.831s | -50.694% |
+| 中等 | 16,366 | 36,632.5 | -123.834% | 10.545s | 34.323s | -225.472% |
+| 复杂 | 263,445.5 | 138,267 | **+44.428%** | 32.375s | 56.927s | -79.224% |
 
-**正确性：** 12/12 主结果完全正确；所有 Mini Test/gate 通过；6/6 独立 Ending 返回 PASS；0 retry/fallback/repair。公共 Sol-ultra dispatcher 不计入用户指定的“主任务 / 主任务+check”两个世界，但完整报告如实公开为 **404,598 tokens / 361.038s**。每档两组用于确认这次结构修改，不代表正式性能准入；logical token 不等于计费 token。
+**实测结论：正确率 PASS；性能策略 FAIL。** 复杂任务带动总任务 token 降低 33.269%，但 Auto 总体慢 97.127%，简单和中等任务也都退化。因此证据否定“普遍节省”的结论；logical token 不等于计费 token。
 
-[查看完整 Benchmark 报告与每次运行。](./management-skill/assets/readme/lifecycle-skill-benchmark.md)
+[查看精确 v46 报告。](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [打开脱敏 benchmark 证据。](./task-analyze-skill/assets/model-routing-benchmark-example.json)
 
 ## 🧩 八个公开 Skill
 

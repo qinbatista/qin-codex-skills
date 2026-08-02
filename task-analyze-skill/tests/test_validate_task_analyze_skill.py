@@ -199,6 +199,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertNotIn("scripts/adaptive_model_runner.py", module.REQUIRED_FILES)
         self.assertIn("receipt-backed local event ledger is the durable fast history", module.REQUIRED_ADAPTIVE_TEXT)
         self.assertIn("deduplicate their stable event IDs", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("suppress Spark for the matching step-capability fingerprint", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("task_capability_profile", module.REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION)
+        self.assertIn("capability_fingerprint", module.REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION)
         self.assertEqual(tuple(module.ACTIVE_MODEL_EFFORTS), module.ACTIVE_MODEL_ORDER)
 
     def test_shared_registry_contains_only_the_highest_numeric_gpt_family_and_source_digest(self):
@@ -470,7 +473,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             self.assertIn("`gpt-5.6-sol|ultra`", bootstrap_text)
             self.assertIn("dynamic_task_graph", bootstrap_text)
             self.assertIn("task_route_dispatcher.py run-plan", bootstrap_text)
-            self.assertIn("task vs task+Ending", bootstrap_text)
+            self.assertIn("compare task vs +Ending", bootstrap_text)
             self.assertIn("no reread/full-read/precheck", bootstrap_text)
             self.assertNotIn("Mini Verify", bootstrap_text)
             global_agents.write_text(bootstrap_text.replace("task_complexity_score.py", "task_score.py", 1), encoding="utf-8")

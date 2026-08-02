@@ -28,6 +28,8 @@ RUNTIME_CENSUS_BUSY_TIMEOUT_MS = 2000
 RUNTIME_CENSUS_RETRY_INTERVAL_SECONDS = 0.1
 RUNTIME_CENSUS_QUIESCENCE_SECONDS = 0.2
 RESULT_READY_EVENT_KEYS = frozenset({"schema_version", "stage", "workload_id", "benchmark_run_id", "result_path", "child_result_ready_monotonic_ns", "main_thread_id"})
+FROZEN_ROUTING_MEMORY_NAME = "model-routing-events.jsonl"
+FROZEN_OBSIDIAN_VAULT_NAME = "obsidian-vault"
 
 
 class BenchmarkRunnerError(ValueError):
@@ -440,6 +442,8 @@ def environment_snapshot(codex_home, workdir, sandbox, receipt_runner):
     agents_path = require_file(codex_home / "AGENTS.md", "codex_agents_missing")
     models_cache_path = require_file(codex_home / "models_cache.json", "codex_models_cache_missing")
     memories_root = require_directory(codex_home / "memories", "codex_memories_missing")
+    require_file(memories_root / FROZEN_ROUTING_MEMORY_NAME, "codex_routing_memory_missing")
+    require_directory(memories_root / FROZEN_OBSIDIAN_VAULT_NAME, "codex_obsidian_vault_missing")
     catalog = benchmark_suite_gate.catalog_snapshot(codex_home, config_path)
     return {"codex_home": str(codex_home), "config_path": str(config_path), "config_sha256": sha256_bytes(config_path.read_bytes()), "agents_path": str(agents_path), "agents_sha256": sha256_bytes(agents_path.read_bytes()), "models_cache_path": str(models_cache_path), "models_cache_sha256": benchmark_suite_gate.models_cache_sha256(models_cache_path), "memories_root": str(memories_root), "memories_sha256": benchmark_suite_gate.sha256_source_tree(memories_root), "workdir": str(workdir), "sandbox": sandbox, "receipt_runner_path": str(receipt_runner), "receipt_runner_sha256": sha256_bytes(receipt_runner.read_bytes()), **catalog}
 
@@ -521,8 +525,10 @@ def build_frozen_plan(args, require_fresh=True):
     global_environment = environment_snapshot(global_home, snapshot_root, args.sandbox, receipt_runner)
     validate_suite_local_catalogs(suite_root, direct_environment)
     validate_suite_local_catalogs(suite_root, global_environment)
-    selected_pair = f"{args.model}|{args.effort}"
-    suite_identity = {"suite_root": str(suite_root), "source_snapshot_sha256": source_snapshot_sha256, "tier_repeat_counts": tier_repeat_counts, "direct": {"config_sha256": direct_environment["config_sha256"], "agents_sha256": direct_environment["agents_sha256"], "visible_catalog_sha256": direct_environment["visible_catalog_sha256"]}, "global": {"config_sha256": global_environment["config_sha256"], "agents_sha256": global_environment["agents_sha256"], "visible_catalog_sha256": global_environment["visible_catalog_sha256"]}}
+    arm_pairs = {"direct": f"{args.direct_model}|{args.direct_effort}", "global": f"{args.auto_entry_model}|{args.auto_entry_effort}"}
+    if arm_pairs != benchmark_suite_gate.ARM_ENTRY_PAIRS:
+        raise BenchmarkRunnerError("benchmark_pair_contract")
+    suite_identity = {"suite_root": str(suite_root), "source_snapshot_sha256": source_snapshot_sha256, "tier_repeat_counts": tier_repeat_counts, "arm_pairs": arm_pairs, "direct": {"config_sha256": direct_environment["config_sha256"], "agents_sha256": direct_environment["agents_sha256"], "visible_catalog_sha256": direct_environment["visible_catalog_sha256"]}, "global": {"config_sha256": global_environment["config_sha256"], "agents_sha256": global_environment["agents_sha256"], "visible_catalog_sha256": global_environment["visible_catalog_sha256"]}}
     suite_digest = sha256_bytes(benchmark_suite_gate.canonical_json(suite_identity).encode("utf-8"))[:16]
     suite_id = f"benchmark-suite-{suite_digest}"
     tier_inputs = {}
@@ -560,6 +566,7 @@ def build_frozen_plan(args, require_fresh=True):
                 evidence_path = raw_root / "evidence.json"
                 role = "result-producer"
                 environment = direct_environment if arm == "direct" else global_environment
+                selected_pair = arm_pairs[arm]
                 receipt_spec = {"path": str(receipt_path), "pair": selected_pair, "role": role, "bind_result": True, "workload_prompt_sha256": tier_input["prompt_sha256"]}
                 run_plan = {"run_id": run_id, "pair_id": pair_id, "tier": tier, "repeat_index": repeat_index, "arm": arm, "order_index": order_index, "prompt_path": str(tier_input["prompt_path"]), "prompt_sha256": tier_input["prompt_sha256"], "expected_result_path": str(tier_input["expected_path"]), "expected_sha256": tier_input["expected_sha256"], "result_path": str(result_path), "evidence_path": str(evidence_path), "receipts": [receipt_spec], "selected_entry_pair": selected_pair, "entry_execution_mode": "executed", "source_root": str(snapshot_root), "source_files_pointer": tier_input["source_files_pointer"], "source_snapshot_sha256": source_snapshot_sha256, "environment": environment}
                 runs.append(run_plan)
@@ -590,8 +597,8 @@ def runner_config(args, plan):
         "benchmark_gate_sha256": sha256_bytes(gate_path.read_bytes()),
         "codex_bin_path": str(codex_bin_path),
         "codex_bin_sha256": sha256_bytes(codex_bin_path.read_bytes()),
-        "model": args.model,
-        "effort": args.effort,
+        "direct_pair": f"{args.direct_model}|{args.direct_effort}",
+        "auto_entry_pair": f"{args.auto_entry_model}|{args.auto_entry_effort}",
         "timeout": args.timeout,
         "outer_timeout_grace": args.outer_timeout_grace,
         "poll_interval_ms": args.poll_interval_ms,
@@ -718,14 +725,17 @@ def execute_run(args, run_plan, prompt_text):
     environment = run_plan["environment"]
     codex_home = Path(environment["codex_home"])
     state_db_path = (codex_home / "state_5.sqlite").absolute()
-    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", args.model, "--effort", args.effort, "--workload-id", run_plan["run_id"], "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--state-db", str(state_db_path), "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout)]
+    run_model, run_effort = run_plan["selected_entry_pair"].split("|", 1)
+    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", run_model, "--effort", run_effort, "--workload-id", run_plan["run_id"], "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--state-db", str(state_db_path), "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout)]
     if run_plan["arm"] == "direct":
         command.extend(["--direct-task", "--benchmark-run-id", f"benchmark-{run_plan['run_id']}"])
     else:
-        command.extend(["--bootstrap-task", "--benchmark-run-id", f"benchmark-{run_plan['run_id']}"])
+        command.extend(["--bootstrap-task", "--benchmark-run-id", f"benchmark-{run_plan['run_id']}", "--benchmark-prompt-path", run_plan["prompt_path"]])
     command_environment = os.environ.copy()
     command_environment.pop(ENTRY_CONTEXT_ENV, None)
     command_environment["CODEX_HOME"] = str(codex_home)
+    command_environment["CODEX_MODEL_ROUTING_MEMORY"] = str(codex_home / "memories" / FROZEN_ROUTING_MEMORY_NAME)
+    command_environment["CODEX_OBSIDIAN_VAULT"] = str(codex_home / "memories" / FROZEN_OBSIDIAN_VAULT_NAME)
     stdout_path = receipt_path.parent / "runner.stdout.log"
     stderr_path = receipt_path.parent / "runner.stderr.log"
     before_census_diagnostics = {}
@@ -880,8 +890,10 @@ def parse_args(argv=None):
     repeat_group = parser.add_mutually_exclusive_group()
     repeat_group.add_argument("--repeat-count", type=int, default=6)
     repeat_group.add_argument("--tier-repeats", help="Even per-tier counts, for example simple=4,medium=2,complex=2.")
-    parser.add_argument("--model", required=True)
-    parser.add_argument("--effort", required=True)
+    parser.add_argument("--direct-model", default="gpt-5.6-sol")
+    parser.add_argument("--direct-effort", default="ultra")
+    parser.add_argument("--auto-entry-model", default="gpt-5.6-luna")
+    parser.add_argument("--auto-entry-effort", default="max")
     parser.add_argument("--direct-codex-home", type=Path, required=True)
     parser.add_argument("--global-codex-home", type=Path, required=True)
     parser.add_argument("--receipt-runner", type=Path, default=Path(__file__).with_name("model_execution_receipt.py"))

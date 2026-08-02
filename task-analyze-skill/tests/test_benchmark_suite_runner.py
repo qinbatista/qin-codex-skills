@@ -44,8 +44,20 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     mode.add_argument("--direct-task", action="store_true")
     mode.add_argument("--bootstrap-task", action="store_true")
     parser.add_argument("--benchmark-run-id")
+    parser.add_argument("--benchmark-prompt-path")
     args = parser.parse_args()
     prompt_text = sys.stdin.read()
+
+    def auto_execution_prompt(raw_workload):
+        workload_sha256 = hashlib.sha256(raw_workload.encode("utf-8")).hexdigest()
+        return "\\n".join([
+            "AUTO_BENCHMARK_ENTRY",
+            "You are the fixed gpt-5.6-luna|max controller. The workload body is deliberately absent.",
+            "Launch exactly one bridge process: invoke the executable in CODEX_AUTO_BENCHMARK_PYTHON directly, with no interpreter discovery or substitution, on `skills/task-analyze-skill/scripts/benchmark_auto_entry_bridge.py` resolved under CODEX_HOME; pass `--prompt-file` from CODEX_AUTO_BENCHMARK_PROMPT_PATH and `--workdir` as the current working directory. Use the longest supported initial wait. If the tool yields a running session, poll that same session until exit; polling is not a retry and must never launch a second process.",
+            "On exit 0, return the bridge stdout JSON byte-for-byte and stop. Do not read the prompt/source, solve, explain, verify, retry, launch another task, or run Ending/Fix.",
+            f"BOUND_WORKLOAD_SHA256: {workload_sha256}",
+            "",
+        ])
     time.sleep(0.08 if args.direct_task else 0.005)
     result_message = prompt_text.strip()
     pair = f"{args.model}|{args.effort}"
@@ -53,7 +65,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     role = "result-producer"
     node_type = "direct-task" if args.direct_task else "bootstrap-task"
     authorization_source = "benchmark-direct" if args.direct_task else "benchmark-global-inline"
-    total_tokens = 1000 if args.direct_task else 400
+    total_tokens = 1000 if args.direct_task else 50
     sessions_root = Path(os.environ["CODEX_HOME"]) / "sessions"
     sessions_root.mkdir(parents=True, exist_ok=True)
     rollout_path = sessions_root / f"rollout-{thread_id}.jsonl"
@@ -64,6 +76,17 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (thread_id, str(rollout_path), "exec", args.model, args.effort, total_tokens))
     connection.commit()
     connection.close()
+    if args.bootstrap_task:
+        adaptive_thread_id = f"{thread_id}-adaptive"
+        adaptive_tokens = 400
+        adaptive_rollout_path = sessions_root / f"rollout-{adaptive_thread_id}.jsonl"
+        adaptive_rollout_events = [{"type": "session_meta", "payload": {"id": adaptive_thread_id, "source": "subagent"}}, {"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "max"}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": adaptive_tokens}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
+        adaptive_rollout_path.write_text("\\n".join(json.dumps(event) for event in adaptive_rollout_events) + "\\n", encoding="utf-8")
+        adaptive_source = json.dumps({"subagent": {"thread_spawn": {"parent_thread_id": thread_id}}})
+        connection = sqlite3.connect(args.state_db)
+        connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (adaptive_thread_id, str(adaptive_rollout_path), adaptive_source, "gpt-5.6-luna", "max", adaptive_tokens))
+        connection.commit()
+        connection.close()
     temporary_result = args.result_output.with_suffix(".tmp")
     temporary_result.write_text(result_message + "\\n", encoding="utf-8")
     temporary_result.replace(args.result_output)
@@ -92,11 +115,18 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         connection.close()
     if args.workload_id == "simple-r01-direct":
         time.sleep(0.15)
-    prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
-    receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": args.benchmark_run_id, "workload_id": args.workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": args.model, "requested_effort": args.effort, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "duplicate_result_detected": False, "workload_prompt_sha256": prompt_sha256, "prompt_sha256": prompt_sha256}
+    workload_prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+    execution_prompt = prompt_text if args.direct_task else auto_execution_prompt(prompt_text)
+    execution_prompt_sha256 = hashlib.sha256(execution_prompt.encode("utf-8")).hexdigest()
+    receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": args.benchmark_run_id, "benchmark_result_source": "controller_final", "workload_id": args.workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": args.model, "requested_effort": args.effort, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": execution_prompt_sha256}
+    if args.bootstrap_task:
+        receipt["benchmark_prompt_file_verified"] = True
+        receipt["benchmark_auto_launch_verified"] = True
+        receipt["benchmark_auto_workspace_count"] = 1
+        receipt["benchmark_auto_bridge_result_verified"] = True
     args.output.write_text(json.dumps(receipt) + "\\n", encoding="utf-8")
     suite_root = args.output.parents[2]
-    call_record = {"run_id": args.workload_id, "direct": args.direct_task, "entry": False, "bootstrap": args.bootstrap_task, "entry_env_present": "CODEX_TASK_ANALYZE_ENTRY_CONTEXT" in os.environ, "benchmark_run_id": args.benchmark_run_id, "model": args.model, "effort": args.effort, "workdir": args.workdir, "state_db": args.state_db, "codex_home": os.environ.get("CODEX_HOME"), "sandbox": args.sandbox, "prompt_sha256": prompt_sha256, "plan_exists": (suite_root / "suite-plan.json").is_file()}
+    call_record = {"run_id": args.workload_id, "direct": args.direct_task, "entry": False, "bootstrap": args.bootstrap_task, "entry_env_present": "CODEX_TASK_ANALYZE_ENTRY_CONTEXT" in os.environ, "benchmark_run_id": args.benchmark_run_id, "model": args.model, "effort": args.effort, "workdir": args.workdir, "state_db": args.state_db, "codex_home": os.environ.get("CODEX_HOME"), "sandbox": args.sandbox, "prompt_sha256": workload_prompt_sha256, "plan_exists": (suite_root / "suite-plan.json").is_file()}
     with (suite_root / "call-order.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(call_record) + "\\n")
 """).strip() + "\n"
@@ -148,6 +178,10 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         memories_root = path / "memories"
         memories_root.mkdir()
         (memories_root / "memory_summary.md").write_text("# Frozen memory\n", encoding="utf-8")
+        (memories_root / module.FROZEN_ROUTING_MEMORY_NAME).write_text("", encoding="utf-8")
+        obsidian_vault = memories_root / module.FROZEN_OBSIDIAN_VAULT_NAME
+        obsidian_vault.mkdir()
+        (obsidian_vault / "AGENTS.md").write_text("# Frozen Obsidian context\n", encoding="utf-8")
         skill_root = path / "skills" / "example-skill"
         plugin_root = path / "plugins" / "cache" / "example" / "1.0.0"
         (skill_root / "agents").mkdir(parents=True)
@@ -172,11 +206,13 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.write_codex_home(direct_home, "direct")
         self.write_codex_home(global_home, "global")
         repeat_arguments = ["--tier-repeats", tier_repeats] if tier_repeats is not None else ["--repeat-count", str(repeat_count)]
-        return module.parse_args(["--suite-root", str(root), *repeat_arguments, "--model", "gpt-5.6-sol", "--effort", "ultra", "--direct-codex-home", str(direct_home), "--global-codex-home", str(global_home), "--receipt-runner", str(receipt_runner), "--codex-bin", str(fake_codex), "--sandbox", "read-only", "--timeout", "2", "--outer-timeout-grace", "1", "--poll-interval-ms", "2", "--quota-codex-home", str(quota_home)])
+        return module.parse_args(["--suite-root", str(root), *repeat_arguments, "--direct-codex-home", str(direct_home), "--global-codex-home", str(global_home), "--receipt-runner", str(receipt_runner), "--codex-bin", str(fake_codex), "--sandbox", "read-only", "--timeout", "2", "--outer-timeout-grace", "1", "--poll-interval-ms", "2", "--quota-codex-home", str(quota_home)])
 
     def test_default_repeat_count_is_six(self):
-        args = module.parse_args(["--suite-root", "/suite", "--model", "gpt-5.6-sol", "--effort", "ultra", "--direct-codex-home", "/direct", "--global-codex-home", "/global"])
+        args = module.parse_args(["--suite-root", "/suite", "--direct-codex-home", "/direct", "--global-codex-home", "/global"])
         self.assertEqual(args.repeat_count, 6)
+        self.assertEqual(f"{args.direct_model}|{args.direct_effort}", "gpt-5.6-sol|ultra")
+        self.assertEqual(f"{args.auto_entry_model}|{args.auto_entry_effort}", "gpt-5.6-luna|max")
 
     def test_first_result_timestamp_excludes_delayed_post_result_receipt_work(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -392,7 +428,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual([(call["run_id"], call["direct"]) for call in calls[:6]], [("simple-r01-direct", True), ("simple-r01-global", False), ("medium-r01-direct", True), ("medium-r01-global", False), ("complex-r01-direct", True), ("complex-r01-global", False)])
         self.assertEqual([(call["run_id"], call["direct"]) for call in calls[6:]], [("simple-r02-global", False), ("simple-r02-direct", True), ("medium-r02-global", False), ("medium-r02-direct", True), ("complex-r02-global", False), ("complex-r02-direct", True)])
         self.assertTrue(all(call["plan_exists"] for call in calls))
-        self.assertTrue(all(call["model"] == "gpt-5.6-sol" and call["effort"] == "ultra" and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in calls))
+        self.assertTrue(all((call["model"], call["effort"]) == (("gpt-5.6-sol", "ultra") if call["direct"] else ("gpt-5.6-luna", "max")) and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in calls))
         self.assertTrue(all(Path(call["state_db"]).is_absolute() and Path(call["state_db"]).parent == Path(call["codex_home"]) for call in calls))
         self.assertTrue(all(call["benchmark_run_id"] == f"benchmark-{call['run_id']}" for call in calls))
         self.assertTrue(all(call["direct"] != call["bootstrap"] and call["entry"] is False and call["entry_env_present"] is False for call in calls))
@@ -406,6 +442,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(plan["runs"][1]["environment"]["config_path"], str((root / "global-home" / "config.toml").resolve()))
         self.assertEqual(plan["runs"][0]["receipts"][0]["role"], "result-producer")
         self.assertEqual(plan["runs"][1]["receipts"][0]["role"], "result-producer")
+        self.assertEqual(plan["runs"][0]["selected_entry_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(plan["runs"][1]["selected_entry_pair"], "gpt-5.6-luna|max")
         self.assertEqual(plan["runs"][0]["environment"]["visible_catalog_sha256"], plan["runs"][1]["environment"]["visible_catalog_sha256"])
         self.assertEqual(plan["runs"][0]["environment"]["skills_catalog_file_count"], 2)
         self.assertEqual(plan["runs"][0]["environment"]["plugins_catalog_file_count"], 3)

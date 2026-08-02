@@ -53,6 +53,32 @@ LEVEL_VALUES = {"low", "medium", "high"}
 COMPLEXITY_VALUES = {"easy", "complex"}
 MODALITY_VALUES = {"text", "mixed", "image"}
 COMPLEXITY_BANDS = (("small", 0, 24), ("standard", 25, 49), ("complex", 50, 74), ("advanced", 75, 100))
+STEP_KINDS = {
+    "analysis",
+    "debugging",
+    "documentation",
+    "image-generation-control",
+    "implementation",
+    "integration",
+    "local-test",
+    "tool-execution",
+    "verification",
+    "visual-verification",
+    "general",
+}
+STRUCTURAL_CAPABILITY_PREFIXES = ("task-", "code-", "operation-", "modality-")
+DISTINCTIVE_CAPABILITY_TAGS = {
+    "api-integration",
+    "browser-automation",
+    "data-analysis",
+    "file-transformation",
+    "image-generation",
+    "local-test",
+    "prompt-engineering",
+    "tool-control",
+    "unity-workflow",
+    "visual-verification",
+}
 MODEL_SWITCH_CATEGORIES = (
     "normal-script-update",
     "code-design",
@@ -91,6 +117,14 @@ FRONTMATTER_FIELDS = (
     "complexity_band",
     "risk",
     "ambiguity",
+    "step_kind",
+    "capability_tags",
+    "capability_fingerprint",
+    "entry_model",
+    "entry_effort",
+    "entry_pair",
+    "entry_anchor_pair",
+    "entry_source",
     "model",
     "effort",
     "pair",
@@ -206,13 +240,164 @@ def _record_complexity_band(record):
     return "complex" if record.get("complexity") == "complex" else "standard"
 
 
-def _query(project_root, task_type, module, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary=""):
+def _contains_capability_term(text, *terms):
+    for term in terms:
+        if any("\u4e00" <= character <= "\u9fff" for character in term):
+            if term in text:
+                return True
+        elif re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text):
+            return True
+    return False
+
+
+def _normalize_explicit_capability_tags(capability_tags):
+    if capability_tags is None:
+        return []
+    if isinstance(capability_tags, str):
+        values = re.split(r"[,\s]+", capability_tags)
+    elif isinstance(capability_tags, (list, tuple, set)):
+        values = list(capability_tags)
+    else:
+        raise ValueError("capability_tags must be a string or a list of slugs")
+    normalized = []
+    for value in values:
+        if not str(value or "").strip():
+            continue
+        tag = _slug(value, "capability_tag")
+        if tag not in normalized:
+            normalized.append(tag)
+    if len(normalized) > 16:
+        raise ValueError("capability_tags may contain at most 16 tags")
+    return normalized
+
+
+def task_capability_profile(task_type, code_kind="general", operation="work", modality="text", complexity_score=35, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None):
+    """Build a sanitized, deterministic step-capability identity.
+
+    Explicit tags are authoritative. Without them, a bounded bilingual keyword
+    vocabulary derives only durable capability categories; raw task text is
+    never persisted in the fingerprint.
+    """
+    normalized_task_type = _slug(task_type, "task_type")
+    normalized_code_kind = _slug(code_kind, "code_kind")
+    normalized_operation = _slug(operation, "operation")
+    if modality not in MODALITY_VALUES or risk not in LEVEL_VALUES or ambiguity not in LEVEL_VALUES:
+        raise ValueError("modality, risk, or ambiguity is invalid")
+    band = complexity_band(complexity_score)
+    summary = _single_line(task_summary, "task_summary", required=False).lower()
+    explicit_tags = _normalize_explicit_capability_tags(capability_tags)
+    tags = {
+        f"task-{normalized_task_type}",
+        f"code-{normalized_code_kind}",
+        f"operation-{normalized_operation}",
+        f"modality-{modality}",
+    }
+    if normalized_task_type in {"code", "script", "normal-script-update"} and normalized_operation in {"edit", "fix", "implement", "modify", "replace", "update", "work", "write"}:
+        tags.add("code-authoring")
+    if normalized_task_type in {"debug", "finding-bugs"} or normalized_operation in {"debug", "diagnose", "fix", "repair"}:
+        tags.add("debugging")
+    if normalized_operation == "test":
+        tags.add("local-test")
+    elif normalized_operation in {"audit", "review", "verify", "validation"}:
+        tags.add("verification")
+    if normalized_operation in {"execute", "command"}:
+        tags.add("command-execution")
+    if explicit_tags:
+        tags.update(explicit_tags)
+    else:
+        if normalized_task_type in {"debug", "finding-bugs"} or normalized_operation in {"debug", "diagnose", "fix", "repair"} or _contains_capability_term(summary, "debug", "diagnose", "bug", "调试", "排错", "修复"):
+            tags.add("debugging")
+        if normalized_operation == "test" or _contains_capability_term(summary, "local test", "unit test", "pytest", "unittest", "regression test", "本地测试", "单元测试", "回归测试"):
+            tags.add("local-test")
+        elif normalized_operation in {"audit", "review", "verify", "validation"} or _contains_capability_term(summary, "verify", "validation", "audit", "review", "验证", "复核", "审计"):
+            tags.add("verification")
+        if _contains_capability_term(summary, "image generation", "image generator", "generate image", "generate images", "generates image", "generates images", "generated image", "generated images", "imagegen", "text to image", "图片生成", "生成图片", "生成图像", "生图"):
+            tags.add("image-generation")
+        if _contains_capability_term(summary, "control", "controller", "automate", "automation", "invoke", "drive", "控制", "调用", "驱动", "自动化"):
+            tags.add("tool-control")
+        if _contains_capability_term(summary, "visual inspection", "visual compare", "rendered output", "pixel", "视觉检查", "视觉对比", "渲染结果"):
+            tags.add("visual-verification")
+        if _contains_capability_term(summary, "browser", "playwright", "chrome", "浏览器"):
+            tags.add("browser-automation")
+        if _contains_capability_term(summary, "api", "endpoint", "webhook", "接口"):
+            tags.add("api-integration")
+        if _contains_capability_term(summary, "unity", "game engine", "游戏引擎"):
+            tags.add("unity-workflow")
+        if normalized_task_type in {"prompt", "documentation-instructions"} or _contains_capability_term(summary, "prompt", "提示词"):
+            tags.add("prompt-engineering")
+        if _contains_capability_term(summary, "data analysis", "analytics", "dataset", "数据分析", "数据集"):
+            tags.add("data-analysis")
+        if _contains_capability_term(summary, "convert file", "transform file", "export file", "文件转换", "导出文件"):
+            tags.add("file-transformation")
+        if normalized_operation in {"execute", "command"} or _contains_capability_term(summary, "run command", "execute command", "运行命令", "执行命令"):
+            tags.add("command-execution")
+    if step_kind:
+        normalized_step_kind = _slug(step_kind, "step_kind")
+        if normalized_step_kind not in STEP_KINDS:
+            raise ValueError(f"step_kind must be one of {', '.join(sorted(STEP_KINDS))}")
+    elif {"image-generation", "tool-control"}.issubset(tags):
+        normalized_step_kind = "image-generation-control"
+    elif "local-test" in tags:
+        normalized_step_kind = "local-test"
+    elif "visual-verification" in tags:
+        normalized_step_kind = "visual-verification"
+    elif "debugging" in tags:
+        normalized_step_kind = "debugging"
+    elif normalized_task_type == "integration" or normalized_operation == "integration":
+        normalized_step_kind = "integration"
+    elif "code-authoring" in tags:
+        normalized_step_kind = "implementation"
+    elif "command-execution" in tags or "tool-control" in tags:
+        normalized_step_kind = "tool-execution"
+    elif "verification" in tags:
+        normalized_step_kind = "verification"
+    elif normalized_task_type in {"document", "documentation-instructions", "prompt"}:
+        normalized_step_kind = "documentation"
+    elif normalized_task_type in {"question", "summary", "analysis"}:
+        normalized_step_kind = "analysis"
+    else:
+        normalized_step_kind = "general"
+    ordered_tags = sorted(tags)
+    payload = {
+        "task_type": normalized_task_type,
+        "code_kind": normalized_code_kind,
+        "operation": normalized_operation,
+        "modality": modality,
+        "complexity_band": band,
+        "risk": risk,
+        "ambiguity": ambiguity,
+        "step_kind": normalized_step_kind,
+        "capability_tags": ordered_tags,
+    }
+    fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    semantic_tags = [tag for tag in ordered_tags if not tag.startswith(STRUCTURAL_CAPABILITY_PREFIXES)]
+    return {"step_kind": normalized_step_kind, "capability_tags": ordered_tags, "semantic_capability_tags": semantic_tags, "capability_fingerprint": fingerprint}
+
+
+def _record_capability_profile(record):
+    stored_tags = record.get("capability_tags")
+    return task_capability_profile(
+        record.get("task_type") or "question",
+        record.get("code_kind") or "general",
+        record.get("operation") or "work",
+        record.get("modality") or "text",
+        _legacy_complexity_score(record.get("complexity") or "easy") if not isinstance(record.get("complexity_score"), int) else record["complexity_score"],
+        record.get("risk") or "low",
+        record.get("ambiguity") or "low",
+        record.get("task_summary") or "",
+        record.get("step_kind") or "",
+        stored_tags if isinstance(stored_tags, list) else None,
+    )
+
+
+def _query(project_root, task_type, module, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None):
     project = project_change_memory._project_identity(project_root)
     if modality not in MODALITY_VALUES or complexity not in COMPLEXITY_VALUES or risk not in LEVEL_VALUES or ambiguity not in LEVEL_VALUES:
         raise ValueError("modality, complexity, risk, or ambiguity is invalid")
     score = _legacy_complexity_score(complexity) if complexity_score is None else complexity_score
     band = complexity_band(score)
     derived_complexity = "complex" if score >= 50 else "easy"
+    capability = task_capability_profile(task_type, code_kind, operation, modality, score, risk, ambiguity, task_summary, step_kind, capability_tags)
     return {
         "project": project,
         "task_type": _slug(task_type, "task_type"),
@@ -228,6 +413,7 @@ def _query(project_root, task_type, module, file_value="", symbol="", code_kind=
         "complexity_band": band,
         "risk": risk,
         "ambiguity": ambiguity,
+        **capability,
     }
 
 
@@ -253,7 +439,7 @@ def _memory_root(query, vault):
     vault_path = project_change_memory._resolve_vault(vault)
     if vault_path is None:
         return None, None
-    owner = project_change_memory._registered_owner(query["project"]["root"])
+    owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
     if owner is None:
         return vault_path, None
     return vault_path, _memory_root_owner(vault_path, owner)
@@ -322,7 +508,16 @@ def _read_project_records(memory_root):
 def _scope_score(record, query):
     if record.get("task_type") != query["task_type"]:
         return None
+    try:
+        record_capability = _record_capability_profile(record)
+    except ValueError:
+        return None
+    if record_capability["capability_fingerprint"] != query["capability_fingerprint"]:
+        return None
     module_match = record.get("module") == query["module"]
+    distinctive = bool(set(query["semantic_capability_tags"]) & DISTINCTIVE_CAPABILITY_TAGS)
+    if not module_match and not distinctive:
+        return None
     file_match = bool(query["file"] and module_match and record.get("file") == query["file"])
     symbol_match = bool(query["symbol"] and file_match and record.get("symbol") == query["symbol"])
     if symbol_match:
@@ -361,10 +556,69 @@ def _best_scope_records(records, query):
     return selected, level, best_score
 
 
-def _cold_start(shared, query, pairs):
+def _transferable_local_records(records, query):
+    """Reuse only an exact step-capability identity across project roots."""
+    required_fields = ("task_type", "code_kind", "operation", "modality", "risk", "ambiguity")
+    current_project_key = query["project"]["key"]
+    distinctive = bool(set(query["semantic_capability_tags"]) & DISTINCTIVE_CAPABILITY_TAGS)
+    transferable = []
+    for record in records:
+        if record.get("project_key") == current_project_key:
+            continue
+        if any(record.get(field) != query[field] for field in required_fields):
+            continue
+        try:
+            record_capability = _record_capability_profile(record)
+        except ValueError:
+            continue
+        if record_capability["capability_fingerprint"] != query["capability_fingerprint"]:
+            continue
+        if record.get("module") != query["module"] and not distinctive:
+            continue
+        if _record_complexity_band(record) != query["complexity_band"]:
+            continue
+        if _quality_verdict(record) is None:
+            continue
+        transferable.append(record)
+    return transferable
+
+
+def _entry_context(shared, pairs, entry_model="", entry_effort=""):
+    model = _single_line(entry_model, "entry_model", required=False, maximum=120)
+    effort = _single_line(entry_effort, "entry_effort", required=False, maximum=40)
+    if bool(model) != bool(effort):
+        raise ValueError("entry_model and entry_effort must be provided together")
+    if not model:
+        return {"entry_model": None, "entry_effort": None, "entry_pair": None, "entry_anchor_pair": None, "entry_source": "unavailable"}
+    entry_pair = f"{model}|{effort}"
+    if entry_pair in pairs:
+        return {"entry_model": model, "entry_effort": effort, "entry_pair": entry_pair, "entry_anchor_pair": entry_pair, "entry_source": "active_quality_pair"}
+    model_rows = {row["id"]: row for row in shared.get("models", []) if isinstance(row, dict) and isinstance(row.get("id"), str)}
+    if model in model_rows:
+        supported = [candidate for candidate in pairs if candidate.startswith(f"{model}|")]
+        effort_order = shared.get("effort_order", [])
+        requested_index = effort_order.index(effort) if effort in effort_order else -1
+        eligible = [candidate for candidate in supported if candidate.split("|", 1)[1] in effort_order and effort_order.index(candidate.split("|", 1)[1]) <= requested_index]
+        anchor_pair = eligible[-1] if eligible else supported[0] if supported else None
+        return {"entry_model": model, "entry_effort": effort, "entry_pair": entry_pair, "entry_anchor_pair": anchor_pair, "entry_source": "normalized_active_quality_pair" if anchor_pair else "unranked"}
+    catalog_row = next((row for row in shared.get("catalog_models", []) if isinstance(row, dict) and row.get("id") == model), None)
+    priority = shared.get("priority_producer")
+    if catalog_row is not None or isinstance(priority, dict) and priority.get("id") == model:
+        return {"entry_model": model, "entry_effort": effort, "entry_pair": entry_pair, "entry_anchor_pair": pairs[0], "entry_source": "catalog_lower_anchor"}
+    return {"entry_model": model, "entry_effort": effort, "entry_pair": entry_pair, "entry_anchor_pair": None, "entry_source": "unranked"}
+
+
+def _static_cold_start(shared, query, pairs):
     levels = shared.get("cold_start_defaults", {}).get(query["task_type"], {})
     pair = levels.get(query["complexity"], shared["default_cold_start"])
     return pair if pair in pairs else shared["default_cold_start"]
+
+
+def _cold_start(shared, query, pairs, entry_anchor_pair=None):
+    static_pair = _static_cold_start(shared, query, pairs)
+    if entry_anchor_pair not in pairs:
+        return static_pair, static_pair
+    return pairs[min(pairs.index(static_pair), pairs.index(entry_anchor_pair))], static_pair
 
 
 def _quality_verdict(record):
@@ -445,7 +699,7 @@ def _like_for_like_cost_scores(records, passing_pairs):
     return scores, _cost_evidence("like_for_like", candidates, shared_hashes=common_hashes, scores=scores)
 
 
-def _active_recommendation(shared, pairs, query, records):
+def _active_recommendation(shared, pairs, query, records, entry_anchor_pair=None):
     verdicts = {}
     pass_counts = {pair: 0 for pair in pairs}
     quality_samples = 0
@@ -471,8 +725,11 @@ def _active_recommendation(shared, pairs, query, records):
     trial = False
     state = "cold_start"
     reason = "shared_cold_start"
+    static_cold_start = _static_cold_start(shared, query, pairs)
     if failed_pair is None and success_pair is None:
-        selected_pair = _cold_start(shared, query, pairs)
+        selected_pair, static_cold_start = _cold_start(shared, query, pairs, entry_anchor_pair)
+        if entry_anchor_pair in pairs and selected_pair == entry_anchor_pair and entry_anchor_pair != static_cold_start:
+            reason = "entry_anchored_cold_start"
     elif failed_pair is None:
         success_index = pairs.index(success_pair)
         if success_index == 0:
@@ -499,18 +756,12 @@ def _active_recommendation(shared, pairs, query, records):
             state = "blocked"
             reason = "quality_boundary_exhausted"
     else:
-        failed_index = pairs.index(failed_pair)
-        success_index = pairs.index(success_pair)
-        untested = [pair for pair in pairs[failed_index + 1:success_index] if pair not in verdicts]
-        if untested:
-            selected_pair = untested[0]
-            trial = True
-            state = "quality_boundary"
-            reason = "quality_boundary_gap_trial"
-        else:
-            selected_pair = min(passing_pairs, key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair))) if cost_scores else success_pair
-            state = "frozen"
-            reason = "receipt_cost_best_verified" if cost_scores else "verified_quality_boundary"
+        # A verified recovery pair is the durable boundary for the next highly
+        # similar step. Do not immediately retry an untested gap and recreate a
+        # failure the user already paid to recover from.
+        selected_pair = min(passing_pairs, key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair))) if cost_scores else success_pair
+        state = "frozen"
+        reason = "receipt_cost_best_verified" if cost_scores else "verified_quality_boundary"
     return {
         "selected_pair": selected_pair,
         "trial": trial,
@@ -522,6 +773,8 @@ def _active_recommendation(shared, pairs, query, records):
         "pass_counts": {pair: count for pair, count in pass_counts.items() if count},
         "minimum_passes_before_downgrade": MIN_REAL_PASSES_BEFORE_DOWNGRADE,
         "cost_evidence": cost_evidence,
+        "static_cold_start": static_cold_start,
+        "entry_route_reason": "history_verified_selection" if quality_samples else "entry_anchor_selected" if entry_anchor_pair in pairs and selected_pair == entry_anchor_pair and entry_anchor_pair != static_cold_start else "contextual_static_below_entry" if entry_anchor_pair in pairs and selected_pair == static_cold_start and entry_anchor_pair != static_cold_start else "history_or_shared_selection",
     }
 
 
@@ -546,7 +799,14 @@ def _priority_producer_pair(shared, query):
 
 
 def _priority_history(records, query, priority_pair):
-    relevant = [record for record in records if record.get("task_type") == query["task_type"] and record.get("operation") == query["operation"] and record.get("code_kind") == query["code_kind"] and _record_complexity_band(record) == query["complexity_band"] and record.get("pair") == priority_pair]
+    relevant = []
+    for record in records:
+        try:
+            capability_match = _record_capability_profile(record)["capability_fingerprint"] == query["capability_fingerprint"]
+        except ValueError:
+            capability_match = False
+        if capability_match and record.get("task_type") == query["task_type"] and record.get("operation") == query["operation"] and record.get("code_kind") == query["code_kind"] and _record_complexity_band(record) == query["complexity_band"] and record.get("pair") == priority_pair:
+            relevant.append(record)
     verdicts = [_quality_verdict(record) for record in relevant]
     if "fail" in verdicts:
         return {"verdict": "fail", "pass_count": verdicts.count("pass"), "matched_records": len(relevant)}
@@ -562,17 +822,27 @@ def _operational_fallback_pair(selected_pair, pairs):
     return pairs[selected_index + 1] if selected_index + 1 < len(pairs) else None
 
 
-def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", vault=None, ladder=DEFAULT_LADDER, local_store=None):
+def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None):
     shared, pairs = load_shared_ladder(ladder)
-    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary)
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
+    entry = _entry_context(shared, pairs, entry_model, entry_effort)
     vault_path, memory_root = _memory_root(query, vault)
-    owner = project_change_memory._registered_owner(query["project"]["root"])
+    owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
     obsidian_configured = _is_configured_owner(vault_path, owner)
-    local_records = [record for record in _read_local_records(local_store) if project_change_memory._record_matches_project(record, query["project"])]
+    all_local_records = _read_local_records(local_store)
+    local_records = [record for record in all_local_records if project_change_memory._record_matches_project(record, query["project"])]
     obsidian_records = [record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])]
     project_records = _merge_model_records(local_records, obsidian_records)
     records, specificity, score = _best_scope_records(project_records, query)
-    active = _active_recommendation(shared, pairs, query, records)
+    transfer_records = []
+    if not records or specificity == "project_task":
+        transfer_candidates = _transferable_local_records(all_local_records, query)
+        transfer_records, transfer_specificity, transfer_score = _best_scope_records(transfer_candidates, query)
+        if transfer_records and (not records or transfer_score > score):
+            records = transfer_records
+            specificity = f"cross_project_{transfer_specificity}"
+            score = transfer_score
+    active = _active_recommendation(shared, pairs, query, records, entry["entry_anchor_pair"])
     selected_pair = active["selected_pair"]
     priority_pair = _priority_producer_pair(shared, query)
     priority_history = _priority_history(project_records, query, priority_pair) if priority_pair else {"verdict": None, "pass_count": 0, "matched_records": 0}
@@ -583,7 +853,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         attempt_trial = priority_history["verdict"] != "pass"
         operational_fallback_pair = selected_pair
         switch_direction = "freeze" if priority_history["verdict"] == "pass" else "downgrade"
-        switch_change = f"{selected_pair}->{priority_pair}"
+        switch_change = f"{entry['entry_pair'] or selected_pair}->{priority_pair}"
     elif priority_pair and priority_history["verdict"] == "fail":
         attempt_pair = selected_pair
         attempt_reason = "spark_verify_failure_upgrade"
@@ -591,15 +861,20 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         attempt_trial = True
         operational_fallback_pair = _operational_fallback_pair(selected_pair, pairs)
         switch_direction = "upgrade"
-        switch_change = f"{priority_pair}->{selected_pair}"
+        switch_change = f"{entry['entry_pair'] or priority_pair}->{selected_pair}"
     else:
         attempt_pair = selected_pair
         attempt_reason = active["reason"]
         attempt_state = active["calibration_state"]
         attempt_trial = active["trial"]
         operational_fallback_pair = _operational_fallback_pair(selected_pair, pairs)
-        switch_direction = "downgrade" if "one_rung_down" in attempt_reason else "upgrade" if "one_rung_up" in attempt_reason or "quality_failure" in attempt_reason else "freeze" if attempt_state == "frozen" else "no_switch"
-        switch_change = f"{active['success_model'] or active['failed_model']}->{attempt_pair}" if active["success_model"] or active["failed_model"] else f"initial->{attempt_pair}"
+        if entry["entry_anchor_pair"] in pairs and attempt_pair in pairs:
+            entry_index = pairs.index(entry["entry_anchor_pair"])
+            attempt_index = pairs.index(attempt_pair)
+            switch_direction = "upgrade" if attempt_index > entry_index else "downgrade" if attempt_index < entry_index else "freeze" if attempt_state == "frozen" else "no_switch"
+        else:
+            switch_direction = "downgrade" if "one_rung_down" in attempt_reason else "upgrade" if "one_rung_up" in attempt_reason or "quality_failure" in attempt_reason else "freeze" if attempt_state == "frozen" else "no_switch"
+        switch_change = f"{entry['entry_pair']}->{attempt_pair}" if entry["entry_pair"] else f"{active['success_model'] or active['failed_model']}->{attempt_pair}" if active["success_model"] or active["failed_model"] else f"initial->{attempt_pair}"
     if attempt_pair is None:
         attempt_state = "blocked"
     attempt_model, attempt_effort = attempt_pair.split("|", 1) if attempt_pair else (None, None)
@@ -610,7 +885,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "memory_available": True,
         "local_memory_available": True,
         "obsidian_memory_available": obsidian_configured,
-        "selection_basis": "local_and_obsidian" if local_records and obsidian_records else "local_history" if local_records else "obsidian_history" if obsidian_records else "shared_cold_start",
+        "selection_basis": "local_transfer_history" if transfer_records and records is transfer_records else "local_and_obsidian" if records and local_records and obsidian_records else "local_history" if records and local_records else "obsidian_history" if records and obsidian_records else "entry_aware_cold_start" if entry["entry_anchor_pair"] else "shared_cold_start",
         "shared_model_registry": shared["registry_id"],
         "project_key": query["project"]["key"],
         "task_type": query["task_type"],
@@ -623,14 +898,25 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "complexity": query["complexity"],
         "complexity_score": query["complexity_score"],
         "complexity_band": query["complexity_band"],
+        "step_kind": query["step_kind"],
+        "capability_tags": query["capability_tags"],
+        "capability_fingerprint": query["capability_fingerprint"],
         "specificity": specificity,
         "specificity_score": score,
         "matched_records": len(records),
         "local_record_count": len(local_records),
         "obsidian_record_count": len(obsidian_records),
         "merged_record_count": len(project_records),
+        "transfer_record_count": len(transfer_records),
         "pending_projection_count": _pending_projection_count(local_store, query["project"]),
         "quality_samples": active["quality_samples"],
+        "entry_model": entry["entry_model"],
+        "entry_effort": entry["entry_effort"],
+        "entry_pair": entry["entry_pair"],
+        "entry_anchor_pair": entry["entry_anchor_pair"],
+        "entry_source": entry["entry_source"],
+        "static_cold_start": active["static_cold_start"],
+        "entry_route_reason": active["entry_route_reason"],
         "selected_pair": selected_pair,
         "selected_model": selected_model,
         "selected_effort": selected_effort,
@@ -665,6 +951,21 @@ def _receipt_pair(receipt):
     model = receipt.get("effective_model") or receipt.get("resolved_model") or receipt.get("requested_model")
     effort = receipt.get("effective_effort") or receipt.get("resolved_effort") or receipt.get("requested_effort")
     return f"{model}|{effort}" if model and effort else None
+
+
+def _receipt_entry(receipt):
+    context = receipt.get("model_learning_context") if isinstance(receipt.get("model_learning_context"), dict) else {}
+    entry_pair = receipt.get("entry_pair") or context.get("entry_pair")
+    entry_model = receipt.get("entry_model") or context.get("entry_model")
+    entry_effort = receipt.get("entry_effort") or context.get("entry_effort")
+    if isinstance(entry_pair, str) and "|" in entry_pair:
+        pair_model, pair_effort = entry_pair.split("|", 1)
+        if entry_model not in {None, pair_model} or entry_effort not in {None, pair_effort}:
+            raise ValueError("receipt entry identity is inconsistent")
+        entry_model, entry_effort = pair_model, pair_effort
+    if bool(entry_model) != bool(entry_effort):
+        raise ValueError("receipt entry identity is incomplete")
+    return entry_model or "", entry_effort or "", receipt.get("entry_source") or context.get("entry_source") or "receipt"
 
 
 def _atomic_write(path, text):
@@ -871,14 +1172,20 @@ def rebuild_model_switches(project_root, *, vault=None):
         sections = {"normal-script-update": "Normal Script Update", "code-design": "Code Design", "finding-bugs": "Finding Bugs", "documentation-instructions": "Documentation and Instructions", "tests-verification": "Tests and Verification", "general-work": "General Work"}
         lines = [heading.rstrip(), "", "This page is the global human-readable projection of the local receipt-backed routing history. Structured records are embedded below.", ""]
         for category, label in sections.items():
-            lines.extend(["## " + label, "", "| Task type | Score | Module | File / symbol | Model | Prior / selected / effective / next | Direction / reason | Outcome / recovery | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
+            lines.extend(["## " + label, "", "| Task type | Step / capability | Score | Module | File / symbol | Entry / selected / effective / next | Direction / reason | Outcome / recovery | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
             for record in records:
                 if _task_category(record) != category:
                     continue
                 detail = _switch_details(record)
                 outcome_reason = str(record.get("outcome_reason") or record.get("failure_class") or "—").replace("|", "/")
                 recovery = record.get("recovery_from_pair") or "—"
-                lines.append(f"| {record.get('task_type','')} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('model','')} / {record.get('effort','')} | {detail['prior_pair'] or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
+                try:
+                    capability = _record_capability_profile(record)
+                except ValueError:
+                    capability = {"step_kind": "general", "semantic_capability_tags": [], "capability_fingerprint": ""}
+                capability_text = ", ".join(capability["semantic_capability_tags"]) or "structural"
+                fingerprint_short = capability["capability_fingerprint"][:12] or "—"
+                lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {fingerprint_short} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
                 lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
             lines.append("")
         # Preserve unexpected records byte-semantically without displaying them
@@ -900,7 +1207,7 @@ def _project_record_to_obsidian(project_root, record, vault=None, local_store=No
     vault_path = project_change_memory._resolve_vault(vault)
     if vault_path is None:
         return {"status": "unavailable", "written": False, "reason": "obsidian_vault_unavailable"}
-    owner = project_change_memory._registered_owner(project["root"])
+    owner = project.get("owner") or project_change_memory._registered_owner(project["root"])
     memory_root = _memory_root_owner(vault_path, owner)
     if memory_root is None or not _is_configured_owner(vault_path, owner):
         return {"status": "pending", "written": False, "reason": "unregistered_or_unknown_project_root"}
@@ -940,9 +1247,9 @@ def reconcile_local_model_history(project_root, *, vault=None, local_store=None)
     return {"status": "written" if projected else "pending" if pending else "up-to-date", "written": projected > 0, "projected": projected, "pending": pending, "latest": latest}
 
 
-def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0):
+def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0):
     shared, pairs = load_shared_ladder(ladder)
-    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary)
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
     if real_status not in {"pass", "fail"} or failure_class not in FAILURE_CLASSES:
         raise ValueError("Real status or failure class is invalid")
     receipt_path = Path(receipt_path).expanduser().resolve()
@@ -950,6 +1257,11 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     receipt_sha256 = hashlib.sha256(receipt_bytes).hexdigest()
     receipt = json.loads(receipt_bytes.decode("utf-8"))
     pair = _receipt_pair(receipt)
+    receipt_entry_model, receipt_entry_effort, receipt_entry_source = _receipt_entry(receipt)
+    if entry_model and receipt_entry_model and (entry_model, entry_effort) != (receipt_entry_model, receipt_entry_effort):
+        raise ValueError("receipt entry identity does not match the recording scope")
+    resolved_entry_model = receipt_entry_model or entry_model
+    resolved_entry_effort = receipt_entry_effort or entry_effort
     priority_producer = shared.get("priority_producer")
     priority_pairs = {f"{priority_producer['id']}|{effort}" for effort in priority_producer["adaptive_efforts"]} if isinstance(priority_producer, dict) and priority_producer.get("enabled") is True else set()
     if pair not in set(pairs) | priority_pairs:
@@ -968,7 +1280,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         raise ValueError("a quality failure requires Real=fail and a matched passing producer receipt")
     if failure_class in OPERATIONAL_FAILURES and real_status != "fail":
         raise ValueError("an operational failure requires Real=fail")
-    owner = project_change_memory._registered_owner(query["project"]["root"])
+    owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
     outcome_reason = _single_line(outcome_reason or ("Real verification passed." if real_status == "pass" else f"Real verification failed: {failure_class}."), "outcome_reason", maximum=280)
     if isinstance(verification_count, bool) or not isinstance(verification_count, int) or verification_count < 0:
         raise ValueError("verification_count must be a non-negative integer")
@@ -986,6 +1298,10 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         risk=risk,
         ambiguity=ambiguity,
         task_summary=task_summary,
+        step_kind=query["step_kind"],
+        capability_tags=query["capability_tags"],
+        entry_model=resolved_entry_model,
+        entry_effort=resolved_entry_effort,
         vault=vault,
         ladder=ladder,
         local_store=local_store,
@@ -1043,6 +1359,14 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "complexity_band": query["complexity_band"],
         "risk": query["risk"],
         "ambiguity": query["ambiguity"],
+        "step_kind": query["step_kind"],
+        "capability_tags": query["capability_tags"],
+        "capability_fingerprint": query["capability_fingerprint"],
+        "entry_model": recommendation["entry_model"],
+        "entry_effort": recommendation["entry_effort"],
+        "entry_pair": recommendation["entry_pair"],
+        "entry_anchor_pair": recommendation["entry_anchor_pair"],
+        "entry_source": receipt_entry_source if recommendation["entry_pair"] else recommendation["entry_source"],
         "model": pair.split("|", 1)[0],
         "effort": pair.split("|", 1)[1],
         "pair": pair,
@@ -1104,6 +1428,11 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "outcome_reason": stored_record["outcome_reason"],
         "complexity_score": stored_record["complexity_score"],
         "complexity_band": stored_record["complexity_band"],
+        "step_kind": stored_record["step_kind"],
+        "capability_tags": stored_record["capability_tags"],
+        "capability_fingerprint": stored_record["capability_fingerprint"],
+        "entry_pair": stored_record["entry_pair"],
+        "entry_anchor_pair": stored_record["entry_anchor_pair"],
         "switch_direction": stored_record["switch_direction"],
         "switch_reason": stored_record["switch_reason"],
         "next_pair": stored_record["next_pair"],
@@ -1127,7 +1456,7 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local
     output = {"status": "ready", "authority": "dual_local_and_obsidian", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "local_store": str(local_path), "local_records": len(local_records), "vault": str(vault_path) if vault_path else "", "obsidian_available": vault_path is not None}
     if project_root:
         project = project_change_memory._project_identity(project_root)
-        owner = project_change_memory._registered_owner(project["root"])
+        owner = project.get("owner") or project_change_memory._registered_owner(project["root"])
         _, page = _memory_root(_query(project_root, "script", "general"), vault)
         memory_available = _is_configured_owner(vault_path, owner)
         if owner is None:
@@ -1167,6 +1496,10 @@ def _add_scope_arguments(parser, *, summary_required=False):
     parser.add_argument("--risk", choices=sorted(LEVEL_VALUES), default="low")
     parser.add_argument("--ambiguity", choices=sorted(LEVEL_VALUES), default="low")
     parser.add_argument("--task-summary", required=summary_required, default="")
+    parser.add_argument("--step-kind", choices=sorted(STEP_KINDS), default="")
+    parser.add_argument("--capability-tag", action="append", default=[])
+    parser.add_argument("--entry-model", default="")
+    parser.add_argument("--entry-effort", default="")
 
 
 def parse_args(argv=None):
@@ -1208,7 +1541,7 @@ def main(argv=None):
     elif args.command == "reconcile":
         output = reconcile_local_model_history(args.project_root, vault=args.vault, local_store=args.local_store)
     else:
-        scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, **common}
+        scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, "step_kind": args.step_kind, "capability_tags": args.capability_tag, "entry_model": args.entry_model, "entry_effort": args.entry_effort, **common}
         if args.command == "recommend":
             output = recommend_model(args.project_root, args.task_type, args.module, **scope)
         else:

@@ -31,6 +31,6 @@ Eligible single-node text/code production enters the compact adaptive runner exa
 - The origin creates and links one persistent End Task per independent real check, then returns without polling. FAIL creates a separate repair task and fresh verifier.
 - Runtime receipts prove observed routing; labels and availability probes do not.
 - Direct uses the exact raw prompt through `--direct-task`; Auto uses it through `--bootstrap-task`.
-- The public two-world comparison is Direct task with zero verifier versus Auto task plus separate Ending. The common Sol-ultra dispatcher/controller is disclosed but excluded from those task/check worlds.
+- The public two-world comparison is fixed Sol-ultra Direct task with zero verifier versus Luna-max-entry Auto task plus separate Ending. Direct includes its Sol producer; Auto excludes only its Luna-max entry controller and must include every adaptive child/graph session in task cost.
 - Savings require complete like-for-like evidence per task class. Logical tokens are not billing tokens.
 - Do not publish or push unless explicitly requested.

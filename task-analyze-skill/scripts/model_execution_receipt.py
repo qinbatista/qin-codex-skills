@@ -29,6 +29,17 @@ except ModuleNotFoundError:
     parse_model_effort_pair = _routing_policy.parse_model_effort_pair
     pair_text = _routing_policy.pair_text
 
+try:
+    from benchmark_prompt_contract import auto_benchmark_execution_prompt
+except ModuleNotFoundError:
+    import importlib.util
+
+    _benchmark_prompt_path = Path(__file__).with_name("benchmark_prompt_contract.py")
+    _benchmark_prompt_spec = importlib.util.spec_from_file_location("task_analyze_benchmark_prompt_contract", _benchmark_prompt_path)
+    _benchmark_prompt_contract = importlib.util.module_from_spec(_benchmark_prompt_spec)
+    _benchmark_prompt_spec.loader.exec_module(_benchmark_prompt_contract)
+    auto_benchmark_execution_prompt = _benchmark_prompt_contract.auto_benchmark_execution_prompt
+
 ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER"}
 RESULT_READY_BEGIN = "RESULT_READY_BEGIN"
 RESULT_READY_END = "RESULT_READY_END"
@@ -611,8 +622,49 @@ def normalize_usage(usage):
     return {"input_tokens": input_tokens, "cached_input_tokens": cached_input_tokens, "uncached_input_tokens": uncached_input_tokens, "output_tokens": output_tokens, "reasoning_output_tokens": reasoning_output_tokens, "total_tokens": total_tokens}
 
 
+def benchmark_auto_launch_evidence(cache_root, workload_sha256):
+    empty_evidence = {"verified": False, "workspace_count": 0, "bridge_result_verified": False, "bridge_result_text": None}
+    try:
+        claim = json.loads((cache_root / "adaptive-entry-launch.json").read_text(encoding="utf-8"))
+        workspaces = sorted(path for path in cache_root.glob("source-copy-*") if path.is_dir())
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return empty_evidence
+    verified = claim == {"schema_version": 1, "workload_sha256": workload_sha256} and len(workspaces) == 1
+    result_text = None
+    bridge_result_verified = False
+    if verified:
+        output_root = workspaces[0] / "Cache" / "task-analyze" / "bridge-output"
+        try:
+            candidate_text = (output_root / "result.json").read_text(encoding="utf-8")
+            bridge_receipt = strict_json_loads((output_root / "receipt.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+        else:
+            receipt_result = candidate_text[:-1] if candidate_text.endswith("\n") else candidate_text
+            result_payload = receipt_result.lstrip("\ufeff")
+            if result_payload.startswith("Complexity:"):
+                disclosure_end = result_payload.find("\n\n")
+                result_payload = result_payload[disclosure_end + 2:] if disclosure_end >= 0 else ""
+            try:
+                candidate_document = strict_json_loads(result_payload)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                candidate_document = None
+            bridge_result_verified = isinstance(candidate_document, dict) and isinstance(bridge_receipt, dict) and bridge_receipt.get("status") == "pass" and bridge_receipt.get("result_published") is True and bridge_receipt.get("duplicate_result_detected") is False and bridge_receipt.get("output_sha256") == sha256_text(result_payload)
+            if bridge_result_verified:
+                result_text = result_payload
+    return {"verified": verified, "workspace_count": len(workspaces), "bridge_result_verified": bridge_result_verified, "bridge_result_text": result_text}
+
+
 def run_receipt(args, prompt_text):
     authorization = authorize_receipt_run(args)
+    benchmark_prompt_path = None
+    if getattr(args, "bootstrap_task", False):
+        try:
+            benchmark_prompt_path = Path(args.benchmark_prompt_path).expanduser().resolve(strict=True)
+        except (OSError, TypeError):
+            raise ReceiptAuthorizationError("bootstrap_task_prompt_path_invalid")
+        if not benchmark_prompt_path.is_file() or sha256_text(benchmark_prompt_path.read_text(encoding="utf-8")) != sha256_text(prompt_text):
+            raise ReceiptAuthorizationError("bootstrap_task_prompt_path_mismatch")
     requested_pair_tuple = parse_model_effort_pair(pair_text(args.model, args.effort))
     allowed_fallback_pairs = normalize_fallback_pairs(getattr(args, "allow_fallback", []))
     requested_pair = requested_pair_tuple
@@ -633,7 +685,9 @@ def run_receipt(args, prompt_text):
     ]
     command.extend(["--ignore-user-config"] if args.ignore_user_config else [])
     command.append("-")
-    if args.entry_task or getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):
+    if getattr(args, "bootstrap_task", False):
+        execution_prompt = auto_benchmark_execution_prompt(prompt_text)
+    elif args.entry_task or getattr(args, "direct_task", False):
         execution_prompt = prompt_text
     else:
         marker = getattr(args, "route_marker", "LOCKED_ROUTE_NODE")
@@ -655,12 +709,21 @@ def run_receipt(args, prompt_text):
     if (benchmark_stream_ready or stream_result_ready) and args.result_output.exists():
         args.result_output.unlink()
     command_environment = None
+    benchmark_cache_root = None
     if args.entry_task:
         command_environment = os.environ.copy()
         command_environment[ENTRY_CONTEXT_ENV] = "1"
     elif getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):
         command_environment = os.environ.copy()
         command_environment.pop(ENTRY_CONTEXT_ENV, None)
+        if getattr(args, "bootstrap_task", False):
+            command_environment["CODEX_AUTO_BENCHMARK_PROMPT_PATH"] = str(benchmark_prompt_path)
+            command_environment["CODEX_AUTO_BENCHMARK_WORKLOAD_SHA256"] = sha256_text(prompt_text)
+            command_environment["CODEX_AUTO_BENCHMARK_CODEX_BIN"] = args.codex_bin
+            command_environment["CODEX_AUTO_BENCHMARK_CHILD_TIMEOUT"] = str(max(args.timeout - 90, 60))
+            command_environment["CODEX_AUTO_BENCHMARK_PYTHON"] = str(Path(sys.executable).resolve(strict=True))
+            benchmark_cache_root = Path(args.result_output).parent / "auto-route-cache" if args.result_output is not None else Path(args.workdir) / "Cache" / "task-analyze" / args.workload_id
+            command_environment["CODEX_AUTO_BENCHMARK_CACHE_ROOT"] = str(benchmark_cache_root)
     if benchmark_stream_ready or stream_result_ready:
         stream_mode = "benchmark" if benchmark_stream_ready else "production"
         streamed_process = run_streaming_result_process(command, execution_prompt, args, command_environment or os.environ.copy(), stream_mode)
@@ -682,8 +745,21 @@ def run_receipt(args, prompt_text):
         else:
             process_stdout = process.stdout.decode("utf-8", errors="replace") if isinstance(process.stdout, bytes) else process.stdout or ""
             process_stderr = process.stderr.decode("utf-8", errors="replace") if isinstance(process.stderr, bytes) else process.stderr or ""
-    elapsed_ms = round((time.perf_counter_ns() - started) / 1_000_000)
+    benchmark_launch_required = bool(getattr(args, "bootstrap_task", False) and args.result_output is not None)
+    benchmark_launch_evidence = benchmark_auto_launch_evidence(benchmark_cache_root, sha256_text(prompt_text)) if benchmark_launch_required else None
     stdout_summary = parse_stdout_events(process_stdout)
+    benchmark_result_source = "controller_final" if benchmark_stream_ready and streamed_matching_result is not None else None
+    terminal_agent_message = extract_last_agent_message(process_stdout)
+    bridge_handoff_allowed = benchmark_launch_required and streamed_matching_result is None and not duplicate_result_detected and not timed_out and process is not None and process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and isinstance(stdout_summary.get("thread_id"), str) and bool(stdout_summary["thread_id"]) and terminal_agent_message is not None and not terminal_agent_message.strip() and benchmark_launch_evidence["bridge_result_verified"] is True
+    if bridge_handoff_allowed:
+        streamed_matching_result = benchmark_launch_evidence["bridge_result_text"]
+        atomic_write_private_text(args.result_output, streamed_matching_result + "\n")
+        result_ready_monotonic_ns = time.monotonic_ns()
+        result_ready_callback = getattr(args, "result_ready_callback", None)
+        if callable(result_ready_callback):
+            result_ready_callback(args.result_output, result_ready_monotonic_ns, stdout_summary["thread_id"])
+        benchmark_result_source = "adaptive_bridge_handoff"
+    elapsed_ms = round((time.perf_counter_ns() - started) / 1_000_000)
     if benchmark_stream_ready or stream_result_ready:
         stdout_summary["output_hash"] = sha256_text(streamed_matching_result) if streamed_matching_result is not None else None
     thread_state = read_thread_state(args.state_db, stdout_summary["thread_id"])
@@ -708,9 +784,10 @@ def run_receipt(args, prompt_text):
     token_consistent = thread_state is not None and usage["total_tokens"] == thread_state.get("tokens_used")
     streamed_result_required = benchmark_stream_ready or stream_result_ready
     streamed_result_match = not streamed_result_required or streamed_matching_result is not None
-    status = "pass" if not timed_out and process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and pair_match and token_consistent and streamed_result_match and not duplicate_result_detected else "fail"
+    benchmark_launch_verified = not benchmark_launch_required or benchmark_launch_evidence["verified"] is True
+    status = "pass" if not timed_out and process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and pair_match and token_consistent and streamed_result_match and not duplicate_result_detected and benchmark_launch_verified else "fail"
     task_complete = rollout["task_complete"] or {}
-    failure_class = "timeout" if timed_out else "protocol" if streamed_result_required and (streamed_matching_result is None or duplicate_result_detected) else infer_failure_class(process, status, stdout_summary["turn_completed"], stdout_summary["turn_failed"], stdout_summary["availability_failure"], model_match, effort_match, pair_match, token_consistent)
+    failure_class = "timeout" if timed_out else "protocol" if (streamed_result_required and (streamed_matching_result is None or duplicate_result_detected)) or not benchmark_launch_verified else infer_failure_class(process, status, stdout_summary["turn_completed"], stdout_summary["turn_failed"], stdout_summary["availability_failure"], model_match, effort_match, pair_match, token_consistent)
     requested_pair = f"{args.model}|{args.effort}"
     attempt = route_attempt_summary(requested_pair=requested_pair, resolved_pair=(resolved_model, resolved_effort) if resolved_model and resolved_effort else None, effective_pair=(effective_model, resolved_effort) if effective_model and resolved_effort else None, status=status, model_match=model_match, effort_match=effort_match, pair_match=pair_match, process_elapsed_ms=elapsed_ms, task_complete=task_complete, execution_failure_class=failure_class, tokens=usage, thread_id=stdout_summary["thread_id"])
     if status == "pass":
@@ -718,6 +795,14 @@ def run_receipt(args, prompt_text):
     receipt = {"schema_version": 1, "proof_level": "local-operational-not-cryptographic", "workload_id": args.workload_id, "node_type": receipt_node_type(args), **authorization, "workload_prompt_sha256": sha256_text(prompt_text), "prompt_sha256": sha256_text(execution_prompt), "output_sha256": stdout_summary["output_hash"], "thread_id": stdout_summary["thread_id"], "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": resolved_model, "resolved_effort": resolved_effort, "resolved_pair": f"{resolved_model}|{resolved_effort}" if resolved_model and resolved_effort else None, "effective_model": effective_model, "effective_effort": resolved_effort, "effective_pair": f"{effective_model}|{resolved_effort}" if effective_model and resolved_effort else None, "reroutes": reroutes, "allowed_fallback_pairs": allowed_fallback_pairs, "model_match": model_match, "effort_match": effort_match, "pair_match": pair_match, "tokens": usage, "metrics_complete": not timed_out and stdout_summary["turn_completed"] and token_consistent, "tokens_lower_bound": timed_out and usage["total_tokens"] is not None, "pre_execution_failure": False, "availability": rollout.get("availability"), "state_tokens_used": (thread_state or {}).get("tokens_used"), "token_total_consistent": token_consistent, "model_turn_duration_ms": task_complete.get("duration_ms"), "time_to_first_token_ms": task_complete.get("time_to_first_token_ms"), "process_elapsed_ms": elapsed_ms, "exit_code": process.returncode if process is not None else None, "turn_completed": False if timed_out else stdout_summary["turn_completed"], "stderr_line_count": len(process_stderr.splitlines()), "cli_version": (thread_state or {}).get("cli_version"), "model_provider": (thread_state or {}).get("model_provider"), "source": (thread_state or {}).get("source"), "status": status, "recorded_at": datetime.now(timezone.utc).isoformat(), "limitations": "Resolved/effective values come from local Codex runtime metadata and reroute events; this is not a cryptographically signed backend attestation."}
     if getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):
         receipt["benchmark_run_id"] = args.benchmark_run_id
+        if benchmark_stream_ready:
+            receipt["benchmark_result_source"] = benchmark_result_source
+    if getattr(args, "bootstrap_task", False):
+        receipt["benchmark_prompt_file_verified"] = True
+        if benchmark_launch_required:
+            receipt["benchmark_auto_launch_verified"] = benchmark_launch_evidence["verified"]
+            receipt["benchmark_auto_workspace_count"] = benchmark_launch_evidence["workspace_count"]
+            receipt["benchmark_auto_bridge_result_verified"] = benchmark_launch_evidence["bridge_result_verified"]
     receipt["failure_class"] = failure_class
     receipt["route_attempts"] = [attempt]
     if streamed_result_required:
@@ -846,6 +931,7 @@ def parse_args(argv=None):
     task_mode.add_argument("--direct-task", action="store_true", help="Benchmark-only raw Direct arm. Requires --benchmark-run-id beginning with benchmark- and is forbidden inside Task Analyze entry context.")
     task_mode.add_argument("--bootstrap-task", action="store_true", help="Benchmark-only Global inline-bootstrap arm. Runs outside Task Analyze entry context and requires --benchmark-run-id.")
     run_parser.add_argument("--benchmark-run-id", help="Required sanitized benchmark-* identifier for --direct-task or --bootstrap-task; rejected for every other mode.")
+    run_parser.add_argument("--benchmark-prompt-path", type=Path, help="Frozen raw workload file required by --bootstrap-task; its UTF-8 content must exactly match stdin.")
     run_parser.add_argument("--route-marker", choices=sorted(ROUTE_MARKERS), default="LOCKED_ROUTE_NODE")
     run_parser.add_argument("--timeout", type=int, default=900)
     compare_parser = subparsers.add_parser("compare")

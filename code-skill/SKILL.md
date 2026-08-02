@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction, or in the Sol-ultra entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill for code implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
+description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill for code implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
 ---
 
 # Code Skill

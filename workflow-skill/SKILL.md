@@ -14,12 +14,12 @@ Admit a task graph when at least two bounded result segments have distinct owner
 Before making a savings claim, confirm that Task Analyze supplied comparable end-to-end evidence:
 
 - direct and Global cohorts share prompt/inputs, cwd, sandbox, user/project configuration, output contract, and acceptance;
-- public evidence compares exactly Direct task versus Auto task, then Direct task versus Auto task + Ending; entry/controller cost is a disclosed but excluded routing diagnostic;
+- public evidence compares fixed `gpt-5.6-sol|ultra` Direct task versus `gpt-5.6-luna|max`-entry Auto task, then Direct task versus Auto task + Ending; only the Auto entry controller is a disclosed/excluded routing diagnostic;
 - correctness passes and Global uses fewer total tokens and less critical-path time;
 - the selected pair is frozen, receipt-backed, Real-passing, and `trial=false`;
 - evidence is current, complete, and workload-comparable.
 
-If any performance item is missing, stale, cross-workload, incomplete, or negative, reject the savings claim, not a structurally valid task graph. Independent read-only sources keep their byte-cost admission and disjoint merge rules. Writable nodes must have non-overlapping ownership to run concurrently; shared files, mutable state, or output dependencies stay ordered. The generated shared ladder plus deduplicated local/Obsidian routing history admits cold start, one-rung downgrade/upgrade trial, or frozen reuse; missing Obsidian continues from local history and never blocks.
+If any performance item is missing, stale, cross-workload, incomplete, or negative, reject the savings claim, not a structurally valid task graph. Independent read-only sources keep their byte-cost admission and disjoint merge rules. Writable nodes must have non-overlapping ownership to run concurrently; shared files, mutable state, or output dependencies stay ordered. The generated shared ladder, observable entry pair, and deduplicated local/Obsidian routing history admit bidirectional routing: matching history wins, no-history cold start never exceeds the entry anchor, quality failure upgrades one rung, repeated Real PASS trials one rung down, and a stable lowest-correct pair freezes; missing Obsidian continues from local history and never blocks.
 
 ## Authority
 
@@ -51,7 +51,7 @@ Inline work uses one direct task action or direct execution surface, then shows 
 1. Execute only dependency-ready nodes. Parallelize safe independent branches; keep ordered, shared-state, irreversible, or output-dependent work sequential.
 2. Require each result and Ending node to retain its own score, band, selected pair, selection basis, purpose, dependencies, and stop condition in its receipt. Load each owning skill and only task-relevant references.
 3. Use one execution surface per branch. Collaboration prompts start `LOCKED_ROUTE_NODE`; do not repeat that branch in a dispatcher.
-4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; ordinary text/code starts on its contextual quality pair. One Real PASS retains the pair, two Real PASS results trial one rung down, and quality FAIL upgrades one rung. The final dynamic foreground and Ending manifests each carry `model_switch_summary`: every planned node is present, Ending nodes are pending before release then reconciled, and the aggregate names Spark use, quality/fallback/failure counts, parallel waves, and unsplit continuity groups. Code completion includes one bounded Quick Check before presentation, never a separate verifier.
+4. One admitted producer runs through `obsidian_adaptive_model_runner.py --emit-result`; ordinary text/code starts at the matching history boundary or, without history, the weaker of its contextual pair and entry anchor. One Real PASS retains the pair, two Real PASS results trial one rung down, and quality FAIL upgrades one rung. The final dynamic foreground and Ending manifests each carry `model_switch_summary`: every planned node is present, Ending nodes are pending before release then reconciled, and the aggregate names Spark use, quality/fallback/failure counts, parallel waves, and unsplit continuity groups. Code completion includes one bounded Quick Check before presentation, never a separate verifier.
 5. Only a real graph with at least two model-executed result nodes saves private schema-2 `dynamic_task_graph` JSON and calls `task_route_dispatcher.py run-plan <plan-file>` once. Independent writable nodes declare non-overlapping outputs; any shared target introduces an explicit dependency. Read-only source graphs additionally retain disjoint allowlists and dependency-only-or-fused merge rules.
 6. Respect authority. Do not push, publish, deploy, message, switch profiles, or perform irreversible work without user authorization.
 
@@ -90,7 +90,7 @@ Use runtime receipts only for delegated model nodes, explicit routing proof, or 
 
 `obsidian_adaptive_model_runner.py` reads the shared contract and merged project/task/module/file/symbol/code experience but never writes learning. It embeds a sanitized learning context in the private receipt. Ending Real writes the effective producer result, attempts, outcome reason, next/recovery pair, and score/band to the local routing ledger first, then projects the same event ID to broad `Model Switch.md`. Pending projections reconcile later. Operational failures are quality-neutral. End-to-end performance admission remains separate.
 
-Savings claims count every session once and test simple, medium, and complex separately. User-visible latency includes any required producer Quick Check and ends at completed-result presentation; detached Ending Real time is separate. A scheduled graph reports every branch and merge pair/token/time, not only its merge. A suite total never converts a losing class into a pass.
+Savings claims test simple, medium, and complex separately. Direct counts its fixed Sol-ultra producer; Auto excludes only its Luna-max entry controller and counts every adaptive task child/graph session once. User-visible latency includes any required producer Quick Check and ends at completed-result presentation; detached Ending Real time is separate. A scheduled graph reports every branch and merge pair/token/time, not only its merge. Every exact result and Ending must pass, and a suite total never converts a losing class into a pass.
 
 ## Prompt And Code Rules
 

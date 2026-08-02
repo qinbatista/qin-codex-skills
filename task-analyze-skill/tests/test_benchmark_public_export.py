@@ -52,26 +52,36 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         catalog = module.benchmark_suite_gate.catalog_snapshot(codex_home, config_path)
         return {"codex_home": str(codex_home), "config_path": str(config_path), "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(), "agents_path": str(agents_path), "agents_sha256": hashlib.sha256(agents_path.read_bytes()).hexdigest(), "models_cache_path": str(models_cache_path), "models_cache_sha256": module.benchmark_suite_gate.models_cache_sha256(models_cache_path), "memories_root": str(memories_root), "memories_sha256": module.benchmark_suite_gate.sha256_source_tree(memories_root), "workdir": str(source_root), "sandbox": "read-only", "receipt_runner_path": str(receipt_runner_path), "receipt_runner_sha256": hashlib.sha256(receipt_runner_path.read_bytes()).hexdigest(), **catalog}
 
-    def make_receipt(self, path, thread_id, pair, result_message, total_tokens, workload_prompt_sha256, workload_id, arm, result_ready_monotonic_ns):
+    def make_receipt(self, path, thread_id, pair, result_message, total_tokens, workload_prompt_sha256, workload_id, arm, result_ready_monotonic_ns, raw_prompt_text):
         model, effort = pair.split("|", 1)
         node_type = "direct-task" if arm == "direct" else "bootstrap-task"
         authorization_source = "benchmark-direct" if arm == "direct" else "benchmark-global-inline"
-        receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": f"benchmark-{workload_id}", "workload_id": workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "node_role": "result-producer", "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "child_result_ready_monotonic_ns": result_ready_monotonic_ns, "result_ready_clock": "benchmark-runner-monotonic", "result_ready_event_sequence": 1, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": workload_prompt_sha256}
+        execution_prompt = raw_prompt_text if arm == "direct" else module.benchmark_suite_gate.auto_benchmark_execution_prompt(raw_prompt_text)
+        receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": f"benchmark-{workload_id}", "benchmark_result_source": "controller_final", "workload_id": workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "node_role": "result-producer", "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "child_result_ready_monotonic_ns": result_ready_monotonic_ns, "result_ready_clock": "benchmark-runner-monotonic", "result_ready_event_sequence": 1, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": hashlib.sha256(execution_prompt.encode("utf-8")).hexdigest()}
+        if arm == "global":
+            receipt["benchmark_prompt_file_verified"] = True
+            receipt["benchmark_auto_launch_verified"] = True
+            receipt["benchmark_auto_workspace_count"] = 1
+            receipt["benchmark_auto_bridge_result_verified"] = True
         self.write_json(path, receipt)
 
-    def make_evidence(self, path, run_id, thread_id, pair, total_tokens, first_result_ms, producer_elapsed_ms):
+    def make_evidence(self, path, run_id, thread_id, pair, total_tokens, first_result_ms, producer_elapsed_ms, arm, task_tokens=None):
         model, effort = pair.split("|", 1)
         runtime_session = {"thread_id": thread_id, "parent_thread_id": None, "source_kind": "root", "model": model, "effort": effort, "tokens_used": total_tokens, "rollout_sha256": "a" * 64, "rollout_model": model, "rollout_effort": effort, "rollout_total_tokens": total_tokens, "turn_completed": True}
+        runtime_sessions = [runtime_session]
+        if arm == "global":
+            adaptive_pair = "gpt-5.6-terra|high"
+            adaptive_model, adaptive_effort = adaptive_pair.split("|", 1)
+            runtime_sessions.append({"thread_id": f"{thread_id}-adaptive", "parent_thread_id": thread_id, "source_kind": "subagent", "model": adaptive_model, "effort": adaptive_effort, "tokens_used": task_tokens, "rollout_sha256": "b" * 64, "rollout_model": adaptive_model, "rollout_effort": adaptive_effort, "rollout_total_tokens": task_tokens, "turn_completed": True})
         before_thread_ids = []
-        after_thread_ids = [thread_id]
-        state_snapshot = {"before_complete": True, "after_complete": True, "before_thread_count": 0, "after_thread_count": 1, "before_thread_ids_sha256": module.benchmark_suite_gate.sha256_text(module.benchmark_suite_gate.canonical_json(before_thread_ids)), "after_thread_ids_sha256": module.benchmark_suite_gate.sha256_text(module.benchmark_suite_gate.canonical_json(after_thread_ids))}
-        foreground_session = {key: runtime_session[key] for key in module.benchmark_suite_gate.FOREGROUND_SESSION_KEYS}
-        evidence = {"schema_version": module.benchmark_suite_gate.SCHEMA_VERSION, "run_id": run_id, "started_monotonic_ns": 1_000_000_000, "first_result_monotonic_ns": 1_000_000_000 + first_result_ms * 1_000_000, "producer_finished_monotonic_ns": 1_000_000_000 + producer_elapsed_ms * 1_000_000, "producer_process_exit_code": 0, "producer_timed_out": False, "producer_complete": True, "foreground_main_thread_id": thread_id, "foreground_state_snapshot": state_snapshot, "foreground_sessions": [foreground_session], "launched_session_ids": [thread_id], "retry_session_ids": [], "fallback_session_ids": [], "repair_session_ids": [], "state_snapshot": state_snapshot, "runtime_sessions": [runtime_session]}
+        after_thread_ids = [runtime["thread_id"] for runtime in runtime_sessions]
+        state_snapshot = {"before_complete": True, "after_complete": True, "before_thread_count": 0, "after_thread_count": len(after_thread_ids), "before_thread_ids_sha256": module.benchmark_suite_gate.sha256_text(module.benchmark_suite_gate.canonical_json(before_thread_ids)), "after_thread_ids_sha256": module.benchmark_suite_gate.sha256_text(module.benchmark_suite_gate.canonical_json(after_thread_ids))}
+        foreground_sessions = [{key: runtime[key] for key in module.benchmark_suite_gate.FOREGROUND_SESSION_KEYS} for runtime in runtime_sessions]
+        evidence = {"schema_version": module.benchmark_suite_gate.SCHEMA_VERSION, "run_id": run_id, "started_monotonic_ns": 1_000_000_000, "first_result_monotonic_ns": 1_000_000_000 + first_result_ms * 1_000_000, "producer_finished_monotonic_ns": 1_000_000_000 + producer_elapsed_ms * 1_000_000, "producer_process_exit_code": 0, "producer_timed_out": False, "producer_complete": True, "foreground_main_thread_id": thread_id, "foreground_state_snapshot": state_snapshot, "foreground_sessions": foreground_sessions, "launched_session_ids": after_thread_ids, "retry_session_ids": [], "fallback_session_ids": [], "repair_session_ids": [], "state_snapshot": state_snapshot, "runtime_sessions": runtime_sessions}
         self.write_json(path, evidence)
 
     def build_fixture(self, root, tier_repeat_counts=None):
         tier_repeat_counts = tier_repeat_counts or {tier: module.MINIMUM_PUBLIC_PAIR_COUNT for tier in module.benchmark_suite_gate.TIERS}
-        selected_pair = "gpt-5.6-sol|ultra"
         source_root = root / "snapshot"
         source_root.mkdir()
         (source_root / "source.py").write_text("VALUE = 1\n", encoding="utf-8")
@@ -94,6 +104,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
                 prompt_sha256 = hashlib.sha256(prompt_path.read_bytes()).hexdigest()
                 expected_sha256 = hashlib.sha256(expected_path.read_bytes()).hexdigest()
                 for arm in arm_order:
+                    selected_pair = module.benchmark_suite_gate.ARM_ENTRY_PAIRS[arm]
                     run_id = f"{pair_id}-{arm}"
                     raw_root = root / "raw" / run_id
                     result_path = raw_root / "result.json"
@@ -101,13 +112,14 @@ class BenchmarkPublicExportTests(unittest.TestCase):
                     receipt_path = raw_root / "receipt.json"
                     result_message = json.dumps(expected_document, sort_keys=True, separators=(",", ":"))
                     self.write_json(result_path, expected_document)
-                    total_tokens = 1000 + repeat_index if arm == "direct" else 500 + repeat_index
+                    total_tokens = 1000 + repeat_index if arm == "direct" else 50 + repeat_index
+                    task_tokens = total_tokens if arm == "direct" else 500 + repeat_index
                     first_result_ms = 200 + repeat_index if arm == "direct" else 100 + repeat_index
                     producer_elapsed_ms = 240 + repeat_index if arm == "direct" else 120 + repeat_index
                     thread_id = f"private-session-{run_id}"
                     result_ready_monotonic_ns = 1_000_000_000 + first_result_ms * 1_000_000
-                    self.make_receipt(receipt_path, thread_id, selected_pair, result_message, total_tokens, prompt_sha256, run_id, arm, result_ready_monotonic_ns)
-                    self.make_evidence(evidence_path, run_id, thread_id, selected_pair, total_tokens, first_result_ms, producer_elapsed_ms)
+                    self.make_receipt(receipt_path, thread_id, selected_pair, result_message, total_tokens, prompt_sha256, run_id, arm, result_ready_monotonic_ns, prompt_path.read_text(encoding="utf-8"))
+                    self.make_evidence(evidence_path, run_id, thread_id, selected_pair, total_tokens, first_result_ms, producer_elapsed_ms, arm, task_tokens)
                     receipt_spec = {"path": self.relative(root, receipt_path), "pair": selected_pair, "role": "result-producer", "bind_result": True, "workload_prompt_sha256": prompt_sha256}
                     run_plan = {"run_id": run_id, "pair_id": pair_id, "tier": tier, "repeat_index": repeat_index, "arm": arm, "order_index": order_index, "prompt_path": self.relative(root, prompt_path), "prompt_sha256": prompt_sha256, "expected_result_path": self.relative(root, expected_path), "expected_sha256": expected_sha256, "result_path": self.relative(root, result_path), "evidence_path": self.relative(root, evidence_path), "receipts": [receipt_spec], "selected_entry_pair": selected_pair, "entry_execution_mode": "executed", "source_root": self.relative(root, source_root), "source_files_pointer": "/source_files", "source_snapshot_sha256": source_snapshot_sha256, "environment": environments[arm]}
                     runs.append(run_plan)
@@ -148,7 +160,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertEqual(public_document["expected_run_count"], 12)
         self.assertEqual(public_document["tier_repeat_counts"], {"simple": 2, "medium": 2, "complex": 2})
         self.assertEqual(public_document["rules"], {"tokens": module.TOKEN_RULE, "time": module.TIME_RULE, "overall": module.OVERALL_RULE, "minimum_pairs_per_tier": 2})
-        self.assertEqual(public_document["entry_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(public_document["entry_pairs"], module.benchmark_suite_gate.ARM_ENTRY_PAIRS)
         self.assertTrue(public_document["configuration"]["config_hash_equal"])
         self.assertTrue(public_document["configuration"]["runtime_context_hash_equal"])
         expected_environment = paths["plan_document"]["runs"][0]["environment"]
@@ -159,7 +171,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertEqual(public_document["configuration"]["catalog_file_counts"], {"skills": expected_environment["skills_catalog_file_count"], "plugins": expected_environment["plugins_catalog_file_count"], "marketplaces": expected_environment["marketplace_catalog_file_count"], "marketplace_sources": len(expected_environment["marketplace_catalog_sources"])})
         self.assertEqual(set(public_document["configuration"]["catalog_sha256"]), {"skills", "plugins", "marketplaces", "visible"})
         self.assertNotEqual(public_document["configuration"]["agents_sha256"]["direct"], public_document["configuration"]["agents_sha256"]["global"])
-        self.assertEqual(public_document["execution_integrity"], {"complete_runs": 12, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "runtime_session_count": 12, "runtime_descendant_count": 0, "multi_session_run_count": 0})
+        self.assertEqual(public_document["execution_integrity"], {"complete_runs": 12, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "runtime_session_count": 18, "runtime_root_count": 12, "runtime_descendant_count": 6, "task_session_count": 12, "controller_tokens_excluded": 309, "multi_session_run_count": 6})
         self.assertEqual([task["label"] for task in public_document["tasks"]], [module.TASK_LABELS[tier] for tier in module.benchmark_suite_gate.TIERS])
         self.assertTrue(all(task["status"] == "pass" and task["failures"] == [] for task in public_document["tasks"]))
         self.assertTrue(all(task["paired_savings_percent_medians"]["logical_total_tokens"] > 0 for task in public_document["tasks"]))
@@ -215,7 +227,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertEqual(desktop_text.count("PASS · 8 pairs · 16 runs"), 3)
         self.assertEqual(mobile_text.count("PASS · 8 pairs · 16 runs"), 3)
 
-    def test_public_export_requires_exactly_one_runtime_root_per_run(self):
+    def test_public_export_requires_exactly_one_direct_runtime_root(self):
         with tempfile.TemporaryDirectory() as temporary:
             paths = self.build_fixture(Path(temporary))
             manifest_path = sorted(paths["manifests"].glob("*.json"))[0]
@@ -228,6 +240,24 @@ class BenchmarkPublicExportTests(unittest.TestCase):
             with self.assertRaisesRegex(module.PublicExportError, "manifest_runtime_session_count_invalid"):
                 module.export_public_json(paths["plan"], paths["summary"], paths["manifests"], paths["output"])
             self.assertFalse(paths["output"].exists())
+
+    def test_public_export_accepts_runtime_proven_global_adaptive_process_roots(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.build_fixture(root)
+            run_plan = next(run for run in paths["plan_document"]["runs"] if run["run_id"] == "simple-r01-global")
+            evidence_path = root / run_plan["evidence_path"]
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            main_thread_id = evidence["foreground_main_thread_id"]
+            for session_group in (evidence["foreground_sessions"], evidence["runtime_sessions"]):
+                for session in session_group:
+                    if session["thread_id"] != main_thread_id:
+                        session["source_kind"] = "root"
+                        session["parent_thread_id"] = None
+            self.write_json(evidence_path, evidence)
+            module.benchmark_suite_gate.evaluate_suite(paths["plan"], paths["manifests"], paths["summary"])
+            public_document = module.export_public_json(paths["plan"], paths["summary"], paths["manifests"], paths["output"])
+        self.assertEqual(public_document["overall_status"], "pass")
 
     def test_plan_summary_and_manifest_tampering_fail_closed_without_overwriting_output(self):
         cases = ["plan_hash", "summary_rule", "summary_extra_key", "manifest_acceptance", "manifest_metric", "manifest_runtime_pair", "manifest_extra_key", "extra_manifest"]
