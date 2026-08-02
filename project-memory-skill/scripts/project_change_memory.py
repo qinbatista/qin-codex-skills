@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 if os.name == "nt":
@@ -447,10 +448,33 @@ def _write_journal_pointer(history_target, vault_path, record):
         index.write_text(updated_index, encoding="utf-8")
 
 
+def _write_root_first_memory(record, vault_path):
+    runtime_path = vault_path / "AI Memory" / "ai_memory.py"
+    specification = importlib.util.spec_from_file_location("myaillm_ai_memory_runtime", runtime_path)
+    if specification is None or specification.loader is None:
+        raise RuntimeError(f"Cannot load root-first AI memory runtime: {runtime_path}")
+    runtime = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(runtime)
+    text = " ".join([record.get("summary", ""), record.get("reason", ""), record.get("result", ""), record.get("verification_status", "")]).lower()
+    if record.get("verification_status") in {"failed", "partial"} or any(word in text for word in ("bug", "fix", "repair", "failure", "error", "regression")):
+        event_type = "bug-fix"
+    elif any(word in text for word in ("architecture", "schema", "ownership", "contract", "structure")):
+        event_type = "architecture"
+    else:
+        event_type = "general"
+    project = record.get("project", {}).get("owner") or record.get("project", {}).get("name") or "Unknown"
+    working_line = json.dumps(record.get("project", {}).get("working_line") or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    output = runtime.record_event(project, record["module"], event_type, record["summary"], record["reason"], record["result"], record["verification_status"], working_line=working_line, files=record["files"], verification=record["verification"], decisions=record["decisions"], risks=record["risks"])
+    runtime.render_views()
+    return {"status": "written", "written": True, "root": "AI Memory/events.jsonl", "event_status": output.get("status"), "event_id": output.get("event_id", "")}
+
+
 def _write_obsidian(record, vault, project_root=None):
     vault_path = _resolve_vault(vault)
     if vault_path is None:
         return {"status": "unavailable", "written": False}
+    if (vault_path / "AI Memory" / "ai_memory.py").is_file():
+        return _write_root_first_memory(record, vault_path)
     entry = _markdown_entry(record)
     target, title = _canonical_history_target(record, vault_path, project_root)
     if target is None:

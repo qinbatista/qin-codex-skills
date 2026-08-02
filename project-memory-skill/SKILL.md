@@ -36,7 +36,7 @@ When Cache content is reusable, retained, workflow-required, or project-influenc
 ## Project Change-Memory Authority And Storage
 
 - For project change memory, the private local JSONL ledger at `~/.codex/project-change-memory/` is authoritative.
-- When `CODEX_OBSIDIAN_VAULT` points to an available vault, or the default `MyAILLM` vault exists, write one complete human-readable entry under exactly one stable `History.md` heading and one pointer-only `Activity Index.md` line; never create ChangeMemory folders, record pages, module pages, file pages, date logs, category pages, or relation notes.
+- When the resolved vault contains `AI Memory/ai_memory.py`, that root-first schema is authoritative: project through its single event store and generated root views, and never create legacy History, Activity, Journal, or Archive layers. Only a vault without that runtime may use the older one-history plus pointer-only projection.
 - Missing or unavailable Obsidian is a successful no-op. Local recording must still complete.
 - Store project-relative file paths, not raw prompts, private reasoning, credentials, tokens, cookies, or unrelated task content.
 - Resolve registered projects from home-relative owner paths. When a project has an explicitly registered old and current root, recall and supersession treat both as one owner without rewriting prior JSONL records; an unregistered same-name clone remains isolated.
@@ -161,4 +161,4 @@ If a project has sufficient git working-line metadata, retrieval excludes ambigu
 
 ## Verification
 
-After recording, require the command's JSON response to report `status=written` or `status=duplicate`, `local.written=true`, and the expected project-relative files. When Obsidian is available, also require `obsidian.status=written`; otherwise require `obsidian.status=unavailable`. A recorder failure reopens the task because the global change-memory contract was not satisfied.
+After recording, require the command's JSON response to report `status=written` or `status=duplicate`, `local.written=true`, and the expected project-relative files. When Obsidian is available, also require `obsidian.status=written`; for a root-first vault require `obsidian.root=AI Memory/events.jsonl`. Otherwise require `obsidian.status=unavailable`. A recorder failure reopens the task because the global change-memory contract was not satisfied.
