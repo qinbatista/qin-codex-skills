@@ -117,9 +117,37 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(args.complexity_band, module.obsidian_model_memory.complexity_band(args.complexity_score))
         self.assertRegex(args.workload_id, r"^fast-[0-9a-f]{16}$")
         self.assertEqual(args.receipt_output.parent, args.result_output.parent)
-        self.assertEqual(args.receipt_output.parent.parent.parent, (root / "codex-home" / "tmp").resolve())
+        expected_output_root = workdir / "Cache" / "task-analyze" / "adaptive-producer" / args.workload_id
+        self.assertEqual(args.receipt_output.parent, expected_output_root.resolve())
+        self.assertNotIn("codex-home", str(args.receipt_output))
         self.assertEqual(args.sandbox, "workspace-write")
         self.assertTrue(args.emit_result)
+
+    def test_route_ready_event_is_flushed_before_producer_call(self):
+        class FlushTrackingStream(io.StringIO):
+            def __init__(self):
+                super().__init__()
+                self.flush_count = 0
+
+            def flush(self):
+                self.flush_count += 1
+                super().flush()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            stream = FlushTrackingStream()
+
+            def fake_run(receipt_args, prompt):
+                self.assertTrue(stream.getvalue().splitlines())
+                receipt_args.result_output.write_text("RESULT", encoding="utf-8")
+                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
+
+            with patch.object(module.sys, "stdout", stream), patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+                result = module.run(args, "Do the work")
+            event = json.loads(stream.getvalue().splitlines()[0])
+        self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "complexity_score": 12, "complexity_band": "small", "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True})
+        self.assertGreaterEqual(stream.flush_count, 1)
+        self.assertEqual(result["status"], "pass")
 
     def test_explicit_route_arguments_keep_read_only_and_emit_defaults(self):
         with tempfile.TemporaryDirectory() as temporary:

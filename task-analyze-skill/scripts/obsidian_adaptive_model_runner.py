@@ -43,6 +43,12 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
     print(json.dumps({"schema_version": 1, "stage": "result-ready", "result_path": str(result_path), "result_ready_monotonic_ns": ready_monotonic_ns}, separators=(",", ":")), flush=True)
 
 
+def _emit_route_ready(args, recommendation):
+    attempt_pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
+    event = {"schema_version": 1, "stage": "route-ready", "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "entry_pair": f"{args.resolved_entry_model}|{args.resolved_entry_effort}", "entry_source": args.resolved_entry_source, "selected_pair": recommendation.get("selected_pair"), "attempt_pair": attempt_pair, "active_fallback_pair": recommendation.get("active_fallback_pair"), "switch_direction": recommendation.get("switch_direction", "no_switch"), "switch_change": recommendation.get("switch_change", f"initial->{attempt_pair}"), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True}
+    print(json.dumps(event, separators=(",", ":")), flush=True)
+
+
 def _atomic_write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
@@ -568,6 +574,7 @@ def run(args, prompt):
         args.complexity_score = 65 if args.complexity == "complex" else 35
     args.resolved_entry_model, args.resolved_entry_effort, args.resolved_entry_source = _resolved_entry_pair(args)
     recommendation = _exact_contract_recommendation(prompt, _recommend(args))
+    _emit_route_ready(args, recommendation)
     sources = scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None
     if admission and admission["admitted"]:
@@ -693,8 +700,7 @@ def resolve_fast_path_args(args, prompt):
     args.complexity_band = complexity_band
     identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, getattr(args, "step_kind", ""), ",".join(getattr(args, "capability_tag", [])), prompt))
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
-    default_output_root = codex_home / "tmp" / "adaptive-producer" / f"fast-{digest}"
+    default_output_root = project_root / "Cache" / "task-analyze" / "adaptive-producer" / f"fast-{digest}"
     args.workdir = workdir
     args.project_root = project_root
     args.task_type = task_type

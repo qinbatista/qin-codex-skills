@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Return the universal 0-100 task complexity score without executing a model."""
 
+import argparse
 import importlib.util
 import json
 import sys
@@ -14,8 +15,11 @@ sys.modules[SPEC.name] = RUNNER
 SPEC.loader.exec_module(RUNNER)
 
 
-def main():
-    prompt = sys.stdin.read()
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Score one task prompt without executing a model.")
+    parser.add_argument("prompt", nargs="?")
+    arguments = parser.parse_args(argv)
+    prompt = arguments.prompt if arguments.prompt is not None else sys.stdin.read()
     if not prompt.strip():
         print(json.dumps({"status": "fail", "reason": "prompt_required"}, separators=(",", ":")))
         return 1
