@@ -39,4 +39,4 @@ The Ending worker runs `ending_verification_plan.py run-check` for its assigned 
 - `FAIL`: a real check found a defect and a repair handoff was created.
 - `BLOCKED`: task creation, verification infrastructure, external state, timeout, or the repair limit prevented PASS.
 
-Local lifecycle history always records the score, check, selected pair, evidence, and repair chain. Receipt-backed producer terminal events additionally sync score and route movement to the project Obsidian `Model Switch.md` page.
+Local lifecycle history always records the score, check, selected pair, evidence, and repair chain. Receipt-backed producer terminal events additionally sync score and route movement to the matching project Obsidian category page and refresh its Model Switch/shared-category links.

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
   <title id="title">Condition-keyed model experience</title>
-  <desc id="desc">Private Obsidian model experience uses broad project or Skills Model Switch.md pages. Project, task, module, file, and symbol are fields only; no hierarchy notes are created. Ending records the matched producer outcome after presentation; operational failure is neutral and quality failure opens repair.</desc>
+  <desc id="desc">Private model experience follows Obsidian native project, Model Switch, stable category, and shared-category links. Project, task, module, file, and symbol remain fields only. No JSON sidecar is created.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#17223d"/></linearGradient>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#67e8f9"/></marker>
@@ -22,11 +22,11 @@
     <text x="185" y="338" text-anchor="middle" fill="#fbbf24" font-size="18" font-weight="700">not workflow-wide</text>
 
     <rect x="370" y="175" width="280" height="200" rx="24" fill="#201a3a" stroke="#a78bfa" stroke-width="2"/>
-    <text x="510" y="220" text-anchor="middle" fill="#ddd6fe" font-size="18" font-weight="800">BROAD MODEL SWITCH</text>
-    <text x="510" y="263" text-anchor="middle" fill="#f8fafc" font-size="24" font-weight="700">fields-only learning</text>
-    <text x="510" y="304" text-anchor="middle" fill="#cbd5e1" font-size="18">project / task / module</text>
-    <text x="510" y="328" text-anchor="middle" fill="#cbd5e1" font-size="16">file / symbol are fields only</text>
-    <text x="510" y="350" text-anchor="middle" fill="#cbd5e1" font-size="16">no hierarchy notes</text>
+    <text x="510" y="220" text-anchor="middle" fill="#ddd6fe" font-size="18" font-weight="800">NATIVE OBSIDIAN GRAPH</text>
+    <text x="510" y="263" text-anchor="middle" fill="#f8fafc" font-size="21" font-weight="700">Model Switch → category</text>
+    <text x="510" y="304" text-anchor="middle" fill="#cbd5e1" font-size="18">category → shared category</text>
+    <text x="510" y="328" text-anchor="middle" fill="#cbd5e1" font-size="16">context stays fields only</text>
+    <text x="510" y="350" text-anchor="middle" fill="#cbd5e1" font-size="16">no JSON sidecar</text>
 
     <rect x="720" y="175" width="280" height="200" rx="24" fill="#102b3d" stroke="#38bdf8" stroke-width="2"/>
     <text x="860" y="220" text-anchor="middle" fill="#bae6fd" font-size="18" font-weight="800">RECOMMEND</text>
@@ -72,6 +72,6 @@
     <text x="220" y="785" fill="#e2e8f0" font-size="19">easy low · complex high · verified PASS retains</text>
   </g>
   <rect x="70" y="930" width="880" height="86" rx="20" fill="#3b1725" stroke="#fb7185" stroke-width="2"/>
-  <text x="510" y="967" text-anchor="middle" fill="#fecdd3" font-size="21" font-weight="800">PRIVATE: broad Obsidian Model Switch.md pages</text>
-  <text x="510" y="995" text-anchor="middle" fill="#ffe4e6" font-size="18">old local JSON is read-only · fields only · no hierarchy notes</text>
+  <text x="510" y="967" text-anchor="middle" fill="#fecdd3" font-size="21" font-weight="800">PRIVATE: linked Obsidian category records</text>
+  <text x="510" y="995" text-anchor="middle" fill="#ffe4e6" font-size="18">bounded link reads · fields only · no JSON sidecar</text>
 </svg>

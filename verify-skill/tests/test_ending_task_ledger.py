@@ -211,17 +211,22 @@ class EndingTaskLedgerTests(unittest.TestCase):
                     passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Focused integration passed"], store=store)
                 learned = passed["model_learning"]
                 canonical_vault = vault.resolve()
-                record_path = canonical_vault / "Projects" / "MuseAI" / "Model Switch.md"
+                switch_path = canonical_vault / "Projects" / "MuseAI" / "Model Switch.md"
+                record_path = canonical_vault / learned["model_record_document"]
                 record_before = record_path.read_bytes()
+                switch_before = switch_path.read_bytes()
 
                 duplicate = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Focused integration passed"], store=store)
 
                 self.assertEqual(learned["obsidian_note"], "Projects/MuseAI/Model Switch.md")
+                self.assertEqual(learned["model_record_document"], "Projects/MuseAI/Model Routing/Normal Script Update.md")
                 self.assertTrue(record_path.is_file())
-                self.assertIn("## Normal Script Update", record_before.decode("utf-8"))
+                self.assertIn("# MuseAI · Normal Script Update", record_before.decode("utf-8"))
                 self.assertIn(learned["record_id"], record_before.decode("utf-8"))
+                self.assertIn("[[Projects/MuseAI/Model Routing/Normal Script Update]]", switch_before.decode("utf-8"))
                 self.assertEqual(duplicate["status"], "duplicate")
                 self.assertEqual(record_path.read_bytes(), record_before)
+                self.assertEqual(switch_path.read_bytes(), switch_before)
                 self.assertFalse(any(canonical_vault.rglob("ModelExperience/*.md")))
                 self.assertFalse(any(project.rglob("model_experience.json")))
             finally:

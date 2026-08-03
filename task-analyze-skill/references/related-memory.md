@@ -14,7 +14,7 @@ Run `scripts/obsidian_memory_bridge.py search --query <generalized task summary>
 - Recheck live source when memory may be stale.
 - If the bridge returns `unavailable` or `no_matches`, continue normally without warning, setup work, or a blocked route.
 
-Exact model/effort learning is separate from this broad advisory search. `project-memory-skill/scripts/obsidian_model_memory.py` merges the receipt-backed local event ledger with the broad Obsidian `Model Switch.md` projection and deduplicates their stable event IDs; the shared ladder supplies cold starts only when both histories are empty.
+Exact model/effort learning is separate from this broad advisory search. `project-memory-skill/scripts/obsidian_model_memory.py` merges the receipt-backed local event ledger with only the current project category, shared category, and exact-fingerprint project pages reached through native Obsidian wikilinks; it deduplicates their stable event IDs. The shared ladder supplies cold starts only when both histories are empty.
 
 ## Obsidian Vault Routing
 

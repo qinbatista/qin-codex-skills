@@ -77,7 +77,7 @@ For receipt-backed grounded JSON, Ending Real may use `../task-analyze-skill/scr
 
 An admitted verification node preserves the locked model, effort, dependencies, input, output, and stop condition. Runtime labels are not proof; use the sanitized receipt contract in `../task-analyze-skill/references/runtime-receipts.md`. Ordinary inline Real Verify uses the current user-selected model and needs no fabricated child receipt.
 
-Routing quality learning records only the producer pair after Real. The adaptive receipt carries its project/task/module/file/symbol/code/operation/score-band context; the terminal ledger event invokes `obsidian_model_memory.py record`, which writes the local routing event first and then projects the same stable event ID to broad Obsidian `Model Switch.md`. Both copies retain outcome reason, attempts, score/band, next pair, and recovery pair and are deduplicated during recommendation. A small `0-24`, low-risk text/code edit tries Spark-low first. Operational failure is quality-neutral; correctness/quality failure upgrades the next matching task. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
+Routing quality learning records only the producer pair after Real. The adaptive receipt carries its project/task/module/file/symbol/code/operation/score-band context; the terminal ledger event invokes `obsidian_model_memory.py record`, which writes the local routing event first and then projects the same stable event ID to the matching native Obsidian category page. The compact Model Switch and shared-category backlinks are refreshed around that page. Both authorities retain outcome reason, attempts, score/band, next pair, and recovery pair and are deduplicated during recommendation. A small `0-24`, low-risk text/code edit tries Spark-low first. Operational failure is quality-neutral; correctness/quality failure upgrades the next matching task. A verifier pair is never recorded as the producer pair, and inline work without a producer receipt never fabricates learning.
 
 ## Real Verify Workflow
 
@@ -85,7 +85,7 @@ Routing quality learning records only the producer pair after Real. The adaptive
 2. Select one realistic evidence path proportional to risk.
 3. Run or inspect the actual artifact/state.
 4. Record input, method, observed output, and pass/fail reason.
-5. On handoff pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching broad Obsidian `Model Switch.md` page before terminal PASS.
+5. On handoff pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching native Obsidian category page before terminal PASS.
 6. After the PASS event is durable, call `set_thread_archived(archived=true)` on the calling thread. Treat an accepted archive as successful cleanup even when it terminates the turn before a final reply. If self-archive is unavailable, retain the thread and emit explicit BLOCKED cleanup status.
 7. On missing evidence, timeout, or concurrent state change, record lifecycle `BLOCKED` and exit unarchived; never ask the user for confirmation or start a repair.
 8. A correctness failure automatically creates a projectless scoped repair task with the exact evidence; the repair receives its own Quick Check and a fresh independent Ending check.

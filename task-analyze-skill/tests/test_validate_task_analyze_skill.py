@@ -198,7 +198,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertIn("scripts/obsidian_adaptive_model_runner.py", module.REQUIRED_FILES)
         self.assertNotIn("scripts/adaptive_model_runner.py", module.REQUIRED_FILES)
         self.assertIn("receipt-backed local event ledger is the durable fast history", module.REQUIRED_ADAPTIVE_TEXT)
-        self.assertIn("deduplicate their stable event IDs", module.REQUIRED_ADAPTIVE_TEXT)
+        self.assertIn("deduplicate stable event IDs", module.REQUIRED_ADAPTIVE_TEXT)
         self.assertIn("suppress Spark for the matching step-capability fingerprint", module.REQUIRED_ADAPTIVE_TEXT)
         self.assertIn("task_capability_profile", module.REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION)
         self.assertIn("capability_fingerprint", module.REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION)

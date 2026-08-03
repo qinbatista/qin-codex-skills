@@ -344,6 +344,16 @@
     "authority": "dual_local_and_obsidian",
     "local_path_template": "~/.codex/model-routing-memory/events.jsonl",
     "projection_path_template": "Model Switch.md",
+    "record_path_template": "<owner-routing>/<Category>.md",
+    "native_wikilink_graph": true,
+    "stable_categories": [
+      "normal-script-update",
+      "code-design",
+      "finding-bugs",
+      "tests-verification",
+      "documentation-instructions",
+      "general-work"
+    ],
     "event_id_dedupe": true,
     "specificity_order": [
       "project_task",

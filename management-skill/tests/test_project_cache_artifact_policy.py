@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
-GLOBAL_AGENTS_PATH = SKILLS_ROOT.parent / "AGENTS.md"
+GLOBAL_AGENTS_PATH = Path.home() / ".codex" / "AGENTS.md"
 GLOBAL_ENTRY_RULE_PATH = SKILLS_ROOT / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
 SYNC_SCRIPT_PATH = SKILLS_ROOT / "management-skill" / "scripts" / "sync_global_skills.py"
 SYNC_SPEC = importlib.util.spec_from_file_location("sync_global_skills", SYNC_SCRIPT_PATH)
@@ -98,12 +98,18 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             for required_text in REQUIRED_DETAILED_REGISTRY_TEXT:
                 self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
 
-    def test_global_agents_and_installable_entry_rule_have_the_same_contract(self):
-        for policy_path in (GLOBAL_AGENTS_PATH, GLOBAL_ENTRY_RULE_PATH):
-            policy_text = policy_path.read_text(encoding="utf-8")
-            self.assertIn("Project Cache artifact policy", policy_text, str(policy_path))
-            for required_text in REQUIRED_POLICY_TEXT:
-                self.assertIn(required_text, policy_text, f"{policy_path}: {required_text}")
+    def test_installable_entry_rule_has_the_project_cache_contract(self):
+        policy_text = GLOBAL_ENTRY_RULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("Project Cache artifact policy", policy_text, str(GLOBAL_ENTRY_RULE_PATH))
+        for required_text in REQUIRED_POLICY_TEXT:
+            self.assertIn(required_text, policy_text, f"{GLOBAL_ENTRY_RULE_PATH}: {required_text}")
+
+    @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
+    def test_installed_global_agents_has_the_same_contract(self):
+        policy_text = GLOBAL_AGENTS_PATH.read_text(encoding="utf-8")
+        self.assertIn("Project Cache artifact policy", policy_text, str(GLOBAL_AGENTS_PATH))
+        for required_text in REQUIRED_POLICY_TEXT:
+            self.assertIn(required_text, policy_text, f"{GLOBAL_AGENTS_PATH}: {required_text}")
 
     def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):
         task_root = SKILLS_ROOT / "management-skill" / "Cache" / "tests" / "cache-artifact-policy-smoke"

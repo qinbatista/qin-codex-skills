@@ -45,10 +45,12 @@ Catalog-only models remain documented but never enter adaptive upgrade/downgrade
 
 - Authority: `dual_local_and_obsidian`
 - Local path: `~/.codex/model-routing-memory/events.jsonl`
-- Obsidian projection: `Model Switch.md`
+- Obsidian entry: `Model Switch.md`
+- Obsidian records: `<owner-routing>/<Category>.md`
+- Native wikilink graph: `true`; stable categories: normal-script-update, code-design, finding-bugs, tests-verification, documentation-instructions, general-work.
 - Stable event dedupe: `true`
 - Specificity: project_task / module / file / symbol
-- Fields only: `true`; hierarchy notes: `false`; legacy local JSON: `read_only_inactive`.
+- Context stays in fields: `true`; per-context hierarchy notes: `false`; legacy local JSON: `read_only_inactive`.
 
 ## Dynamic defaults
 

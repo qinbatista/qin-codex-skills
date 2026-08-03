@@ -41,7 +41,7 @@
 - **学习：** receipt 有效的 Real PASS 保留当前档；两次匹配 PASS 才可向下降一级；质量失败向上升一级。失败后恢复成功的强档会被下一次精确匹配直接复用；实现与本地测试分别记忆。
 - **操作故障：** 零结果故障只允许一次更强 fallback，不把它当质量失败学习。
 - **Schedule：** 复合任务拆成可量化、责任明确的步骤并逐步选模；两到三个独立只读 source 先做成本准入，有依赖的多文件工作使用一个上下文 producer。
-- **记忆：** Ending 结果更新宽泛项目/Skills `Model Switch.md` 页面；project/task/module/file/symbol 仅是字段，不创建层级笔记。
+- **记忆：** Ending 更新 Model Switch 与原生类别链接；只读匹配类别，不用 JSON sidecar。
 
 ## 规则
 
@@ -51,7 +51,7 @@
 - **交付：** 先完成并返回主任务结果，再进行后台验证。
 - **验证：** 每个独立检查使用评分、选模 End Task；全部 PASS。FAIL → Fix Task → 全新 End Task，最多三次。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
-- **记忆：** 修改历史用本地 JSONL（可投影 Obsidian）；私有学习用宽泛项目/Skills `Model Switch.md`，仅字段，不建层级笔记。
+- **记忆：** 修改历史用本地 JSONL；模型学习走原生类别链接，项目/任务等保持为字段。
 - **模型：** 使用已保存梯级；主动本地更新时选择最高数字 GPT 家族；符合条件的小编辑优先 Spark-low；缓存不可用就保留原列表。
 - **隐私：** secret、原始 Prompt/结果、receipt、ledger、cache 和临时文件留在本地。
 

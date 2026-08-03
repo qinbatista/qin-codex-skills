@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import os
 import tempfile
@@ -84,13 +85,15 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.write_receipt(recommendation["attempt_pair"])
         return module.record_model_result(self.project, "code", "example-module", self.receipt, "pass", "none", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault, recorded_at=recorded_at)
 
-    def test_write_is_one_broad_page_with_one_structured_record(self):
+    def test_write_uses_one_category_page_with_one_structured_record(self):
         written = self.record()
         page = self.vault / written["obsidian_note"]
-        text = page.read_text(encoding="utf-8")
+        category = self.vault / "Projects" / "ThisIsMyOregon" / "Model Routing" / "Normal Script Update.md"
         self.assertEqual(written["status"], "written")
-        self.assertEqual(text.count("<!-- model-experience: "), 1)
-        self.assertIn("## Normal Script Update", text)
+        self.assertEqual(written["model_record_document"], "Projects/ThisIsMyOregon/Model Routing/Normal Script Update.md")
+        self.assertEqual(written["model_record_link"], "[[Projects/ThisIsMyOregon/Model Routing/Normal Script Update]]")
+        self.assertEqual(category.read_text(encoding="utf-8").count("<!-- model-experience: "), 1)
+        self.assertIn("[[Projects/ThisIsMyOregon/Model Routing/Normal Script Update]]", page.read_text(encoding="utf-8"))
         self.assertFalse(any(self.vault.rglob("ModelExperience/*.md")))
         self.assertFalse(any(self.vault.rglob(".model-experience.lock")))
 
@@ -111,8 +114,9 @@ class ObsidianModelMemoryTests(unittest.TestCase):
             receipt.write_text(json.dumps({"status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "requested_pair": recommendation["attempt_pair"], "executed_pair": recommendation["attempt_pair"], "priority_attempt_pair": recommendation["attempt_pair"], "workload_prompt_sha256": f"{index:064x}", "tokens": {"total_tokens": index}, "process_elapsed_ms": index}), encoding="utf-8")
             written = module.record_model_result(self.project, "code", "example-module", receipt, "pass", "none", file_value=Path("src") / f"example-{index}.py", symbol=f"Example.run{index}", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Sequential Path-backed write.", vault=self.vault, recorded_at=datetime(2026, 7, 13, 12, 0, index % 60, tzinfo=timezone.utc))
             self.assertEqual(written["status"], "written")
-        self.assertEqual(page.read_text(encoding="utf-8").count("<!-- model-experience: "), 100)
-        self.assertEqual(len(list(self.vault.rglob("*.md"))), 2)
+        category = self.vault / "Projects" / "ThisIsMyOregon" / "Model Routing" / "Normal Script Update.md"
+        self.assertEqual(category.read_text(encoding="utf-8").count("<!-- model-experience: "), 100)
+        self.assertFalse(any(self.vault.rglob("*.graph-index.json")))
 
     def test_reader_scopes_records_from_its_single_page(self):
         self.record()
@@ -123,6 +127,9 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(recommendation["obsidian_record_count"], 1)
         self.assertEqual(recommendation["merged_record_count"], 1)
         self.assertEqual(recommendation["selection_basis"], "local_and_obsidian")
+
+
+
 
     def test_local_first_write_survives_vault_outage_and_reconciles_later(self):
         unavailable_vault = self.root / "unavailable-vault"
@@ -192,11 +199,25 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         recommendation = module.recommend_model(current_root, "code", "feed", file_value="src/feed.py", symbol="Feed.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Update feed parser.", vault=self.vault)
         self.assertEqual(recommendation["matched_records"], 1)
         self.assertEqual(recommendation["specificity"], "symbol")
+        self.assertEqual(recommendation["matched_records"], 1)
+        self.assertEqual(recommendation["specificity"], "symbol")
+
+
+    def test_compact_recommendation_is_bounded_route_capsule(self):
+        self.record()
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
+        capsule = module._compact_recommendation(recommendation)
+        capsule_bytes = len(json.dumps(capsule, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        self.assertEqual(capsule["status"], "ready")
+        self.assertEqual(capsule["attempt_pair"], recommendation["attempt_pair"])
+        self.assertEqual(capsule["capability_fingerprint"], recommendation["capability_fingerprint"])
+        self.assertLess(capsule_bytes, 4096)
+        self.assertIn("route_capsule", capsule)
 
     def test_rebuild_hides_foreign_rows_but_preserves_structured_record(self):
         self.record()
         own = module._read_project_records(self.broad_page)[0]
-        foreign = dict(own, record_id="foreign", project_key="unrelated-project", project_owner="Unrelated", module="foreign-module")
+        foreign = dict(own, record_id="foreign", event_id="foreign-event", project_key="unrelated-project", project_owner="Unrelated", module="foreign-module")
         self.broad_page.write_text("# Model Switch\n\n" + "\n".join("<!-- model-experience: " + json.dumps(record) + " -->" for record in (own, foreign)) + "\n", encoding="utf-8")
         result = module.rebuild_model_switches(self.project, vault=self.vault)
         text = self.broad_page.read_text(encoding="utf-8")
@@ -220,7 +241,7 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(result["status"], "no-op")
         self.assertEqual(records, [foreign])
 
-    def test_unknown_root_status_reports_missing_broad_page_without_crash(self):
+    def test_registered_owner_status_reports_missing_model_switch_without_crash(self):
         status = module.memory_status(self.project, vault=self.vault)
         self.assertEqual(status["status"], "ready")
         self.assertTrue(status["memory_available"])
@@ -229,7 +250,8 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         status = module.memory_status(self.project, vault=self.vault)
         self.assertEqual(status["status"], "ready")
         self.assertTrue(status["memory_available"])
-        self.assertEqual(status["reason"], "configured_broad_page_missing")
+        self.assertEqual(status["reason"], "configured_model_switch_missing")
+        self.assertEqual(status["model_switch_owner"], "ThisIsMyOregon")
 
     def test_first_receipt_backed_record_lazily_creates_broad_page_and_links_index(self):
         self.broad_page.unlink()
@@ -239,8 +261,9 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(result["status"], "written")
         text = self.broad_page.read_text(encoding="utf-8")
         index = self.broad_index.read_text(encoding="utf-8")
-        self.assertEqual(text.count("<!-- model-experience: "), 1)
-        self.assertIn("- [[Projects/ThisIsMyOregon/Model Switch.md]]", index)
+        category = self.vault / "Projects" / "ThisIsMyOregon" / "Model Routing" / "Normal Script Update.md"
+        self.assertEqual(category.read_text(encoding="utf-8").count("<!-- model-experience: "), 1)
+        self.assertIn("- [[Projects/ThisIsMyOregon/Model Switch|Model Switch]] — Compact entry to native linked model-routing categories.", index)
         self.assertEqual(result["model_switch_document"], "Projects/ThisIsMyOregon/Model Switch.md")
         self.assertEqual(result["model_switch_link"], "[[Projects/ThisIsMyOregon/Model Switch]]")
 
@@ -458,8 +481,7 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(record["step_kind"], "implementation")
         self.assertRegex(record["capability_fingerprint"], r"^[0-9a-f]{64}$")
         self.assertIn("code-authoring", record["capability_tags"])
-        self.assertIn("Step / capability", self.broad_page.read_text(encoding="utf-8"))
-        self.assertIn("gpt-5.6-luna|max / gpt-5.6-luna|max", self.broad_page.read_text(encoding="utf-8"))
+        self.assertTrue(any("record-entry" in page.read_text(encoding="utf-8") for page in (self.vault / "Projects" / "ThisIsMyOregon" / "Model Routing").glob("*.md")))
 
     def test_small_edit_score_uses_spark_priority_with_quality_fallback(self):
         recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity_score=12, risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
@@ -549,6 +571,80 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(replay["status"], "duplicate")
         self.assertEqual(final["selected_pair"], "gpt-5.6-terra|xhigh")
         self.assertEqual(final["attempt_pair"], final["selected_pair"])
+
+
+    def test_native_wikilinks_form_project_shared_and_cross_project_edges(self):
+        self.record()
+        category_page = self.vault / "Projects" / "ThisIsMyOregon" / "Model Routing" / "Normal Script Update.md"
+        shared_page = self.vault / "Skills" / "Model Routing" / "Normal Script Update.md"
+        shared_index = self.vault / "Skills" / "Model Routing" / "index.md"
+        switch_text = self.broad_page.read_text(encoding="utf-8")
+        category_text = category_page.read_text(encoding="utf-8")
+        shared_text = shared_page.read_text(encoding="utf-8")
+        self.assertIn("[[Projects/ThisIsMyOregon/Model Switch|Model Switch]]", self.broad_index.read_text(encoding="utf-8"))
+        self.assertIn("[[Projects/ThisIsMyOregon/Model Routing/Normal Script Update]]", switch_text)
+        self.assertIn("[[Projects/ThisIsMyOregon/index]]", category_text)
+        self.assertIn("[[Projects/ThisIsMyOregon/Model Switch]]", category_text)
+        self.assertIn("[[Skills/Model Routing/Normal Script Update]]", category_text)
+        self.assertIn("[[Projects/ThisIsMyOregon/Model Routing/Normal Script Update]]", shared_text)
+        self.assertIn("[[Skills/Model Routing/Normal Script Update]]", shared_index.read_text(encoding="utf-8"))
+        self.assertIn("| Task | Step / capability | Score |", category_text)
+        self.assertNotIn("<!-- model-experience: ", switch_text)
+        route = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)["route_capsule"]
+        self.assertEqual(route["mode"], "obsidian_native_wikilinks")
+        self.assertEqual(route["current_source_document"], "Projects/ThisIsMyOregon/Model Routing/Normal Script Update.md")
+        self.assertLessEqual(route["pages_read"], 2)
+
+    def test_migration_preserves_foreign_records_and_keeps_model_switch_compact(self):
+        own = self.quality_record("gpt-5.6-terra|medium")
+        own.update(model_experience_schema=1, project_key=module.project_change_memory._project_identity(self.project)["key"], task_type="code", module="example-module", file="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low")
+        foreign = dict(own, project_key="foreign-project", record_id="foreign-record")
+        self.broad_page.write_text("# Model Switch\n\n<!-- model-experience: " + json.dumps(own) + " -->\n<!-- model-experience: " + json.dumps(foreign) + " -->\n", encoding="utf-8")
+        rebuilt = module.rebuild_model_switches(self.project, vault=self.vault)
+        switch_text = self.broad_page.read_text(encoding="utf-8")
+        category_text = (self.vault / "Projects" / "ThisIsMyOregon" / "Model Routing" / "Normal Script Update.md").read_text(encoding="utf-8")
+        self.assertEqual(rebuilt["records"], 1)
+        self.assertIn("foreign-record", switch_text)
+        self.assertNotIn('"project_key":"' + module.project_change_memory._project_identity(self.project)["key"] + '"', switch_text)
+        self.assertIn("example-module", category_text)
+
+    def test_shared_category_reads_only_exact_fingerprint_project_page(self):
+        other_root = self.home / "Documents" / "Muse" / "SVGDrawer"
+        other_root.mkdir(parents=True)
+        other_owner = "SVGDrawer"
+        other_record = self.quality_record("gpt-5.6-terra|high")
+        other_record.update(model_experience_schema=1, project_key=module.project_change_memory._project_identity(other_root)["key"], project_owner=other_owner, task_type="code", module="example-module", file="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low")
+        profile = module._record_capability_profile(other_record)
+        other_record["capability_fingerprint"] = profile["capability_fingerprint"]
+        other_page = self.vault / "Projects" / other_owner / "Model Routing" / "Normal Script Update.md"
+        other_page.parent.mkdir(parents=True)
+        other_page.write_text(module._render_category_page(self.vault, other_owner, "normal-script-update", [other_record]), encoding="utf-8")
+        module._refresh_shared_category(self.vault, "normal-script-update")
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Exact cross-project routing.", vault=self.vault)
+        self.assertEqual(recommendation["specificity"], "cross_project_symbol")
+        self.assertEqual(recommendation["matched_records"], 1)
+        self.assertIn("[[Projects/SVGDrawer/Model Routing/Normal Script Update]]", (self.vault / recommendation["route_capsule"]["shared_document"]).read_text(encoding="utf-8"))
+
+    def test_compact_cli_excludes_graph_index_commands(self):
+        with self.assertRaises(SystemExit), mock.patch("sys.stderr", new=io.StringIO()):
+            module.parse_args(["graph-index-status", "--project-root", str(self.project)])
+
+
+
+    def test_global_skills_uses_model_routing_records_pages(self):
+        source_root = self.home / "Documents" / "AIProject" / "qin-codex-skills"
+        source_root.mkdir(parents=True)
+        (self.vault / "Skills").mkdir()
+        recommendation = module.recommend_model(source_root, "code", "global-routing", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
+        receipt = self.write_receipt(recommendation["attempt_pair"], self.root / "global-receipt.json")
+        written = module.record_model_result(source_root, "code", "global-routing", receipt, "pass", "none", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
+        category = self.vault / "Skills" / "Model Routing Records" / "Normal Script Update.md"
+        self.assertEqual(written["status"], "written")
+        self.assertTrue(category.exists())
+        self.assertIn("[[Skills/Model Routing/Normal Script Update]]", category.read_text(encoding="utf-8"))
+        routed = module.recommend_model(source_root, "code", "global-routing", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
+        self.assertEqual(routed["obsidian_record_count"], 1)
+        self.assertEqual(routed["route_capsule"]["current_source_document"], "Skills/Model Routing Records/Normal Script Update.md")
 
 
 if __name__ == "__main__":

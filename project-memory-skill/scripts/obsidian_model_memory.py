@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -83,8 +84,8 @@ MODEL_SWITCH_CATEGORIES = (
     "normal-script-update",
     "code-design",
     "finding-bugs",
-    "documentation-instructions",
     "tests-verification",
+    "documentation-instructions",
     "general-work",
 )
 MODEL_SWITCH_DIRECTIONS = (
@@ -96,6 +97,16 @@ MODEL_SWITCH_DIRECTIONS = (
     "operational_fallback",
 )
 MODEL_SWITCH_CATEGORY_MARKER = "<!-- generated:model-switch-category -->"
+
+MODEL_SWITCH_CATEGORY_TITLES = {
+    "normal-script-update": "Normal Script Update",
+    "code-design": "Code Design",
+    "finding-bugs": "Finding Bugs",
+    "documentation-instructions": "Documentation and Instructions",
+    "tests-verification": "Tests and Verification",
+    "general-work": "General Work",
+}
+
 FRONTMATTER_FIELDS = (
     "model_experience_schema",
     "record_id",
@@ -462,20 +473,29 @@ def model_switch_reference(project_root, *, vault=None):
 
 
 def _project_switch_index(vault_path, owner):
-    if owner == "Global Codex Skills":
-        return None
     return _project_switch_directory(vault_path, owner) / "index.md"
 
 
 def _ensure_model_switch_index_link(vault_path, owner, memory_root):
     index_path = _project_switch_index(vault_path, owner)
-    if index_path is None or not index_path.exists():
+    if not index_path.exists():
         return
-    target = _vault_relative_path(vault_path, memory_root).as_posix()
-    line = f"- [[{target}]]"
+    target = _vault_relative_path(vault_path, memory_root).as_posix().removesuffix(".md")
+    canonical = f"- [[{target}|Model Switch]] — Compact entry to native linked model-routing categories."
     text = index_path.read_text(encoding="utf-8")
-    if line not in text:
-        index_path.write_text(text.rstrip() + "\n" + line + "\n", encoding="utf-8")
+    output = []
+    found = False
+    for line in text.splitlines():
+        targets = [match.split("|", 1)[0].strip().removesuffix(".md") for match in re.findall(r"\[\[([^\]]+)\]\]", line)]
+        if target in targets:
+            if not found:
+                output.append(canonical)
+                found = True
+            continue
+        output.append(line)
+    if not found:
+        output.append(canonical)
+    _atomic_write(index_path, "\n".join(output).rstrip() + "\n")
 
 
 def _parse_frontmatter(path):
@@ -512,7 +532,11 @@ def _read_project_records(memory_root):
                 continue
             if record.get("model_experience_schema") == SCHEMA_VERSION:
                 records.append(_json_safe(record))
-        return records
+        routing_directory = memory_root.parent / ("Model Routing Records" if memory_root.parent.name == "Skills" else "Model Routing")
+        if routing_directory.exists():
+            for page in routing_directory.glob("*.md"):
+                records.extend(_read_embedded_records(page))
+        return _merge_model_records(records, [])
     records = []
     for path in sorted((memory_root / "records").glob("*/*/*.md")):
         record = _parse_frontmatter(path)
@@ -575,11 +599,10 @@ def _best_scope_records(records, query):
 def _transferable_local_records(records, query):
     """Reuse only an exact step-capability identity across project roots."""
     required_fields = ("task_type", "code_kind", "operation", "modality", "risk", "ambiguity")
-    current_project_key = query["project"]["key"]
     distinctive = bool(set(query["semantic_capability_tags"]) & DISTINCTIVE_CAPABILITY_TAGS)
     transferable = []
     for record in records:
-        if record.get("project_key") == current_project_key:
+        if project_change_memory._record_matches_project(record, query["project"]):
             continue
         if any(record.get(field) != query[field] for field in required_fields):
             continue
@@ -839,6 +862,7 @@ def _operational_fallback_pair(selected_pair, pairs):
 
 
 def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None):
+    started_ns = time.perf_counter_ns()
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
     entry = _entry_context(shared, pairs, entry_model, entry_effort)
@@ -848,17 +872,32 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     obsidian_configured = _is_configured_owner(vault_path, owner)
     all_local_records = _read_local_records(local_store)
     local_records = [record for record in all_local_records if project_change_memory._record_matches_project(record, query["project"])]
-    obsidian_records = [record for record in _read_project_records(memory_root) if project_change_memory._record_matches_project(record, query["project"])]
+    category = _task_category(query)
+    native_read = _native_model_records(vault_path, owner, category, query) if vault_path is not None and owner else {"current_records": [], "transfer_records": [], "page_count": 0, "read_bytes": 0, "candidate_records": 0, "project_index_document": "", "model_switch_document": "", "current_document": "", "current_source_document": "", "shared_index_document": "", "shared_document": "", "linked_documents": []}
+    obsidian_records = [record for record in native_read["current_records"] if project_change_memory._record_matches_project(record, query["project"])]
+    local_record_count = len(local_records)
+    obsidian_record_count = len(obsidian_records)
+    merged_record_count = len(_merge_model_records(local_records, obsidian_records))
+    pending_projection_count = _pending_projection_count(local_store, query["project"])
     project_records = _merge_model_records(local_records, obsidian_records)
     records, specificity, score = _best_scope_records(project_records, query)
     transfer_records = []
+    transfer_selection_basis = None
     if not records or specificity == "project_task":
-        transfer_candidates = _transferable_local_records(all_local_records, query)
+        local_transfer_candidates = _transferable_local_records(all_local_records, query)
+        obsidian_transfer_candidates = _transferable_local_records(native_read["transfer_records"], query)
+        transfer_candidates = _merge_model_records(local_transfer_candidates, obsidian_transfer_candidates)
         transfer_records, transfer_specificity, transfer_score = _best_scope_records(transfer_candidates, query)
         if transfer_records and (not records or transfer_score > score):
             records = transfer_records
             specificity = f"cross_project_{transfer_specificity}"
             score = transfer_score
+            selected_event_ids = {_model_event_key(record) for record in transfer_records}
+            local_transfer_ids = {_model_event_key(record) for record in local_transfer_candidates}
+            obsidian_transfer_ids = {_model_event_key(record) for record in obsidian_transfer_candidates}
+            uses_local = bool(selected_event_ids & local_transfer_ids)
+            uses_obsidian = bool(selected_event_ids & obsidian_transfer_ids)
+            transfer_selection_basis = "local_and_obsidian_linked_transfer_history" if uses_local and uses_obsidian else "obsidian_linked_transfer_history" if uses_obsidian else "local_transfer_history"
     active = _active_recommendation(shared, pairs, query, records, entry["entry_anchor_pair"])
     selected_pair = active["selected_pair"]
     priority_pair = _priority_producer_pair(shared, query)
@@ -896,6 +935,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         attempt_state = "blocked"
     attempt_model, attempt_effort = attempt_pair.split("|", 1) if attempt_pair else (None, None)
     selected_model, selected_effort = selected_pair.split("|", 1) if selected_pair else (None, None)
+    route_chain = [document for document in (native_read["project_index_document"], native_read["model_switch_document"], native_read["current_document"], native_read["shared_index_document"], native_read["shared_document"], *native_read["linked_documents"]) if document]
     return {
         "schema_version": SCHEMA_VERSION,
         "source": "local_and_obsidian_model_history",
@@ -905,7 +945,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "model_switch_status": model_switch["status"],
         "model_switch_document": model_switch["document"],
         "model_switch_link": model_switch["link"],
-        "selection_basis": "local_transfer_history" if transfer_records and records is transfer_records else "local_and_obsidian" if records and local_records and obsidian_records else "local_history" if records and local_records else "obsidian_history" if records and obsidian_records else "entry_aware_cold_start" if entry["entry_anchor_pair"] else "shared_cold_start",
+        "selection_basis": transfer_selection_basis if transfer_selection_basis else "local_and_obsidian" if records and local_records and obsidian_records else "local_history" if records and local_records else "obsidian_history" if records and obsidian_records else "entry_aware_cold_start" if entry["entry_anchor_pair"] else "shared_cold_start",
         "shared_model_registry": shared["registry_id"],
         "project_key": query["project"]["key"],
         "task_type": query["task_type"],
@@ -924,11 +964,11 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "specificity": specificity,
         "specificity_score": score,
         "matched_records": len(records),
-        "local_record_count": len(local_records),
-        "obsidian_record_count": len(obsidian_records),
-        "merged_record_count": len(project_records),
+        "local_record_count": local_record_count,
+        "obsidian_record_count": obsidian_record_count,
+        "merged_record_count": merged_record_count,
         "transfer_record_count": len(transfer_records),
-        "pending_projection_count": _pending_projection_count(local_store, query["project"]),
+        "pending_projection_count": pending_projection_count,
         "quality_samples": active["quality_samples"],
         "entry_model": entry["entry_model"],
         "entry_effort": entry["entry_effort"],
@@ -961,6 +1001,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "pass_counts": active["pass_counts"],
         "minimum_passes_before_downgrade": active["minimum_passes_before_downgrade"],
         "cost_evidence": active["cost_evidence"],
+        "route_capsule": {"mode": "obsidian_native_wikilinks", "chain": route_chain, "current_document": native_read["current_document"], "current_source_document": native_read["current_source_document"], "shared_document": native_read["shared_document"], "linked_documents": native_read["linked_documents"], "pages_read": native_read["page_count"], "read_bytes": native_read["read_bytes"], "candidate_records": native_read["candidate_records"], "elapsed_ms": round((time.perf_counter_ns() - started_ns) / 1_000_000, 3)},
     }
 
 
@@ -1060,8 +1101,161 @@ def _read_local_records(local_store=None):
             continue
         record = envelope.get("record")
         if isinstance(record, dict) and record.get("model_experience_schema") == SCHEMA_VERSION:
+            normalized = dict(record)
+            if isinstance(envelope.get("event_id"), str) and envelope["event_id"]:
+                normalized.setdefault("event_id", envelope["event_id"])
+            records.append(_json_safe(normalized))
+    return records
+
+
+def _model_routing_directory(vault_path, owner):
+    return vault_path / "Skills" / "Model Routing Records" if owner == "Global Codex Skills" else _project_switch_directory(vault_path, owner) / "Model Routing"
+
+
+def _category_page(vault_path, owner, category):
+    return _model_routing_directory(vault_path, owner) / f"{MODEL_SWITCH_CATEGORY_TITLES[category]}.md"
+
+
+def _category_reference(vault_path, owner, category):
+    page = _category_page(vault_path, owner, category)
+    document = _vault_relative_path(vault_path, page).as_posix()
+    return {"document": document, "link": _wikilink(vault_path, page)}
+
+
+def _shared_routing_directory(vault_path):
+    return vault_path / "Skills" / "Model Routing"
+
+
+def _shared_category_page(vault_path, category):
+    return _shared_routing_directory(vault_path) / f"{MODEL_SWITCH_CATEGORY_TITLES[category]}.md"
+
+
+def _owner_index(vault_path, owner):
+    return _project_switch_index(vault_path, owner)
+
+
+def _wikilink(vault_path, path):
+    relative = _vault_relative_path(vault_path, path).as_posix()
+    return f"[[{relative[:-3] if relative.endswith('.md') else relative}]]"
+
+
+def _read_embedded_records(path):
+    if path is None or not Path(path).exists():
+        return []
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    records = []
+    for raw in re.findall(r"<!-- model-experience: (.*?) -->", text, flags=re.DOTALL):
+        try:
+            record = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if record.get("model_experience_schema") == SCHEMA_VERSION:
             records.append(_json_safe(record))
     return records
+
+
+def _record_capability_or_default(record):
+    try:
+        return _record_capability_profile(record)
+    except ValueError:
+        return {"step_kind": str(record.get("step_kind") or "general"), "semantic_capability_tags": [], "capability_fingerprint": str(record.get("capability_fingerprint") or "")}
+
+
+def _native_model_records(vault_path, owner, category, query):
+    current_page = _category_page(vault_path, owner, category)
+    model_switch = _memory_root_owner(vault_path, owner)
+    current_source = current_page if current_page.exists() else model_switch
+    current_records = _read_embedded_records(current_source)
+    current_bytes = current_source.stat().st_size if current_source.exists() else 0
+    page_count = int(current_source.exists())
+    shared_page = _shared_category_page(vault_path, category)
+    try:
+        shared_text = shared_page.read_text(encoding="utf-8")
+    except OSError:
+        shared_text = ""
+    page_count += int(bool(shared_text))
+    candidate_pages = []
+    fingerprint = query["capability_fingerprint"]
+    for line in shared_text.splitlines():
+        match = re.search(r"\[\[([^\]]+)\]\].*?fingerprints:\s*([^\s]+)", line)
+        if match and fingerprint in set(match.group(2).split(",")):
+            target = match.group(1).split("|", 1)[0].split("#", 1)[0].strip()
+            candidate = (vault_path / (target if target.endswith(".md") else target + ".md")).resolve()
+            try:
+                candidate.relative_to(vault_path.resolve())
+            except ValueError:
+                continue
+            if candidate != current_page.resolve() and candidate.is_file():
+                candidate_pages.append(candidate)
+    transfer_records = []
+    candidate_bytes = 0
+    for candidate in sorted(set(candidate_pages)):
+        candidate_bytes += candidate.stat().st_size
+        transfer_records.extend(_read_embedded_records(candidate))
+    transfer_records = _merge_model_records([], transfer_records)
+    linked_documents = [_vault_relative_path(vault_path, candidate).as_posix() for candidate in sorted(set(candidate_pages))]
+    return {"current_records": current_records, "transfer_records": transfer_records, "page_count": page_count + len(linked_documents), "read_bytes": current_bytes + len(shared_text.encode("utf-8")) + candidate_bytes, "candidate_records": len(current_records) + len(transfer_records), "project_index_document": _vault_relative_path(vault_path, _owner_index(vault_path, owner)).as_posix(), "model_switch_document": _vault_relative_path(vault_path, model_switch).as_posix(), "current_document": _vault_relative_path(vault_path, current_page).as_posix(), "current_source_document": _vault_relative_path(vault_path, current_source).as_posix(), "shared_index_document": _vault_relative_path(vault_path, _shared_routing_directory(vault_path) / "index.md").as_posix(), "shared_document": _vault_relative_path(vault_path, shared_page).as_posix(), "linked_documents": linked_documents}
+
+
+def _render_category_page(vault_path, owner, category, records):
+    title = MODEL_SWITCH_CATEGORY_TITLES[category]
+    project_index = _owner_index(vault_path, owner)
+    model_switch = _memory_root_owner(vault_path, owner)
+    fingerprints = sorted({capability["capability_fingerprint"] for capability in (_record_capability_or_default(record) for record in records) if capability["capability_fingerprint"]})
+    lines = [MODEL_SWITCH_CATEGORY_MARKER, f"# {owner} · {title}", "", f"- Project index: {_wikilink(vault_path, project_index)}", f"- Model Switch: {_wikilink(vault_path, model_switch)}", f"- Shared task type: {_wikilink(vault_path, _shared_category_page(vault_path, category))}", "", f"Records: {len(records)}", f"Fingerprints: {', '.join(f'`{fingerprint}`' for fingerprint in fingerprints)}", "", "| Task | Step / capability | Score | Module / file / symbol | Entry / selected / effective / next | Direction / reason | Outcome / recovery | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    for record in records:
+        detail = _switch_details(record)
+        capability = _record_capability_or_default(record)
+        capability_text = ", ".join(capability["semantic_capability_tags"]) or "structural"
+        location = " / ".join(value for value in (record.get("module"), record.get("file"), record.get("symbol")) if value) or "—"
+        outcome_reason = str(record.get("outcome_reason") or record.get("failure_class") or "—").replace("|", "/")
+        recovery = record.get("recovery_from_pair") or "—"
+        lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {capability['capability_fingerprint'][:12]} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {location} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
+        lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_model_switch(vault_path, owner, records_by_category, foreign_records):
+    lines = ["# Model Switch", "", f"- Project index: {_wikilink(vault_path, _owner_index(vault_path, owner))}", f"- Shared routing graph: {_wikilink(vault_path, _shared_routing_directory(vault_path) / 'index.md')}", "", "Model routing records by stable task category.", ""]
+    for category in MODEL_SWITCH_CATEGORIES:
+        records = records_by_category.get(category, [])
+        if records:
+            lines.append(f"- {_wikilink(vault_path, _category_page(vault_path, owner, category))} ({len(records)})")
+    if foreign_records:
+        lines.extend(["", "<!-- preserved foreign model-experience records -->"])
+        lines.extend("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->" for record in foreign_records)
+    return "\n".join(lines) + "\n"
+
+
+def _refresh_shared_category(vault_path, category):
+    shared_page = _shared_category_page(vault_path, category)
+    project_pattern = f"*/Model Routing/{MODEL_SWITCH_CATEGORY_TITLES[category]}.md"
+    pages = sorted((vault_path / "Projects").glob(project_pattern)) if (vault_path / "Projects").exists() else []
+    global_page = vault_path / "Skills" / "Model Routing Records" / f"{MODEL_SWITCH_CATEGORY_TITLES[category]}.md"
+    if global_page.exists():
+        pages.append(global_page)
+    lines = [f"# {MODEL_SWITCH_CATEGORY_TITLES[category]}", "", f"- Routing index: {_wikilink(vault_path, _shared_routing_directory(vault_path) / 'index.md')}", "", "Project routing records with native Obsidian links.", ""]
+    for page in pages:
+        fingerprints = sorted({capability["capability_fingerprint"] for capability in (_record_capability_or_default(record) for record in _read_embedded_records(page)) if capability["capability_fingerprint"]})
+        lines.append(f"- {_wikilink(vault_path, page)} — fingerprints: {','.join(fingerprints)}")
+    _atomic_write(shared_page, "\n".join(lines) + "\n")
+
+
+def _refresh_shared_routing_index(vault_path):
+    routing_index = _shared_routing_directory(vault_path) / "index.md"
+    lines = ["# Model Routing", "", "Native Obsidian task-type links between project model memories.", ""]
+    lines.extend(f"- {_wikilink(vault_path, _shared_category_page(vault_path, category))}" for category in MODEL_SWITCH_CATEGORIES)
+    _atomic_write(routing_index, "\n".join(lines) + "\n")
+    skills_index = vault_path / "Skills" / "index.md"
+    if skills_index.exists():
+        link_line = f"- {_wikilink(vault_path, routing_index)} — Native project/task-type model-memory graph."
+        skills_text = skills_index.read_text(encoding="utf-8")
+        if link_line not in skills_text:
+            _atomic_write(skills_index, skills_text.rstrip() + "\n" + link_line + "\n")
+
 
 
 def _merge_model_records(local_records, obsidian_records):
@@ -1181,40 +1375,33 @@ def rebuild_model_switches(project_root, *, vault=None):
     vault_path = project_change_memory._resolve_vault(vault)
     if vault_path is None:
         return {"status": "unavailable", "written": False, "reason": "obsidian_vault_unavailable"}
-    query = _query(project_root, "script", "general")
-    _, broad_page = _memory_root(query, vault)
-    if broad_page is not None and broad_page.exists():
-        page_records = _read_project_records(broad_page)
-        records = [record for record in page_records if project_change_memory._record_matches_project(record, project)]
-        foreign_records = [record for record in page_records if not project_change_memory._record_matches_project(record, project)]
-        project_record_count = len(records)
-        heading = "# Model Switch\n\n"
-        sections = {"normal-script-update": "Normal Script Update", "code-design": "Code Design", "finding-bugs": "Finding Bugs", "documentation-instructions": "Documentation and Instructions", "tests-verification": "Tests and Verification", "general-work": "General Work"}
-        lines = [heading.rstrip(), "", "This page is the global human-readable projection of the local receipt-backed routing history. Structured records are embedded below.", ""]
-        for category, label in sections.items():
-            lines.extend(["## " + label, "", "| Task type | Step / capability | Score | Module | File / symbol | Entry / selected / effective / next | Direction / reason | Outcome / recovery | Receipt | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"])
-            for record in records:
-                if _task_category(record) != category:
-                    continue
-                detail = _switch_details(record)
-                outcome_reason = str(record.get("outcome_reason") or record.get("failure_class") or "—").replace("|", "/")
-                recovery = record.get("recovery_from_pair") or "—"
-                try:
-                    capability = _record_capability_profile(record)
-                except ValueError:
-                    capability = {"step_kind": "general", "semantic_capability_tags": [], "capability_fingerprint": ""}
-                capability_text = ", ".join(capability["semantic_capability_tags"]) or "structural"
-                fingerprint_short = capability["capability_fingerprint"][:12] or "—"
-                lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {fingerprint_short} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {record.get('module','')} | {record.get('file','') or '—'} {record.get('symbol','')} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('receipt_sha256','')} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
-                lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
-            lines.append("")
-        # Preserve unexpected records byte-semantically without displaying them
-        # in another project's visible summary table.
-        for record in foreign_records:
-            lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
-        _atomic_write(broad_page, "\n".join(lines).rstrip() + "\n")
-        return {"status": "rebuilt", "written": True, "project_key": project["key"], "records": project_record_count, "page_records": len(page_records), "summary": _vault_relative_path(vault_path, broad_page).as_posix()}
-    return {"status": "no-op", "written": False, "project_key": project["key"], "reason": "broad_model_switch_missing"}
+    owner = project.get("owner") or project_change_memory._registered_owner(project["root"])
+    if owner is None:
+        return {"status": "no-op", "written": False, "reason": "unregistered_project"}
+    broad_page = _memory_root_owner(vault_path, owner)
+    legacy_records = _read_embedded_records(broad_page)
+    category_records = []
+    for category in MODEL_SWITCH_CATEGORIES:
+        category_records.extend(_read_embedded_records(_category_page(vault_path, owner, category)))
+    all_records = _merge_model_records(legacy_records, category_records)
+    own_records = [record for record in all_records if project_change_memory._record_matches_project(record, project)]
+    foreign_records = [record for record in all_records if not project_change_memory._record_matches_project(record, project)]
+    records_by_category = {category: [] for category in MODEL_SWITCH_CATEGORIES}
+    for record in own_records:
+        records_by_category[_task_category(record)].append(record)
+    broad_page.parent.mkdir(parents=True, exist_ok=True)
+    for category, records in records_by_category.items():
+        category_page = _category_page(vault_path, owner, category)
+        if records:
+            category_page.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write(category_page, _render_category_page(vault_path, owner, category, records))
+    _atomic_write(broad_page, _render_model_switch(vault_path, owner, records_by_category, foreign_records))
+    _ensure_model_switch_index_link(vault_path, owner, broad_page)
+    _refresh_shared_routing_index(vault_path)
+    for category in MODEL_SWITCH_CATEGORIES:
+        _refresh_shared_category(vault_path, category)
+    return {"status": "rebuilt", "written": True, "project_key": project["key"], "records": len(own_records), "page_records": len(all_records), "summary": _vault_relative_path(vault_path, broad_page).as_posix(), "category_pages": [_vault_relative_path(vault_path, _category_page(vault_path, owner, category)).as_posix() for category, records in records_by_category.items() if records]}
+
 
 
 def relink_project(project_root, *, vault=None):
@@ -1240,7 +1427,8 @@ def _project_record_to_obsidian(project_root, record, vault=None, local_store=No
             _atomic_write(memory_root, "# Model Switch\n\n" + "\n".join("<!-- model-experience: " + json.dumps(_json_safe(item), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->" for item in records) + "\n")
             _ensure_model_switch_index_link(vault_path, owner, memory_root)
         model_switch = rebuild_model_switches(project_root, vault=vault)
-    return {"status": "duplicate" if duplicate is not None else "written", "written": True, "record_id": (duplicate or record).get("record_id"), "obsidian_note": _vault_relative_path(vault_path, memory_root).as_posix(), "model_switch": model_switch}
+    model_record = _category_reference(vault_path, owner, _task_category(duplicate or record))
+    return {"status": "duplicate" if duplicate is not None else "written", "written": True, "record_id": (duplicate or record).get("record_id"), "obsidian_note": _vault_relative_path(vault_path, memory_root).as_posix(), "model_record_document": model_record["document"], "model_record_link": model_record["link"], "model_switch": model_switch}
 
 
 def reconcile_local_model_history(project_root, *, vault=None, local_store=None):
@@ -1435,6 +1623,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     vault_path, memory_root = _memory_root(query, vault)
     model_switch_reference_result = model_switch_reference(project_root, vault=vault)
     obsidian_note = _vault_relative_path(vault_path, memory_root).as_posix() if projection_state.get("status") == "written" and vault_path is not None and memory_root is not None else None
+    owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
+    model_record = _category_reference(vault_path, owner, _task_category(stored_record)) if obsidian_note and owner else {"document": None, "link": None}
     if model_switch is None and obsidian_note:
         model_switch = rebuild_model_switches(project_root, vault=vault)
     return {
@@ -1462,6 +1652,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "local": {"status": local_result["status"], "written": True, "path": local_result["path"]},
         "obsidian": projection_state,
         "obsidian_note": obsidian_note,
+        "model_record_document": model_record["document"],
+        "model_record_link": model_record["link"],
         "model_switch_status": model_switch_reference_result["status"],
         "model_switch_document": model_switch_reference_result["document"],
         "model_switch_link": model_switch_reference_result["link"],
@@ -1489,14 +1681,14 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local
         elif page is None:
             reason = "unconfigured_project_root"
         elif not page.exists():
-            reason = "configured_broad_page_missing"
+            reason = "configured_model_switch_missing"
         else:
             reason = None
         output.update(
             {
                 "project_key": project["key"],
                 "memory_available": memory_available,
-                "broad_page_owner": owner,
+                "model_switch_owner": owner,
                 "records": 0 if page is None else len(_read_project_records(page)),
                 "project_local_records": len([record for record in local_records if project_change_memory._record_matches_project(record, project)]),
                 "pending_projection_count": _pending_projection_count(local_path, project),
@@ -1530,6 +1722,11 @@ def _add_scope_arguments(parser, *, summary_required=False):
     parser.add_argument("--entry-effort", default="")
 
 
+def _compact_recommendation(recommendation):
+    keys = ("selection_basis", "project_key", "complexity_score", "complexity_band", "step_kind", "capability_fingerprint", "specificity", "matched_records", "entry_pair", "selected_pair", "attempt_pair", "active_fallback_pair", "attempt_trial", "attempt_reason", "attempt_calibration_state", "switch_direction", "model_switch_document", "model_switch_link", "route_capsule")
+    return {"status": "blocked" if recommendation.get("attempt_calibration_state") == "blocked" else "ready", **{key: recommendation.get(key) for key in keys}}
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Read and write dual local and Obsidian adaptive model memory")
     parser.add_argument("--vault", type=Path)
@@ -1538,6 +1735,7 @@ def parse_args(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     recommend = commands.add_parser("recommend")
     _add_scope_arguments(recommend)
+    recommend.add_argument("--compact", action="store_true")
     record = commands.add_parser("record")
     _add_scope_arguments(record, summary_required=True)
     record.add_argument("--receipt", type=Path, required=True)
@@ -1572,6 +1770,8 @@ def main(argv=None):
         scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, "step_kind": args.step_kind, "capability_tags": args.capability_tag, "entry_model": args.entry_model, "entry_effort": args.entry_effort, **common}
         if args.command == "recommend":
             output = recommend_model(args.project_root, args.task_type, args.module, **scope)
+            if args.compact:
+                output = _compact_recommendation(output)
         else:
             output = record_model_result(args.project_root, args.task_type, args.module, args.receipt, args.real_status, args.failure_class, trial=args.trial, outcome_reason=args.outcome_reason, verification_count=args.verification_count, **scope)
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
