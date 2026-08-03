@@ -685,23 +685,16 @@ def recompute_bounds(record, active_pairs=None):
             and _pair_verdict(record, frozen_pair) == "pass"
             and (strongest_failure is None or compare_pair(frozen_pair, strongest_failure) > 0)
         )
-        if frozen_pair_still_valid:
+        if frozen_pair_still_valid and record.get("selection_basis") != "receipt_cost":
             return
     if (hard_floor_real_pass and strongest_failure is None) or boundary_complete:
         eligible_pairs = _pairs_between_bounds(candidate_pairs, hard_pair, strongest_failure)
         real_passing = _passes_within(eligible_pairs, record)
         passing_pairs = [pair for pair in eligible_pairs if pair in real_passing]
-        cost_scores, cost_evidence = _like_for_like_cost_scores(record, passing_pairs)
+        _, cost_evidence = _like_for_like_cost_scores(record, passing_pairs)
         record["cost_evidence"] = cost_evidence
-        if cost_scores is not None:
-            best_pair = min(
-                passing_pairs,
-                key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], candidate_pairs.index(pair)),
-            )
-            record["selection_basis"] = "receipt_cost"
-        else:
-            best_pair = _pick_weakest_passing_above_failure(candidate_pairs, strongest_failure, hard_pair, record)
-            record["selection_basis"] = "quality_boundary"
+        best_pair = _pick_weakest_passing_above_failure(candidate_pairs, strongest_failure, hard_pair, record)
+        record["selection_basis"] = "quality_boundary"
         record["calibration_state"] = "frozen"
         record["best_pair"] = pair_text(*best_pair) if best_pair is not None else None
     elif strongest_failure is not None:
@@ -959,24 +952,16 @@ def recommend_route(args):
             if gap_pair is not None:
                 return _recommendation(condition, record, pairs, static_pair, hard_pair, gap_pair, "quality_boundary_gap_trial", True, record["selection_basis"])
             passing_pairs = [pair for pair in eligible_pairs if pair in _passes_within(eligible_pairs, record)]
-            cost_scores, cost_evidence = _like_for_like_cost_scores(record, passing_pairs)
+            _, cost_evidence = _like_for_like_cost_scores(record, passing_pairs)
             record["cost_evidence"] = cost_evidence
-            if cost_scores is not None:
-                selected = min(
-                    passing_pairs,
-                    key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair)),
-                )
-                reason = "receipt_cost_best_verified"
-                trial = False
-            else:
-                selected = _pick_weakest_passing_above_failure(pairs, failure_pair, hard_pair, record)
-                reason = "verified_quality_boundary"
-                trial = False
+            selected = _pick_weakest_passing_above_failure(pairs, failure_pair, hard_pair, record)
+            reason = "verified_quality_boundary"
+            trial = False
             if selected is None:
                 selected = _first_eligible_after_failure(failure_pair, eligible_pairs)
                 reason = "quality_failure_boundary_exhausted" if selected is None else "failure_and_success_boundary"
                 trial = selected is not None
-        return _recommendation(condition, record, pairs, static_pair, hard_pair, selected, reason, trial, "receipt_cost" if reason == "receipt_cost_best_verified" else record["selection_basis"])
+        return _recommendation(condition, record, pairs, static_pair, hard_pair, selected, reason, trial, record["selection_basis"])
     return _history_locked(args.history, recommend)[1]
 
 

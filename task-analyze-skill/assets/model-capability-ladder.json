@@ -5,8 +5,8 @@
   "source": {
     "models_cache": "~/.codex/models_cache.json",
     "client_version": "0.146.0",
-    "fetched_at": "2026-07-25T18:45:01.563456Z",
-    "catalog_sha256": "ed69842c6a3023a23a83e32b315829bbc7788b6f0a8174dfae7482f8113fe36b"
+    "fetched_at": "2026-08-03T03:57:13.631264Z",
+    "catalog_sha256": "cc94381ad8e45d5ff1bc32597b28d6ee780b8f4a949ea40bc98265826e299917"
   },
   "active_family": {
     "id": "gpt-5.6",

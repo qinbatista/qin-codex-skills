@@ -28,7 +28,7 @@ Each terminal write rebuilds the six sections on that same broad `Model Switch.m
 - Quality/correctness FAIL: one rung up, effort before stronger model; record the failure before repair.
 - Spark quality/correctness FAIL: suppress Spark for the matching step-capability fingerprint and upgrade the next matching task to its contextual quality pair.
 - Operational FAIL: neutral; it does not create a quality boundary.
-- Like-for-like passing pairs: median tokens first, median process time second, weaker rung third.
+- Like-for-like token/time evidence remains diagnostic; route selection always keeps the lowest Real-passing rung above the strongest failed rung.
 - Lowest passing pair or closed pass/fail recovery boundary: freeze with `trial=false` until a later quality failure or catalog/policy drift. When a weaker pair failed and a stronger pair passed, the next exact-capability match starts on that successful pair instead of probing an untested gap.
 
 Obsidian evidence and same-name/display-page evidence never cross project keys. Local receipt evidence may transfer across modules or roots only when the exact step-capability fingerprint and difficulty context match. Distinctive tags such as image generation plus tool control, local testing, browser/API work, or visual verification permit cross-module reuse; generic work also requires the same module. The recommendation reports its cross-project specificity and keeps foreign Obsidian rows isolated. The receipt-backed local event ledger is the durable fast history and broad `Model Switch.md` is its global projection; recommendations deduplicate their stable event IDs. `strategy_performance.py` remains the separate authority for multi-node Global-versus-Direct admission and savings claims.

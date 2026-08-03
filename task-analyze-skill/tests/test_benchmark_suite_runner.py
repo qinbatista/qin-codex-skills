@@ -124,6 +124,11 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         receipt["benchmark_auto_launch_verified"] = True
         receipt["benchmark_auto_workspace_count"] = 1
         receipt["benchmark_auto_bridge_result_verified"] = True
+        tier = args.workload_id.split("-r", 1)[0]
+        selected_pairs = {"simple": "gpt-5.3-codex-spark|low", "medium": "gpt-5.6-terra|medium", "complex": "gpt-5.6-luna|max"}
+        selected_pair = selected_pairs[tier]
+        route_signature = {"selected_pair": selected_pair, "effective_pair": selected_pair, "scheduled_graph": False, "assigned_pairs": [selected_pair], "trial": False, "recommendation_state": "frozen", "selection_provenance": "dual_model_history", "capability_assignment": [{"node_id": tier, "effective_pair": selected_pair}]}
+        receipt["benchmark_selected_execution"] = {"schema_version": 2, "receipt_sha256": hashlib.sha256(adaptive_thread_id.encode("utf-8")).hexdigest(), "selected_pair": selected_pair, "effective_pair": selected_pair, "steady_state_logical_tokens": adaptive_tokens, "steady_state_execution_elapsed_ms": 1, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": route_signature}
     args.output.write_text(json.dumps(receipt) + "\\n", encoding="utf-8")
     suite_root = args.output.parents[2]
     call_record = {"run_id": args.workload_id, "direct": args.direct_task, "entry": False, "bootstrap": args.bootstrap_task, "entry_env_present": "CODEX_TASK_ANALYZE_ENTRY_CONTEXT" in os.environ, "benchmark_run_id": args.benchmark_run_id, "model": args.model, "effort": args.effort, "workdir": args.workdir, "state_db": args.state_db, "codex_home": os.environ.get("CODEX_HOME"), "sandbox": args.sandbox, "prompt_sha256": workload_prompt_sha256, "plan_exists": (suite_root / "suite-plan.json").is_file()}
@@ -424,11 +429,15 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(result["run_count"], 12)
         self.assertEqual(result["overall_status"], "pass")
         self.assertEqual(summary["overall_status"], "pass")
-        self.assertTrue(all(summary["tiers"][tier]["paired_wins"] == {"first_result_elapsed_ms": 2, "logical_total_tokens": 2, "total_wall_elapsed_ms": 2} for tier in module.TIERS))
-        self.assertEqual([(call["run_id"], call["direct"]) for call in calls[:6]], [("simple-r01-direct", True), ("simple-r01-global", False), ("medium-r01-direct", True), ("medium-r01-global", False), ("complex-r01-direct", True), ("complex-r01-global", False)])
-        self.assertEqual([(call["run_id"], call["direct"]) for call in calls[6:]], [("simple-r02-global", False), ("simple-r02-direct", True), ("medium-r02-global", False), ("medium-r02-direct", True), ("complex-r02-global", False), ("complex-r02-direct", True)])
+        self.assertTrue(all(summary["tiers"][tier]["paired_wins"] == {"steady_state_logical_tokens": 2, "steady_state_execution_elapsed_ms": 2, "first_result_elapsed_ms": 2, "total_wall_elapsed_ms": 2} for tier in module.TIERS))
+        performance_calls = [call for call in calls if not call["run_id"].endswith("-sol-entry-probe")]
+        probe_calls = [call for call in calls if call["run_id"].endswith("-sol-entry-probe")]
+        self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[:6]], [("simple-r01-direct", True), ("simple-r01-global", False), ("medium-r01-direct", True), ("medium-r01-global", False), ("complex-r01-direct", True), ("complex-r01-global", False)])
+        self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[6:]], [("simple-r02-global", False), ("simple-r02-direct", True), ("medium-r02-global", False), ("medium-r02-direct", True), ("complex-r02-global", False), ("complex-r02-direct", True)])
+        self.assertEqual([call["run_id"] for call in probe_calls], ["simple-r01-global-sol-entry-probe", "medium-r01-global-sol-entry-probe", "complex-r01-global-sol-entry-probe"])
         self.assertTrue(all(call["plan_exists"] for call in calls))
-        self.assertTrue(all((call["model"], call["effort"]) == (("gpt-5.6-sol", "ultra") if call["direct"] else ("gpt-5.6-luna", "max")) and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in calls))
+        self.assertTrue(all((call["model"], call["effort"]) == (("gpt-5.6-sol", "ultra") if call["direct"] else ("gpt-5.6-luna", "max")) and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in performance_calls))
+        self.assertTrue(all((call["model"], call["effort"]) == ("gpt-5.6-sol", "ultra") and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in probe_calls))
         self.assertTrue(all(Path(call["state_db"]).is_absolute() and Path(call["state_db"]).parent == Path(call["codex_home"]) for call in calls))
         self.assertTrue(all(call["benchmark_run_id"] == f"benchmark-{call['run_id']}" for call in calls))
         self.assertTrue(all(call["direct"] != call["bootstrap"] and call["entry"] is False and call["entry_env_present"] is False for call in calls))
@@ -444,6 +453,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(plan["runs"][1]["receipts"][0]["role"], "result-producer")
         self.assertEqual(plan["runs"][0]["selected_entry_pair"], "gpt-5.6-sol|ultra")
         self.assertEqual(plan["runs"][1]["selected_entry_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(len([run for run in plan["runs"] if "dual_entry_probe" in run]), 3)
+        self.assertTrue(all(run_summary.get("sol_entry_probe_status") == "pass" for run_summary in result["runs"] if run_summary["run_id"].endswith("r01-global")))
         self.assertEqual(plan["runs"][0]["environment"]["visible_catalog_sha256"], plan["runs"][1]["environment"]["visible_catalog_sha256"])
         self.assertEqual(plan["runs"][0]["environment"]["skills_catalog_file_count"], 2)
         self.assertEqual(plan["runs"][0]["environment"]["plugins_catalog_file_count"], 3)
@@ -544,10 +555,12 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertNotIn("repeat_count", plan)
         self.assertEqual(plan["tier_repeat_counts"], {"simple": 4, "medium": 2, "complex": 2})
         self.assertEqual(summary["tier_repeat_counts"], plan["tier_repeat_counts"])
-        simple_directions = [call["direct"] for call in calls if call["run_id"].startswith("simple")]
+        performance_calls = [call for call in calls if not call["run_id"].endswith("-sol-entry-probe")]
+        simple_directions = [call["direct"] for call in performance_calls if call["run_id"].startswith("simple")]
         self.assertEqual(simple_directions, [True, False, False, True, True, False, False, True])
-        self.assertEqual(len([call for call in calls if call["run_id"].startswith("medium")]), 4)
-        self.assertEqual(len([call for call in calls if call["run_id"].startswith("complex")]), 4)
+        self.assertEqual(len([call for call in performance_calls if call["run_id"].startswith("medium")]), 4)
+        self.assertEqual(len([call for call in performance_calls if call["run_id"].startswith("complex")]), 4)
+        self.assertEqual(len(calls) - len(performance_calls), 3)
         self.assertEqual(summary["overall_status"], "pass")
 
     def test_invalid_per_tier_repeat_cli_fails_before_plan_or_launch(self):
@@ -572,7 +585,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(module.BenchmarkRunnerError, "suite_outputs_already_exist"):
                 module.run_suite(args)
             self.assertEqual((root / "suite-plan.json").read_bytes(), first_plan)
-            self.assertEqual(len((root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()), 12)
+            self.assertEqual(len((root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()), 15)
 
     def test_quota_response_parser_keeps_only_bounded_scheduling_fields(self):
         response = {
@@ -644,7 +657,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
                 module.run_suite(args)
             self.assertEqual(raised.exception.reason, "quota_headroom_low")
             first_calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]
-            self.assertEqual([call["run_id"] for call in first_calls], ["simple-r01-direct", "simple-r01-global"])
+            self.assertEqual([call["run_id"] for call in first_calls], ["simple-r01-direct", "simple-r01-global", "simple-r01-global-sol-entry-probe"])
             self.assertTrue((root / "suite-plan.json").is_file())
             self.assertTrue((root / module.RUNNER_CONFIG_NAME).is_file())
             self.assertFalse((root / "summary.json").exists())
@@ -654,8 +667,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             self.quota_reader.return_value = available
             result = module.run_suite(args)
             all_calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]
-            self.assertEqual(len(all_calls), 12)
-            self.assertEqual(len({call["run_id"] for call in all_calls}), 12)
+            self.assertEqual(len(all_calls), 15)
+            self.assertEqual(len({call["run_id"] for call in all_calls}), 15)
             self.assertEqual(result["run_count"], 12)
             self.assertEqual(result["overall_status"], "pass")
             self.assertTrue(all(summary.get("resumed_existing") is True for summary in result["runs"][:2]))

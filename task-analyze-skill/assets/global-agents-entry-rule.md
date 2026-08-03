@@ -6,7 +6,7 @@ Score every submission 0-100 before task files:small 0-24,standard 25-49,complex
 
 `model_identity_disclosure.py render` outputs every origin/result/Ending verbatim:`Complexity:`+`· Model:`+`· Route:`,then `Evidence:`=`runtime receipt|verified entry (no runtime receipt)|task assignment (no runtime receipt)|configured selection (no runtime receipt)|unavailable`.A changed route adds `Model path:`.Receipt wins;else known pair;only unavailable=`unknown|unknown`;full routing data stays in receipts/ledgers.
 
-AUTO_BENCHMARK_ENTRY:Direct `gpt-5.6-sol|ultra`,no verify;Auto `gpt-5.6-luna|max` MUST child/graph then return child JSON;empty final:receipt+hash only;gate owns separate Ending,excludes only controller;compare task vs +Ending;all exact PASS.
+AUTO_BENCHMARK_ENTRY:Direct Sol-ultra no Skill;Auto Luna-max stable child/graph.Primary=execution time+tokens;route/calibration/Ending separate;first-result diagnostic;Sol probe exact result+route;all result/Ending PASS;primary totals lower.
 
 Unity:report the project path relative to its root;read ProjectVersion.txt;list Editors;resolve `unity editors path <version>`;confirm binary;use CLI first.If the external Editor binary needs an absolute path,use a validated `Cache/cache_path.json` entry or discover it once and register it there.On unavailable/unsupported/one failed diagnosis,report then fallback.Never change/install/substitute without approval.
 

@@ -26,13 +26,22 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
     def relative(self, root, path):
         return path.relative_to(root).as_posix()
 
+    def aggregate_tier(self, tier, repeat_count, manifests):
+        primary_manifests = []
+        for manifest in manifests:
+            primary_manifest = dict(manifest)
+            primary_manifest.setdefault("steady_state_logical_tokens", primary_manifest["logical_total_tokens"])
+            primary_manifest.setdefault("steady_state_execution_elapsed_ms", primary_manifest["first_result_elapsed_ms"])
+            primary_manifests.append(primary_manifest)
+        return module.aggregate_tier(tier, repeat_count, primary_manifests)
+
     def make_receipt(self, path, thread_id, pair, role, result_message, total_tokens, workload_prompt_sha256, workload_id, arm, result_ready_monotonic_ns=1, raw_prompt_text=None):
         model, effort = pair.split("|", 1)
         node_type = "direct-task" if arm == "direct" else "bootstrap-task"
         authorization_source = "benchmark-direct" if arm == "direct" else "benchmark-global-inline"
         execution_prompt = module.auto_benchmark_execution_prompt(raw_prompt_text) if arm == "global" and raw_prompt_text is not None else raw_prompt_text
         execution_prompt_sha256 = hashlib.sha256(execution_prompt.encode("utf-8")).hexdigest() if execution_prompt is not None else workload_prompt_sha256
-        receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": f"benchmark-{workload_id}", "benchmark_result_source": "controller_final", "workload_id": workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "child_result_ready_monotonic_ns": result_ready_monotonic_ns, "result_ready_clock": "benchmark-runner-monotonic", "result_ready_event_sequence": 1, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": execution_prompt_sha256}
+        receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": f"benchmark-{workload_id}", "benchmark_result_source": "controller_final", "workload_id": workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": model, "requested_effort": effort, "resolved_model": model, "resolved_effort": effort, "effective_model": model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "process_elapsed_ms": 60 if arm == "global" else 100, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "child_result_ready_monotonic_ns": result_ready_monotonic_ns, "result_ready_clock": "benchmark-runner-monotonic", "result_ready_event_sequence": 1, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": execution_prompt_sha256}
         if arm == "global":
             receipt["benchmark_prompt_file_verified"] = True
             receipt["benchmark_auto_launch_verified"] = True
@@ -60,6 +69,82 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         evidence = {"schema_version": module.SCHEMA_VERSION, "run_id": run_id, "started_monotonic_ns": 1_000_000_000, "first_result_monotonic_ns": 1_000_000_000 + first_result_ms * 1_000_000, "producer_finished_monotonic_ns": 1_000_000_000 + total_wall_ms * 1_000_000, "producer_process_exit_code": 0, "producer_timed_out": False, "producer_complete": True, "foreground_main_thread_id": foreground_main_thread_id, "foreground_state_snapshot": foreground_state_snapshot, "foreground_sessions": foreground_sessions, "launched_session_ids": session_ids, "retry_session_ids": [], "fallback_session_ids": [], "repair_session_ids": [], "state_snapshot": state_snapshot, "runtime_sessions": runtime_sessions}
         self.write_json(path, evidence)
         return evidence
+
+    def selected_execution(self, task_tokens):
+        pair = "gpt-5.6-luna|max"
+        signature = {
+            "selected_pair": pair,
+            "effective_pair": pair,
+            "scheduled_graph": False,
+            "assigned_pairs": [pair],
+            "trial": False,
+            "recommendation_state": "frozen",
+            "selection_provenance": "local_history",
+            "capability_assignment": [{"node_id": "result", "step_kind": "implementation", "capability_tags": ["benchmark"], "effective_pair": pair}],
+        }
+        return {
+            "schema_version": 2,
+            "receipt_sha256": "b" * 64,
+            "selected_pair": pair,
+            "effective_pair": pair,
+            "steady_state_logical_tokens": task_tokens,
+            "steady_state_execution_elapsed_ms": 60,
+            "calibration_attempt_count": 0,
+            "calibration_failure_elapsed_ms": 0,
+            "calibration_failure_logical_tokens": 0,
+            "route_signature": signature,
+        }
+
+    def write_passing_probe(self, root, run_plan, receipt, result_message):
+        probe_root = root / "entry-probes" / run_plan["run_id"]
+        receipt_path = probe_root / "receipt.json"
+        result_path = probe_root / "result.json"
+        summary_path = probe_root / "summary.json"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_path.write_text(result_message + "\n", encoding="utf-8")
+        selected_execution = receipt["benchmark_selected_execution"]
+        probe_receipt = dict(receipt)
+        probe_receipt.update({
+            "thread_id": f"probe-{run_plan['run_id']}",
+            "workload_id": f"{run_plan['run_id']}-sol-entry-probe",
+            "benchmark_run_id": f"benchmark-{run_plan['run_id']}-sol-entry-probe",
+            "requested_pair": module.SOL_ENTRY_PROBE_PAIR,
+            "effective_pair": module.SOL_ENTRY_PROBE_PAIR,
+            "requested_model": "gpt-5.6-sol",
+            "requested_effort": "ultra",
+            "resolved_model": "gpt-5.6-sol",
+            "resolved_effort": "ultra",
+            "effective_model": "gpt-5.6-sol",
+            "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(),
+            "benchmark_selected_execution": selected_execution,
+        })
+        self.write_json(receipt_path, probe_receipt)
+        result_sha256 = hashlib.sha256(result_path.read_bytes()).hexdigest()
+        signature = selected_execution["route_signature"]
+        summary = {
+            "schema_version": 1,
+            "status": "pass",
+            "reason": "exact_output_and_route_signature_match",
+            "tier": run_plan["tier"],
+            "primary_run_id": run_plan["run_id"],
+            "primary_entry_pair": module.AUTO_ENTRY_PAIR,
+            "probe_entry_pair": module.SOL_ENTRY_PROBE_PAIR,
+            "expected_result_sha256": run_plan["expected_sha256"],
+            "primary_result_sha256": hashlib.sha256((result_message + "\n").encode("utf-8")).hexdigest(),
+            "probe_result_sha256": result_sha256,
+            "primary_route_signature": signature,
+            "probe_route_signature": signature,
+            "route_signature_match": True,
+            "capability_assignment_match": True,
+        }
+        self.write_json(summary_path, summary)
+        run_plan["dual_entry_probe"] = {
+            "schema_version": 1,
+            "entry_pair": module.SOL_ENTRY_PROBE_PAIR,
+            "receipt_path": self.relative(root, receipt_path),
+            "result_path": self.relative(root, result_path),
+            "summary_path": self.relative(root, summary_path),
+        }
 
     def make_environment(self, root, name, skill_text="# Test skill\n", marketplace_root=None):
         codex_home = root / name
@@ -133,10 +218,16 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                     runtime_sessions = [self.make_runtime_session(thread_id, pair, tokens)]
                     if arm == "global":
                         runtime_sessions.append(self.make_runtime_session(f"{thread_id}-adaptive", "gpt-5.6-luna|max", task_tokens, thread_id, "subagent"))
+                        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                        selected_execution = self.selected_execution(task_tokens)
+                        receipt["benchmark_selected_execution"] = selected_execution
+                        self.write_json(receipt_path, receipt)
                     foreground_sessions = [self.make_foreground_session(runtime_session) for runtime_session in runtime_sessions]
                     self.make_evidence(evidence_path, run_id, [runtime_session["thread_id"] for runtime_session in runtime_sessions], first_result_ms, total_wall_ms, pair, tokens, runtime_sessions, foreground_sessions, thread_id)
                     receipt_spec = {"path": self.relative(root, receipt_path), "pair": pair, "role": "result-producer", "bind_result": True, "workload_prompt_sha256": prompt_sha256}
                     run_plan = {"run_id": run_id, "pair_id": pair_id, "tier": tier, "repeat_index": repeat_index, "arm": arm, "order_index": order_index, "prompt_path": self.relative(root, prompt_path), "prompt_sha256": prompt_sha256, "expected_result_path": self.relative(root, expected_path), "expected_sha256": expected_sha256, "result_path": self.relative(root, result_path), "evidence_path": self.relative(root, evidence_path), "receipts": [receipt_spec], "selected_entry_pair": pair, "entry_execution_mode": "executed", "source_root": self.relative(root, source_root), "source_files_pointer": "/source_files", "source_snapshot_sha256": source_snapshot_sha256}
+                    if arm == "global" and repeat_index == 1:
+                        self.write_passing_probe(root, run_plan, receipt, result_message)
                     runs.append(run_plan)
                     run_paths[run_id] = {"result": result_path, "evidence": evidence_path, "receipt": receipt_path, "expected": expected_path}
                     order_index += 1
@@ -158,18 +249,21 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertEqual(summary["token_rule"], module.TOKEN_RULE)
         self.assertEqual(summary["time_rule"], module.TIME_RULE)
         self.assertTrue(all(summary["tiers"][tier]["status"] == "pass" for tier in module.TIERS))
-        self.assertEqual(summary["tiers"]["simple"]["paired_wins"], {"first_result_elapsed_ms": 2, "logical_total_tokens": 2, "total_wall_elapsed_ms": 2})
-        self.assertEqual(summary["tiers"]["simple"]["direct_medians"]["logical_total_tokens"], 1001.5)
-        self.assertEqual(summary["tiers"]["simple"]["global_medians"]["logical_total_tokens"], 401.5)
+        self.assertEqual(summary["tiers"]["simple"]["paired_wins"]["steady_state_logical_tokens"], 2)
+        self.assertEqual(summary["tiers"]["simple"]["paired_wins"]["steady_state_execution_elapsed_ms"], 2)
+        self.assertEqual(summary["tiers"]["simple"]["direct_medians"]["steady_state_logical_tokens"], 1001.5)
+        self.assertEqual(summary["tiers"]["simple"]["global_medians"]["steady_state_logical_tokens"], 401.5)
         self.assertEqual(simple_direct_manifest["acceptance_status"], "pass")
-        self.assertEqual(simple_direct_manifest["logical_total_tokens"], 1001)
+        self.assertEqual(simple_direct_manifest["steady_state_logical_tokens"], 1001)
+        self.assertEqual(simple_direct_manifest["steady_state_execution_elapsed_ms"], 201)
+        self.assertEqual(simple_direct_manifest["route_selection_elapsed_ms"], 0)
         self.assertEqual(simple_direct_manifest["first_result_elapsed_ms"], 201)
         self.assertEqual(simple_direct_manifest["producer_elapsed_ms"], 301)
         self.assertEqual(simple_direct_manifest["total_wall_elapsed_ms"], simple_direct_manifest["producer_elapsed_ms"] + simple_direct_manifest["ending_real_elapsed_ms"])
         self.assertEqual(simple_direct_manifest["gate"]["generated_by"], "benchmark_suite_gate")
-        self.assertEqual(summary["tiers"]["simple"]["direct_totals"]["logical_total_tokens"], 2003)
-        self.assertEqual(summary["tiers"]["simple"]["global_totals"]["logical_total_tokens"], 803)
-        self.assertEqual(summary["tiers"]["simple"]["metric_gates"]["first_result_elapsed_ms"]["status"], "pass")
+        self.assertEqual(summary["tiers"]["simple"]["direct_totals"]["steady_state_logical_tokens"], 2003)
+        self.assertEqual(summary["tiers"]["simple"]["global_totals"]["steady_state_logical_tokens"], 803)
+        self.assertEqual(summary["tiers"]["simple"]["metric_gates"]["steady_state_execution_elapsed_ms"]["status"], "pass")
 
     def test_global_verified_adaptive_bridge_handoff_is_an_accepted_result_source(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -272,7 +366,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertIn("evidence_timing", manifest["gate"]["failures"])
         self.assertEqual(manifest["acceptance_status"], "fail")
 
-    def test_one_global_time_loss_fails_its_tier_and_overall_without_suite_masking(self):
+    def test_slower_first_result_is_visible_without_changing_steady_state_verdict(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path, _, run_paths = self.build_suite(root)
@@ -284,17 +378,16 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             self.write_json(run_paths["simple-2-global"]["evidence"], evidence)
             self.write_json(run_paths["simple-2-global"]["receipt"], receipt)
             summary = module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
-        self.assertEqual(summary["overall_status"], "fail")
-        self.assertEqual(summary["tiers"]["simple"]["status"], "fail")
-        self.assertIn("first_result_tolerance_loss", summary["tiers"]["simple"]["failures"])
-        self.assertNotIn("first_result_savings_threshold_loss", summary["tiers"]["simple"]["failures"])
-        self.assertNotIn("first_result_majority_loss", summary["tiers"]["simple"]["failures"])
-        self.assertNotIn("total_wall_raw_median_loss", summary["tiers"]["simple"]["failures"])
+        self.assertEqual(summary["overall_status"], "pass")
+        self.assertEqual(summary["tiers"]["simple"]["status"], "pass")
+        self.assertEqual(summary["tiers"]["simple"]["optimization_status"], "pass")
+        self.assertEqual(summary["tiers"]["simple"]["performance_diagnostics"], [])
+        self.assertGreater(summary["tiers"]["simple"]["global_totals"]["first_result_elapsed_ms"], summary["tiers"]["simple"]["direct_totals"]["first_result_elapsed_ms"])
         self.assertEqual(summary["tiers"]["medium"]["status"], "pass")
         self.assertEqual(summary["tiers"]["complex"]["status"], "pass")
-        self.assertEqual(summary["tiers"]["simple"]["metric_gates"]["first_result_elapsed_ms"]["status"], "fail")
+        self.assertEqual(summary["tiers"]["simple"]["metric_gates"]["steady_state_execution_elapsed_ms"]["status"], "pass")
 
-    def test_one_slower_first_result_pair_passes_when_first_result_gate_passes(self):
+    def test_one_slower_first_result_pair_is_a_separate_diagnostic(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path, _, run_paths = self.build_suite(root, repeat_count=4)
@@ -308,12 +401,14 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             summary = module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
         simple_summary = summary["tiers"]["simple"]
         self.assertEqual(summary["overall_status"], "pass")
+        self.assertEqual(simple_summary["status"], "pass")
+        self.assertEqual(simple_summary["optimization_status"], "pass")
         self.assertEqual(simple_summary["paired_wins"]["first_result_elapsed_ms"], 3)
-        self.assertEqual(simple_summary["metric_gates"]["first_result_elapsed_ms"]["status"], "pass")
         self.assertEqual(simple_summary["paired_wins"]["total_wall_elapsed_ms"], 3)
         self.assertNotIn("total_wall_elapsed_ms", simple_summary["metric_gates"])
         self.assertLess(simple_summary["global_medians"]["first_result_elapsed_ms"], simple_summary["direct_medians"]["first_result_elapsed_ms"])
         self.assertGreaterEqual(simple_summary["paired_savings_percent_medians"]["first_result_elapsed_ms"], module.MINIMUM_PAIRED_TIME_SAVINGS_PERCENT)
+        self.assertEqual(simple_summary["performance_diagnostics"], [])
 
     def test_short_task_time_jitter_over_five_percent_but_under_two_seconds_is_not_material(self):
         gate = module.evaluate_paired_metric(
@@ -345,10 +440,10 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 15000, "total_wall_elapsed_ms": 15000}
             global_manifest = {"run_id": f"global-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "first_result_elapsed_ms": global_time, "total_wall_elapsed_ms": global_time}
             manifests.extend([direct_manifest, global_manifest])
-        tier_summary = module.aggregate_tier("simple", 6, manifests)
-        time_gate = tier_summary["metric_gates"]["first_result_elapsed_ms"]
+        tier_summary = self.aggregate_tier("simple", 6, manifests)
+        time_gate = tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]
         self.assertEqual(tier_summary["status"], "pass")
-        self.assertNotIn("first_result_regression_bound_loss", tier_summary["failures"])
+        self.assertNotIn("steady_state_regression_bound_loss", tier_summary["performance_diagnostics"])
         self.assertEqual(time_gate["material_pair_regression_count"], 1)
         self.assertFalse(time_gate["worst_pair_regression_within_limit"])
         self.assertFalse(time_gate["regression_bound_required"])
@@ -371,13 +466,13 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
             global_manifest = {"run_id": f"global-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "first_result_elapsed_ms": 96, "total_wall_elapsed_ms": 96}
             manifests.extend([direct_manifest, global_manifest])
-        tier_summary = module.aggregate_tier("simple", 4, manifests)
+        tier_summary = self.aggregate_tier("simple", 4, manifests)
         self.assertEqual(tier_summary["status"], "pass")
-        self.assertEqual(tier_summary["paired_wins"]["first_result_elapsed_ms"], 4)
-        self.assertTrue(tier_summary["metric_gates"]["first_result_elapsed_ms"]["raw_global_median_lower"])
-        self.assertTrue(tier_summary["metric_gates"]["first_result_elapsed_ms"]["strict_majority_better"])
-        self.assertTrue(tier_summary["metric_gates"]["first_result_elapsed_ms"]["paired_savings_median_meets_threshold"])
-        self.assertNotIn("first_result_savings_threshold_loss", tier_summary["failures"])
+        self.assertEqual(tier_summary["paired_wins"]["steady_state_execution_elapsed_ms"], 4)
+        self.assertTrue(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["raw_global_median_lower"])
+        self.assertTrue(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["strict_majority_better"])
+        self.assertTrue(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["paired_savings_median_meets_threshold"])
+        self.assertNotIn("steady_state_savings_threshold_loss", tier_summary["performance_diagnostics"])
         self.assertNotIn("total_wall_savings_threshold_loss", tier_summary["failures"])
 
     def test_exact_five_percent_time_savings_passes(self):
@@ -386,10 +481,10 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
             global_manifest = {"run_id": f"global-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "first_result_elapsed_ms": 95, "total_wall_elapsed_ms": 95}
             manifests.extend([direct_manifest, global_manifest])
-        tier_summary = module.aggregate_tier("simple", 4, manifests)
+        tier_summary = self.aggregate_tier("simple", 4, manifests)
         self.assertEqual(tier_summary["status"], "pass")
-        self.assertEqual(tier_summary["paired_savings_percent_medians"]["first_result_elapsed_ms"], 5.0)
-        self.assertTrue(tier_summary["metric_gates"]["first_result_elapsed_ms"]["paired_savings_median_meets_threshold"])
+        self.assertEqual(tier_summary["paired_savings_percent_medians"]["steady_state_execution_elapsed_ms"], 5.0)
+        self.assertTrue(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["paired_savings_median_meets_threshold"])
 
     def test_medium_non_majority_time_wins_fail_even_when_raw_and_savings_medians_pass(self):
         manifests = []
@@ -397,13 +492,14 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "medium", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
             global_manifest = {"run_id": f"global-{repeat_index}", "tier": "medium", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "first_result_elapsed_ms": global_time, "total_wall_elapsed_ms": global_time}
             manifests.extend([direct_manifest, global_manifest])
-        tier_summary = module.aggregate_tier("medium", 4, manifests)
-        self.assertEqual(tier_summary["status"], "fail")
-        self.assertEqual(tier_summary["paired_wins"]["first_result_elapsed_ms"], 2)
-        self.assertTrue(tier_summary["metric_gates"]["first_result_elapsed_ms"]["raw_global_median_lower"])
-        self.assertTrue(tier_summary["metric_gates"]["first_result_elapsed_ms"]["paired_savings_median_meets_threshold"])
-        self.assertFalse(tier_summary["metric_gates"]["first_result_elapsed_ms"]["strict_majority_better"])
-        self.assertIn("first_result_majority_loss", tier_summary["failures"])
+        tier_summary = self.aggregate_tier("medium", 4, manifests)
+        self.assertEqual(tier_summary["status"], "pass")
+        self.assertEqual(tier_summary["optimization_status"], "fail")
+        self.assertEqual(tier_summary["paired_wins"]["steady_state_execution_elapsed_ms"], 2)
+        self.assertTrue(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["raw_global_median_lower"])
+        self.assertTrue(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["paired_savings_median_meets_threshold"])
+        self.assertFalse(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["strict_majority_better"])
+        self.assertIn("steady_state_majority_loss", tier_summary["performance_diagnostics"])
         self.assertNotIn("total_wall_majority_loss", tier_summary["failures"])
 
     def test_zero_or_negative_time_median_fails(self):
@@ -415,9 +511,9 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                     direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "medium", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
                     global_manifest = {"run_id": f"global-{repeat_index}", "tier": "medium", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "first_result_elapsed_ms": global_time, "total_wall_elapsed_ms": global_time}
                     manifests.extend([direct_manifest, global_manifest])
-                tier_summary = module.aggregate_tier("medium", 2, manifests)
-            self.assertEqual(tier_summary["status"], "fail")
-            self.assertIn("first_result_raw_median_loss", tier_summary["failures"])
+                tier_summary = self.aggregate_tier("medium", 2, manifests)
+            self.assertEqual(tier_summary["status"], "pass")
+            self.assertIn("steady_state_raw_median_loss", tier_summary["performance_diagnostics"])
             self.assertNotIn("total_wall_raw_median_loss", tier_summary["failures"])
             self.assertLessEqual(tier_summary["paired_savings_percent_medians"]["first_result_elapsed_ms"], expected_maximum_median)
 
@@ -427,7 +523,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
             global_manifest = {"run_id": f"global-{repeat_index}", "tier": "simple", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "first_result_elapsed_ms": 50, "total_wall_elapsed_ms": 10000}
             manifests.extend([direct_manifest, global_manifest])
-        tier_summary = module.aggregate_tier("simple", 6, manifests)
+            tier_summary = self.aggregate_tier("simple", 6, manifests)
         self.assertEqual(tier_summary["status"], "pass")
         self.assertNotIn("total_wall_elapsed_ms", tier_summary["metric_gates"])
         self.assertGreater(tier_summary["global_totals"]["total_wall_elapsed_ms"], tier_summary["direct_totals"]["total_wall_elapsed_ms"])
@@ -435,13 +531,14 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
     def test_complex_first_result_time_is_diagnostic(self):
         manifests = []
         for repeat_index in range(1, 5):
-            direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "complex", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
-            global_manifest = {"run_id": f"global-{repeat_index}", "tier": "complex", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "first_result_elapsed_ms": 150, "total_wall_elapsed_ms": 150}
+            direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "complex", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "steady_state_logical_tokens": 100, "steady_state_execution_elapsed_ms": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
+            global_manifest = {"run_id": f"global-{repeat_index}", "tier": "complex", "repeat_index": repeat_index, "arm": "global", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 50, "steady_state_logical_tokens": 50, "steady_state_execution_elapsed_ms": 50, "first_result_elapsed_ms": 150, "total_wall_elapsed_ms": 150}
             manifests.extend([direct_manifest, global_manifest])
-        tier_summary = module.aggregate_tier("complex", 4, manifests)
+        tier_summary = self.aggregate_tier("complex", 4, manifests)
         self.assertEqual(tier_summary["status"], "pass")
-        self.assertEqual(tier_summary["metric_gates"]["first_result_elapsed_ms"]["status"], "pass")
-        self.assertNotIn("first_result_aggregate_loss", tier_summary["failures"])
+        self.assertEqual(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["status"], "pass")
+        self.assertEqual(tier_summary["performance_diagnostics"], [])
+        self.assertGreater(tier_summary["global_totals"]["first_result_elapsed_ms"], tier_summary["direct_totals"]["first_result_elapsed_ms"])
 
     def test_per_tier_repeat_counts_freeze_run_count_and_alternating_order(self):
         tier_repeat_counts = {"simple": 4, "medium": 2, "complex": 2}

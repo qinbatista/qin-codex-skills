@@ -492,21 +492,29 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(active["selected_pair"], pairs[pairs.index("gpt-5.6-terra|medium") + 1])
         self.assertEqual(active["reason"], "quality_failure_one_rung_up")
 
-    def test_like_for_like_cost_ranks_tokens_then_time_then_weaker_pair(self):
+    def test_like_for_like_cost_is_diagnostic_and_never_overrides_lowest_correct_pair(self):
         records = [
             self.quality_record("gpt-5.6-luna|low", workload="1", tokens=200, elapsed=100),
             self.quality_record("gpt-5.6-terra|medium", workload="1", tokens=100, elapsed=500),
         ]
-        token_winner, _ = self.active(records)
-        self.assertEqual(token_winner["selected_pair"], "gpt-5.6-terra|medium")
-        self.assertEqual(token_winner["reason"], "receipt_cost_best_verified")
+        token_diagnostic, pairs = self.active(records)
+        self.assertEqual(token_diagnostic["selected_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(token_diagnostic["reason"], "verified_floor_retained")
+        self.assertEqual(token_diagnostic["cost_evidence"]["status"], "like_for_like")
         records[0].update(total_tokens=100, process_ms=300)
         records[1].update(total_tokens=100, process_ms=500)
-        time_winner, _ = self.active(records)
-        self.assertEqual(time_winner["selected_pair"], "gpt-5.6-luna|low")
+        time_diagnostic, _ = self.active(records)
+        self.assertEqual(time_diagnostic["selected_pair"], "gpt-5.6-luna|low")
         records[0]["process_ms"] = records[1]["process_ms"] = 500
-        tie_winner, _ = self.active(records)
-        self.assertEqual(tie_winner["selected_pair"], "gpt-5.6-luna|low")
+        tie_diagnostic, _ = self.active(records)
+        self.assertEqual(tie_diagnostic["selected_pair"], "gpt-5.6-luna|low")
+        recovered, _ = self.active([
+            self.quality_record(pairs[0], status="fail", workload="1", tokens=20, elapsed=20),
+            self.quality_record(pairs[1], workload="1", tokens=300, elapsed=300),
+            self.quality_record(pairs[2], workload="1", tokens=30, elapsed=30),
+        ])
+        self.assertEqual(recovered["selected_pair"], pairs[1])
+        self.assertEqual(recovered["reason"], "verified_quality_boundary")
 
     def test_bound_historical_failure_records_once_after_recommendation_advances(self):
         pair = "gpt-5.6-terra|high"

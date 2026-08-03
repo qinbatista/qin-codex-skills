@@ -140,11 +140,11 @@ def validate_fixture(path=FIXTURE_PATH, skills_root=None, require_installed=Fals
     if set(by_prompt) != set(DIRECT_PROMPTS + [COMPLEX_PROMPT]):
         failures.append("graduated fixture raw prompts do not match the required set")
     template = payload.get("admitted_dispatcher_template")
+    resolved_skills_root = Path(skills_root).resolve() if skills_root is not None else _dispatcher_module().resolve_skills_root()
     if require_installed:
-        resolved_root = Path(skills_root or Path(__file__).resolve().parents[2])
         for container in [*scenarios, template if isinstance(template, dict) else {}]:
             for skill_id in required_skill_ids(container):
-                _check_installed(skill_id, resolved_root, failures)
+                _check_installed(skill_id, resolved_skills_root, failures)
     for prompt in DIRECT_PROMPTS:
         scenario = by_prompt.get(prompt, {})
         if scenario.get("complexity") != "easy" or scenario.get("route_type") != "inline_tool" or scenario.get("skill") != "chrome:control-chrome":
@@ -171,7 +171,7 @@ def validate_fixture(path=FIXTURE_PATH, skills_root=None, require_installed=Fals
     for scenario in scenarios:
         if any(route_id in {"task-analyze-skill", "workflow-skill"} for route_id in scenario.get("route", [])):
             failures.append(f"{scenario.get('prompt')}: ordinary route invokes full routing skills")
-    _validate_dispatcher_template(template, Path(skills_root or Path(__file__).resolve().parents[2]), failures)
+    _validate_dispatcher_template(template, resolved_skills_root, failures)
     return failures
 
 

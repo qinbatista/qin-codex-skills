@@ -35,7 +35,7 @@ Eligible optimization production follows the catalog-generated shared ladder and
 
 - Shared role models are cold-start hints only; auto-build or refresh the highest registered numeric GPT family from weakest to strongest and exclude older families from active switching.
 - Every Python/C#/Unity C# helper or implementation node still loads `code-skill`. Eligible small low-risk edits try Spark first; other production executes the saved contextual quality pair. Two Real PASS results permit one-rung descent and verified correctness/quality failure moves one rung up. Spark failure suppresses the matching score band and upgrades the next task. Spark remains available for admitted disjoint source branches.
-- Correctness and quality are eligibility gates. Rank tokens, then process time, then weaker rung only when every compared Real-passing pair shares the same exact workload hash with complete metrics; otherwise use the quality boundary.
+- Correctness and quality are eligibility gates. Routing always keeps the lowest Real-passing rung above the strongest failed rung; like-for-like token/time evidence evaluates the strategy but never promotes a stronger passing pair over that lowest-correct boundary.
 - A frozen exact-profile pair is reused until verified failure or material ladder, hard-floor, profile, or policy drift.
 
 An admitted node does not silently inherit or reselect another pair. Ineligible inline work does not fabricate a receipt. A label is not execution proof; eligible production and any claimed model routing, benchmark, or savings require the matched runtime receipt.
@@ -74,13 +74,13 @@ Do not claim savings from shorter text, different prompts, different inputs, or 
 
 - Compare identical task scope, prompts, inputs, topology, sandbox, and acceptance criteria.
 - To compare Direct versus Global, keep user/project configuration identical. Run Direct with the exact raw prompt through `model_execution_receipt.py run --direct-task --benchmark-run-id benchmark-...` and Global through `--bootstrap-task --benchmark-run-id benchmark-...`; neither arm enters Task Analyze context or adds `LOCKED_ROUTE_NODE`, and neither uses `--ignore-user-config`.
-- Aggregate every unique entry, collaboration, dispatcher, retry, and incomplete worker session exactly once. Never count a canonical receipt and its matching attempt receipt twice.
-- Treat first-result foreground tokens/time as the user task cost. Record Ending Real totals only as diagnostics; exclude all Ending/verification time and tokens from task-cost and admission comparisons. A timeout or missing final result fails the optimization gate and cannot support a savings claim.
+- For adaptive model-matching claims, make the primary comparison the clean stable selected execution after the correct route is known: Direct counts its complete fixed task census and Auto counts its selected child/graph receipt. Exclude matching/controller time, calibration failures, retries, fallbacks, repairs, entry-invariance probes, and Ending from primary token/time savings, but report each separately rather than hiding it.
+- Keep actual first-result wait as an end-to-end diagnostic. Never advertise first-result savings unless that metric itself is lower. A timeout, missing final result, unstable/trial route, entry mismatch, or incorrect Ending fails the optimization gate.
 - Keep cached input separate; it is already part of input tokens.
 - Keep reasoning output separate; it is already part of output tokens.
 - Compare critical-path elapsed time for parallel workflows.
 - Treat one pair as a smoke result; prefer alternating repeated runs and medians.
-- Never let faster execution override a higher total-token result when the routing objective is token-first, time-second.
+- Require every compared result and Ending to be correct, Luna/Sol entry to converge on the same stable route, and both aggregate steady logical tokens and steady execution time to be lower. Keep per-tier regressions visible even when the aggregate verdict passes.
 
 ## Generated File Placement
 

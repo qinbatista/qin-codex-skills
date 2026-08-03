@@ -4,8 +4,8 @@ This snapshot and the shared JSON registry come from the local Codex catalog. Th
 
 - Source: `~/.codex/models_cache.json`
 - Codex client version: `0.146.0`
-- Local catalog snapshot: `2026-07-25T18:45:01.563456Z`
-- Semantic catalog SHA-256: `ed69842c6a3023a23a83e32b315829bbc7788b6f0a8174dfae7482f8113fe36b`
+- Local catalog snapshot: `2026-08-03T03:57:13.631264Z`
+- Semantic catalog SHA-256: `cc94381ad8e45d5ff1bc32597b28d6ee780b8f4a949ea40bc98265826e299917`
 - Registry schema: `2`
 - Active quality family: `gpt-5.6` (highest numeric GPT family)
 

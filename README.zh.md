@@ -57,21 +57,22 @@
 
 ## 📊 真实自适应 Benchmark：先完成，再后台验证
 
-当前冻结 v46 比较：**无 Skill** 固定使用 `gpt-5.6-sol | ultra`；**有 Skill** 从 `gpt-5.6-luna | max` 进入，再按冻结历史逐步骤选模。所有 adaptive child/graph 都计入，只排除 Luna 入口 controller。
+当前冻结 v47 比较：**无 Skill** 固定使用 `gpt-5.6-sol | ultra`；**有 Skill** 从 `gpt-5.6-luna | max` 进入，再按冻结历史逐步骤选模。主指标从正确路由已经冻结后开始：计入选中的 producer/graph 执行；入口匹配、controller、校准失败、retry/fallback/repair 和 Ending 全部单列。
 
-<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="当前 Direct 与 Auto 基准：所有结果和 Ending 正确，但性能策略门槛失败"></picture>
+<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="当前 Direct 与 Auto 基准：所有结果和 Ending 通过；总体稳定执行时间和 token 降低，同时保留简单和中等档退化"></picture>
 
-**6 组 A/B · 12 次运行 · 12/12 精确结果与 12/12 Ending PASS · 0 retry · 0 fallback · 0 repair**
+**6 组 A/B · 12 次运行 · 12/12 精确结果与 12/12 Ending PASS · 3/3 Sol 入口路由探针 PASS · 0 retry/fallback/repair**
 
-| 档位 | Direct token 中位数 | Auto token 中位数 | 配对 token 节省 | Direct 首结果 | Auto 首结果 | 配对时间节省 |
+| 档位 | Direct 稳定 token | Auto 稳定 token | 节省 | Direct 稳定执行 | Auto 稳定执行 | 节省 |
 |---|---:|---:|---:|---:|---:|---:|
-| 简单 | 25,881.5 | 29,091.5 | -30.064% | 13.430s | 19.831s | -50.694% |
-| 中等 | 16,366 | 36,632.5 | -123.834% | 10.545s | 34.323s | -225.472% |
-| 复杂 | 263,445.5 | 138,267 | **+44.428%** | 32.375s | 56.927s | -79.224% |
+| 简单 | 32,654 | 93,448 | -186.176% | 22.896s | 17.561s | +23.301% |
+| 中等 | 49,451 | 91,398 | -84.825% | 27.676s | 28.057s | -1.377% |
+| 复杂 | 538,903 | 273,442 | **+49.260%** | 67.047s | 45.481s | **+32.165%** |
+| **总体** | **621,008** | **458,288** | **+26.203%** | **117.619s** | **91.099s** | **+22.547%** |
 
-**实测结论：正确率 PASS；性能策略 FAIL。** 复杂任务带动总任务 token 降低 33.269%，但 Auto 总体慢 97.127%，简单和中等任务也都退化。因此证据否定“普遍节省”的结论；logical token 不等于计费 token。
+**实测结论：正确率/证据 PASS；冻结路由后的总体性能 PASS。** 稳定执行节省 26.520 秒和 162,720 logical token。实际首结果时间更慢（`117.619s → 211.145s`），因为 120.046 秒的路由/controller 工作按定义不计入稳定态节省，并且单独公开。简单和中等档的 token 退化仍然保留；这只是本组冻结任务的证据，不是普遍结论或计费价格结论。
 
-[查看精确 v46 报告。](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [打开脱敏 benchmark 证据。](./task-analyze-skill/assets/model-routing-benchmark-example.json)
+[查看精确 v47 报告。](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [打开脱敏 benchmark 证据。](./task-analyze-skill/assets/model-routing-benchmark-example.json)
 
 ## 🧩 八个公开 Skill
 

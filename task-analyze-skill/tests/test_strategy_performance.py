@@ -12,8 +12,10 @@ module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
 
 
-def arm(tokens, first_result_ms, total_wall_ms, gate_status="pass"):
-    return {"gate_status": gate_status, "completion": "complete", "metrics_complete": True, "logical_total_tokens": tokens, "first_result_elapsed_ms": first_result_ms, "total_wall_elapsed_ms": total_wall_ms, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "unreceipted_descendant_count": 0}
+def arm(tokens, first_result_ms, total_wall_ms, gate_status="pass", steady_tokens=None, steady_execution_ms=None):
+    steady_tokens = tokens if steady_tokens is None else steady_tokens
+    steady_execution_ms = first_result_ms if steady_execution_ms is None else steady_execution_ms
+    return {"gate_status": gate_status, "completion": "complete", "metrics_complete": True, "logical_total_tokens": tokens, "steady_state_logical_tokens": steady_tokens, "steady_state_execution_elapsed_ms": steady_execution_ms, "route_selection_elapsed_ms": first_result_ms - steady_execution_ms, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "first_result_elapsed_ms": first_result_ms, "total_wall_elapsed_ms": total_wall_ms, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "unreceipted_descendant_count": 0}
 
 
 class StrategyPerformanceTests(unittest.TestCase):
@@ -185,8 +187,8 @@ class StrategyPerformanceTests(unittest.TestCase):
                 recommendation = module.record_sample(args)
         self.assertTrue(recommendation["admitted"])
         self.assertTrue(recommendation["regression_bounds_pass"])
-        self.assertTrue(recommendation["metric_gates"]["logical_total_tokens"]["status"] == "pass")
-        self.assertLess(recommendation["metric_gates"]["logical_total_tokens"]["worst_pair_savings_percent"], 0)
+        self.assertTrue(recommendation["metric_gates"]["steady_state_logical_tokens"]["status"] == "pass")
+        self.assertLess(recommendation["metric_gates"]["steady_state_logical_tokens"]["worst_pair_savings_percent"], 0)
 
     def test_workload_hashes_do_not_share_admission(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -43,24 +43,15 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
                 module.CHILD_TIMEOUT_ENV: "120",
                 module.CACHE_ROOT_ENV: str(root / "Cache" / "bridge"),
                 module.PYTHON_ENV: str(Path(module.sys.executable).resolve()),
+                module.ENTRY_MODEL_ENV: "gpt-5.6-luna",
+                module.ENTRY_EFFORT_ENV: "max",
             }
-            with patch.dict(os.environ, environment, clear=False), patch.object(module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=summary, stderr="")) as run_mock:
+            execution = {"schema_version": 2, "receipt_sha256": "a" * 64, "selected_pair": "gpt-5.6-sol|ultra", "effective_pair": "gpt-5.6-sol|ultra", "steady_state_logical_tokens": 12, "steady_state_execution_elapsed_ms": 5, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": {"selected_pair": "gpt-5.6-sol|ultra", "effective_pair": "gpt-5.6-sol|ultra", "scheduled_graph": False, "assigned_pairs": ["gpt-5.6-sol|ultra"], "trial": False, "recommendation_state": "frozen", "selection_provenance": "local_history", "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-5.6-sol|ultra"}]}}
+            with patch.dict(os.environ, environment, clear=False), patch.object(module, "run_adaptive_entry", return_value=({"b": 2, "a": 1}, execution)) as run_mock:
                 result = module.run_bridge(args)
         self.assertEqual(result, {"b": 2, "a": 1})
-        command = run_mock.call_args.args[0]
-        self.assertEqual(command[0], module.sys.executable)
-        self.assertIn(str(adaptive_runner.resolve()), command)
-        self.assertIn("read-only", command)
-        project_root_index = command.index("--project-root") + 1
-        workdir_index = command.index("--workdir") + 1
-        cache_root_index = command.index("--cache-root") + 1
-        self.assertEqual(command[project_root_index], str(source.resolve()))
-        self.assertNotEqual(command[workdir_index], str(source.resolve()))
-        self.assertTrue(Path(command[workdir_index]).is_relative_to((root / "Cache" / "bridge").resolve()))
-        self.assertTrue(Path(command[cache_root_index]).is_relative_to(Path(command[workdir_index])))
-        self.assertEqual(run_mock.call_args.kwargs["cwd"], Path(command[workdir_index]))
-        self.assertEqual(run_mock.call_args.kwargs["input"], prompt)
-        self.assertFalse(run_mock.call_args.kwargs["shell"])
+        self.assertEqual(run_mock.call_count, 1)
+        self.assertEqual(run_mock.call_args_list[0].args[1], ("gpt-5.6-luna", "max"))
 
     def test_bridge_rejects_prompt_hash_drift_before_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -114,13 +105,13 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
     def test_launch_claim_allows_exactly_one_adaptive_producer(self):
         with tempfile.TemporaryDirectory() as temporary:
             cache_root = Path(temporary) / "Cache" / "bridge"
-            claim_path = module.claim_adaptive_launch(cache_root, "a" * 64)
+            claim_path = module.claim_adaptive_launch(cache_root, "a" * 64, ("gpt-5.6-luna", "max"))
             self.assertEqual(
                 json.loads(claim_path.read_text(encoding="utf-8")),
-                {"schema_version": 1, "workload_sha256": "a" * 64},
+                {"schema_version": 3, "workload_sha256": "a" * 64, "entry_pair": "gpt-5.6-luna|max"},
             )
             with self.assertRaisesRegex(ValueError, "already launched"):
-                module.claim_adaptive_launch(cache_root, "a" * 64)
+                module.claim_adaptive_launch(cache_root, "a" * 64, ("gpt-5.6-luna", "max"))
 
 
 if __name__ == "__main__":

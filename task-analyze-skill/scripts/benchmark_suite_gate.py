@@ -24,8 +24,8 @@ except ModuleNotFoundError:
     auto_benchmark_execution_prompt = _benchmark_prompt_contract.auto_benchmark_execution_prompt
 
 
-SCHEMA_VERSION = 4
-MANIFEST_SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
+MANIFEST_SCHEMA_VERSION = 7
 CATALOG_SCHEMA_VERSION = 1
 MINIMUM_PAIRED_SAVINGS_PERCENT = 0.0
 MINIMUM_PAIRED_TIME_SAVINGS_PERCENT = MINIMUM_PAIRED_SAVINGS_PERCENT
@@ -39,10 +39,10 @@ ARMS = ("direct", "global")
 DIRECT_BASELINE_PAIR = "gpt-5.6-sol|ultra"
 AUTO_ENTRY_PAIR = "gpt-5.6-luna|max"
 ARM_ENTRY_PAIRS = {"direct": DIRECT_BASELINE_PAIR, "global": AUTO_ENTRY_PAIR}
-GATED_METRICS = ("logical_total_tokens", "first_result_elapsed_ms")
-OVERALL_RULE = "simple AND medium AND complex"
-TOKEN_RULE = "For result-ready task execution tokens: Direct counts its fixed Sol Ultra producer; Auto excludes the Luna Max entry controller and counts its adaptive child/graph sessions. Global cohort total < Direct cohort total AND raw Global median < raw Direct median AND paired savings median is non-negative; mandatory post-result Ending sessions remain in the completion census but not the task-token metric"
-TIME_RULE = "For user-visible first-result time, including any required producer Quick Check: Simple must stay inside the Direct cohort's measured median-absolute-deviation noise envelope; Medium requires lower cohort total, lower raw median, non-negative paired savings median, and a strict majority of faster pairs; Complex time is diagnostic and cannot veto correctness plus token benefit. Detached post-result Ending thread time is excluded"
+GATED_METRICS = ("steady_state_logical_tokens", "steady_state_execution_elapsed_ms")
+OVERALL_RULE = "all task and Ending correctness PASS AND aggregate steady-state execution lower AND aggregate steady-state logical tokens lower"
+TOKEN_RULE = "Primary token savings use steady_state_logical_tokens only: Direct uses its fixed Sol Ultra producer receipt; Auto uses the verified frozen adaptive bridge selected child/graph receipt. Entry-controller, matching, calibration failures, retries, fallbacks, repairs, and Ending are excluded from the primary metric and remain separately reported. Overall PASS requires the aggregate Auto cohort total to be lower than Direct; per-tier medians, paired savings, and regressions remain visible diagnostics"
+TIME_RULE = "Primary time savings use steady_state_execution_elapsed_ms only: Direct uses fixed Sol Ultra producer execution; Auto uses verified frozen adaptive bridge selected execution or graph critical path. Overall PASS requires the aggregate Auto cohort total to be lower than Direct. first_result_elapsed_ms remains an end-to-end diagnostic and is never advertised as saved unless separately lower; route selection, calibration, and Ending remain separate diagnostics"
 ENTRY_EXECUTION_MODES = frozenset({"executed", "deterministic-pre-model"})
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -50,7 +50,7 @@ PLAN_COMMON_KEYS = frozenset({"schema_version", "suite_id", "runs"})
 PLAN_LEGACY_KEYS = PLAN_COMMON_KEYS | {"repeat_count"}
 PLAN_TIER_KEYS = PLAN_COMMON_KEYS | {"tier_repeat_counts"}
 RUN_REQUIRED_KEYS = frozenset({"run_id", "pair_id", "tier", "repeat_index", "arm", "order_index", "prompt_sha256", "expected_result_path", "expected_sha256", "result_path", "evidence_path", "receipts", "selected_entry_pair", "entry_execution_mode"})
-RUN_OPTIONAL_KEYS = frozenset({"prompt_path", "source_root", "source_files_pointer", "source_snapshot_sha256", "environment"})
+RUN_OPTIONAL_KEYS = frozenset({"prompt_path", "source_root", "source_files_pointer", "source_snapshot_sha256", "environment", "dual_entry_probe"})
 RECEIPT_REQUIRED_KEYS = frozenset({"path", "pair", "role", "bind_result", "workload_prompt_sha256"})
 RECEIPT_OPTIONAL_KEYS = frozenset()
 EVIDENCE_KEYS = frozenset({"schema_version", "run_id", "started_monotonic_ns", "first_result_monotonic_ns", "producer_finished_monotonic_ns", "producer_process_exit_code", "producer_timed_out", "producer_complete", "foreground_main_thread_id", "foreground_state_snapshot", "foreground_sessions", "launched_session_ids", "retry_session_ids", "fallback_session_ids", "repair_session_ids", "state_snapshot", "runtime_sessions"})
@@ -63,6 +63,9 @@ CATALOG_PAIR_FIELDS = ("catalog_schema_version", "skills_catalog_sha256", "skill
 RUNTIME_CONTEXT_PAIR_FIELDS = ("models_cache_sha256", "memories_sha256")
 ENVIRONMENT_KEYS = frozenset({"codex_home", "config_path", "config_sha256", "agents_path", "agents_sha256", "models_cache_path", "models_cache_sha256", "memories_root", "memories_sha256", "workdir", "sandbox", "receipt_runner_path", "receipt_runner_sha256"}) | CATALOG_ENVIRONMENT_KEYS
 ENDING_REAL_METHOD = "post-result-deterministic-exact-source-receipt-session-gate"
+SOL_ENTRY_PROBE_PAIR = DIRECT_BASELINE_PAIR
+DUAL_ENTRY_PROBE_KEYS = frozenset({"schema_version", "entry_pair", "receipt_path", "result_path", "summary_path"})
+DUAL_ENTRY_PROBE_SUMMARY_KEYS = frozenset({"schema_version", "status", "reason", "tier", "primary_run_id", "primary_entry_pair", "probe_entry_pair", "expected_result_sha256", "primary_result_sha256", "probe_result_sha256", "primary_route_signature", "probe_route_signature", "route_signature_match", "capability_assignment_match"})
 
 
 class BenchmarkGateError(ValueError):
@@ -469,6 +472,16 @@ def validate_run_plan(run_plan, repeat_limit):
         require_sha256(run_plan.get("source_snapshot_sha256"), "plan_source_snapshot_hash")
     if "environment" in run_plan:
         validate_environment_plan(run_plan["environment"])
+    dual_entry_probe = run_plan.get("dual_entry_probe")
+    probe_required = run_plan["arm"] == "global" and repeat_index == 1
+    if probe_required != isinstance(dual_entry_probe, dict):
+        raise BenchmarkGateError("plan_dual_entry_probe")
+    if dual_entry_probe is not None:
+        require_exact_keys(dual_entry_probe, DUAL_ENTRY_PROBE_KEYS, frozenset(), "plan_dual_entry_probe")
+        if dual_entry_probe["schema_version"] != 1 or dual_entry_probe["entry_pair"] != SOL_ENTRY_PROBE_PAIR:
+            raise BenchmarkGateError("plan_dual_entry_probe")
+        for path_key in ["receipt_path", "result_path", "summary_path"]:
+            require_string(dual_entry_probe[path_key], "plan_dual_entry_probe")
 
 
 def validate_plan(plan):
@@ -886,6 +899,85 @@ def validate_receipt(receipt, receipt_spec, result_message, run_plan, expected_e
     return {"thread_id": thread_id, "pair": receipt.get("effective_pair"), "role": receipt.get("node_role"), "total_tokens": total_tokens, "retry_count": retry_count, "fallback_count": fallback_count, "result_ready_monotonic_ns": result_ready_monotonic_ns, "failures": failures}
 
 
+def selected_execution_metrics(receipt, arm, runtime_summary, first_result_elapsed_ms):
+    if arm == "direct":
+        total_tokens = runtime_summary.get("logical_total_tokens")
+        elapsed_ms = first_result_elapsed_ms
+        route_attempts = receipt.get("route_attempts") if isinstance(receipt.get("route_attempts"), list) else []
+        failed_attempts = [attempt for attempt in route_attempts if isinstance(attempt, dict) and attempt.get("status") != "pass"]
+        calibration_attempt_count = len(failed_attempts) + int(receipt.get("trial") is True) + len(receipt.get("reroutes") if isinstance(receipt.get("reroutes"), list) else [])
+        calibration_failure_elapsed_ms = sum(attempt.get("process_elapsed_ms", 0) for attempt in failed_attempts if isinstance(attempt.get("process_elapsed_ms"), int) and attempt["process_elapsed_ms"] >= 0)
+        calibration_failure_logical_tokens = sum((attempt.get("tokens") or {}).get("total_tokens", 0) for attempt in failed_attempts if isinstance((attempt.get("tokens") or {}).get("total_tokens", 0), int) and (attempt.get("tokens") or {}).get("total_tokens", 0) >= 0)
+        signature = {
+            "selected_pair": receipt.get("effective_pair"),
+            "effective_pair": receipt.get("effective_pair"),
+            "scheduled_graph": False,
+            "assigned_pairs": [receipt.get("effective_pair")],
+            "trial": False,
+            "recommendation_state": "direct_fixed",
+            "selection_provenance": "direct_fixed",
+            "capability_assignment": [{"node_id": "direct", "effective_pair": receipt.get("effective_pair")}],
+        }
+        clean = receipt.get("status") == "pass" and receipt.get("metrics_complete") is True and isinstance(route_attempts, list) and route_attempts and not failed_attempts and receipt.get("trial") in {None, False} and receipt.get("reroutes") == [] and receipt.get("node_role") != "repair"
+    else:
+        execution = receipt.get("benchmark_selected_execution")
+        if not isinstance(execution, dict) or set(execution) != {"schema_version", "receipt_sha256", "selected_pair", "effective_pair", "steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "calibration_attempt_count", "calibration_failure_elapsed_ms", "calibration_failure_logical_tokens", "route_signature"}:
+            return None, ["selected_execution_receipt_missing"]
+        signature = execution.get("route_signature")
+        total_tokens = execution.get("steady_state_logical_tokens")
+        elapsed_ms = execution.get("steady_state_execution_elapsed_ms")
+        calibration_attempt_count = execution.get("calibration_attempt_count")
+        calibration_failure_elapsed_ms = execution.get("calibration_failure_elapsed_ms")
+        calibration_failure_logical_tokens = execution.get("calibration_failure_logical_tokens")
+        clean = execution.get("schema_version") == 2 and isinstance(execution.get("receipt_sha256"), str) and SHA256_PATTERN.fullmatch(execution["receipt_sha256"]) is not None and isinstance(signature, dict) and signature.get("trial") is False and signature.get("recommendation_state") in {"frozen", "priority_verified", "verified_recovery"} and signature.get("selection_provenance") in {"dual_model_history", "local_transfer_history", "local_and_obsidian", "local_history", "obsidian_history"} and isinstance(signature.get("capability_assignment"), list) and signature["capability_assignment"] and execution.get("selected_pair") == signature.get("selected_pair")
+    failures = []
+    if not isinstance(total_tokens, int) or total_tokens < 0:
+        failures.append("steady_state_tokens_invalid")
+    if not isinstance(elapsed_ms, int) or elapsed_ms < 0:
+        failures.append("steady_state_elapsed_invalid")
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in [calibration_attempt_count, calibration_failure_elapsed_ms, calibration_failure_logical_tokens]):
+        failures.append("calibration_diagnostics_invalid")
+    if not clean:
+        failures.append("steady_state_not_clean")
+    return {"steady_state_logical_tokens": total_tokens if isinstance(total_tokens, int) else None, "steady_state_execution_elapsed_ms": elapsed_ms if isinstance(elapsed_ms, int) else None, "calibration_attempt_count": calibration_attempt_count if isinstance(calibration_attempt_count, int) else None, "calibration_failure_elapsed_ms": calibration_failure_elapsed_ms if isinstance(calibration_failure_elapsed_ms, int) else None, "calibration_failure_logical_tokens": calibration_failure_logical_tokens if isinstance(calibration_failure_logical_tokens, int) else None, "route_signature": signature}, failures
+
+
+def validate_dual_entry_probe(plan_root, run_plan, primary_receipt, expected_sha256, primary_result_sha256):
+    probe = run_plan.get("dual_entry_probe")
+    if probe is None:
+        return []
+    failures = []
+    try:
+        probe_receipt_path = resolve_plan_path(plan_root, probe["receipt_path"], "entry_invariance_probe_path")
+        probe_result_path = resolve_plan_path(plan_root, probe["result_path"], "entry_invariance_probe_path")
+        probe_summary_path = resolve_plan_path(plan_root, probe["summary_path"], "entry_invariance_probe_path")
+        probe_receipt, _ = load_json_object(probe_receipt_path, "entry_invariance_probe_receipt")
+        probe_result, probe_result_bytes = read_exact_json_result(probe_result_path, "entry_invariance_probe_result")
+        probe_summary, _ = load_json_object(probe_summary_path, "entry_invariance_probe_summary")
+    except BenchmarkGateError as error:
+        return [error.code]
+    if set(probe_summary) != DUAL_ENTRY_PROBE_SUMMARY_KEYS or probe_summary.get("schema_version") != 1 or probe_summary.get("status") != "pass" or probe_summary.get("reason") != "exact_output_and_route_signature_match":
+        failures.append("entry_invariance_probe_summary")
+    primary_execution = primary_receipt.get("benchmark_selected_execution") if isinstance(primary_receipt, dict) else None
+    probe_execution = probe_receipt.get("benchmark_selected_execution") if isinstance(probe_receipt, dict) else None
+    probe_metrics, probe_metric_failures = selected_execution_metrics(probe_receipt, "global", {}, 0)
+    if probe_metric_failures:
+        failures.append("entry_invariance_probe_execution")
+    probe_message = probe_result_bytes.decode("utf-8")
+    probe_message = probe_message[:-1] if probe_message.endswith("\n") else probe_message
+    expected_fields = {"tier": run_plan["tier"], "primary_run_id": run_plan["run_id"], "primary_entry_pair": AUTO_ENTRY_PAIR, "probe_entry_pair": SOL_ENTRY_PROBE_PAIR, "expected_result_sha256": expected_sha256, "primary_result_sha256": primary_result_sha256, "probe_result_sha256": sha256_bytes(probe_result_bytes), "primary_route_signature": primary_execution.get("route_signature") if isinstance(primary_execution, dict) else None, "probe_route_signature": probe_execution.get("route_signature") if isinstance(probe_execution, dict) else None, "route_signature_match": isinstance(primary_execution, dict) and isinstance(probe_execution, dict) and primary_execution.get("route_signature") == probe_execution.get("route_signature"), "capability_assignment_match": isinstance(primary_execution, dict) and isinstance(probe_execution, dict) and primary_execution.get("route_signature", {}).get("capability_assignment") == probe_execution.get("route_signature", {}).get("capability_assignment")}
+    if any(probe_summary.get(field) != expected_value for field, expected_value in expected_fields.items()):
+        failures.append("entry_invariance_probe_summary")
+    required_probe_fields = {"status": "pass", "failure_class": None, "node_type": "bootstrap-task", "requested_pair": SOL_ENTRY_PROBE_PAIR, "effective_pair": SOL_ENTRY_PROBE_PAIR, "benchmark_prompt_file_verified": True, "benchmark_auto_launch_verified": True, "benchmark_auto_workspace_count": 1, "benchmark_auto_bridge_result_verified": True, "result_published": True, "duplicate_result_detected": False}
+    if any(probe_receipt.get(field) != expected_value for field, expected_value in required_probe_fields.items()) or probe_receipt.get("output_sha256") != sha256_text(probe_message):
+        failures.append("entry_invariance_probe_receipt")
+    if sha256_bytes(probe_result_bytes) != expected_sha256:
+        failures.append("entry_invariance_probe_result")
+    if expected_fields["route_signature_match"] is not True or expected_fields["capability_assignment_match"] is not True:
+        failures.append("entry_invariance_probe_mismatch")
+    return failures
+
+
 def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     ending_started_ns = time.perf_counter_ns()
     failures = []
@@ -963,6 +1055,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
         evidence = None
         fail(error.code, True)
     receipt_summaries = []
+    receipt_documents = []
     for receipt_spec in run_plan["receipts"]:
         receipt_path = resolve_plan_path(plan_root, receipt_spec["path"], "receipt_path")
         try:
@@ -970,6 +1063,7 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
             receipt_summary = validate_receipt(receipt, receipt_spec, result_message, run_plan, expected_execution_prompt_sha256)
             receipt_summary["bind_result"] = receipt_spec["bind_result"]
             receipt_summaries.append(receipt_summary)
+            receipt_documents.append((receipt_spec, receipt))
             for receipt_failure in receipt_summary["failures"]:
                 fail(receipt_failure, receipt_failure != "receipt_result_hash")
         except BenchmarkGateError as error:
@@ -1013,7 +1107,6 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
     if repair_count:
         fail("repair_not_allowed")
     logical_total_tokens = runtime_summary["logical_total_tokens"]
-    metrics_complete = not any(failure in failures for failure in ["receipt_invalid", "receipt_incomplete", "receipt_tokens", "receipt_thread_id", "receipt_route_attempts", "receipt_reroutes", "receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_benchmark_prompt_unverified", "receipt_auto_launch_unverified", "receipt_result_source_invalid", "receipt_execution_prompt_mismatch", "receipt_result_hash", "receipt_result_not_published", "receipt_result_not_frozen", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "receipt_session_duplicate", "unexpected_receipt", "runtime_main_receipt", "foreground_state_snapshot_incomplete", "foreground_main_thread_mismatch", "runtime_state_snapshot_incomplete", "runtime_session_tree", "runtime_session_pair_mismatch", "runtime_session_incomplete", "receipt_runtime_token_mismatch", "global_adaptive_child_missing"])
     first_result_elapsed_ms = None
     producer_elapsed_ms = None
     total_wall_elapsed_ms = None
@@ -1026,13 +1119,33 @@ def evaluate_run(plan_root, suite_id, plan_sha256, run_plan):
             fail("run_exit_code", True)
         if not evidence["producer_complete"]:
             fail("producer_incomplete", True)
+    bound_receipt = next((receipt for receipt_spec, receipt in receipt_documents if receipt_spec["bind_result"]), None)
+    steady_metrics, steady_failures = selected_execution_metrics(bound_receipt, run_plan["arm"], runtime_summary, first_result_elapsed_ms) if isinstance(bound_receipt, dict) else (None, ["selected_execution_receipt_missing"])
+    for steady_failure in steady_failures:
+        fail(steady_failure, True)
+    if isinstance(bound_receipt, dict) and expected_sha256 is not None and presented_result_sha256 is not None:
+        for probe_failure in validate_dual_entry_probe(plan_root, run_plan, bound_receipt, expected_sha256, presented_result_sha256):
+            fail(probe_failure, True)
+    metrics_complete = not any(failure in failures for failure in ["receipt_invalid", "receipt_incomplete", "receipt_tokens", "receipt_thread_id", "receipt_route_attempts", "receipt_reroutes", "receipt_node_type_mismatch", "receipt_entry_context_active", "receipt_authorization_source_mismatch", "receipt_benchmark_run_id_mismatch", "receipt_workload_id_mismatch", "receipt_benchmark_prompt_unverified", "receipt_auto_launch_unverified", "receipt_result_source_invalid", "receipt_execution_prompt_mismatch", "receipt_result_hash", "receipt_result_not_published", "receipt_result_not_frozen", "receipt_result_ready_event_invalid", "receipt_result_ready_timing_mismatch", "receipt_session_duplicate", "unexpected_receipt", "runtime_main_receipt", "foreground_state_snapshot_incomplete", "foreground_main_thread_mismatch", "runtime_state_snapshot_incomplete", "runtime_session_tree", "runtime_session_pair_mismatch", "runtime_session_incomplete", "receipt_runtime_token_mismatch", "global_adaptive_child_missing", "selected_execution_receipt_missing", "steady_state_tokens_invalid", "steady_state_elapsed_invalid", "steady_state_not_clean", "calibration_diagnostics_invalid", "entry_invariance_probe_path", "entry_invariance_probe_receipt", "entry_invariance_probe_result", "entry_invariance_probe_summary", "entry_invariance_probe_execution", "entry_invariance_probe_mismatch"])
+    steady_state_execution_elapsed_ms = steady_metrics.get("steady_state_execution_elapsed_ms") if steady_metrics else None
+    steady_state_logical_tokens = steady_metrics.get("steady_state_logical_tokens") if steady_metrics else None
+    if run_plan["arm"] == "direct":
+        route_selection_elapsed_ms = 0 if isinstance(first_result_elapsed_ms, int) and isinstance(steady_state_execution_elapsed_ms, int) else None
+    else:
+        route_selection_elapsed_ms = first_result_elapsed_ms - steady_state_execution_elapsed_ms if isinstance(first_result_elapsed_ms, int) and isinstance(steady_state_execution_elapsed_ms, int) else None
+    if route_selection_elapsed_ms is None or route_selection_elapsed_ms < 0:
+        fail("route_selection_elapsed_invalid", True)
+        metrics_complete = False
+    calibration_attempt_count = steady_metrics.get("calibration_attempt_count") if steady_metrics else None
+    calibration_failure_elapsed_ms = steady_metrics.get("calibration_failure_elapsed_ms") if steady_metrics else None
+    calibration_failure_logical_tokens = steady_metrics.get("calibration_failure_logical_tokens") if steady_metrics else None
     ending_real_elapsed_ms = (time.perf_counter_ns() - ending_started_ns) // 1_000_000
     total_wall_elapsed_ms = producer_elapsed_ms + ending_real_elapsed_ms if producer_elapsed_ms is not None else None
-    completion = "timeout" if evidence is not None and evidence["producer_timed_out"] else "complete" if not operational_failures else "incomplete"
+    completion = "timeout" if evidence is not None and evidence["producer_timed_out"] else "complete" if evidence is not None and evidence["producer_complete"] else "incomplete"
     acceptance_status = "pass" if not failures and completion == "complete" else "fail"
     executed_pairs = [f"{runtime_session['model']}|{runtime_session['effort']}" for runtime_session in evidence["runtime_sessions"]] if evidence is not None else []
     ending_real = {"method": ENDING_REAL_METHOD, "completed": True, "status": "pass" if not failures else "fail"}
-    return {"schema_version": MANIFEST_SCHEMA_VERSION, "suite_id": suite_id, "plan_sha256": plan_sha256, "run_id": run_plan["run_id"], "pair_id": run_plan["pair_id"], "tier": run_plan["tier"], "repeat_index": run_plan["repeat_index"], "arm": run_plan["arm"], "order_index": run_plan["order_index"], "workload_prompt_sha256": run_plan["prompt_sha256"], "prompt_file_sha256": prompt_file_sha256, "expected_sha256": expected_sha256, "source_snapshot_sha256": source_snapshot_sha256, "environment_sha256": environment_sha256, "selected_entry_pair": run_plan["selected_entry_pair"], "entry_execution_mode": run_plan["entry_execution_mode"], "result_producer_pair": result_producer_pair, "executed_pairs": executed_pairs, "receipt_session_ids": receipt_session_ids, "unexpected_receipt_session_ids": unexpected_receipt_session_ids, "unreceipted_descendant_count": unreceipted_descendant_count, "runtime_session_count": runtime_summary["session_count"], "runtime_root_session_count": runtime_summary["root_session_count"], "runtime_descendant_session_count": runtime_summary["descendant_session_count"], "task_session_count": runtime_summary["task_session_count"], "controller_tokens_excluded": runtime_summary["controller_tokens_excluded"], "completion": completion, "retry_count": retry_count, "fallback_count": fallback_count, "repair_count": repair_count, "metrics_complete": metrics_complete, "logical_total_tokens": logical_total_tokens, "first_result_elapsed_ms": first_result_elapsed_ms, "producer_elapsed_ms": producer_elapsed_ms, "ending_real_elapsed_ms": ending_real_elapsed_ms, "total_wall_elapsed_ms": total_wall_elapsed_ms, "presented_result_sha256": presented_result_sha256, "presented_result_object_sha256": presented_result_object_sha256, "ending_real": ending_real, "acceptance_status": acceptance_status, "gate": {"generated_by": "benchmark_suite_gate", "version": SCHEMA_VERSION, "evidence_sha256": evidence_sha256, "status": acceptance_status, "failures": failures, "source_files_checked": source_files_checked}}
+    return {"schema_version": MANIFEST_SCHEMA_VERSION, "suite_id": suite_id, "plan_sha256": plan_sha256, "run_id": run_plan["run_id"], "pair_id": run_plan["pair_id"], "tier": run_plan["tier"], "repeat_index": run_plan["repeat_index"], "arm": run_plan["arm"], "order_index": run_plan["order_index"], "workload_prompt_sha256": run_plan["prompt_sha256"], "prompt_file_sha256": prompt_file_sha256, "expected_sha256": expected_sha256, "source_snapshot_sha256": source_snapshot_sha256, "environment_sha256": environment_sha256, "selected_entry_pair": run_plan["selected_entry_pair"], "entry_execution_mode": run_plan["entry_execution_mode"], "result_producer_pair": result_producer_pair, "executed_pairs": executed_pairs, "receipt_session_ids": receipt_session_ids, "unexpected_receipt_session_ids": unexpected_receipt_session_ids, "unreceipted_descendant_count": unreceipted_descendant_count, "runtime_session_count": runtime_summary["session_count"], "runtime_root_session_count": runtime_summary["root_session_count"], "runtime_descendant_session_count": runtime_summary["descendant_session_count"], "task_session_count": runtime_summary["task_session_count"], "controller_tokens_excluded": runtime_summary["controller_tokens_excluded"], "completion": completion, "retry_count": retry_count, "fallback_count": fallback_count, "repair_count": repair_count, "metrics_complete": metrics_complete, "logical_total_tokens": logical_total_tokens, "steady_state_logical_tokens": steady_state_logical_tokens, "steady_state_execution_elapsed_ms": steady_state_execution_elapsed_ms, "route_selection_elapsed_ms": route_selection_elapsed_ms, "calibration_attempt_count": calibration_attempt_count, "calibration_failure_elapsed_ms": calibration_failure_elapsed_ms, "calibration_failure_logical_tokens": calibration_failure_logical_tokens, "first_result_elapsed_ms": first_result_elapsed_ms, "producer_elapsed_ms": producer_elapsed_ms, "ending_real_elapsed_ms": ending_real_elapsed_ms, "total_wall_elapsed_ms": total_wall_elapsed_ms, "presented_result_sha256": presented_result_sha256, "presented_result_object_sha256": presented_result_object_sha256, "ending_real": ending_real, "acceptance_status": acceptance_status, "gate": {"generated_by": "benchmark_suite_gate", "version": SCHEMA_VERSION, "evidence_sha256": evidence_sha256, "status": acceptance_status, "failures": failures, "source_files_checked": source_files_checked}}
 
 
 def evaluate_paired_metric(direct_values, global_values, minimum_savings_percent=MINIMUM_PAIRED_SAVINGS_PERCENT, maximum_regression_percent=MAXIMUM_PAIRED_REGRESSION_PERCENT, require_strict_majority=True, maximum_absolute_regression=None, require_regression_bound=True):
@@ -1092,6 +1205,7 @@ def evaluate_paired_metric(direct_values, global_values, minimum_savings_percent
 def aggregate_tier(tier, repeat_count, manifests):
     tier_manifests = [manifest for manifest in manifests if manifest["tier"] == tier]
     failures = []
+    performance_diagnostics = []
     arm_failures = [manifest["run_id"] for manifest in tier_manifests if manifest["acceptance_status"] != "pass" or manifest["completion"] != "complete" or manifest["metrics_complete"] is not True or manifest.get("retry_count") != 0 or manifest.get("fallback_count") != 0 or manifest.get("repair_count") != 0]
     if arm_failures:
         failures.append("arm_failure")
@@ -1104,21 +1218,21 @@ def aggregate_tier(tier, repeat_count, manifests):
                 failures.append("pair_structure_failure")
     direct_manifests = [manifest for manifest in tier_manifests if manifest["arm"] == "direct"]
     global_manifests = [manifest for manifest in tier_manifests if manifest["arm"] == "global"]
-    metric_names = ("logical_total_tokens", "first_result_elapsed_ms", "total_wall_elapsed_ms")
+    metric_names = ("steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "first_result_elapsed_ms", "total_wall_elapsed_ms")
     metric_gates = {
         metric: evaluate_paired_metric(
             [manifest[metric] for manifest in sorted(direct_manifests, key=lambda item: item["repeat_index"])],
             [manifest[metric] for manifest in sorted(global_manifests, key=lambda item: item["repeat_index"])],
-            require_strict_majority=metric != "logical_total_tokens",
-            maximum_absolute_regression=MAXIMUM_PAIRED_TIME_REGRESSION_MS if metric == "first_result_elapsed_ms" else None,
+            require_strict_majority=metric != "steady_state_logical_tokens",
+            maximum_absolute_regression=MAXIMUM_PAIRED_TIME_REGRESSION_MS if metric in {"steady_state_execution_elapsed_ms", "first_result_elapsed_ms"} else None,
             require_regression_bound=False,
         )
         for metric in metric_names
     } if not arm_failures and len(direct_manifests) == repeat_count and len(global_manifests) == repeat_count else {}
-    if "first_result_elapsed_ms" in metric_gates:
-        time_gate = metric_gates["first_result_elapsed_ms"]
+    if "steady_state_execution_elapsed_ms" in metric_gates:
+        time_gate = metric_gates["steady_state_execution_elapsed_ms"]
         if tier == "simple":
-            direct_time_values = [manifest["first_result_elapsed_ms"] for manifest in sorted(direct_manifests, key=lambda item: item["repeat_index"])]
+            direct_time_values = [manifest["steady_state_execution_elapsed_ms"] for manifest in sorted(direct_manifests, key=lambda item: item["repeat_index"])]
             direct_time_median = statistics.median(direct_time_values)
             direct_time_mad = statistics.median(abs(value - direct_time_median) for value in direct_time_values)
             time_gate["strict_majority_required"] = False
@@ -1126,7 +1240,7 @@ def aggregate_tier(tier, repeat_count, manifests):
         elif tier == "complex":
             time_gate["strict_majority_required"] = False
             time_gate["status"] = "pass"
-    failure_prefixes = {"logical_total_tokens": "token", "first_result_elapsed_ms": "first_result"}
+    failure_prefixes = {"steady_state_logical_tokens": "token", "steady_state_execution_elapsed_ms": "steady_state"}
     gate_failure_fields = {
         "aggregate_global_lower": "aggregate_loss",
         "raw_global_median_lower": "raw_median_loss",
@@ -1139,11 +1253,13 @@ def aggregate_tier(tier, repeat_count, manifests):
             continue
         gate = metric_gates[metric]
         prefix = failure_prefixes[metric]
-        if metric == "first_result_elapsed_ms" and tier == "simple":
+        if metric == "steady_state_execution_elapsed_ms" and tier == "simple":
             if gate["status"] != "pass":
-                failures.append("first_result_tolerance_loss")
+                performance_diagnostics.append("steady_state_tolerance_loss")
             continue
-        if metric == "first_result_elapsed_ms" and tier == "complex":
+        if metric == "steady_state_execution_elapsed_ms" and tier == "complex":
+            if not gate["aggregate_global_lower"]:
+                performance_diagnostics.append("steady_state_aggregate_loss")
             continue
         for field, suffix in gate_failure_fields.items():
             if field == "strict_majority_better" and not gate["strict_majority_required"]:
@@ -1151,7 +1267,7 @@ def aggregate_tier(tier, repeat_count, manifests):
             if field == "worst_pair_regression_within_limit" and not gate["regression_bound_required"]:
                 continue
             if not gate[field]:
-                failures.append(f"{prefix}_{suffix}")
+                performance_diagnostics.append(f"{prefix}_{suffix}")
     direct_totals = {metric: metric_gates[metric]["direct_total"] if metric in metric_gates else None for metric in metric_names}
     global_totals = {metric: metric_gates[metric]["global_total"] if metric in metric_gates else None for metric in metric_names}
     direct_medians = {metric: metric_gates[metric]["direct_median"] if metric in metric_gates else None for metric in metric_names}
@@ -1162,7 +1278,7 @@ def aggregate_tier(tier, repeat_count, manifests):
         metric: {key: value for key, value in gate.items() if key not in {"direct_total", "global_total", "direct_median", "global_median", "paired_savings_percent_median", "better_pairs"}}
         for metric, gate in metric_gates.items() if metric in GATED_METRICS
     }
-    return {"status": "pass" if not failures else "fail", "failures": failures, "failed_run_ids": arm_failures, "run_count": len(tier_manifests), "pair_count": repeat_count, "paired_wins": paired_wins, "direct_totals": direct_totals, "global_totals": global_totals, "direct_medians": direct_medians, "global_medians": global_medians, "paired_savings_percent_medians": paired_savings_medians, "metric_gates": public_metric_gates}
+    return {"status": "pass" if not failures else "fail", "optimization_status": "pass" if not performance_diagnostics else "fail", "failures": failures, "performance_diagnostics": performance_diagnostics, "failed_run_ids": arm_failures, "run_count": len(tier_manifests), "pair_count": repeat_count, "paired_wins": paired_wins, "direct_totals": direct_totals, "global_totals": global_totals, "direct_medians": direct_medians, "global_medians": global_medians, "paired_savings_percent_medians": paired_savings_medians, "metric_gates": public_metric_gates}
 
 
 def evaluate_suite(plan_path, manifest_dir, summary_path):
@@ -1173,9 +1289,17 @@ def evaluate_suite(plan_path, manifest_dir, summary_path):
     manifests = [evaluate_run(plan_root, plan["suite_id"], plan_sha256, run_plan) for run_plan in plan["runs"]]
     tier_repeat_counts = repeat_counts_from_plan(plan)
     tier_summaries = {tier: aggregate_tier(tier, tier_repeat_counts[tier], manifests) for tier in TIERS}
-    overall_status = "pass" if all(tier_summaries[tier]["status"] == "pass" for tier in TIERS) else "fail"
+    all_correct = all(tier_summaries[tier]["status"] == "pass" for tier in TIERS)
+    direct_manifests = sorted([manifest for manifest in manifests if manifest["arm"] == "direct"], key=lambda item: item["order_index"])
+    global_manifests = sorted([manifest for manifest in manifests if manifest["arm"] == "global"], key=lambda item: item["order_index"])
+    cohort_metric_gates = {}
+    for metric in GATED_METRICS:
+        direct_total = sum(manifest[metric] for manifest in direct_manifests) if all(isinstance(manifest.get(metric), int) and manifest[metric] >= 0 for manifest in direct_manifests) else None
+        global_total = sum(manifest[metric] for manifest in global_manifests) if all(isinstance(manifest.get(metric), int) and manifest[metric] >= 0 for manifest in global_manifests) else None
+        cohort_metric_gates[metric] = {"direct_total": direct_total, "global_total": global_total, "aggregate_global_lower": isinstance(direct_total, int) and isinstance(global_total, int) and global_total < direct_total, "status": "pass" if isinstance(direct_total, int) and isinstance(global_total, int) and global_total < direct_total else "fail"}
+    overall_status = "pass" if all_correct and all(gate["status"] == "pass" for gate in cohort_metric_gates.values()) else "fail"
     uniform_repeat_count = next(iter(set(tier_repeat_counts.values()))) if len(set(tier_repeat_counts.values())) == 1 else None
-    summary = {"schema_version": SCHEMA_VERSION, "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "repeat_count": uniform_repeat_count, "tier_repeat_counts": tier_repeat_counts, "overall_status": overall_status, "overall_rule": OVERALL_RULE, "time_rule": TIME_RULE, "token_rule": TOKEN_RULE, "tiers": tier_summaries}
+    summary = {"schema_version": SCHEMA_VERSION, "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "repeat_count": uniform_repeat_count, "tier_repeat_counts": tier_repeat_counts, "overall_status": overall_status, "all_correct": all_correct, "overall_rule": OVERALL_RULE, "time_rule": TIME_RULE, "token_rule": TOKEN_RULE, "cohort_metric_gates": cohort_metric_gates, "tiers": tier_summaries}
     for manifest in manifests:
         atomic_write_json(manifest_dir / f"{manifest['run_id']}.json", manifest)
     atomic_write_json(summary_path, summary)

@@ -12,7 +12,7 @@ Only efforts exposed for a model are included. Movement stays inside the generat
 
 - One Real PASS retains the current pair; two receipt-matched Real PASS results trial one lower effort on the same model, then the strongest effort on the next weaker model.
 - Quality/correctness failure trials one higher effort on the same model, then the lowest effort on the next stronger model.
-- Repeated PASS freezes the generated minimum pair; any verified fail-to-pass recovery boundary freezes its lowest passing pair without an immediate untested-gap probe. When multiple passing pairs share an exact workload hash, rank median logical tokens, then median process time, then weaker rung.
+- Repeated PASS freezes the generated minimum pair; any verified fail-to-pass recovery boundary freezes its lowest passing pair without an immediate untested-gap probe. Token/time measurements for multiple passing pairs remain diagnostics and never override that lowest-correct pair.
 - Operational failure is quality-neutral.
 
 ## Cold Start, Score, And Spark Priority

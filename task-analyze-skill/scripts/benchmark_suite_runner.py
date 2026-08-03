@@ -569,6 +569,9 @@ def build_frozen_plan(args, require_fresh=True):
                 selected_pair = arm_pairs[arm]
                 receipt_spec = {"path": str(receipt_path), "pair": selected_pair, "role": role, "bind_result": True, "workload_prompt_sha256": tier_input["prompt_sha256"]}
                 run_plan = {"run_id": run_id, "pair_id": pair_id, "tier": tier, "repeat_index": repeat_index, "arm": arm, "order_index": order_index, "prompt_path": str(tier_input["prompt_path"]), "prompt_sha256": tier_input["prompt_sha256"], "expected_result_path": str(tier_input["expected_path"]), "expected_sha256": tier_input["expected_sha256"], "result_path": str(result_path), "evidence_path": str(evidence_path), "receipts": [receipt_spec], "selected_entry_pair": selected_pair, "entry_execution_mode": "executed", "source_root": str(snapshot_root), "source_files_pointer": tier_input["source_files_pointer"], "source_snapshot_sha256": source_snapshot_sha256, "environment": environment}
+                if arm == "global" and repeat_index == 1:
+                    probe_root = suite_root / "entry-invariance-probes" / tier
+                    run_plan["dual_entry_probe"] = {"schema_version": 1, "entry_pair": benchmark_suite_gate.SOL_ENTRY_PROBE_PAIR, "receipt_path": str(probe_root / "receipt.json"), "result_path": str(probe_root / "result.json"), "summary_path": str(probe_root / "summary.json")}
                 runs.append(run_plan)
                 order_index += 1
     plan = {"schema_version": benchmark_suite_gate.SCHEMA_VERSION, "suite_id": suite_id, "tier_repeat_counts": tier_repeat_counts, "runs": runs} if args.tier_repeats is not None else {"schema_version": benchmark_suite_gate.SCHEMA_VERSION, "suite_id": suite_id, "repeat_count": args.repeat_count, "runs": runs}
@@ -830,6 +833,51 @@ def execute_run(args, run_plan, prompt_text):
     return {"run_id": run_plan["run_id"], "arm": run_plan["arm"], "exit_code": process_exit_code, "timed_out": timed_out, "thread_id_present": thread_id is not None}
 
 
+def execute_dual_entry_probe(args, run_plan, prompt_text):
+    probe = run_plan.get("dual_entry_probe")
+    if probe is None:
+        return None
+    receipt_path = Path(probe["receipt_path"])
+    result_path = Path(probe["result_path"])
+    summary_path = Path(probe["summary_path"])
+    probe_root = summary_path.parent
+    probe_root.mkdir(parents=True, exist_ok=False)
+    environment = run_plan["environment"]
+    codex_home = Path(environment["codex_home"])
+    probe_run_id = f"{run_plan['run_id']}-sol-entry-probe"
+    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", probe_run_id, "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--state-db", str((codex_home / "state_5.sqlite").absolute()), "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout), "--bootstrap-task", "--benchmark-run-id", f"benchmark-{probe_run_id}", "--benchmark-prompt-path", run_plan["prompt_path"]]
+    command_environment = os.environ.copy()
+    command_environment.pop(ENTRY_CONTEXT_ENV, None)
+    command_environment["CODEX_HOME"] = str(codex_home)
+    command_environment["CODEX_MODEL_ROUTING_MEMORY"] = str(codex_home / "memories" / FROZEN_ROUTING_MEMORY_NAME)
+    command_environment["CODEX_OBSIDIAN_VAULT"] = str(codex_home / "memories" / FROZEN_OBSIDIAN_VAULT_NAME)
+    summary = {"schema_version": 1, "status": "fail", "reason": "probe_execution_failed", "tier": run_plan["tier"], "primary_run_id": run_plan["run_id"], "primary_entry_pair": run_plan["selected_entry_pair"], "probe_entry_pair": probe["entry_pair"], "expected_result_sha256": run_plan["expected_sha256"], "primary_result_sha256": None, "probe_result_sha256": None, "primary_route_signature": None, "probe_route_signature": None, "route_signature_match": False, "capability_assignment_match": False}
+    try:
+        process = subprocess.run(command, input=prompt_text, text=True, capture_output=True, cwd=environment["workdir"], env=command_environment, shell=False, timeout=args.timeout + args.outer_timeout_grace, check=False)
+        primary_receipt = load_optional_receipt(Path(run_plan["receipts"][0]["path"]))
+        primary_result_bytes = Path(run_plan["result_path"]).read_bytes()
+        probe_receipt = load_optional_receipt(receipt_path)
+        probe_result_bytes = result_path.read_bytes()
+        primary_execution = primary_receipt.get("benchmark_selected_execution") if isinstance(primary_receipt, dict) else None
+        probe_execution = probe_receipt.get("benchmark_selected_execution") if isinstance(probe_receipt, dict) else None
+        primary_signature = primary_execution.get("route_signature") if isinstance(primary_execution, dict) else None
+        probe_signature = probe_execution.get("route_signature") if isinstance(probe_execution, dict) else None
+        summary.update({"primary_result_sha256": sha256_bytes(primary_result_bytes), "probe_result_sha256": sha256_bytes(probe_result_bytes), "primary_route_signature": primary_signature, "probe_route_signature": probe_signature, "route_signature_match": primary_signature == probe_signature, "capability_assignment_match": isinstance(primary_signature, dict) and isinstance(probe_signature, dict) and primary_signature.get("capability_assignment") == probe_signature.get("capability_assignment")})
+        probe_status_fields = {"status": "pass", "failure_class": None, "node_type": "bootstrap-task", "requested_pair": probe["entry_pair"], "effective_pair": probe["entry_pair"], "benchmark_prompt_file_verified": True, "benchmark_auto_launch_verified": True, "benchmark_auto_workspace_count": 1, "benchmark_auto_bridge_result_verified": True, "result_published": True, "duplicate_result_detected": False}
+        probe_result_text = probe_result_bytes.decode("utf-8")
+        probe_result_text = probe_result_text[:-1] if probe_result_text.endswith("\n") else probe_result_text
+        probe_receipt_valid = isinstance(probe_receipt, dict) and all(probe_receipt.get(field) == expected_value for field, expected_value in probe_status_fields.items()) and probe_receipt.get("output_sha256") == sha256_bytes(probe_result_text.encode("utf-8"))
+        exact_output = summary["primary_result_sha256"] == run_plan["expected_sha256"] and summary["probe_result_sha256"] == run_plan["expected_sha256"]
+        if process.returncode == 0 and probe_receipt_valid and exact_output and summary["route_signature_match"] and summary["capability_assignment_match"]:
+            summary.update({"status": "pass", "reason": "exact_output_and_route_signature_match"})
+        elif process.returncode == 0:
+            summary["reason"] = "probe_contract_mismatch"
+    except (OSError, UnicodeError, subprocess.TimeoutExpired):
+        pass
+    benchmark_suite_gate.atomic_write_json(summary_path, summary)
+    return summary
+
+
 def validate_runtime_args(args):
     if args.outer_timeout_grace < 0 or args.poll_interval_ms < 1 or args.quota_app_server_timeout < 1:
         raise BenchmarkRunnerError("runner_timing_options_invalid")
@@ -871,6 +919,9 @@ def run_suite(args):
                 raise BenchmarkRunnerError(f"cohort_contaminated_gate_{error.code}")
             run_summary = execute_run(args, run_plan, tier_inputs[run_plan["tier"]]["prompt_text"])
             run_summaries.append(run_summary)
+            probe_summary = execute_dual_entry_probe(args, run_plan, tier_inputs[run_plan["tier"]]["prompt_text"])
+            if probe_summary is not None:
+                run_summary["sol_entry_probe_status"] = probe_summary["status"]
             run_manifest = benchmark_suite_gate.evaluate_run(suite_root, plan["suite_id"], sha256_bytes(plan_bytes), run_plan)
             receipt = load_optional_receipt(Path(run_plan["receipts"][0]["path"]))
             failure_class = receipt.get("failure_class") if receipt else None

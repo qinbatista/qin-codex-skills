@@ -720,7 +720,7 @@ def _active_recommendation(shared, pairs, query, records, entry_anchor_pair=None
     failed_pair = max(failed_pairs, key=pairs.index) if failed_pairs else None
     passing_pairs = [pair for pair, verdict in verdicts.items() if verdict == "pass" and (failed_pair is None or pairs.index(pair) > pairs.index(failed_pair))]
     success_pair = min(passing_pairs, key=pairs.index) if passing_pairs else None
-    cost_scores, cost_evidence = _like_for_like_cost_scores(records, passing_pairs)
+    _, cost_evidence = _like_for_like_cost_scores(records, passing_pairs)
     selected_pair = None
     trial = False
     state = "cold_start"
@@ -733,9 +733,9 @@ def _active_recommendation(shared, pairs, query, records, entry_anchor_pair=None
     elif failed_pair is None:
         success_index = pairs.index(success_pair)
         if success_index == 0:
-            selected_pair = min(passing_pairs, key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair))) if cost_scores else success_pair
+            selected_pair = success_pair
             state = "frozen"
-            reason = "receipt_cost_best_verified" if cost_scores else "verified_floor_retained"
+            reason = "verified_floor_retained"
         elif pass_counts[success_pair] < MIN_REAL_PASSES_BEFORE_DOWNGRADE:
             selected_pair = success_pair
             state = "collecting_evidence"
@@ -759,9 +759,9 @@ def _active_recommendation(shared, pairs, query, records, entry_anchor_pair=None
         # A verified recovery pair is the durable boundary for the next highly
         # similar step. Do not immediately retry an untested gap and recreate a
         # failure the user already paid to recover from.
-        selected_pair = min(passing_pairs, key=lambda pair: (cost_scores[pair][0], cost_scores[pair][1], pairs.index(pair))) if cost_scores else success_pair
+        selected_pair = success_pair
         state = "frozen"
-        reason = "receipt_cost_best_verified" if cost_scores else "verified_quality_boundary"
+        reason = "verified_quality_boundary"
     return {
         "selected_pair": selected_pair,
         "trial": trial,

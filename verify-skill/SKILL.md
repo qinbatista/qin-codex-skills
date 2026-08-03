@@ -116,7 +116,7 @@ Execute the real interaction path, inspect errors and side effects, and confirm 
 
 For connected projects or repeated failures, Ending Real reads only the directly related merged local/Obsidian routing history and failure lessons. Missing Obsidian leaves a pending projection; future selection still uses the local receipt-backed event. Save sanitized reasons only; never store secrets or raw private transcripts.
 
-Optimization verification is independent Ending Real. Require different optimizer/verifier identities, raw before/after inputs and outputs, same-behavior acceptance, token and first-result measurements when claimed, and dependency/order/side-effect/error checks. If no independent verifier is callable, report it as blocked; do not self-certify.
+Optimization verification is independent Ending Real. Require different optimizer/verifier identities, raw before/after inputs and outputs, same-behavior acceptance, and dependency/order/side-effect/error checks. For adaptive routing, verify primary steady selected-execution tokens/time separately from actual first-result wait, route/controller overhead, calibration failures, retries/fallbacks/repairs, entry probes, and Ending. Require both Luna-max and Sol-ultra entry probes to return the exact result and same stable route/capability assignment. If no independent verifier is callable, report it as blocked; do not self-certify.
 
 ## Evidence Output
 

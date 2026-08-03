@@ -436,7 +436,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["scheduled_graph"] = True
     receipt["schedule_mode"] = plan.get("schedule_mode", "parallel_independent_sources")
     receipt["scheduled_sources"] = sources
-    receipt["scheduled_nodes"] = [{"id": node.get("id"), "requested_pair": f"{node.get('requested_model')}|{node.get('requested_effort')}", "effective_pair": f"{node.get('model')}|{node.get('effort')}", "tokens": (node.get("tokens") or {}).get("total_tokens"), "process_elapsed_ms": node.get("process_elapsed_ms")} for node in result_nodes]
+    receipt["scheduled_nodes"] = [{"id": node.get("id"), "requested_pair": f"{node.get('requested_model')}|{node.get('requested_effort')}", "effective_pair": f"{node.get('model')}|{node.get('effort')}", "tokens": (node.get("tokens") or {}).get("total_tokens"), "process_elapsed_ms": node.get("process_elapsed_ms"), "step_kind": (node.get("model_memory_scope") or {}).get("step_kind", "grounded-source-audit"), "capability_tags": (node.get("model_memory_scope") or {}).get("capability_tags", ["grounded-source-audit"])} for node in result_nodes]
     receipt["scheduled_result_node_count"] = len(result_nodes)
     receipt["parallel_branch_count"] = plan.get("parallel_branch_count", len(sources))
     receipt["fused_source"] = plan.get("fused_source")
@@ -448,6 +448,10 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["entry_pair"] = f"{entry_model}|{entry_effort}"
     receipt["entry_source"] = entry_source
     receipt["model_learning_context"] = _model_learning_context(args)
+    receipt["recommendation_state"] = merge_recommendation.get("attempt_calibration_state", merge_recommendation.get("calibration_state"))
+    receipt["trial"] = merge_recommendation.get("attempt_trial", merge_recommendation.get("trial"))
+    receipt["selection_provenance"] = merge_recommendation.get("selection_basis")
+    receipt["capability_assignment"] = [{"node_id": node["id"], "step_kind": node["step_kind"], "capability_tags": node["capability_tags"], "effective_pair": node["effective_pair"]} for node in receipt["scheduled_nodes"]]
     receipt["complexity_score"] = args.complexity_score
     receipt["complexity_band"] = obsidian_model_memory.complexity_band(args.complexity_score)
     receipt["switch_direction"] = "no_switch"
@@ -612,6 +616,8 @@ def run(args, prompt):
     receipt["entry_source"] = args.resolved_entry_source
     learning_context = _model_learning_context(args)
     receipt["model_learning_context"] = learning_context
+    receipt["selection_provenance"] = recommendation.get("selection_basis")
+    receipt["capability_assignment"] = [{"node_id": "result", "step_kind": learning_context["step_kind"], "capability_tags": learning_context["capability_tags"], "effective_pair": receipt.get("effective_pair") or receipt.get("requested_pair")}]
     result_published = bool(receipt.get("result_published") is True and args.result_output.is_file() and args.result_output.stat().st_size > 0)
     receipt["result_published"] = result_published
     if result_published:

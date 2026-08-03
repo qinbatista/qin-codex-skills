@@ -233,7 +233,9 @@ def _priority_result_node(node, stage=None):
 
 def resolve_skills_root(skills_root=None):
     if skills_root is None:
-        return DISPATCHER_SKILLS_ROOT
+        codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+        installed_skills_root = codex_home / "skills"
+        return installed_skills_root if installed_skills_root.is_dir() else DISPATCHER_SKILLS_ROOT
     return Path(skills_root).resolve()
 
 

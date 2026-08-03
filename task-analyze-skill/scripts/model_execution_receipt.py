@@ -622,14 +622,14 @@ def normalize_usage(usage):
     return {"input_tokens": input_tokens, "cached_input_tokens": cached_input_tokens, "uncached_input_tokens": uncached_input_tokens, "output_tokens": output_tokens, "reasoning_output_tokens": reasoning_output_tokens, "total_tokens": total_tokens}
 
 
-def benchmark_auto_launch_evidence(cache_root, workload_sha256):
-    empty_evidence = {"verified": False, "workspace_count": 0, "bridge_result_verified": False, "bridge_result_text": None}
+def benchmark_auto_launch_evidence(cache_root, workload_sha256, expected_entry_pair):
+    empty_evidence = {"verified": False, "workspace_count": 0, "bridge_result_verified": False, "bridge_result_text": None, "selected_execution": None}
     try:
         claim = json.loads((cache_root / "adaptive-entry-launch.json").read_text(encoding="utf-8"))
         workspaces = sorted(path for path in cache_root.glob("source-copy-*") if path.is_dir())
     except (OSError, UnicodeError, json.JSONDecodeError):
         return empty_evidence
-    verified = claim == {"schema_version": 1, "workload_sha256": workload_sha256} and len(workspaces) == 1
+    verified = isinstance(claim, dict) and set(claim) == {"schema_version", "workload_sha256", "entry_pair"} and claim.get("schema_version") == 3 and claim.get("workload_sha256") == workload_sha256 and claim.get("entry_pair") == expected_entry_pair and len(workspaces) == 1
     result_text = None
     bridge_result_verified = False
     if verified:
@@ -649,10 +649,23 @@ def benchmark_auto_launch_evidence(cache_root, workload_sha256):
                 candidate_document = strict_json_loads(result_payload)
             except (TypeError, ValueError, json.JSONDecodeError):
                 candidate_document = None
-            bridge_result_verified = isinstance(candidate_document, dict) and isinstance(bridge_receipt, dict) and bridge_receipt.get("status") == "pass" and bridge_receipt.get("result_published") is True and bridge_receipt.get("duplicate_result_detected") is False and bridge_receipt.get("output_sha256") == sha256_text(result_payload)
+            selected_execution = None
+            try:
+                from benchmark_auto_entry_bridge import receipt_projection
+            except ModuleNotFoundError:
+                bridge_module_path = Path(__file__).with_name("benchmark_auto_entry_bridge.py")
+                bridge_spec = __import__("importlib.util").util.spec_from_file_location("benchmark_auto_entry_bridge_for_receipt", bridge_module_path)
+                bridge_module = __import__("importlib.util").util.module_from_spec(bridge_spec)
+                bridge_spec.loader.exec_module(bridge_module)
+                receipt_projection = bridge_module.receipt_projection
+            try:
+                selected_execution = receipt_projection(bridge_receipt)
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                selected_execution = None
+            bridge_result_verified = isinstance(candidate_document, dict) and isinstance(bridge_receipt, dict) and bridge_receipt.get("status") == "pass" and bridge_receipt.get("result_published") is True and bridge_receipt.get("duplicate_result_detected") is False and bridge_receipt.get("output_sha256") == sha256_text(result_payload) and selected_execution is not None
             if bridge_result_verified:
                 result_text = result_payload
-    return {"verified": verified, "workspace_count": len(workspaces), "bridge_result_verified": bridge_result_verified, "bridge_result_text": result_text}
+    return {"verified": verified, "workspace_count": len(workspaces), "bridge_result_verified": bridge_result_verified, "bridge_result_text": result_text, "selected_execution": selected_execution if bridge_result_verified else None}
 
 
 def run_receipt(args, prompt_text):
@@ -686,7 +699,7 @@ def run_receipt(args, prompt_text):
     command.extend(["--ignore-user-config"] if args.ignore_user_config else [])
     command.append("-")
     if getattr(args, "bootstrap_task", False):
-        execution_prompt = auto_benchmark_execution_prompt(prompt_text)
+        execution_prompt = auto_benchmark_execution_prompt(prompt_text, pair_text(args.model, args.effort))
     elif args.entry_task or getattr(args, "direct_task", False):
         execution_prompt = prompt_text
     else:
@@ -722,6 +735,8 @@ def run_receipt(args, prompt_text):
             command_environment["CODEX_AUTO_BENCHMARK_CODEX_BIN"] = args.codex_bin
             command_environment["CODEX_AUTO_BENCHMARK_CHILD_TIMEOUT"] = str(max(args.timeout - 90, 60))
             command_environment["CODEX_AUTO_BENCHMARK_PYTHON"] = str(Path(sys.executable).resolve(strict=True))
+            command_environment["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"] = args.model
+            command_environment["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"] = args.effort
             benchmark_cache_root = Path(args.result_output).parent / "auto-route-cache" if args.result_output is not None else Path(args.workdir) / "Cache" / "task-analyze" / args.workload_id
             command_environment["CODEX_AUTO_BENCHMARK_CACHE_ROOT"] = str(benchmark_cache_root)
     if benchmark_stream_ready or stream_result_ready:
@@ -746,7 +761,7 @@ def run_receipt(args, prompt_text):
             process_stdout = process.stdout.decode("utf-8", errors="replace") if isinstance(process.stdout, bytes) else process.stdout or ""
             process_stderr = process.stderr.decode("utf-8", errors="replace") if isinstance(process.stderr, bytes) else process.stderr or ""
     benchmark_launch_required = bool(getattr(args, "bootstrap_task", False) and args.result_output is not None)
-    benchmark_launch_evidence = benchmark_auto_launch_evidence(benchmark_cache_root, sha256_text(prompt_text)) if benchmark_launch_required else None
+    benchmark_launch_evidence = benchmark_auto_launch_evidence(benchmark_cache_root, sha256_text(prompt_text), pair_text(args.model, args.effort)) if benchmark_launch_required else None
     stdout_summary = parse_stdout_events(process_stdout)
     benchmark_result_source = "controller_final" if benchmark_stream_ready and streamed_matching_result is not None else None
     terminal_agent_message = extract_last_agent_message(process_stdout)
@@ -803,6 +818,7 @@ def run_receipt(args, prompt_text):
             receipt["benchmark_auto_launch_verified"] = benchmark_launch_evidence["verified"]
             receipt["benchmark_auto_workspace_count"] = benchmark_launch_evidence["workspace_count"]
             receipt["benchmark_auto_bridge_result_verified"] = benchmark_launch_evidence["bridge_result_verified"]
+            receipt["benchmark_selected_execution"] = benchmark_launch_evidence["selected_execution"]
     receipt["failure_class"] = failure_class
     receipt["route_attempts"] = [attempt]
     if streamed_result_required:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Admit model delegation only after repeated end-to-end Pareto wins."""
+"""Admit model delegation only after repeated steady-state Pareto wins."""
 
 import argparse
 import hashlib
@@ -12,7 +12,7 @@ from pathlib import Path
 from tempfile import mkstemp
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_MINIMUM_PAIRED_SAMPLES = 6
 DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0
 DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0
@@ -20,7 +20,7 @@ DEFAULT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "local" / "adaptive
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 PAIR_PATTERN = re.compile(r"^[a-z0-9.-]+\|(low|medium|high|xhigh|max|ultra)$")
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
-ARM_FIELDS = {"gate_status", "completion", "metrics_complete", "logical_total_tokens", "first_result_elapsed_ms", "total_wall_elapsed_ms", "retry_count", "fallback_count", "repair_count", "unreceipted_descendant_count"}
+ARM_FIELDS = {"gate_status", "completion", "metrics_complete", "logical_total_tokens", "steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "route_selection_elapsed_ms", "calibration_attempt_count", "calibration_failure_elapsed_ms", "calibration_failure_logical_tokens", "first_result_elapsed_ms", "total_wall_elapsed_ms", "retry_count", "fallback_count", "repair_count", "unreceipted_descendant_count"}
 
 
 class StrategyPerformanceError(ValueError):
@@ -89,9 +89,11 @@ def profile_key(fields):
 def _validate_arm(arm, field):
     if not isinstance(arm, dict) or set(arm) != ARM_FIELDS:
         raise StrategyPerformanceError(f"{field}_invalid")
-    for count_field in ("logical_total_tokens", "first_result_elapsed_ms", "total_wall_elapsed_ms", "retry_count", "fallback_count", "repair_count", "unreceipted_descendant_count"):
+    for count_field in ("logical_total_tokens", "steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "route_selection_elapsed_ms", "calibration_attempt_count", "calibration_failure_elapsed_ms", "calibration_failure_logical_tokens", "first_result_elapsed_ms", "total_wall_elapsed_ms", "retry_count", "fallback_count", "repair_count", "unreceipted_descendant_count"):
         if not isinstance(arm[count_field], int) or arm[count_field] < 0:
             raise StrategyPerformanceError(f"{field}_invalid")
+    if arm["first_result_elapsed_ms"] != arm["steady_state_execution_elapsed_ms"] + arm["route_selection_elapsed_ms"]:
+        raise StrategyPerformanceError(f"{field}_invalid")
     if arm["gate_status"] not in {"pass", "fail"} or arm["completion"] not in {"complete", "timeout", "incomplete"} or not isinstance(arm["metrics_complete"], bool):
         raise StrategyPerformanceError(f"{field}_invalid")
     return dict(arm)
@@ -104,11 +106,12 @@ def validate_sample(sample, workload_prompt_sha256):
     direct = _validate_arm(sample["direct"], "direct")
     global_arm = _validate_arm(sample["global"], "global")
     comparable = all(arm["gate_status"] == "pass" and arm["completion"] == "complete" and arm["metrics_complete"] and arm["retry_count"] == 0 and arm["fallback_count"] == 0 and arm["repair_count"] == 0 and arm["unreceipted_descendant_count"] == 0 for arm in (direct, global_arm))
-    token_savings_percent = (direct["logical_total_tokens"] - global_arm["logical_total_tokens"]) / direct["logical_total_tokens"] * 100 if direct["logical_total_tokens"] > 0 else None
+    token_savings_percent = (direct["steady_state_logical_tokens"] - global_arm["steady_state_logical_tokens"]) / direct["steady_state_logical_tokens"] * 100 if direct["steady_state_logical_tokens"] > 0 else None
+    execution_savings_percent = (direct["steady_state_execution_elapsed_ms"] - global_arm["steady_state_execution_elapsed_ms"]) / direct["steady_state_execution_elapsed_ms"] * 100 if direct["steady_state_execution_elapsed_ms"] > 0 else None
     first_result_savings_percent = (direct["first_result_elapsed_ms"] - global_arm["first_result_elapsed_ms"]) / direct["first_result_elapsed_ms"] * 100 if direct["first_result_elapsed_ms"] > 0 else None
     total_wall_savings_percent = (direct["total_wall_elapsed_ms"] - global_arm["total_wall_elapsed_ms"]) / direct["total_wall_elapsed_ms"] * 100 if direct["total_wall_elapsed_ms"] > 0 else None
-    strict_pareto_win = comparable and token_savings_percent is not None and first_result_savings_percent is not None and min(token_savings_percent, first_result_savings_percent) > 0
-    return {"workload_prompt_sha256": workload_hash, "direct": direct, "global": global_arm, "comparable": comparable, "strict_pareto_win": strict_pareto_win, "token_savings_percent": token_savings_percent, "first_result_savings_percent": first_result_savings_percent, "total_wall_savings_percent": total_wall_savings_percent, "recorded_at": datetime.now(timezone.utc).isoformat()}
+    strict_pareto_win = comparable and token_savings_percent is not None and execution_savings_percent is not None and min(token_savings_percent, execution_savings_percent) > 0
+    return {"workload_prompt_sha256": workload_hash, "direct": direct, "global": global_arm, "comparable": comparable, "strict_pareto_win": strict_pareto_win, "token_savings_percent": token_savings_percent, "execution_savings_percent": execution_savings_percent, "first_result_savings_percent": first_result_savings_percent, "total_wall_savings_percent": total_wall_savings_percent, "recorded_at": datetime.now(timezone.utc).isoformat()}
 
 
 def record_sample(args):
@@ -136,10 +139,11 @@ def _cohort_summary(samples, minimum_paired_samples, minimum_savings_percent, ma
     all_samples_comparable = bool(samples) and len(comparable) == len(samples)
     all_quality_metrics_complete = bool(samples) and all(all(arm.get("gate_status") == "pass" and arm.get("completion") == "complete" and arm.get("metrics_complete") is True for arm in (sample.get("direct", {}), sample.get("global", {}))) for sample in samples)
     correctness_failure_samples = sum(any(arm.get("gate_status") != "pass" for arm in (sample.get("direct", {}), sample.get("global", {}))) for sample in samples)
-    token_wins = sum(sample["global"]["logical_total_tokens"] < sample["direct"]["logical_total_tokens"] for sample in comparable)
+    token_wins = sum(sample["global"]["steady_state_logical_tokens"] < sample["direct"]["steady_state_logical_tokens"] for sample in comparable)
+    steady_execution_faster_pairs = sum(sample["global"]["steady_state_execution_elapsed_ms"] < sample["direct"]["steady_state_execution_elapsed_ms"] for sample in comparable)
     first_result_faster_pairs = sum(sample["global"]["first_result_elapsed_ms"] < sample["direct"]["first_result_elapsed_ms"] for sample in comparable)
     total_wall_faster_pairs = sum(sample["global"]["total_wall_elapsed_ms"] < sample["direct"]["total_wall_elapsed_ms"] for sample in comparable)
-    metric_names = ("logical_total_tokens", "first_result_elapsed_ms", "total_wall_elapsed_ms")
+    metric_names = ("steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "first_result_elapsed_ms", "total_wall_elapsed_ms")
     gated_metric_names = benchmark_suite_gate.GATED_METRICS
     metric_gates = {
         metric: benchmark_suite_gate.evaluate_paired_metric(
@@ -147,13 +151,14 @@ def _cohort_summary(samples, minimum_paired_samples, minimum_savings_percent, ma
             [sample["global"][metric] for sample in comparable],
             minimum_savings_percent=minimum_savings_percent,
             maximum_regression_percent=maximum_pair_regression_percent,
-            require_strict_majority=metric != "logical_total_tokens",
-            maximum_absolute_regression=benchmark_suite_gate.MAXIMUM_PAIRED_TIME_REGRESSION_MS if metric == "first_result_elapsed_ms" else None,
+            require_strict_majority=metric != "steady_state_logical_tokens",
+            maximum_absolute_regression=benchmark_suite_gate.MAXIMUM_PAIRED_TIME_REGRESSION_MS if metric in {"steady_state_execution_elapsed_ms", "first_result_elapsed_ms"} else None,
             require_regression_bound=False,
         )
         for metric in metric_names
     } if comparable else {}
-    token_median = metric_gates.get("logical_total_tokens", {}).get("paired_savings_percent_median")
+    token_median = metric_gates.get("steady_state_logical_tokens", {}).get("paired_savings_percent_median")
+    execution_median = metric_gates.get("steady_state_execution_elapsed_ms", {}).get("paired_savings_percent_median")
     first_result_median = metric_gates.get("first_result_elapsed_ms", {}).get("paired_savings_percent_median")
     total_wall_median = metric_gates.get("total_wall_elapsed_ms", {}).get("paired_savings_percent_median")
     direct_first_result_median = metric_gates.get("first_result_elapsed_ms", {}).get("direct_median")
@@ -161,16 +166,17 @@ def _cohort_summary(samples, minimum_paired_samples, minimum_savings_percent, ma
     direct_total_wall_median = metric_gates.get("total_wall_elapsed_ms", {}).get("direct_median")
     global_total_wall_median = metric_gates.get("total_wall_elapsed_ms", {}).get("global_median")
     every_pair_token_win = enough_samples and token_wins == len(comparable)
-    token_majority_lower = enough_samples and metric_gates.get("logical_total_tokens", {}).get("strict_majority_better") is True
+    token_majority_lower = enough_samples and metric_gates.get("steady_state_logical_tokens", {}).get("strict_majority_better") is True
+    steady_execution_majority_faster = enough_samples and metric_gates.get("steady_state_execution_elapsed_ms", {}).get("strict_majority_better") is True
     first_result_majority_faster = enough_samples and metric_gates.get("first_result_elapsed_ms", {}).get("strict_majority_better") is True
     total_wall_majority_faster = enough_samples and metric_gates.get("total_wall_elapsed_ms", {}).get("strict_majority_better") is True
-    raw_time_medians_pass = enough_samples and metric_gates.get("first_result_elapsed_ms", {}).get("raw_global_median_lower") is True
+    raw_time_medians_pass = enough_samples and metric_gates.get("steady_state_execution_elapsed_ms", {}).get("raw_global_median_lower") is True
     savings_medians_pass = enough_samples and all(metric_gates.get(metric, {}).get("paired_savings_median_meets_threshold") is True for metric in gated_metric_names)
     aggregate_totals_pass = enough_samples and all(metric_gates.get(metric, {}).get("aggregate_global_lower") is True for metric in gated_metric_names)
     regression_bounds_pass = enough_samples and all(metric_gates.get(metric, {}).get("worst_pair_regression_within_limit") is True or metric_gates.get(metric, {}).get("regression_bound_required") is False for metric in gated_metric_names)
     metric_gates_pass = enough_samples and all(metric_gates.get(metric, {}).get("status") == "pass" for metric in gated_metric_names)
     admitted = enough_samples and all_samples_comparable and all_quality_metrics_complete and correctness_failure_samples == 0 and metric_gates_pass
-    return {"paired_samples": len(samples), "comparable_samples": len(comparable), "strict_pareto_wins": len(strict_wins), "minimum_paired_samples": minimum_paired_samples, "minimum_savings_percent": minimum_savings_percent, "maximum_pair_regression_percent": maximum_pair_regression_percent, "maximum_pair_time_regression_ms": benchmark_suite_gate.MAXIMUM_PAIRED_TIME_REGRESSION_MS, "all_samples_comparable": all_samples_comparable, "all_quality_metrics_complete": all_quality_metrics_complete, "correctness_failure_samples": correctness_failure_samples, "token_wins": token_wins, "every_pair_token_win": every_pair_token_win, "token_majority_lower": token_majority_lower, "first_result_faster_pairs": first_result_faster_pairs, "total_wall_faster_pairs": total_wall_faster_pairs, "first_result_majority_faster": first_result_majority_faster, "total_wall_majority_faster": total_wall_majority_faster, "median_direct_first_result_elapsed_ms": direct_first_result_median, "median_global_first_result_elapsed_ms": global_first_result_median, "median_direct_total_wall_elapsed_ms": direct_total_wall_median, "median_global_total_wall_elapsed_ms": global_total_wall_median, "median_token_savings_percent": token_median, "median_first_result_savings_percent": first_result_median, "median_total_wall_savings_percent": total_wall_median, "raw_time_medians_pass": raw_time_medians_pass, "savings_medians_pass": savings_medians_pass, "aggregate_totals_pass": aggregate_totals_pass, "regression_bounds_pass": regression_bounds_pass, "metric_gates": metric_gates, "admitted": admitted}
+    return {"paired_samples": len(samples), "comparable_samples": len(comparable), "strict_pareto_wins": len(strict_wins), "minimum_paired_samples": minimum_paired_samples, "minimum_savings_percent": minimum_savings_percent, "maximum_pair_regression_percent": maximum_pair_regression_percent, "maximum_pair_time_regression_ms": benchmark_suite_gate.MAXIMUM_PAIRED_TIME_REGRESSION_MS, "all_samples_comparable": all_samples_comparable, "all_quality_metrics_complete": all_quality_metrics_complete, "correctness_failure_samples": correctness_failure_samples, "token_wins": token_wins, "every_pair_token_win": every_pair_token_win, "token_majority_lower": token_majority_lower, "steady_execution_faster_pairs": steady_execution_faster_pairs, "steady_execution_majority_faster": steady_execution_majority_faster, "first_result_faster_pairs": first_result_faster_pairs, "total_wall_faster_pairs": total_wall_faster_pairs, "first_result_majority_faster": first_result_majority_faster, "total_wall_majority_faster": total_wall_majority_faster, "median_direct_first_result_elapsed_ms": direct_first_result_median, "median_global_first_result_elapsed_ms": global_first_result_median, "median_direct_total_wall_elapsed_ms": direct_total_wall_median, "median_global_total_wall_elapsed_ms": global_total_wall_median, "median_token_savings_percent": token_median, "median_execution_savings_percent": execution_median, "median_first_result_savings_percent": first_result_median, "median_total_wall_savings_percent": total_wall_median, "raw_time_medians_pass": raw_time_medians_pass, "savings_medians_pass": savings_medians_pass, "aggregate_totals_pass": aggregate_totals_pass, "regression_bounds_pass": regression_bounds_pass, "metric_gates": metric_gates, "admitted": admitted}
 
 
 def recommend_mode(args, history=None):
@@ -184,7 +190,7 @@ def recommend_mode(args, history=None):
     samples = [sample for sample in record.get("samples", []) if sample.get("workload_prompt_sha256") == workload_hash] if isinstance(record, dict) else []
     summary = _cohort_summary(samples, args.minimum_paired_samples, args.minimum_savings_percent, maximum_pair_regression_percent)
     execution_mode = "delegated_adaptive" if summary["admitted"] else "inline_entry"
-    reason = "repeated_token_win_latency_median_majority" if summary["admitted"] else "delegation_not_proven_faster_and_smaller"
+    reason = "repeated_steady_state_token_and_execution_win" if summary["admitted"] else "delegation_not_proven_steady_state_faster_and_smaller"
     return {"schema_version": SCHEMA_VERSION, "execution_mode": execution_mode, "reason": reason, "profile_key": profile_key(fields), "workload_prompt_sha256": workload_hash, **summary}
 
 
@@ -203,7 +209,7 @@ def add_common_arguments(parser):
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="Require repeated end-to-end token and time wins before delegating a task.")
+    parser = argparse.ArgumentParser(description="Require repeated steady-state token and execution wins before delegating a task.")
     subparsers = parser.add_subparsers(dest="command", required=True)
     recommend_parser = subparsers.add_parser("recommend")
     add_common_arguments(recommend_parser)

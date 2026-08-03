@@ -78,7 +78,7 @@ Auto no longer means “always try Spark” or “always run Sol-ultra.” Its d
 3. **Two matched Real PASS outcomes try exactly one weaker rung.** Repeated success earns a controlled downgrade, not a jump to the floor.
 4. **A receipt-valid quality failure upgrades exactly one rung immediately.** The failed pair cannot remain selected.
 5. **A zero-result operational failure gets one stronger fallback.** It is not learned as a quality failure.
-6. **Multiple verified passing pairs are ranked like-for-like.** The same workload hash is compared by median total tokens, then process time, then the weaker rung.
+6. **Multiple verified passing pairs keep the lowest correct rung.** Same-workload token/time measurements remain diagnostics and never promote a stronger passing pair.
 7. **Spark is schedule-source-only.** It is never the ordinary first attempt and cannot override the contextual quality pair.
 
 This state machine answers the central complaint: a successful Auto run cannot stay on Sol-ultra forever, and a failed weak model cannot keep retrying forever. It moves only when receipt-backed evidence justifies the move.

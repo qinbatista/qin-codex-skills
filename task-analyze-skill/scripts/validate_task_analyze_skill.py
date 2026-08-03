@@ -152,9 +152,9 @@ REQUIRED_SKILL_TEXT = [
     "Task-Graph Admission And Performance Claims",
     "exactly two worlds",
     "frozen model-visible catalogs and memory snapshot",
-    "lower cohort total and raw median",
-    "individual regressions remain visible diagnostics",
-    "median-absolute-deviation noise envelope",
+    "lower aggregate steady selected-execution logical tokens and time",
+    "Per-tier medians, wins, regressions",
+    "runtime noise",
     "no correctness-preserving change remains",
     "frozen, receipt-backed, Real-passing, and `trial=false`",
     "resolve_entry_model.py",
@@ -169,7 +169,7 @@ REQUIRED_SKILL_TEXT = [
     "highest-version quality ladder",
     "eligible bounded text/code work, including tiny questions and local value edits, attempts Spark-low",
     "two receipt-matched Real passes",
-    "rank median logical tokens first",
+    "never choose a stronger passing pair merely because it used fewer tokens or less time",
     "two receipt-matched Real passes",
     "Ending Real alone records receipt-backed producer PASS/FAIL",
     "writes the local routing event before the canonical broad Obsidian projection",
@@ -192,7 +192,7 @@ REQUIRED_SKILL_TEXT = [
     "grounded_result_gate.py",
     "task_route_dispatcher.py run-plan",
     "Missing memory providers are a successful no-op",
-    "Auto task tokens exclude only its Luna-max entry controller",
+    "Matching/controller time, calibration failures, retries, fallbacks, repairs, entry probes, and Ending are excluded from primary time/token savings",
     "same simple, medium, and complex benchmark cohort",
     "controller-stamped sanitized `result-ready` event",
     "runner-owned receipt and evidence timestamps to match exactly",
@@ -265,7 +265,7 @@ REQUIRED_RECEIPT_TEXT = [
     "input, cached-input, output, reasoning-output, and total tokens",
     "whole-process elapsed time",
     "not a cryptographically signed backend attestation",
-    "exactly two strategy worlds",
+    "exactly two performance worlds",
     "workload_prompt_sha256",
     "entry-context marker",
     "in-process authorization",
@@ -320,7 +320,7 @@ REQUIRED_MODEL_SWITCH_CATEGORIES = ["normal-script-update", "code-design", "find
 REQUIRED_MODEL_SWITCH_DIRECTIONS = ["initial", "upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"]
 REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "DEFAULT_LOCAL_STORE", "model-routing-memory", "model-capability-ladder.json", "Model Switch.md", "_read_local_records", "_merge_model_records", "_transferable_local_records", "cross_project_", "local_transfer_history", "transfer_record_count", "reconcile_local_model_history", "event_id", "outcome_reason", "recovery_from_pair", "attempt_chain", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "complexity_score", "complexity_band", "task_capability_profile", "step_kind", "capability_tags", "capability_fingerprint", "DISTINCTIVE_CAPABILITY_TAGS", "verified_quality_boundary", "_priority_producer_pair", "_priority_history", "spark_verify_failure_suppresses_", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "receipt_status", "turn_completed", "model_match", "effort_match"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
 REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "complexity_scale", "small_edit_task_types", "small_edit_operations", "TASK_SEGMENT_PURPOSES", "task_segment_maximum_complexity_score", "suppress_matching_complexity_band_and_upgrade", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
-REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
+REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "route_selection_elapsed_ms", "calibration_failure_elapsed_ms", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
 REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "ENTRY_CONTEXT_ENV",
     "bootstrap-task",
@@ -333,7 +333,7 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
 ]
-REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show compact score/model/route status", "Resolve entry first", "exact step-capability/band history wins across roots", "Sol/high may downgrade", "Luna-max/lower may upgrade", "no match stays <=entry", "reuse recovered/lowest-correct", "Split distinct work only", "each result/Ending records score,band,pair,purpose,deps,stop", "parent score never fixes the project model", "Eligible low-risk low-ambiguity text/code/write/execute score<=24", "executes Spark-low first", "the entry routes it instead of answering inline", "Ending quality FAIL suppresses that fingerprint", "Dependency-ready independent nodes run in parallel", "shared writes/order/output deps stay linear", "Before eligible text/code", "entry MUST resolve CODEX_HOME", "pipe exact task once via platform Python", "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "multi-node work saves one schema-2 `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark for a valid graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses local history,queues projection,no block", "Producer owns files/skills/Quick Check", "End Task required after result", "score each check", "global projectless End/Fix Tasks", "all checks PASS", "PASS records then self-archives", "FAIL records evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal receipts write local history first", "the same event ID to Obsidian", "future routes merge/dedupe", "entry/selected/effective/next pairs", "step fingerprint,score/band,direction,recovery", "AUTO_BENCHMARK_ENTRY", "Direct `gpt-5.6-sol|ultra`", "Auto `gpt-5.6-luna|max`", "MUST child/graph then return child JSON", "gate owns separate Ending", "excludes only controller", "compare task vs +Ending", "all exact PASS", "No hook", "Final PASS/BLOCKED Ending-only"]
+REQUIRED_GLOBAL_BOOTSTRAP_TEXT = ["# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "show compact score/model/route status", "Resolve entry first", "exact step-capability/band history wins across roots", "Sol/high may downgrade", "Luna-max/lower may upgrade", "no match stays <=entry", "reuse recovered/lowest-correct", "Split distinct work only", "each result/Ending records score,band,pair,purpose,deps,stop", "parent score never fixes the project model", "Eligible low-risk low-ambiguity text/code/write/execute score<=24", "executes Spark-low first", "the entry routes it instead of answering inline", "Ending quality FAIL suppresses that fingerprint", "Dependency-ready independent nodes run in parallel", "shared writes/order/output deps stay linear", "Before eligible text/code", "entry MUST resolve CODEX_HOME", "pipe exact task once via platform Python", "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "multi-node work saves one schema-2 `dynamic_task_graph`", "task_route_dispatcher.py run-plan", "Never require a benchmark for a valid graph", "Exact one-source/tool/image uses `task_complexity_score.py`", "2 Real PASS down 1 rung", "quality FAIL up 1", "missing Obsidian uses local history,queues projection,no block", "Producer owns files/skills/Quick Check", "End Task required after result", "score each check", "global projectless End/Fix Tasks", "all checks PASS", "PASS records then self-archives", "FAIL records evidence", "fresh End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit", "never same-task subtask/emulate/wait/self-verify", "Terminal receipts write local history first", "the same event ID to Obsidian", "future routes merge/dedupe", "entry/selected/effective/next pairs", "step fingerprint,score/band,direction,recovery", "AUTO_BENCHMARK_ENTRY", "Direct Sol-ultra no Skill", "Auto Luna-max stable child/graph", "Primary=execution time+tokens", "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "all result/Ending PASS", "primary totals lower", "No hook", "Final PASS/BLOCKED Ending-only"]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "· Model:", "· Route:", "Evidence:", "runtime receipt", "verified entry (no runtime receipt)", "task assignment (no runtime receipt)", "configured selection (no runtime receipt)", "Model path:", "changed route", "unknown|unknown", "full routing data"]
 RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS = ["compact Result Model Disclosure", "task-analyze-skill/references/route-contract.md", "Do not expand"]
@@ -835,7 +835,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
             if normalize(forbidden) in normalize(global_agents_text):
                 failures.append(f"global AGENTS contains forbidden hook or machine-plan contract: {forbidden}")
     failures.extend(missing_terms("global entry asset", entry_asset_text, REQUIRED_GLOBAL_ENTRY_ASSET_TEXT))
-    failures.extend(missing_terms("benchmark evidence", benchmark_evidence_text, ["# Adaptive Model Test and Benchmark Evidence", "Implementation status: PASS", "Correctness status: PASS", "Performance hypothesis: FAIL", "41 tests", "29 tests", "500 tests", "55 tests", "20 focused tests", "12/12 PASS", "all_correct=true", "gpt-5.6-sol|ultra", "gpt-5.6-luna|max", "Spark-low", "Terra-medium", "44.428%", "universal savings hypothesis", "simple", "medium", "complex"]))
+    failures.extend(missing_terms("benchmark evidence", benchmark_evidence_text, ["# Adaptive Model Test and Benchmark Evidence", "Implementation status: PASS", "Correctness status: PASS", "Steady-state performance hypothesis: PASS", "End-to-end first-result diagnostic: FAIL", "41 tests", "29 tests", "500 tests", "55 tests", "20 focused tests", "12/12 PASS", "all_correct=true", "gpt-5.6-sol|ultra", "gpt-5.6-luna|max", "Spark-low", "Terra-medium", "Luna-low", "3/3 PASS", "49.260%", "26.203%", "120.046", "not a universal", "simple", "medium", "complex"]))
     if global_agents_path.exists() and entry_asset_text.replace(GLOBAL_ENTRY_ASSET_DIRECTIVE, "", 1) != global_agents_text:
         failures.append("global entry asset does not exactly match global AGENTS after removing its merge directive")
     for forbidden in FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT:

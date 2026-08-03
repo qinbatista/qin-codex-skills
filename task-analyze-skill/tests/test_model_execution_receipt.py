@@ -506,7 +506,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
                 os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
                 receipt = module.run_receipt(args, raw_prompt)
-        execution_prompt = module.auto_benchmark_execution_prompt(raw_prompt)
+        execution_prompt = module.auto_benchmark_execution_prompt(raw_prompt, "gpt-5.6-sol|ultra")
         self.assertEqual(run_mock.call_args.kwargs["input"], execution_prompt)
         self.assertIn("AUTO_BENCHMARK_ENTRY", execution_prompt)
         self.assertIn("benchmark_auto_entry_bridge.py", execution_prompt)
@@ -519,6 +519,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PROMPT_PATH"], str(prompt_path.resolve()))
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_WORKLOAD_SHA256"], module.sha256_text(raw_prompt))
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PYTHON"], str(Path(module.sys.executable).resolve()))
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"], "gpt-5.6-sol")
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"], "ultra")
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_CACHE_ROOT"], str(args.workdir / "Cache" / "task-analyze" / args.workload_id))
         self.assertEqual(receipt["node_type"], "bootstrap-task")
         self.assertEqual(receipt["node_role"], "result-producer")
@@ -561,9 +563,27 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 workspace = cache_root / "source-copy-one"
                 output_root = workspace / "Cache" / "task-analyze" / "bridge-output"
                 output_root.mkdir(parents=True)
-                (cache_root / "adaptive-entry-launch.json").write_text(json.dumps({"schema_version": 1, "workload_sha256": module.sha256_text(raw_prompt)}) + "\n", encoding="utf-8")
+                (cache_root / "adaptive-entry-launch.json").write_text(json.dumps({"schema_version": 3, "workload_sha256": module.sha256_text(raw_prompt), "entry_pair": "gpt-5.6-luna|max"}) + "\n", encoding="utf-8")
                 (output_root / "result.json").write_text(bridge_receipt_result + "\n", encoding="utf-8")
-                (output_root / "receipt.json").write_text(json.dumps({"status": "pass", "result_published": True, "duplicate_result_detected": False, "output_sha256": module.sha256_text(bridge_result)}) + "\n", encoding="utf-8")
+                bridge_receipt = {
+                    "status": "pass",
+                    "metrics_complete": True,
+                    "result_published": True,
+                    "duplicate_result_detected": False,
+                    "output_sha256": module.sha256_text(bridge_result),
+                    "selected_pair": "gpt-5.6-luna|max",
+                    "effective_pair": "gpt-5.6-luna|max",
+                    "tokens": {"total_tokens": 12},
+                    "process_elapsed_ms": 5,
+                    "route_attempts": [{"status": "pass", "process_elapsed_ms": 5, "tokens": {"total_tokens": 12}}],
+                    "reroutes": [],
+                    "trial": False,
+                    "recommendation_state": "frozen",
+                    "selection_provenance": "local_history",
+                    "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-5.6-luna|max"}],
+                    "node_role": "result-producer",
+                }
+                (output_root / "receipt.json").write_text(json.dumps(bridge_receipt) + "\n", encoding="utf-8")
                 thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "max", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
                 rollout = {"turn_context": {"turn_id": "bootstrap-handoff-turn", "model": "gpt-5.6-luna", "effort": "max"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
                 args = argparse.Namespace(model="gpt-5.6-luna", effort="max", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-handoff", benchmark_prompt_path=prompt_path, result_output=result_path, timeout=30, workdir=root, state_db=root / "state.sqlite", workload_id="bootstrap-handoff", allow_fallback=[])

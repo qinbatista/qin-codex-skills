@@ -406,8 +406,11 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.3-codex-spark", "low", total_tokens=50, process_elapsed_ms=30)
             module.record_event(failure)
             recommendation = module.recommend_route(weak_low_a)
-            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|high")
-            self.assertEqual(recommendation["reason"], "receipt_cost_best_verified")
+            record = next(iter(module.load_history(history)["conditions"].values()))
+            self.assertEqual(recommendation["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(recommendation["reason"], "verified_quality_boundary")
+            self.assertEqual(recommendation["selection_basis"], "quality_boundary")
+            self.assertEqual(record["cost_evidence"]["status"], "like_for_like")
 
     def test_record_retains_valid_workload_prompt_hash(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -515,8 +518,8 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.6-luna", "low", total_tokens=100, process_elapsed_ms=100)
             module.record_event(low)
             frozen = module.recommend_route(low)
-            self.assertEqual(frozen["selected_pair"], "gpt-5.6-luna|high")
-            self.assertEqual(frozen["selection_basis"], "receipt_cost")
+            self.assertEqual(frozen["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(frozen["selection_basis"], "quality_boundary")
             self.assertFalse(frozen["trial"])
 
             later = arguments(history, receipt, verify_level="real", verify_status="pass", failure_class="none", run_id="run-high-expensive")
@@ -524,8 +527,8 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             write_receipt(receipt, "gpt-5.6-luna", "high", total_tokens=1000, process_elapsed_ms=1000)
             module.record_event(later)
             still_frozen = module.recommend_route(later)
-            self.assertEqual(still_frozen["selected_pair"], "gpt-5.6-luna|high")
-            self.assertEqual(still_frozen["selection_basis"], "receipt_cost")
+            self.assertEqual(still_frozen["selected_pair"], "gpt-5.6-luna|low")
+            self.assertEqual(still_frozen["selection_basis"], "quality_boundary")
             self.assertFalse(still_frozen["trial"])
 
     def test_gap_selects_intermediate_then_freezes_after_pass(self):
