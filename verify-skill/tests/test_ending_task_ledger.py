@@ -141,6 +141,55 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(state["producer_binding"]["status"], "recorded")
         self.assertEqual(duplicate["status"], "duplicate")
 
+    def test_bound_receipt_accepts_current_extended_routing_context(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(
+                root,
+                step_kind="local-test",
+                capability_tags=["model-routing", "persistent-end-task"],
+                capability_fingerprint="a" * 64,
+                entry_model="gpt-5.6-sol",
+                entry_effort="max",
+                entry_pair="gpt-5.6-sol|max",
+                entry_source="explicit",
+            )
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=root / "store", producer_receipt=receipt)
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        context = state["producer_binding"]["model_learning_context"]
+        self.assertEqual(context["step_kind"], "local-test")
+        self.assertEqual(context["capability_tags"], ["model-routing", "persistent-end-task"])
+        self.assertEqual(context["entry_pair"], "gpt-5.6-sol|max")
+
+    def test_ending_keeps_its_own_score_and_pair_while_learning_from_producer(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root)
+            plan = project / "ending-plan.json"
+            plan.write_text(json.dumps({"verification_required": True}), encoding="utf-8")
+            started = LEDGER.start_lifecycle(
+                "verification",
+                project,
+                "Run independent acceptance",
+                project,
+                "runtime",
+                ["script.py"],
+                store=root / "store",
+                producer_receipt=receipt,
+                complexity_score=68,
+                complexity_band="complex",
+                verification_required=True,
+                verification_plan=plan,
+                ending_check_id="acceptance",
+                selected_pair="gpt-5.6-terra|high",
+            )
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        self.assertEqual(state["complexity_score"], 68)
+        self.assertEqual(state["complexity_band"], "complex")
+        self.assertEqual(state["producer_binding"]["model_learning_context"]["complexity_score"], 12)
+        self.assertEqual(state["model_disclosure"]["current_pair"], "gpt-5.6-terra|high")
+        self.assertEqual(state["model_disclosure"]["model_evidence"], "task_assignment")
+
     def test_real_bound_ending_writes_canonical_model_switch_projection_idempotently(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -283,7 +332,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(state["producer_binding"]["status"], "no-op")
         self.assertEqual(state["model_learning"], no_op)
 
-    def test_bound_receipt_rejects_unsanitized_or_extra_learning_context(self):
+    def test_bound_receipt_rejects_unsanitized_or_unknown_learning_context(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project, receipt = self.producer_receipt(root, task_summary="unsafe\nsummary", raw_prompt="secret")

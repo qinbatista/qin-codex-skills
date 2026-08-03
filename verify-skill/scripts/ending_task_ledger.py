@@ -28,7 +28,9 @@ FAILURE_CLASSES = {"none", "availability", "timeout", "protocol", "telemetry", "
 MODEL_EVIDENCE_LEVELS = {"runtime_receipt", "verified_entry", "task_assignment", "configured_selection", "unavailable"}
 ROUTE_CHANGES = {"upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"}
 UNKNOWN_MODEL_PAIR = "unknown|unknown"
-MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
+REQUIRED_MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
+OPTIONAL_MODEL_CONTEXT_FIELDS = ("step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source")
+MODEL_CONTEXT_FIELDS = REQUIRED_MODEL_CONTEXT_FIELDS + OPTIONAL_MODEL_CONTEXT_FIELDS
 
 
 def _now():
@@ -163,15 +165,24 @@ def _producer_binding(receipt_value, project_root=None):
     receipt_bytes = receipt_path.read_bytes()
     receipt = json.loads(receipt_bytes.decode("utf-8"))
     context = receipt.get("model_learning_context") if isinstance(receipt, dict) else None
-    if not isinstance(context, dict) or set(context) != set(MODEL_CONTEXT_FIELDS):
+    context_fields = set(context) if isinstance(context, dict) else set()
+    if not isinstance(context, dict) or not set(REQUIRED_MODEL_CONTEXT_FIELDS).issubset(context_fields) or context_fields - set(MODEL_CONTEXT_FIELDS):
         raise ValueError("producer receipt requires the exact sanitized model_learning_context fields")
     sanitized = {}
-    for field in MODEL_CONTEXT_FIELDS:
+    for field in (field for field in MODEL_CONTEXT_FIELDS if field in context):
         value = context[field]
         if field == "complexity_score":
             if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 100:
                 raise ValueError("producer model_learning_context.complexity_score must be an integer from 0 to 100")
             sanitized[field] = value
+            continue
+        if field == "capability_tags":
+            if not isinstance(value, list) or len(value) > 32 or any(not isinstance(tag, str) for tag in value):
+                raise ValueError("producer model_learning_context.capability_tags must be a bounded text list")
+            cleaned_tags = [_single_line(tag, "model_learning_context.capability_tags", required=True, max_length=120) for tag in value]
+            if cleaned_tags != value or len(cleaned_tags) != len(set(cleaned_tags)):
+                raise ValueError("producer model_learning_context.capability_tags is not sanitized")
+            sanitized[field] = cleaned_tags
             continue
         maximum = 1200 if field == "project_root" else 600 if field in {"file", "symbol", "task_summary"} else 160
         if not isinstance(value, str):
@@ -180,6 +191,12 @@ def _producer_binding(receipt_value, project_root=None):
         if cleaned != value:
             raise ValueError(f"producer model_learning_context.{field} is not sanitized")
         sanitized[field] = cleaned
+    if "capability_fingerprint" in sanitized and not re.fullmatch(r"[0-9a-f]{64}", sanitized["capability_fingerprint"]):
+        raise ValueError("producer model_learning_context.capability_fingerprint must be lowercase SHA-256")
+    if "entry_pair" in sanitized:
+        expected_entry_pair = f"{sanitized.get('entry_model', '')}|{sanitized.get('entry_effort', '')}"
+        if not sanitized.get("entry_model") or not sanitized.get("entry_effort") or sanitized["entry_pair"] != expected_entry_pair:
+            raise ValueError("producer model_learning_context.entry_pair does not match entry_model and entry_effort")
     expected_band = "small" if sanitized["complexity_score"] <= 24 else "standard" if sanitized["complexity_score"] <= 49 else "complex" if sanitized["complexity_score"] <= 74 else "advanced"
     if sanitized["complexity_band"] != expected_band:
         raise ValueError("producer model_learning_context.complexity_band does not match complexity_score")
@@ -211,7 +228,7 @@ def _record_bound_model_result(binding, real_status, failure_class, outcome_reas
         raise ValueError("bound producer receipt changed after lifecycle start")
     context = binding["model_learning_context"]
     memory = _load_model_memory_module()
-    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], bound_receipt=binding, outcome_reason=outcome_reason, verification_count=verification_count)
+    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], step_kind=context.get("step_kind", ""), capability_tags=context.get("capability_tags"), entry_model=context.get("entry_model", ""), entry_effort=context.get("entry_effort", ""), bound_receipt=binding, outcome_reason=outcome_reason, verification_count=verification_count)
 
 
 def _successful_model_learning_noop(result):
@@ -262,13 +279,10 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
     if producer_binding:
         bound_score = producer_binding["model_learning_context"]["complexity_score"]
         bound_band = producer_binding["model_learning_context"]["complexity_band"]
-        if complexity_score is not None and complexity_score != bound_score:
-            raise ValueError("lifecycle complexity_score does not match producer receipt")
-        if complexity_band and complexity_band != bound_band:
-            raise ValueError("lifecycle complexity_band does not match producer receipt")
-        complexity_score = bound_score
-        complexity_band = bound_band
-    elif complexity_score is not None:
+        if complexity_score is None:
+            complexity_score = bound_score
+            complexity_band = bound_band
+    if complexity_score is not None:
         if isinstance(complexity_score, bool) or not 0 <= complexity_score <= 100:
             raise ValueError("complexity_score must be an integer from 0 to 100")
         expected_band = "small" if complexity_score <= 24 else "standard" if complexity_score <= 49 else "complex" if complexity_score <= 74 else "advanced"
@@ -310,7 +324,8 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
         verification_plan_path = Path(verification_plan).expanduser().resolve() if verification_plan else None
         if verification_required and (not verification_plan_path or not verification_plan_path.is_file()):
             raise ValueError("verification-required lifecycle requires an existing verification plan")
-        model_disclosure = _model_disclosure(selected_pair, producer_binding, requested_pair, resolved_pair, effective_pair, previous_pair, model_evidence, route_change, switch_summary, reason)
+        ending_owns_model_identity = bool(selected_pair and (verification_required or ending_check_id))
+        model_disclosure = _model_disclosure(selected_pair, None if ending_owns_model_identity else producer_binding, requested_pair, resolved_pair, effective_pair, previous_pair, model_evidence, route_change, switch_summary, reason)
         event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _model_pair(selected_pair, "selected_pair"), "model_disclosure": model_disclosure}
         state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "module": _single_line(module, "module", required=False, max_length=160), "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
         if parent:
