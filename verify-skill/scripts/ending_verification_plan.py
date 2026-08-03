@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 BAND_ROLES = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}
-THREAD_TARGET = {"type": "projectless"}
-TERMINAL_THREAD_POLICY = {"pass": "record_pass_then_archive_self", "fail": "keep_unarchived", "blocked": "keep_unarchived"}
+THREAD_TARGET = {"type": "project", "environment": {"type": "local"}, "project_id": "resolve_exact_project_root"}
+TERMINAL_THREAD_POLICY = {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"}
 CREATE_THREAD_TOOL = "codex_app__create_thread"
 LAUNCH_STATE_SCHEMA_VERSION = 1
 
@@ -79,7 +79,7 @@ def normalize_check(raw, project_root, task_name, task_score, registry=None):
         "check_id": check_id,
         "name": name,
         "title": f"End Task-{task_name}-{name}",
-        "thread_target": THREAD_TARGET,
+        "thread_target": {**THREAD_TARGET, "project_root": str(project_root)},
         "terminal_thread_policy": TERMINAL_THREAD_POLICY,
         "cwd": str(cwd),
         "command": command,
@@ -90,7 +90,7 @@ def normalize_check(raw, project_root, task_name, task_score, registry=None):
         "on_failure": {
             "action": "create_repair_task_then_fresh_ending",
             "repair_title": f"Fix Task-{task_name}-{name}",
-            "thread_target": THREAD_TARGET,
+            "thread_target": {**THREAD_TARGET, "project_root": str(project_root)},
             "terminal_thread_policy": TERMINAL_THREAD_POLICY,
             "error_fields": ["exit_code", "stdout", "stderr", "timed_out"],
             "max_repair_attempts": 3,
@@ -118,7 +118,7 @@ def build_plan(project_root, task_name, task_score, checks):
         "task_complexity": pair_for_score(task_score, registry),
         "verification_required": True,
         "execution": "separate_persistent_tasks",
-        "thread_target": THREAD_TARGET,
+        "thread_target": {**THREAD_TARGET, "project_root": str(root)},
         "terminal_thread_policy": TERMINAL_THREAD_POLICY,
         "all_checks_must_pass": True,
         "ending_tasks": tasks,
@@ -167,17 +167,19 @@ def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=Non
             f"Producer receipt relative to project root: {receipt_line}",
             "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the plan's exact run-check command from the project root.",
             "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; bind the producer receipt when one is present so terminal evidence updates local routing history and Obsidian.",
-            "PASS requires the new evidence file to report status=pass and the expected exit code. FAIL/BLOCKED must preserve exact evidence and remain unarchived.",
-            "After durable PASS, archive this calling task with set_thread_archived(archived=true).",
+            "PASS requires the new evidence file to report status=pass and the expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this project task visible.",
+            "After the terminal ledger event, print its structured model_assessment: task/check score and band, producer pair, Ending pair, attempt count, first-attempt or retry result, suitability, next routing action and pair, concise evidence reason, and Obsidian model-record link/status. Never expose private chain-of-thought.",
+            "Never call set_thread_archived or delete this End Task automatically.",
         ]
     )
 
 
-def build_launch_spec(plan_path, evidence_dir, producer_receipt=None):
+def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None):
     plan_file, plan = _read_json(plan_path, "plan")
     project_root = Path(plan.get("project_root", "")).expanduser().resolve()
     if not project_root.is_dir():
         raise ValueError("plan.project_root must be an existing directory")
+    project_value = _clean(project_id, "project_id", 200)
     _inside(project_root, plan_file, "plan")
     evidence_root = _inside(project_root, evidence_dir, "evidence_dir")
     receipt_path = None
@@ -207,13 +209,14 @@ def build_launch_spec(plan_path, evidence_dir, producer_receipt=None):
             "complexity_band": check["complexity_band"],
             "tool": CREATE_THREAD_TOOL,
             "arguments": {
-                "target": THREAD_TARGET,
+                "target": {"type": "project", "projectId": project_value, "environment": {"type": "local"}},
                 "title": check["title"],
                 "model": model,
                 "thinking": thinking,
                 "prompt": prompt,
             },
             "evidence_output": str(evidence_output),
+            "project_id": project_value,
             "acknowledgement_required": True,
         }
         request["request_sha256"] = hashlib.sha256(
@@ -226,21 +229,31 @@ def build_launch_spec(plan_path, evidence_dir, producer_receipt=None):
         "plan": str(plan_file),
         "plan_sha256": hashlib.sha256(plan_file.read_bytes()).hexdigest(),
         "project_root": str(project_root),
+        "project_binding": {
+            "project_id": project_value,
+            "project_root": str(project_root),
+            "environment": {"type": "local"},
+            "resolver": "codex_app__list_projects exact canonical project root",
+        },
         "execution": "host_persistent_create_thread",
-        "thread_target": THREAD_TARGET,
+        "thread_target": {"type": "project", "projectId": project_value, "environment": {"type": "local"}},
         "required_launch_count": len(launch_requests),
         "launch_requests": launch_requests,
         "launch_gate": "all_requests_require_thread_and_host_acknowledgement",
     }
 
 
-def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, state_output):
+def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_id, state_output):
     launch_file, launch_spec = _read_json(launch_spec_path, "launch_spec")
     request = next((item for item in launch_spec.get("launch_requests", []) if item.get("check_id") == check_id), None)
     if not isinstance(request, dict):
         raise ValueError(f"unknown check_id: {check_id}")
     thread_value = _clean(thread_id, "thread_id", 160)
     host_value = _clean(host_id, "host_id", 160)
+    project_value = _clean(project_id, "project_id", 200)
+    expected_project_id = launch_spec.get("project_binding", {}).get("project_id")
+    if project_value != expected_project_id or request.get("project_id") != expected_project_id:
+        raise ValueError("project_id does not match the launch specification")
     state_path = Path(state_output).expanduser().resolve()
     state = {
         "schema_version": LAUNCH_STATE_SCHEMA_VERSION,
@@ -263,6 +276,7 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, state_out
             "request_sha256": request["request_sha256"],
             "thread_id": thread_value,
             "host_id": host_value,
+            "project_id": project_value,
             "status": "launched",
             "acknowledged_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -303,9 +317,9 @@ def audit_launches(launch_spec_path, state_path):
         if not launch:
             continue
         thread_ids.append(launch.get("thread_id"))
-        if launch.get("status") != "launched" or not launch.get("thread_id") or not launch.get("host_id"):
+        if launch.get("status") != "launched" or not launch.get("thread_id") or not launch.get("host_id") or not launch.get("project_id"):
             failures.append(f"End Task {check_id} lacks a persistent thread acknowledgement")
-        if any(launch.get(field) != request.get(field) for field in ("title", "selected_pair", "request_sha256")):
+        if any(launch.get(field) != request.get(field) for field in ("title", "selected_pair", "request_sha256", "project_id")):
             failures.append(f"End Task {check_id} acknowledgement does not match its launch request")
     if len(thread_ids) != len(set(thread_ids)):
         failures.append("End Task launch acknowledgements must use unique thread ids")
@@ -384,6 +398,7 @@ def parse_args(argv=None):
     launch = subparsers.add_parser("create-launches")
     launch.add_argument("--plan", type=Path, required=True)
     launch.add_argument("--evidence-dir", type=Path, required=True)
+    launch.add_argument("--project-id", required=True)
     launch.add_argument("--producer-receipt", type=Path)
     launch.add_argument("--output", type=Path, required=True)
     acknowledge = subparsers.add_parser("ack-launch")
@@ -391,6 +406,7 @@ def parse_args(argv=None):
     acknowledge.add_argument("--check-id", required=True)
     acknowledge.add_argument("--thread-id", required=True)
     acknowledge.add_argument("--host-id", required=True)
+    acknowledge.add_argument("--project-id", required=True)
     acknowledge.add_argument("--state-output", type=Path, required=True)
     audit = subparsers.add_parser("audit-launches")
     audit.add_argument("--launch-spec", type=Path, required=True)
@@ -409,12 +425,12 @@ def main(argv=None):
         output = run_check(args.plan, args.check_id, args.evidence_output)
         code = 0 if output["status"] == "pass" else 1
     elif args.command == "create-launches":
-        output = build_launch_spec(args.plan, args.evidence_dir, args.producer_receipt)
+        output = build_launch_spec(args.plan, args.evidence_dir, args.project_id, args.producer_receipt)
         _atomic_write(args.output, output)
         output = {"status": "written", "output": str(args.output.expanduser().resolve()), "required_launch_count": output["required_launch_count"], "selected_pairs": [item["selected_pair"] for item in output["launch_requests"]]}
         code = 0
     elif args.command == "ack-launch":
-        output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.state_output)
+        output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.project_id, args.state_output)
         code = 0
     else:
         output = audit_launches(args.launch_spec, args.launch_state)

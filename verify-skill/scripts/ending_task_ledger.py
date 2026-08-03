@@ -25,6 +25,8 @@ SCHEMA_VERSION = 1
 TERMINAL_EVENTS = {"pass", "fail", "blocked"}
 ALL_EVENTS = TERMINAL_EVENTS | {"note"}
 FAILURE_CLASSES = {"none", "availability", "timeout", "protocol", "telemetry", "execution", "receipt", "quality", "correctness"}
+QUALITY_FAILURES = {"quality", "correctness"}
+OPERATIONAL_FAILURES = FAILURE_CLASSES - QUALITY_FAILURES - {"none"}
 MODEL_EVIDENCE_LEVELS = {"runtime_receipt", "verified_entry", "task_assignment", "configured_selection", "unavailable"}
 ROUTE_CHANGES = {"upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"}
 UNKNOWN_MODEL_PAIR = "unknown|unknown"
@@ -222,13 +224,13 @@ def _load_model_memory_module():
     return module
 
 
-def _record_bound_model_result(binding, real_status, failure_class, outcome_reason="", verification_count=0):
+def _record_bound_model_result(binding, real_status, failure_class, outcome_reason="", verification_count=0, *, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
     receipt_path = Path(binding["receipt_path"])
     if hashlib.sha256(receipt_path.read_bytes()).hexdigest() != binding["receipt_sha256"]:
         raise ValueError("bound producer receipt changed after lifecycle start")
     context = binding["model_learning_context"]
     memory = _load_model_memory_module()
-    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], step_kind=context.get("step_kind", ""), capability_tags=context.get("capability_tags"), entry_model=context.get("entry_model", ""), entry_effort=context.get("entry_effort", ""), bound_receipt=binding, outcome_reason=outcome_reason, verification_count=verification_count)
+    return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], step_kind=context.get("step_kind", ""), capability_tags=context.get("capability_tags"), entry_model=context.get("entry_model", ""), entry_effort=context.get("entry_effort", ""), bound_receipt=binding, outcome_reason=outcome_reason, verification_count=verification_count, ending_attempt_number=ending_attempt_number, prior_quality_failure_count=prior_quality_failure_count, prior_operational_failure_count=prior_operational_failure_count)
 
 
 def _successful_model_learning_noop(result):
@@ -266,6 +268,131 @@ def _normalize_root_attempts(store, root, descendants, repair_limit):
             descendant["attempt_index"] = index
             descendant["max_repair_attempts"] = repair_limit
             _write_state(store, descendant)
+
+
+def _terminal_event(state):
+    return next((event for event in reversed(state.get("events", [])) if event.get("event") in TERMINAL_EVENTS), None)
+
+
+def _state_pair(state):
+    learning = state.get("model_learning") if isinstance(state.get("model_learning"), dict) else {}
+    binding = state.get("producer_binding") if isinstance(state.get("producer_binding"), dict) else {}
+    disclosure = state.get("model_disclosure") if isinstance(state.get("model_disclosure"), dict) else {}
+    return learning.get("pair") or binding.get("effective_pair") or disclosure.get("current_pair") or state.get("selected_pair") or UNKNOWN_MODEL_PAIR
+
+
+def _attempt_context(store, state):
+    root = _root_lifecycle(store, state)
+    chain = [root, *_root_descendants(store, root)]
+    chain = [state if item.get("lifecycle_id") == state.get("lifecycle_id") else item for item in chain]
+    attempt_number = int(state.get("attempt_index", 0)) + 1
+    prior = [item for item in chain if int(item.get("attempt_index", 0)) < int(state.get("attempt_index", 0))]
+    prior_events = [(item, _terminal_event(item)) for item in prior]
+    prior_events = [(item, event) for item, event in prior_events if event]
+    prior_quality = sum(event.get("event") == "fail" and event.get("failure_class") in QUALITY_FAILURES for _, event in prior_events)
+    prior_operational = sum(event.get("event") == "fail" and event.get("failure_class") in OPERATIONAL_FAILURES for _, event in prior_events)
+    attempts = [
+        {
+            "attempt": int(item.get("attempt_index", 0)) + 1,
+            "lifecycle_id": item.get("lifecycle_id"),
+            "status": event.get("event"),
+            "failure_class": event.get("failure_class") or "none",
+            "pair": _state_pair(item),
+        }
+        for item, event in prior_events
+    ]
+    return {
+        "attempt_number": attempt_number,
+        "prior_quality_failure_count": prior_quality,
+        "prior_operational_failure_count": prior_operational,
+        "initial_pair": _state_pair(root),
+        "attempt_chain": attempts,
+    }
+
+
+def _model_assessment(state, event_name, failure_class, model_learning, attempt_context):
+    learning = model_learning if isinstance(model_learning, dict) else {}
+    binding = state.get("producer_binding") if isinstance(state.get("producer_binding"), dict) else {}
+    attempt_number = attempt_context["attempt_number"]
+    producer_pair = learning.get("pair") or binding.get("effective_pair") or UNKNOWN_MODEL_PAIR
+    ending_pair = state.get("selected_pair") or UNKNOWN_MODEL_PAIR
+    next_pair = learning.get("next_pair") or producer_pair
+    prior_quality = attempt_context["prior_quality_failure_count"]
+    prior_operational = attempt_context["prior_operational_failure_count"]
+    quality_failures = prior_quality + int(event_name == "fail" and failure_class in QUALITY_FAILURES)
+    operational_failures = prior_operational + int(event_name == "fail" and failure_class in OPERATIONAL_FAILURES)
+    if event_name == "pass" and attempt_number == 1:
+        pass_shape = "first_attempt_pass"
+        if learning.get("next_pair_direction") == "downgrade" and next_pair != producer_pair:
+            suitability = "suitable_downgrade_candidate"
+            routing_action = "trial_downgrade_one_rung_next_matching_task"
+            reason = "The first Ending attempt passed; accumulated matching Real PASS evidence reached the one-rung downgrade threshold."
+        else:
+            suitability = "suitable"
+            routing_action = "retain_until_second_matching_first_pass"
+            reason = "The first Ending attempt passed; retain this pair until the matching Real PASS threshold supports a one-rung trial."
+    elif event_name == "pass" and prior_quality:
+        pass_shape = "retry_pass"
+        suitability = "initial_pair_too_weak_recovered"
+        routing_action = "reuse_lowest_successful_recovery_pair"
+        reason = "A prior correctness or quality attempt failed and this retry passed; keep the lowest pair that produced the verified recovery."
+    elif event_name == "pass":
+        pass_shape = "retry_pass"
+        suitability = "suitable_after_operational_recovery"
+        routing_action = "retain_quality_boundary"
+        reason = "The retry passed after an operational interruption; the interruption is quality-neutral."
+    elif event_name == "fail" and failure_class in QUALITY_FAILURES:
+        pass_shape = "failed_attempt"
+        suitability = "too_weak_for_verified_result"
+        routing_action = "upgrade_one_rung_for_repair"
+        reason = "The real check found a correctness or quality defect; the next repair route moves one rung up."
+    elif event_name == "fail":
+        pass_shape = "failed_attempt"
+        suitability = "quality_unproven_operational_failure"
+        routing_action = "retry_without_quality_penalty"
+        reason = "The check failed operationally, so model quality is not downgraded or upgraded from this evidence."
+    else:
+        pass_shape = "blocked"
+        suitability = "unproven"
+        routing_action = "none_until_blocker_clears"
+        reason = "The Ending check was blocked before a quality verdict was available."
+    suitability = learning.get("model_suitability") or suitability
+    routing_action = learning.get("routing_action") or routing_action
+    current_attempt = {
+        "attempt": attempt_number,
+        "lifecycle_id": state.get("lifecycle_id"),
+        "status": event_name,
+        "failure_class": failure_class if event_name == "fail" else "none",
+        "pair": producer_pair,
+    }
+    task_context = binding.get("model_learning_context") if isinstance(binding.get("model_learning_context"), dict) else {}
+    return {
+        "task_complexity_score": task_context.get("complexity_score"),
+        "task_complexity_band": task_context.get("complexity_band"),
+        "ending_complexity_score": state.get("complexity_score"),
+        "ending_complexity_band": state.get("complexity_band"),
+        "producer_pair": producer_pair,
+        "ending_pair": ending_pair,
+        "initial_pair": attempt_context["initial_pair"],
+        "attempt_count": attempt_number,
+        "pass_attempt_number": attempt_number if event_name == "pass" else None,
+        "pass_shape": pass_shape,
+        "quality_failure_count": quality_failures,
+        "operational_failure_count": operational_failures,
+        "model_suitability": suitability,
+        "routing_action": routing_action,
+        "next_pair": next_pair,
+        "recovery_from_pair": learning.get("recovery_from_pair"),
+        "matched_pass_count_after": learning.get("matched_pass_count_after"),
+        "minimum_passes_before_downgrade": learning.get("minimum_passes_before_downgrade"),
+        "reason": reason,
+        "attempt_chain": [*attempt_context["attempt_chain"], current_attempt],
+        "model_record_status": learning.get("obsidian", {}).get("status") if isinstance(learning.get("obsidian"), dict) else learning.get("status") or "unavailable",
+        "model_record_document": learning.get("model_record_document"),
+        "model_record_link": learning.get("model_record_link"),
+        "model_switch_document": learning.get("model_switch_document"),
+        "model_switch_link": learning.get("model_switch_link"),
+    }
 
 
 def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair="", requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason=""):
@@ -356,21 +483,26 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
             raise ValueError(f"lifecycle is already terminal: {state['status']}")
         binding = state.get("producer_binding")
         model_learning = None
+        attempt_context = _attempt_context(store_path, state)
         if binding and event_name in {"pass", "fail"}:
             if event_name == "pass" and failure_class != "none":
                 raise ValueError("a bound Ending pass requires failure_class=none")
             if event_name == "fail" and failure_class == "none":
                 raise ValueError("a bound Ending fail requires an explicit failure_class")
-            model_learning = _record_bound_model_result(binding, event_name, failure_class, _single_line(summary, "summary", max_length=280), len(verification or []))
+            model_learning = _record_bound_model_result(binding, event_name, failure_class, _single_line(summary, "summary", max_length=280), len(verification or []), ending_attempt_number=attempt_context["attempt_number"], prior_quality_failure_count=attempt_context["prior_quality_failure_count"], prior_operational_failure_count=attempt_context["prior_operational_failure_count"])
             state["model_learning"] = model_learning
             state["producer_binding"]["status"] = "no-op" if _successful_model_learning_noop(model_learning) else "recorded" if model_learning.get("written") is True else "unavailable"
         recorded_at = _now()
         event = {"schema_version": SCHEMA_VERSION, "event": event_name, "recorded_at": recorded_at, "lifecycle_id": lifecycle_id, "summary": _single_line(summary, "summary"), "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "error_fingerprint": _single_line(error_fingerprint, "error_fingerprint", required=False, max_length=160) or None, "failure_class": failure_class if event_name in {"pass", "fail"} else None, "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band")}
+        model_assessment = _model_assessment(state, event_name, failure_class, model_learning, attempt_context) if event_name in TERMINAL_EVENTS else None
         if model_learning is not None:
             event["model_learning"] = model_learning
             event["switch_direction"] = model_learning.get("switch_direction")
             event["switch_reason"] = model_learning.get("switch_reason")
             event["next_pair"] = model_learning.get("next_pair")
+        if model_assessment is not None:
+            event["model_assessment"] = model_assessment
+            state["model_assessment"] = model_assessment
         state["events"].append(event)
         state["updated_at"] = recorded_at
         if event_name in TERMINAL_EVENTS:
@@ -380,6 +512,8 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
     output = {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": state["status"], "final_gate_passed": event_name == "pass", "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
     if model_learning is not None:
         output["model_learning"] = model_learning
+    if model_assessment is not None:
+        output["model_assessment"] = model_assessment
     if event_name == "fail":
         output["repair_required"] = True
         output["repair_handoff"] = {"action": "create_repair_task_then_fresh_ending", "repair_of_lifecycle_id": lifecycle_id, "summary": event["summary"], "verification": event["verification"], "error_fingerprint": event["error_fingerprint"], "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band"), "max_repair_attempts": state.get("max_repair_attempts")}
@@ -396,7 +530,7 @@ def audit_lifecycle(lifecycle_id, store=DEFAULT_STORE):
     else:
         terminal_status = active["status"] if active["status"] in {"passed", "blocked"} else "pending"
     chain = [root["lifecycle_id"], *(state["lifecycle_id"] for state in descendants)]
-    return {"status": "pass" if terminal_status == "passed" else terminal_status, "root_lifecycle_id": root["lifecycle_id"], "active_lifecycle_id": active["lifecycle_id"], "terminal_status": terminal_status, "complexity_score": active.get("complexity_score"), "complexity_band": active.get("complexity_band"), "chain": chain, "descendants": [state["lifecycle_id"] for state in descendants], "final_gate_passed": terminal_status == "passed"}
+    return {"status": "pass" if terminal_status == "passed" else terminal_status, "root_lifecycle_id": root["lifecycle_id"], "active_lifecycle_id": active["lifecycle_id"], "terminal_status": terminal_status, "complexity_score": active.get("complexity_score"), "complexity_band": active.get("complexity_band"), "attempt_count": int(active.get("attempt_index", 0)) + 1, "model_assessment": active.get("model_assessment"), "chain": chain, "descendants": [state["lifecycle_id"] for state in descendants], "final_gate_passed": terminal_status == "passed"}
 
 
 def main():

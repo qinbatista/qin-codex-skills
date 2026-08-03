@@ -169,6 +169,16 @@ FRONTMATTER_FIELDS = (
     "completed_pair",
     "recovery_from_pair",
     "attempt_chain",
+    "ending_attempt_number",
+    "ending_pass_shape",
+    "prior_quality_failure_count",
+    "prior_operational_failure_count",
+    "matched_pass_count_after",
+    "minimum_passes_before_downgrade",
+    "next_pair_reason",
+    "next_pair_direction",
+    "model_suitability",
+    "routing_action",
 )
 
 
@@ -1205,7 +1215,7 @@ def _render_category_page(vault_path, owner, category, records):
     project_index = _owner_index(vault_path, owner)
     model_switch = _memory_root_owner(vault_path, owner)
     fingerprints = sorted({capability["capability_fingerprint"] for capability in (_record_capability_or_default(record) for record in records) if capability["capability_fingerprint"]})
-    lines = [MODEL_SWITCH_CATEGORY_MARKER, f"# {owner} · {title}", "", f"- Project index: {_wikilink(vault_path, project_index)}", f"- Model Switch: {_wikilink(vault_path, model_switch)}", f"- Shared task type: {_wikilink(vault_path, _shared_category_page(vault_path, category))}", "", f"Records: {len(records)}", f"Fingerprints: {', '.join(f'`{fingerprint}`' for fingerprint in fingerprints)}", "", "| Task | Step / capability | Score | Module / file / symbol | Entry / selected / effective / next | Direction / reason | Outcome / recovery | Tokens / time | Ending |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    lines = [MODEL_SWITCH_CATEGORY_MARKER, f"# {owner} · {title}", "", f"- Project index: {_wikilink(vault_path, project_index)}", f"- Model Switch: {_wikilink(vault_path, model_switch)}", f"- Shared task type: {_wikilink(vault_path, _shared_category_page(vault_path, category))}", "", f"Records: {len(records)}", f"Fingerprints: {', '.join(f'`{fingerprint}`' for fingerprint in fingerprints)}", "", "| Task | Step / capability | Score | Module / file / symbol | Entry / selected / effective / next | Direction / reason | Outcome / recovery | Tokens / time | Ending attempt | Next decision |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for record in records:
         detail = _switch_details(record)
         capability = _record_capability_or_default(record)
@@ -1213,7 +1223,7 @@ def _render_category_page(vault_path, owner, category, records):
         location = " / ".join(value for value in (record.get("module"), record.get("file"), record.get("symbol")) if value) or "—"
         outcome_reason = str(record.get("outcome_reason") or record.get("failure_class") or "—").replace("|", "/")
         recovery = record.get("recovery_from_pair") or "—"
-        lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {capability['capability_fingerprint'][:12]} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {location} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} |")
+        lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {capability['capability_fingerprint'][:12]} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {location} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} / {record.get('ending_attempt_number','—')} / {record.get('ending_pass_shape','—')} / {record.get('model_suitability','—')} | {record.get('routing_action','—')} / {record.get('next_pair_direction','—')} / {record.get('next_pair_reason','—')} |")
         lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1455,7 +1465,7 @@ def reconcile_local_model_history(project_root, *, vault=None, local_store=None)
     return {"status": "written" if projected else "pending" if pending else "up-to-date", "written": projected > 0, "projected": projected, "pending": pending, "latest": latest}
 
 
-def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0):
+def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
     if real_status not in {"pass", "fail"} or failure_class not in FAILURE_CLASSES:
@@ -1492,6 +1502,14 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     outcome_reason = _single_line(outcome_reason or ("Real verification passed." if real_status == "pass" else f"Real verification failed: {failure_class}."), "outcome_reason", maximum=280)
     if isinstance(verification_count, bool) or not isinstance(verification_count, int) or verification_count < 0:
         raise ValueError("verification_count must be a non-negative integer")
+    for field, value in (
+        ("ending_attempt_number", ending_attempt_number),
+        ("prior_quality_failure_count", prior_quality_failure_count),
+        ("prior_operational_failure_count", prior_operational_failure_count),
+    ):
+        minimum = 1 if field == "ending_attempt_number" else 0
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            raise ValueError(f"{field} must be an integer >= {minimum}")
     recommendation = recommend_model(
         project_root,
         task_type,
@@ -1533,7 +1551,56 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     operational_failure = real_status == "fail" and failure_class in OPERATIONAL_FAILURES
     recorded_switch_direction = "upgrade" if quality_failure else "operational_fallback" if operational_failure else recommendation["switch_direction"]
     recorded_switch_reason = f"spark_verify_failure_suppresses_{query['complexity_band']}_band" if priority_failure else f"{failure_class}_failure_one_rung_up" if quality_failure else f"{failure_class}_before_result_use_contextual_pair" if operational_failure else recommendation["attempt_reason"]
-    next_pair = recommendation["active_fallback_pair"] if priority_failure else pairs[pairs.index(pair) + 1] if quality_failure and pair in pairs and pairs.index(pair) + 1 < len(pairs) else recommendation["attempt_pair"]
+    prior_pass_count = recommendation.get("pass_counts", {}).get(pair, 0)
+    matched_pass_count_after = prior_pass_count + (1 if real_status == "pass" and pair in pairs else 0)
+    if priority_failure:
+        next_pair = recommendation["active_fallback_pair"]
+        next_pair_reason = "spark_quality_failure_uses_contextual_quality_pair"
+        next_pair_direction = "upgrade"
+    elif quality_failure:
+        pair_index = pairs.index(pair) if pair in pairs else -1
+        next_pair = pairs[pair_index + 1] if 0 <= pair_index < len(pairs) - 1 else pair
+        next_pair_reason = "quality_failure_one_rung_up" if next_pair != pair else "quality_boundary_exhausted"
+        next_pair_direction = "upgrade" if next_pair != pair else "freeze"
+    elif operational_failure:
+        next_pair = recommendation["attempt_pair"] or pair
+        next_pair_reason = "operational_failure_is_quality_neutral"
+        next_pair_direction = "no_switch" if next_pair == pair else "operational_fallback"
+    elif pair in priority_pairs:
+        next_pair = pair
+        next_pair_reason = "verified_priority_pair_retained"
+        next_pair_direction = "freeze"
+    elif recommendation.get("failed_model") and real_status == "pass":
+        next_pair = pair
+        next_pair_reason = "verified_recovery_pair_retained"
+        next_pair_direction = "freeze"
+    elif real_status == "pass" and pair in pairs and matched_pass_count_after >= MIN_REAL_PASSES_BEFORE_DOWNGRADE and pairs.index(pair) > 0:
+        next_pair = pairs[pairs.index(pair) - 1]
+        next_pair_reason = "two_matching_real_passes_trial_one_rung_down"
+        next_pair_direction = "downgrade"
+    else:
+        next_pair = pair or recommendation["attempt_pair"]
+        next_pair_reason = "first_real_pass_retain_collecting_evidence" if real_status == "pass" else "retain_current_boundary"
+        next_pair_direction = "freeze" if next_pair == pair else "no_switch"
+    ending_pass_shape = "first_attempt_pass" if real_status == "pass" and ending_attempt_number == 1 else "retry_pass" if real_status == "pass" else "failed_attempt"
+    if real_status == "pass" and ending_attempt_number == 1 and next_pair_direction == "downgrade":
+        model_suitability = "suitable_downgrade_candidate"
+        routing_action = "trial_downgrade_one_rung_next_matching_task"
+    elif real_status == "pass" and ending_attempt_number == 1:
+        model_suitability = "suitable"
+        routing_action = "retain_until_second_matching_first_pass"
+    elif real_status == "pass" and prior_quality_failure_count:
+        model_suitability = "initial_pair_too_weak_recovered"
+        routing_action = "reuse_lowest_successful_recovery_pair"
+    elif real_status == "pass":
+        model_suitability = "suitable_after_operational_recovery"
+        routing_action = "retain_quality_boundary"
+    elif quality_failure:
+        model_suitability = "too_weak_for_verified_result"
+        routing_action = "upgrade_one_rung_for_repair"
+    else:
+        model_suitability = "quality_unproven_operational_failure"
+        routing_action = "retry_without_quality_penalty"
     attempt_chain = []
     for attempt in receipt.get("route_attempts", []) if isinstance(receipt.get("route_attempts"), list) else []:
         if not isinstance(attempt, dict):
@@ -1608,6 +1675,16 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "completed_pair": pair,
         "recovery_from_pair": recommendation.get("failed_model") if real_status == "pass" else None,
         "attempt_chain": attempt_chain,
+        "ending_attempt_number": ending_attempt_number,
+        "ending_pass_shape": ending_pass_shape,
+        "prior_quality_failure_count": prior_quality_failure_count,
+        "prior_operational_failure_count": prior_operational_failure_count,
+        "matched_pass_count_after": matched_pass_count_after,
+        "minimum_passes_before_downgrade": MIN_REAL_PASSES_BEFORE_DOWNGRADE,
+        "next_pair_reason": next_pair_reason,
+        "next_pair_direction": next_pair_direction,
+        "model_suitability": model_suitability,
+        "routing_action": routing_action,
     }
     base = _json_safe(base)
     fingerprint_payload = _json_safe({key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}})
@@ -1648,6 +1725,16 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "switch_reason": stored_record["switch_reason"],
         "next_pair": stored_record["next_pair"],
         "recovery_from_pair": stored_record["recovery_from_pair"],
+        "ending_attempt_number": stored_record.get("ending_attempt_number"),
+        "ending_pass_shape": stored_record.get("ending_pass_shape"),
+        "prior_quality_failure_count": stored_record.get("prior_quality_failure_count"),
+        "prior_operational_failure_count": stored_record.get("prior_operational_failure_count"),
+        "matched_pass_count_after": stored_record.get("matched_pass_count_after"),
+        "minimum_passes_before_downgrade": stored_record.get("minimum_passes_before_downgrade"),
+        "next_pair_reason": stored_record.get("next_pair_reason"),
+        "next_pair_direction": stored_record.get("next_pair_direction"),
+        "model_suitability": stored_record.get("model_suitability"),
+        "routing_action": stored_record.get("routing_action"),
         "shared_model_registry": shared["registry_id"],
         "local": {"status": local_result["status"], "written": True, "path": local_result["path"]},
         "obsidian": projection_state,

@@ -158,17 +158,47 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertNotEqual(second["attempt_pair"], first["attempt_pair"])
         second_receipt = self.root / "second-receipt.json"
         self.write_receipt(second["attempt_pair"], path=second_receipt)
-        passed = module.record_model_result(self.project, "code", "recovery-routing", second_receipt, "pass", "none", outcome_reason="Regression verification passed after the model upgrade.", verification_count=2, **context)
+        passed = module.record_model_result(self.project, "code", "recovery-routing", second_receipt, "pass", "none", outcome_reason="Regression verification passed after the model upgrade.", verification_count=2, ending_attempt_number=2, prior_quality_failure_count=1, **context)
         records = [record for record in module._read_local_records() if record["module"] == "recovery-routing"]
         self.assertEqual(len(records), 2)
         self.assertEqual(failed["next_pair"], second["attempt_pair"])
         self.assertEqual(passed["recovery_from_pair"], first["attempt_pair"])
+        self.assertEqual(passed["ending_pass_shape"], "retry_pass")
+        self.assertEqual(passed["ending_attempt_number"], 2)
+        self.assertEqual(passed["next_pair_reason"], "verified_recovery_pair_retained")
+        self.assertEqual(passed["model_suitability"], "initial_pair_too_weak_recovered")
+        self.assertEqual(passed["routing_action"], "reuse_lowest_successful_recovery_pair")
         self.assertEqual(records[-1]["completed_pair"], second["attempt_pair"])
         self.assertEqual(records[-1]["outcome_reason"], "Regression verification passed after the model upgrade.")
         recommendation = module.recommend_model(self.project, "code", "recovery-routing", **context)
         self.assertEqual(recommendation["local_record_count"], 2)
         self.assertEqual(recommendation["obsidian_record_count"], 2)
         self.assertEqual(recommendation["merged_record_count"], 2)
+
+    def test_first_real_pass_retains_pair_and_second_matching_pass_sets_one_rung_down(self):
+        context = {"file_value": "src/example.py", "symbol": "Example.calibrate", "code_kind": "python", "operation": "feature", "modality": "text", "complexity_score": 35, "risk": "medium", "ambiguity": "low", "task_summary": "Calibrate a bounded model route.", "vault": self.vault}
+        first_route = module.recommend_model(self.project, "code", "calibration-routing", **context)
+        first_receipt = self.write_receipt(first_route["attempt_pair"], path=self.root / "calibration-first.json")
+        first = module.record_model_result(self.project, "code", "calibration-routing", first_receipt, "pass", "none", ending_attempt_number=1, **context)
+        second_route = module.recommend_model(self.project, "code", "calibration-routing", **context)
+        second_receipt = self.write_receipt(second_route["attempt_pair"], path=self.root / "calibration-second.json")
+        second_payload = json.loads(second_receipt.read_text(encoding="utf-8"))
+        second_payload["workload_prompt_sha256"] = "2" * 64
+        second_receipt.write_text(json.dumps(second_payload), encoding="utf-8")
+        second = module.record_model_result(self.project, "code", "calibration-routing", second_receipt, "pass", "none", ending_attempt_number=1, **context)
+        _, pairs = module.load_shared_ladder()
+        expected_lower = pairs[pairs.index(first_route["attempt_pair"]) - 1]
+        self.assertEqual(first["matched_pass_count_after"], 1)
+        self.assertEqual(first["next_pair"], first_route["attempt_pair"])
+        self.assertEqual(first["next_pair_reason"], "first_real_pass_retain_collecting_evidence")
+        self.assertEqual(first["model_suitability"], "suitable")
+        self.assertEqual(first["routing_action"], "retain_until_second_matching_first_pass")
+        self.assertEqual(second["matched_pass_count_after"], 2)
+        self.assertEqual(second["next_pair"], expected_lower)
+        self.assertEqual(second["next_pair_direction"], "downgrade")
+        self.assertEqual(second["next_pair_reason"], "two_matching_real_passes_trial_one_rung_down")
+        self.assertEqual(second["model_suitability"], "suitable_downgrade_candidate")
+        self.assertEqual(second["routing_action"], "trial_downgrade_one_rung_next_matching_task")
 
     def test_pre_result_timeout_records_neutral_operational_fallback(self):
         context = {"file_value": "src/example.py", "symbol": "Example.timeout", "code_kind": "python", "operation": "design", "modality": "text", "complexity_score": 82, "risk": "high", "ambiguity": "high", "task_summary": "Record a timed out routing stage.", "vault": self.vault}

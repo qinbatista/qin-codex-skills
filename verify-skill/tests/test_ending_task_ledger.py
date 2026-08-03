@@ -135,11 +135,60 @@ class EndingTaskLedgerTests(unittest.TestCase):
             state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
         record.assert_called_once()
         self.assertEqual(record.call_args.args[1:], ("pass", "none", "Real verification passed", 1))
+        self.assertEqual(record.call_args.kwargs["ending_attempt_number"], 1)
         self.assertEqual(passed["model_learning"], learned)
         self.assertEqual(passed["model_learning"]["model_switch"]["status"], "rebuilt")
         self.assertEqual(state["events"][-1]["model_learning"], learned)
         self.assertEqual(state["producer_binding"]["status"], "recorded")
+        self.assertEqual(passed["model_assessment"]["pass_shape"], "first_attempt_pass")
+        self.assertEqual(passed["model_assessment"]["attempt_count"], 1)
+        self.assertEqual(passed["model_assessment"]["model_suitability"], "suitable")
         self.assertEqual(duplicate["status"], "duplicate")
+
+    def test_retry_pass_reports_original_pair_failure_and_verified_recovery(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root)
+            store = root / "store"
+            original = LEDGER.start_lifecycle("verification", project, "First Ending", project, store=store, producer_receipt=receipt, selected_pair="gpt-5.6-luna|low")
+            failed_learning = {
+                "status": "written",
+                "written": True,
+                "pair": "gpt-5.6-luna|low",
+                "next_pair": "gpt-5.6-terra|medium",
+                "next_pair_direction": "upgrade",
+                "model_record_document": "Projects/project/Model Routing/Tests and Verification.md",
+                "model_record_link": "[[Projects/project/Model Routing/Tests and Verification]]",
+            }
+            passed_learning = {
+                "status": "written",
+                "written": True,
+                "pair": "gpt-5.6-terra|medium",
+                "next_pair": "gpt-5.6-terra|medium",
+                "next_pair_direction": "freeze",
+                "recovery_from_pair": "gpt-5.6-luna|low",
+                "ending_attempt_number": 2,
+                "model_record_document": "Projects/project/Model Routing/Tests and Verification.md",
+                "model_record_link": "[[Projects/project/Model Routing/Tests and Verification]]",
+                "obsidian": {"status": "written"},
+            }
+            with patch.object(LEDGER, "_record_bound_model_result", return_value=failed_learning) as failed_record:
+                failed = LEDGER.record_event(original["lifecycle_id"], "fail", "First check found a mismatch", ["mismatch"], "mismatch", store, "correctness")
+            repair = LEDGER.start_lifecycle("verification", project, "Fresh Ending after repair", project, repair_of_lifecycle_id=original["lifecycle_id"], store=store, producer_receipt=receipt, selected_pair="gpt-5.6-terra|medium")
+            with patch.object(LEDGER, "_record_bound_model_result", return_value=passed_learning) as passed_record:
+                passed = LEDGER.record_event(repair["lifecycle_id"], "pass", "Second check passed", ["regression pass"], store=store)
+            audit = LEDGER.audit_lifecycle(original["lifecycle_id"], store)
+        self.assertEqual(failed["model_assessment"]["model_suitability"], "too_weak_for_verified_result")
+        self.assertEqual(failed_record.call_args.kwargs["ending_attempt_number"], 1)
+        self.assertEqual(passed_record.call_args.kwargs["ending_attempt_number"], 2)
+        self.assertEqual(passed_record.call_args.kwargs["prior_quality_failure_count"], 1)
+        self.assertEqual(passed["model_assessment"]["pass_shape"], "retry_pass")
+        self.assertEqual(passed["model_assessment"]["attempt_count"], 2)
+        self.assertEqual(passed["model_assessment"]["model_suitability"], "initial_pair_too_weak_recovered")
+        self.assertEqual(passed["model_assessment"]["routing_action"], "reuse_lowest_successful_recovery_pair")
+        self.assertEqual(passed["model_assessment"]["next_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(passed["model_assessment"]["model_record_link"], "[[Projects/project/Model Routing/Tests and Verification]]")
+        self.assertEqual(audit["attempt_count"], 2)
 
     def test_bound_receipt_accepts_current_extended_routing_context(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

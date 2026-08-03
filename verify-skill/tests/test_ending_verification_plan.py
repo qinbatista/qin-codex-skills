@@ -25,11 +25,13 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])
         self.assertEqual(plan["execution"], "separate_persistent_tasks")
-        self.assertEqual(plan["thread_target"], {"type": "projectless"})
-        self.assertEqual(plan["terminal_thread_policy"], {"pass": "record_pass_then_archive_self", "fail": "keep_unarchived", "blocked": "keep_unarchived"})
+        self.assertEqual(plan["thread_target"]["type"], "project")
+        self.assertEqual(plan["thread_target"]["environment"], {"type": "local"})
+        self.assertEqual(plan["thread_target"]["project_root"], str(root.resolve()))
+        self.assertEqual(plan["terminal_thread_policy"], {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"})
         self.assertEqual([task["title"] for task in plan["ending_tasks"]], ["End Task-routing-unit", "End Task-routing-integration"])
-        self.assertTrue(all(task["thread_target"] == {"type": "projectless"} for task in plan["ending_tasks"]))
-        self.assertTrue(all(task["terminal_thread_policy"]["pass"] == "record_pass_then_archive_self" for task in plan["ending_tasks"]))
+        self.assertTrue(all(task["thread_target"]["type"] == "project" for task in plan["ending_tasks"]))
+        self.assertTrue(all(task["terminal_thread_policy"]["pass"] == "keep_visible" for task in plan["ending_tasks"]))
         self.assertNotEqual(plan["ending_tasks"][0]["selected_pair"], plan["ending_tasks"][1]["selected_pair"])
 
     def test_run_check_executes_real_command_and_records_pass(self):
@@ -54,12 +56,13 @@ class EndingVerificationPlanTests(unittest.TestCase):
             evidence = PLAN.run_check(plan_path, "unit", evidence_path)
         self.assertEqual(evidence["status"], "fail")
         self.assertEqual(evidence["repair_handoff"]["action"], "create_repair_task_then_fresh_ending")
-        self.assertEqual(evidence["repair_handoff"]["thread_target"], {"type": "projectless"})
-        self.assertEqual(evidence["repair_handoff"]["terminal_thread_policy"]["fail"], "keep_unarchived")
+        self.assertEqual(evidence["repair_handoff"]["thread_target"]["type"], "project")
+        self.assertEqual(evidence["repair_handoff"]["thread_target"]["project_root"], str(root.resolve()))
+        self.assertEqual(evidence["repair_handoff"]["terminal_thread_policy"]["fail"], "keep_visible")
         self.assertEqual(evidence["repair_handoff"]["error"]["exit_code"], 7)
         self.assertIn("broken", evidence["repair_handoff"]["error"]["stderr"])
 
-    def test_launch_spec_requires_one_real_projectless_thread_per_check(self):
+    def test_launch_spec_requires_one_real_project_thread_per_check(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path = root / "plan.json"
@@ -67,15 +70,18 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"], "complexity_score": 20},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])), encoding="utf-8")
-            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123")
         self.assertEqual(launch["execution"], "host_persistent_create_thread")
         self.assertEqual(launch["required_launch_count"], 2)
         self.assertEqual({item["tool"] for item in launch["launch_requests"]}, {"codex_app__create_thread"})
-        self.assertTrue(all(item["arguments"]["target"] == {"type": "projectless"} for item in launch["launch_requests"]))
+        self.assertEqual(launch["project_binding"]["project_root"], str(root.resolve()))
+        self.assertTrue(all(item["arguments"]["target"] == {"type": "project", "projectId": "project-123", "environment": {"type": "local"}} for item in launch["launch_requests"]))
         self.assertTrue(all(item["arguments"]["prompt"].startswith("ENDING_TASK_WORKER\n") for item in launch["launch_requests"]))
         self.assertTrue(all("Verification plan relative to project root: plan.json" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("Evidence output relative to project root: Cache/tests/ending-evidence/" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all(str(root / "plan.json") not in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all("Never call set_thread_archived" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all("structured model_assessment" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertEqual(
             [f"{item['arguments']['model']}|{item['arguments']['thinking']}" for item in launch["launch_requests"]],
             [item["selected_pair"] for item in launch["launch_requests"]],
@@ -91,12 +97,12 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"], "complexity_score": 20},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])), encoding="utf-8")
-            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123")
             launch_path.write_text(json.dumps(launch), encoding="utf-8")
             not_launched = PLAN.audit_launches(launch_path, state_path)
-            PLAN.acknowledge_launch(launch_path, "unit", "thread-unit", "host-unit", state_path)
+            PLAN.acknowledge_launch(launch_path, "unit", "thread-unit", "host-unit", "project-123", state_path)
             blocked = PLAN.audit_launches(launch_path, state_path)
-            PLAN.acknowledge_launch(launch_path, "integration", "thread-integration", "host-integration", state_path)
+            PLAN.acknowledge_launch(launch_path, "integration", "thread-integration", "host-integration", "project-123", state_path)
             passed = PLAN.audit_launches(launch_path, state_path)
         self.assertEqual(not_launched["status"], "blocked")
         self.assertEqual(not_launched["end_task_trigger_rate"], "0%")
@@ -116,10 +122,10 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"]},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"]},
             ])), encoding="utf-8")
-            launch_path.write_text(json.dumps(PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence")), encoding="utf-8")
-            PLAN.acknowledge_launch(launch_path, "unit", "same-thread", "host", state_path)
+            launch_path.write_text(json.dumps(PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123")), encoding="utf-8")
+            PLAN.acknowledge_launch(launch_path, "unit", "same-thread", "host", "project-123", state_path)
             with self.assertRaisesRegex(ValueError, "cannot acknowledge multiple checks"):
-                PLAN.acknowledge_launch(launch_path, "integration", "same-thread", "host", state_path)
+                PLAN.acknowledge_launch(launch_path, "integration", "same-thread", "host", "project-123", state_path)
 
 
 if __name__ == "__main__":

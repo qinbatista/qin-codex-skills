@@ -9,17 +9,17 @@ Every user submission records a scored local Ending lifecycle. When the complete
 3. Define observable acceptance commands. Use `scripts/ending_verification_plan.py plan` with one check per independent unit, integration/API, build, render/visual, or live-state surface.
 4. Give every check its own complexity score. The planner selects `weak_default`, `balanced_default`, `balanced_complex`, or `frontier_complex`; Spark is not an Ending verifier.
 5. Start the local lifecycle with `--verification-required --verification-plan`, score/band, and `--producer-receipt` when present.
-6. Create and title one persistent `End Task-{task}-{check}` per plan item with `create_thread` target `{"type":"projectless"}`, using that check's selected model and effort. Never attach it to the source project. Pass the exact `run-check` command, lifecycle/receipt paths, absolute project root, touched files, and repair boundary. Safe independent checks may run concurrently; shared-state checks stay ordered.
+6. Resolve the exact saved project by canonical root and create one persistent `End Task-{task}-{check}` per plan item with a project/local `create_thread` target, using that check's selected model and effort. Pass the exact `run-check` command, lifecycle/receipt paths, project root, touched files, and repair boundary. Safe independent checks may run concurrently; shared-state checks stay ordered.
 7. Link the tasks and return the origin without polling. Missing task creation is terminal BLOCKED and is not verification.
 
 ## Real check PASS
 
-The Ending worker runs `ending_verification_plan.py run-check` for its assigned check. It records the real command, exit code, stdout/stderr, elapsed time, score/band, and selected pair. PASS requires the expected observable result. Every required check must PASS before the lifecycle final gate passes. A receipt-backed PASS also records producer model learning to Obsidian; the verifier pair is never learned as the producer. After the PASS event is durable, the worker calls `set_thread_archived` with `archived=true` and no thread ID. An accepted archive may terminate the turn before a final reply; the durable evidence remains authoritative. If self-archive is unavailable, it remains visible and returns `BLOCKED: PASS recorded but self-archive unavailable`.
+The Ending worker runs `ending_verification_plan.py run-check` for its assigned check. It records the real command, exit code, stdout/stderr, elapsed time, score/band, and selected pair. PASS requires the expected observable result. Every required check must PASS before the lifecycle final gate passes. A receipt-backed terminal event records producer model learning to Obsidian; the verifier pair is never learned as the producer. The worker then prints the ledger's structured `model_assessment`, including attempt count, first/retry pass, suitability, next action/pair, and record link/status. It never calls `set_thread_archived` or deletes itself; every terminal End/Fix task remains visible.
 
 ## Real check FAIL and repair
 
 1. Record lifecycle FAIL with the exact failing command, exit code, stdout/stderr, failure class, and stable error fingerprint.
-2. Use the emitted `repair_handoff` to create projectless `Fix Task-{task}-{check}`. The repair task receives the original request, changed files, allowed scope, and exact error evidence.
+2. Use the emitted `repair_handoff` to create `Fix Task-{task}-{check}` in the same saved project. The repair task receives the original request, changed files, allowed scope, and exact error evidence.
 3. The repair task may edit only the authorized result, runs its own Quick Check, and then creates a fresh `End Task-{task}-{check}` that reruns the original acceptance check.
 4. Continue repair then fresh verification for at most three attempts. Never let a failing verifier repair its own target or claim PASS from its earlier evidence.
 5. If all repair attempts fail, record BLOCKED with the final exact error and attempt history. BLOCKED never counts as verified.
