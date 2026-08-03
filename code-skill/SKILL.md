@@ -1,11 +1,11 @@
 ---
 name: code-skill
-description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill for code implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
+description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill for code implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
 ---
 
 # Code Skill
 
-Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. The entry parent dispatches first without loading this file; the selected `LOCKED_ROUTE_NODE` result producer loads it. Every submission and every dynamic code segment receives a deterministic `0-100` complexity score. A low-risk, low-ambiguity code, write, probe, command, transform, or execute segment scoring `0-24` tries the catalog priority producer first even inside a larger task; other eligible implementations execute their score role or Obsidian-context quality pair. A self-contained bounded read-only lookup or audit stays on the bootstrap but still reports its score. The producer performs one bounded Quick Check before presenting code; deeper independent verification runs later in a separate persistent Ending thread.
+Use this as the global executor for active registry-owned code work that needs domain behavior or style rules. The entry parent dispatches first without loading this file; the selected `LOCKED_ROUTE_NODE` result producer loads it. Every submission and every dynamic code segment receives a deterministic `0-100` complexity score. A low-risk, low-ambiguity code, write, probe, command, transform, or execute segment scoring `0-24` tries the catalog priority producer first even inside a larger task; other eligible implementations execute their score role or Obsidian-context quality pair. A self-contained bounded read-only lookup or audit stays on the bootstrap only when it requests no file/report; any requested output artifact is producer work. The producer performs one bounded Quick Check before presenting code; deeper independent verification runs later in a separate persistent Ending thread.
 
 ## Internal Route Selection
 
@@ -21,7 +21,7 @@ Load this skill for every inline request or admitted node that writes, debugs, r
 
 Use only the registered domain resolved from the inline request or admitted node; other production language domains remain with their owning production skill until explicitly registered here.
 
-Do not load it for an exact bounded read-only source lookup/audit that already supplies its source scope and output contract. The bootstrap collects that evidence once and returns.
+Do not load it for an exact bounded read-only source lookup/audit that supplies its source scope and output contract and requests no output artifact. The bootstrap collects that evidence once and returns. A Cache note or report is an artifact and must be produced through the adaptive runner.
 
 ## Execution-domain routing
 
@@ -91,7 +91,7 @@ The smallest safe syntax, existence, direct-reference, or focused local executio
 
 Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines.
 
-The mandatory post-result Ending lifecycle still runs. Return published code after Quick Check, then release the real-test Ending tasks. The origin does not poll them. A failing Ending verifier records exact evidence and launches a separate repair task; the repaired code gets a fresh different verifier. The lifecycle always records score/band, check evidence, selected verifier pair, and repair chain locally; a receipt-backed producer terminal event also records score, route direction, and next pair in Obsidian.
+The mandatory post-result Ending lifecycle still runs. Return published code after Quick Check, then release the real-test Ending tasks. The origin does not poll them. A failing Ending verifier records exact evidence and launches a separate repair task; the repaired code gets a fresh different verifier. The lifecycle always records score/band, check evidence, selected verifier pair, and repair chain locally and in Obsidian. Only a receipt-backed producer event may change routing; an unreceipted known assignment is observation-only.
 
 ## Optimization Boundary
 

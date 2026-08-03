@@ -166,7 +166,7 @@ def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=Non
             f"Expected command: {command_text}",
             f"Producer receipt relative to project root: {receipt_line}",
             "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the plan's exact run-check command from the project root.",
-            "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; bind the producer receipt when one is present so terminal evidence updates local routing history and Obsidian.",
+            "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; bind the producer receipt when present. Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation.",
             "PASS requires the new evidence file to report status=pass and the expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this project task visible.",
             "After the terminal ledger event, print its structured model_assessment: task/check score and band, producer pair, Ending pair, attempt count, first-attempt or retry result, suitability, next routing action and pair, concise evidence reason, and Obsidian model-record link/status. Never expose private chain-of-thought.",
             "Never call set_thread_archived or delete this End Task automatically.",

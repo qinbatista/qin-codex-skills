@@ -41,7 +41,7 @@
 - **学习：** receipt 有效的 Real PASS 保留当前档；两次匹配 PASS 才可向下降一级；质量失败向上升一级。失败后恢复成功的强档会被下一次精确匹配直接复用；实现与本地测试分别记忆。
 - **操作故障：** 零结果故障只允许一次更强 fallback，不把它当质量失败学习。
 - **Schedule：** 复合任务拆成可量化、责任明确的步骤并逐步选模；两到三个独立只读 source 先做成本准入，有依赖的多文件工作使用一个上下文 producer。
-- **记忆：** Ending 更新 Model Switch 与原生类别链接；只读匹配类别，不用 JSON sidecar。
+- **记忆：** Model Switch 与原生类别链接按项目 → Model Switch → 类别 → 共享类别保存每个终态 Ending；不读完整历史，也不用 JSON sidecar。receipt 结果可调整路线，无 receipt 的已知 assignment 只做可见观察，不参与自动升降级。
 
 ## 规则
 

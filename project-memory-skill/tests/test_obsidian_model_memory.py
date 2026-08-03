@@ -625,6 +625,65 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(route["current_source_document"], "Projects/ThisIsMyOregon/Model Routing/Normal Script Update.md")
         self.assertLessEqual(route["pages_read"], 2)
 
+    def test_unreceipted_assignment_is_projected_but_never_moves_routing(self):
+        scope = {
+            "file_value": "src/example.py",
+            "code_kind": "general",
+            "operation": "verify",
+            "modality": "text",
+            "complexity_score": 18,
+            "risk": "low",
+            "ambiguity": "low",
+            "task_summary": "Verify one generated structure record.",
+            "step_kind": "verification",
+            "capability_tags": ["local-test"],
+        }
+        before = module.recommend_model(self.project, "verification", "structure-record", vault=self.vault, **scope)
+        observed = module.record_model_observation(
+            self.project,
+            "verification",
+            "structure-record",
+            "gpt-5.6-luna|medium",
+            "pass",
+            "none",
+            observation_id="ending-structure-record-1",
+            model_evidence="task_assignment",
+            vault=self.vault,
+            ending_attempt_number=1,
+            outcome_reason="Independent file check passed.",
+            verification_count=1,
+            **scope,
+        )
+        replay = module.record_model_observation(
+            self.project,
+            "verification",
+            "structure-record",
+            "gpt-5.6-luna|medium",
+            "pass",
+            "none",
+            observation_id="ending-structure-record-1",
+            model_evidence="task_assignment",
+            vault=self.vault,
+            ending_attempt_number=1,
+            outcome_reason="Independent file check passed.",
+            verification_count=1,
+            **scope,
+        )
+        after = module.recommend_model(self.project, "verification", "structure-record", vault=self.vault, **scope)
+        category = self.vault / "Projects" / "ThisIsMyOregon" / "Model Routing" / "Tests and Verification.md"
+        envelope = json.loads(self.local_store.read_text(encoding="utf-8").splitlines()[0])
+        record = envelope["record"]
+        self.assertEqual(observed["status"], "written")
+        self.assertEqual(replay["status"], "duplicate")
+        self.assertFalse(observed["learning_eligible"])
+        self.assertEqual(observed["model_record_link"], "[[Projects/ThisIsMyOregon/Model Routing/Tests and Verification]]")
+        self.assertEqual(record["receipt_status"], "unavailable")
+        self.assertEqual(record["model_evidence"], "task_assignment")
+        self.assertFalse(record["learning_eligible"])
+        self.assertEqual(record["routing_action"], "record_only_require_receipted_evidence_before_model_movement")
+        self.assertEqual(after["attempt_pair"], before["attempt_pair"])
+        self.assertIn("task_assignment / pass / 1 / first_attempt_pass", category.read_text(encoding="utf-8"))
+
     def test_migration_preserves_foreign_records_and_keeps_model_switch_compact(self):
         own = self.quality_record("gpt-5.6-terra|medium")
         own.update(model_experience_schema=1, project_key=module.project_change_memory._project_identity(self.project)["key"], task_type="code", module="example-module", file="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low")

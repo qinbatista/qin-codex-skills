@@ -41,7 +41,7 @@ Main work and Ending verification are deliberately different task sessions. A su
 - **Learning:** A receipt-valid Real PASS retains the pair; two matched PASS outcomes may try one weaker rung; quality failure upgrades one rung. A recovered stronger pair is reused directly for the next exact match, while implementation and local-test steps keep separate histories.
 - **Operational:** A zero-result failure gets one stronger fallback and is not learned as a quality failure.
 - **Scheduling:** Compound requests split into quantifiable owned steps; each step routes independently. Two or three read-only sources are cost-admitted before reads; dependent multi-file work stays with one contextual producer.
-- **Memory:** Native project → Model Switch → category → shared-category links read only matching records; no JSON sidecar or full-history read.
+- **Memory:** Native project → Model Switch → category → shared-category links hold every terminal Ending record; no JSON sidecar or full-history read. Receipt-backed outcomes may move routing; known assignments without receipts remain visible, non-learning observations.
 
 ## Rules
 

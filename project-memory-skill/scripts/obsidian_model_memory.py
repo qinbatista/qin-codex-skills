@@ -148,6 +148,9 @@ FRONTMATTER_FIELDS = (
     "failure_class",
     "outcome_reason",
     "verification_count",
+    "model_evidence",
+    "learning_eligible",
+    "observation_id",
     "receipt_status",
     "model_match",
     "effort_match",
@@ -1215,7 +1218,7 @@ def _render_category_page(vault_path, owner, category, records):
     project_index = _owner_index(vault_path, owner)
     model_switch = _memory_root_owner(vault_path, owner)
     fingerprints = sorted({capability["capability_fingerprint"] for capability in (_record_capability_or_default(record) for record in records) if capability["capability_fingerprint"]})
-    lines = [MODEL_SWITCH_CATEGORY_MARKER, f"# {owner} · {title}", "", f"- Project index: {_wikilink(vault_path, project_index)}", f"- Model Switch: {_wikilink(vault_path, model_switch)}", f"- Shared task type: {_wikilink(vault_path, _shared_category_page(vault_path, category))}", "", f"Records: {len(records)}", f"Fingerprints: {', '.join(f'`{fingerprint}`' for fingerprint in fingerprints)}", "", "| Task | Step / capability | Score | Module / file / symbol | Entry / selected / effective / next | Direction / reason | Outcome / recovery | Tokens / time | Ending attempt | Next decision |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    lines = [MODEL_SWITCH_CATEGORY_MARKER, f"# {owner} · {title}", "", f"- Project index: {_wikilink(vault_path, project_index)}", f"- Model Switch: {_wikilink(vault_path, model_switch)}", f"- Shared task type: {_wikilink(vault_path, _shared_category_page(vault_path, category))}", "", f"Records: {len(records)}", f"Fingerprints: {', '.join(f'`{fingerprint}`' for fingerprint in fingerprints)}", "", "| Task | Step / capability | Score | Module / file / symbol | Entry / selected / effective / next | Direction / reason | Outcome / recovery | Tokens / time | Evidence / Ending attempt | Next decision |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for record in records:
         detail = _switch_details(record)
         capability = _record_capability_or_default(record)
@@ -1223,7 +1226,8 @@ def _render_category_page(vault_path, owner, category, records):
         location = " / ".join(value for value in (record.get("module"), record.get("file"), record.get("symbol")) if value) or "—"
         outcome_reason = str(record.get("outcome_reason") or record.get("failure_class") or "—").replace("|", "/")
         recovery = record.get("recovery_from_pair") or "—"
-        lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {capability['capability_fingerprint'][:12]} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {location} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {record.get('real_status','')} / {record.get('ending_attempt_number','—')} / {record.get('ending_pass_shape','—')} / {record.get('model_suitability','—')} | {record.get('routing_action','—')} / {record.get('next_pair_direction','—')} / {record.get('next_pair_reason','—')} |")
+        evidence = record.get("model_evidence") or ("runtime_receipt" if record.get("receipt_status") == "pass" else record.get("receipt_status") or "unavailable")
+        lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {capability['capability_fingerprint'][:12]} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {location} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {evidence} / {record.get('real_status','')} / {record.get('ending_attempt_number','—')} / {record.get('ending_pass_shape','—')} / {record.get('model_suitability','—')} | {record.get('routing_action','—')} / {record.get('next_pair_direction','—')} / {record.get('next_pair_reason','—')} |")
         lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1465,6 +1469,200 @@ def reconcile_local_model_history(project_root, *, vault=None, local_store=None)
     return {"status": "written" if projected else "pending" if pending else "up-to-date", "written": projected > 0, "projected": projected, "pending": pending, "latest": latest}
 
 
+def record_model_observation(project_root, task_type, module, pair, real_status, failure_class, *, observation_id, file_value="", symbol="", code_kind="general", operation="verify", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="verification", capability_tags=None, entry_model="", entry_effort="", model_evidence="task_assignment", vault=None, ladder=DEFAULT_LADDER, recorded_at=None, local_store=None, outcome_reason="", verification_count=0, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
+    """Persist a visible, non-learning model observation when no runtime receipt exists."""
+    shared, pairs = load_shared_ladder(ladder)
+    priority = shared.get("priority_producer")
+    priority_pairs = {f"{priority['id']}|{effort}" for effort in priority["adaptive_efforts"]} if isinstance(priority, dict) and priority.get("enabled") is True else set()
+    pair = _single_line(pair, "pair", maximum=160)
+    if pair not in set(pairs) | priority_pairs:
+        raise ValueError("observed pair is outside the shared active producer contract")
+    if real_status not in {"pass", "fail", "blocked"} or failure_class not in FAILURE_CLASSES:
+        raise ValueError("observation status or failure class is invalid")
+    if real_status == "pass" and failure_class != "none":
+        raise ValueError("a passing observation requires failure_class=none")
+    if real_status == "fail" and failure_class == "none":
+        raise ValueError("a failed observation requires an explicit failure class")
+    if model_evidence not in {"verified_entry", "task_assignment", "configured_selection"}:
+        raise ValueError("an unreceipted observation requires a known non-runtime evidence level")
+    observation_id = _single_line(observation_id, "observation_id", maximum=160)
+    if isinstance(verification_count, bool) or not isinstance(verification_count, int) or verification_count < 0:
+        raise ValueError("verification_count must be a non-negative integer")
+    for field, value in (
+        ("ending_attempt_number", ending_attempt_number),
+        ("prior_quality_failure_count", prior_quality_failure_count),
+        ("prior_operational_failure_count", prior_operational_failure_count),
+    ):
+        minimum = 1 if field == "ending_attempt_number" else 0
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            raise ValueError(f"{field} must be an integer >= {minimum}")
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
+    recommendation = recommend_model(
+        project_root,
+        task_type,
+        module,
+        file_value=file_value,
+        symbol=symbol,
+        code_kind=code_kind,
+        operation=operation,
+        modality=modality,
+        complexity=complexity,
+        complexity_score=query["complexity_score"],
+        risk=risk,
+        ambiguity=ambiguity,
+        task_summary=task_summary,
+        step_kind=query["step_kind"],
+        capability_tags=query["capability_tags"],
+        entry_model=entry_model,
+        entry_effort=entry_effort,
+        vault=vault,
+        ladder=ladder,
+        local_store=local_store,
+    )
+    timestamp = recorded_at or datetime.now(timezone.utc)
+    owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
+    outcome_reason = _single_line(outcome_reason or ("Ending verification passed without a producer runtime receipt." if real_status == "pass" else "Ending verification recorded without a producer runtime receipt."), "outcome_reason", maximum=280)
+    ending_pass_shape = "first_attempt_pass" if real_status == "pass" and ending_attempt_number == 1 else "retry_pass" if real_status == "pass" else "failed_attempt" if real_status == "fail" else "blocked"
+    if real_status == "pass":
+        model_suitability = "suitable_observed_no_runtime_receipt"
+    elif real_status == "fail" and failure_class in QUALITY_FAILURES:
+        model_suitability = "quality_failure_observed_no_runtime_receipt"
+    elif real_status == "fail":
+        model_suitability = "operational_failure_observed_no_runtime_receipt"
+    else:
+        model_suitability = "unproven_observed_no_runtime_receipt"
+    routing_action = "record_only_require_receipted_evidence_before_model_movement"
+    event_payload = f"{query['project']['key']}|{observation_id}|{real_status}|{failure_class}|{pair}"
+    event_id = hashlib.sha256(event_payload.encode()).hexdigest()
+    base = {
+        "model_experience_schema": SCHEMA_VERSION,
+        "record_id": "",
+        "event_id": event_id,
+        "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "project_name": query["project"]["name"],
+        "project_key": query["project"]["key"],
+        "project_owner": owner,
+        "task_type": query["task_type"],
+        "task_summary": query["task_summary"],
+        "module": query["module"],
+        "file": query["file"],
+        "symbol": query["symbol"],
+        "code_kind": query["code_kind"],
+        "operation": query["operation"],
+        "modality": query["modality"],
+        "complexity": query["complexity"],
+        "complexity_score": query["complexity_score"],
+        "complexity_band": query["complexity_band"],
+        "risk": query["risk"],
+        "ambiguity": query["ambiguity"],
+        "step_kind": query["step_kind"],
+        "capability_tags": query["capability_tags"],
+        "capability_fingerprint": query["capability_fingerprint"],
+        "entry_model": recommendation["entry_model"],
+        "entry_effort": recommendation["entry_effort"],
+        "entry_pair": recommendation["entry_pair"],
+        "entry_anchor_pair": recommendation["entry_anchor_pair"],
+        "entry_source": recommendation["entry_source"],
+        "model": pair.split("|", 1)[0],
+        "effort": pair.split("|", 1)[1],
+        "pair": pair,
+        "selected_pair": pair,
+        "prior_pair": recommendation.get("success_model") or recommendation.get("failed_model"),
+        "attempt_pair": pair,
+        "active_fallback_pair": recommendation.get("active_fallback_pair"),
+        "operational_failure_pairs": [],
+        "real_status": real_status,
+        "failure_class": failure_class,
+        "outcome_reason": outcome_reason,
+        "verification_count": verification_count,
+        "model_evidence": model_evidence,
+        "learning_eligible": False,
+        "observation_id": observation_id,
+        "receipt_status": "unavailable",
+        "model_match": False,
+        "effort_match": False,
+        "turn_completed": True,
+        "trial": False,
+        "selection_reason": f"{model_evidence}_without_runtime_receipt",
+        "recommendation_state": "observed_not_learning_eligible",
+        "specificity": recommendation["specificity"],
+        "matched_records": recommendation["matched_records"],
+        "success_pair": recommendation["success_model"],
+        "failed_pair": recommendation["failed_model"],
+        "workload_prompt_sha256": None,
+        "total_tokens": None,
+        "process_ms": None,
+        "receipt_sha256": None,
+        "switch_direction": "no_switch",
+        "switch_reason": "observation_only_no_runtime_receipt",
+        "next_pair": pair,
+        "completed_pair": pair,
+        "recovery_from_pair": None,
+        "attempt_chain": [{"pair": pair, "status": real_status, "failure_class": failure_class}],
+        "ending_attempt_number": ending_attempt_number,
+        "ending_pass_shape": ending_pass_shape,
+        "prior_quality_failure_count": prior_quality_failure_count,
+        "prior_operational_failure_count": prior_operational_failure_count,
+        "matched_pass_count_after": recommendation.get("pass_counts", {}).get(pair, 0),
+        "minimum_passes_before_downgrade": MIN_REAL_PASSES_BEFORE_DOWNGRADE,
+        "next_pair_reason": "observation_only_no_runtime_receipt",
+        "next_pair_direction": "no_switch",
+        "model_suitability": model_suitability,
+        "routing_action": routing_action,
+    }
+    base = _json_safe(base)
+    fingerprint_payload = _json_safe({key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}})
+    fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    base["record_id"] = f"{timestamp.strftime('%Y%m%dT%H%M%SZ')}-{fingerprint[:12]}"
+    local_result = _append_local_record(base, local_store)
+    stored_record = local_result["record"]
+    reconcile_result = reconcile_local_model_history(project_root, vault=vault, local_store=local_store)
+    states = _read_projection_state(local_store)
+    projection_state = states.get(event_id, {"status": "pending", "reason": "projection_state_missing"})
+    latest_projection = reconcile_result.get("latest") if isinstance(reconcile_result, dict) else None
+    model_switch = latest_projection.get("model_switch") if isinstance(latest_projection, dict) else None
+    vault_path, memory_root = _memory_root(query, vault)
+    model_switch_reference_result = model_switch_reference(project_root, vault=vault)
+    obsidian_note = _vault_relative_path(vault_path, memory_root).as_posix() if projection_state.get("status") == "written" and vault_path is not None and memory_root is not None else None
+    model_record = _category_reference(vault_path, owner, _task_category(stored_record)) if obsidian_note and owner else {"document": None, "link": None}
+    if model_switch is None and obsidian_note:
+        model_switch = rebuild_model_switches(project_root, vault=vault)
+    return {
+        "status": "duplicate" if local_result["status"] == "duplicate" else "written",
+        "written": True,
+        "learning_eligible": False,
+        "record_id": stored_record["record_id"],
+        "event_id": stored_record["event_id"],
+        "project_key": stored_record["project_key"],
+        "pair": stored_record["pair"],
+        "real_status": stored_record["real_status"],
+        "failure_class": stored_record["failure_class"],
+        "complexity_score": stored_record["complexity_score"],
+        "complexity_band": stored_record["complexity_band"],
+        "ending_attempt_number": stored_record["ending_attempt_number"],
+        "ending_pass_shape": stored_record["ending_pass_shape"],
+        "model_suitability": stored_record["model_suitability"],
+        "routing_action": stored_record["routing_action"],
+        "switch_direction": stored_record["switch_direction"],
+        "switch_reason": stored_record["switch_reason"],
+        "next_pair": stored_record["next_pair"],
+        "matched_pass_count_after": stored_record["matched_pass_count_after"],
+        "minimum_passes_before_downgrade": stored_record["minimum_passes_before_downgrade"],
+        "next_pair_reason": stored_record["next_pair_reason"],
+        "next_pair_direction": stored_record["next_pair_direction"],
+        "local": {"status": local_result["status"], "written": True, "path": local_result["path"]},
+        "obsidian": projection_state,
+        "obsidian_note": obsidian_note,
+        "model_record_document": model_record["document"],
+        "model_record_link": model_record["link"],
+        "model_switch_status": model_switch_reference_result["status"],
+        "model_switch_document": model_switch_reference_result["document"],
+        "model_switch_link": model_switch_reference_result["link"],
+        "pending_projection_count": reconcile_result["pending"],
+        "model_switch": model_switch or {"status": projection_state.get("status"), "written": projection_state.get("status") == "written", "reason": projection_state.get("reason")},
+    }
+
+
 def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
@@ -1654,6 +1852,9 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "failure_class": failure_class,
         "outcome_reason": outcome_reason,
         "verification_count": verification_count,
+        "model_evidence": "runtime_receipt",
+        "learning_eligible": True,
+        "observation_id": None,
         "receipt_status": "pass" if valid_receipt else "fail",
         "model_match": receipt.get("model_match") is True,
         "effort_match": receipt.get("effort_match") is True,

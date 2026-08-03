@@ -363,6 +363,50 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(state["model_disclosure"]["switch_summary"], "No model switch")
         self.assertEqual(state["model_disclosure"]["reason"], "Previous-model provenance unavailable: no assignment or receipt.")
 
+    def test_unbound_ending_assignment_records_non_learning_project_observation(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "structure.md").write_text("verified\n", encoding="utf-8")
+            store = root / "store"
+            started = LEDGER.start_lifecycle(
+                "verification",
+                project,
+                "Verify the structure record",
+                project,
+                "structure-record",
+                ["structure.md"],
+                store=store,
+                complexity_score=18,
+                selected_pair="gpt-5.6-luna|medium",
+                model_evidence="task_assignment",
+            )
+            observation = {
+                "status": "written",
+                "written": True,
+                "learning_eligible": False,
+                "pair": "gpt-5.6-luna|medium",
+                "next_pair": "gpt-5.6-luna|medium",
+                "next_pair_direction": "no_switch",
+                "model_suitability": "suitable_observed_no_runtime_receipt",
+                "routing_action": "record_only_require_receipted_evidence_before_model_movement",
+                "obsidian": {"status": "written"},
+                "model_record_document": "Projects/project/Model Routing/Tests and Verification.md",
+                "model_record_link": "[[Projects/project/Model Routing/Tests and Verification]]",
+            }
+            with patch.object(LEDGER, "_record_unbound_model_observation", return_value=observation) as record:
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Independent file check passed", ["structure.md exists"], store=store)
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        record.assert_called_once()
+        self.assertEqual(passed["model_learning"], observation)
+        self.assertEqual(passed["model_assessment"]["producer_pair"], "unknown|unknown")
+        self.assertEqual(passed["model_assessment"]["ending_pair"], "gpt-5.6-luna|medium")
+        self.assertEqual(passed["model_assessment"]["model_record_pair"], "gpt-5.6-luna|medium")
+        self.assertEqual(passed["model_assessment"]["model_record_status"], "written")
+        self.assertEqual(passed["model_assessment"]["routing_action"], "record_only_require_receipted_evidence_before_model_movement")
+        self.assertFalse(state["model_learning"]["learning_eligible"])
+
     def test_runtime_receipt_evidence_requires_a_validated_receipt(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

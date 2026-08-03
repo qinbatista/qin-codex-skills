@@ -14,7 +14,7 @@ Every user submission records a scored local Ending lifecycle. When the complete
 
 ## Real check PASS
 
-The Ending worker runs `ending_verification_plan.py run-check` for its assigned check. It records the real command, exit code, stdout/stderr, elapsed time, score/band, and selected pair. PASS requires the expected observable result. Every required check must PASS before the lifecycle final gate passes. A receipt-backed terminal event records producer model learning to Obsidian; the verifier pair is never learned as the producer. The worker then prints the ledger's structured `model_assessment`, including attempt count, first/retry pass, suitability, next action/pair, and record link/status. It never calls `set_thread_archived` or deletes itself; every terminal End/Fix task remains visible.
+The Ending worker runs `ending_verification_plan.py run-check` for its assigned check. It records the real command, exit code, stdout/stderr, elapsed time, score/band, and selected pair. PASS requires the expected observable result. Every required check must PASS before the lifecycle final gate passes. Every terminal event writes a project-linked model record to Obsidian. A receipt-backed producer event is learning-eligible; without a receipt the known verifier assignment is an observation only and is never mislabeled as the producer. The worker then prints the ledger's structured `model_assessment`, including attempt count, first/retry pass, suitability, next action/pair, and record link/status. It never calls `set_thread_archived` or deletes itself; every terminal End/Fix task remains visible.
 
 ## Real check FAIL and repair
 
@@ -39,4 +39,4 @@ The Ending worker runs `ending_verification_plan.py run-check` for its assigned 
 - `FAIL`: a real check found a defect and a repair handoff was created.
 - `BLOCKED`: task creation, verification infrastructure, external state, timeout, or the repair limit prevented PASS.
 
-Local lifecycle history always records the score, check, selected pair, evidence, and repair chain. Receipt-backed producer terminal events additionally sync score and route movement to the matching project Obsidian category page and refresh its Model Switch/shared-category links.
+Local lifecycle history always records the score, check, selected pair, evidence, and repair chain. Every terminal event syncs a same-ID record to the matching project Obsidian category page and refreshes its Model Switch/shared-category links; only receipt-backed producer evidence may move routing.
