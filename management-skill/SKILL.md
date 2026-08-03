@@ -78,9 +78,11 @@ Use the maintained scripts instead of ad hoc profile or mirror logic:
 - `scripts/show_all_auth_status.py`
 - `scripts/sync_global_skills.py`
 
+The maintained Git repository is the publication source of truth; the installed global directory is a deployment target, never the source for repository edits. Run `sync_global_skills.py push --source-dir <repository-root> --message <message>` from that repository. The command validates the approved public files, renders both root READMEs, commits the source repository itself when needed, pushes its current branch, and verifies that the remote branch hash equals local `HEAD`. It must not report success while the maintained source is still an uncommitted or unpushed copy.
+
 Use `sync_global_skills.py deploy --source-dir <repository-root> --skills-dir <global-skills-directory>` for an explicit local installation from the maintained repository source. It validates the approved eight-skill set, public safety, and platform compatibility, preserves unrelated local skills and `task-analyze-skill/local/`, atomically installs the canonical `task-analyze-skill/assets/global-agents-entry-rule.md` contract into the sibling global `AGENTS.md`, and does not publish to GitHub. Deployment is incomplete when the eight folders match but that always-loaded entry contract does not.
 
-`sync_global_skills.py status` also checks local `AGENTS.md` parity against the installed Task Lifecycle asset and exits nonzero on drift, even when the eight Skill folders already match the remote mirror.
+`sync_global_skills.py status --source-dir <repository-root> --skills-dir <global-skills-directory>` compares repository source with both the remote branch and the deployed global folders, checks local `AGENTS.md` parity against the repository Task Lifecycle asset, and exits nonzero on deployment drift.
 
 Use snapshot/dry-run/status modes for testing. Do not call `sync` or `push` in a task that was authorized only to edit/test local skills.
 

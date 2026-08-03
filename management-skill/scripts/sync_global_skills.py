@@ -25,6 +25,7 @@ def load_skill_platform_checker(skills_dir):
 
 
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
+DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_STATE_FILE = DEFAULT_PROJECT_ROOT / "state" / "management-skill-sync.json"
 DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "management-skill-sync"
@@ -954,7 +955,7 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
     return copied_names
 
 
-def push(repository, skills_dir, message, dry_run):
+def push_global_snapshot(repository, skills_dir, message, dry_run):
     with temporary_workspace("qin-codex-skills-") as sandbox:
         repository_dir = clone_repository(repository, sandbox)
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
@@ -976,6 +977,112 @@ def push(repository, skills_dir, message, dry_run):
         print(f"Pushed global skills to {repository}.")
 
 
+def source_repository_root(source_dir):
+    source_dir = Path(source_dir).expanduser().resolve()
+    try:
+        repository_root = Path(run_command(["git", "rev-parse", "--show-toplevel"], cwd=source_dir).stdout.strip()).resolve()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(
+            f"Refusing to publish because the maintained source is not a Git repository: {source_dir}. "
+            "Run push from the maintained repository or pass --source-dir explicitly."
+        ) from error
+    if repository_root != source_dir:
+        raise RuntimeError(f"Refusing to publish a nested source path; expected repository root {repository_root}, got {source_dir}")
+    return repository_root
+
+
+def publishable_source_path(relative_path):
+    relative_path = Path(relative_path)
+    if relative_path.as_posix() in {"README.md", "README.zh.md"}:
+        return True
+    if not relative_path.parts or relative_path.parts[0] not in APPROVED_GLOBAL_SKILL_NAMES:
+        return False
+    skill_relative = Path(*relative_path.parts[1:])
+    if not skill_relative.parts:
+        return True
+    return (
+        not any(part in EXCLUDED_PARTS for part in skill_relative.parts)
+        and not skill_relative.name.endswith(EXCLUDED_SUFFIXES)
+        and not sensitive_name(skill_relative)
+    )
+
+
+def staged_source_paths(source_dir):
+    output = run_command(["git", "diff", "--cached", "--name-only", "--diff-filter=ACDMRTUXB"], cwd=source_dir).stdout
+    return [Path(line) for line in output.splitlines() if line.strip()]
+
+
+def assert_publishable_staged_paths(source_dir):
+    staged_paths = staged_source_paths(source_dir)
+    refused = [path for path in staged_paths if not publishable_source_path(path)]
+    if refused:
+        details = "\n".join(f"- {path.as_posix()}" for path in refused)
+        raise RuntimeError(f"Refusing to mix non-public or unrelated staged paths into the source publication:\n{details}")
+    return staged_paths
+
+
+def render_source_readmes(source_dir, skill_paths, dry_run=False):
+    expected = {
+        source_dir / "README.md": build_readme(skill_paths, language="en"),
+        source_dir / "README.zh.md": build_readme(skill_paths, language="zh"),
+    }
+    changed = []
+    for path, rendered in expected.items():
+        if not path.is_file() or path.read_text(encoding="utf-8") != rendered:
+            changed.append(path.name)
+            if not dry_run:
+                path.write_text(rendered, encoding="utf-8")
+    return changed
+
+
+def remote_branch_head(source_dir, branch_name):
+    output = run_command(["git", "ls-remote", "origin", f"refs/heads/{branch_name}"], cwd=source_dir).stdout.strip()
+    return output.split()[0] if output else ""
+
+
+def push(repository, source_dir, message, dry_run):
+    source_dir = source_repository_root(source_dir)
+    skill_paths = skill_directories(source_dir)
+    assert_approved_global_skill_set(skill_paths)
+    assert_repository_skill_set(source_dir)
+    assert_no_symlinks(skill_paths, "maintained source skill trees")
+    load_staged_routing_policy(skill_paths)
+    assert_public_safe(skill_paths)
+    checker_module = load_skill_platform_checker(source_dir)
+    checker_module.assert_skill_platform_safe(source_dir, source_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
+    readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=dry_run)
+    branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
+    if not branch_name:
+        raise RuntimeError("Refusing to publish from a detached source HEAD")
+    if dry_run:
+        status_text = run_command(["git", "status", "--short", "--branch"], cwd=source_dir).stdout.strip()
+        local_head = repository_head(source_dir)
+        remote_head = remote_branch_head(source_dir, branch_name)
+        print_lines("Repository source skills selected for publication:", [path.name for path in skill_paths])
+        if readme_changes:
+            print_lines("Generated README changes required:", readme_changes)
+        print(status_text or "Source worktree is clean.")
+        print(f"Source HEAD: {local_head}")
+        print(f"Remote {branch_name}: {remote_head or 'missing'}")
+        return
+    if readme_changes:
+        print_lines("Rendered source README files:", readme_changes)
+    run_command(["git", "add", "--", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER], cwd=source_dir)
+    staged_paths = assert_publishable_staged_paths(source_dir)
+    if staged_paths:
+        run_command(["git", "commit", "-m", message], cwd=source_dir)
+        print(f"Committed maintained source: {repository_head(source_dir)}")
+    local_head = repository_head(source_dir)
+    run_command(["git", "push", "origin", f"HEAD:{branch_name}"], cwd=source_dir)
+    observed_remote_head = remote_branch_head(source_dir, branch_name)
+    if observed_remote_head != local_head:
+        raise RuntimeError(
+            f"Remote verification failed after push: local {local_head}, remote {observed_remote_head or 'missing'}"
+        )
+    write_sync_state(DEFAULT_STATE_FILE, repository, local_head, snapshot_hash(skill_paths), snapshot_hash(skill_paths))
+    print(f"Pushed maintained source {local_head} to {repository}:{branch_name} and verified the remote hash.")
+
+
 def sync(repository, skills_dir, message):
     with temporary_workspace("qin-codex-skills-") as sandbox:
         repository_dir = clone_repository(repository, sandbox)
@@ -993,7 +1100,7 @@ def sync(repository, skills_dir, message):
         remote_changed = remote_head != state.get("remote_head") or remote_hash != state.get("remote_hash")
         if local_changed and not remote_changed:
             print("Local global skills are newer than the last synced state. Pushing to GitHub.")
-            push(repository, skills_dir, message, False)
+            push_global_snapshot(repository, skills_dir, message, False)
         elif remote_changed and not local_changed:
             print("Remote global skills are newer than the last synced state. Pulling into ~/.codex/skills.")
             changed_names = mirror_repository_to_local(repository_dir, skills_dir)
@@ -1001,7 +1108,7 @@ def sync(repository, skills_dir, message):
             print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
         elif latest_local_timestamp(local_paths) >= repository_timestamp(repository_dir):
             print("Both sides differ; local files are newest. Pushing to GitHub.")
-            push(repository, skills_dir, message, False)
+            push_global_snapshot(repository, skills_dir, message, False)
         else:
             print("Both sides differ; remote commit is newest. Pulling into ~/.codex/skills.")
             changed_names = mirror_repository_to_local(repository_dir, skills_dir)
@@ -1018,13 +1125,16 @@ def main():
     sync_parser.add_argument("--message", default="Sync global Codex skills")
     subparsers.add_parser("preuse")
     subparsers.add_parser("pull")
-    subparsers.add_parser("status")
+    status_parser = subparsers.add_parser("status")
+    status_parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
+    status_parser.add_argument("--skills-dir", type=Path, dest="status_skills_dir", default=argparse.SUPPRESS)
     deploy_parser = subparsers.add_parser("deploy")
     deploy_parser.add_argument("--source-dir", type=Path, required=True)
     deploy_parser.add_argument("--skills-dir", type=Path, dest="deploy_skills_dir", default=argparse.SUPPRESS)
     render_parser = subparsers.add_parser("render-readme")
     render_parser.add_argument("--output", type=Path, required=True)
     push_parser = subparsers.add_parser("push")
+    push_parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
     push_parser.add_argument("--message", default="Update global Codex skills")
     args = parser.parse_args()
     if args.command == "sync":
@@ -1034,10 +1144,20 @@ def main():
     elif args.command == "pull":
         pull(args.repo, args.skills_dir)
     elif args.command == "status":
-        parity = global_agents_parity(args.skills_dir, args.skills_dir)
+        status_skills_dir = getattr(args, "status_skills_dir", args.skills_dir)
+        source_dir = args.source_dir.expanduser().resolve()
+        deployment_differences = [
+            name for name in PRIMARY_SKILL_ORDER
+            if path_differs(source_dir / name, status_skills_dir.expanduser().resolve() / name)
+        ]
+        parity = global_agents_parity(source_dir, status_skills_dir)
+        if deployment_differences:
+            print_lines("Repository source differs from deployed global skills:", deployment_differences)
+        else:
+            print("Repository source skills match the deployed global skills.")
         print("Local global AGENTS.md matches the installed Task Lifecycle asset." if parity["status"] == "pass" else f"Local deployment mismatch: {parity['reason']} ({parity['target']})")
-        push(args.repo, args.skills_dir, "Update global Codex skills", True)
-        if parity["status"] != "pass":
+        push(args.repo, source_dir, "Update global Codex skills", True)
+        if parity["status"] != "pass" or deployment_differences:
             raise SystemExit(1)
     elif args.command == "deploy":
         deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
@@ -1048,7 +1168,7 @@ def main():
         args.output.expanduser().resolve().write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
         print(f"Rendered public README: {args.output.expanduser().resolve()}")
     elif args.command == "push":
-        push(args.repo, args.skills_dir, args.message, False)
+        push(args.repo, args.source_dir, args.message, False)
 
 
 if __name__ == "__main__":

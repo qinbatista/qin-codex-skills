@@ -148,6 +148,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
 
     def test_management_sync_default_paths_are_derived_from_the_project(self):
         expected_project_root = SYNC_SCRIPT_PATH.resolve().parents[3]
+        self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, SYNC_SCRIPT_PATH.resolve().parents[2])
         self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, expected_project_root)
         self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_project_root / "Cache" / "management-skill-sync")
         self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_project_root / "state" / "management-skill-sync.json")

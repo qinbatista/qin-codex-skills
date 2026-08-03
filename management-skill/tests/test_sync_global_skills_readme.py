@@ -761,6 +761,53 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
             self.assertEqual((target_dir.parent / "AGENTS.md").read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
 
+    def test_push_cli_defaults_to_the_maintained_repository_source(self):
+        argv = ["sync_global_skills.py", "push", "--message", "source-first smoke"]
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "push") as publisher:
+            sync_global_skills.main()
+        publisher.assert_called_once_with(
+            sync_global_skills.DEFAULT_REPOSITORY,
+            sync_global_skills.DEFAULT_SOURCE_DIR,
+            "source-first smoke",
+            False,
+        )
+
+    def test_publishable_source_paths_exclude_unrelated_or_private_content(self):
+        self.assertTrue(sync_global_skills.publishable_source_path(Path("verify-skill/SKILL.md")))
+        self.assertTrue(sync_global_skills.publishable_source_path(Path("README.zh.md")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path("notes.txt")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path("task-analyze-skill/local/private.json")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path("verify-skill/auth.json")))
+
+    def test_push_commits_the_source_repository_and_verifies_remote_head(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            source_dir = sandbox / "source"
+            remote_dir = sandbox / "remote.git"
+            source_dir.mkdir()
+            sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
+            sync_global_skills.run_command(["git", "init"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "branch", "-M", "master"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "config", "user.name", "Source Publish Test"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "config", "user.email", "source-publish@example.invalid"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "add", "-A"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "init", "--bare", str(remote_dir)], cwd=sandbox)
+            sync_global_skills.run_command(["git", "remote", "add", "origin", str(remote_dir)], cwd=source_dir)
+            sync_global_skills.run_command(["git", "push", "-u", "origin", "master"], cwd=source_dir)
+            skill_path = source_dir / "verify-skill" / "SKILL.md"
+            skill_path.write_text(skill_path.read_text(encoding="utf-8") + "\nSource-first publish smoke.\n", encoding="utf-8")
+            previous_head = sync_global_skills.repository_head(source_dir)
+            state_file = sandbox / "state.json"
+            with mock.patch.object(sync_global_skills, "DEFAULT_STATE_FILE", state_file):
+                sync_global_skills.push("fixture/repository", source_dir, "Publish source change", False)
+            current_head = sync_global_skills.repository_head(source_dir)
+            remote_head = sync_global_skills.remote_branch_head(source_dir, "master")
+            self.assertNotEqual(previous_head, current_head)
+            self.assertEqual(current_head, remote_head)
+            self.assertEqual(sync_global_skills.run_command(["git", "status", "--short"], cwd=source_dir).stdout, "")
+            self.assertTrue(state_file.is_file())
+
     def test_deploy_reports_no_change_only_when_skills_and_global_agents_match(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "global-skills"
