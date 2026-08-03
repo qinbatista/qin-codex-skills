@@ -20,7 +20,7 @@ Select only what the inline request or admitted locked plan requires:
 
 Task Analyze owns selection and storage. Every eligible text/code producer runs the catalog-derived adaptive route, and its post-presentation Ending lifecycle starts with the producer receipt. The terminal ledger event records the result automatically; tool-only routes have no adaptive producer sample.
 
-- Store active private model experience in the receipt-backed local event ledger first, then project the same stable event ID to the broad Obsidian `Model Switch.md` page. Recommendations merge and deduplicate both stores; neither is mirrored. Old local `task-analyze-skill/local/adaptive-routing/model_experience.json` remains legacy read-only history.
+- Store active private model experience in the receipt-backed local event ledger first, then project the same stable event ID to the broad Model Switch.md page in Obsidian. Recommendations merge and deduplicate both stores; neither is mirrored. Old local `task-analyze-skill/local/adaptive-routing/model_experience.json` remains legacy read-only history.
 - Record controlled task-profile enums, a generalized privacy-filtered task summary, requested/resolved/effective producer model and effort, execution/Real status, explicit success/failed model ranges, failure class, prompt-free workload hash, tokens, and timing only.
 - Never store raw prompts, raw results, paths, thread/session IDs, account data, receipt bodies, secrets, or private task content.
 - Categories/model roles are shared cold-start hints only. Every task stores a `0-100` score. Eligible small low-risk edits try Spark first; other production uses the saved quality pair. Only an explicit user model-update request may rescan local `~/.codex/models_cache.json`; keep the last valid ladder if the cache is unavailable and never fetch models. One Real PASS retains a quality pair, two PASS results trial one rung down, and correctness/quality FAIL moves one rung up. Spark quality failure suppresses the matching project/task/operation/code-kind/score-band context and upgrades the next task. Reuse the frozen pair with `trial=false`.
@@ -77,6 +77,8 @@ Use the maintained scripts instead of ad hoc profile or mirror logic:
 - `scripts/manage_auth_profiles.py`
 - `scripts/show_all_auth_status.py`
 - `scripts/sync_global_skills.py`
+
+Use `sync_global_skills.py deploy --source-dir <repository-root> --skills-dir <global-skills-directory>` for an explicit local installation from the maintained repository source. It validates the approved eight-skill set, public safety, and platform compatibility, preserves unrelated local skills and `task-analyze-skill/local/`, and does not publish to GitHub.
 
 Use snapshot/dry-run/status modes for testing. Do not call `sync` or `push` in a task that was authorized only to edit/test local skills.
 

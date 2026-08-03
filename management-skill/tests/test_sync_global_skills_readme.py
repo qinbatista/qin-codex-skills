@@ -1,11 +1,13 @@
 import importlib.util
 import json
 import re
+import sys
 import tempfile
 import unittest
 import unicodedata
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "sync_global_skills.py"
@@ -718,6 +720,38 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             (unrelated / "SKILL.md").write_text("---\nname: chronicle\ndescription: local only\n---\n")
             sync_global_skills.mirror_repository_to_local(repository_dir, local_dir)
             self.assertTrue(unrelated.exists())
+
+    def test_deploy_copies_repository_skills_and_preserves_local_private_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            private_state = target_dir / "task-analyze-skill" / "local" / "adaptive-routing" / "events.jsonl"
+            private_state.parent.mkdir(parents=True)
+            private_state.write_text("private-state\n", encoding="utf-8")
+            unrelated = target_dir / "chronicle" / "SKILL.md"
+            unrelated.parent.mkdir(parents=True)
+            unrelated.write_text("local-only\n", encoding="utf-8")
+
+            changed_names = sync_global_skills.deploy(SKILLS_DIR, target_dir)
+
+            self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
+            self.assertEqual(private_state.read_text(encoding="utf-8"), "private-state\n")
+            self.assertTrue(unrelated.is_file())
+            self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
+
+    def test_deploy_cli_accepts_skills_dir_after_subcommand(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            argv = [
+                "sync_global_skills.py",
+                "deploy",
+                "--source-dir",
+                str(SKILLS_DIR),
+                "--skills-dir",
+                str(target_dir),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                sync_global_skills.main()
+            self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
 
     def test_private_model_experience_json_is_excluded_and_preserved_on_pull(self):
         with tempfile.TemporaryDirectory() as temp_dir:

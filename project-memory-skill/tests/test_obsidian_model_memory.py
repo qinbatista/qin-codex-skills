@@ -241,6 +241,17 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         index = self.broad_index.read_text(encoding="utf-8")
         self.assertEqual(text.count("<!-- model-experience: "), 1)
         self.assertIn("- [[Projects/ThisIsMyOregon/Model Switch.md]]", index)
+        self.assertEqual(result["model_switch_document"], "Projects/ThisIsMyOregon/Model Switch.md")
+        self.assertEqual(result["model_switch_link"], "[[Projects/ThisIsMyOregon/Model Switch]]")
+
+    def test_source_checkout_recommendation_exposes_global_model_switch_link(self):
+        source_root = self.home / "Documents" / "AIProject" / "qin-codex-skills"
+        source_root.mkdir(parents=True)
+        (self.vault / "Skills").mkdir()
+        recommendation = module.recommend_model(source_root, "code", "global-skill-routing", code_kind="python", operation="audit", complexity_score=82, risk="low", ambiguity="medium", task_summary="Audit the global skill route.", vault=self.vault)
+        self.assertEqual(recommendation["model_switch_status"], "pending")
+        self.assertEqual(recommendation["model_switch_document"], "Skills/Model Switch.md")
+        self.assertEqual(recommendation["model_switch_link"], "[[Skills/Model Switch]]")
 
     def test_real_absolute_nested_svgdrawer_mapping_is_more_specific_than_muse(self):
         query = {"project": {"name": "skill", "root": str(self.home / "Documents" / "Muse" / "SVGDrawer" / "skill"), "key": "svgdrawer-test"}}

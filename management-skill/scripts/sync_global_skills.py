@@ -825,6 +825,30 @@ def mirror_repository_to_local(repository_dir, skills_dir):
     return changed_names
 
 
+def deploy(source_dir, skills_dir):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = Path(skills_dir).expanduser().resolve()
+    skill_paths = skill_directories(source_dir)
+    assert_approved_global_skill_set(skill_paths)
+    assert_no_symlinks(skill_paths, "approved source skill trees")
+    load_staged_routing_policy(skill_paths)
+    assert_public_safe(skill_paths)
+    checker_module = load_skill_platform_checker(source_dir)
+    checker_module.assert_skill_platform_safe(source_dir, source_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    changed_names = []
+    for path in skill_paths:
+        target = skills_dir / path.name
+        if path_differs(path, target):
+            copy_skill_directory(path, target, preserve_local=path.name == "task-analyze-skill")
+            changed_names.append(path.name)
+    if changed_names:
+        print_lines("Deployed repository skills into the local global skill directory:", changed_names)
+    else:
+        print("Local global skills already match the repository source.")
+    return changed_names
+
+
 def remote_changes(repository, skills_dir):
     with temporary_workspace("qin-codex-skills-") as sandbox:
         repository_dir = clone_repository(repository, sandbox)
@@ -943,6 +967,9 @@ def main():
     subparsers.add_parser("preuse")
     subparsers.add_parser("pull")
     subparsers.add_parser("status")
+    deploy_parser = subparsers.add_parser("deploy")
+    deploy_parser.add_argument("--source-dir", type=Path, required=True)
+    deploy_parser.add_argument("--skills-dir", type=Path, dest="deploy_skills_dir", default=argparse.SUPPRESS)
     render_parser = subparsers.add_parser("render-readme")
     render_parser.add_argument("--output", type=Path, required=True)
     push_parser = subparsers.add_parser("push")
@@ -956,6 +983,8 @@ def main():
         pull(args.repo, args.skills_dir)
     elif args.command == "status":
         push(args.repo, args.skills_dir, "Update global Codex skills", True)
+    elif args.command == "deploy":
+        deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
     elif args.command == "render-readme":
         skill_paths = skill_directories(args.skills_dir)
         assert_approved_global_skill_set(skill_paths)

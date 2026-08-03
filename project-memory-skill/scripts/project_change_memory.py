@@ -258,6 +258,7 @@ HOME_PROJECT_OWNER_ROOTS = ((".codex", "Global Codex Skills"),)
 # current locations may coexist here so moving a repository does not split its
 # durable change history or adaptive model learning.
 DOCUMENT_PROJECT_OWNER_ROOTS = (
+    ("AIProject/qin-codex-skills", "Global Codex Skills"),
     ("Muse/SVGDrawer", "SVGDrawer"),
     ("Muse/MuseAI", "MuseAI"),
     ("Muse/UserExamples", "MuseAI"),

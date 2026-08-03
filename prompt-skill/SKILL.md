@@ -138,7 +138,7 @@ Portable behavior requirements:
 2. Resolve external executables with PATH-aware lookup (`shutil.which`, `Get-Command`, `command -v`, or equivalent) before launch.
 3. Fail with a clear unsupported-platform error for unsupported targets.
 
-Reference guard patterns are tracked in `../code-skill/references/skill-platform-compatibility.md` and required for Python, shell, PowerShell, JavaScript, and TypeScript.
+Reference guard patterns are tracked in `../code-skill/references/skill-platform-compatibility.md` and required for Python, shell, PowerShell, and other supported language/runtime surfaces.
 
 ## Image And Multimodal Prompts
 

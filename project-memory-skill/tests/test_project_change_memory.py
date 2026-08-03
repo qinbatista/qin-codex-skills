@@ -197,6 +197,16 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             self.assertEqual(str(descendant_target), "/tmp/vault/Skills/Global Codex Skills History.md")
             self.assertIsNone(clone_target)
 
+    def test_global_codex_skill_source_checkout_shares_global_owner(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            home = temporary / "home"
+            source_root = home / "Documents" / "AIProject" / "qin-codex-skills"
+            source_root.mkdir(parents=True)
+            with mock.patch.object(MEMORY.Path, "home", lambda: home):
+                owner = MEMORY._registered_owner(source_root)
+            self.assertEqual(owner, "Global Codex Skills")
+
     def test_cache_descendants_do_not_inherit_registered_project_memory_owner(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)

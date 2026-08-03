@@ -445,6 +445,22 @@ def _memory_root(query, vault):
     return vault_path, _memory_root_owner(vault_path, owner)
 
 
+def model_switch_reference(project_root, *, vault=None):
+    project = project_change_memory._project_identity(project_root)
+    vault_path = project_change_memory._resolve_vault(vault)
+    if vault_path is None:
+        return {"status": "unavailable", "owner": project.get("owner") or "", "document": "", "link": ""}
+    owner = project.get("owner") or project_change_memory._registered_owner(project["root"])
+    if owner is None:
+        return {"status": "unregistered", "owner": "", "document": "", "link": ""}
+    memory_root = _memory_root_owner(vault_path, owner)
+    if memory_root is None:
+        return {"status": "unavailable", "owner": owner, "document": "", "link": ""}
+    document = _vault_relative_path(vault_path, memory_root).as_posix()
+    link_target = document[:-3] if document.endswith(".md") else document
+    return {"status": "ready" if memory_root.exists() else "pending", "owner": owner, "document": document, "link": f"[[{link_target}]]"}
+
+
 def _project_switch_index(vault_path, owner):
     if owner == "Global Codex Skills":
         return None
@@ -827,6 +843,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
     entry = _entry_context(shared, pairs, entry_model, entry_effort)
     vault_path, memory_root = _memory_root(query, vault)
+    model_switch = model_switch_reference(project_root, vault=vault)
     owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
     obsidian_configured = _is_configured_owner(vault_path, owner)
     all_local_records = _read_local_records(local_store)
@@ -885,6 +902,9 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "memory_available": True,
         "local_memory_available": True,
         "obsidian_memory_available": obsidian_configured,
+        "model_switch_status": model_switch["status"],
+        "model_switch_document": model_switch["document"],
+        "model_switch_link": model_switch["link"],
         "selection_basis": "local_transfer_history" if transfer_records and records is transfer_records else "local_and_obsidian" if records and local_records and obsidian_records else "local_history" if records and local_records else "obsidian_history" if records and obsidian_records else "entry_aware_cold_start" if entry["entry_anchor_pair"] else "shared_cold_start",
         "shared_model_registry": shared["registry_id"],
         "project_key": query["project"]["key"],
@@ -1413,6 +1433,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     latest_projection = reconcile_result.get("latest") if isinstance(reconcile_result, dict) else None
     model_switch = latest_projection.get("model_switch") if isinstance(latest_projection, dict) else None
     vault_path, memory_root = _memory_root(query, vault)
+    model_switch_reference_result = model_switch_reference(project_root, vault=vault)
     obsidian_note = _vault_relative_path(vault_path, memory_root).as_posix() if projection_state.get("status") == "written" and vault_path is not None and memory_root is not None else None
     if model_switch is None and obsidian_note:
         model_switch = rebuild_model_switches(project_root, vault=vault)
@@ -1441,6 +1462,9 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "local": {"status": local_result["status"], "written": True, "path": local_result["path"]},
         "obsidian": projection_state,
         "obsidian_note": obsidian_note,
+        "model_switch_status": model_switch_reference_result["status"],
+        "model_switch_document": model_switch_reference_result["document"],
+        "model_switch_link": model_switch_reference_result["link"],
         "pending_projection_count": reconcile_result["pending"],
         "model_switch": model_switch or {"status": projection_state.get("status"), "written": projection_state.get("status") == "written", "reason": projection_state.get("reason")},
     }
@@ -1456,6 +1480,7 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local
     output = {"status": "ready", "authority": "dual_local_and_obsidian", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "local_store": str(local_path), "local_records": len(local_records), "vault": str(vault_path) if vault_path else "", "obsidian_available": vault_path is not None}
     if project_root:
         project = project_change_memory._project_identity(project_root)
+        model_switch = model_switch_reference(project_root, vault=vault)
         owner = project.get("owner") or project_change_memory._registered_owner(project["root"])
         _, page = _memory_root(_query(project_root, "script", "general"), vault)
         memory_available = _is_configured_owner(vault_path, owner)
@@ -1476,6 +1501,9 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local
                 "project_local_records": len([record for record in local_records if project_change_memory._record_matches_project(record, project)]),
                 "pending_projection_count": _pending_projection_count(local_path, project),
                 "page": "" if page is None else _vault_relative_path(vault_path, page).as_posix(),
+                "model_switch_status": model_switch["status"],
+                "model_switch_document": model_switch["document"],
+                "model_switch_link": model_switch["link"],
                 "reason": reason,
             }
         )
