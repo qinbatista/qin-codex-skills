@@ -52,6 +52,17 @@ DISPATCHER_FIXED_ROLES = {"verification", "repair", "ending"}
 _NODE_AUTHORIZATION = contextvars.ContextVar("task_analyze_receipt_node_authorization", default=None)
 
 
+def route_node_lifecycle_boundary(marker):
+    if marker == "LOCKED_ROUTE_NODE":
+        return (
+            "This is the result node only. Do not create, launch, wait for, or summarize End/Fix tasks; "
+            "the entry parent owns post-result lifecycle after this node's passing receipt."
+        )
+    if marker == "ENDING_TASK_WORKER":
+        return "Execute only the assigned Ending check; never create a nested End/Fix task or restart routing."
+    raise ValueError(f"unsupported route marker {marker}")
+
+
 class ReceiptAuthorizationError(ValueError):
     def __init__(self, code):
         super().__init__(code)
@@ -704,10 +715,9 @@ def run_receipt(args, prompt_text):
         execution_prompt = prompt_text
     else:
         marker = getattr(args, "route_marker", "LOCKED_ROUTE_NODE")
-        if marker not in ROUTE_MARKERS:
-            raise ValueError(f"unsupported route marker {marker}")
+        lifecycle_boundary = route_node_lifecycle_boundary(marker)
         canonical_workdir = Path(args.workdir).expanduser().resolve()
-        execution_prompt = f"{marker}\nThis is a bounded node from an already-returned Task Analyze route. Execute the assigned node directly; do not restart Task Analyze or redesign the route. Your process is already in the canonical working directory `{canonical_workdir}`. Use that current directory directly; do not reconstruct, shorten, or guess another absolute workdir in tool calls.\n\n{prompt_text}"
+        execution_prompt = f"{marker}\nThis is a bounded node from an already-returned Task Analyze route. Execute the assigned node directly; do not restart Task Analyze or redesign the route. {lifecycle_boundary} Your process is already in the canonical working directory `{canonical_workdir}`. Use that current directory directly; do not reconstruct, shorten, or guess another absolute workdir in tool calls.\n\n{prompt_text}"
     stream_result_ready = bool(getattr(args, "stream_result_ready", False))
     if stream_result_ready:
         execution_prompt += f"\n\nWhen the requested result is complete, emit exactly one complete agent message in this shape and do not use these markers for progress/commentary:\n{RESULT_READY_BEGIN}\n<complete user-facing result>\n{RESULT_READY_END}"

@@ -119,6 +119,8 @@ REQUIRED_SKILL_TEXT = [
     "exact-project Obsidian history",
     "strongly matched transferable local history",
     "mandatory post-result Ending lifecycle",
+    "A `LOCKED_ROUTE_NODE` produces only its assigned result and Quick Check",
+    "entry parent owns post-receipt lifecycle",
     "automatically activates multi-node routing",
     "visible 0-100 complexity score",
     "small low-risk edits",
@@ -341,6 +343,10 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "dispatcher_adaptive_result_authorization",
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
+    "route_node_lifecycle_boundary",
+    "Do not create, launch, wait for, or summarize End/Fix tasks",
+    "entry parent owns post-result lifecycle after this node's passing receipt",
+    "never create a nested End/Fix task",
 ]
 REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100",
@@ -350,7 +356,8 @@ REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "each result/Ending records score,band,pair,purpose,deps,stop", "Eligible low-risk low-ambiguity text/code/write/execute score<=24",
     "executes Spark-low first", "Ending quality FAIL suppresses that fingerprint", "Dependency-ready independent nodes run parallel",
     "shared writes/order/output deps stay linear", "resolve CODEX_HOME", "pipe exact task once via platform Python",
-    "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "dynamic_task_graph",
+    "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "LOCKED_ROUTE_NODE does result/Quick Check only",
+    "entry parent launches Ending after passing receipt", "ENDING_TASK_WORKER does assigned check only:no nested lifecycle", "dynamic_task_graph",
     "task_route_dispatcher.py run-plan", "no benchmark", "Exact one-source/tool/image read-only uses `task_complexity_score.py`", "no reread/full-read/precheck", "output artifact MUST runner",
     "2 Real PASS trial down 1 rung", "quality FAIL up 1", "missing Obsidian queues projection;local history continues",
     "Producer owns files/skills/Quick Check", "Every result,including read-only,triggers a visible End Task", "exact saved project",
@@ -809,7 +816,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ stages=>per-stage graph", "final Model stages has every difficulty/pair/status", "History picks lowest-correct", "entry moves up/down", "no-history<=entry", "obsidian_adaptive_model_runner.py", "only artifact-free exact/tool/image uses task_complexity_score.py", "Small low-risk edit<=24 tries Spark-low", "quality FAIL suppresses band", "Every result requires End Task in exact saved project", "ending_verification_plan.py", "project/local End/check", "ack(threadId+hostId+projectId)", "audit=100%", "all PASS,visible", "never auto-archive/delete", "Assessment:stage difficulty/pairs,attempt,first/retry,suitability", "Obsidian link", "No receipt still records non-learning observation", "same-project Fix+fresh End<=3", "BLOCKED is not verified", "Never emulate", "same-task/self-verify forbidden"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ stages=>per-stage graph", "final Model stages has every difficulty/pair/status", "History picks lowest-correct", "entry moves up/down", "no-history<=entry", "obsidian_adaptive_model_runner.py", "only artifact-free exact/tool/image uses task_complexity_score.py", "LOCKED_ROUTE_NODE produces result/Quick Check only", "parent launches Ending after passing receipt", "Small low-risk edit<=24 tries Spark-low", "quality FAIL suppresses band", "Every result requires End Task in exact saved project", "ending_verification_plan.py", "project/local End/check", "ack(threadId+hostId+projectId)", "audit=100%", "all PASS,visible", "never auto-archive/delete", "Assessment:stage difficulty/pairs,attempt,first/retry,suitability", "Obsidian link", "No receipt still records non-learning observation", "same-project Fix+fresh End<=3", "BLOCKED is not verified", "Never emulate", "same-task/self-verify forbidden"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("Task Analyze result disclosure", skill_text, RESULT_MODEL_DISCLOSURE_TERMS))

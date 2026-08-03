@@ -25,7 +25,7 @@ This is the lifecycle’s most important structural rule:
 
 1. **Score every submission from 0–100, then finish the requested job** and run the proportional implementation check.
 2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
-3. **After every result, start one scored/model-routed `End Task-<task name>-<check>` in the exact saved project per real check.** Resolve the project by canonical root and require a real project/local thread acknowledgement.
+3. **After every result producer returns a passing receipt, its entry parent starts one scored/model-routed `End Task-<task name>-<check>` in the exact saved project per real check.** The locked producer never starts Ending recursively; the parent binds its receipt, resolves the project by canonical root, and requires a real project/local thread acknowledgement.
 4. **Every Ending runs its assigned real check and all required checks must PASS.** PASS/FAIL/BLOCKED tasks remain visible and report stage difficulty/pairs, attempt count, first/retry pass, suitability, next route, and Obsidian record link/status. Failure creates a Fix Task in the same project, then a fresh End Task reruns the check, for up to three repairs. End/Fix tasks never auto-archive or delete themselves.
 
 Main work and Ending verification are deliberately different task sessions. A summary is never verification: heavy changes need real tests, API evidence, builds, renders, or visual checks appropriate to the change.

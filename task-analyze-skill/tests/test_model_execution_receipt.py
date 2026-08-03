@@ -175,12 +175,23 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertIn("features.multi_agent=false", command)
         self.assertEqual(command[-1], "-")
         self.assertTrue(run_mock.call_args.kwargs["input"].startswith("LOCKED_ROUTE_NODE"))
+        self.assertIn("This is the result node only", run_mock.call_args.kwargs["input"])
+        self.assertIn("Do not create, launch, wait for, or summarize End/Fix tasks", run_mock.call_args.kwargs["input"])
+        self.assertIn("entry parent owns post-result lifecycle after this node's passing receipt", run_mock.call_args.kwargs["input"])
         self.assertIn(f"canonical working directory `{Path('/tmp').resolve()}`", run_mock.call_args.kwargs["input"])
         self.assertTrue(run_mock.call_args.kwargs["input"].endswith("same prompt"))
         self.assertTrue(run_mock.call_args.kwargs["shell"] is False)
         self.assertEqual(receipt["status"], "pass")
         self.assertTrue(receipt["model_match"])
         self.assertTrue(receipt["effort_match"])
+
+    def test_route_markers_define_non_recursive_lifecycle_ownership(self):
+        result_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
+        ending_boundary = module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
+        self.assertIn("entry parent owns post-result lifecycle", result_boundary)
+        self.assertIn("never create a nested End/Fix task", ending_boundary)
+        with self.assertRaisesRegex(ValueError, "unsupported route marker"):
+            module.route_node_lifecycle_boundary("UNKNOWN")
 
     def test_run_receipt_includes_sanitized_route_attempt_metadata(self):
         stdout_text = "\n".join([

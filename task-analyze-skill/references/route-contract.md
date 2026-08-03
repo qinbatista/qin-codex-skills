@@ -36,7 +36,7 @@ The graduated examples are therefore inline by default:
 
 Load full Task Analyze for explicit model routing/benchmarking, Task Analyze maintenance, or a real dependency graph. Full activation still defaults to one producer when segmentation would only duplicate context. A bounded task graph does not require prior benchmark evidence; only a claim that it saves time or tokens does. Read-only source graphs retain byte/context admission, disjoint allowlists, and dependency-only-or-fused merge rules. Writable graphs declare non-overlapping ownership for parallel nodes and explicit dependencies for shared targets.
 
-For an admitted route, the entry model may coordinate the route but must not duplicate a child's source inspection. Every collaboration child starts with `LOCKED_ROUTE_NODE`, and collaboration plus dispatcher must never execute the same branch twice.
+For an admitted route, the entry model may coordinate the route but must not duplicate a child's source inspection. Every collaboration child starts with `LOCKED_ROUTE_NODE`, produces only its assigned result and Quick Check, and never starts End/Fix work. After its passing receipt exists, the entry parent binds it to Ending. Collaboration plus dispatcher must never execute the same branch twice.
 
 - One admitted deterministic model node uses one producer, immediate result release, and post-result Real Verify.
 - Multiple result branches require pairwise-disjoint `source_allowlist` values. The main merge either sets `reads_dependency_results_only=true` with no source allowlist, or sets `fuses_owned_source_with_dependencies=true` with exactly one additional disjoint source allowlist and direct dependencies on every other result node.
