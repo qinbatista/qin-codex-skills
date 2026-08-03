@@ -160,6 +160,10 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
     def test_global_entry_required_terms_match_compact_contract(self):
         required = module.REQUIRED_ENTRY
         self.assertIn("Score every submission 0-100", required)
+        self.assertIn("no match stays <=entry", required)
+        self.assertIn("reuse recovered/lowest-correct", required)
+        self.assertNotIn("cold start stays <=entry", required)
+        self.assertNotIn("reuse frozen lowest-correct", required)
         self.assertIn("obsidian_adaptive_model_runner.py", required)
         self.assertIn("task_complexity_score.py", required)
         self.assertIn("Spark-low first", required)
