@@ -11,7 +11,7 @@ When the producer can express acceptance as an exact command, test, API probe, r
 
 Never add a broad verifier before the user's first presentation. After presentation, Ending may run the real proportional unit, integration, API, build, render, visual, or state test required to prove the result. Keep each check focused; do not substitute prose inspection for an executable or observable check when one exists.
 
-A same-task subagent is forbidden for Ending because it keeps the origin task active. Use the host's persistent `create_thread` capability with target `{"type":"projectless"}`, then `set_thread_title` for the exact title. Never attach an End Task or Fix Task to the source project; pass the absolute project root/cwd and allowed files in the worker prompt instead. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, record and disclose terminal `BLOCKED` with the exact outer-host handoff; do not silently mark the Ending lifecycle complete, substitute a subagent, or start a wait loop.
+A same-task subagent is forbidden for Ending because it keeps the origin task active. Build launch requests with `scripts/ending_verification_plan.py create-launches`, use the host's persistent `create_thread` capability with target `{"type":"projectless"}`, then acknowledge every returned `threadId` plus `hostId` with `ack-launch`. `audit-launches` must report `end_task_trigger_rate=100%`; a plan/handoff alone is not a launch. Never attach an End Task or Fix Task to the source project; pass the absolute project root/cwd and allowed files in the worker prompt instead. The global lifecycle authorizes this background task. If persistent task creation is unavailable or fails, record and disclose terminal `BLOCKED` with the exact outer-host handoff; do not silently mark the Ending lifecycle complete, substitute a subagent, or start a wait loop.
 
 When the user explicitly asks for a test, audit, review, replay, or verification as the primary task, that work is the requested result and runs normally on the current model. It does not need a fabricated pre-result verification phase.
 
@@ -54,7 +54,7 @@ The origin final is complete after result presentation. After recording lifecycl
 
 ## Result Model Disclosure
 
-Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines.
+Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines. A composite final additionally includes the generated `Model stages (N):` block so the verifier's own score/pair/status is visible beside every result stage.
 
 ## Real Verify Scope
 

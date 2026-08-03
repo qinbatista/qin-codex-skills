@@ -106,6 +106,8 @@ CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verificatio
 PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "project-memory-skill", "verify-skill", "optimization-skill", "management-skill"]
 APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
+GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
+GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
 ENGLISH_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.md"
 CHINESE_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.zh.md"
 CATEGORY_LABEL_WIDTH = 28
@@ -801,6 +803,51 @@ def path_differs(source_dir, target_dir):
         return subprocess.run(["git", "diff", "--no-index", "--quiet", str(sandbox / "source"), str(sandbox / "target")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
 
 
+def canonical_global_agents_text(source_dir):
+    asset_path = Path(source_dir).expanduser().resolve() / GLOBAL_AGENTS_ASSET
+    if not asset_path.is_file():
+        raise RuntimeError(f"global AGENTS entry asset is missing: {asset_path}")
+    text = asset_path.read_text(encoding="utf-8")
+    if not text.startswith(GLOBAL_AGENTS_DIRECTIVE):
+        raise RuntimeError("global AGENTS entry asset is missing its merge directive")
+    rendered = text[len(GLOBAL_AGENTS_DIRECTIVE):]
+    if not rendered.startswith("# Task Lifecycle\n"):
+        raise RuntimeError("global AGENTS entry asset does not render the Task Lifecycle contract")
+    return rendered
+
+
+def deploy_global_agents(source_dir, skills_dir):
+    rendered = canonical_global_agents_text(source_dir)
+    target = Path(skills_dir).expanduser().resolve().parent / "AGENTS.md"
+    if target.is_file() and target.read_text(encoding="utf-8") == rendered:
+        return False
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".AGENTS.md.", suffix=".tmp", dir=target.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, target)
+    finally:
+        if os.path.exists(temporary_name):
+            os.unlink(temporary_name)
+    return True
+
+
+def global_agents_parity(source_dir, skills_dir):
+    expected = canonical_global_agents_text(source_dir)
+    target = Path(skills_dir).expanduser().resolve().parent / "AGENTS.md"
+    if not target.is_file():
+        return {"status": "fail", "target": str(target), "reason": "global AGENTS.md is missing"}
+    observed = target.read_text(encoding="utf-8")
+    return {
+        "status": "pass" if observed == expected else "fail",
+        "target": str(target),
+        "reason": None if observed == expected else "global AGENTS.md differs from the installed Task Lifecycle asset",
+    }
+
+
 def print_lines(title, lines):
     print(title)
     for line in lines:
@@ -822,6 +869,8 @@ def mirror_repository_to_local(repository_dir, skills_dir):
         if path_differs(path, skills_dir / path.name):
             copy_skill_directory(path, skills_dir / path.name, preserve_local=path.name == "task-analyze-skill")
             changed_names.append(path.name)
+    if deploy_global_agents(repository_dir, skills_dir):
+        print("Deployed the remote Task Lifecycle contract into the local global AGENTS.md.")
     return changed_names
 
 
@@ -842,9 +891,12 @@ def deploy(source_dir, skills_dir):
         if path_differs(path, target):
             copy_skill_directory(path, target, preserve_local=path.name == "task-analyze-skill")
             changed_names.append(path.name)
+    agents_changed = deploy_global_agents(source_dir, skills_dir)
     if changed_names:
         print_lines("Deployed repository skills into the local global skill directory:", changed_names)
-    else:
+    if agents_changed:
+        print("Deployed the repository Task Lifecycle contract into the local global AGENTS.md.")
+    if not changed_names and not agents_changed:
         print("Local global skills already match the repository source.")
     return changed_names
 
@@ -982,7 +1034,11 @@ def main():
     elif args.command == "pull":
         pull(args.repo, args.skills_dir)
     elif args.command == "status":
+        parity = global_agents_parity(args.skills_dir, args.skills_dir)
+        print("Local global AGENTS.md matches the installed Task Lifecycle asset." if parity["status"] == "pass" else f"Local deployment mismatch: {parity['reason']} ({parity['target']})")
         push(args.repo, args.skills_dir, "Update global Codex skills", True)
+        if parity["status"] != "pass":
+            raise SystemExit(1)
     elif args.command == "deploy":
         deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
     elif args.command == "render-readme":

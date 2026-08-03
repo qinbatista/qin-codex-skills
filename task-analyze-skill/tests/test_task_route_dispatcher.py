@@ -587,6 +587,24 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         accepted = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(accepted, [])
 
+    def test_dynamic_graph_rejects_fixed_score_role_for_non_small_result_stage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.dynamic_segment_plan(root / "work" / "cache" / "route")
+            upstream = plan["nodes"][0]
+            upstream.pop("priority_producer")
+            upstream["complexity_score"] = 40
+            upstream["complexity_band"] = "standard"
+            upstream["model"], upstream["effort"] = module.score_role_pair(40).split("|", 1)
+            upstream["selection_basis"] = "score_role"
+            upstream["allow_fallback"] = []
+            stage = plan["decomposition"]["stage_inventory"][0]
+            stage["score"] = 40
+            stage["band"] = "standard"
+            stage["model_intent"] = f"{upstream['model']}|{upstream['effort']}"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertIn("upstream standard/complex/advanced result stages must use adaptive_quality history routing", failures)
+
     def test_real_verify_rejects_management_only_ending(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1297,6 +1315,12 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         ending_summary = {entry["node_id"]: entry for entry in summary["nodes"]}[ending_node["id"]]
         self.assertEqual(ending_summary["status"], "pending")
         self.assertEqual(ending_summary["model_evidence_source"], "task_assignment")
+        self.assertEqual(ending_summary["phase"], "ending")
+        self.assertEqual(ending_summary["skill"], "verify-skill")
+        self.assertEqual(ending_summary["purpose"], "ending-verify")
+        implementation_summary = {entry["node_id"]: entry for entry in summary["nodes"]}[plan["nodes"][0]["id"]]
+        self.assertEqual(implementation_summary["purpose"], "implement")
+        self.assertEqual(implementation_summary["stop_condition"], "Write output")
         self.assertIsInstance(summary["aggregate"]["parallel_waves"], int)
 
     def test_ending_manifest_reconciles_model_switch_summary_with_quality_failure_attribution(self):

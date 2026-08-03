@@ -730,12 +730,15 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             unrelated = target_dir / "chronicle" / "SKILL.md"
             unrelated.parent.mkdir(parents=True)
             unrelated.write_text("local-only\n", encoding="utf-8")
+            global_agents = target_dir.parent / "AGENTS.md"
+            global_agents.write_text("# stale lifecycle\n", encoding="utf-8")
 
             changed_names = sync_global_skills.deploy(SKILLS_DIR, target_dir)
 
             self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
             self.assertEqual(private_state.read_text(encoding="utf-8"), "private-state\n")
             self.assertTrue(unrelated.is_file())
+            self.assertEqual(global_agents.read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
 
     def test_deploy_cli_accepts_skills_dir_after_subcommand(self):
@@ -752,6 +755,27 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             with mock.patch.object(sys, "argv", argv):
                 sync_global_skills.main()
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
+            self.assertEqual((target_dir.parent / "AGENTS.md").read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
+
+    def test_deploy_reports_no_change_only_when_skills_and_global_agents_match(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            sync_global_skills.deploy(SKILLS_DIR, target_dir)
+            with mock.patch("builtins.print") as printer:
+                changed_names = sync_global_skills.deploy(SKILLS_DIR, target_dir)
+        self.assertEqual(changed_names, [])
+        printer.assert_any_call("Local global skills already match the repository source.")
+
+    def test_global_agents_parity_detects_stale_always_loaded_contract(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            sync_global_skills.deploy(SKILLS_DIR, target_dir)
+            matching = sync_global_skills.global_agents_parity(SKILLS_DIR, target_dir)
+            (target_dir.parent / "AGENTS.md").write_text("# stale\n", encoding="utf-8")
+            stale = sync_global_skills.global_agents_parity(SKILLS_DIR, target_dir)
+        self.assertEqual(matching["status"], "pass")
+        self.assertEqual(stale["status"], "fail")
+        self.assertIn("differs", stale["reason"])
 
     def test_private_model_experience_json_is_excluded_and_preserved_on_pull(self):
         with tempfile.TemporaryDirectory() as temp_dir:

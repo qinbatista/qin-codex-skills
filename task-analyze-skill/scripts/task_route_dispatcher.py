@@ -741,6 +741,8 @@ def validate_plan(
             else:
                 if selection_basis not in {"score_role", "adaptive_quality"}:
                     failures.append(f"{node_id} result node must use score_role or adaptive_quality")
+                if node_score_band is not None and node.get("complexity_score", 0) >= 25 and selection_basis != "adaptive_quality":
+                    failures.append(f"{node_id} standard/complex/advanced result stages must use adaptive_quality history routing")
                 if selection_basis == "score_role" and node_score_band is not None and f"{model}|{effort}" != score_role_pair(node["complexity_score"]):
                     failures.append(f"{node_id} score_role pair must match its node score")
                 if _dynamic_spark_eligible(node, stage):
@@ -809,7 +811,8 @@ def validate_plan(
         if expected_owner is not None and skill != expected_owner:
             failures.append(f"{node_id} bypasses code-skill; implementation owner mismatch for {execution_domain}")
 
-        if node_id == plan.get("main_result_node"):
+        adaptive_dynamic_result = dynamic_graph and phase == "result" and node.get("selection_basis") == "adaptive_quality"
+        if node_id == plan.get("main_result_node") or adaptive_dynamic_result:
             routing_condition = node.get("routing_condition")
             if not isinstance(routing_condition, dict):
                 failures.append(f"{node_id} requires routing_condition")
@@ -1220,8 +1223,15 @@ def build_model_switch_summary(plan, records, entry, *, ending_quality_failure_n
             assignment = "parallel_independent_assignment"
         else:
             assignment = "dependency_transition"
+        stage_record = _stage_for_node_id(plan, node_id)
         summary_entry = {
             "node_id": node_id,
+            "phase": node.get("phase"),
+            "purpose": node.get("purpose") or node.get("task_summary") or node_id,
+            "skill": node.get("skill"),
+            "stop_condition": node.get("stop_condition") or (stage_record.get("stop_condition") if isinstance(stage_record, dict) else None),
+            "step_kind": (node.get("model_memory_scope") or {}).get("step_kind"),
+            "capability_tags": list((node.get("model_memory_scope") or {}).get("capability_tags") or []),
             "score": node.get("complexity_score"),
             "band": node.get("complexity_band"),
             "requested_model": requested_model,

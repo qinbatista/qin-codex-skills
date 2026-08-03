@@ -72,6 +72,65 @@ class ResultModelDisclosureTests(unittest.TestCase):
         for obsolete_label in ("Current model:", "Model pairs", "Previous model:", "Switch summary:", "Reason:"):
             self.assertNotIn(obsolete_label, disclosure_text)
 
+    def test_multi_stage_disclosure_lists_every_stage_score_pair_and_status(self):
+        summary = {
+            "nodes": [
+                {
+                    "node_id": "implementation",
+                    "phase": "result",
+                    "purpose": "Implement lifecycle gate",
+                    "score": 84,
+                    "band": "advanced",
+                    "requested_pair": "gpt-5.6-sol|max",
+                    "resolved_pair": "gpt-5.6-sol|max",
+                    "effective_pair": "gpt-5.6-sol|max",
+                    "model_evidence_source": "runtime_receipt",
+                    "route_change": "no_switch",
+                    "status": "pass",
+                    "relations": {"dependencies": []},
+                },
+                {
+                    "node_id": "quick-test",
+                    "phase": "result",
+                    "purpose": "Run focused tests",
+                    "score": 32,
+                    "band": "standard",
+                    "requested_pair": "gpt-5.6-terra|medium",
+                    "resolved_pair": "gpt-5.6-terra|medium",
+                    "effective_pair": "gpt-5.6-terra|medium",
+                    "model_evidence_source": "runtime_receipt",
+                    "route_change": "no_switch",
+                    "status": "pass",
+                    "relations": {"dependencies": ["implementation"]},
+                },
+                {
+                    "node_id": "ending-real",
+                    "phase": "ending",
+                    "purpose": "Independent real verification",
+                    "score": 67,
+                    "band": "complex",
+                    "requested_pair": "gpt-5.6-sol|high",
+                    "resolved_pair": "gpt-5.6-sol|high",
+                    "effective_pair": "gpt-5.6-sol|high",
+                    "model_evidence_source": "task_assignment",
+                    "route_change": "freeze",
+                    "status": "pending",
+                    "relations": {"dependencies": ["quick-test"]},
+                },
+            ]
+        }
+        rendered = disclosure_module.render_disclosure(
+            84,
+            entry_resolution={"status": "verified", "model": "gpt-5.6-sol", "effort": "max"},
+            model_switch_summary=summary,
+        )
+        self.assertIn("Model stages (3):", rendered)
+        self.assertIn("Implement lifecycle gate [result:implementation] · Complexity: 84/100 (advanced) · Model: gpt-5.6-sol|max", rendered)
+        self.assertIn("Run focused tests [result:quick-test] · Complexity: 32/100 (standard) · Model: gpt-5.6-terra|medium", rendered)
+        self.assertIn("Independent real verification [ending:ending-real] · Complexity: 67/100 (complex) · Model: gpt-5.6-sol|high", rendered)
+        self.assertIn("Status: PENDING · Evidence: task assignment (no runtime receipt)", rendered)
+        self.assertEqual(module.validate_result_model_disclosure(rendered), [])
+
     def test_runtime_receipt_replaces_wrong_or_verbose_leading_disclosure(self):
         receipt = {
             "requested_pair": "gpt-5.3-codex-spark|low",
@@ -121,7 +180,7 @@ class ResultModelDisclosureTests(unittest.TestCase):
         self.assertEqual(identity["effective_pair"], "gpt-5.6-terra|medium")
 
     def test_contract_exists_across_owning_skills(self):
-        canonical_terms = ("Complexity:", "· Model:", "· Route:", "Evidence:", "verified entry (no runtime receipt)", "Model path:", "only when", "full routing data")
+        canonical_terms = ("Complexity:", "· Model:", "· Route:", "Evidence:", "verified entry (no runtime receipt)", "Model path:", "only when", "Model stages", "full routing data")
         canonical_paths = [SKILLS_ROOT / "task-analyze-skill" / "SKILL.md", SKILLS_ROOT / "task-analyze-skill" / "references" / "route-contract.md"]
         for source_path in canonical_paths:
             source_text = source_path.read_text(encoding="utf-8")

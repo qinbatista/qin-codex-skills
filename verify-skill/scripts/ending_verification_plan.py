@@ -16,6 +16,8 @@ SCHEMA_VERSION = 2
 BAND_ROLES = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}
 THREAD_TARGET = {"type": "projectless"}
 TERMINAL_THREAD_POLICY = {"pass": "record_pass_then_archive_self", "fail": "keep_unarchived", "blocked": "keep_unarchived"}
+CREATE_THREAD_TOOL = "codex_app__create_thread"
+LAUNCH_STATE_SCHEMA_VERSION = 1
 
 
 def complexity_band(score):
@@ -132,6 +134,194 @@ def _atomic_write(path, payload):
     target.chmod(0o600)
 
 
+def _read_json(path, field):
+    source = Path(path).expanduser().resolve()
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"{field} is not readable JSON") from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"{field} must contain a JSON object")
+    return source, payload
+
+
+def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=None):
+    project_root = Path(plan["project_root"]).expanduser().resolve()
+    relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root)
+    relative_cwd = Path(check["cwd"]).expanduser().resolve().relative_to(project_root)
+    relative_evidence = Path(evidence_output).expanduser().resolve().relative_to(project_root)
+    receipt_line = str(Path(producer_receipt).expanduser().resolve().relative_to(project_root)) if producer_receipt else "none"
+    command_text = json.dumps(check["command"], ensure_ascii=False, separators=(",", ":"))
+    return "\n".join(
+        [
+            "ENDING_TASK_WORKER",
+            "Execute one independent persistent End Task. Do not restart Task Analyze or Workflow.",
+            f"Project root: {plan['project_root']}",
+            f"Working directory relative to project root: {relative_cwd}",
+            f"Verification plan relative to project root: {relative_plan}",
+            f"Check id: {check['check_id']}",
+            f"Evidence output relative to project root: {relative_evidence}",
+            f"Assigned pair: {check['selected_pair']}",
+            f"Complexity: {check['complexity_score']}/100 ({check['complexity_band']})",
+            f"Expected command: {command_text}",
+            f"Producer receipt relative to project root: {receipt_line}",
+            "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the plan's exact run-check command from the project root.",
+            "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; bind the producer receipt when one is present so terminal evidence updates local routing history and Obsidian.",
+            "PASS requires the new evidence file to report status=pass and the expected exit code. FAIL/BLOCKED must preserve exact evidence and remain unarchived.",
+            "After durable PASS, archive this calling task with set_thread_archived(archived=true).",
+        ]
+    )
+
+
+def build_launch_spec(plan_path, evidence_dir, producer_receipt=None):
+    plan_file, plan = _read_json(plan_path, "plan")
+    project_root = Path(plan.get("project_root", "")).expanduser().resolve()
+    if not project_root.is_dir():
+        raise ValueError("plan.project_root must be an existing directory")
+    _inside(project_root, plan_file, "plan")
+    evidence_root = _inside(project_root, evidence_dir, "evidence_dir")
+    receipt_path = None
+    if producer_receipt:
+        receipt_path = _inside(project_root, producer_receipt, "producer_receipt")
+        if not receipt_path.is_file():
+            raise ValueError("producer_receipt must be an existing file")
+    tasks = plan.get("ending_tasks")
+    if not isinstance(tasks, list) or not tasks:
+        raise ValueError("plan must contain ending_tasks")
+    launch_requests = []
+    for check in tasks:
+        check_id = check.get("check_id") if isinstance(check, dict) else None
+        if not isinstance(check_id, str) or not check_id:
+            raise ValueError("every ending task requires check_id")
+        selected_pair = check.get("selected_pair")
+        if not isinstance(selected_pair, str) or "|" not in selected_pair:
+            raise ValueError(f"ending task {check_id} requires selected_pair")
+        model, thinking = selected_pair.split("|", 1)
+        evidence_output = evidence_root / f"{check_id}.json"
+        prompt = _worker_prompt(plan_file, plan, check, evidence_output, receipt_path)
+        request = {
+            "check_id": check_id,
+            "title": check["title"],
+            "selected_pair": selected_pair,
+            "complexity_score": check["complexity_score"],
+            "complexity_band": check["complexity_band"],
+            "tool": CREATE_THREAD_TOOL,
+            "arguments": {
+                "target": THREAD_TARGET,
+                "title": check["title"],
+                "model": model,
+                "thinking": thinking,
+                "prompt": prompt,
+            },
+            "evidence_output": str(evidence_output),
+            "acknowledgement_required": True,
+        }
+        request["request_sha256"] = hashlib.sha256(
+            json.dumps(request["arguments"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        launch_requests.append(request)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "plan": str(plan_file),
+        "plan_sha256": hashlib.sha256(plan_file.read_bytes()).hexdigest(),
+        "project_root": str(project_root),
+        "execution": "host_persistent_create_thread",
+        "thread_target": THREAD_TARGET,
+        "required_launch_count": len(launch_requests),
+        "launch_requests": launch_requests,
+        "launch_gate": "all_requests_require_thread_and_host_acknowledgement",
+    }
+
+
+def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, state_output):
+    launch_file, launch_spec = _read_json(launch_spec_path, "launch_spec")
+    request = next((item for item in launch_spec.get("launch_requests", []) if item.get("check_id") == check_id), None)
+    if not isinstance(request, dict):
+        raise ValueError(f"unknown check_id: {check_id}")
+    thread_value = _clean(thread_id, "thread_id", 160)
+    host_value = _clean(host_id, "host_id", 160)
+    state_path = Path(state_output).expanduser().resolve()
+    state = {
+        "schema_version": LAUNCH_STATE_SCHEMA_VERSION,
+        "launch_spec": str(launch_file),
+        "launch_spec_sha256": hashlib.sha256(launch_file.read_bytes()).hexdigest(),
+        "launches": [],
+    }
+    if state_path.is_file():
+        _, state = _read_json(state_path, "launch_state")
+        if state.get("launch_spec_sha256") != hashlib.sha256(launch_file.read_bytes()).hexdigest():
+            raise ValueError("launch_state belongs to a different launch_spec")
+    launches = [item for item in state.get("launches", []) if isinstance(item, dict) and item.get("check_id") != check_id]
+    if any(item.get("thread_id") == thread_value for item in launches):
+        raise ValueError("one End Task thread cannot acknowledge multiple checks")
+    launches.append(
+        {
+            "check_id": check_id,
+            "title": request["title"],
+            "selected_pair": request["selected_pair"],
+            "request_sha256": request["request_sha256"],
+            "thread_id": thread_value,
+            "host_id": host_value,
+            "status": "launched",
+            "acknowledged_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    state["launches"] = sorted(launches, key=lambda item: item["check_id"])
+    _atomic_write(state_path, state)
+    return {"status": "acknowledged", "check_id": check_id, "thread_id": thread_value, "host_id": host_value, "state": str(state_path)}
+
+
+def audit_launches(launch_spec_path, state_path):
+    launch_file, launch_spec = _read_json(launch_spec_path, "launch_spec")
+    launch_sha256 = hashlib.sha256(launch_file.read_bytes()).hexdigest()
+    required = {item["check_id"]: item for item in launch_spec.get("launch_requests", []) if isinstance(item, dict) and item.get("check_id")}
+    try:
+        _, state = _read_json(state_path, "launch_state")
+    except ValueError:
+        return {
+            "status": "blocked",
+            "end_task_trigger_rate": "0%",
+            "required_launch_count": len(required),
+            "launched_count": 0,
+            "threads": [],
+            "failures": ["launch_state is unavailable; End Task has not been acknowledged"],
+        }
+    observed = {item["check_id"]: item for item in state.get("launches", []) if isinstance(item, dict) and item.get("check_id")}
+    failures = []
+    if state.get("launch_spec_sha256") != launch_sha256:
+        failures.append("launch_state does not match launch_spec")
+    missing = sorted(set(required) - set(observed))
+    extra = sorted(set(observed) - set(required))
+    if missing:
+        failures.append("missing End Task launch acknowledgements: " + ", ".join(missing))
+    if extra:
+        failures.append("unexpected End Task launch acknowledgements: " + ", ".join(extra))
+    thread_ids = []
+    for check_id, request in required.items():
+        launch = observed.get(check_id)
+        if not launch:
+            continue
+        thread_ids.append(launch.get("thread_id"))
+        if launch.get("status") != "launched" or not launch.get("thread_id") or not launch.get("host_id"):
+            failures.append(f"End Task {check_id} lacks a persistent thread acknowledgement")
+        if any(launch.get(field) != request.get(field) for field in ("title", "selected_pair", "request_sha256")):
+            failures.append(f"End Task {check_id} acknowledgement does not match its launch request")
+    if len(thread_ids) != len(set(thread_ids)):
+        failures.append("End Task launch acknowledgements must use unique thread ids")
+    required_count = len(required)
+    launched_count = sum(1 for check_id in required if check_id in observed and observed[check_id].get("status") == "launched")
+    trigger_rate = round(100 * launched_count / required_count) if required_count else 0
+    return {
+        "status": "pass" if not failures and launched_count == required_count else "blocked",
+        "end_task_trigger_rate": f"{trigger_rate}%",
+        "required_launch_count": required_count,
+        "launched_count": launched_count,
+        "threads": [observed[check_id] for check_id in sorted(required) if check_id in observed],
+        "failures": failures,
+    }
+
+
 def run_check(plan_path, check_id, evidence_output):
     plan_file = Path(plan_path).expanduser().resolve()
     plan = json.loads(plan_file.read_text(encoding="utf-8"))
@@ -191,6 +381,20 @@ def parse_args(argv=None):
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--check-id", required=True)
     run.add_argument("--evidence-output", type=Path, required=True)
+    launch = subparsers.add_parser("create-launches")
+    launch.add_argument("--plan", type=Path, required=True)
+    launch.add_argument("--evidence-dir", type=Path, required=True)
+    launch.add_argument("--producer-receipt", type=Path)
+    launch.add_argument("--output", type=Path, required=True)
+    acknowledge = subparsers.add_parser("ack-launch")
+    acknowledge.add_argument("--launch-spec", type=Path, required=True)
+    acknowledge.add_argument("--check-id", required=True)
+    acknowledge.add_argument("--thread-id", required=True)
+    acknowledge.add_argument("--host-id", required=True)
+    acknowledge.add_argument("--state-output", type=Path, required=True)
+    audit = subparsers.add_parser("audit-launches")
+    audit.add_argument("--launch-spec", type=Path, required=True)
+    audit.add_argument("--launch-state", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -201,8 +405,19 @@ def main(argv=None):
         _atomic_write(args.output, payload)
         output = {"status": "written", "output": str(args.output.expanduser().resolve()), "ending_tasks": len(payload["ending_tasks"]), "selected_pairs": [task["selected_pair"] for task in payload["ending_tasks"]]}
         code = 0
-    else:
+    elif args.command == "run-check":
         output = run_check(args.plan, args.check_id, args.evidence_output)
+        code = 0 if output["status"] == "pass" else 1
+    elif args.command == "create-launches":
+        output = build_launch_spec(args.plan, args.evidence_dir, args.producer_receipt)
+        _atomic_write(args.output, output)
+        output = {"status": "written", "output": str(args.output.expanduser().resolve()), "required_launch_count": output["required_launch_count"], "selected_pairs": [item["selected_pair"] for item in output["launch_requests"]]}
+        code = 0
+    elif args.command == "ack-launch":
+        output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.state_output)
+        code = 0
+    else:
+        output = audit_launches(args.launch_spec, args.launch_state)
         code = 0 if output["status"] == "pass" else 1
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
     return code

@@ -59,6 +59,68 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(evidence["repair_handoff"]["error"]["exit_code"], 7)
         self.assertIn("broken", evidence["repair_handoff"]["error"]["stderr"])
 
+    def test_launch_spec_requires_one_real_projectless_thread_per_check(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            plan_path.write_text(json.dumps(PLAN.build_plan(root, "routing", 60, [
+                {"name": "unit", "command": ["python3", "-c", "print('unit')"], "complexity_score": 20},
+                {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
+            ])), encoding="utf-8")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence")
+        self.assertEqual(launch["execution"], "host_persistent_create_thread")
+        self.assertEqual(launch["required_launch_count"], 2)
+        self.assertEqual({item["tool"] for item in launch["launch_requests"]}, {"codex_app__create_thread"})
+        self.assertTrue(all(item["arguments"]["target"] == {"type": "projectless"} for item in launch["launch_requests"]))
+        self.assertTrue(all(item["arguments"]["prompt"].startswith("ENDING_TASK_WORKER\n") for item in launch["launch_requests"]))
+        self.assertTrue(all("Verification plan relative to project root: plan.json" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all("Evidence output relative to project root: Cache/tests/ending-evidence/" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all(str(root / "plan.json") not in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertEqual(
+            [f"{item['arguments']['model']}|{item['arguments']['thinking']}" for item in launch["launch_requests"]],
+            [item["selected_pair"] for item in launch["launch_requests"]],
+        )
+
+    def test_launch_audit_blocks_until_every_thread_is_acknowledged(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            launch_path = root / "launch.json"
+            state_path = root / "launch-state.json"
+            plan_path.write_text(json.dumps(PLAN.build_plan(root, "routing", 60, [
+                {"name": "unit", "command": ["python3", "-c", "print('unit')"], "complexity_score": 20},
+                {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
+            ])), encoding="utf-8")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence")
+            launch_path.write_text(json.dumps(launch), encoding="utf-8")
+            not_launched = PLAN.audit_launches(launch_path, state_path)
+            PLAN.acknowledge_launch(launch_path, "unit", "thread-unit", "host-unit", state_path)
+            blocked = PLAN.audit_launches(launch_path, state_path)
+            PLAN.acknowledge_launch(launch_path, "integration", "thread-integration", "host-integration", state_path)
+            passed = PLAN.audit_launches(launch_path, state_path)
+        self.assertEqual(not_launched["status"], "blocked")
+        self.assertEqual(not_launched["end_task_trigger_rate"], "0%")
+        self.assertEqual(blocked["status"], "blocked")
+        self.assertEqual(blocked["end_task_trigger_rate"], "50%")
+        self.assertEqual(passed["status"], "pass")
+        self.assertEqual(passed["end_task_trigger_rate"], "100%")
+        self.assertEqual(passed["launched_count"], 2)
+
+    def test_one_thread_cannot_acknowledge_two_checks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            launch_path = root / "launch.json"
+            state_path = root / "launch-state.json"
+            plan_path.write_text(json.dumps(PLAN.build_plan(root, "routing", 60, [
+                {"name": "unit", "command": ["python3", "-c", "print('unit')"]},
+                {"name": "integration", "command": ["python3", "-c", "print('integration')"]},
+            ])), encoding="utf-8")
+            launch_path.write_text(json.dumps(PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence")), encoding="utf-8")
+            PLAN.acknowledge_launch(launch_path, "unit", "same-thread", "host", state_path)
+            with self.assertRaisesRegex(ValueError, "cannot acknowledge multiple checks"):
+                PLAN.acknowledge_launch(launch_path, "integration", "same-thread", "host", state_path)
+
 
 if __name__ == "__main__":
     unittest.main()

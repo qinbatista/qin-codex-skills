@@ -68,7 +68,7 @@ For README changes:
 
 ## Main Result And Ending Task
 
-For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines. First-result time ends at that presentation. A global projectless Ending Task then owns Real Verify, including deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. PASS records durable evidence then self-archives; a mismatch, FAIL, or BLOCKED remains visible and reopens the task.
+For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines. Management is only the publication/deployment stage of a composite task: never replace implementation, focused-test, publication, deployment, Obsidian-record, and Ending identities with one management pair. When the route has two or more model-executed nodes, append the generated `Model stages (N):` block from the final `model_switch_summary`. First-result time ends at that presentation. A global projectless Ending Task then owns Real Verify, including deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory. It must have a real `create_thread` acknowledgement and `audit-launches` must report `end_task_trigger_rate=100%`; a handoff file alone is not deployment verification. PASS records durable evidence then self-archives; a mismatch, FAIL, or BLOCKED remains visible and reopens the task.
 
 ## Commands
 
@@ -78,7 +78,9 @@ Use the maintained scripts instead of ad hoc profile or mirror logic:
 - `scripts/show_all_auth_status.py`
 - `scripts/sync_global_skills.py`
 
-Use `sync_global_skills.py deploy --source-dir <repository-root> --skills-dir <global-skills-directory>` for an explicit local installation from the maintained repository source. It validates the approved eight-skill set, public safety, and platform compatibility, preserves unrelated local skills and `task-analyze-skill/local/`, and does not publish to GitHub.
+Use `sync_global_skills.py deploy --source-dir <repository-root> --skills-dir <global-skills-directory>` for an explicit local installation from the maintained repository source. It validates the approved eight-skill set, public safety, and platform compatibility, preserves unrelated local skills and `task-analyze-skill/local/`, atomically installs the canonical `task-analyze-skill/assets/global-agents-entry-rule.md` contract into the sibling global `AGENTS.md`, and does not publish to GitHub. Deployment is incomplete when the eight folders match but that always-loaded entry contract does not.
+
+`sync_global_skills.py status` also checks local `AGENTS.md` parity against the installed Task Lifecycle asset and exits nonzero on drift, even when the eight Skill folders already match the remote mirror.
 
 Use snapshot/dry-run/status modes for testing. Do not call `sync` or `push` in a task that was authorized only to edit/test local skills.
 

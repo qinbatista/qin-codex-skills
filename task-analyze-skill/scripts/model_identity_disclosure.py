@@ -30,6 +30,14 @@ load_registry = _load_model_registry()
 DISCLOSURE_EVIDENCE_LABELS = {"runtime receipt": ("runtime_receipt", "runtime_receipt"), "verified entry (no runtime receipt)": ("verified_entry", "UNVERIFIED (no runtime receipt)"), "task assignment (no runtime receipt)": ("task_assignment", "UNVERIFIED (no runtime receipt)"), "configured selection (no runtime receipt)": ("configured_selection", "UNVERIFIED (no runtime receipt)"), "unavailable": ("unavailable", "unavailable")}
 DISCLOSURE_ROUTE_LABELS = {"upgrade": "upgrade", "downgrade": "downgrade", "frozen": "freeze", "no switch": "no_switch", "fallback": "operational_fallback"}
 DISCLOSURE_PATTERN = re.compile(r"^Complexity:\s*(?P<score>\d+)/100 \((?P<band>small|standard|complex|advanced)\) · Model:\s*(?P<current_model>[^|\s]+)\|(?P<current_effort>[^|\s]+) · Route:\s*(?P<route_label>upgrade|downgrade|frozen|no switch|fallback)\s*$(?:\n^Model path:\s*(?P<model_path>[^\n]+?)\s*$)?\n^Evidence:\s*(?P<evidence_label>runtime receipt|verified entry \(no runtime receipt\)|task assignment \(no runtime receipt\)|configured selection \(no runtime receipt\)|unavailable)\s*$", re.MULTILINE)
+STAGE_ROUTE_LABELS = {"upgrade": "upgrade", "downgrade": "downgrade", "freeze": "frozen", "no_switch": "no switch", "operational_fallback": "fallback"}
+STAGE_EVIDENCE_LABELS = {
+    "runtime_receipt": "runtime receipt",
+    "verified_entry": "verified entry (no runtime receipt)",
+    "task_assignment": "task assignment (no runtime receipt)",
+    "configured_selection": "configured selection (no runtime receipt)",
+    "unavailable": "unavailable",
+}
 
 
 def _allowed_pairs(registry=None):
@@ -98,7 +106,48 @@ def _complexity_band(score):
     raise ValueError("complexity score must be between 0 and 100")
 
 
-def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=None, registry=None):
+def _compact_stage_value(value, fallback, maximum=120):
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return (text or fallback)[:maximum]
+
+
+def render_stage_summary(model_switch_summary, registry=None):
+    if not isinstance(model_switch_summary, dict):
+        return ""
+    nodes = [node for node in model_switch_summary.get("nodes", []) if isinstance(node, dict)]
+    if len(nodes) < 2:
+        return ""
+    allowed_pairs = _allowed_pairs(registry)
+    lines = [f"Model stages ({len(nodes)}):"]
+    for index, node in enumerate(nodes, start=1):
+        node_id = _compact_stage_value(node.get("node_id"), f"stage-{index}", 80)
+        purpose = _compact_stage_value(node.get("purpose"), node_id)
+        phase = _compact_stage_value(node.get("phase"), "result", 20)
+        score = node.get("score")
+        if isinstance(score, bool) or not isinstance(score, int):
+            raise ValueError(f"stage {node_id} requires an integer complexity score")
+        band = node.get("band")
+        if band != _complexity_band(score):
+            raise ValueError(f"stage {node_id} complexity band does not match its score")
+        pair = node.get("effective_pair") or node.get("resolved_pair") or node.get("requested_pair") or "unknown|unknown"
+        evidence_source = node.get("model_evidence_source") or "unavailable"
+        if pair != "unknown|unknown" and pair not in allowed_pairs:
+            raise ValueError(f"stage {node_id} uses unsupported model pair: {pair}")
+        if evidence_source not in STAGE_EVIDENCE_LABELS:
+            raise ValueError(f"stage {node_id} uses unsupported evidence source: {evidence_source}")
+        if pair == "unknown|unknown" and evidence_source != "unavailable":
+            raise ValueError(f"stage {node_id} unknown pair requires unavailable evidence")
+        route = STAGE_ROUTE_LABELS.get(node.get("route_change"), "no switch")
+        status = _compact_stage_value(node.get("status"), "pending", 24).upper()
+        dependencies = node.get("relations", {}).get("dependencies") if isinstance(node.get("relations"), dict) else None
+        dependency_text = ", ".join(str(value) for value in dependencies) if isinstance(dependencies, list) and dependencies else "entry"
+        lines.append(
+            f"{index}. {purpose} [{phase}:{node_id}] · Complexity: {score}/100 ({band}) · Model: {pair} · Route: {route} · Status: {status} · Evidence: {STAGE_EVIDENCE_LABELS[evidence_source]} · Dependencies: {dependency_text}"
+        )
+    return "\n".join(lines)
+
+
+def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=None, registry=None, model_switch_summary=None):
     identity = resolve_disclosure_identity(runtime_receipt, entry_resolution, registry)
     requested_pair = identity["requested_pair"]
     resolved_pair = identity["resolved_pair"]
@@ -138,15 +187,19 @@ def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=N
     if model_path:
         lines.append(f"Model path: {' -> '.join(model_path)}")
     lines.append(f"Evidence: {evidence_label}")
+    stage_summary = render_stage_summary(model_switch_summary, registry)
+    if stage_summary:
+        lines.extend(["", stage_summary])
     return "\n".join(lines)
 
 
-def normalize_result_disclosure(result_text, complexity_score, runtime_receipt=None, entry_resolution=None, registry=None):
+def normalize_result_disclosure(result_text, complexity_score, runtime_receipt=None, entry_resolution=None, registry=None, model_switch_summary=None):
     canonical = render_disclosure(
         complexity_score,
         runtime_receipt=runtime_receipt,
         entry_resolution=entry_resolution,
         registry=registry,
+        model_switch_summary=model_switch_summary,
     )
     text = str(result_text or "").lstrip("\ufeff")
     compact_match = DISCLOSURE_PATTERN.search(text)
@@ -216,6 +269,7 @@ def main(argv=None):
     render_parser = subparsers.add_parser("render")
     render_parser.add_argument("--complexity-score", type=int, required=True)
     render_parser.add_argument("--receipt", type=Path)
+    render_parser.add_argument("--manifest", type=Path, help="Foreground or Ending manifest containing model_switch_summary")
     render_parser.add_argument("--thread-id", default=os.environ.get("CODEX_THREAD_ID"))
     render_parser.add_argument("--sessions-dir", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")))
     subparsers.add_parser("validate")
@@ -225,8 +279,14 @@ def main(argv=None):
         print(json.dumps({"status": "pass" if not failures else "fail", "failures": failures}, ensure_ascii=False, separators=(",", ":")))
         return 0 if not failures else 1
     runtime_receipt = json.loads(args.receipt.expanduser().resolve().read_text(encoding="utf-8")) if args.receipt else None
+    model_switch_summary = None
+    if args.manifest:
+        manifest = json.loads(args.manifest.expanduser().resolve().read_text(encoding="utf-8"))
+        model_switch_summary = manifest.get("model_switch_summary") if isinstance(manifest, dict) else None
+        if not isinstance(model_switch_summary, dict):
+            raise ValueError("manifest does not contain model_switch_summary")
     entry_resolution = None if runtime_receipt else _load_entry_resolver().resolve_entry_model(args.thread_id, args.sessions_dir)
-    print(render_disclosure(args.complexity_score, runtime_receipt=runtime_receipt, entry_resolution=entry_resolution))
+    print(render_disclosure(args.complexity_score, runtime_receipt=runtime_receipt, entry_resolution=entry_resolution, model_switch_summary=model_switch_summary))
     return 0
 
 
