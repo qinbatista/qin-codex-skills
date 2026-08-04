@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**专用于 Codex · 每个任务评分 · 先完成主任务 · 再用强制 Ending 证明结果**
+**专用于 Codex · 每个任务评分 · 先完成主任务 · 复杂或重要结果才用 Ending 留痕验证**
 
 [English](./README.md)
 
@@ -16,16 +16,16 @@
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-zh-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先评分并完成主任务，再为独立真实检查运行强制评分 Ending Task">
+  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先评分并完成主任务，复杂或重要结果才运行 Ending">
 </picture>
 
-## ✅ 先完成主任务，再执行强制真实验证
+## ✅ 先完成主任务，重要结果才做 Ending
 
 这是整个生命周期最重要的结构规则：
 
 1. **每个提交先按 0–100 评分，再完成用户要求的工作**，并运行与实现相称的基础检查。
 2. **立即返回已完成结果。** 不让用户被验证、轮询或修复流程卡住。
-3. **每个 producer 返回有效 PASS receipt 后，由入口父任务在全局任务列表中为每个真实检查另开一个评分并选模的 projectless `End Task-<任务名>-<检查>`。** 锁定 producer 不递归启动 Ending；父任务绑定 receipt、把原项目根保留为执行上下文，并要求真实 thread 回执。
+3. **复杂或重要结果确实需要真实检查时，入口父任务才为每个独立检查在全局任务列表中为每个独立检查另开一个评分并选模的 projectless `End Task-<任务名>-<检查>`。** 锁定 producer 不递归启动 Ending；父任务绑定 receipt、把原项目根保留为执行上下文，并要求真实 thread 回执。
 4. **每个 Ending 必须执行分配的真实检查，所有必需检查都要 PASS。** PASS/FAIL/BLOCKED task 都保持可见（包括 End Task），并报告阶段难度与模型、尝试次数、一次过/重试通过、模型适配度、下一模型路线和 Obsidian 记录链接/状态。FAIL 会在同一项目建立 Fix Task，再由全新的 projectless End Task 重跑；最多修复三次。End/Fix task 永不自动归档或删除。
 
 主工作与 Ending 验证刻意使用不同任务会话。文字总结不算验证；重型修改必须用对应的真实测试、API 证据、build、render 或视觉检查证明。
@@ -49,7 +49,7 @@
 - **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
 - **路由：** 只有明确要求或当前端到端证据成立时才委派。
 - **交付：** 先完成并返回主任务结果，再进行后台验证。
-- **验证：** 每个独立检查使用评分、选模 End Task；全部 PASS。FAIL → Fix Task → 全新 End Task，最多三次。
+- **验证：** 复杂/重要结果需真实检查时才用评分 End Task；全部 PASS。FAIL → Fix → 全新 End Task，最多三次。简单查看/改单个 value 跳过。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
 - **记忆：** 修改历史用本地 JSONL；模型学习走原生类别链接，项目/任务等保持为字段。
 - **模型：** 使用已保存梯级；主动本地更新时选择最高数字 GPT 家族；符合条件的小编辑优先 Spark-low；缓存不可用就保留原列表。
@@ -96,7 +96,7 @@
 ## 安装
 
 1. 把八个 Skill 文件夹放进 `~/.codex/skills/`。
-2. 将 [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) 合并到 `~/.codex/AGENTS.md`。
+2. 将 [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) 部署到 `~/.codex/AGENTS.md` 和宿主可发现的用户级 `~/AGENTS.md`。
 3. 正常启动 Codex；不安装生命周期 hook。
 
 **隐私：** 镜像排除 auth、secret、私有 ledger、路由历史、cache、原始 Prompt/结果、receipt 和临时文件；每次发布都运行安全检查。

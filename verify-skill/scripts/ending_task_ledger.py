@@ -584,7 +584,7 @@ def audit_lifecycle(lifecycle_id, store=DEFAULT_STORE):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Record mandatory post-result Ending Task lifecycles")
+    parser = argparse.ArgumentParser(description="Record eligible post-result Ending Task lifecycles")
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE)
     subparsers = parser.add_subparsers(dest="command", required=True)
     start_parser = subparsers.add_parser("start")

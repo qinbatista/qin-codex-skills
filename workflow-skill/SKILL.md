@@ -1,11 +1,11 @@
 ---
 name: workflow-skill
-description: "Execute one Obsidian-context producer or a dynamically scored dependency graph. Every task still launches the mandatory post-result Ending lifecycle."
+description: "Execute one Obsidian-context producer or a dynamically scored dependency graph. Complex or important results launch the post-result Ending lifecycle when tests, records, or durable memory are needed."
 ---
 
 # Workflow Skill
 
-Use result-producing Workflow for one Obsidian-context adaptive quality producer with a one-rung-stronger operational fallback, or after full `task-analyze-skill` returns a dynamically scored locked multi-node route. Ineligible ordinary work remains inline, and every task uses the universal Ending lifecycle after presentation. Continue in the same task; no hook is used; never print the private machine plan.
+Use result-producing Workflow for one Obsidian-context adaptive quality producer with a one-rung-stronger operational fallback, or after full `task-analyze-skill` returns a dynamically scored locked multi-node route. Ineligible ordinary work remains inline; complex or important results use the Ending lifecycle after presentation, while simple reads and one-value edits skip it. Continue in the same task; no hook is used; never print the private machine plan.
 
 ## Graph And Claim Gates
 
@@ -44,7 +44,7 @@ Workflow reports only an actual fallback or post-result repair. It never adds a 
 
 Eligible single-node production tasks get one project/task/module/file/symbol/code lookup and call `obsidian_adaptive_model_runner.py` once, including cold start. A multi-node request instead materializes one `dynamic_task_graph` and calls the dispatcher once. The parent score never forces all nodes onto one pair. Spark-low is first for every eligible low-risk, low-ambiguity text/code/write/execute node scoring 0-24, including downstream nodes inside a complex graph; a concrete exception is required when it is unsuitable.
 
-Inline work uses one direct task action or direct execution surface, then shows the completed main result immediately. Ending Real Verify starts only afterward.
+Inline work uses one direct task action or direct execution surface, then shows the completed main result immediately. Ending Real Verify starts only afterward when the result qualifies for Ending.
 
 ## Admitted Execution
 
@@ -64,7 +64,7 @@ When requested work is complete:
 1. cross Main Goal Done Gate based on task completion, not an independent verification claim;
 2. for code, run the smallest safe local smoke, or skip a heavy/API/large-file path and check syntax plus changed function, variable, import, and direct-reference names;
 3. show `CODE READY` or `MAIN RESULT READY` immediately with Quick Check PASS/SKIPPED evidence;
-4. release the Ending Real handoff for every result; resolve the exact saved project with `codex_app__list_projects`, run `ending_verification_plan.py create-launches --project-id <resolved-id>`, invoke every generated projectless `codex_app__create_thread` call, acknowledge each returned `threadId`, `hostId`, and project ID, and require `audit-launches` to report `end_task_trigger_rate=100%`. Name it exactly `End Task-{concise related task name}`, link it, and return without waiting. Worker prompts keep the originating project root as execution context and use project-root-relative paths. A handoff without host acknowledgement is pending, never triggered. Keep every global End Task visible after terminal status; never auto-archive or delete it. When `create_thread` is callable, invoke the generated projectless call; never inspect app-server schemas/commands or emulate task creation. If thread tools are unavailable, return the completed result and exact BLOCKED handoff immediately; the outer host creates the End Task. Exact project-resolution failure follows the same boundary. Never poll or self-run Ending.
+4. when the result is complex or important and needs tests, records, or durable memory, release the Ending Real handoff; resolve the exact saved project with `codex_app__list_projects`, run `ending_verification_plan.py create-launches --project-id <resolved-id>`, invoke every generated projectless `codex_app__create_thread` call, acknowledge each returned `threadId`, `hostId`, and project ID, and require `audit-launches` to report `end_task_trigger_rate=100%`. Name it exactly `End Task-{concise related task name}`, link it, and return without waiting. Worker prompts keep the originating project root as execution context and use project-root-relative paths. A handoff without host acknowledgement is pending, never triggered. Keep every global End Task visible after terminal status; never auto-archive or delete it. When `create_thread` is callable, invoke the generated projectless call; never inspect app-server schemas/commands or emulate task creation. If thread tools are unavailable, return the completed result and exact BLOCKED handoff immediately; the outer host creates the End Task. Exact project-resolution failure follows the same boundary. Never poll or self-run Ending.
 
 ## Result Model Disclosure
 
@@ -74,9 +74,9 @@ For adaptive or dispatched execution, launch the CLI as an ongoing session and r
 
 For a dispatcher use ongoing `run-plan` session -> `result-ready` event -> bounded Quick Check when code -> show the public result file -> collect final run manifest -> `release-main-result` -> create/rename/link End Task when thread tools are callable, or emit its handoff when they are absent -> origin returns. Only the End Task thread may call `run-ending`. Never use a same-task Ending subagent or wait for the Ending verdict in the origin. A later Real correctness failure is owned and reported by the End Task thread.
 
-## Mandatory Ending Task
+## Ending Task For Eligible Results
 
-Ending begins only after the main result and its passing producer receipt is available. A `LOCKED_ROUTE_NODE` never starts or waits for Ending; the entry parent binds that receipt, builds `ending_verification_plan.py`, and creates one persistent `End Task-{task}-{check}` per independent real unit/integration/API/build/render/state check. Each check has its own `0-100` score and quality-ladder model/effort; all required checks must PASS. The entry parent creates tasks only when thread tools are callable; otherwise it emits BLOCKED handoffs for the outer host. Start the local lifecycle with score, plan, and `--producer-receipt` when present.
+For a complex or important result that needs tests, records, or durable memory, Ending begins only after the main result and its passing producer receipt is available. A `LOCKED_ROUTE_NODE` never starts or waits for Ending; the entry parent binds that receipt, builds `ending_verification_plan.py`, and creates one persistent `End Task-{task}-{check}` per independent real unit/integration/API/build/render/state check. Each check has its own `0-100` score and quality-ladder model/effort; all required checks must PASS. The entry parent creates tasks only when thread tools are callable; otherwise it emits BLOCKED handoffs for the outer host. Start the local lifecycle with score, plan, and `--producer-receipt` when present. Simple reads, file opens, and one-value edits skip this lifecycle.
 
 The End Task thread starts its worker prompt with `ENDING_TASK_WORKER`; any locked-route metadata follows that marker. It never restarts Task Analyze/Workflow, silently changes the delivered result, asks the user to resolve external state, or waits/polls. A concurrent state change records terminal `BLOCKED` and exits. The origin returns after creating and linking the thread, which is the projectless global End Task, with its result complete. Every terminal status remains visible; the worker never calls `set_thread_archived` or deletes itself.
 

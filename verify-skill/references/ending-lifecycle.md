@@ -1,6 +1,6 @@
-# Mandatory Real-Test Ending Lifecycle
+# Eligible Real-Test Ending Lifecycle
 
-Every user submission records a scored local Ending lifecycle. When the completed result needs verification—code/file edits, bug fixes, generated artifacts, UI/render work, integrations, or external actions—Ending executes real proportional checks in separate persistent Codex tasks. Prior receipts or prose summaries alone cannot PASS.
+Complex or important results record a scored local Ending lifecycle when they need tests, records, or durable memory; simple reads and one-value edits skip it. When the completed result needs verification—code/file edits, bug fixes, generated artifacts, UI/render work, integrations, or external actions—Ending executes real proportional checks in separate persistent Codex tasks. Prior receipts or prose summaries alone cannot PASS.
 
 ## Parent sequence
 

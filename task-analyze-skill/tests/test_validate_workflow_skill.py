@@ -174,7 +174,7 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         self.assertIn("MUST child/graph then return child JSON", required)
         self.assertIn("compare task vs +Ending", required)
         self.assertIn("excludes only controller", required)
-        self.assertIn("Every result,including read-only,triggers a visible projectless End Task", required)
+        self.assertIn("Complex/important needs test/record/memory=>projectless End", required)
         self.assertIn("codex_app__create_thread projectless", required)
         self.assertIn("End Tasks stay globally visible", required)
         self.assertIn("never auto-archive/delete", required)

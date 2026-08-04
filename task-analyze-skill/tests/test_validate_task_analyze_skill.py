@@ -122,7 +122,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         (temp_dir / "assets" / "model-capability-ladder.json").write_text(json.dumps(generated_ladder, indent=2) + "\n", encoding="utf-8")
         global_agents = temp_dir / "AGENTS.md"
         entry_asset_text = (source / "assets" / "global-agents-entry-rule.md").read_text(encoding="utf-8")
-        global_agents.write_text(entry_asset_text.replace("Merge this section into `~/.codex/AGENTS.md`.\n\n", ""), encoding="utf-8")
+        global_agents.write_text(entry_asset_text.replace(module.GLOBAL_ENTRY_ASSET_DIRECTIVE, ""), encoding="utf-8")
         global_skills = temp_dir / "skills"
         for skill_name in APPROVED:
             skill_dir = global_skills / skill_name
@@ -463,7 +463,8 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Producer owns files/skills/Quick Check", bootstrap_text)
-            self.assertIn("Every result,including read-only,triggers a visible projectless End Task", bootstrap_text)
+            self.assertIn("Complex/important needs test/record/memory=>projectless End", bootstrap_text)
+            self.assertIn("Simple read/open/one-value skip", bootstrap_text)
             self.assertIn("codex_app__create_thread projectless", bootstrap_text)
             self.assertIn("ack threadId+hostId+projectId", bootstrap_text)
             self.assertIn("End Tasks stay globally visible", bootstrap_text)
@@ -500,6 +501,22 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             entry_asset.write_text(entry_asset.read_text(encoding="utf-8") + "drift\n", encoding="utf-8")
             drifted = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertTrue(any("does not exactly match global AGENTS" in failure for failure in drifted["failures"]))
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_validator_requires_host_discoverable_user_agents_when_codex_agents_is_used(self):
+        temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
+        try:
+            codex_home = temp_dir / ".codex"
+            codex_home.mkdir()
+            codex_agents = codex_home / "AGENTS.md"
+            codex_agents.write_text(global_agents.read_text(encoding="utf-8"), encoding="utf-8")
+            valid = module.validate(temp_dir, models_cache, codex_agents, global_skills, temp_dir / "hooks.json")
+            self.assertTrue(valid["valid"], valid["failures"])
+            global_agents.unlink()
+            missing_host = module.validate(temp_dir, models_cache, codex_agents, global_skills, temp_dir / "hooks.json")
+            self.assertFalse(missing_host["valid"])
+            self.assertTrue(any("always-loaded global AGENTS.md is missing" in failure and str(global_agents) in failure for failure in missing_host["failures"]))
         finally:
             shutil.rmtree(temp_dir)
 

@@ -207,7 +207,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
         self.assertIn("# 🚀 Auto Best Model", readme)
-        self.assertIn("**Codex-only · score every task · finish the job first · prove it with mandatory Ending tasks**", readme)
+        self.assertIn("**Codex-only · score every task · finish the job first · use Ending only for complex or important recorded/tested results**", readme)
         self.assertNotIn("AutoBestModel", readme)
         self.assertIn("**Mirrors:** `qin-codex-skills` · `auto-best-model`", readme)
         self.assertIn("Saved highest-family quality ladder", readme)
@@ -760,6 +760,19 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 sync_global_skills.main()
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
             self.assertEqual((target_dir.parent / "AGENTS.md").read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
+
+    def test_deploy_installs_both_codex_and_host_discoverable_global_agents(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home_dir = Path(temp_dir) / "home"
+            target_dir = home_dir / ".codex" / "skills"
+            sync_global_skills.deploy(SKILLS_DIR, target_dir)
+            expected = sync_global_skills.canonical_global_agents_text(SKILLS_DIR)
+            targets = sync_global_skills.global_agents_targets(target_dir)
+            self.assertEqual(targets, [(home_dir / ".codex" / "AGENTS.md").resolve(), (home_dir / "AGENTS.md").resolve()])
+            self.assertEqual([target.read_text(encoding="utf-8") for target in targets], [expected, expected])
+            parity = sync_global_skills.global_agents_parity(SKILLS_DIR, target_dir)
+            self.assertEqual(parity["status"], "pass")
+            self.assertEqual(parity["targets"], [str(target) for target in targets])
 
     def test_push_cli_defaults_to_the_maintained_repository_source(self):
         argv = ["sync_global_skills.py", "push", "--message", "source-first smoke"]

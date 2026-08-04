@@ -118,13 +118,13 @@ REQUIRED_SKILL_TEXT = [
     "hookless bootstrap",
     "exact-project Obsidian history",
     "strongly matched transferable local history",
-    "mandatory post-result Ending lifecycle",
+    "Ending is conditional",
     "A `LOCKED_ROUTE_NODE` produces only its assigned result and Quick Check",
     "entry parent owns post-receipt lifecycle",
     "automatically activates multi-node routing",
     "visible 0-100 complexity score",
     "small low-risk edits",
-    "End Task is hard-required",
+    "End Task is conditional",
     "nested cache/fixture `SKILL.md`",
     "Activation Boundary",
     "Ordinary Inline Bootstrap",
@@ -213,7 +213,7 @@ REQUIRED_ROUTE_TEXT = [
     "Do not run Mini/Fast Verify before first presentation",
     "## Ordinary Entry Contract",
     "Complexity: N/100 (band)",
-    "hard-required",
+    "End Task is required only for complex work or an important result that needs tests, records, or durable memory",
     "Model stages (N):",
     "ending_verification_plan.py create-launches",
     "ack-launch",
@@ -357,33 +357,33 @@ REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "executes Spark-low first", "Ending quality FAIL suppresses that fingerprint", "Dependency-ready independent nodes run parallel",
     "shared writes/order/output deps stay linear", "resolve CODEX_HOME", "pipe exact task once via platform Python",
     "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "LOCKED_ROUTE_NODE does result/Quick Check only",
-    "entry parent launches Ending after passing receipt", "ENDING_TASK_WORKER does assigned check only:no nested lifecycle", "dynamic_task_graph",
+    "parent launches End after complex/important receipt", "ENDING_TASK_WORKER does assigned check only:no nested lifecycle", "dynamic_task_graph",
     "task_route_dispatcher.py run-plan", "no benchmark", "Exact one-source/tool/image read-only uses `task_complexity_score.py`", "no reread/full-read/precheck", "output artifact MUST runner",
     "2 Real PASS trial down 1 rung", "quality FAIL up 1", "missing Obsidian queues projection;local history continues",
-    "Producer owns files/skills/Quick Check", "Every result,including read-only,triggers a visible projectless End Task", "codex_app__create_thread projectless",
+    "Producer owns files/skills/Quick Check", "Complex/important needs test/record/memory=>projectless End", "codex_app__create_thread projectless",
     "resolve root with codex_app__list_projects", "ending_verification_plan.py create-launches --project-id",
-    "ack threadId+hostId+projectId", "audit-launches end_task_trigger_rate=100%", "handoff is pending", "all checks PASS",
+    "ack threadId+hostId+projectId", "audit-launches end_task_trigger_rate=100%", "handoff pending", "all checks PASS",
     "End Tasks stay globally visible", "never auto-archive/delete", "attempts,first/retry pass", "suitability", "Obsidian link/status",
     "same-project Fix", "fresh projectless End Task", "up to 3 repairs", "BLOCKED only unavailable/external/limit",
     "never same-task subtask/emulate/wait/self-verify", "Terminal events write local+same-ID Obsidian records", "only receipts move routing",
     "future routes merge/dedupe pairs,fingerprint,score/band,direction,recovery", "AUTO_BENCHMARK_ENTRY", "Direct Sol-ultra no Skill",
     "Auto Luna-max stable child/graph", "MUST child/graph then return child JSON", "gate owns separate Ending", "excludes only controller",
     "compare task vs +Ending", "all exact PASS", "all result/Ending PASS", "Primary=time+tokens", "totals lower",
-    "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "Final PASS/BLOCKED Ending-only",
+    "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "Final Ending PASS/BLOCKED",
 ]
-REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
+REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "· Model:", "· Route:", "Evidence:", "runtime receipt", "verified entry (no runtime receipt)", "task assignment (no runtime receipt)", "configured selection (no runtime receipt)", "Model path:", "Model stages", "changed route", "unknown|unknown", "full routing data"]
 RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS = ["compact Result Model Disclosure", "task-analyze-skill/references/route-contract.md", "Do not expand"]
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "build real proportional Ending checks", "Every required check must PASS", "separate scoped repair task", "fresh verifier"]
 REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "separate scored/modelled End Tasks", "All required checks must PASS", "fresh verifier"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
-REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "mandatory scored Ending lifecycle", "ending_verification_plan.py", "projectless global End Tasks", "Every terminal End Task stays visible", "Never auto-archive or delete", "fresh projectless verifier"]
+REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "Start the scored Ending lifecycle only for complex work or an important result that needs tests, records, or durable memory", "ending_verification_plan.py", "projectless global End Tasks", "Every terminal End Task stays visible", "Never auto-archive or delete", "fresh projectless verifier"]
 REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "present the completed prompt first"]
 REQUIRED_VERIFY_SKILL_TEXT = ["execute a real proportional test", "ending_verification_plan.py", "own `0-100` check score", "All required checks must PASS", "{\"type\":\"projectless\"", "create-launches", "ack-launch", "end_task_trigger_rate=100%", "remain visible", "Never call `set_thread_archived`", "global task list", "exact saved project", "structured model assessment", "fresh Ending task", "BLOCKED does not count as verified"]
 REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "weak_default", "balanced_default", "balanced_complex", "frontier_complex", "separate_persistent_tasks", "THREAD_TARGET", "REPAIR_THREAD_TARGET", "projectless", "TERMINAL_THREAD_POLICY", "keep_visible", "project_binding", "subprocess.run", "create_repair_task_then_fresh_ending", "max_repair_attempts", "codex_app__create_thread", "create-launches", "ack-launch", "audit-launches", "end_task_trigger_rate", "structured model_assessment", "Never call set_thread_archived"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
-GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
+GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
 MAX_GLOBAL_BOOTSTRAP_BYTES = 6500
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
@@ -816,7 +816,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ stages=>per-stage graph", "final Model stages has every difficulty/pair/status", "History picks lowest-correct", "entry moves up/down", "no-history<=entry", "obsidian_adaptive_model_runner.py", "only artifact-free exact/tool/image uses task_complexity_score.py", "LOCKED_ROUTE_NODE produces result/Quick Check only", "parent launches Ending after passing receipt", "Small low-risk edit<=24 tries Spark-low", "quality FAIL suppresses band", "Every result requires projectless global End Task", "ending_verification_plan.py", "bind exact project", "projectless End/check", "ack(threadId+hostId+projectId)", "audit=100%", "all PASS,visible", "never auto-archive/delete", "Assessment:stage difficulty/pairs,attempt,first/retry,suitability", "Obsidian link", "No receipt still records non-learning observation", "same-project Fix+fresh projectless End<=3", "BLOCKED is not verified", "Never emulate", "same-task/self-verify forbidden"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ stages=>per-stage graph", "final Model stages has every difficulty/pair/status", "History picks lowest-correct", "entry moves up/down", "no-history<=entry", "obsidian_adaptive_model_runner.py", "only artifact-free exact/tool/image uses task_complexity_score.py", "LOCKED_ROUTE_NODE produces result/Quick Check only", "parent launches Ending only for complex/important results needing tests/records/memory", "Small low-risk edit<=24 tries Spark-low", "quality FAIL suppresses band", "Eligible results require projectless global End Task; simple reads/open/one-value edits skip Ending", "ending_verification_plan.py", "bind exact project", "projectless End/check", "ack(threadId+hostId+projectId)", "audit=100%", "all PASS,visible", "never auto-archive/delete", "Assessment:stage difficulty/pairs,attempt,first/retry,suitability", "Obsidian link", "No receipt still records non-learning observation", "same-project Fix+fresh projectless End<=3", "BLOCKED is not verified", "Never emulate", "same-task/self-verify forbidden"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("Task Analyze result disclosure", skill_text, RESULT_MODEL_DISCLOSURE_TERMS))
@@ -860,17 +860,23 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     for forbidden in FORBIDDEN_TEXT:
         if normalize(forbidden) in normalize(live_text):
             failures.append(f"live contract contains obsolete text: {forbidden}")
-    if not global_agents_path.exists():
-        failures.append(f"always-loaded global AGENTS.md is missing: {global_agents_path}")
-    else:
-        global_agents_text = read_text(global_agents_path)
-        failures.extend(missing_terms("global AGENTS", global_agents_text, REQUIRED_GLOBAL_BOOTSTRAP_TEXT))
-        failures.extend(missing_terms("global AGENTS result disclosure", global_agents_text, RESULT_MODEL_DISCLOSURE_TERMS))
-        if len(global_agents_text.encode("utf-8")) > MAX_GLOBAL_BOOTSTRAP_BYTES:
-            failures.append(f"global AGENTS exceeds compact bootstrap limit: {len(global_agents_text.encode('utf-8'))} > {MAX_GLOBAL_BOOTSTRAP_BYTES} bytes")
+    global_agents_targets = [global_agents_path]
+    if global_agents_path.parent.name == ".codex":
+        global_agents_targets.append(global_agents_path.parent.parent / "AGENTS.md")
+    for target in global_agents_targets:
+        label = "global AGENTS" if target == global_agents_path else f"global AGENTS ({target})"
+        if not target.exists():
+            failures.append(f"always-loaded global AGENTS.md is missing: {target}")
+            continue
+        target_text = read_text(target)
+        failures.extend(missing_terms(label, target_text, REQUIRED_GLOBAL_BOOTSTRAP_TEXT))
+        failures.extend(missing_terms(f"{label} result disclosure", target_text, RESULT_MODEL_DISCLOSURE_TERMS))
+        if len(target_text.encode("utf-8")) > MAX_GLOBAL_BOOTSTRAP_BYTES:
+            failures.append(f"{label} exceeds compact bootstrap limit: {len(target_text.encode('utf-8'))} > {MAX_GLOBAL_BOOTSTRAP_BYTES} bytes")
         for forbidden in FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT:
-            if normalize(forbidden) in normalize(global_agents_text):
-                failures.append(f"global AGENTS contains forbidden hook or machine-plan contract: {forbidden}")
+            if normalize(forbidden) in normalize(target_text):
+                failures.append(f"{label} contains forbidden hook or machine-plan contract: {forbidden}")
+    global_agents_text = read_text(global_agents_path) if global_agents_path.exists() else ""
     failures.extend(missing_terms("global entry asset", entry_asset_text, REQUIRED_GLOBAL_ENTRY_ASSET_TEXT))
     failures.extend(missing_terms("benchmark evidence", benchmark_evidence_text, ["# Adaptive Model Test and Benchmark Evidence", "Implementation status: PASS", "Correctness status: PASS", "Steady-state performance hypothesis: PASS", "End-to-end first-result diagnostic: FAIL", "41 tests", "29 tests", "500 tests", "55 tests", "20 focused tests", "12/12 PASS", "all_correct=true", "gpt-5.6-sol|ultra", "gpt-5.6-luna|max", "Spark-low", "Terra-medium", "Luna-low", "3/3 PASS", "49.260%", "26.203%", "120.046", "not a universal", "simple", "medium", "complex"]))
     if global_agents_path.exists() and entry_asset_text.replace(GLOBAL_ENTRY_ASSET_DIRECTIVE, "", 1) != global_agents_text:

@@ -108,7 +108,7 @@ PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "
 APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
-GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md`.\n\n"
+GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
 ENGLISH_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.md"
 CHINESE_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.zh.md"
 CATEGORY_LABEL_WIDTH = 28
@@ -819,11 +819,17 @@ def canonical_global_agents_text(source_dir):
     return rendered
 
 
-def deploy_global_agents(source_dir, skills_dir):
-    rendered = canonical_global_agents_text(source_dir)
-    target = Path(skills_dir).expanduser().resolve().parent / "AGENTS.md"
-    if target.is_file() and target.read_text(encoding="utf-8") == rendered:
-        return False
+def global_agents_targets(skills_dir):
+    """Return the installed Codex contract and the host-discoverable user contract."""
+    skills_root = Path(skills_dir).expanduser().resolve()
+    codex_root = skills_root.parent
+    targets = [codex_root / "AGENTS.md"]
+    if codex_root.name == ".codex":
+        targets.append(codex_root.parent / "AGENTS.md")
+    return targets
+
+
+def _write_global_agents_target(target, rendered):
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(prefix=".AGENTS.md.", suffix=".tmp", dir=target.parent)
     try:
@@ -835,19 +841,36 @@ def deploy_global_agents(source_dir, skills_dir):
     finally:
         if os.path.exists(temporary_name):
             os.unlink(temporary_name)
-    return True
+
+
+def deploy_global_agents(source_dir, skills_dir):
+    rendered = canonical_global_agents_text(source_dir)
+    changed = False
+    for target in global_agents_targets(skills_dir):
+        if target.is_file() and target.read_text(encoding="utf-8") == rendered:
+            continue
+        _write_global_agents_target(target, rendered)
+        changed = True
+    return changed
 
 
 def global_agents_parity(source_dir, skills_dir):
     expected = canonical_global_agents_text(source_dir)
-    target = Path(skills_dir).expanduser().resolve().parent / "AGENTS.md"
-    if not target.is_file():
-        return {"status": "fail", "target": str(target), "reason": "global AGENTS.md is missing"}
-    observed = target.read_text(encoding="utf-8")
+    targets = global_agents_targets(skills_dir)
+    missing = [str(target) for target in targets if not target.is_file()]
+    different = [str(target) for target in targets if target.is_file() and target.read_text(encoding="utf-8") != expected]
+    target = targets[0]
+    if missing:
+        reason = f"global AGENTS.md is missing: {', '.join(missing)}"
+    elif different:
+        reason = f"global AGENTS.md differs from the installed Task Lifecycle asset: {', '.join(different)}"
+    else:
+        reason = None
     return {
-        "status": "pass" if observed == expected else "fail",
+        "status": "pass" if not missing and not different else "fail",
         "target": str(target),
-        "reason": None if observed == expected else "global AGENTS.md differs from the installed Task Lifecycle asset",
+        "targets": [str(target) for target in targets],
+        "reason": reason,
     }
 
 

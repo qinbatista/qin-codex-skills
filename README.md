@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**Codex-only · score every task · finish the job first · prove it with mandatory Ending tasks**
+**Codex-only · score every task · finish the job first · use Ending only for complex or important recorded/tested results**
 
 [中文说明](./README.zh.md)
 
@@ -16,16 +16,16 @@ Small low-risk edits scoring 0–24 try Spark-low first · larger work uses the 
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: score and finish the main job, then run mandatory scored Ending tasks for independent real checks">
+  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: score and finish the main job, then use Ending for complex or important recorded or tested results">
 </picture>
 
-## ✅ Finish first. Run mandatory real verification.
+## ✅ Finish first. Use Ending for important results.
 
 This is the lifecycle’s most important structural rule:
 
 1. **Score every submission from 0–100, then finish the requested job** and run the proportional implementation check.
 2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
-3. **After every result producer returns a passing receipt, its entry parent starts one scored/model-routed projectless `End Task-<task name>-<check>` in the global task list per real check.** The locked producer never starts Ending recursively; the parent binds its receipt, keeps the originating project root as execution context, and requires a real thread acknowledgement.
+3. **After a complex or important result needs a real check, its entry parent starts one scored/model-routed projectless `End Task-<task name>-<check>` in the global task list, one per independent check.** The locked producer never starts Ending recursively; the parent binds its receipt, keeps the originating project root as execution context, and requires a real thread acknowledgement.
 4. **Every Ending runs its assigned real check and all required checks must PASS.** PASS/FAIL/BLOCKED tasks remain visible and report stage difficulty/pairs, attempt count, first/retry pass, suitability, next route, and Obsidian record link/status. Failure creates a Fix Task in the originating project, then a fresh projectless End Task reruns the check, for up to three repairs. End/Fix tasks never auto-archive or delete themselves.
 
 Main work and Ending verification are deliberately different task sessions. A summary is never verification: heavy changes need real tests, API evidence, builds, renders, or visual checks appropriate to the change.
@@ -49,7 +49,7 @@ Main work and Ending verification are deliberately different task sessions. A su
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Finish and return the completed main result before background verification.
-- **Verify:** Mandatory: one scored/model-routed End Task per independent check; all must PASS. FAIL → Fix Task + fresh End Task, up to three.
+- **Verify:** Complex/important results use one scored End Task per check; all PASS. FAIL → Fix + fresh check, max 3. Simple reads/one-value edits skip.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
 - **Memory:** Change history is local JSONL + optional Obsidian; model learning follows native linked categories, with context kept as fields.
 - **Models:** Use saved ladder; explicit update refreshes the highest GPT family; eligible small edits prioritize Spark-low; missing cache preserves it.
@@ -96,7 +96,7 @@ Current frozen v47 compares **Without skill** fixed at `gpt-5.6-sol | ultra` wit
 ## Install
 
 1. Put the eight Skill folders under `~/.codex/skills/`.
-2. Merge [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) into `~/.codex/AGENTS.md`.
+2. Deploy [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) into both `~/.codex/AGENTS.md` and the host-discoverable user-level `~/AGENTS.md`.
 3. Start Codex normally; no lifecycle hook is installed.
 
 **Privacy:** The mirror excludes auth, secrets, private ledgers, routing history, caches, raw prompts/results, receipts, and work artifacts; every publish runs a safety scan.
