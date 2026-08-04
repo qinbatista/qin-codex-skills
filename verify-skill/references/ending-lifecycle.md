@@ -9,7 +9,7 @@ Every user submission records a scored local Ending lifecycle. When the complete
 3. Define observable acceptance commands. Use `scripts/ending_verification_plan.py plan` with one check per independent unit, integration/API, build, render/visual, or live-state surface.
 4. Give every check its own complexity score. The planner selects `weak_default`, `balanced_default`, `balanced_complex`, or `frontier_complex`; Spark is not an Ending verifier.
 5. Start the local lifecycle with `--verification-required --verification-plan`, score/band, and `--producer-receipt` when present.
-6. Resolve the exact saved project by canonical root and create one persistent `End Task-{task}-{check}` per plan item with a project/local `create_thread` target, using that check's selected model and effort. Pass the exact `run-check` command, lifecycle/receipt paths, project root, touched files, and repair boundary. Safe independent checks may run concurrently; shared-state checks stay ordered.
+6. Resolve the exact saved project by canonical root, then create one persistent projectless `End Task-{task}-{check}` per plan item in the global task list, using that check's selected model and effort. Preserve the project ID binding and pass the exact `run-check` command, lifecycle/receipt paths, originating project root, touched files, and repair boundary. Safe independent checks may run concurrently; shared-state checks stay ordered.
 7. Link the tasks and return the origin without polling. Missing task creation is terminal BLOCKED and is not verification.
 
 ## Real check PASS

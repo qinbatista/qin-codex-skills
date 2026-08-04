@@ -163,7 +163,7 @@ SKILL_CONTENTS = {
     "workflow-skill": [
         ("Locked route execution", "Execute only a positively admitted plan with exact pairs, dependencies, allowlists, and receipts."),
         ("Single-producer default", "Dependency-coupled work and small independent sources stay with one contextual producer."),
-        ("Result-first handoff", "The producer completes proportional Quick Check, presents the result, then creates an End Task in the exact saved project."),
+        ("Result-first handoff", "The producer completes proportional Quick Check, presents the result, then creates a projectless End Task in the global task list."),
         ("Ending visibility", "PASS, FAIL, and BLOCKED remain visible; End/Fix tasks never auto-archive or delete themselves."),
         ("Runtime proof", "Every model-generated node exposes its effective pair and token/time receipt."),
     ],
@@ -195,7 +195,7 @@ SKILL_CONTENTS = {
     ],
     "verify-skill": [
         ("Proportional completion evidence", "The producer owns the bounded Quick Check before presentation."),
-        ("Persistent End Task", "Create and rename a project/local task exactly End Task-<related task>; every terminal status remains visible."),
+        ("Persistent End Task", "Create and rename a projectless task exactly End Task-<related task>; every terminal status remains visible."),
         ("Deterministic manifest", "Ending runs the supplied fixed validator instead of guessing schema fields or reinterpreting prose."),
         ("Real-check boundary", "Ending runs its assigned proportional real check; a failing verifier records evidence and hands repair to another task."),
         ("Terminal verdict", "Durable evidence precedes a visible verdict and structured model suitability/next-route summary."),
@@ -218,7 +218,7 @@ CHINESE_SKILL_CONTENTS = {
     "workflow-skill": [
         ("锁定路线执行", "只执行 pair、依赖、allowlist 与 receipt 都准确的已准入计划。"),
         ("单 Producer 默认", "依赖耦合工作和小型独立 source 都使用一个上下文 producer。"),
-        ("结果优先交接", "Producer 完成 Quick Check、展示结果，再在准确的已保存项目中创建 End Task。"),
+        ("结果优先交接", "Producer 完成 Quick Check、展示结果，再在全局任务列表中创建 projectless End Task。"),
         ("Ending 可见性", "PASS、FAIL、BLOCKED 都保持可见；End/Fix task 永不自动归档或删除。"),
         ("运行证明", "每个模型节点都公开实际 effective pair 和 token/time receipt。"),
     ],
@@ -250,7 +250,7 @@ CHINESE_SKILL_CONTENTS = {
     ],
     "verify-skill": [
         ("成比例完成证据", "Producer 在展示前负责边界明确的 Quick Check。"),
-        ("持久 End Task", "创建并准确命名 project/local End Task-<相关任务>；所有终态都保持可见。"),
+        ("持久 End Task", "创建并准确命名 projectless End Task-<相关任务>；所有终态都保持可见。"),
         ("确定性 Manifest", "Ending 执行给定固定 validator，不猜 schema 字段，也不重新解释自然语言。"),
         ("真实检查边界", "Ending 执行分配的成比例真实检查；失败 verifier 记录证据并交给另一个任务修复。"),
         ("终局判定", "持久证据先于可见终局和结构化模型适配度/下一路线总结。"),

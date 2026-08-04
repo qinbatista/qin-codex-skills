@@ -25,12 +25,13 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])
         self.assertEqual(plan["execution"], "separate_persistent_tasks")
-        self.assertEqual(plan["thread_target"]["type"], "project")
-        self.assertEqual(plan["thread_target"]["environment"], {"type": "local"})
+        self.assertEqual(plan["schema_version"], 3)
+        self.assertEqual(plan["thread_target"]["type"], "projectless")
+        self.assertNotIn("environment", plan["thread_target"])
         self.assertEqual(plan["thread_target"]["project_root"], str(root.resolve()))
         self.assertEqual(plan["terminal_thread_policy"], {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"})
         self.assertEqual([task["title"] for task in plan["ending_tasks"]], ["End Task-routing-unit", "End Task-routing-integration"])
-        self.assertTrue(all(task["thread_target"]["type"] == "project" for task in plan["ending_tasks"]))
+        self.assertTrue(all(task["thread_target"]["type"] == "projectless" for task in plan["ending_tasks"]))
         self.assertTrue(all(task["terminal_thread_policy"]["pass"] == "keep_visible" for task in plan["ending_tasks"]))
         self.assertNotEqual(plan["ending_tasks"][0]["selected_pair"], plan["ending_tasks"][1]["selected_pair"])
 
@@ -57,12 +58,14 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(evidence["status"], "fail")
         self.assertEqual(evidence["repair_handoff"]["action"], "create_repair_task_then_fresh_ending")
         self.assertEqual(evidence["repair_handoff"]["thread_target"]["type"], "project")
+        self.assertEqual(evidence["repair_handoff"]["thread_target"]["environment"], {"type": "local"})
+        self.assertEqual(evidence["repair_handoff"]["thread_target"]["project_id"], "resolve_exact_project_root")
         self.assertEqual(evidence["repair_handoff"]["thread_target"]["project_root"], str(root.resolve()))
         self.assertEqual(evidence["repair_handoff"]["terminal_thread_policy"]["fail"], "keep_visible")
         self.assertEqual(evidence["repair_handoff"]["error"]["exit_code"], 7)
         self.assertIn("broken", evidence["repair_handoff"]["error"]["stderr"])
 
-    def test_launch_spec_requires_one_real_project_thread_per_check(self):
+    def test_launch_spec_requires_one_real_projectless_thread_per_check(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path = root / "plan.json"
@@ -75,7 +78,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(launch["required_launch_count"], 2)
         self.assertEqual({item["tool"] for item in launch["launch_requests"]}, {"codex_app__create_thread"})
         self.assertEqual(launch["project_binding"]["project_root"], str(root.resolve()))
-        self.assertTrue(all(item["arguments"]["target"] == {"type": "project", "projectId": "project-123", "environment": {"type": "local"}} for item in launch["launch_requests"]))
+        self.assertTrue(all(item["arguments"]["target"] == {"type": "projectless"} for item in launch["launch_requests"]))
         self.assertTrue(all(item["arguments"]["prompt"].startswith("ENDING_TASK_WORKER\n") for item in launch["launch_requests"]))
         self.assertTrue(all("Verification plan relative to project root: plan.json" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("Evidence output relative to project root: Cache/tests/ending-evidence/" in item["arguments"]["prompt"] for item in launch["launch_requests"]))

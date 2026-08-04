@@ -225,7 +225,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Cold start", readme)
         self.assertIn("zero-result failure gets one stronger fallback", readme)
         self.assertIn("finish the job first", readme)
-        self.assertIn("one scored/model-routed `End Task-<task name>-<check>` in the exact saved project", readme)
+        self.assertIn("one scored/model-routed projectless `End Task-<task name>-<check>` in the global task list", readme)
         self.assertIn("all required checks must PASS", readme)
         self.assertIn("PASS/FAIL/BLOCKED tasks remain visible", readme)
         self.assertIn("first/retry pass", readme)

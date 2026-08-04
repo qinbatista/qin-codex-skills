@@ -14,7 +14,8 @@ from pathlib import Path
 
 SCHEMA_VERSION = 3
 BAND_ROLES = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}
-THREAD_TARGET = {"type": "project", "environment": {"type": "local"}, "project_id": "resolve_exact_project_root"}
+THREAD_TARGET = {"type": "projectless"}
+REPAIR_THREAD_TARGET = {"type": "project", "environment": {"type": "local"}, "project_id": "resolve_exact_project_root"}
 TERMINAL_THREAD_POLICY = {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"}
 CREATE_THREAD_TOOL = "codex_app__create_thread"
 LAUNCH_STATE_SCHEMA_VERSION = 1
@@ -90,7 +91,7 @@ def normalize_check(raw, project_root, task_name, task_score, registry=None):
         "on_failure": {
             "action": "create_repair_task_then_fresh_ending",
             "repair_title": f"Fix Task-{task_name}-{name}",
-            "thread_target": {**THREAD_TARGET, "project_root": str(project_root)},
+            "thread_target": {**REPAIR_THREAD_TARGET, "project_root": str(project_root)},
             "terminal_thread_policy": TERMINAL_THREAD_POLICY,
             "error_fields": ["exit_code", "stdout", "stderr", "timed_out"],
             "max_repair_attempts": 3,
@@ -155,7 +156,7 @@ def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=Non
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
-            "Execute one independent persistent End Task. Do not restart Task Analyze or Workflow.",
+            "Execute one independent persistent projectless End Task. Do not restart Task Analyze or Workflow.",
             f"Project root: {plan['project_root']}",
             f"Working directory relative to project root: {relative_cwd}",
             f"Verification plan relative to project root: {relative_plan}",
@@ -167,7 +168,7 @@ def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=Non
             f"Producer receipt relative to project root: {receipt_line}",
             "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the plan's exact run-check command from the project root.",
             "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; bind the producer receipt when present. Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation.",
-            "PASS requires the new evidence file to report status=pass and the expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this project task visible.",
+            "PASS requires the new evidence file to report status=pass and the expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this projectless global task visible.",
             "After the terminal ledger event, print its structured model_assessment: task/check score and band, producer pair, Ending pair, attempt count, first-attempt or retry result, suitability, next routing action and pair, concise evidence reason, and Obsidian model-record link/status. Never expose private chain-of-thought.",
             "Never call set_thread_archived or delete this End Task automatically.",
         ]
@@ -209,7 +210,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
             "complexity_band": check["complexity_band"],
             "tool": CREATE_THREAD_TOOL,
             "arguments": {
-                "target": {"type": "project", "projectId": project_value, "environment": {"type": "local"}},
+                "target": dict(THREAD_TARGET),
                 "title": check["title"],
                 "model": model,
                 "thinking": thinking,
@@ -236,7 +237,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
             "resolver": "codex_app__list_projects exact canonical project root",
         },
         "execution": "host_persistent_create_thread",
-        "thread_target": {"type": "project", "projectId": project_value, "environment": {"type": "local"}},
+        "thread_target": dict(THREAD_TARGET),
         "required_launch_count": len(launch_requests),
         "launch_requests": launch_requests,
         "launch_gate": "all_requests_require_thread_and_host_acknowledgement",
