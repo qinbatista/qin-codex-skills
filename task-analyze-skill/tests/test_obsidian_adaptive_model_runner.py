@@ -136,18 +136,49 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
             stream = FlushTrackingStream()
+            adaptive = recommendation()
 
             def fake_run(receipt_args, prompt):
                 self.assertTrue(stream.getvalue().splitlines())
                 receipt_args.result_output.write_text("RESULT", encoding="utf-8")
                 return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
 
-            with patch.object(module.sys, "stdout", stream), patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+            with patch.object(module.sys, "stdout", stream), patch.object(module, "_recommend", return_value=adaptive), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
-            event = json.loads(stream.getvalue().splitlines()[0])
-        self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "complexity_score": 12, "complexity_band": "small", "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True})
+            events = [json.loads(line) for line in stream.getvalue().splitlines()]
+            event = events[0]
+            notice_event = events[1]
+        expected_notice = module._model_route_notice(args, adaptive)
+        self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "complexity_score": 12, "complexity_band": "small", "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
+        self.assertEqual(notice_event, {"schema_version": 1, "stage": "model-switch-notice", "user_visible": True, **expected_notice})
         self.assertGreaterEqual(stream.flush_count, 1)
         self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["model_route_notice"], expected_notice)
+
+    def test_repeated_failure_notice_names_the_higher_model_and_task_part(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.resolved_entry_model = "gpt-5.6-luna"
+            args.resolved_entry_effort = "max"
+            adaptive = recommendation(pair="gpt-5.6-terra|low", fallback_pair="gpt-5.6-terra|medium")
+            adaptive.update({"step_kind": "debugging", "session_effort": {"failure_recorded": True, "user_effort": 10, "last_model_pair": "gpt-5.6-luna|max", "solving_surface": "core_solving", "step_estimate": 1, "estimated_effort": "low", "model_difficulty": "difficult", "information_burden": "low"}, "session_escalation": {"applied": True, "from_pair": "gpt-5.6-luna|max", "to_pair": "gpt-5.6-terra|low"}})
+            notice = module._model_route_notice(args, adaptive)
+        self.assertEqual(notice["kind"], "session_model_escalation")
+        self.assertIn("increased the model to gpt-5.6-terra|low", notice["message"])
+        self.assertIn("core solving / debugging part", notice["message"])
+        self.assertIn("Entry model remains gpt-5.6-luna|max", notice["message"])
+        self.assertEqual(notice["estimated_steps"], 1)
+
+    def test_graph_notice_lists_each_modelled_task_part(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.resolved_entry_model = "gpt-5.6-luna"
+            args.resolved_entry_effort = "max"
+            plan = {"nodes": [{"id": "source-1", "phase": "result", "model": "gpt-5.6-luna", "effort": "low", "step_kind": "analysis", "dependencies": []}, {"id": "merge-result", "phase": "result", "model": "gpt-5.6-terra", "effort": "medium", "step_kind": "integration", "dependencies": ["source-1"]}, {"id": "ending-verify", "phase": "ending", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["merge-result"]}]}
+            notice = module._graph_model_route_notice(args, plan, recommendation(), recommendation(pair="gpt-5.6-terra|medium"))
+        self.assertEqual(notice["kind"], "graph_model_route")
+        self.assertEqual([part["node_id"] for part in notice["parts"]], ["source-1", "merge-result", "ending-verify"])
+        self.assertIn("each of 3 task parts", notice["message"])
 
     def test_explicit_route_arguments_keep_read_only_and_emit_defaults(self):
         with tempfile.TemporaryDirectory() as temporary:

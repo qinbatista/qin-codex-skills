@@ -123,6 +123,8 @@ REQUIRED_WORKFLOW = [
     "suite total never converts a losing class into a pass",
     "Ending Real time is separate",
     "stage=result-ready",
+    "model-switch-notice",
+    "user-visible pair and task-part announcement",
     "launch the CLI as an ongoing session",
     "The origin returns after creating and linking the thread",
     "when `create_thread` is callable",

@@ -43,13 +43,79 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
     print(json.dumps({"schema_version": 1, "stage": "result-ready", "result_path": str(result_path), "result_ready_monotonic_ns": ready_monotonic_ns}, separators=(",", ":")), flush=True)
 
 
+def _route_part_label(args, recommendation, node=None):
+    session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
+    surface = session_summary.get("solving_surface") or ""
+    step_kind = (node.get("step_kind") if isinstance(node, dict) else "") or recommendation.get("step_kind") or getattr(args, "step_kind", "") or getattr(args, "operation", "") or getattr(args, "task_type", "") or "task"
+    labels = []
+    if isinstance(node, dict) and node.get("id"):
+        labels.append(str(node["id"]).replace("-", " "))
+    if surface:
+        labels.append(str(surface).replace("_", " "))
+    if step_kind and str(step_kind).replace("_", " ") not in labels:
+        labels.append(str(step_kind).replace("_", " "))
+    return " / ".join(labels) + " part"
+
+
+def _model_route_notice(args, recommendation):
+    entry_pair = f"{args.resolved_entry_model}|{args.resolved_entry_effort}"
+    attempt_pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair") or "unknown|unknown"
+    selected_pair = recommendation.get("selected_pair") or attempt_pair
+    session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
+    session_escalation = recommendation.get("session_escalation") if isinstance(recommendation.get("session_escalation"), dict) else {}
+    previous_pair = session_escalation.get("from_pair") or session_summary.get("last_model_pair") or entry_pair
+    repeated_failure = bool(session_summary.get("failure_recorded"))
+    route_changed = bool(previous_pair and attempt_pair != "unknown|unknown" and previous_pair != attempt_pair)
+    previous_model = previous_pair.split("|", 1)[0] if "|" in previous_pair else ""
+    attempt_model = attempt_pair.split("|", 1)[0] if "|" in attempt_pair else ""
+    model_changed = bool(previous_model and attempt_model and previous_model != "unknown" and attempt_model != "unknown" and previous_model != attempt_model)
+    effort_changed = bool(route_changed and not model_changed)
+    task_part = _route_part_label(args, recommendation)
+    if repeated_failure and route_changed and model_changed:
+        kind = "session_model_escalation"
+        message = f"Model update: increased the model to {attempt_pair} for the {task_part} after repeated same-session failure. Entry model remains {entry_pair}; effort is estimated independently from the steps for this part."
+    elif repeated_failure and route_changed and effort_changed:
+        kind = "session_effort_escalation"
+        message = f"Model update: increased solving effort to {attempt_pair} for the {task_part} after repeated same-session failure. Entry model remains {entry_pair}; the model family did not change."
+    elif repeated_failure:
+        kind = "session_repeated_failure_route"
+        message = f"Model route: repeated same-session failure detected; using {attempt_pair} for the {task_part}. Entry model remains {entry_pair}; this route is not a Real-pass claim."
+    else:
+        kind = "route_selection"
+        message = f"Model route: using {attempt_pair} for the {task_part}; entry model is {entry_pair}. Model family and effort were selected separately for this task part."
+    return {"kind": kind, "message": message, "task_part": task_part, "entry_pair": entry_pair, "previous_pair": previous_pair, "selected_pair": selected_pair, "attempt_pair": attempt_pair, "model_changed": model_changed, "effort_changed": effort_changed, "repeated_failure": repeated_failure, "route_changed": route_changed, "session_user_effort": session_summary.get("user_effort"), "estimated_steps": session_summary.get("step_estimate"), "estimated_effort": session_summary.get("estimated_effort"), "model_difficulty": session_summary.get("model_difficulty"), "information_burden": session_summary.get("information_burden")}
+
+
+def _graph_model_route_notice(args, plan, recommendation, merge_recommendation):
+    entry_pair = f"{args.resolved_entry_model}|{args.resolved_entry_effort}"
+    session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
+    parts = []
+    for node in plan.get("nodes", []):
+        if node.get("phase") not in {"result", "ending"}:
+            continue
+        pair = f"{node.get('model')}|{node.get('effort')}"
+        parts.append({"task_part": _route_part_label(args, {"session_effort": session_summary}, node), "node_id": node.get("id"), "phase": node.get("phase"), "pair": pair, "dependencies": list(node.get("dependencies") or []), "user_visible": True})
+    escalation = recommendation.get("session_escalation") if isinstance(recommendation.get("session_escalation"), dict) else {}
+    message = f"Model route ready: each of {len(parts)} task parts has its own model and effort; entry model is {entry_pair}."
+    if escalation.get("applied"):
+        message = f"Model update: repeated same-session failure changed the affected solving route to {escalation.get('to_pair') or merge_recommendation.get('selected_pair')}; every other task part remains independently assigned. Entry model remains {entry_pair}."
+    return {"kind": "graph_model_route", "message": message, "entry_pair": entry_pair, "parts": parts, "repeated_failure": bool(session_summary.get("failure_recorded")), "session_escalation": escalation}
+
+
+def _emit_model_route_notice(notice):
+    event = {"schema_version": 1, "stage": "model-switch-notice", "user_visible": True, **notice}
+    print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+
 def _emit_route_ready(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
-    event = {"schema_version": 1, "stage": "route-ready", "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "entry_pair": f"{args.resolved_entry_model}|{args.resolved_entry_effort}", "entry_source": args.resolved_entry_source, "selected_pair": recommendation.get("selected_pair"), "attempt_pair": attempt_pair, "active_fallback_pair": recommendation.get("active_fallback_pair"), "switch_direction": recommendation.get("switch_direction", "no_switch"), "switch_change": recommendation.get("switch_change", f"initial->{attempt_pair}"), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True}
+    notice = _model_route_notice(args, recommendation)
+    event = {"schema_version": 1, "stage": "route-ready", "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "entry_pair": f"{args.resolved_entry_model}|{args.resolved_entry_effort}", "entry_source": args.resolved_entry_source, "selected_pair": recommendation.get("selected_pair"), "attempt_pair": attempt_pair, "active_fallback_pair": recommendation.get("active_fallback_pair"), "switch_direction": recommendation.get("switch_direction", "no_switch"), "switch_change": recommendation.get("switch_change", f"initial->{attempt_pair}"), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": notice["message"], "model_route_notice": notice}
     session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
     if session_summary.get("available"):
         event.update({"session_state": session_summary.get("state"), "session_user_effort": session_summary.get("user_effort"), "session_failure_recorded": session_summary.get("failure_recorded"), "session_escalation": recommendation.get("session_escalation")})
     print(json.dumps(event, separators=(",", ":")), flush=True)
+    _emit_model_route_notice(notice)
 
 
 def _atomic_write_json(path, value):
@@ -421,6 +487,8 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     entry_effort = args.resolved_entry_effort
     entry_source = args.resolved_entry_source
     plan, merge_recommendation = _scheduled_plan(args, prompt, sources, entry_model, entry_effort, recommendation)
+    graph_notice = _graph_model_route_notice(args, plan, recommendation, merge_recommendation)
+    _emit_model_route_notice(graph_notice)
     ready = {}
 
     def publish_result(result_path, ready_monotonic_ns):
@@ -469,10 +537,11 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["complexity_band"] = obsidian_model_memory.complexity_band(args.complexity_score)
     receipt["switch_direction"] = "no_switch"
     receipt["switch_change"] = "scheduled_graph"
+    receipt["model_route_notice"] = graph_notice
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
-    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_real_status": "pending", "model_learning_context": receipt["model_learning_context"]}
+    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_real_status": "pending", "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice}
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary
@@ -628,6 +697,7 @@ def run(args, prompt):
     receipt["entry_effort"] = args.resolved_entry_effort
     receipt["entry_pair"] = f"{args.resolved_entry_model}|{args.resolved_entry_effort}"
     receipt["entry_source"] = args.resolved_entry_source
+    receipt["model_route_notice"] = _model_route_notice(args, recommendation)
     learning_context = _model_learning_context(args)
     receipt["model_learning_context"] = learning_context
     if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
@@ -684,6 +754,7 @@ def run(args, prompt):
         "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else None,
         "ending_real_status": "pending" if receipt.get("status") == "pass" and result_published else "not_started",
         "model_learning_context": learning_context,
+        "model_route_notice": receipt["model_route_notice"],
     }
     if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
         summary["session_effort"] = recommendation["session_effort"]
