@@ -40,6 +40,16 @@ except ModuleNotFoundError:
     model_registry = importlib.util.module_from_spec(_registry_spec)
     _registry_spec.loader.exec_module(model_registry)
 
+try:
+    import session_effort
+except ModuleNotFoundError:
+    import importlib.util
+
+    _session_effort_path = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "session_effort.py"
+    _session_effort_spec = importlib.util.spec_from_file_location("session_effort", _session_effort_path)
+    session_effort = importlib.util.module_from_spec(_session_effort_spec)
+    _session_effort_spec.loader.exec_module(session_effort)
+
 
 SCHEMA_VERSION = 1
 LOCAL_MEMORY_SCHEMA_VERSION = 1
@@ -182,6 +192,34 @@ FRONTMATTER_FIELDS = (
     "next_pair_direction",
     "model_suitability",
     "routing_action",
+    "session_key",
+    "session_state",
+    "session_turn_count",
+    "session_prior_turn_count",
+    "session_same_task_turns",
+    "session_user_effort",
+    "session_failure_recorded",
+    "session_model_pair",
+    "session_model_source",
+    "session_model_pairs",
+    "session_task_fingerprint",
+    "session_project_match",
+    "session_solving_surface",
+    "session_task_length",
+    "session_step_estimate",
+    "session_step_class",
+    "session_estimated_effort",
+    "session_information_burden",
+    "session_model_family",
+    "session_model_difficulty",
+    "session_difficulty_class",
+    "session_route_class",
+    "session_preferred_pair",
+    "session_route_reason",
+    "session_explicit_route_hint",
+    "session_escalation_pair",
+    "session_escalation_reason",
+    "session_event_id",
 )
 
 
@@ -874,7 +912,7 @@ def _operational_fallback_pair(selected_pair, pairs):
     return pairs[selected_index + 1] if selected_index + 1 < len(pairs) else None
 
 
-def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None):
+def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None, session_prompt="", session_id="", session_context=None):
     started_ns = time.perf_counter_ns()
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags)
@@ -944,11 +982,46 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         else:
             switch_direction = "downgrade" if "one_rung_down" in attempt_reason else "upgrade" if "one_rung_up" in attempt_reason or "quality_failure" in attempt_reason else "freeze" if attempt_state == "frozen" else "no_switch"
         switch_change = f"{entry['entry_pair']}->{attempt_pair}" if entry["entry_pair"] else f"{active['success_model'] or active['failed_model']}->{attempt_pair}" if active["success_model"] or active["failed_model"] else f"initial->{attempt_pair}"
+    base_selected_pair = selected_pair
+    base_attempt_pair = attempt_pair
+    if isinstance(session_context, dict):
+        session_summary = session_effort.sanitize_summary(session_context)
+    else:
+        session_summary = session_effort.assess_session(session_prompt or task_summary, Path(project_root).expanduser().resolve(), project_key=query["project"]["key"], task_type=query["task_type"], module=query["module"], capability_fingerprint=query["capability_fingerprint"], operation=query["operation"], modality=query["modality"], complexity_score=query["complexity_score"], task_summary=task_summary, session_id=session_id, local_store=local_store)
+    session_escalation = {"applied": False, "reason": "no_repeated_session_failure", "from_pair": session_summary.get("last_model_pair") or "", "to_pair": "", "frontier_reached": False}
+    if session_summary.get("failure_recorded"):
+        previous_pair = session_summary.get("last_model_pair") or base_attempt_pair or base_selected_pair
+        quality_base_pair = base_selected_pair if base_selected_pair in pairs else base_attempt_pair if base_attempt_pair in pairs else None
+        route_choice = session_effort.solve_route_pair(session_summary, previous_pair, pairs, quality_base_pair)
+        forced_pair = route_choice["pair"]
+        escalation_reason = route_choice["reason"]
+        if forced_pair:
+            selected_pair = forced_pair
+            attempt_pair = forced_pair
+            operational_fallback_pair = _operational_fallback_pair(forced_pair, pairs)
+            attempt_reason = escalation_reason
+            attempt_state = "session_quality_frontier" if route_choice["frontier_reached"] else "session_quality_boundary"
+            attempt_trial = False
+            switch_direction = "freeze" if forced_pair == base_attempt_pair else "upgrade"
+            switch_change = f"{previous_pair}->{forced_pair}"
+            session_escalation = {"applied": forced_pair != base_attempt_pair, "reason": escalation_reason, "from_pair": previous_pair, "to_pair": forced_pair, "frontier_reached": route_choice["frontier_reached"]}
     if attempt_pair is None:
         attempt_state = "blocked"
     attempt_model, attempt_effort = attempt_pair.split("|", 1) if attempt_pair else (None, None)
     selected_model, selected_effort = selected_pair.split("|", 1) if selected_pair else (None, None)
+    session_event = {"status": "not_recorded", "written": False, "reason": "session_not_recordable"}
+    if session_summary.get("available") and session_summary.get("project_match"):
+        try:
+            session_event = session_effort.record_session_effort(session_summary, project_key=query["project"]["key"], task_type=query["task_type"], module=query["module"], capability_fingerprint=query["capability_fingerprint"], complexity_score=query["complexity_score"], complexity_band=query["complexity_band"], selected_pair=attempt_pair or selected_pair, requested_pair=base_attempt_pair or base_selected_pair, local_store=local_store)
+        except (OSError, ValueError):
+            session_event = {"status": "failed", "written": False, "reason": "session_record_write_failed"}
+    session_summary = dict(session_summary)
+    session_summary["session_event_id"] = session_event.get("event_id", "")
+    session_summary["session_event_status"] = session_event.get("status", "not_recorded")
     route_chain = [document for document in (native_read["project_index_document"], native_read["model_switch_document"], native_read["current_document"], native_read["shared_index_document"], native_read["shared_document"], *native_read["linked_documents"]) if document]
+    selection_basis = "session_effort_escalation" if session_escalation["applied"] else transfer_selection_basis if transfer_selection_basis else "local_and_obsidian" if records and local_records and obsidian_records else "local_history" if records and local_records else "obsidian_history" if records and obsidian_records else "entry_aware_cold_start" if entry["entry_anchor_pair"] else "shared_cold_start"
+    recommendation_reason = attempt_reason if session_summary.get("failure_recorded") else active["reason"]
+    recommendation_state = attempt_state if session_summary.get("failure_recorded") else active["calibration_state"]
     return {
         "schema_version": SCHEMA_VERSION,
         "source": "local_and_obsidian_model_history",
@@ -958,7 +1031,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "model_switch_status": model_switch["status"],
         "model_switch_document": model_switch["document"],
         "model_switch_link": model_switch["link"],
-        "selection_basis": transfer_selection_basis if transfer_selection_basis else "local_and_obsidian" if records and local_records and obsidian_records else "local_history" if records and local_records else "obsidian_history" if records and obsidian_records else "entry_aware_cold_start" if entry["entry_anchor_pair"] else "shared_cold_start",
+        "selection_basis": selection_basis,
         "shared_model_registry": shared["registry_id"],
         "project_key": query["project"]["key"],
         "task_type": query["task_type"],
@@ -1002,8 +1075,8 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "priority_matched_records": priority_history["matched_records"],
         "priority_producer_scope": "bounded_text_code_and_scheduled_independent_sources",
         "trial": active["trial"],
-        "reason": active["reason"],
-        "calibration_state": active["calibration_state"],
+        "reason": recommendation_reason,
+        "calibration_state": recommendation_state,
         "attempt_trial": attempt_trial,
         "attempt_reason": attempt_reason,
         "attempt_calibration_state": attempt_state,
@@ -1014,6 +1087,8 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "pass_counts": active["pass_counts"],
         "minimum_passes_before_downgrade": active["minimum_passes_before_downgrade"],
         "cost_evidence": active["cost_evidence"],
+        "session_effort": session_summary,
+        "session_escalation": session_escalation,
         "route_capsule": {"mode": "obsidian_native_wikilinks", "chain": route_chain, "current_document": native_read["current_document"], "current_source_document": native_read["current_source_document"], "shared_document": native_read["shared_document"], "linked_documents": native_read["linked_documents"], "pages_read": native_read["page_count"], "read_bytes": native_read["read_bytes"], "candidate_records": native_read["candidate_records"], "elapsed_ms": round((time.perf_counter_ns() - started_ns) / 1_000_000, 3)},
     }
 
@@ -1227,7 +1302,10 @@ def _render_category_page(vault_path, owner, category, records):
         outcome_reason = str(record.get("outcome_reason") or record.get("failure_class") or "—").replace("|", "/")
         recovery = record.get("recovery_from_pair") or "—"
         evidence = record.get("model_evidence") or ("runtime_receipt" if record.get("receipt_status") == "pass" else record.get("receipt_status") or "unavailable")
-        lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {capability['capability_fingerprint'][:12]} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {location} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {evidence} / {record.get('real_status','')} / {record.get('ending_attempt_number','—')} / {record.get('ending_pass_shape','—')} / {record.get('model_suitability','—')} | {record.get('routing_action','—')} / {record.get('next_pair_direction','—')} / {record.get('next_pair_reason','—')} |")
+        next_decision = f"{record.get('routing_action','—')} / {record.get('next_pair_direction','—')} / {record.get('next_pair_reason','—')}"
+        if record.get("session_key"):
+            next_decision = f"{next_decision}; session {record.get('session_state') or 'unknown'} / {record.get('session_route_class') or 'unclassified'} / steps {record.get('session_step_estimate') or '—'} / effort-class {record.get('session_estimated_effort') or '—'} / info {record.get('session_information_burden') or '—'} / difficulty {record.get('session_model_difficulty') or '—'} / effort {record.get('session_user_effort') or '—'} / failed {record.get('session_failure_recorded')} / model {record.get('session_model_pair') or '—'} / preferred {record.get('session_preferred_pair') or '—'} / escalate {record.get('session_escalation_pair') or '—'}"
+        lines.append(f"| {record.get('task_type','')} | {capability['step_kind']} / {capability_text} / {capability['capability_fingerprint'][:12]} | {record.get('complexity_score','—')}/100 {record.get('complexity_band') or _record_complexity_band(record)} | {location} | {record.get('entry_pair') or '—'} / {detail['selected_pair'] or '—'} / {detail['effective_pair'] or '—'} / {detail['next_pair'] or '—'} | {detail['switch_direction']} / {detail['switch_reason']} | {outcome_reason} / {recovery} | {record.get('total_tokens','—')} / {record.get('process_ms','—')} | {evidence} / {record.get('real_status','')} / {record.get('ending_attempt_number','—')} / {record.get('ending_pass_shape','—')} / {record.get('model_suitability','—')} | {next_decision} |")
         lines.append("<!-- model-experience: " + json.dumps(_json_safe(record), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + " -->")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1518,6 +1596,7 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
         vault=vault,
         ladder=ladder,
         local_store=local_store,
+        session_prompt=task_summary,
     )
     timestamp = recorded_at or datetime.now(timezone.utc)
     owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
@@ -1532,6 +1611,8 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
     else:
         model_suitability = "unproven_observed_no_runtime_receipt"
     routing_action = "record_only_require_receipted_evidence_before_model_movement"
+    session_summary = session_effort.sanitize_summary(recommendation.get("session_effort"))
+    session_escalation = recommendation.get("session_escalation") if isinstance(recommendation.get("session_escalation"), dict) else {}
     event_payload = f"{query['project']['key']}|{observation_id}|{real_status}|{failure_class}|{pair}"
     event_id = hashlib.sha256(event_payload.encode()).hexdigest()
     base = {
@@ -1609,6 +1690,34 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
         "next_pair_direction": "no_switch",
         "model_suitability": model_suitability,
         "routing_action": routing_action,
+        "session_key": session_summary.get("session_key", ""),
+        "session_state": session_summary.get("state", ""),
+        "session_turn_count": session_summary.get("turn_count", 0),
+        "session_prior_turn_count": session_summary.get("prior_turn_count", 0),
+        "session_same_task_turns": session_summary.get("same_task_turns", 0),
+        "session_user_effort": session_summary.get("user_effort", 0),
+        "session_failure_recorded": session_summary.get("failure_recorded", False),
+        "session_model_pair": session_summary.get("last_model_pair", ""),
+        "session_model_source": session_summary.get("last_model_source", ""),
+        "session_model_pairs": session_summary.get("model_pairs", []),
+        "session_task_fingerprint": session_summary.get("task_topic_fingerprint", ""),
+        "session_project_match": session_summary.get("project_match", False),
+        "session_solving_surface": session_summary.get("solving_surface", ""),
+        "session_task_length": session_summary.get("task_length", ""),
+        "session_step_estimate": session_summary.get("step_estimate", 0),
+        "session_step_class": session_summary.get("step_class", ""),
+        "session_estimated_effort": session_summary.get("estimated_effort", ""),
+        "session_information_burden": session_summary.get("information_burden", ""),
+        "session_model_family": session_summary.get("model_family", ""),
+        "session_model_difficulty": session_summary.get("model_difficulty", ""),
+        "session_difficulty_class": session_summary.get("difficulty_class", ""),
+        "session_route_class": session_summary.get("route_class", ""),
+        "session_preferred_pair": session_summary.get("preferred_solving_pair", ""),
+        "session_route_reason": session_summary.get("route_reason", ""),
+        "session_explicit_route_hint": session_summary.get("explicit_route_hint", ""),
+        "session_escalation_pair": session_escalation.get("to_pair", ""),
+        "session_escalation_reason": session_escalation.get("reason", ""),
+        "session_event_id": session_summary.get("session_event_id", ""),
     }
     base = _json_safe(base)
     fingerprint_payload = _json_safe({key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}})
@@ -1729,6 +1838,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         vault=vault,
         ladder=ladder,
         local_store=local_store,
+        session_prompt=task_summary,
+        session_context=receipt.get("session_effort") if isinstance(receipt.get("session_effort"), dict) else None,
     )
     priority_attempt_pair = receipt.get("priority_attempt_pair") or receipt.get("requested_pair")
     operational_failure_pairs = receipt.get("operational_failure_pairs") if isinstance(receipt.get("operational_failure_pairs"), list) else []
@@ -1809,6 +1920,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         attempt_chain.append({"pair": attempt_pair, "status": str(attempt.get("status") or "unknown")[:32], "failure_class": str(attempt.get("failure_class") or "none")[:32]})
         if len(attempt_chain) == 8:
             break
+    session_summary = session_effort.sanitize_summary(receipt.get("session_effort"))
+    session_escalation = receipt.get("session_escalation") if isinstance(receipt.get("session_escalation"), dict) else {}
     event_payload = f"{query['project']['key']}|{receipt_sha256}|{real_status}|{failure_class}"
     event_id = hashlib.sha256(event_payload.encode()).hexdigest()
     base = {
@@ -1886,6 +1999,34 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "next_pair_direction": next_pair_direction,
         "model_suitability": model_suitability,
         "routing_action": routing_action,
+        "session_key": session_summary.get("session_key", ""),
+        "session_state": session_summary.get("state", ""),
+        "session_turn_count": session_summary.get("turn_count", 0),
+        "session_prior_turn_count": session_summary.get("prior_turn_count", 0),
+        "session_same_task_turns": session_summary.get("same_task_turns", 0),
+        "session_user_effort": session_summary.get("user_effort", 0),
+        "session_failure_recorded": session_summary.get("failure_recorded", False),
+        "session_model_pair": session_summary.get("last_model_pair", ""),
+        "session_model_pairs": session_summary.get("model_pairs", []),
+        "session_task_fingerprint": session_summary.get("task_topic_fingerprint", ""),
+        "session_project_match": session_summary.get("project_match", False),
+        "session_model_source": session_summary.get("last_model_source", ""),
+        "session_solving_surface": session_summary.get("solving_surface", ""),
+        "session_task_length": session_summary.get("task_length", ""),
+        "session_step_estimate": session_summary.get("step_estimate", 0),
+        "session_step_class": session_summary.get("step_class", ""),
+        "session_estimated_effort": session_summary.get("estimated_effort", ""),
+        "session_information_burden": session_summary.get("information_burden", ""),
+        "session_model_family": session_summary.get("model_family", ""),
+        "session_model_difficulty": session_summary.get("model_difficulty", ""),
+        "session_difficulty_class": session_summary.get("difficulty_class", ""),
+        "session_route_class": session_summary.get("route_class", ""),
+        "session_preferred_pair": session_summary.get("preferred_solving_pair", ""),
+        "session_route_reason": session_summary.get("route_reason", ""),
+        "session_explicit_route_hint": session_summary.get("explicit_route_hint", ""),
+        "session_escalation_pair": session_escalation.get("to_pair", ""),
+        "session_escalation_reason": session_escalation.get("reason", ""),
+        "session_event_id": session_summary.get("session_event_id", ""),
     }
     base = _json_safe(base)
     fingerprint_payload = _json_safe({key: base[key] for key in FRONTMATTER_FIELDS if key not in {"record_id", "recorded_at"}})
@@ -1936,6 +2077,24 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "next_pair_direction": stored_record.get("next_pair_direction"),
         "model_suitability": stored_record.get("model_suitability"),
         "routing_action": stored_record.get("routing_action"),
+        "session_state": stored_record.get("session_state"),
+        "session_user_effort": stored_record.get("session_user_effort"),
+        "session_failure_recorded": stored_record.get("session_failure_recorded"),
+        "session_model_pair": stored_record.get("session_model_pair"),
+        "session_solving_surface": stored_record.get("session_solving_surface"),
+        "session_task_length": stored_record.get("session_task_length"),
+        "session_step_estimate": stored_record.get("session_step_estimate"),
+        "session_step_class": stored_record.get("session_step_class"),
+        "session_estimated_effort": stored_record.get("session_estimated_effort"),
+        "session_information_burden": stored_record.get("session_information_burden"),
+        "session_model_family": stored_record.get("session_model_family"),
+        "session_model_difficulty": stored_record.get("session_model_difficulty"),
+        "session_difficulty_class": stored_record.get("session_difficulty_class"),
+        "session_route_class": stored_record.get("session_route_class"),
+        "session_preferred_pair": stored_record.get("session_preferred_pair"),
+        "session_route_reason": stored_record.get("session_route_reason"),
+        "session_escalation_pair": stored_record.get("session_escalation_pair"),
+        "session_event_id": stored_record.get("session_event_id"),
         "shared_model_registry": shared["registry_id"],
         "local": {"status": local_result["status"], "written": True, "path": local_result["path"]},
         "obsidian": projection_state,

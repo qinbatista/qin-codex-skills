@@ -46,6 +46,9 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
 def _emit_route_ready(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
     event = {"schema_version": 1, "stage": "route-ready", "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "entry_pair": f"{args.resolved_entry_model}|{args.resolved_entry_effort}", "entry_source": args.resolved_entry_source, "selected_pair": recommendation.get("selected_pair"), "attempt_pair": attempt_pair, "active_fallback_pair": recommendation.get("active_fallback_pair"), "switch_direction": recommendation.get("switch_direction", "no_switch"), "switch_change": recommendation.get("switch_change", f"initial->{attempt_pair}"), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True}
+    session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
+    if session_summary.get("available"):
+        event.update({"session_state": session_summary.get("state"), "session_user_effort": session_summary.get("user_effort"), "session_failure_recorded": session_summary.get("failure_recorded"), "session_escalation": recommendation.get("session_escalation")})
     print(json.dumps(event, separators=(",", ":")), flush=True)
 
 
@@ -101,7 +104,7 @@ def _receipt_args(args, selected):
     )
 
 
-def _recommend(args):
+def _recommend(args, prompt=""):
     return obsidian_model_memory.recommend_model(
         args.project_root,
         args.task_type,
@@ -122,6 +125,7 @@ def _recommend(args):
         entry_effort=getattr(args, "resolved_entry_effort", None) or getattr(args, "entry_effort", None) or "",
         vault=args.vault,
         ladder=args.ladder,
+        session_prompt=prompt,
     )
 
 
@@ -454,6 +458,9 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["entry_pair"] = f"{entry_model}|{entry_effort}"
     receipt["entry_source"] = entry_source
     receipt["model_learning_context"] = _model_learning_context(args)
+    if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
+        receipt["session_effort"] = recommendation["session_effort"]
+        receipt["session_escalation"] = recommendation.get("session_escalation")
     receipt["recommendation_state"] = merge_recommendation.get("attempt_calibration_state", merge_recommendation.get("calibration_state"))
     receipt["trial"] = merge_recommendation.get("attempt_trial", merge_recommendation.get("trial"))
     receipt["selection_provenance"] = merge_recommendation.get("selection_basis")
@@ -573,7 +580,7 @@ def run(args, prompt):
     if not hasattr(args, "complexity_score") or args.complexity_score is None:
         args.complexity_score = 65 if args.complexity == "complex" else 35
     args.resolved_entry_model, args.resolved_entry_effort, args.resolved_entry_source = _resolved_entry_pair(args)
-    recommendation = _exact_contract_recommendation(prompt, _recommend(args))
+    recommendation = _exact_contract_recommendation(prompt, _recommend(args, prompt))
     _emit_route_ready(args, recommendation)
     sources = scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None
@@ -623,6 +630,9 @@ def run(args, prompt):
     receipt["entry_source"] = args.resolved_entry_source
     learning_context = _model_learning_context(args)
     receipt["model_learning_context"] = learning_context
+    if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
+        receipt["session_effort"] = recommendation["session_effort"]
+        receipt["session_escalation"] = recommendation.get("session_escalation")
     receipt["selection_provenance"] = recommendation.get("selection_basis")
     receipt["capability_assignment"] = [{"node_id": "result", "step_kind": learning_context["step_kind"], "capability_tags": learning_context["capability_tags"], "effective_pair": receipt.get("effective_pair") or receipt.get("requested_pair")}]
     result_published = bool(receipt.get("result_published") is True and args.result_output.is_file() and args.result_output.stat().st_size > 0)
@@ -675,6 +685,9 @@ def run(args, prompt):
         "ending_real_status": "pending" if receipt.get("status") == "pass" and result_published else "not_started",
         "model_learning_context": learning_context,
     }
+    if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
+        summary["session_effort"] = recommendation["session_effort"]
+        summary["session_escalation"] = recommendation.get("session_escalation")
     if args.emit_result and summary["status"] == "pass":
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary

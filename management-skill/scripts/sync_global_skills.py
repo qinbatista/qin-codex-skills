@@ -155,6 +155,7 @@ SKILL_CONTENTS = {
     "task-analyze-skill": [
         ("Adaptive bootstrap", "Eligible ordinary production executes the saved contextual quality pair without loading the full routing skill."),
         ("Receipt-backed movement", "One Real PASS retains, two matched PASS outcomes try one weaker rung, and quality failure upgrades one rung."),
+        ("Session-effort solving routes", "A repeated same-topic correction records private hashed session effort, chooses model family from difficulty/information, estimates low-through-ultra effort from steps, then strengthens the same class only when needed."),
         ("Source-cost admission", "Two or three independent sources choose one producer or a fused graph from byte and session-context estimates before content reads."),
         ("Performance admission", "Open-ended graphs and savings claims require current comparable correctness, token, and time evidence."),
         ("Two-world benchmark", "Direct task has no verifier; Auto returns the task result before a separate Ending check; dispatcher cost remains a disclosed diagnostic."),
@@ -209,6 +210,7 @@ CHINESE_SKILL_CONTENTS = {
     "task-analyze-skill": [
         ("自适应 bootstrap", "合格普通生产任务直接执行已保存的上下文质量档，不加载完整路由 skill。"),
         ("Receipt 证据移动", "一次 Real PASS 保留，两次匹配 PASS 降一级，质量失败升一级。"),
+        ("Session effort 解题路线", "同主题重复修正记录私有哈希 session effort，根据难度/信息量选择模型族，根据预计步骤选择 low 到 ultra，再按同类需要增强；跳题开启独立状态。"),
         ("Source 成本准入", "两个或三个独立 source 在读取前根据 byte 与会话上下文估算选择单 producer 或融合 graph。"),
         ("性能准入", "开放式 graph 与节省声明必须有当前可比的正确性、token 和时间证据。"),
         ("双世界 benchmark", "Direct 主任务无 verifier；Auto 先返回结果再独立 Ending；dispatcher 只作公开诊断。"),
