@@ -4,8 +4,8 @@ This snapshot and the shared JSON registry come from the local Codex catalog. Th
 
 - Source: `~/.codex/models_cache.json`
 - Codex client version: `0.146.0`
-- Local catalog snapshot: `2026-08-03T03:57:13.631264Z`
-- Semantic catalog SHA-256: `cc94381ad8e45d5ff1bc32597b28d6ee780b8f4a949ea40bc98265826e299917`
+- Local catalog snapshot: `2026-08-04T23:57:39.372386Z`
+- Semantic catalog SHA-256: `321268789daf09d6aee6d5178cff4b9c46898678716440d4fc3c77417704675a`
 - Registry schema: `2`
 - Active quality family: `gpt-5.6` (highest numeric GPT family)
 
@@ -21,16 +21,13 @@ Only the highest registered numeric GPT family is active. Within that family, mo
 
 ## Catalog-visible models
 
-Catalog-only models remain documented but never enter adaptive upgrade/downgrade movement while a higher numeric GPT family is registered.
+Only the highest numeric GPT family and the priority producer are retained in this routing snapshot. Older visible models may be present in the machine cache, but they are excluded from the registry, semantic digest, and routing candidates so background catalog refreshes cannot reintroduce them.
 
 | Display name | Model ID | Catalog role | Provider priority | Supported efforts |
 |---|---|---|---:|---|
 | GPT-5.6-Sol | `gpt-5.6-sol` | active_quality | 1 | low, medium, high, xhigh, max, ultra |
 | GPT-5.6-Terra | `gpt-5.6-terra` | active_quality | 2 | low, medium, high, xhigh, max, ultra |
 | GPT-5.6-Luna | `gpt-5.6-luna` | active_quality | 3 | low, medium, high, xhigh, max |
-| GPT-5.5 | `gpt-5.5` | catalog_only | 7 | low, medium, high, xhigh |
-| GPT-5.4 | `gpt-5.4` | catalog_only | 16 | low, medium, high, xhigh |
-| GPT-5.4-Mini | `gpt-5.4-mini` | catalog_only | 23 | low, medium, high, xhigh |
 | GPT-5.3-Codex-Spark | `gpt-5.3-codex-spark` | priority_producer | 26 | low, medium, high, xhigh |
 
 ## Priority text/code producer
@@ -81,9 +78,6 @@ Catalog-only models remain documented but never enter adaptive upgrade/downgrade
 - `gpt-5.6-sol` (active_quality): low, medium, high, xhigh, max, ultra.
 - `gpt-5.6-terra` (active_quality): low, medium, high, xhigh, max, ultra.
 - `gpt-5.6-luna` (active_quality): low, medium, high, xhigh, max.
-- `gpt-5.5` (catalog_only): low, medium, high, xhigh.
-- `gpt-5.4` (catalog_only): low, medium, high, xhigh.
-- `gpt-5.4-mini` (catalog_only): low, medium, high, xhigh.
 - `gpt-5.3-codex-spark` (priority_producer): low, medium, high, xhigh.
 - Unsupported efforts are normalized within the selected model's advertised effort list.
 

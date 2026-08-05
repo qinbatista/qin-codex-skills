@@ -168,8 +168,6 @@ class ResultModelDisclosureTests(unittest.TestCase):
         self.assertIn("gpt-5.6-terra|medium", allowed_pairs)
         self.assertIn("gpt-5.6-luna|low", allowed_pairs)
         self.assertIn("gpt-5.3-codex-spark|low", allowed_pairs)
-        self.assertNotIn("gpt-5.5|high", allowed_pairs)
-        self.assertNotIn("gpt-5.4|high", allowed_pairs)
         self.assertNotIn("GPT-5|unknown", allowed_pairs)
 
     def test_runtime_receipt_split_fields_build_exact_pairs(self):

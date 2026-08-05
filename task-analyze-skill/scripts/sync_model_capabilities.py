@@ -46,7 +46,7 @@ def build_snapshot(registry):
         speed_tiers = ", ".join(model["additional_speed_tiers"]) or "default"
         efforts = ", ".join(model["codex_efforts"])
         lines.append(f"| {model['capability_rank']} | {model['display_name']} | `{model['id']}` | {roles} | {inputs} | {context} | {api_support} | `{model['default_effort']}` | {efforts} | {speed_tiers} |")
-    lines.extend(["", "## Catalog-visible models", "", "Catalog-only models remain documented but never enter adaptive upgrade/downgrade movement while a higher numeric GPT family is registered.", "", "| Display name | Model ID | Catalog role | Provider priority | Supported efforts |", "|---|---|---|---:|---|"])
+    lines.extend(["", "## Catalog-visible models", "", "Only the highest numeric GPT family and the priority producer are retained in this routing snapshot. Older visible models may be present in the machine cache, but they are excluded from the registry, semantic digest, and routing candidates so background catalog refreshes cannot reintroduce them.", "", "| Display name | Model ID | Catalog role | Provider priority | Supported efforts |", "|---|---|---|---:|---|"])
     for model in registry["catalog_models"]:
         lines.append(f"| {model['display_name']} | `{model['id']}` | {model['catalog_role']} | {model['provider_priority']} | {', '.join(model['codex_efforts'])} |")
     lines.extend(["", "## Priority text/code producer", ""])

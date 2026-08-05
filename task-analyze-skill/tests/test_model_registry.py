@@ -26,7 +26,7 @@ def catalog(models, version="1.2.3", fetched_at="2026-07-15T00:00:00Z"):
 
 class ModelRegistryTests(unittest.TestCase):
     def current_catalog(self):
-        models = [catalog_model("gpt-5.6-sol", 1, "Latest frontier coding model", efforts=("ultra", "low", "high", "medium")), catalog_model("gpt-5.6-terra", 2, "Balanced model for everyday work"), catalog_model("gpt-5.6-luna", 3, "Fast and affordable model"), catalog_model("gpt-5.5", 7, "Prior frontier model"), catalog_model("gpt-5.4", 16, "Prior everyday model"), catalog_model("gpt-5.4-mini", 23, "Prior small model"), catalog_model("gpt-5.3-codex-spark", 26, "Ultra-fast coding model", efforts=("xhigh", "low", "high", "medium"), modalities=("text",), supported_in_api=False), catalog_model("hidden-review", 40, "Automatic review model", visibility="hide")]
+        models = [catalog_model("gpt-5.6-sol", 1, "Latest frontier coding model", efforts=("ultra", "low", "high", "medium")), catalog_model("gpt-5.6-terra", 2, "Balanced model for everyday work"), catalog_model("gpt-5.6-luna", 3, "Fast and affordable model"), catalog_model("gpt-5.3-codex-spark", 26, "Ultra-fast coding model", efforts=("xhigh", "low", "high", "medium"), modalities=("text",), supported_in_api=False), catalog_model("hidden-review", 40, "Automatic review model", visibility="hide")]
         return catalog(models)
 
     def test_builds_generic_registry_from_visible_catalog(self):
@@ -49,8 +49,8 @@ class ModelRegistryTests(unittest.TestCase):
         self.assertNotIn("gpt-5.3-codex-spark", [model["id"] for model in registry["models"]])
         self.assertNotIn("hidden-review", [model["id"] for model in registry["models"]])
         self.assertEqual(registry["models"][-1]["codex_efforts"], ["low", "medium", "high", "ultra"])
-        self.assertEqual([model["id"] for model in registry["catalog_models"]], ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"])
-        self.assertEqual([model["catalog_role"] for model in registry["catalog_models"]], ["active_quality", "active_quality", "active_quality", "catalog_only", "catalog_only", "catalog_only", "priority_producer"])
+        self.assertEqual([model["id"] for model in registry["catalog_models"]], ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"])
+        self.assertEqual([model["catalog_role"] for model in registry["catalog_models"]], ["active_quality", "active_quality", "active_quality", "priority_producer"])
         self.assertEqual(registry["source"], {"models_cache": "~/.codex/models_cache.json", "client_version": "1.2.3", "fetched_at": "2026-07-15T00:00:00Z", "catalog_sha256": "a" * 64})
         self.assertIs(model_registry.validate_registry(registry), registry)
 
@@ -74,12 +74,26 @@ class ModelRegistryTests(unittest.TestCase):
         self.assertIsNone(registry["priority_producer"])
         self.assertEqual(registry["active_family"]["id"], "gpt-8")
         self.assertEqual([model["id"] for model in registry["models"]], ["gpt-8-economy", "gpt-8-balanced", "gpt-8-frontier"])
-        self.assertEqual([model["id"] for model in registry["catalog_models"] if model["catalog_role"] == "catalog_only"], ["gpt-5.6-sol", "gpt-5.6-luna"])
+        self.assertEqual([model["id"] for model in registry["catalog_models"]], ["gpt-8-frontier", "gpt-8-balanced", "gpt-8-economy"])
         self.assertFalse(registry["policy"]["priority_producer_first_text_code"])
         self.assertFalse(registry["policy"]["priority_producer_first_small_edits"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources_only"])
         model_registry.validate_registry(registry)
+
+    def test_older_visible_catalog_models_do_not_change_selected_digest_or_registry(self):
+        current = self.current_catalog()
+        legacy = catalog_model("gpt-4.9", 7, "Prior frontier model")
+        legacy_midsize = catalog_model("gpt-4.8", 16, "Prior everyday model")
+        legacy_small = catalog_model("gpt-4.8-mini", 23, "Prior small model")
+        noisy = deepcopy(current)
+        noisy["models"].extend([legacy, legacy_midsize, legacy_small])
+
+        current_digest = model_registry.semantic_catalog_sha256(current)
+        noisy_digest = model_registry.semantic_catalog_sha256(noisy)
+        self.assertEqual(noisy_digest, current_digest)
+        registry = model_registry.build_registry(noisy, noisy_digest)
+        self.assertEqual([model["id"] for model in registry["catalog_models"]], ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"])
 
     def test_numeric_family_parser_supports_future_major_and_dotted_versions(self):
         self.assertEqual(model_registry.parse_numeric_gpt_family("gpt-6-codex"), ("gpt-6", (6,)))

@@ -27,11 +27,35 @@ NUMERIC_GPT_FAMILY_PATTERN = re.compile(r"^gpt-(\d+(?:\.\d+)*)(?:-|$)", re.IGNOR
 SEMANTIC_MODEL_FIELDS = ("slug", "display_name", "description", "default_reasoning_level", "visibility", "supported_in_api", "priority", "additional_speed_tiers", "input_modalities", "context_window")
 
 
+def _selected_catalog_models(catalog):
+    visible_models = [
+        model
+        for model in catalog["models"]
+        if isinstance(model, dict)
+        and model.get("visibility") == "list"
+        and isinstance(model.get("supported_reasoning_levels"), list)
+        and model["supported_reasoning_levels"]
+        and isinstance(model.get("slug"), str)
+        and model.get("slug")
+        and not isinstance(model.get("priority"), bool)
+        and isinstance(model.get("priority"), (int, float))
+    ]
+    priority_model = _select_priority_producer(visible_models)
+    quality_candidates = [model for model in visible_models if model is not priority_model]
+    family_candidates = [(model, parse_numeric_gpt_family(model["slug"])) for model in quality_candidates]
+    family_candidates = [(model, family) for model, family in family_candidates if family is not None]
+    if not family_candidates:
+        return visible_models
+    _, highest_numeric_version = max((family for _, family in family_candidates), key=lambda family: family[1])
+    active_ids = {model["slug"] for model, family in family_candidates if family[1] == highest_numeric_version}
+    return [model for model in visible_models if model is priority_model or model["slug"] in active_ids]
+
+
 def semantic_catalog_sha256(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("client_version"), str) or not isinstance(catalog.get("models"), list):
         raise ValueError("Codex model catalog is incomplete")
     semantic_models = []
-    for model in catalog["models"]:
+    for model in _selected_catalog_models(catalog):
         if not isinstance(model, dict):
             semantic_models.append(model)
             continue
@@ -170,8 +194,11 @@ def build_registry(catalog, catalog_sha256=None):
     model_rows = [_model_row(model, rank, effort_order, role_models) for rank, model in enumerate(quality_models, start=1)]
     active_model_ids = {model["id"] for model in model_rows}
     catalog_models = []
+    selected_catalog_ids = {model["slug"] for model in visible_models if model is priority_model or model["slug"] in active_model_ids}
     for model in sorted(visible_models, key=lambda model: (model["priority"], model["slug"])):
-        catalog_role = "priority_producer" if model is priority_model else "active_quality" if model["slug"] in active_model_ids else "catalog_only"
+        if model["slug"] not in selected_catalog_ids:
+            continue
+        catalog_role = "priority_producer" if model is priority_model else "active_quality"
         catalog_models.append({**_model_metadata(model, effort_order), "catalog_role": catalog_role})
     models_by_id = {model["id"]: model for model in model_rows}
     weak = models_by_id[role_models["weak"]]

@@ -14,8 +14,8 @@ module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
 
 
-LEGACY_SIMPLE_EXPECTED = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.4", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-5.4\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
-LEGACY_SIMPLE_ACTUAL = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.4", "definition_chain": ["POM_BOM_TEXT_AGENT_MODEL=OPENAI_TESTING_DEFAULT_MODEL", "OPENAI_TESTING_DEFAULT_MODEL=\"gpt-5.4\""], "source": "core/script/ai/ai_model_catalog.py"}
+LEGACY_SIMPLE_EXPECTED = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.6-terra", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-5.6-terra\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
+LEGACY_SIMPLE_ACTUAL = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.6-terra", "definition_chain": ["POM_BOM_TEXT_AGENT_MODEL=OPENAI_TESTING_DEFAULT_MODEL", "OPENAI_TESTING_DEFAULT_MODEL=\"gpt-5.6-terra\""], "source": "core/script/ai/ai_model_catalog.py"}
 
 
 class BenchmarkSuiteGateTests(unittest.TestCase):

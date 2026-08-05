@@ -5,8 +5,8 @@
   "source": {
     "models_cache": "~/.codex/models_cache.json",
     "client_version": "0.146.0",
-    "fetched_at": "2026-08-03T03:57:13.631264Z",
-    "catalog_sha256": "cc94381ad8e45d5ff1bc32597b28d6ee780b8f4a949ea40bc98265826e299917"
+    "fetched_at": "2026-08-04T23:57:39.372386Z",
+    "catalog_sha256": "321268789daf09d6aee6d5178cff4b9c46898678716440d4fc3c77417704675a"
   },
   "active_family": {
     "id": "gpt-5.6",
@@ -91,73 +91,6 @@
         "fast"
       ],
       "catalog_role": "active_quality"
-    },
-    {
-      "id": "gpt-5.5",
-      "display_name": "GPT-5.5",
-      "provider_priority": 7,
-      "provider_positioning": "Frontier model for complex coding, research, and real-world work.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "medium",
-      "additional_speed_tiers": [
-        "fast"
-      ],
-      "catalog_role": "catalog_only"
-    },
-    {
-      "id": "gpt-5.4",
-      "display_name": "GPT-5.4",
-      "provider_priority": 16,
-      "provider_positioning": "Strong model for everyday coding.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "medium",
-      "additional_speed_tiers": [
-        "fast"
-      ],
-      "catalog_role": "catalog_only"
-    },
-    {
-      "id": "gpt-5.4-mini",
-      "display_name": "GPT-5.4-Mini",
-      "provider_priority": 23,
-      "provider_positioning": "Small, fast, and cost-efficient model for simpler coding tasks.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "medium",
-      "additional_speed_tiers": [],
-      "catalog_role": "catalog_only"
     },
     {
       "id": "gpt-5.3-codex-spark",

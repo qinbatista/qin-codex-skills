@@ -163,9 +163,9 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         module_source = snapshot_root / "core" / "script" / "module" / "universal_POM_helper.py"
         ai_source.parent.mkdir(parents=True)
         module_source.parent.mkdir(parents=True)
-        ai_source.write_text('OPENAI_TESTING_DEFAULT_MODEL = "gpt-5.4"\nPOM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL\n', encoding="utf-8")
+        ai_source.write_text('OPENAI_TESTING_DEFAULT_MODEL = "gpt-5.6-terra"\nPOM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL\n', encoding="utf-8")
         module_source.write_text("class UniversalPOMHelper:\n    pass\n", encoding="utf-8")
-        simple_expected = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.4", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-5.4\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
+        simple_expected = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.6-terra", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-5.6-terra\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
         medium_expected = {"class": "UniversalPOMHelper", "method": "build_pom", "prompt_keys_read": ["user_text"], "mutates_prompt_json": ["size_structure"], "always_return_keys": ["Measurement", "sample_size"], "optional_return_keys": ["universal_debug"], "calls_user_pom_helper": False, "source": "core/script/module/universal_POM_helper.py"}
         complex_expected = {"entry": "UniversalPOMHelper.build_pom", "early_exit_conditions": ["not measurement_names"], "stages": [], "final_merge_fields": ["id"], "always_return_keys": ["Measurement", "sample_size"], "optional_return_keys": ["universal_debug"], "source_files": ["core/script/module/universal_POM_helper.py"]}
         expected_documents = {"simple": simple_expected, "medium": medium_expected, "complex": complex_expected}

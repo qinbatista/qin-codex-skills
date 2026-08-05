@@ -253,7 +253,7 @@ REQUIRED_SELECTION_TEXT = [
     "bootstrap it once",
     "Only an explicit user model-update request",
     "highest numeric GPT family",
-    "Older numeric families remain catalog-only",
+    "Older visible families may remain in the machine cache, but they are excluded from the saved registry",
     "## Quality Order",
     "## Cold Start, Score, And Spark Priority",
     "## Learning Boundary",

@@ -4,7 +4,7 @@ The shared source of truth is the saved `assets/model-capability-ladder.json`. O
 
 ## Quality Order
 
-The saved quality ladder contains only the highest numeric GPT family seen during the last explicit local update, excluding the optional schedule producer. Provider catalog priority orders that family's variants from weakest to strongest, and each variant contributes only its supported reasoning efforts. Older numeric families remain catalog-only.
+The saved registry contains only the highest numeric GPT family seen during the last explicit local update plus the optional priority producer. Provider catalog priority orders that family's variants from weakest to strongest, and each variant contributes only its supported reasoning efforts. Older visible families may remain in the machine cache, but they are excluded from the saved registry, its semantic digest, and all routing candidates.
 
 `low -> medium -> high -> xhigh -> max -> ultra`
 
