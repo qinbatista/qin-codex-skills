@@ -60,6 +60,10 @@ Adaptive model learning is a distinct system; it never uses the project change-m
 
 These adaptive model-learning rules do not alter project change-memory behavior: `~/.codex/project-change-memory/` remains the authoritative local JSONL ledger for durable file-change reasons, results, verification, and touched files, including when Obsidian is unavailable.
 
+## Separate Personal Preference Memory
+
+Personal preference and technical-working-trait memory is a third, separate stream. Every user submission is scanned for bounded candidates, but an empty scan is a strict no-op. Only the Ending worker may submit a candidate bundle through `scripts/personal_memory.py` or `ending_task_ledger.py event --memory-candidates-file`; the bridge validates explicit/repeated/verified evidence, rejects private content, writes one root-first `AI Memory/events.jsonl` event, and updates a stable Preferences owner page. UI candidates use `Preferences/UI Style Preferences.md` when that owner exists; other candidates use `Preferences/AI Captured Preferences.md`. Missing Obsidian queues sanitized candidates locally and never discards them. This stream never changes the task result and never replaces project-change or model-routing memory.
+
 Use the maintained helper instead of editing Model Switch routing records manually:
 
 ```bash

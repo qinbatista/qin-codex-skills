@@ -60,6 +60,48 @@ class EndingTaskLedgerTests(unittest.TestCase):
             self.assertTrue(audit["final_gate_passed"])
             self.assertEqual(audit["chain"], [started["lifecycle_id"]])
 
+    def test_terminal_ending_records_personal_memory_result_and_no_candidate_is_noop(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, store=store)
+            no_candidates = {"status": "no-candidates", "written": False, "candidates": 0}
+            with patch.object(LEDGER, "_record_personal_memory_candidates", return_value=no_candidates) as record:
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Focused test passed"], store=store)
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        record.assert_called_once_with(state, "pass", None)
+        self.assertEqual(passed["personal_memory"], no_candidates)
+        self.assertEqual(state["events"][-1]["personal_memory"], no_candidates)
+
+    def test_terminal_ending_can_persist_a_candidate_file_result(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            candidate_file = project / "Cache" / "tests" / "ending-memory" / "candidates.json"
+            candidate_file.parent.mkdir(parents=True)
+            candidate_file.write_text(json.dumps({"candidates": [{"kind": "preference", "area": "ui", "statement": "Prefer compact status layouts.", "evidence": "Explicit user request.", "basis": "explicit_user_request", "confidence": "high", "source": "ending"}]}), encoding="utf-8")
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, store=store)
+            captured = {"status": "written", "written": True, "candidates": 1, "vault": "ready"}
+            with patch.object(LEDGER, "_record_personal_memory_candidates", return_value=captured) as record:
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", store=store, memory_candidates_file=candidate_file)
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        record.assert_called_once_with(state, "pass", candidate_file)
+        self.assertEqual(passed["personal_memory"]["candidates"], 1)
+        self.assertEqual(state["personal_memory"]["status"], "written")
+
+    def test_memory_candidate_file_must_stay_inside_project_root(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, store=root / "store")
+            with self.assertRaisesRegex(ValueError, "inside the lifecycle project root"):
+                LEDGER._record_personal_memory_candidates(started | {"cwd": str(project)}, "pass", root / "outside.json")
+
     def test_failure_is_logged_before_repair_and_repair_has_own_ending(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

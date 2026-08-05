@@ -146,11 +146,12 @@ def _read_json(path, field):
     return source, payload
 
 
-def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=None):
+def _worker_prompt(plan_path, plan, check, evidence_output, memory_candidates_output, producer_receipt=None):
     project_root = Path(plan["project_root"]).expanduser().resolve()
     relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root)
     relative_cwd = Path(check["cwd"]).expanduser().resolve().relative_to(project_root)
     relative_evidence = Path(evidence_output).expanduser().resolve().relative_to(project_root)
+    relative_memory_candidates = Path(memory_candidates_output).expanduser().resolve().relative_to(project_root)
     receipt_line = str(Path(producer_receipt).expanduser().resolve().relative_to(project_root)) if producer_receipt else "none"
     command_text = json.dumps(check["command"], ensure_ascii=False, separators=(",", ":"))
     return "\n".join(
@@ -162,6 +163,7 @@ def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=Non
             f"Verification plan relative to project root: {relative_plan}",
             f"Check id: {check['check_id']}",
             f"Evidence output relative to project root: {relative_evidence}",
+            f"Personal memory candidates output relative to project root: {relative_memory_candidates}",
             f"Assigned pair: {check['selected_pair']}",
             f"Complexity: {check['complexity_score']}/100 ({check['complexity_band']})",
             f"Expected command: {command_text}",
@@ -169,6 +171,9 @@ def _worker_prompt(plan_path, plan, check, evidence_output, producer_receipt=Non
             "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the plan's exact run-check command from the project root.",
             "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; bind the producer receipt when present. Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation.",
             "PASS requires the new evidence file to report status=pass and the expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this projectless global task visible.",
+            "Every Codex submission receives a bounded personal-memory scan. Analyze only explicit user preferences, repeated user corrections, or verified working patterns relevant to this task; do not infer sensitive traits and never copy raw prompts, raw results, paths, secrets, or chain-of-thought.",
+            "If the scan finds no durable preference or technical working trait, do not create the personal memory candidates file and pass no --memory-candidates-file option. If it finds candidates, write only {\"candidates\":[...]} to the assigned file using kind=preference|technical-trait, area=ui|workflow|technical|general, basis=explicit_user_request|repeated_user_correction|verified_work_pattern, confidence=high|medium, source=ending, statement, and compact evidence; then pass --memory-candidates-file with the relative path to the terminal ledger event.",
+            "Personal memory is separate from model-routing and project-change memory. A candidate write must not alter the requested result; an empty candidate set must be a strict no-op.",
             "After the terminal ledger event, print its structured model_assessment: task/check score and band, producer pair, Ending pair, attempt count, first-attempt or retry result, suitability, next routing action and pair, concise evidence reason, and Obsidian model-record link/status. Never expose private chain-of-thought.",
             "Never call set_thread_archived or delete this End Task automatically.",
         ]
@@ -201,7 +206,8 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
             raise ValueError(f"ending task {check_id} requires selected_pair")
         model, thinking = selected_pair.split("|", 1)
         evidence_output = evidence_root / f"{check_id}.json"
-        prompt = _worker_prompt(plan_file, plan, check, evidence_output, receipt_path)
+        memory_candidates_output = evidence_root / f"{check_id}.memory.json"
+        prompt = _worker_prompt(plan_file, plan, check, evidence_output, memory_candidates_output, receipt_path)
         request = {
             "check_id": check_id,
             "title": check["title"],
@@ -217,6 +223,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
                 "prompt": prompt,
             },
             "evidence_output": str(evidence_output),
+            "memory_candidates_output": str(memory_candidates_output),
             "project_id": project_value,
             "acknowledgement_required": True,
         }

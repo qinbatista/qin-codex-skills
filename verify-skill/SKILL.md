@@ -52,6 +52,14 @@ Do not call code verified when the lifecycle is FAIL or BLOCKED.
 
 The origin final is complete after result presentation and real End Task launch acknowledgement. The End Task remains visible after PASS/FAIL/BLOCKED. No hook is used or installed.
 
+## Per-Submission Personal Memory Scan
+
+Every user Codex submission gets one bounded memory-relevance scan, including small tasks that would otherwise skip Ending. The scan is separate from adaptive model routing and project-change memory. It may produce candidates only for durable user preferences, repeated user corrections, or verified technical working patterns that are directly supported by the current submission; it must not infer sensitive traits or persist raw prompts, raw results, private reasoning, machine paths, secrets, or thread/session identifiers.
+
+If the scan finds no candidate, it is a strict no-op: do not create a candidate file, do not write an Obsidian event, and do not create an Ending only for memory. If it finds a candidate, the result becomes important durable-memory work and requires the normal result-first Ending lifecycle even when the task score is small. The Ending worker writes an optional project-relative JSON file only when candidates exist, then passes `--memory-candidates-file <relative-path>` to `ending_task_ledger.py event`. The accepted schema is `{\"candidates\":[...]}` with bounded `kind`, `area`, `basis`, `confidence`, `source=ending`, `statement`, and `evidence` fields.
+
+The personal-memory bridge validates the candidate again, writes one root-first `AI Memory/events.jsonl` memory event, and updates the stable Preferences owner page (`UI Style Preferences.md` for UI candidates when present, otherwise `AI Captured Preferences.md`). If Obsidian is unavailable, it queues only the sanitized candidate bundle locally for replay. A memory write never changes the requested result; an empty candidate set never writes anything.
+
 ## Result Model Disclosure
 
 Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines. A composite final additionally includes the generated `Model stages (N):` block so the verifier's own score/pair/status is visible beside every eligible result stage.

@@ -1,6 +1,6 @@
 # Eligible Real-Test Ending Lifecycle
 
-Complex or important results record a scored local Ending lifecycle when they need tests, records, or durable memory; simple reads and one-value edits skip it. When the completed result needs verification—code/file edits, bug fixes, generated artifacts, UI/render work, integrations, or external actions—Ending executes real proportional checks in separate persistent Codex tasks. Prior receipts or prose summaries alone cannot PASS.
+Complex or important results record a scored local Ending lifecycle when they need tests, records, or durable memory; a personal-memory candidate makes an otherwise small result important. If the bounded per-submission memory scan finds nothing, it is a strict no-op and does not create an Ending only for memory. When the completed result needs verification—code/file edits, bug fixes, generated artifacts, UI/render work, integrations, or external actions—Ending executes real proportional checks in separate persistent Codex tasks. Prior receipts or prose summaries alone cannot PASS.
 
 ## Parent sequence
 
@@ -15,6 +15,8 @@ Complex or important results record a scored local Ending lifecycle when they ne
 ## Real check PASS
 
 The Ending worker runs `ending_verification_plan.py run-check` for its assigned check. It records the real command, exit code, stdout/stderr, elapsed time, score/band, and selected pair. PASS requires the expected observable result. Every required check must PASS before the lifecycle final gate passes. Every terminal event writes a project-linked model record to Obsidian. A receipt-backed producer event is learning-eligible; without a receipt the known verifier assignment is an observation only and is never mislabeled as the producer. The worker then prints the ledger's structured `model_assessment`, including attempt count, first/retry pass, suitability, next action/pair, and record link/status. It never calls `set_thread_archived` or deletes itself; every terminal End/Fix task remains visible.
+
+After the real check, the worker performs the personal-memory scan. It creates the project-relative candidate JSON only when a supported explicit preference, repeated correction, or verified working pattern exists; otherwise it omits the file and the ledger receives no memory write. A candidate terminal event passes that file to `ending_task_ledger.py --memory-candidates-file`, which validates and projects it through the root-first Preferences owner without changing the result.
 
 ## Real check FAIL and repair
 

@@ -224,6 +224,43 @@ def _load_model_memory_module():
     return module
 
 
+def _load_personal_memory_module():
+    script_path = Path(__file__).resolve().parents[2] / "project-memory-skill" / "scripts" / "personal_memory.py"
+    spec = importlib.util.spec_from_file_location("ending_task_personal_memory", script_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _memory_candidate_file(state, candidate_file):
+    if not candidate_file:
+        return None
+    path = Path(candidate_file).expanduser()
+    root_value = state.get("project_root") or state.get("cwd")
+    root = Path(root_value).expanduser().resolve() if root_value else Path.cwd().resolve()
+    resolved = (root / path).resolve() if not path.is_absolute() else path.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise ValueError("memory candidates file must stay inside the lifecycle project root") from error
+    return resolved
+
+
+def _record_personal_memory_candidates(state, event_name, candidate_file):
+    if event_name not in TERMINAL_EVENTS or not candidate_file:
+        return {"status": "no-candidates", "written": False, "candidates": 0}
+    path = _memory_candidate_file(state, candidate_file)
+    if not path or not path.is_file():
+        return {"status": "no-candidates", "written": False, "candidates": 0}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    candidates = payload.get("candidates") if isinstance(payload, dict) else payload
+    memory = _load_personal_memory_module()
+    verification_status = {"pass": "passed", "fail": "partial", "blocked": "partial"}[event_name]
+    module = _routing_slug(state.get("module") or state.get("ending_check_id") or "ending-memory", "ending-memory")
+    return memory.capture(candidates, project="Global Preferences", module=module, verification_status=verification_status)
+
+
 def _record_bound_model_result(binding, real_status, failure_class, outcome_reason="", verification_count=0, *, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
     receipt_path = Path(binding["receipt_path"])
     if hashlib.sha256(receipt_path.read_bytes()).hexdigest() != binding["receipt_sha256"]:
@@ -513,7 +550,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
     return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
 
 
-def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none"):
+def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none", memory_candidates_file=None):
     if event_name not in ALL_EVENTS:
         raise ValueError(f"event must be one of {', '.join(sorted(ALL_EVENTS))}")
     if failure_class not in FAILURE_CLASSES:
@@ -553,6 +590,10 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         if model_assessment is not None:
             event["model_assessment"] = model_assessment
             state["model_assessment"] = model_assessment
+        personal_memory = _record_personal_memory_candidates(state, event_name, memory_candidates_file)
+        if event_name in TERMINAL_EVENTS:
+            event["personal_memory"] = personal_memory
+            state["personal_memory"] = personal_memory
         state["events"].append(event)
         state["updated_at"] = recorded_at
         if event_name in TERMINAL_EVENTS:
@@ -564,6 +605,8 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         output["model_learning"] = model_learning
     if model_assessment is not None:
         output["model_assessment"] = model_assessment
+    if event_name in TERMINAL_EVENTS:
+        output["personal_memory"] = event.get("personal_memory")
     if event_name == "fail":
         output["repair_required"] = True
         output["repair_handoff"] = {"action": "create_repair_task_then_fresh_ending", "repair_of_lifecycle_id": lifecycle_id, "summary": event["summary"], "verification": event["verification"], "error_fingerprint": event["error_fingerprint"], "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band"), "max_repair_attempts": state.get("max_repair_attempts")}
@@ -618,13 +661,14 @@ def main():
     event_parser.add_argument("--verification", action="append", default=[])
     event_parser.add_argument("--error-fingerprint", default="")
     event_parser.add_argument("--failure-class", choices=sorted(FAILURE_CLASSES), default="none")
+    event_parser.add_argument("--memory-candidates-file", type=Path)
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("--lifecycle-id", required=True)
     args = parser.parse_args()
     if args.command == "start":
         output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair, args.requested_pair, args.resolved_pair, args.effective_pair, args.previous_pair, args.model_evidence, args.route_change, args.switch_summary, args.reason)
     elif args.command == "event":
-        output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class)
+        output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class, args.memory_candidates_file)
     else:
         output = audit_lifecycle(args.lifecycle_id, args.store)
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))

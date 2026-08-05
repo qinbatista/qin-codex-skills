@@ -82,9 +82,11 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertTrue(all(item["arguments"]["prompt"].startswith("ENDING_TASK_WORKER\n") for item in launch["launch_requests"]))
         self.assertTrue(all("Verification plan relative to project root: plan.json" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("Evidence output relative to project root: Cache/tests/ending-evidence/" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all("Personal memory candidates output relative to project root: Cache/tests/ending-evidence/" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all(str(root / "plan.json") not in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("Never call set_thread_archived" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("structured model_assessment" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all("If the scan finds no durable preference" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertEqual(
             [f"{item['arguments']['model']}|{item['arguments']['thinking']}" for item in launch["launch_requests"]],
             [item["selected_pair"] for item in launch["launch_requests"]],
