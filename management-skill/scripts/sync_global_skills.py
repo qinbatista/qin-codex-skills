@@ -164,7 +164,7 @@ SKILL_CONTENTS = {
         ("Locked route execution", "Execute only a positively admitted plan with exact pairs, dependencies, allowlists, and receipts."),
         ("Single-producer default", "Dependency-coupled work and small independent sources stay with one contextual producer."),
         ("Result-first handoff", "The producer completes proportional Quick Check, presents the result, then creates a projectless End Task in the global task list."),
-        ("Ending visibility", "PASS, FAIL, and BLOCKED remain visible; End/Fix tasks never auto-archive or delete themselves."),
+        ("Ending visibility", "PASS, FAIL, and BLOCKED remain visible; Ending tasks and repair handoffs never auto-archive or delete themselves."),
         ("Runtime proof", "Every model-generated node exposes its effective pair and token/time receipt."),
     ],
     "prompt-skill": [
@@ -219,7 +219,7 @@ CHINESE_SKILL_CONTENTS = {
         ("锁定路线执行", "只执行 pair、依赖、allowlist 与 receipt 都准确的已准入计划。"),
         ("单 Producer 默认", "依赖耦合工作和小型独立 source 都使用一个上下文 producer。"),
         ("结果优先交接", "Producer 完成 Quick Check、展示结果，再在全局任务列表中创建 projectless End Task。"),
-        ("Ending 可见性", "PASS、FAIL、BLOCKED 都保持可见；End/Fix task 永不自动归档或删除。"),
+        ("Ending 可见性", "PASS、FAIL、BLOCKED 都保持可见；Ending task 与修复交接永不自动归档或删除。"),
         ("运行证明", "每个模型节点都公开实际 effective pair 和 token/time receipt。"),
     ],
     "prompt-skill": [

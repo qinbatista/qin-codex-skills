@@ -21,7 +21,7 @@ else:
 
 DEFAULT_STORE = Path.home() / ".codex" / "ending-task-memory"
 DEFAULT_MAX_REPAIR_ATTEMPTS = 3
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TERMINAL_EVENTS = {"pass", "fail", "blocked"}
 ALL_EVENTS = TERMINAL_EVENTS | {"note"}
 FAILURE_CLASSES = {"none", "availability", "timeout", "protocol", "telemetry", "execution", "receipt", "quality", "correctness"}
@@ -30,6 +30,7 @@ OPERATIONAL_FAILURES = FAILURE_CLASSES - QUALITY_FAILURES - {"none"}
 MODEL_EVIDENCE_LEVELS = {"runtime_receipt", "verified_entry", "task_assignment", "configured_selection", "unavailable"}
 ROUTE_CHANGES = {"upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"}
 UNKNOWN_MODEL_PAIR = "unknown|unknown"
+REPAIR_DISPATCH_TOOL = "codex_app__send_message_to_thread"
 REQUIRED_MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
 OPTIONAL_MODEL_CONTEXT_FIELDS = ("step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source")
 MODEL_CONTEXT_FIELDS = REQUIRED_MODEL_CONTEXT_FIELDS + OPTIONAL_MODEL_CONTEXT_FIELDS
@@ -120,6 +121,14 @@ def _exclusive_file_lock(lock_path):
 def _model_pair(value, field_name):
     pair = _single_line(value, field_name, required=False, max_length=160)
     return pair if pair and pair != UNKNOWN_MODEL_PAIR else None
+
+
+def _origin_session(thread_id="", host_id=""):
+    if bool(thread_id) != bool(host_id):
+        raise ValueError("origin session requires both origin_thread_id and origin_host_id")
+    if not thread_id:
+        return None
+    return {"thread_id": _single_line(thread_id, "origin_thread_id", max_length=160), "host_id": _single_line(host_id, "origin_host_id", max_length=160)}
 
 
 def _model_disclosure(selected_pair, producer_binding, requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason=""):
@@ -478,7 +487,46 @@ def _model_assessment(state, event_name, failure_class, model_learning, attempt_
     }
 
 
-def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair="", requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason=""):
+def _repair_prompt(state, event):
+    project_root = Path(state["project_root"]).expanduser().resolve() if state.get("project_root") else None
+    plan_text = "the saved verification plan"
+    if project_root and state.get("verification_plan"):
+        try:
+            plan_text = Path(state["verification_plan"]).expanduser().resolve().relative_to(project_root).as_posix()
+        except ValueError:
+            plan_text = "the saved verification plan"
+    failure_class = event.get("failure_class") or "correctness"
+    error_fingerprint = event.get("error_fingerprint") or "not-supplied"
+    if error_fingerprint == "acceptance-mismatch" or failure_class in QUALITY_FAILURES:
+        failure_instruction = "The final result is incorrect or differs from the original user request. Compare the delivered result and the original request before changing anything, even if the command exited successfully."
+    elif failure_class == "timeout":
+        failure_instruction = "The real check timed out. Determine whether the timeout is caused by the changed result or the verification environment, then repair only the result when the evidence supports it."
+    else:
+        failure_instruction = "The real check did not meet its expected runtime result. Inspect the exact evidence and repair the result only when the evidence identifies a producer defect."
+    evidence_text = "\n".join(f"- {value}" for value in event.get("verification", [])) or "- No additional verification text was supplied."
+    evidence_text = evidence_text[:2400]
+    files_text = ", ".join(state.get("files") or ["the files authorized by the original result task"])
+    next_attempt = int(state.get("attempt_index", 0)) + 1
+    max_attempts = int(state.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS))
+    origin = state.get("origin_session") or {}
+    return "\n".join(["ENDING_REPAIR_REQUEST", "Continue in this original source session; do not create a separate repair session or let the Ending verifier edit the target.", f"Original task: {state['summary']}", "Read the original user request and the current delivered result in this session before choosing the repair.", f"Acceptance check: {state.get('ending_check_id') or 'the same saved Ending check'}", f"Verification plan relative to project root: {plan_text}", f"Project binding id: {state.get('project_id') or 'resolve the exact saved project before launching the next Ending'}", f"Origin session thread id: {origin.get('thread_id') or 'current source session'}", f"Origin session host id: {origin.get('host_id') or 'current source session host'}", f"Repair attempt to run: {next_attempt} of {max_attempts}", f"Failure class: {failure_class}", f"Error fingerprint: {error_fingerprint}", f"Failure meaning: {failure_instruction}", "Observed evidence:", evidence_text, f"Authorized result files: {files_text}", "Required actions:", "1. Compare the current result with the original user request and the acceptance contract; if the result still differs, fix the smallest authorized producer path.", "2. Run the producer Quick Check and present the repaired result in this same source session.", f"3. Start a fresh Ending for the same acceptance check as a child of lifecycle {state['lifecycle_id']} using --repair-of-lifecycle-id; never reuse the failed verdict.", "4. Carry the same project binding and origin session metadata into the new launch, create/acknowledge every projectless End Task, and return without waiting for its verdict.", "5. If the repair limit is exhausted or the source session cannot complete the repair, record BLOCKED with the exact evidence; do not claim PASS."])
+
+
+def _repair_handoff(state, event):
+    common = {"repair_of_lifecycle_id": state["lifecycle_id"], "summary": event["summary"], "verification": event["verification"], "error_fingerprint": event["error_fingerprint"], "failure_class": event["failure_class"], "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band"), "max_repair_attempts": state.get("max_repair_attempts")}
+    origin = state.get("origin_session")
+    next_attempt = int(state.get("attempt_index", 0)) + 1
+    max_attempts = int(state.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS))
+    if not origin:
+        return {**common, "action": "blocked_origin_session_unavailable", "blocked_reason": "Ending automatic repair requires the exact source session thread_id and host_id captured at launch.", "requires_origin_session": True}
+    if next_attempt > max_attempts:
+        return {**common, "action": "repair_limit_exhausted", "blocked_reason": f"No automatic repair prompt is allowed after {max_attempts} repair attempts.", "requires_origin_session": True, "origin_session": origin}
+    prompt = _repair_prompt(state, event)
+    dispatch = {"tool": REPAIR_DISPATCH_TOOL, "arguments": {"threadId": origin["thread_id"], "hostId": origin["host_id"], "prompt": prompt}, "required": True}
+    return {**common, "action": "send_repair_prompt_to_origin_session_then_fresh_ending", "requires_origin_session": True, "origin_session": origin, "repair_dispatch": dispatch, "repair_prompt": prompt, "next_step": "origin_session_repairs_then_starts_fresh_ending"}
+
+
+def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair="", requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason="", project_id="", origin_thread_id="", origin_host_id=""):
     cwd_path = Path(cwd).expanduser().resolve()
     if not cwd_path.is_dir():
         raise ValueError("cwd must be an existing directory")
@@ -486,6 +534,8 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
     project_path = Path(project_root).expanduser().resolve() if project_root else None
     if project_path is None and producer_binding:
         project_path = Path(producer_binding["model_learning_context"]["project_root"])
+    origin_session = _origin_session(origin_thread_id, origin_host_id)
+    project_id_value = _single_line(project_id, "project_id", required=False, max_length=200) or None
     if producer_binding:
         bound_score = producer_binding["model_learning_context"]["complexity_score"]
         bound_band = producer_binding["model_learning_context"]["complexity_band"]
@@ -531,13 +581,22 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
                     _write_state(store_path, root)
                     _append_event(store_path, blocked_event)
                 raise ValueError("repair attempt limit exceeded")
+            parent_origin = parent.get("origin_session")
+            if parent_origin and origin_session and parent_origin != origin_session:
+                raise ValueError("repair lifecycle must preserve the origin session")
+            origin_session = origin_session or parent_origin
+            project_id_value = project_id_value or parent.get("project_id")
+        if origin_session and not project_path:
+            raise ValueError("origin session requires project_root")
+        if origin_session and not project_id_value:
+            raise ValueError("origin session requires project_id")
         verification_plan_path = Path(verification_plan).expanduser().resolve() if verification_plan else None
         if verification_required and (not verification_plan_path or not verification_plan_path.is_file()):
             raise ValueError("verification-required lifecycle requires an existing verification plan")
         ending_owns_model_identity = bool(selected_pair and (verification_required or ending_check_id))
         model_disclosure = _model_disclosure(selected_pair, None if ending_owns_model_identity else producer_binding, requested_pair, resolved_pair, effective_pair, previous_pair, model_evidence, route_change, switch_summary, reason)
         event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _model_pair(selected_pair, "selected_pair"), "model_disclosure": model_disclosure}
-        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "module": _single_line(module, "module", required=False, max_length=160), "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
+        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "project_id": project_id_value, "origin_session": origin_session, "module": _single_line(module, "module", required=False, max_length=160), "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
         if parent:
             parent_event = {"schema_version": SCHEMA_VERSION, "event": "repair_started", "recorded_at": created_at, "lifecycle_id": parent["lifecycle_id"], "child_lifecycle_id": lifecycle_id, "summary": f"Repair lifecycle {lifecycle_id} started"}
             parent["repair_children"].append(lifecycle_id)
@@ -547,7 +606,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
             _append_event(store_path, parent_event)
         state_path = _write_state(store_path, state)
         _append_event(store_path, event)
-    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
+    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "project_id": project_id_value, "origin_session": origin_session, "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
 
 
 def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none", memory_candidates_file=None):
@@ -598,8 +657,19 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         state["updated_at"] = recorded_at
         if event_name in TERMINAL_EVENTS:
             state["status"] = {"pass": "passed", "fail": "failed", "blocked": "blocked"}[event_name]
+        repair_handoff = _repair_handoff(state, event) if event_name == "fail" else None
+        limit_blocked_event = None
+        if repair_handoff is not None:
+            event["repair_handoff"] = repair_handoff
+            state["repair_handoff"] = repair_handoff
+            if repair_handoff.get("action") == "repair_limit_exhausted":
+                limit_blocked_event = {"schema_version": SCHEMA_VERSION, "event": "blocked", "recorded_at": recorded_at, "lifecycle_id": lifecycle_id, "summary": f"Repair attempt limit exhausted at {state.get('max_repair_attempts', DEFAULT_MAX_REPAIR_ATTEMPTS)}", "verification": event["verification"], "error_fingerprint": "repair-attempt-limit-exceeded", "failure_class": None, "repair_handoff": repair_handoff}
+                state["events"].append(limit_blocked_event)
+                state["status"] = "blocked"
         state_path = _write_state(store_path, state)
         _append_event(store_path, event)
+        if limit_blocked_event is not None:
+            _append_event(store_path, limit_blocked_event)
     output = {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": state["status"], "final_gate_passed": event_name == "pass", "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
     if model_learning is not None:
         output["model_learning"] = model_learning
@@ -609,7 +679,7 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         output["personal_memory"] = event.get("personal_memory")
     if event_name == "fail":
         output["repair_required"] = True
-        output["repair_handoff"] = {"action": "create_repair_task_then_fresh_ending", "repair_of_lifecycle_id": lifecycle_id, "summary": event["summary"], "verification": event["verification"], "error_fingerprint": event["error_fingerprint"], "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band"), "max_repair_attempts": state.get("max_repair_attempts")}
+        output["repair_handoff"] = repair_handoff
     return output
 
 
@@ -654,6 +724,9 @@ def main():
     start_parser.add_argument("--route-change", choices=sorted(ROUTE_CHANGES), default="")
     start_parser.add_argument("--switch-summary", default="")
     start_parser.add_argument("--reason", default="")
+    start_parser.add_argument("--project-id", default="")
+    start_parser.add_argument("--origin-thread-id", default="")
+    start_parser.add_argument("--origin-host-id", default="")
     event_parser = subparsers.add_parser("event")
     event_parser.add_argument("--lifecycle-id", required=True)
     event_parser.add_argument("--event", choices=sorted(ALL_EVENTS), required=True)
@@ -666,7 +739,7 @@ def main():
     audit_parser.add_argument("--lifecycle-id", required=True)
     args = parser.parse_args()
     if args.command == "start":
-        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair, args.requested_pair, args.resolved_pair, args.effective_pair, args.previous_pair, args.model_evidence, args.route_change, args.switch_summary, args.reason)
+        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair, args.requested_pair, args.resolved_pair, args.effective_pair, args.previous_pair, args.model_evidence, args.route_change, args.switch_summary, args.reason, args.project_id, args.origin_thread_id, args.origin_host_id)
     elif args.command == "event":
         output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class, args.memory_candidates_file)
     else:

@@ -11,7 +11,7 @@ When the producer can express acceptance as an exact command, test, API probe, r
 
 Never add a broad verifier before the user's first presentation. After presentation, Ending may run the real proportional unit, integration, API, build, render, visual, or state test required to prove the result. Keep each check focused; do not substitute prose inspection for an executable or observable check when one exists.
 
-A same-task subagent is forbidden for Ending because it keeps the origin task active. Complex or important results get an Ending when they need a real test, record, or durable memory; exact read-only work and one-value edits skip it. Resolve the exact saved project by canonical root, build launch requests with `scripts/ending_verification_plan.py create-launches --project-id <resolved-id>`, use the host's persistent `create_thread` capability with target `{"type":"projectless"}`, then acknowledge every returned `threadId`, `hostId`, and project ID with `ack-launch`. `audit-launches` must report `end_task_trigger_rate=100%`; a plan/handoff alone is not a launch. End Tasks belong to the global task list and remain visible after every terminal status; the originating project root stays in the plan only as the execution context. A failed check still sends its `Fix Task` to the exact saved project because repair writes project files. If project resolution or persistent task creation is unavailable, record and disclose terminal `BLOCKED` with the exact outer-host handoff; do not silently mark the Ending lifecycle complete, substitute a subagent, or start a wait loop.
+A same-task subagent is forbidden for Ending because it keeps the origin task active. Complex or important results get an Ending when they need a real test, record, or durable memory; exact read-only work and one-value edits skip it. Capture the immutable origin session before launch: the source Codex thread/session ID, host ID, exact project ID, and project root. Resolve the exact saved project by canonical root, build launch requests with `scripts/ending_verification_plan.py create-launches --project-id <resolved-id>`, use the host's persistent `create_thread` capability with target `{"type":"projectless"}`, then acknowledge every returned `threadId`, `hostId`, and project ID with `ack-launch`. `audit-launches` must report `end_task_trigger_rate=100%`; a plan/handoff alone is not a launch. End Tasks belong to the global task list and remain visible after every terminal status. A failed check or acceptance mismatch records exact evidence and automatically submits its bounded repair prompt through `codex_app__send_message_to_thread` to that immutable origin session; the source session is the only repair executor and then starts a fresh Ending for the same check. If the origin session or prompt submission is unavailable, record and disclose terminal `BLOCKED`; do not silently mark the Ending lifecycle complete, create a replacement repair session, substitute a subagent, or start a wait loop.
 
 When the user explicitly asks for a test, audit, review, replay, or verification as the primary task, that work is the requested result and runs normally on the current model. It does not need a fabricated pre-result verification phase.
 
@@ -24,10 +24,10 @@ The required order is:
 3. classify whether Real Verify is required; when required, build one plan containing the exact real checks and an independent score/model pair per check;
 4. write a scored lifecycle receipt, bind `--producer-receipt` when present, then create one persistent `End Task-{task}-{check}` per independent plan check;
 5. run each assigned real check and require all checks to PASS;
-6. on FAIL, record the exact command, exit code, stdout/stderr, and failure class, then automatically create `Fix Task-{task}-{check}` with that error and the allowed files; after repair, create a fresh Ending task with the same acceptance check;
-7. repeat the repair/reverify loop for at most three repair attempts; use BLOCKED only for unavailable infrastructure, external state, timeout, or exhausted repair limit;
-8. let every terminal ledger event record local and Obsidian history; only receipt-backed producer PASS/FAIL may update adaptive model learning, while known unreceipted assignments remain non-learning observations.
-9. after any terminal event, keep the End/Fix task visible and print the ledger's structured model assessment: task/check score and band, producer and verifier pairs, attempt count, first-attempt or retry pass, suitability, next pair/action, concise evidence reason, and Obsidian model-record link/status. Never call `set_thread_archived`, delete the task, or expose private chain-of-thought.
+6. on FAIL, record the exact command, exit code, stdout/stderr, failure class, and acceptance mismatch when applicable; automatically submit the generated `repair_prompt` through `codex_app__send_message_to_thread` to the immutable origin session with the recorded `threadId` and `hostId`;
+7. the origin session reads the original request and current result, repairs only the authorized producer scope, runs Quick Check, presents the corrected result and a new producer receipt, then starts a fresh projectless Ending for the same acceptance check using `--repair-of-lifecycle-id`;
+8. repeat the source-session repair and fresh-reverification loop for at most three repair attempts; if the source session or prompt submission is unavailable, or the limit is exhausted, record BLOCKED;
+9. let every terminal ledger event record local and Obsidian history; only receipt-backed producer PASS/FAIL may update adaptive model learning, while known unreceipted assignments remain non-learning observations. Keep every failed Ending and repair handoff visible; never call `set_thread_archived`, create a replacement fixer, let the verifier edit the result, or expose private chain-of-thought.
 
 First-result latency includes Quick Check and ends at step 2. Ending time is recorded separately. The origin returns after linking the Ending tasks and does not poll. The lifecycle is verified only when every required check and any repair's fresh recheck PASS; BLOCKED does not count as verified. A tool's own producer-side state may be Quick Check evidence, but independent Ending must observe the completed result again.
 
@@ -35,10 +35,10 @@ First-result latency includes Quick Check and ends at step 2. Ending time is rec
 
 - Build a plan with one check object per independent acceptance surface. Separate unit, integration/API, render/visual, and live-state checks when they do not share mutable state.
 - Create one persistent task per check; pass lifecycle ID, plan/check ID, exact command, score/band, selected model/effort, receipts, project root, touched files, and allowed repair scope.
-- Always create End Tasks as projectless global tasks while preserving the exact project ID binding; acknowledge each persistent thread ID, host ID, and project ID. Use project-root-relative paths for prompts, commands, evidence, and repair scope; create a required Fix Task in that exact saved project.
+- Always create End Tasks as projectless global tasks while preserving the exact project ID binding and immutable origin session; acknowledge each persistent thread ID, host ID, and project ID. Use project-root-relative paths for prompts, commands, evidence, and repair scope. The origin session, not the verifier or a replacement fixer, owns any repair write.
 - Select quality-ladder roles by check score: small uses `weak_default`, standard `balanced_default`, complex `balanced_complex`, and advanced `frontier_complex`. Spark remains a small-edit producer, not an Ending verifier.
 - Run `ending_verification_plan.py run-check`; do not merely summarize prior Quick Check output. Independent safe checks may run concurrently. Shared-state checks remain ordered.
-- On failure, record terminal FAIL, create the repair task from `repair_handoff`, and require its new Ending task to rerun the original acceptance command. Never let the failing verifier edit the result itself.
+- On failure or acceptance mismatch, record terminal FAIL, submit `repair_handoff.repair_dispatch` to the immutable origin session, and require that session's new Ending task to rerun the original acceptance command. Never let the failing verifier edit the result itself.
 - If persistent task creation fails, record and disclose `BLOCKED: persistent End Task unavailable` plus the exact handoff; never substitute a same-task subagent or treat Ending as complete.
 
 ### Required Status Vocabulary
@@ -94,9 +94,9 @@ Routing quality learning records only the receipt-backed producer pair after Rea
 3. Run or inspect the actual artifact/state.
 4. Record input, method, observed output, and pass/fail reason.
 5. On handoff pass, record lifecycle `PASS`; a bound producer receipt records the producer outcome on the matching native Obsidian category page before terminal PASS.
-6. After any terminal event, keep the calling project task visible and print `model_assessment`; never auto-archive or delete it.
+6. After any terminal event, keep the calling project task visible and print the structured `model_assessment`; never auto-archive or delete it.
 7. On missing evidence, timeout, or concurrent state change, record lifecycle `BLOCKED` and exit visible; never ask the user for confirmation or start a repair.
-8. A correctness failure automatically creates a scoped repair task in the same saved project with the exact evidence; the repair receives its own Quick Check and a fresh independent Ending check.
+8. A correctness failure or acceptance mismatch automatically submits a scoped repair prompt to the immutable origin session with the exact evidence; that session receives the original request context, runs Quick Check, presents the corrected result, and starts a fresh independent Ending check. Repeat for at most three repairs; missing or failed prompt submission is BLOCKED.
 
 ## Artifact Guidance
 
@@ -166,6 +166,6 @@ When Cache content is reusable, retained, workflow-required, or project-influenc
 - Verify the user's observable result, not only the attempted method.
 - Do not hide uncertainty or a blocked environment.
 - Do not claim runtime receipt proof without a receipt; display a known assignment with explicit unverified evidence.
-- Do not let the failing Ending verifier alter the result. Create a separate repair task, then a fresh verifier task.
+- Do not let the failing Ending verifier alter the result. Submit the exact bounded repair prompt to the immutable origin session, then require that source session to start a fresh verifier task.
 - Do not let an optimization implementer verify its own work.
 - Do not push, deploy, or send external messages without authorization.

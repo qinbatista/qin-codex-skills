@@ -28,7 +28,7 @@ Eligible single-node text/code production enters the compact adaptive runner exa
 - Benchmark evidence is required to claim savings, not to execute a structurally valid bounded graph.
 - Every active registry-owned code-domain implementation uses `code-skill`.
 - Main Result and proportional Quick Check precede all Ending verification.
-- The origin creates and links one persistent End Task per independent real check, then returns without polling. FAIL creates a separate repair task and fresh verifier.
+- The origin captures its immutable source session, creates and links one persistent projectless End Task per independent real check, then returns without polling. FAIL or acceptance mismatch records exact evidence and submits the repair prompt to that source session through `codex_app__send_message_to_thread`; the source session performs the authorized repair and starts a fresh verifier, up to three attempts.
 - Runtime receipts prove observed routing; labels and availability probes do not.
 - Direct uses the exact raw prompt through `--direct-task`; Auto uses it through `--bootstrap-task`.
 - The public two-world comparison is fixed Sol-ultra Direct task with zero verifier versus Luna-max-entry Auto task plus separate Ending. Direct includes its Sol producer; Auto excludes only its Luna-max entry controller and must include every adaptive child/graph session in task cost.

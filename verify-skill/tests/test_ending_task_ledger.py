@@ -347,11 +347,52 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(result["status"], "written")
         self.assertEqual(result["lifecycle_status"], "failed")
         self.assertTrue(result["repair_required"])
-        self.assertEqual(result["repair_handoff"]["action"], "create_repair_task_then_fresh_ending")
+        self.assertEqual(result["repair_handoff"]["action"], "blocked_origin_session_unavailable")
+        self.assertTrue(result["repair_handoff"]["requires_origin_session"])
         self.assertFalse(result["final_gate_passed"])
         self.assertEqual(state["status"], "failed")
         self.assertEqual(state["producer_binding"]["status"], "unavailable")
         self.assertEqual(state["model_learning"], unavailable)
+
+    def test_failure_dispatches_contextual_prompt_to_original_source_session(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            plan = project / "ending-plan.json"
+            plan.write_text(json.dumps({"verification_required": True}), encoding="utf-8")
+            store = root / "store"
+            started = LEDGER.start_lifecycle("verification", project, "Verify the requested artifact", project, store=store, verification_required=True, verification_plan=plan, ending_check_id="artifact", project_id="project-123", origin_thread_id="source-session-001", origin_host_id="host-local")
+            failed = LEDGER.record_event(started["lifecycle_id"], "fail", "The final artifact differs from the original request", ["Command exited 0; acceptance mismatch: approved line is missing."], "acceptance-mismatch", store=store, failure_class="correctness")
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+            repair = LEDGER.start_lifecycle("verification", project, "Fresh Ending after source-session repair", project, repair_of_lifecycle_id=started["lifecycle_id"], store=store, verification_required=True, verification_plan=plan, ending_check_id="artifact")
+            repair_state = json.loads((store / "lifecycles" / f"{repair['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        handoff = failed["repair_handoff"]
+        self.assertEqual(handoff["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
+        self.assertEqual(handoff["repair_dispatch"]["tool"], "codex_app__send_message_to_thread")
+        self.assertEqual(handoff["repair_dispatch"]["arguments"]["threadId"], "source-session-001")
+        self.assertEqual(handoff["repair_dispatch"]["arguments"]["hostId"], "host-local")
+        self.assertIn("missing", handoff["repair_prompt"])
+        self.assertIn("Start a fresh Ending", handoff["repair_prompt"])
+        self.assertEqual(state["origin_session"], {"thread_id": "source-session-001", "host_id": "host-local"})
+        self.assertEqual(repair_state["origin_session"], state["origin_session"])
+        self.assertEqual(repair_state["project_id"], "project-123")
+
+    def test_final_failed_repair_is_immediately_blocked_at_the_limit(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            store = root / "store"
+            original = LEDGER.start_lifecycle("verification", root, "Verify the requested artifact", root, store=store, max_repair_attempts=1, project_id="project-123", origin_thread_id="source-session-001", origin_host_id="host-local")
+            LEDGER.record_event(original["lifecycle_id"], "fail", "Initial Ending failed", ["The acceptance check failed."], "acceptance-mismatch", store=store, failure_class="correctness")
+            repair = LEDGER.start_lifecycle("verification", root, "Fresh Ending after source-session repair", root, repair_of_lifecycle_id=original["lifecycle_id"], store=store)
+            final_failure = LEDGER.record_event(repair["lifecycle_id"], "fail", "The repaired result still differs", ["The acceptance check still fails."], "acceptance-mismatch", store=store, failure_class="correctness")
+            audit = LEDGER.audit_lifecycle(original["lifecycle_id"], store)
+            state = json.loads((store / "lifecycles" / f"{repair['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        self.assertEqual(final_failure["lifecycle_status"], "blocked")
+        self.assertEqual(final_failure["repair_handoff"]["action"], "repair_limit_exhausted")
+        self.assertEqual(audit["status"], "blocked")
+        self.assertEqual(audit["terminal_status"], "blocked")
+        self.assertTrue(any(event["event"] == "blocked" and event["error_fingerprint"] == "repair-attempt-limit-exceeded" for event in state["events"]))
 
     def test_verification_required_lifecycle_binds_real_plan_and_model_pair(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

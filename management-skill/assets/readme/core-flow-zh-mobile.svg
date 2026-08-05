@@ -39,7 +39,7 @@
   <rect x="110" y="830" width="500" height="130" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
   <text x="360" y="870" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="15" font-weight="700">4  符合条件的 ENDING TASK(S)</text>
   <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="22" font-weight="700">执行真实检查 · 全部 PASS</text>
-  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="16">FAIL → Fix Task → 全新 Ending，最多 3 次。</text>
+  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="16">FAIL → 返回原始 session 修复提示词 → 全新 Ending，最多 3 次。</text>
 
   <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif" font-size="16">评分 → 完成 → 返回 → 符合条件的真实 Ending</text>
 </svg>

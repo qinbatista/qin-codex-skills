@@ -12,12 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 BAND_ROLES = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}
 THREAD_TARGET = {"type": "projectless"}
-REPAIR_THREAD_TARGET = {"type": "project", "environment": {"type": "local"}, "project_id": "resolve_exact_project_root"}
 TERMINAL_THREAD_POLICY = {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"}
 CREATE_THREAD_TOOL = "codex_app__create_thread"
+ORIGIN_SESSION_RESUME_CAPABILITY = "codex_app__send_message_to_thread"
 LAUNCH_STATE_SCHEMA_VERSION = 1
 
 
@@ -32,6 +32,23 @@ def _clean(value, field, maximum=160):
     if not text:
         raise ValueError(f"{field} is required")
     return text[:maximum]
+
+
+def _normalize_origin_session(raw, project_root):
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("origin_session must be a JSON object")
+    thread_id = _clean(raw.get("thread_id"), "origin_session.thread_id", 240)
+    host_id = _clean(raw.get("host_id"), "origin_session.host_id", 160)
+    project_id = _clean(raw.get("project_id"), "origin_session.project_id", 200)
+    source_root = Path(raw.get("project_root") or project_root).expanduser().resolve()
+    if source_root != project_root:
+        raise ValueError("origin_session.project_root must match project_root")
+    resume_capability = _clean(raw.get("resume_capability") or ORIGIN_SESSION_RESUME_CAPABILITY, "origin_session.resume_capability", 160)
+    if resume_capability != ORIGIN_SESSION_RESUME_CAPABILITY:
+        raise ValueError(f"origin_session.resume_capability must be {ORIGIN_SESSION_RESUME_CAPABILITY}")
+    return {"thread_id": thread_id, "host_id": host_id, "project_id": project_id, "project_root": str(project_root), "resume_capability": resume_capability, "immutable": True}
 
 
 def _registry():
@@ -59,7 +76,7 @@ def _inside(root, value, field):
     return path
 
 
-def normalize_check(raw, project_root, task_name, task_score, registry=None):
+def normalize_check(raw, project_root, task_name, task_score, origin_session, registry=None):
     if not isinstance(raw, dict):
         raise ValueError("each check must be a JSON object")
     name = _clean(raw.get("name"), "check.name", 80)
@@ -76,6 +93,8 @@ def normalize_check(raw, project_root, task_name, task_score, registry=None):
     expected_exit = raw.get("expected_exit_code", 0)
     if isinstance(expected_exit, bool) or not isinstance(expected_exit, int):
         raise ValueError("check.expected_exit_code must be an integer")
+    acceptance = _clean(raw.get("acceptance") or name, "check.acceptance", 1200)
+    repair_scope = _clean(raw.get("repair_scope") or "Only the original producer's authorized result scope.", "check.repair_scope", 600)
     return {
         "check_id": check_id,
         "name": name,
@@ -87,25 +106,29 @@ def normalize_check(raw, project_root, task_name, task_score, registry=None):
         "expected_exit_code": expected_exit,
         "timeout_seconds": timeout,
         "independent": bool(raw.get("independent", True)),
+        "acceptance": acceptance,
+        "repair_scope": repair_scope,
         **route,
         "on_failure": {
-            "action": "create_repair_task_then_fresh_ending",
-            "repair_title": f"Fix Task-{task_name}-{name}",
-            "thread_target": {**REPAIR_THREAD_TARGET, "project_root": str(project_root)},
+            "action": "send_repair_prompt_to_origin_session_then_fresh_ending",
+            "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY,
             "terminal_thread_policy": TERMINAL_THREAD_POLICY,
             "error_fields": ["exit_code", "stdout", "stderr", "timed_out"],
             "max_repair_attempts": 3,
+            "origin_session_required": True,
+            "origin_session": origin_session,
         },
     }
 
 
-def build_plan(project_root, task_name, task_score, checks):
+def build_plan(project_root, task_name, task_score, checks, origin_session=None):
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
         raise ValueError("project_root must be an existing directory")
     cleaned_task = _clean(task_name, "task_name", 80)
     registry = _registry()
-    tasks = [normalize_check(check, root, cleaned_task, task_score, registry) for check in checks]
+    normalized_origin_session = _normalize_origin_session(origin_session, root)
+    tasks = [normalize_check(check, root, cleaned_task, task_score, normalized_origin_session, registry) for check in checks]
     if not tasks:
         raise ValueError("at least one real verification check is required")
     ids = [task["check_id"] for task in tasks]
@@ -122,6 +145,8 @@ def build_plan(project_root, task_name, task_score, checks):
         "thread_target": {**THREAD_TARGET, "project_root": str(root)},
         "terminal_thread_policy": TERMINAL_THREAD_POLICY,
         "all_checks_must_pass": True,
+        "origin_session": normalized_origin_session,
+        "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": 3, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
         "ending_tasks": tasks,
     }
 
@@ -146,6 +171,17 @@ def _read_json(path, field):
     return source, payload
 
 
+def _repair_handoff(check, origin_session, observed, mismatch_summary=""):
+    mismatch = _clean(mismatch_summary, "requirement_mismatch", 1200) if mismatch_summary else ""
+    if not origin_session:
+        return {"action": "blocked_origin_session_unavailable", "origin_session": None, "origin_session_required": True, "reason": "The exact producer session was not captured before Ending launched."}
+    evidence_reason = mismatch or ("The real acceptance command did not produce the expected exit result." if observed.get("timed_out") or observed.get("exit_code") != check["expected_exit_code"] else "The observed final result did not satisfy the original acceptance contract.")
+    prompt_lines = ["Continue the original producer task in this exact origin session.", "Do not restart Task Analyze, do not let the Ending verifier edit the result, and do not ask the user to copy this prompt.", f"Original acceptance contract: {check['acceptance']}", f"Observed Ending issue: {evidence_reason}", f"Observed exit code: {observed.get('exit_code')}", f"Observed stdout: {observed.get('stdout') or '<empty>'}", f"Observed stderr: {observed.get('stderr') or '<empty>'}", f"Repair scope: {check['repair_scope']}", "Repair the result so it satisfies the original user objective and acceptance contract, run the bounded Quick Check, and return the corrected result plus a new producer receipt to the parent lifecycle. The parent will launch a fresh projectless Ending for the same check; do not create or wait for that Ending here."]
+    repair_prompt = "\n".join(prompt_lines)
+    repair_dispatch = {"tool": ORIGIN_SESSION_RESUME_CAPABILITY, "arguments": {"threadId": origin_session["thread_id"], "hostId": origin_session["host_id"], "prompt": repair_prompt}, "required": True}
+    return {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session": origin_session, "origin_session_required": True, "prompt_submission": "automatic", "repair_dispatch": repair_dispatch, "repair_prompt": repair_prompt, "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
+
+
 def _worker_prompt(plan_path, plan, check, evidence_output, memory_candidates_output, producer_receipt=None):
     project_root = Path(plan["project_root"]).expanduser().resolve()
     relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root)
@@ -167,10 +203,16 @@ def _worker_prompt(plan_path, plan, check, evidence_output, memory_candidates_ou
             f"Assigned pair: {check['selected_pair']}",
             f"Complexity: {check['complexity_score']}/100 ({check['complexity_band']})",
             f"Expected command: {command_text}",
+            f"Original acceptance contract: {check['acceptance']}",
+            f"Authorized repair scope: {check['repair_scope']}",
+            f"Origin producer session (immutable): {json.dumps(plan.get('origin_session'), ensure_ascii=False, separators=(',', ':'))}",
             f"Producer receipt relative to project root: {receipt_line}",
             "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the plan's exact run-check command from the project root.",
-            "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; bind the producer receipt when present. Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation.",
+            "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; when starting it, persist --project-id, --origin-thread-id, and --origin-host-id from origin_session and bind the producer receipt when present. Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation.",
             "PASS requires the new evidence file to report status=pass and the expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this projectless global task visible.",
+            "A command PASS is not enough when the final artifact/state differs from the original user objective or acceptance contract. In that case, mark the evidence as a correctness mismatch with the plan's mismatch command, then use the repair handoff.",
+            "On FAIL or a correctness mismatch, do not edit the result in this Ending. Record exact evidence, then automatically submit the generated repair_prompt by calling codex_app__send_message_to_thread with repair_dispatch.arguments (threadId, hostId, and the exact prompt) to continue the original origin session. The prompt must identify the observed defect or requirement gap, original acceptance, evidence, authorized repair scope, and required next result. The origin session must repair, run Quick Check, and present a new result and producer receipt; the parent lifecycle then launches a fresh projectless Ending with the same check. Repeat this loop for at most three repair attempts; unavailable or failed origin-session submission is BLOCKED.",
+            "The failed Ending and its repair handoff remain visible as the audit record; the original producer session is the only repair executor. Never open a replacement fixer session, self-repair, self-verify, create nested End/Fix tasks, or wait/poll for the origin session.",
             "Every Codex submission receives a bounded personal-memory scan. Analyze only explicit user preferences, repeated user corrections, or verified working patterns relevant to this task; do not infer sensitive traits and never copy raw prompts, raw results, paths, secrets, or chain-of-thought.",
             "If the scan finds no durable preference or technical working trait, do not create the personal memory candidates file and pass no --memory-candidates-file option. If it finds candidates, write only {\"candidates\":[...]} to the assigned file using kind=preference|technical-trait, area=ui|workflow|technical|general, basis=explicit_user_request|repeated_user_correction|verified_work_pattern, confidence=high|medium, source=ending, statement, and compact evidence; then pass --memory-candidates-file with the relative path to the terminal ledger event.",
             "Personal memory is separate from model-routing and project-change memory. A candidate write must not alter the requested result; an empty candidate set must be a strict no-op.",
@@ -187,6 +229,11 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         raise ValueError("plan.project_root must be an existing directory")
     project_value = _clean(project_id, "project_id", 200)
     _inside(project_root, plan_file, "plan")
+    origin_session = _normalize_origin_session(plan.get("origin_session"), project_root)
+    if not origin_session:
+        raise ValueError("origin_session is required for a repair-capable Ending launch")
+    if origin_session["project_id"] != project_value:
+        raise ValueError("origin_session.project_id must match project_id")
     evidence_root = _inside(project_root, evidence_dir, "evidence_dir")
     receipt_path = None
     if producer_receipt:
@@ -245,6 +292,8 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         },
         "execution": "host_persistent_create_thread",
         "thread_target": dict(THREAD_TARGET),
+        "origin_session": origin_session,
+        "repair_policy": plan.get("repair_policy"),
         "required_launch_count": len(launch_requests),
         "launch_requests": launch_requests,
         "launch_gate": "all_requests_require_thread_and_host_acknowledgement",
@@ -372,6 +421,8 @@ def run_check(plan_path, check_id, evidence_output):
         "selected_pair": check["selected_pair"],
         "complexity_score": check["complexity_score"],
         "complexity_band": check["complexity_band"],
+        "failure_class": "none" if passed else "timeout" if timed_out else "execution",
+        "repair_context": {"origin_session": plan.get("origin_session"), "acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "max_repair_attempts": check["on_failure"]["max_repair_attempts"]},
         "command": check["command"],
         "cwd": check["cwd"],
         "expected_exit_code": check["expected_exit_code"],
@@ -385,8 +436,25 @@ def run_check(plan_path, check_id, evidence_output):
         "plan_sha256": hashlib.sha256(plan_file.read_bytes()).hexdigest(),
     }
     if not passed:
-        evidence["repair_handoff"] = {**check["on_failure"], "failed_ending_title": check["title"], "failed_check_id": check_id, "error": {key: evidence[key] for key in check["on_failure"]["error_fields"]}}
+        evidence["repair_handoff"] = {**_repair_handoff(check, plan.get("origin_session"), evidence), "failed_ending_title": check["title"], "failed_check_id": check_id, "error": {key: evidence[key] for key in check["on_failure"]["error_fields"]}, "terminal_thread_policy": check["on_failure"]["terminal_thread_policy"]}
     _atomic_write(evidence_output, evidence)
+    return evidence
+
+
+def record_requirement_mismatch(evidence_path, mismatch_summary):
+    evidence_file, evidence = _read_json(evidence_path, "evidence")
+    if not evidence.get("repair_context"):
+        raise ValueError("evidence does not contain repair_context")
+    summary = _clean(mismatch_summary, "requirement_mismatch", 1200)
+    evidence["status"] = "fail"
+    evidence["failure_class"] = "correctness"
+    evidence["error_fingerprint"] = "acceptance-mismatch"
+    evidence["requirement_mismatch"] = summary
+    context = evidence["repair_context"]
+    check = {"title": evidence.get("title"), "check_id": evidence.get("check_id"), "expected_exit_code": evidence.get("expected_exit_code"), "acceptance": context["acceptance"], "repair_scope": context["repair_scope"], "on_failure": {"max_repair_attempts": context["max_repair_attempts"]}}
+    observed = {"exit_code": evidence.get("exit_code"), "stdout": evidence.get("stdout"), "stderr": evidence.get("stderr"), "timed_out": evidence.get("timed_out")}
+    evidence["repair_handoff"] = {**_repair_handoff(check, context.get("origin_session"), observed, summary), "failed_ending_title": evidence.get("title"), "failed_check_id": evidence.get("check_id"), "error": {"exit_code": evidence.get("exit_code"), "stdout": evidence.get("stdout"), "stderr": evidence.get("stderr"), "timed_out": evidence.get("timed_out")}}
+    _atomic_write(evidence_file, evidence)
     return evidence
 
 
@@ -397,12 +465,16 @@ def parse_args(argv=None):
     plan.add_argument("--project-root", type=Path, required=True)
     plan.add_argument("--task-name", required=True)
     plan.add_argument("--complexity-score", type=int, required=True)
+    plan.add_argument("--origin-session-json", required=True)
     plan.add_argument("--check-json", action="append", default=[])
     plan.add_argument("--output", type=Path, required=True)
     run = subparsers.add_parser("run-check")
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--check-id", required=True)
     run.add_argument("--evidence-output", type=Path, required=True)
+    mismatch = subparsers.add_parser("mismatch")
+    mismatch.add_argument("--evidence", type=Path, required=True)
+    mismatch.add_argument("--summary", required=True)
     launch = subparsers.add_parser("create-launches")
     launch.add_argument("--plan", type=Path, required=True)
     launch.add_argument("--evidence-dir", type=Path, required=True)
@@ -425,12 +497,15 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     if args.command == "plan":
-        payload = build_plan(args.project_root, args.task_name, args.complexity_score, [json.loads(value) for value in args.check_json])
+        payload = build_plan(args.project_root, args.task_name, args.complexity_score, [json.loads(value) for value in args.check_json], json.loads(args.origin_session_json))
         _atomic_write(args.output, payload)
         output = {"status": "written", "output": str(args.output.expanduser().resolve()), "ending_tasks": len(payload["ending_tasks"]), "selected_pairs": [task["selected_pair"] for task in payload["ending_tasks"]]}
         code = 0
     elif args.command == "run-check":
         output = run_check(args.plan, args.check_id, args.evidence_output)
+        code = 0 if output["status"] == "pass" else 1
+    elif args.command == "mismatch":
+        output = record_requirement_mismatch(args.evidence, args.summary)
         code = 0 if output["status"] == "pass" else 1
     elif args.command == "create-launches":
         output = build_launch_spec(args.plan, args.evidence_dir, args.project_id, args.producer_receipt)

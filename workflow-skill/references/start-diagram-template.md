@@ -40,4 +40,4 @@ After the Mermaid diagram, list each real node with purpose, exact model ID, eff
 - Main Result always precedes Ending Task.
 - Ending Task always follows Main Result.
 - Real Verify never contributes to user-visible first-result latency.
-- A Real correctness failure records exact evidence, creates a separate repair task, and requires a fresh Ending verifier.
+- A Real correctness failure or acceptance mismatch records exact evidence, submits a bounded repair prompt to the immutable origin session, and requires that source session to start a fresh Ending verifier.

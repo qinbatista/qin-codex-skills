@@ -26,7 +26,7 @@
 1. **每个提交先按 0–100 评分，再完成用户要求的工作**，并运行与实现相称的基础检查。
 2. **立即返回已完成结果。** 不让用户被验证、轮询或修复流程卡住。
 3. **复杂或重要结果确实需要真实检查时，入口父任务才为每个独立检查在全局任务列表中为每个独立检查另开一个评分并选模的 projectless `End Task-<任务名>-<检查>`。** 锁定 producer 不递归启动 Ending；父任务绑定 receipt、把原项目根保留为执行上下文，并要求真实 thread 回执。
-4. **每个 Ending 必须执行分配的真实检查，所有必需检查都要 PASS。** PASS/FAIL/BLOCKED task 都保持可见（包括 End Task），并报告阶段难度与模型、尝试次数、一次过/重试通过、模型适配度、下一模型路线和 Obsidian 记录链接/状态。FAIL 会在同一项目建立 Fix Task，再由全新的 projectless End Task 重跑；最多修复三次。End/Fix task 永不自动归档或删除。
+4. **每个 Ending 必须执行分配的真实检查，所有必需检查都要 PASS。** PASS/FAIL/BLOCKED task 都保持可见（包括 End Task），并报告阶段难度与模型、尝试次数、一次过/重试通过、模型适配度、下一模型路线和 Obsidian 记录链接/状态。FAIL 或验收到最终结果与原始需求不一致时，通过 `codex_app__send_message_to_thread` 把准确修复提示词发送回不可变的原始 session；原始 session 修复授权范围内的结果，再启动全新的 projectless End Task 重跑，最多修复三次。Ending task 与修复交接永不自动归档或删除。
 
 主工作与 Ending 验证刻意使用不同任务会话。文字总结不算验证；重型修改必须用对应的真实测试、API 证据、build、render 或视觉检查证明。
 

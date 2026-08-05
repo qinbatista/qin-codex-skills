@@ -39,7 +39,7 @@
   <rect x="110" y="830" width="500" height="130" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
   <text x="360" y="870" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" font-weight="700">4  ELIGIBLE ENDING TASK(S)</text>
   <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="700">Run real checks · all PASS</text>
-  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">FAIL → Fix Task → fresh Ending, up to 3.</text>
+  <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">FAIL → origin session repair prompt → fresh Ending, up to 3.</text>
 
   <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">Score → finish → return → eligible real Ending</text>
 </svg>

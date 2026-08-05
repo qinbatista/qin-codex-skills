@@ -52,7 +52,7 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 
 - Before presenting a light/local Python edit, run the smallest safe focused smoke that exercises the changed function. For API, large-file, expensive, destructive, or import-side-effect-heavy work, skip the heavy run; use `py_compile` or AST parsing plus direct changed function, variable, import, and reference checks.
 - Present `CODE READY` with Quick Check evidence, then build real proportional Ending checks. Create one scored/modelled persistent task per independent unit, integration/API, or runtime check and return without polling. Every required check must PASS.
-- A failing verifier records the exact command/output/error and creates a separate scoped repair task. After repair, create a fresh verifier that reruns the original check; continue for at most three attempts. BLOCKED is not verified.
+- A failing verifier records the exact command/output/error and acceptance gap, then submits the generated repair prompt through `codex_app__send_message_to_thread` to the immutable origin session. That source session repairs only the authorized result, runs Quick Check, presents a new result, and starts a fresh Ending that reruns the original check with `--repair-of-lifecycle-id`; continue for at most three attempts. Missing source-session metadata or failed prompt submission is BLOCKED, and BLOCKED is not verified.
 - Record an optional simplification idea without editing only when the delivered behavior is already correct and no repair is required.
 
 ## Error Handling

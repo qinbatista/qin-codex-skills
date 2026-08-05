@@ -4,9 +4,9 @@
   "scope": "shared_non_personal",
   "source": {
     "models_cache": "~/.codex/models_cache.json",
-    "client_version": "0.146.0",
-    "fetched_at": "2026-08-04T23:57:39.372386Z",
-    "catalog_sha256": "321268789daf09d6aee6d5178cff4b9c46898678716440d4fc3c77417704675a"
+    "client_version": "0.147.0",
+    "fetched_at": "2026-08-05T23:02:42.823500Z",
+    "catalog_sha256": "89a08bd6f50209ae92bf9ef10304318a082a960cfd345798c77997ddd3dde11b"
   },
   "active_family": {
     "id": "gpt-5.6",
