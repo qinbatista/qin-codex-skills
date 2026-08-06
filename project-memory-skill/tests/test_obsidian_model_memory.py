@@ -145,6 +145,26 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(first["task_name"], "step-one")
         self.assertEqual(second["task_name"], "step-two")
 
+    def test_related_session_group_is_read_with_evidence_but_unrelated_session_isolated(self):
+        current_session = "019fc8e5-87da-7082-90b9-6d505404d231"
+        related_session = "019fc8e5-87da-7082-90b9-6d505404d232"
+        unrelated_session = "019fc8e5-87da-7082-90b9-6d505404d233"
+        query = module._query(self.project, "code", "example-module", "src/example.py", "Example.run", "python", "edit", "text", "easy", 35, "low", "low", "related task", "implementation", None, "current-step", "shared-route")
+        shared_group_key = module.session_effort.task_group_key(query["project"]["key"], "shared-route", "related-step")
+        unrelated_group_key = module.session_effort.task_group_key(query["project"]["key"], "other-route", "unrelated-step")
+        common = {"model_experience_schema": 1, "project_key": query["project"]["key"], "project_owner": "ThisIsMyOregon", "task_type": query["task_type"], "task_summary": query["task_summary"], "module": query["module"], "file": query["file"], "symbol": query["symbol"], "code_kind": query["code_kind"], "operation": query["operation"], "modality": query["modality"], "complexity": query["complexity"], "complexity_score": query["complexity_score"], "complexity_band": query["complexity_band"], "risk": query["risk"], "ambiguity": query["ambiguity"], "step_kind": query["step_kind"], "capability_tags": query["capability_tags"], "capability_fingerprint": query["capability_fingerprint"], "pair": "gpt-5.6-terra|high", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none", "recorded_at": "2026-08-06T12:00:00Z"}
+        related = {**common, "record_id": "related-record", "event_id": "related-event", "task_name": "related-step", "task_group": "shared-route", "task_group_key": shared_group_key, "task_scope_key": module.session_effort.task_scope_key(query["project"]["key"], query["task_type"], query["module"], "related-step"), "codex_session_key": module.session_effort.session_key(related_session), "session_key": module.session_effort.session_key(related_session)}
+        unrelated = {**common, "record_id": "unrelated-record", "event_id": "unrelated-event", "task_name": "unrelated-step", "task_group": "other-route", "task_group_key": unrelated_group_key, "task_scope_key": module.session_effort.task_scope_key(query["project"]["key"], query["task_type"], query["module"], "unrelated-step"), "codex_session_key": module.session_effort.session_key(unrelated_session), "session_key": module.session_effort.session_key(unrelated_session), "pair": "gpt-5.6-sol|high"}
+        self.write_local_history([related, unrelated], prefix="related")
+        recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", complexity_score=35, risk="low", ambiguity="low", task_summary="related task", task_name="current-step", task_group="shared-route", session_id=current_session, vault=self.vault)
+        related_key = module.session_effort.session_key(related_session)
+        self.assertEqual(recommendation["matched_records"], 1)
+        self.assertEqual(recommendation["related_session_count"], 1)
+        self.assertEqual(recommendation["related_session_keys"], [related_key])
+        self.assertEqual(recommendation["scope_relation_counts"].get("related_task_group"), 1)
+        self.assertEqual(recommendation["related_session_evidence"][0]["source_session_key"], related_key)
+        self.assertEqual(recommendation["related_session_evidence"][0]["relation_reason"], "related_task_group")
+
 
 
 

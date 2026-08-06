@@ -77,19 +77,64 @@ def task_scope_key(project_key="", task_type="", module="", task_name=""):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
+def task_group_key(project_key="", task_group="", task_name=""):
+    relation_name = task_group or task_name
+    if not str(relation_name or "").strip():
+        return ""
+    normalized = normalize_task_name(relation_name, "group")
+    return hashlib.sha256(f"{str(project_key or '').strip().lower()}|task-group|{normalized}".encode("utf-8")).hexdigest()[:24]
+
+
+def task_context_key(project_key="", task_type="", module="", file_value="", symbol="", capability_fingerprint="", operation="", modality="", complexity_band="", risk="", ambiguity=""):
+    values = (project_key, task_type, module, file_value, symbol, capability_fingerprint, operation, modality, complexity_band, risk, ambiguity)
+    if not any(str(value or "").strip() for value in values):
+        return ""
+    payload = "|".join(re.sub(r"\s+", " ", str(value or "")).strip().lower() for value in values)
+    return hashlib.sha256(f"task-context|{payload}".encode("utf-8")).hexdigest()[:24]
+
+
 def session_task_scope_key(session_key_value, task_scope):
     return hashlib.sha256(f"{str(session_key_value or '')}|{str(task_scope or '')}".encode("utf-8")).hexdigest()[:24]
 
 
-def scope_matches(record, *, session_key_value="", task_scope=""):
-    """Return whether one memory record belongs to the active session/task scope."""
+def scope_relation(record, *, session_key_value="", task_scope="", task_group_key_value="", task_context_key_value=""):
+    """Return the evidence-backed relation between a record and the active scope.
+
+    A session key is an identity boundary, not an unconditional cross-session
+    sharing ban. Same-task, same-group, and matching bounded task-context keys
+    may relate different sessions; otherwise a different session is excluded.
+    Scoped reads also exclude legacy rows that do not carry the requested
+    relation metadata.
+    """
     record_session_key = str(record.get("codex_session_key") or record.get("session_key") or "")
     record_task_scope = str(record.get("task_scope_key") or "")
-    if session_key_value and record_session_key != str(session_key_value):
-        return False
-    if task_scope and record_task_scope != str(task_scope):
-        return False
-    return bool(session_key_value or task_scope)
+    record_project = record.get("project") if isinstance(record.get("project"), dict) else {}
+    record_project_key = str(record.get("project_key") or record_project.get("key") or "")
+    record_group_key = str(record.get("task_group_key") or "") or task_group_key(record_project_key, record.get("task_group", ""), record.get("task_name", ""))
+    record_context_key = str(record.get("task_context_key") or "") or task_context_key(record_project_key, record.get("task_type", ""), record.get("module", ""), record.get("file", ""), record.get("symbol", ""), record.get("capability_fingerprint", ""), record.get("operation", ""), record.get("modality", ""), record.get("complexity_band") or record.get("complexity", ""), record.get("risk", ""), record.get("ambiguity", ""))
+    active_session_key = str(session_key_value or "")
+    active_task_scope = str(task_scope or "")
+    active_group_key = str(task_group_key_value or "")
+    active_context_key = str(task_context_key_value or "")
+    if not (active_session_key or active_task_scope or active_group_key):
+        return {"matched": True, "reason": "unscoped_query", "same_session": False}
+    same_session = bool(active_session_key and record_session_key == active_session_key)
+    same_task = bool(active_task_scope and record_task_scope == active_task_scope)
+    same_group = bool(active_group_key and record_group_key == active_group_key)
+    same_context = bool(active_context_key and record_context_key and record_context_key == active_context_key)
+    if same_task:
+        return {"matched": True, "reason": "same_session_task" if same_session else "related_task_scope", "same_session": same_session}
+    if same_group:
+        return {"matched": True, "reason": "same_session_task_group" if same_session else "related_task_group", "same_session": same_session}
+    if same_context and not same_session:
+        return {"matched": True, "reason": "related_task_context", "same_session": False}
+    if same_session and not (active_task_scope or active_group_key):
+        return {"matched": True, "reason": "same_session", "same_session": True}
+    return {"matched": False, "reason": "unrelated_session", "same_session": same_session}
+
+
+def scope_matches(record, *, session_key_value="", task_scope="", task_group_key_value="", task_context_key_value=""):
+    return bool(scope_relation(record, session_key_value=session_key_value, task_scope=task_scope, task_group_key_value=task_group_key_value, task_context_key_value=task_context_key_value)["matched"])
 
 
 def _prompt_hash(prompt):
@@ -408,23 +453,26 @@ def solve_route_pair(summary, previous_pair, pairs, quality_base_pair=None):
 
 
 def _summary_defaults():
-    return {"available": False, "session_key": "", "codex_session_key": "", "project_match": False, "state": "unavailable", "turn_count": 0, "prior_turn_count": 0, "same_task_turns": 0, "user_effort": 0, "failure_recorded": False, "last_model_pair": "", "last_model_source": "", "model_pairs": [], "task_name": "", "task_scope_key": "", "task_scope_mode": "unscoped", "session_task_scope_key": "", "task_topic_fingerprint": "", "current_turn_key": "", "current_prompt_sha256": "", "solving_surface": "", "task_length": "", "step_estimate": 0, "step_class": "", "estimated_effort": "", "information_burden": "", "model_family": "", "model_difficulty": "", "difficulty_class": "", "route_class": "", "preferred_solving_pair": "", "route_reason": "", "explicit_route_hint": "", "session_event_id": "", "session_event_status": "not_recorded"}
+    return {"available": False, "session_key": "", "codex_session_key": "", "project_match": False, "state": "unavailable", "turn_count": 0, "prior_turn_count": 0, "same_task_turns": 0, "user_effort": 0, "failure_recorded": False, "last_model_pair": "", "last_model_source": "", "model_pairs": [], "task_name": "", "task_group": "", "task_scope_key": "", "task_group_key": "", "task_scope_mode": "unscoped", "session_task_scope_key": "", "task_topic_fingerprint": "", "current_turn_key": "", "current_prompt_sha256": "", "solving_surface": "", "task_length": "", "step_estimate": 0, "step_class": "", "estimated_effort": "", "information_burden": "", "model_family": "", "model_difficulty": "", "difficulty_class": "", "route_class": "", "preferred_solving_pair": "", "route_reason": "", "explicit_route_hint": "", "session_event_id": "", "session_event_status": "not_recorded"}
 
 
-def assess_session(prompt, project_root, *, project_key="", task_type="", module="", capability_fingerprint="", operation="", modality="", complexity_score=None, task_summary="", task_name="", session_id="", sessions_root=None, local_store=None):
+def assess_session(prompt, project_root, *, project_key="", task_type="", module="", capability_fingerprint="", operation="", modality="", complexity_score=None, task_summary="", task_name="", task_group="", session_id="", sessions_root=None, local_store=None):
     resolved_session_id = resolve_session_id(prompt, session_id)
     summary = _summary_defaults()
     explicit_task_name = str(task_name or os.environ.get("CODEX_TASK_NAME") or "").strip()
+    explicit_task_group = str(task_group or os.environ.get("CODEX_TASK_GROUP") or "").strip()
     summary["task_name"] = normalize_task_name(explicit_task_name) if explicit_task_name else ""
+    summary["task_group"] = normalize_task_name(explicit_task_group, "group") if explicit_task_group else ""
     stable_task_scope = task_scope_key(project_key, task_type, module, summary["task_name"] or module or task_type)
     summary["task_scope_key"] = stable_task_scope if explicit_task_name else ""
+    summary["task_group_key"] = task_group_key(project_key, summary["task_group"], summary["task_name"])
     if not resolved_session_id:
-        summary["task_scope_mode"] = "task" if summary["task_scope_key"] else "unscoped"
+        summary["task_scope_mode"] = "task+group" if summary["task_scope_key"] and summary["task_group_key"] else "task" if summary["task_scope_key"] else "group" if summary["task_group_key"] else "unscoped"
         return summary
     summary["session_key"] = session_key(resolved_session_id)
     summary["codex_session_key"] = summary["session_key"]
     summary["session_task_scope_key"] = session_task_scope_key(summary["session_key"], stable_task_scope)
-    summary["task_scope_mode"] = "session+task" if summary["task_scope_key"] else "session"
+    summary["task_scope_mode"] = "session+task+group" if summary["task_scope_key"] and summary["task_group_key"] else "session+task" if summary["task_scope_key"] else "session+group" if summary["task_group_key"] else "session"
     summary["current_prompt_sha256"] = _prompt_hash(prompt)
     candidates = _candidate_paths(resolved_session_id, sessions_root)
     rollout = _read_rollout(candidates[-1], resolved_session_id) if candidates else None
@@ -508,7 +556,7 @@ def record_session_effort(summary, *, project_key, task_type, module, capability
     event_payload = "|".join(str(value or "") for value in (summary["session_key"], summary.get("session_task_scope_key"), project_key, task_type, module, current_prompt_sha256, summary.get("current_turn_key")))
     event_id = hashlib.sha256(event_payload.encode("utf-8")).hexdigest()
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    record = {"session_memory_schema": SESSION_SCHEMA_VERSION, "event_id": event_id, "recorded_at": timestamp, "session_key": str(summary["session_key"]), "codex_session_key": str(summary.get("codex_session_key") or summary.get("session_key") or ""), "session_task_scope_key": str(summary.get("session_task_scope_key") or ""), "task_name": str(summary.get("task_name") or ""), "task_scope_key": str(summary.get("task_scope_key") or ""), "task_scope_mode": str(summary.get("task_scope_mode") or "session"), "turn_key": str(summary.get("current_turn_key") or ""), "project_key": str(project_key or ""), "task_type": str(task_type or ""), "module": str(module or ""), "capability_fingerprint": str(capability_fingerprint or ""), "complexity_score": complexity_score, "complexity_band": str(complexity_band or ""), "state": str(summary.get("state") or ""), "failure_recorded": bool(summary.get("failure_recorded")), "same_task_turns": int(summary.get("same_task_turns") or 0), "user_effort": int(summary.get("user_effort") or 0), "selected_pair": str(selected_pair or ""), "requested_pair": str(requested_pair or ""), "prior_model_pair": str(summary.get("last_model_pair") or ""), "model_pairs": [str(pair) for pair in summary.get("model_pairs", []) if isinstance(pair, str)], "task_topic_fingerprint": str(summary.get("task_topic_fingerprint") or ""), "solving_surface": str(summary.get("solving_surface") or ""), "task_length": str(summary.get("task_length") or ""), "step_estimate": int(summary.get("step_estimate") or 0), "step_class": str(summary.get("step_class") or ""), "estimated_effort": str(summary.get("estimated_effort") or ""), "information_burden": str(summary.get("information_burden") or ""), "model_family": str(summary.get("model_family") or ""), "model_difficulty": str(summary.get("model_difficulty") or ""), "difficulty_class": str(summary.get("difficulty_class") or ""), "route_class": str(summary.get("route_class") or ""), "preferred_solving_pair": str(summary.get("preferred_solving_pair") or ""), "route_reason": str(summary.get("route_reason") or ""), "explicit_route_hint": str(summary.get("explicit_route_hint") or "")}
+    record = {"session_memory_schema": SESSION_SCHEMA_VERSION, "event_id": event_id, "recorded_at": timestamp, "session_key": str(summary["session_key"]), "codex_session_key": str(summary.get("codex_session_key") or summary.get("session_key") or ""), "session_task_scope_key": str(summary.get("session_task_scope_key") or ""), "task_name": str(summary.get("task_name") or ""), "task_group": str(summary.get("task_group") or ""), "task_scope_key": str(summary.get("task_scope_key") or ""), "task_group_key": str(summary.get("task_group_key") or ""), "task_scope_mode": str(summary.get("task_scope_mode") or "session"), "turn_key": str(summary.get("current_turn_key") or ""), "project_key": str(project_key or ""), "task_type": str(task_type or ""), "module": str(module or ""), "capability_fingerprint": str(capability_fingerprint or ""), "complexity_score": complexity_score, "complexity_band": str(complexity_band or ""), "state": str(summary.get("state") or ""), "failure_recorded": bool(summary.get("failure_recorded")), "same_task_turns": int(summary.get("same_task_turns") or 0), "user_effort": int(summary.get("user_effort") or 0), "selected_pair": str(selected_pair or ""), "requested_pair": str(requested_pair or ""), "prior_model_pair": str(summary.get("last_model_pair") or ""), "model_pairs": [str(pair) for pair in summary.get("model_pairs", []) if isinstance(pair, str)], "task_topic_fingerprint": str(summary.get("task_topic_fingerprint") or ""), "solving_surface": str(summary.get("solving_surface") or ""), "task_length": str(summary.get("task_length") or ""), "step_estimate": int(summary.get("step_estimate") or 0), "step_class": str(summary.get("step_class") or ""), "estimated_effort": str(summary.get("estimated_effort") or ""), "information_burden": str(summary.get("information_burden") or ""), "model_family": str(summary.get("model_family") or ""), "model_difficulty": str(summary.get("model_difficulty") or ""), "difficulty_class": str(summary.get("difficulty_class") or ""), "route_class": str(summary.get("route_class") or ""), "preferred_solving_pair": str(summary.get("preferred_solving_pair") or ""), "route_reason": str(summary.get("route_reason") or ""), "explicit_route_hint": str(summary.get("explicit_route_hint") or "")}
     path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
     lock_path = path.with_suffix(path.suffix + ".lock")
     path.parent.mkdir(parents=True, exist_ok=True)

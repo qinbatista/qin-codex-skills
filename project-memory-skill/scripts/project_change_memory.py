@@ -34,16 +34,19 @@ _SESSION_EFFORT = importlib.util.module_from_spec(_SESSION_EFFORT_SPEC)
 _SESSION_EFFORT_SPEC.loader.exec_module(_SESSION_EFFORT)
 
 
-def _memory_scope(project_key, module, task_name="", session_id=""):
+def _memory_scope(project_key, module, task_name="", task_group="", session_id=""):
     resolved_session_id = _SESSION_EFFORT.resolve_session_id("", session_id)
     normalized_task_name = _SESSION_EFFORT.normalize_task_name(task_name) if str(task_name or "").strip() else ""
-    return {"codex_session_key": _SESSION_EFFORT.session_key(resolved_session_id) if resolved_session_id else "", "task_name": normalized_task_name, "task_scope_key": _SESSION_EFFORT.task_scope_key(project_key, "project-change", module, normalized_task_name) if normalized_task_name else "", "task_scope_mode": "session+task" if resolved_session_id and normalized_task_name else "session" if resolved_session_id else "task" if normalized_task_name else "unscoped"}
+    normalized_task_group = _SESSION_EFFORT.normalize_task_name(task_group, "group") if str(task_group or "").strip() else ""
+    task_scope = _SESSION_EFFORT.task_scope_key(project_key, "project-change", module, normalized_task_name) if normalized_task_name else ""
+    group_scope = _SESSION_EFFORT.task_group_key(project_key, normalized_task_group, normalized_task_name)
+    return {"codex_session_key": _SESSION_EFFORT.session_key(resolved_session_id) if resolved_session_id else "", "task_name": normalized_task_name, "task_group": normalized_task_group, "task_scope_key": task_scope, "task_group_key": group_scope, "task_scope_mode": "session+task+group" if resolved_session_id and task_scope and group_scope else "session+task" if resolved_session_id and task_scope else "session+group" if resolved_session_id and group_scope else "session" if resolved_session_id else "task+group" if task_scope and group_scope else "task" if task_scope else "group" if group_scope else "unscoped"}
 
 
 def _record_in_memory_scope(record, scope):
-    if not (scope.get("codex_session_key") or scope.get("task_scope_key")):
+    if not (scope.get("codex_session_key") or scope.get("task_scope_key") or scope.get("task_group_key")):
         return True
-    return _SESSION_EFFORT.scope_matches(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""))
+    return _SESSION_EFFORT.scope_matches(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""), task_group_key_value=scope.get("task_group_key", ""))
 
 
 def _acquire_file_lock(lock_handle):
@@ -232,7 +235,7 @@ def _markdown_entry(record):
     risks = "; ".join(record["risks"]) or "none"
     supersedes = record["supersedes"] or "none"
     anchor = _event_anchor(record["id"])
-    return f"### {record['recorded_at']} — {record['summary']}\n\n- Record ID: `{record['id']}`\n- Module: {record['module']}\n- Task scope: {record.get('task_scope_mode', 'unscoped')} / `{record.get('task_scope_key', '')}`\n- Scope: {record['scope']}\n- Change kind: {record['change_kind']}\n- What changed: {record['summary']}\n- Why: {record['reason']}\n- Result: {record['result']}\n- Verification: {record['verification_status']} — {verifications}\n- Decisions: {decisions}\n- Remaining risks: {risks}\n- Supersedes: `{supersedes}`\n- Files:\n{files}\n\n^{anchor}\n\n"
+    return f"### {record['recorded_at']} — {record['summary']}\n\n- Record ID: `{record['id']}`\n- Module: {record['module']}\n- Task scope: {record.get('task_scope_mode', 'unscoped')} / `{record.get('task_scope_key', '')}`\n- Task group: {record.get('task_group', '')} / `{record.get('task_group_key', '')}`\n- Scope: {record['scope']}\n- Change kind: {record['change_kind']}\n- What changed: {record['summary']}\n- Why: {record['reason']}\n- Result: {record['result']}\n- Verification: {record['verification_status']} — {verifications}\n- Decisions: {decisions}\n- Remaining risks: {risks}\n- Supersedes: `{supersedes}`\n- Files:\n{files}\n\n^{anchor}\n\n"
 
 
 HISTORY_SECTIONS = (
@@ -485,7 +488,7 @@ def _write_root_first_memory(record, vault_path):
         event_type = "general"
     project = record.get("project", {}).get("owner") or record.get("project", {}).get("name") or "Unknown"
     working_line = json.dumps(record.get("project", {}).get("working_line") or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    output = runtime.record_event(project, record["module"], event_type, record["summary"], record["reason"], record["result"], record["verification_status"], working_line=working_line, files=record["files"], verification=record["verification"], decisions=record["decisions"], risks=record["risks"], task_name=record.get("task_name", ""), codex_session_key=record.get("codex_session_key", ""), task_scope_key=record.get("task_scope_key", ""))
+    output = runtime.record_event(project, record["module"], event_type, record["summary"], record["reason"], record["result"], record["verification_status"], working_line=working_line, files=record["files"], verification=record["verification"], decisions=record["decisions"], risks=record["risks"], task_name=record.get("task_name", ""), task_group=record.get("task_group", ""), codex_session_key=record.get("codex_session_key", ""), task_scope_key=record.get("task_scope_key", ""), task_group_key=record.get("task_group_key", ""))
     runtime.render_views()
     return {"status": "written", "written": True, "root": "AI Memory/events.jsonl", "event_status": output.get("status"), "event_id": output.get("event_id", "")}
 
@@ -518,18 +521,18 @@ def _write_obsidian(record, vault, project_root=None):
 
 def _fingerprint(record):
     payload = {key: record[key] for key in ("project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes")}
-    payload.update({key: record.get(key, "") for key in ("codex_session_key", "task_name", "task_scope_key", "task_scope_mode")})
+    payload.update({key: record.get(key, "") for key in ("codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")})
     if record.get("project", {}).get("working_line"):
         payload["working_line"] = record["project"]["working_line"]
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id=""):
+def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id="", task_group=""):
     resolved_project_root = Path(project_root).expanduser().resolve()
     project = _project_identity(project_root)
     timestamp = recorded_at or datetime.now(timezone.utc)
     working_line = _derive_working_line(project_root)
-    scope_fields = _memory_scope(project["key"], module, task_name, session_id)
+    scope_fields = _memory_scope(project["key"], module, task_name, task_group, session_id)
     record = {"schema_version": SCHEMA_VERSION, "id": "", "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"), "project": project, "module": _single_line(module, "module", max_length=160), "scope": scope, "change_kind": change_kind, "summary": _single_line(summary, "summary"), "reason": _single_line(reason, "reason"), "result": _single_line(result, "result"), "verification_status": verification_status, **scope_fields, "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "decisions": [_single_line(value, "decision", max_length=600) for value in (decisions or [])], "risks": [_single_line(value, "risk", max_length=600) for value in (risks or [])], "files": _normalize_files(resolved_project_root, files), "supersedes": _single_line(supersedes, "supersedes", required=False, max_length=120)}
     record["project"]["working_line"] = working_line
     if scope not in SCOPE_VALUES:
@@ -577,11 +580,11 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     return {"status": "written", "record_id": record["id"], "project": project, "files": record["files"], "local": {"written": True, "store": store_path.name, "record": record_path.relative_to(store_path).as_posix()}, "obsidian": obsidian_status}
 
 
-def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE, include_ambiguous=False, task_name="", session_id=""):
+def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE, include_ambiguous=False, task_name="", session_id="", task_group=""):
     project = _project_identity(project_root) if project_root else None
     normalized_files = _normalize_files(project_root, files) if project_root and files else list(files or [])
     current_line = _derive_working_line(project_root) if project_root else {}
-    scope = _memory_scope(project["key"], module or "project-wide", task_name, session_id) if project else {"codex_session_key": "", "task_scope_key": ""}
+    scope = _memory_scope(project["key"], module or "project-wide", task_name, task_group, session_id) if project else {"codex_session_key": "", "task_scope_key": "", "task_group_key": ""}
     terms = [term for term in re.findall(r"[\w.+-]+", query.lower()) if len(term) >= 2][:12]
     matches = []
     for record in reversed(_read_records(Path(store).expanduser().resolve() / "index.jsonl")):
@@ -598,7 +601,8 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
         searchable = " ".join([record["summary"], record["reason"], record["result"], record["module"], *record["files"], *record["verification"], *record["decisions"], *record["risks"]]).lower()
         if terms and not all(term in searchable for term in terms):
             continue
-        matches.append({key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_scope_key", "task_scope_mode")})
+        relation = _SESSION_EFFORT.scope_relation(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""), task_group_key_value=scope.get("task_group_key", "")) if scope.get("codex_session_key") or scope.get("task_scope_key") or scope.get("task_group_key") else {"reason": "unscoped_query"}
+        matches.append({**{key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")}, "relation_reason": relation["reason"], "source_session_key": record.get("codex_session_key", "") or record.get("session_key", "")})
         if len(matches) >= max(1, min(max_results, 25)):
             break
     return {"status": "ok" if matches else "no-matches", "matches": matches}
@@ -624,6 +628,7 @@ def main():
     search_parser.add_argument("--max-results", type=int, default=8)
     search_parser.add_argument("--include-ambiguous", action="store_true")
     search_parser.add_argument("--task-name", default=os.environ.get("CODEX_TASK_NAME", ""))
+    search_parser.add_argument("--task-group", default=os.environ.get("CODEX_TASK_GROUP", ""))
     search_parser.add_argument("--session-id", default="")
     record_parser = subparsers.add_parser("record")
     record_parser.add_argument("--project-root", type=Path, required=True)
@@ -640,13 +645,14 @@ def main():
     record_parser.add_argument("--file", action="append", required=True)
     record_parser.add_argument("--supersedes", default="")
     record_parser.add_argument("--task-name", default=os.environ.get("CODEX_TASK_NAME", ""))
+    record_parser.add_argument("--task-group", default=os.environ.get("CODEX_TASK_GROUP", ""))
     record_parser.add_argument("--session-id", default="")
     subparsers.add_parser("status")
     args = parser.parse_args()
     if args.command == "search":
-        output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store, args.include_ambiguous, args.task_name, args.session_id)
+        output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store, args.include_ambiguous, args.task_name, args.session_id, args.task_group)
     elif args.command == "record":
-        output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault, None, args.task_name, args.session_id)
+        output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault, None, args.task_name, args.session_id, args.task_group)
     else:
         output = memory_status(args.store, args.vault)
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))

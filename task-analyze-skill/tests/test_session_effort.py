@@ -66,8 +66,23 @@ class SessionEffortTests(unittest.TestCase):
         self.assertNotEqual(first_session, second_session)
         self.assertNotEqual(first_task, second_task)
         self.assertTrue(module.scope_matches({"codex_session_key": first_session, "task_scope_key": first_task}, session_key_value=first_session, task_scope=first_task))
+        related = module.scope_relation({"codex_session_key": first_session, "task_scope_key": first_task}, session_key_value=second_session, task_scope=first_task)
+        self.assertTrue(related["matched"])
+        self.assertEqual(related["reason"], "related_task_scope")
+        self.assertFalse(module.scope_matches({"codex_session_key": first_session, "task_scope_key": first_task}, session_key_value=first_session, task_scope=second_task))
         self.assertFalse(module.scope_matches({"codex_session_key": first_session, "task_scope_key": first_task}, session_key_value=second_session, task_scope=second_task))
         self.assertFalse(module.scope_matches({"session_key": "", "task_scope_key": ""}, session_key_value=first_session))
+
+    def test_related_task_group_crosses_sessions_only_with_explicit_group_evidence(self):
+        first_session = module.session_key("019fc8e5-87da-7082-90b9-6d505404d229")
+        second_session = module.session_key("019fc8e5-87da-7082-90b9-6d505404d230")
+        group = module.task_group_key("demo", "shared-route", "related-step")
+        relation = module.scope_relation({"codex_session_key": first_session, "task_name": "related-step", "task_group": "shared-route", "task_group_key": group}, session_key_value=second_session, task_group_key_value=group)
+        self.assertTrue(relation["matched"])
+        self.assertEqual(relation["reason"], "related_task_group")
+        isolated = module.scope_relation({"codex_session_key": first_session, "task_group_key": module.task_group_key("demo", "other-route", "other-step")}, session_key_value=second_session, task_group_key_value=group)
+        self.assertFalse(isolated["matched"])
+        self.assertEqual(isolated["reason"], "unrelated_session")
 
     def test_escalation_stops_at_sol_ultra(self):
         pairs = ["gpt-5.6-luna|max", "gpt-5.6-terra|max", "gpt-5.6-sol|max", "gpt-5.6-sol|ultra"]

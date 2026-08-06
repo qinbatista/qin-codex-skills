@@ -127,7 +127,9 @@ FRONTMATTER_FIELDS = (
     "project_owner",
     "task_type",
     "task_name",
+    "task_group",
     "task_scope_key",
+    "task_group_key",
     "task_summary",
     "module",
     "file",
@@ -457,7 +459,7 @@ def _record_capability_profile(record):
     )
 
 
-def _query(project_root, task_type, module, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, task_name=""):
+def _query(project_root, task_type, module, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", step_kind="", capability_tags=None, task_name="", task_group=""):
     project = project_change_memory._project_identity(project_root)
     if modality not in MODALITY_VALUES or complexity not in COMPLEXITY_VALUES or risk not in LEVEL_VALUES or ambiguity not in LEVEL_VALUES:
         raise ValueError("modality, complexity, risk, or ambiguity is invalid")
@@ -466,12 +468,16 @@ def _query(project_root, task_type, module, file_value="", symbol="", code_kind=
     derived_complexity = "complex" if score >= 50 else "easy"
     capability = task_capability_profile(task_type, code_kind, operation, modality, score, risk, ambiguity, task_summary, step_kind, capability_tags)
     normalized_task_name = session_effort.normalize_task_name(task_name) if str(task_name or "").strip() else ""
+    normalized_task_group = session_effort.normalize_task_name(task_group, "group") if str(task_group or "").strip() else ""
+    group_key = session_effort.task_group_key(project["key"], normalized_task_group, normalized_task_name)
     return {
         "project": project,
         "task_type": _slug(task_type, "task_type"),
         "task_name": normalized_task_name,
+        "task_group": normalized_task_group,
         "task_scope_key": session_effort.task_scope_key(project["key"], _slug(task_type, "task_type"), _single_line(module, "module", maximum=160), normalized_task_name) if normalized_task_name else "",
-        "task_scope_enforced": bool(str(task_name or "").strip()),
+        "task_group_key": group_key,
+        "task_scope_enforced": bool(str(task_name or "").strip() or str(task_group or "").strip()),
         "task_summary": _single_line(task_summary, "task_summary", required=False),
         "module": _single_line(module, "module", maximum=160),
         "file": _optional_relative_file(project["root"], file_value),
@@ -605,10 +611,14 @@ def _read_project_records(memory_root):
     return records
 
 
-def _record_in_query_scope(record, query):
+def _record_scope_relation(record, query):
     if not query.get("scope_enforced"):
-        return True
-    return session_effort.scope_matches(record, session_key_value=query.get("codex_session_key", ""), task_scope=query.get("task_scope_key", ""))
+        return {"matched": True, "reason": "unscoped_query", "same_session": False}
+    return session_effort.scope_relation(record, session_key_value=query.get("codex_session_key", ""), task_scope=query.get("task_scope_key", ""), task_group_key_value=query.get("task_group_key", ""))
+
+
+def _record_in_query_scope(record, query):
+    return bool(_record_scope_relation(record, query)["matched"])
 
 
 def _scope_score(record, query):
@@ -933,18 +943,18 @@ def _operational_fallback_pair(selected_pair, pairs):
     return pairs[selected_index + 1] if selected_index + 1 < len(pairs) else None
 
 
-def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None, session_prompt="", session_id="", session_context=None):
+def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", task_group="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None, session_prompt="", session_id="", session_context=None):
     started_ns = time.perf_counter_ns()
     shared, pairs = load_shared_ladder(ladder)
-    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags, task_name)
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags, task_name, task_group)
     if isinstance(session_context, dict):
         session_summary = session_effort.sanitize_summary(session_context)
     else:
-        session_summary = session_effort.assess_session(session_prompt or task_summary, Path(project_root).expanduser().resolve(), project_key=query["project"]["key"], task_type=query["task_type"], module=query["module"], capability_fingerprint=query["capability_fingerprint"], operation=query["operation"], modality=query["modality"], complexity_score=query["complexity_score"], task_summary=task_summary, task_name=task_name, session_id=session_id, local_store=local_store)
-    requested_scope = bool(str(session_id or "").strip() or str(task_name or "").strip())
-    context_scope = bool(isinstance(session_context, dict) and (session_summary.get("codex_session_key") or session_summary.get("task_scope_key")))
-    active_scope = bool(session_summary.get("codex_session_key") or query.get("task_scope_key")) if requested_scope else context_scope
-    query.update({"task_name": query.get("task_name", ""), "task_scope_key": query.get("task_scope_key", "") if str(task_name or "").strip() else "", "codex_session_key": session_summary.get("codex_session_key") if active_scope else "", "scope_enforced": active_scope})
+        session_summary = session_effort.assess_session(session_prompt or task_summary, Path(project_root).expanduser().resolve(), project_key=query["project"]["key"], task_type=query["task_type"], module=query["module"], capability_fingerprint=query["capability_fingerprint"], operation=query["operation"], modality=query["modality"], complexity_score=query["complexity_score"], task_summary=task_summary, task_name=task_name, task_group=task_group, session_id=session_id, local_store=local_store)
+    requested_scope = bool(str(session_id or "").strip() or str(task_name or "").strip() or str(task_group or "").strip())
+    context_scope = bool(isinstance(session_context, dict) and (session_summary.get("codex_session_key") or session_summary.get("task_scope_key") or session_summary.get("task_group_key")))
+    active_scope = bool(session_summary.get("codex_session_key") or query.get("task_scope_key") or query.get("task_group_key")) if requested_scope else context_scope
+    query.update({"task_name": query.get("task_name", ""), "task_group": query.get("task_group", ""), "task_scope_key": query.get("task_scope_key", "") if str(task_name or "").strip() else "", "task_group_key": query.get("task_group_key", ""), "codex_session_key": session_summary.get("codex_session_key") if active_scope else "", "scope_enforced": active_scope})
     entry = _entry_context(shared, pairs, entry_model, entry_effort)
     vault_path, memory_root = _memory_root(query, vault)
     model_switch = model_switch_reference(project_root, vault=vault)
@@ -958,6 +968,16 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     local_record_count = len(local_records)
     obsidian_record_count = len(obsidian_records)
     merged_record_count = len(_merge_model_records(local_records, obsidian_records))
+    scope_relation_counts = {}
+    related_session_keys = set()
+    related_session_evidence = []
+    for scoped_record in _merge_model_records(local_records, obsidian_records):
+        relation = _record_scope_relation(scoped_record, query)
+        scope_relation_counts[relation["reason"]] = scope_relation_counts.get(relation["reason"], 0) + 1
+        record_session_key = str(scoped_record.get("codex_session_key") or scoped_record.get("session_key") or "")
+        if relation["matched"] and relation["reason"].startswith("related_") and record_session_key:
+            related_session_keys.add(record_session_key)
+            related_session_evidence.append({"record_id": str(scoped_record.get("record_id") or scoped_record.get("event_id") or ""), "source_session_key": record_session_key, "relation_reason": relation["reason"]})
     pending_projection_count = _pending_projection_count(local_store, query["project"])
     project_records = _merge_model_records(local_records, obsidian_records)
     records, specificity, score = _best_scope_records(project_records, query)
@@ -1061,7 +1081,9 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "project_key": query["project"]["key"],
         "task_type": query["task_type"],
         "task_name": query["task_name"],
+        "task_group": query.get("task_group", ""),
         "task_scope_key": query["task_scope_key"],
+        "task_group_key": query.get("task_group_key", ""),
         "task_scope_enforced": query["task_scope_enforced"],
         "codex_session_key": query.get("codex_session_key", ""),
         "scope_enforced": query.get("scope_enforced", False),
@@ -1084,6 +1106,10 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "local_record_count": local_record_count,
         "obsidian_record_count": obsidian_record_count,
         "merged_record_count": merged_record_count,
+        "scope_relation_counts": scope_relation_counts,
+        "related_session_count": len(related_session_keys),
+        "related_session_keys": sorted(related_session_keys),
+        "related_session_evidence": related_session_evidence[:50],
         "transfer_record_count": len(transfer_records),
         "pending_projection_count": pending_projection_count,
         "quality_samples": active["quality_samples"],
@@ -1578,7 +1604,7 @@ def reconcile_local_model_history(project_root, *, vault=None, local_store=None)
     return {"status": "written" if projected else "pending" if pending else "up-to-date", "written": projected > 0, "projected": projected, "pending": pending, "latest": latest}
 
 
-def record_model_observation(project_root, task_type, module, pair, real_status, failure_class, *, observation_id, file_value="", symbol="", code_kind="general", operation="verify", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", session_id="", step_kind="verification", capability_tags=None, entry_model="", entry_effort="", model_evidence="task_assignment", vault=None, ladder=DEFAULT_LADDER, recorded_at=None, local_store=None, outcome_reason="", verification_count=0, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
+def record_model_observation(project_root, task_type, module, pair, real_status, failure_class, *, observation_id, file_value="", symbol="", code_kind="general", operation="verify", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", task_group="", session_id="", step_kind="verification", capability_tags=None, entry_model="", entry_effort="", model_evidence="task_assignment", vault=None, ladder=DEFAULT_LADDER, recorded_at=None, local_store=None, outcome_reason="", verification_count=0, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
     """Persist a visible, non-learning model observation when no runtime receipt exists."""
     shared, pairs = load_shared_ladder(ladder)
     priority = shared.get("priority_producer")
@@ -1605,7 +1631,7 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
         minimum = 1 if field == "ending_attempt_number" else 0
         if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
             raise ValueError(f"{field} must be an integer >= {minimum}")
-    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags, task_name)
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags, task_name, task_group)
     recommendation = recommend_model(
         project_root,
         task_type,
@@ -1621,6 +1647,7 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
         ambiguity=ambiguity,
         task_summary=task_summary,
         task_name=task_name,
+        task_group=task_group,
         session_id=session_id,
         step_kind=query["step_kind"],
         capability_tags=query["capability_tags"],
@@ -1658,7 +1685,9 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
         "project_owner": owner,
         "task_type": query["task_type"],
         "task_name": query.get("task_name", ""),
+        "task_group": query.get("task_group", ""),
         "task_scope_key": query.get("task_scope_key", ""),
+        "task_group_key": query.get("task_group_key", ""),
         "task_summary": query["task_summary"],
         "module": query["module"],
         "file": query["file"],
@@ -1810,9 +1839,9 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
     }
 
 
-def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", session_id="", step_kind="", capability_tags=None, entry_model="", entry_effort="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
+def record_model_result(project_root, task_type, module, receipt_path, real_status, failure_class, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", task_group="", session_id="", step_kind="", capability_tags=None, entry_model="", entry_effort="", trial=False, vault=None, ladder=DEFAULT_LADDER, recorded_at=None, bound_receipt=None, local_store=None, outcome_reason="", verification_count=0, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
     shared, pairs = load_shared_ladder(ladder)
-    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags, task_name)
+    query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags, task_name, task_group)
     if real_status not in {"pass", "fail"} or failure_class not in FAILURE_CLASSES:
         raise ValueError("Real status or failure class is invalid")
     receipt_path = Path(receipt_path).expanduser().resolve()
@@ -1870,6 +1899,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         ambiguity=ambiguity,
         task_summary=task_summary,
         task_name=task_name,
+        task_group=task_group,
         session_id=session_id,
         step_kind=query["step_kind"],
         capability_tags=query["capability_tags"],
@@ -1974,7 +2004,9 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         "project_owner": owner,
         "task_type": query["task_type"],
         "task_name": query.get("task_name", ""),
+        "task_group": query.get("task_group", ""),
         "task_scope_key": query.get("task_scope_key", ""),
+        "task_group_key": query.get("task_group_key", ""),
         "task_summary": query["task_summary"],
         "module": query["module"],
         "file": query["file"],
@@ -2209,6 +2241,7 @@ def _add_scope_arguments(parser, *, summary_required=False):
     parser.add_argument("--ambiguity", choices=sorted(LEVEL_VALUES), default="low")
     parser.add_argument("--task-summary", required=summary_required, default="")
     parser.add_argument("--task-name", default=os.environ.get("CODEX_TASK_NAME", ""))
+    parser.add_argument("--task-group", default=os.environ.get("CODEX_TASK_GROUP", ""))
     parser.add_argument("--session-id", default=os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID", ""))
     parser.add_argument("--step-kind", choices=sorted(STEP_KINDS), default="")
     parser.add_argument("--capability-tag", action="append", default=[])
@@ -2261,7 +2294,7 @@ def main(argv=None):
     elif args.command == "reconcile":
         output = reconcile_local_model_history(args.project_root, vault=args.vault, local_store=args.local_store)
     else:
-        scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, "task_name": args.task_name, "session_id": args.session_id, "step_kind": args.step_kind, "capability_tags": args.capability_tag, "entry_model": args.entry_model, "entry_effort": args.entry_effort, **common}
+        scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, "task_name": args.task_name, "task_group": args.task_group, "session_id": args.session_id, "step_kind": args.step_kind, "capability_tags": args.capability_tag, "entry_model": args.entry_model, "entry_effort": args.entry_effort, **common}
         if args.command == "recommend":
             output = recommend_model(args.project_root, args.task_type, args.module, **scope)
             if args.compact:
