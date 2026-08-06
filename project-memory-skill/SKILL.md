@@ -1,13 +1,13 @@
 ---
 name: project-memory-skill
-description: "Always use in the result-producing node for durable project-file changes. The observable entry parent routes before memory recall; the selected producer recalls prior project/module/file decisions before editing and records the completed change after Ending. Do not use for read-only work or disposable Cache artifacts."
+description: "Always use in the result-producing node for durable project-file changes. The observable entry parent routes before memory recall; the selected producer covers project/module/method scope, recalls prior project/module/file decisions before editing, and records the completed change after Ending. Do not use for read-only work or disposable Cache artifacts."
 ---
 
 # Project Memory Skill
 
 ## Objective
 
-Maintain a durable, file-level explanation of project changes so future AI work can recover what changed, why it changed, what constraints were intentional, which historical bugs remain relevant, and what result was verified. Organize every record as `project -> functional module -> concrete code/file` and use prior records to avoid repeating rejected approaches, reintroducing known failures, or undoing deliberate decisions.
+Maintain a durable explanation of project changes so future AI work can recover what changed, why it changed, what constraints were intentional, which historical bugs remain relevant, and what result was verified. Every active project has a coverage record, every encountered functional module has a module record, and every method-targeted code action has a method/symbol record. The existing project-change ledger still keeps concrete file evidence under those scopes.
 
 ## Required Scope
 
@@ -32,6 +32,21 @@ Look up the registry first and validate the schema, absolute path, declared kind
 Project `AGENTS.md` is a compact structural contract, not a project notebook. Keep only stable project structure, ownership boundaries, critical entry points, hard constraints, project-wide conventions, a compact definition of done, and short pointers to canonical build/verification documentation. Do not write implementation details, task history, logs, receipts, test results, evidence, generated data, temporary notes, dependency walkthroughs, long command blocks, or troubleshooting prose there. Store those details in the owning source, project documentation, or a README inside the relevant Cache area.
 
 When Cache content is reusable, retained, workflow-required, or project-influencing, add one concise registry entry to project-root `AGENTS.md`: the exact Cache-relative path, one-line structural role, owner/source of truth, and retention/version-control status. Link to the owning source or detailed README instead of embedding its commands, dependencies, runbook, or regeneration procedure. Update `AGENTS.md` only when project structure, ownership, a critical entry point, or a hard constraint changes. Important Cache without this concise pointer is incomplete; one-off disposable outputs need no entry. Never delete documented important Cache content without explicit authorization; other cleanup may delete only the current task's named Cache folder or explicitly identified disposable files.
+
+## Mandatory Project / Module / Method Coverage
+
+- Coverage is a separate native-memory layer, not a model-routing category page and not a JSON sidecar in Obsidian. The local authority is `~/.codex/project-memory-coverage/events.jsonl`; Obsidian projects it as `Memory Coverage/index.md`, `Modules/<module>.md`, and `Methods/<module>--<method>.md` under the resolved project owner.
+- Every route calls `memory_coverage.py ensure`, which creates or refreshes the project and module scopes. A real method/symbol supplied by the task also creates or refreshes the method scope. Coverage stores only sanitized project/module/method/file/source fields and never raw prompts, reasoning, receipts, or absolute project paths.
+- A durable code action that targets code must provide `--symbol <method-or-symbol>`. A deliberate file/module-level code change uses the explicit `--symbol __module__` sentinel; it is not silently treated as a method. A missing method scope blocks the route or durable result instead of allowing an untracked code change to pass.
+- Use `memory_coverage.py validate` to inspect the required scopes. Missing Obsidian is still a successful local coverage write; a missing method identity is not an Obsidian outage and remains a blocking contract failure.
+- Model-routing learning remains the six shared category pages described below. It keeps project/task/module/file/symbol as fields and does not create one model page per method; the coverage pages are the corresponding durable project-memory index.
+
+The maintained helper can be called directly from the project root:
+
+```bash
+python3 project-memory-skill/scripts/memory_coverage.py ensure --project-root <root> --module <module> --symbol <method-or-symbol> --file <relative-file> --task-type code --operation edit --source project-change
+python3 project-memory-skill/scripts/memory_coverage.py validate --project-root <root> --module <module> --symbol <method-or-symbol> --require-method
+```
 
 ## Project Change-Memory Authority And Storage
 
@@ -64,11 +79,12 @@ These adaptive model-learning rules do not alter project change-memory behavior:
 
 Personal preference and technical-working-trait memory is a third, separate stream. Every user submission is scanned for bounded candidates, but an empty scan is a strict no-op. Only the Ending worker may submit a candidate bundle through `scripts/personal_memory.py` or `ending_task_ledger.py event --memory-candidates-file`; the bridge validates explicit/repeated/verified evidence, rejects private content, writes one root-first `AI Memory/events.jsonl` event, and updates a stable Preferences owner page. UI candidates use `Preferences/UI Style Preferences.md` when that owner exists; other candidates use `Preferences/AI Captured Preferences.md`. Missing Obsidian queues sanitized candidates locally and never discards them. This stream never changes the task result and never replaces project-change or model-routing memory.
 
-Use the maintained helper instead of editing Model Switch routing records manually:
+Use the maintained helpers instead of editing coverage or Model Switch routing records manually:
 
 ```bash
 python3 <codex-home>/skills/project-memory-skill/scripts/obsidian_model_memory.py recommend --compact --project-root <root> --task-type <type> --module <module> --file <relative-file> --symbol <method-or-symbol> --code-kind <kind> --operation <operation> --complexity-score <0-100> --step-kind <kind> --capability-tag <stable-tag> --entry-model <model> --entry-effort <effort>
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py record --project-root <root> --task-type <type> --module <module> --file <relative-file> --symbol <method-or-symbol> --code-kind <kind> --operation <operation> --complexity-score <0-100> --task-summary <sanitized-summary> --receipt <producer-receipt> --real-status <pass|fail> --failure-class <class>
+python3 ~/.codex/skills/project-memory-skill/scripts/memory_coverage.py validate --project-root <root> --module <module> --symbol <method-or-symbol> --require-method
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py reconcile --project-root <root>
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py rebuild-model-switches --project-root <root>
 ```
@@ -117,7 +133,8 @@ python3 ~/.codex/skills/project-memory-skill/scripts/project_change_memory.py re
   --verification <check-and-evidence> \
   --decision <important-invariant-or-tradeoff> \
   --risk <remaining-risk-or-none> \
-  --file <project-relative-file>
+  --file <project-relative-file> \
+  --symbol <method-or-symbol>
 ```
 
 Repeat `--verification`, `--decision`, `--risk`, and `--file` as needed. For a rename or move, include both old and new paths. For a broad modification, use `scope=project` and a real module such as `project-wide`; never invent a precise code module when none exists.

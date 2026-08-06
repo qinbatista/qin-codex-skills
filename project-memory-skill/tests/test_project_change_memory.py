@@ -74,7 +74,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             (project / "src").mkdir(parents=True)
             (project / "src" / "feature.py").write_text("result = 1\n", encoding="utf-8")
             with mock.patch.object(MEMORY.Path, "home", lambda: home):
-                result = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added editor update", "Preserve project scope", "Feature updates written", "passed", ["src/feature.py"], ["passed test"], ["Keep API stable"], ["none"], store=store, vault=vault, recorded_at=datetime(2026, 7, 12, 20, 0, tzinfo=timezone.utc))
+                result = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added editor update", "Preserve project scope", "Feature updates written", "passed", ["src/feature.py"], ["passed test"], ["Keep API stable"], ["none"], store=store, vault=vault, recorded_at=datetime(2026, 7, 12, 20, 0, tzinfo=timezone.utc), symbols=["__module__"])
                 target, _ = MEMORY._canonical_history_target({"project": result["project"]}, Path(vault))
             activity = target.parent / "Activity Index.md"
             journal_log = vault / "Journal" / "log.md"
@@ -289,8 +289,8 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             (project / "src").mkdir()
             (project / "src" / "feature.py").write_text("value = 1\n", encoding="utf-8")
             recorded_at = datetime(2026, 7, 12, 20, 0, tzinfo=timezone.utc)
-            first = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added stable feature behavior", "Preserve the public contract while fixing the implementation", "Focused behavior now passes", "passed", ["src/feature.py"], ["python unit test passed"], ["Keep the public key exact"], ["none"], store=store, vault=vault, recorded_at=recorded_at)
-            duplicate = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added stable feature behavior", "Preserve the public contract while fixing the implementation", "Focused behavior now passes", "passed", ["src/feature.py"], ["python unit test passed"], ["Keep the public key exact"], ["none"], store=store, vault=vault, recorded_at=recorded_at)
+            first = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added stable feature behavior", "Preserve the public contract while fixing the implementation", "Focused behavior now passes", "passed", ["src/feature.py"], ["python unit test passed"], ["Keep the public key exact"], ["none"], store=store, vault=vault, recorded_at=recorded_at, symbols=["__module__"])
+            duplicate = MEMORY.record_change(project, "feature-engine", "code", "edit", "Added stable feature behavior", "Preserve the public contract while fixing the implementation", "Focused behavior now passes", "passed", ["src/feature.py"], ["python unit test passed"], ["Keep the public key exact"], ["none"], store=store, vault=vault, recorded_at=recorded_at, symbols=["__module__"])
             search = MEMORY.search_records(project, "feature-engine", ["src/feature.py"], "stable feature", 8, store, include_ambiguous=True)
             self.assertEqual(first["status"], "written")
             self.assertEqual(first["obsidian"]["status"], "no-op")
@@ -388,9 +388,9 @@ class ProjectChangeMemoryTests(unittest.TestCase):
                 return active_line["value"]
 
             with mock.patch.object(MEMORY, "_derive_working_line", side_effect=derive_line):
-                main_record = MEMORY.record_change(project, "runtime", "code", "edit", "Mainline runtime update", "Use current branch line", "Pass", "passed", ["src/feature.py"], ["unit check"], ["Keep branch identity"], ["none"], store=store, vault=root / "missing-vault")
+                main_record = MEMORY.record_change(project, "runtime", "code", "edit", "Mainline runtime update", "Use current branch line", "Pass", "passed", ["src/feature.py"], ["unit check"], ["Keep branch identity"], ["none"], store=store, vault=root / "missing-vault", symbols=["__module__"])
                 active_line["value"] = stale_line
-                MEMORY.record_change(project, "runtime", "code", "edit", "Stale branch update", "Mature on old commit", "Pass", "passed", ["src/feature.py"], ["unit check"], ["Keep branch identity"], ["none"], store=store, vault=root / "missing-vault")
+                MEMORY.record_change(project, "runtime", "code", "edit", "Stale branch update", "Mature on old commit", "Pass", "passed", ["src/feature.py"], ["unit check"], ["Keep branch identity"], ["none"], store=store, vault=root / "missing-vault", symbols=["__module__"])
                 active_line["value"] = main_line
                 scoped = MEMORY.search_records(project, "runtime", ["src/feature.py"], "runtime", 8, store)
                 all_records = MEMORY.search_records(project, "runtime", ["src/feature.py"], "runtime", 8, store, include_ambiguous=True)

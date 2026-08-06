@@ -21,7 +21,7 @@ Small low-risk edits scoring 0–24 try Spark-low first · larger work uses the 
 
 ## ✅ Finish first. Use Ending for important results.
 
-This is the lifecycle’s most important structural rule:
+This lifecycle rule matters:
 
 1. **Score every submission from 0–100, then finish the requested job** and run the proportional implementation check.
 2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
@@ -51,7 +51,7 @@ Main work and Ending verification are deliberately different task sessions. A su
 - **Deliver:** Finish and return the completed main result before background verification.
 - **Verify:** Complex/important results use one scored End Task per check; all PASS. FAIL → Fix + fresh check, max 3. Simple reads/one-value edits skip.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
-- **Memory:** Change history is local JSONL + optional Obsidian; model learning follows native linked categories, with context kept as fields.
+- **Memory:** Change history is local JSONL + optional Obsidian; project/module + code symbols (`__module__`) required; context kept as fields.
 - **Models:** Use saved ladder; explicit update refreshes the highest GPT family; eligible small edits prioritize Spark-low; missing cache preserves it.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
@@ -80,7 +80,7 @@ Current frozen v47 compares **Without skill** fixed at `gpt-5.6-sol | ultra` wit
 - [`Workflow`](./workflow-skill/SKILL.md) — admitted locked-route execution.
 - [`Prompt`](./prompt-skill/SKILL.md) — reusable prompt and durable AI-instruction gate.
 - [`Code`](./code-skill/SKILL.md) — Python, C#, Unity C#, and registered code domains.
-- [`Project Memory`](./project-memory-skill/SKILL.md) — project/module/file recall and verified records.
+- [`Project Memory`](./project-memory-skill/SKILL.md) — mandatory project/module/method coverage, file recall, and verified records.
 - [`Verify`](./verify-skill/SKILL.md) — post-result Real Verify and regression evidence.
 - [`Optimization`](./optimization-skill/SKILL.md) — stable repeated work into reusable tools.
 - [`Management`](./management-skill/SKILL.md) — private profiles and public mirror management.

@@ -31,6 +31,16 @@ except ModuleNotFoundError:
     _memory_spec.loader.exec_module(project_change_memory)
 
 try:
+    import memory_coverage
+except ModuleNotFoundError:
+    import importlib.util
+
+    _coverage_path = Path(__file__).with_name("memory_coverage.py")
+    _coverage_spec = importlib.util.spec_from_file_location("memory_coverage", _coverage_path)
+    memory_coverage = importlib.util.module_from_spec(_coverage_spec)
+    _coverage_spec.loader.exec_module(memory_coverage)
+
+try:
     import model_registry
 except ModuleNotFoundError:
     import importlib.util
@@ -957,6 +967,23 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     query.update({"task_name": query.get("task_name", ""), "task_group": query.get("task_group", ""), "task_scope_key": query.get("task_scope_key", "") if str(task_name or "").strip() else "", "task_group_key": query.get("task_group_key", ""), "codex_session_key": session_summary.get("codex_session_key") if active_scope else "", "scope_enforced": active_scope})
     entry = _entry_context(shared, pairs, entry_model, entry_effort)
     vault_path, memory_root = _memory_root(query, vault)
+    coverage_store = None
+    if local_store:
+        coverage_store = Path(local_store).expanduser().resolve().parent / "memory-coverage-events.jsonl"
+    elif vault is not None:
+        coverage_store = Path(vault).expanduser().resolve().parent / "memory-coverage-events.jsonl"
+    memory_coverage_result = memory_coverage.ensure_coverage(
+        project_root,
+        query["module"],
+        symbol=query["symbol"],
+        files=[query["file"]] if query["file"] else [],
+        task_type=query["task_type"],
+        code_kind=query["code_kind"],
+        operation=query["operation"],
+        source="model-route",
+        vault=vault_path,
+        store=coverage_store,
+    )
     model_switch = model_switch_reference(project_root, vault=vault)
     owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
     obsidian_configured = _is_configured_owner(vault_path, owner)
@@ -1073,6 +1100,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         "memory_available": True,
         "local_memory_available": True,
         "obsidian_memory_available": obsidian_configured,
+        "memory_coverage": memory_coverage_result,
         "model_switch_status": model_switch["status"],
         "model_switch_document": model_switch["document"],
         "model_switch_link": model_switch["link"],
@@ -2190,10 +2218,11 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local
     shared, pairs = load_shared_ladder(ladder)
     vault_path = project_change_memory._resolve_vault(vault)
     local_path = _resolve_local_store(local_store)
+    coverage_store = Path(local_path).expanduser().resolve().parent / "memory-coverage-events.jsonl" if local_store else None
     local_records = _read_local_records(local_path)
     priority_producer = shared.get("priority_producer")
     priority_pair_count = len(priority_producer["adaptive_efforts"]) if isinstance(priority_producer, dict) and priority_producer.get("enabled") is True else 0
-    output = {"status": "ready", "authority": "dual_local_and_obsidian", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "local_store": str(local_path), "local_records": len(local_records), "vault": str(vault_path) if vault_path else "", "obsidian_available": vault_path is not None}
+    output = {"status": "ready", "authority": "dual_local_and_obsidian", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "local_store": str(local_path), "local_records": len(local_records), "memory_coverage": memory_coverage.coverage_status(project_root, store=coverage_store), "vault": str(vault_path) if vault_path else "", "obsidian_available": vault_path is not None}
     if project_root:
         project = project_change_memory._project_identity(project_root)
         model_switch = model_switch_reference(project_root, vault=vault)
@@ -2250,7 +2279,7 @@ def _add_scope_arguments(parser, *, summary_required=False):
 
 
 def _compact_recommendation(recommendation):
-    keys = ("selection_basis", "project_key", "complexity_score", "complexity_band", "step_kind", "capability_fingerprint", "specificity", "matched_records", "entry_pair", "selected_pair", "attempt_pair", "active_fallback_pair", "attempt_trial", "attempt_reason", "attempt_calibration_state", "switch_direction", "model_switch_document", "model_switch_link", "route_capsule")
+    keys = ("selection_basis", "project_key", "complexity_score", "complexity_band", "step_kind", "capability_fingerprint", "specificity", "matched_records", "entry_pair", "selected_pair", "attempt_pair", "active_fallback_pair", "attempt_trial", "attempt_reason", "attempt_calibration_state", "switch_direction", "model_switch_document", "model_switch_link", "memory_coverage", "route_capsule")
     return {"status": "blocked" if recommendation.get("attempt_calibration_state") == "blocked" else "ready", **{key: recommendation.get(key) for key in keys}}
 
 

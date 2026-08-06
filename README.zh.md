@@ -51,7 +51,7 @@
 - **交付：** 先完成并返回主任务结果，再进行后台验证。
 - **验证：** 复杂/重要结果需真实检查时才用评分 End Task；全部 PASS。FAIL → Fix → 全新 End Task，最多三次。简单查看/改单个 value 跳过。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
-- **记忆：** 修改历史用本地 JSONL；模型学习走原生类别链接，项目/任务等保持为字段。
+- **记忆：** 本地 JSONL + 可选 Obsidian 记录项目/模块覆盖；方法代码需 symbol，模块级用 `__module__`；模型学习走原生类别链接，项目/任务等保持为字段。
 - **模型：** 使用已保存梯级；主动本地更新时选择最高数字 GPT 家族；符合条件的小编辑优先 Spark-low；缓存不可用就保留原列表。
 - **隐私：** secret、原始 Prompt/结果、receipt、ledger、cache 和临时文件留在本地。
 
@@ -80,7 +80,7 @@
 - [`Workflow`](./workflow-skill/SKILL.md) — 执行已准入的锁定路线。
 - [`Prompt`](./prompt-skill/SKILL.md) — 可复用 Prompt 和持久 AI 指令入口。
 - [`Code`](./code-skill/SKILL.md) — Python、C#、Unity C# 和已注册代码域。
-- [`Project Memory`](./project-memory-skill/SKILL.md) — 项目/模块/文件回溯和验证记录。
+- [`Project Memory`](./project-memory-skill/SKILL.md) — 强制项目/模块/方法覆盖、文件回溯和验证记录。
 - [`Verify`](./verify-skill/SKILL.md) — 结果之后的 Real Verify 和回归证据。
 - [`Optimization`](./optimization-skill/SKILL.md) — 把稳定重复流程变成工具。
 - [`Management`](./management-skill/SKILL.md) — 私有 profile 和公共镜像管理。

@@ -520,8 +520,8 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         implementation = {**common, "task_summary": "Implement the bounded parser change.", "operation": "implement", "complexity": "easy", "complexity_score": 38, "complexity_band": "standard", "pair": "gpt-5.6-terra|medium", "step_kind": implementation_profile["step_kind"], "capability_tags": implementation_profile["capability_tags"], "capability_fingerprint": implementation_profile["capability_fingerprint"]}
         local_test = {**common, "task_summary": "Run the local pytest regression suite.", "operation": "test", "complexity": "easy", "complexity_score": 18, "complexity_band": "small", "pair": "gpt-5.6-luna|low", "step_kind": test_profile["step_kind"], "capability_tags": test_profile["capability_tags"], "capability_fingerprint": test_profile["capability_fingerprint"]}
         self.write_local_history([implementation, local_test], prefix="compound")
-        implementation_route = module.recommend_model(self.project, "code", "compound-parser", file_value="src/example.py", code_kind="python", operation="implement", complexity_score=38, task_summary="Implement the bounded parser change.", entry_model="gpt-5.6-sol", entry_effort="ultra", vault=self.vault)
-        test_route = module.recommend_model(self.project, "code", "compound-parser", file_value="src/example.py", code_kind="python", operation="test", complexity_score=18, task_summary="Run the local pytest regression suite.", entry_model="gpt-5.6-sol", entry_effort="ultra", vault=self.vault)
+        implementation_route = module.recommend_model(self.project, "code", "compound-parser", file_value="src/example.py", symbol="__module__", code_kind="python", operation="implement", complexity_score=38, task_summary="Implement the bounded parser change.", entry_model="gpt-5.6-sol", entry_effort="ultra", vault=self.vault)
+        test_route = module.recommend_model(self.project, "code", "compound-parser", file_value="src/example.py", symbol="__module__", code_kind="python", operation="test", complexity_score=18, task_summary="Run the local pytest regression suite.", entry_model="gpt-5.6-sol", entry_effort="ultra", vault=self.vault)
         self.assertEqual(implementation_route["attempt_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(implementation_route["step_kind"], "implementation")
         self.assertEqual(test_route["attempt_pair"], "gpt-5.6-luna|low")
@@ -768,14 +768,14 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         source_root = self.home / "Documents" / "AIProject" / "qin-codex-skills"
         source_root.mkdir(parents=True)
         (self.vault / "Skills").mkdir()
-        recommendation = module.recommend_model(source_root, "code", "global-routing", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
+        recommendation = module.recommend_model(source_root, "code", "global-routing", symbol="__module__", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
         receipt = self.write_receipt(recommendation["attempt_pair"], self.root / "global-receipt.json")
-        written = module.record_model_result(source_root, "code", "global-routing", receipt, "pass", "none", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
+        written = module.record_model_result(source_root, "code", "global-routing", receipt, "pass", "none", symbol="__module__", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
         category = self.vault / "Skills" / "Model Routing Records" / "Normal Script Update.md"
         self.assertEqual(written["status"], "written")
         self.assertTrue(category.exists())
         self.assertIn("[[Skills/Model Routing/Normal Script Update]]", category.read_text(encoding="utf-8"))
-        routed = module.recommend_model(source_root, "code", "global-routing", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
+        routed = module.recommend_model(source_root, "code", "global-routing", symbol="__module__", code_kind="python", operation="edit", complexity_score=35, task_summary="Record global skills routing.", vault=self.vault)
         self.assertEqual(routed["obsidian_record_count"], 1)
         self.assertEqual(routed["route_capsule"]["current_source_document"], "Skills/Model Routing Records/Normal Script Update.md")
 

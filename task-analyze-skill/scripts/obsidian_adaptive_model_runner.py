@@ -258,6 +258,16 @@ def infer_complexity_score(prompt):
     return max(0, min(100, score))
 
 
+def infer_memory_symbol(prompt):
+    """Recover an explicit method/function symbol when the fast path omitted it."""
+    text = re.sub(r"\s+", " ", str(prompt or "")).strip()
+    labeled = re.search(r"(?:method|function|symbol|函数|方法)\s*(?:是|为|[:：])?\s*[`\"']?([A-Za-z_][\w.$:<>-]*)", text, re.IGNORECASE)
+    if labeled:
+        return labeled.group(1)
+    qualified = re.search(r"\b([A-Z][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|::[A-Za-z_][A-Za-z0-9_]*))\b", text)
+    return qualified.group(1) if qualified else ""
+
+
 def infer_complexity(prompt):
     return "complex" if infer_complexity_score(prompt) >= 50 else "easy"
 
@@ -789,6 +799,7 @@ def resolve_fast_path_args(args, prompt):
     args.complexity = "complex" if args.complexity_score >= 50 else "easy"
     if fast_path and args.operation == "work":
         args.operation = infer_operation(prompt)
+    args.symbol = args.symbol or infer_memory_symbol(prompt_text)
     complexity_band = obsidian_model_memory.complexity_band(args.complexity_score)
     args.complexity_band = complexity_band
     identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, getattr(args, "step_kind", ""), ",".join(getattr(args, "capability_tag", [])), prompt))

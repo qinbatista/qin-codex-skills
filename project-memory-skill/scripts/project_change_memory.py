@@ -34,6 +34,22 @@ _SESSION_EFFORT = importlib.util.module_from_spec(_SESSION_EFFORT_SPEC)
 _SESSION_EFFORT_SPEC.loader.exec_module(_SESSION_EFFORT)
 
 
+def _coverage_runtime():
+    """Load the sibling coverage runtime without creating an import cycle."""
+    try:
+        import memory_coverage
+
+        return memory_coverage
+    except ModuleNotFoundError:
+        coverage_path = Path(__file__).with_name("memory_coverage.py")
+        coverage_spec = importlib.util.spec_from_file_location("project_memory_coverage", coverage_path)
+        if coverage_spec is None or coverage_spec.loader is None:
+            raise RuntimeError(f"Cannot load memory coverage runtime: {coverage_path}")
+        coverage = importlib.util.module_from_spec(coverage_spec)
+        coverage_spec.loader.exec_module(coverage)
+        return coverage
+
+
 def _memory_scope(project_key, module, task_name="", task_group="", session_id=""):
     resolved_session_id = _SESSION_EFFORT.resolve_session_id("", session_id)
     active_task_name = task_name or os.environ.get("CODEX_TASK_NAME", "")
@@ -237,7 +253,8 @@ def _markdown_entry(record):
     risks = "; ".join(record["risks"]) or "none"
     supersedes = record["supersedes"] or "none"
     anchor = _event_anchor(record["id"])
-    return f"### {record['recorded_at']} — {record['summary']}\n\n- Record ID: `{record['id']}`\n- Module: {record['module']}\n- Task scope: {record.get('task_scope_mode', 'unscoped')} / `{record.get('task_scope_key', '')}`\n- Task group: {record.get('task_group', '')} / `{record.get('task_group_key', '')}`\n- Scope: {record['scope']}\n- Change kind: {record['change_kind']}\n- What changed: {record['summary']}\n- Why: {record['reason']}\n- Result: {record['result']}\n- Verification: {record['verification_status']} — {verifications}\n- Decisions: {decisions}\n- Remaining risks: {risks}\n- Supersedes: `{supersedes}`\n- Files:\n{files}\n\n^{anchor}\n\n"
+    symbols = ", ".join(f"`{value}`" for value in record.get("symbols", [])) or "none"
+    return f"### {record['recorded_at']} — {record['summary']}\n\n- Record ID: `{record['id']}`\n- Module: {record['module']}\n- Methods/symbols: {symbols}\n- Task scope: {record.get('task_scope_mode', 'unscoped')} / `{record.get('task_scope_key', '')}`\n- Task group: {record.get('task_group', '')} / `{record.get('task_group_key', '')}`\n- Scope: {record['scope']}\n- Change kind: {record['change_kind']}\n- What changed: {record['summary']}\n- Why: {record['reason']}\n- Result: {record['result']}\n- Verification: {record['verification_status']} — {verifications}\n- Decisions: {decisions}\n- Remaining risks: {risks}\n- Supersedes: `{supersedes}`\n- Files:\n{files}\n\n^{anchor}\n\n"
 
 
 HISTORY_SECTIONS = (
@@ -522,20 +539,23 @@ def _write_obsidian(record, vault, project_root=None):
 
 
 def _fingerprint(record):
-    payload = {key: record[key] for key in ("project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes")}
+    payload = {key: record[key] for key in ("project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "symbols", "supersedes")}
     payload.update({key: record.get(key, "") for key in ("codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")})
     if record.get("project", {}).get("working_line"):
         payload["working_line"] = record["project"]["working_line"]
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id="", task_group=""):
+def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id="", task_group="", symbols=None):
     resolved_project_root = Path(project_root).expanduser().resolve()
     project = _project_identity(project_root)
     timestamp = recorded_at or datetime.now(timezone.utc)
     working_line = _derive_working_line(project_root)
-    scope_fields = _memory_scope(project["key"], module, task_name, task_group, session_id)
-    record = {"schema_version": SCHEMA_VERSION, "id": "", "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"), "project": project, "module": _single_line(module, "module", max_length=160), "scope": scope, "change_kind": change_kind, "summary": _single_line(summary, "summary"), "reason": _single_line(reason, "reason"), "result": _single_line(result, "result"), "verification_status": verification_status, **scope_fields, "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "decisions": [_single_line(value, "decision", max_length=600) for value in (decisions or [])], "risks": [_single_line(value, "risk", max_length=600) for value in (risks or [])], "files": _normalize_files(resolved_project_root, files), "supersedes": _single_line(supersedes, "supersedes", required=False, max_length=120)}
+    normalized_module = _single_line(module, "module", max_length=160)
+    normalized_files = _normalize_files(resolved_project_root, files)
+    normalized_symbols = [_single_line(value, "symbol", required=False, max_length=240) for value in (symbols or []) if str(value or "").strip()]
+    scope_fields = _memory_scope(project["key"], normalized_module, task_name, task_group, session_id)
+    record = {"schema_version": SCHEMA_VERSION, "id": "", "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"), "project": project, "module": normalized_module, "symbols": normalized_symbols, "scope": scope, "change_kind": change_kind, "summary": _single_line(summary, "summary"), "reason": _single_line(reason, "reason"), "result": _single_line(result, "result"), "verification_status": verification_status, **scope_fields, "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "decisions": [_single_line(value, "decision", max_length=600) for value in (decisions or [])], "risks": [_single_line(value, "risk", max_length=600) for value in (risks or [])], "files": normalized_files, "supersedes": _single_line(supersedes, "supersedes", required=False, max_length=120)}
     record["project"]["working_line"] = working_line
     if scope not in SCOPE_VALUES:
         raise ValueError(f"scope must be one of {', '.join(SCOPE_VALUES)}")
@@ -545,6 +565,20 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
         raise ValueError(f"verification_status must be one of {', '.join(VERIFICATION_STATUS_VALUES)}")
     if verification_status != "not-run" and not record["verification"]:
         raise ValueError("at least one --verification is required unless verification-status is not-run")
+    coverage_store = None
+    if Path(store).expanduser().resolve() != Path(DEFAULT_STORE).expanduser().resolve():
+        coverage_store = Path(store).expanduser().resolve().parent / "memory-coverage-events.jsonl"
+    coverage = _coverage_runtime().ensure_coverage(
+        resolved_project_root,
+        normalized_module,
+        symbol=normalized_symbols[0] if normalized_symbols else "",
+        files=normalized_files,
+        source="project-change",
+        require_method=scope == "code",
+        vault=vault,
+        store=coverage_store,
+        recorded_at=timestamp,
+    )
     record["fingerprint"] = _fingerprint(record)
     record["id"] = f"{timestamp.strftime('%Y%m%dT%H%M%SZ')}-{record['fingerprint'][:12]}"
     store_path = Path(store).expanduser().resolve()
@@ -567,7 +601,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
                 raise ValueError("supersedes must overlap at least one touched file")
         duplicate = next((existing for existing in reversed(existing_records) if existing.get("fingerprint") == record["fingerprint"]), None)
         if duplicate:
-            return {"status": "duplicate", "record_id": duplicate["id"], "project": duplicate["project"], "files": duplicate["files"], "local": {"written": True, "store": store_path.name}, "obsidian": {"status": "not-rewritten", "written": False}}
+            return {"status": "duplicate", "record_id": duplicate["id"], "project": duplicate["project"], "files": duplicate["files"], "symbols": duplicate.get("symbols", []), "coverage": coverage, "local": {"written": True, "store": store_path.name}, "obsidian": {"status": "not-rewritten", "written": False}}
         project_dir = store_path / "projects" / project["key"]
         record_path = project_dir / "records" / timestamp.strftime("%Y") / timestamp.strftime("%m") / f"{record['id']}.json"
         record_path.parent.mkdir(parents=True, exist_ok=True)
@@ -579,7 +613,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
         for relative_file in record["files"]:
             _append_jsonl(_project_file_index_path(project_dir, relative_file), record)
         obsidian_status = _write_obsidian(record, vault, resolved_project_root)
-    return {"status": "written", "record_id": record["id"], "project": project, "files": record["files"], "local": {"written": True, "store": store_path.name, "record": record_path.relative_to(store_path).as_posix()}, "obsidian": obsidian_status}
+    return {"status": "written", "record_id": record["id"], "project": project, "files": record["files"], "symbols": record["symbols"], "coverage": coverage, "local": {"written": True, "store": store_path.name, "record": record_path.relative_to(store_path).as_posix()}, "obsidian": obsidian_status}
 
 
 def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE, include_ambiguous=False, task_name="", session_id="", task_group=""):
@@ -604,7 +638,7 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
         if terms and not all(term in searchable for term in terms):
             continue
         relation = _SESSION_EFFORT.scope_relation(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""), task_group_key_value=scope.get("task_group_key", "")) if scope.get("codex_session_key") or scope.get("task_scope_key") or scope.get("task_group_key") else {"reason": "unscoped_query"}
-        matches.append({**{key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")}, "relation_reason": relation["reason"], "source_session_key": record.get("codex_session_key", "") or record.get("session_key", "")})
+        matches.append({**{key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "symbols", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")}, "relation_reason": relation["reason"], "source_session_key": record.get("codex_session_key", "") or record.get("session_key", "")})
         if len(matches) >= max(1, min(max_results, 25)):
             break
     return {"status": "ok" if matches else "no-matches", "matches": matches}
@@ -645,6 +679,7 @@ def main():
     record_parser.add_argument("--decision", action="append", default=[])
     record_parser.add_argument("--risk", action="append", default=[])
     record_parser.add_argument("--file", action="append", required=True)
+    record_parser.add_argument("--symbol", action="append", default=[])
     record_parser.add_argument("--supersedes", default="")
     record_parser.add_argument("--task-name", default=os.environ.get("CODEX_TASK_NAME", ""))
     record_parser.add_argument("--task-group", default=os.environ.get("CODEX_TASK_GROUP", ""))
@@ -654,7 +689,7 @@ def main():
     if args.command == "search":
         output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store, args.include_ambiguous, args.task_name, args.session_id, args.task_group)
     elif args.command == "record":
-        output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault, None, args.task_name, args.session_id, args.task_group)
+        output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault, None, args.task_name, args.session_id, args.task_group, symbols=args.symbol)
     else:
         output = memory_status(args.store, args.vault)
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
