@@ -951,7 +951,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
         session_summary = session_effort.sanitize_summary(session_context)
     else:
         session_summary = session_effort.assess_session(session_prompt or task_summary, Path(project_root).expanduser().resolve(), project_key=query["project"]["key"], task_type=query["task_type"], module=query["module"], capability_fingerprint=query["capability_fingerprint"], operation=query["operation"], modality=query["modality"], complexity_score=query["complexity_score"], task_summary=task_summary, task_name=task_name, task_group=task_group, session_id=session_id, local_store=local_store)
-    requested_scope = bool(str(session_id or "").strip() or str(task_name or "").strip() or str(task_group or "").strip())
+    requested_scope = bool(str(session_id or "").strip() or str(task_name or "").strip() or str(task_group or "").strip() or session_summary.get("codex_session_key"))
     context_scope = bool(isinstance(session_context, dict) and (session_summary.get("codex_session_key") or session_summary.get("task_scope_key") or session_summary.get("task_group_key")))
     active_scope = bool(session_summary.get("codex_session_key") or query.get("task_scope_key") or query.get("task_group_key")) if requested_scope else context_scope
     query.update({"task_name": query.get("task_name", ""), "task_group": query.get("task_group", ""), "task_scope_key": query.get("task_scope_key", "") if str(task_name or "").strip() else "", "task_group_key": query.get("task_group_key", ""), "codex_session_key": session_summary.get("codex_session_key") if active_scope else "", "scope_enforced": active_scope})

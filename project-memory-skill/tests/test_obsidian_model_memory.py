@@ -22,7 +22,7 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.home = self.root / "home"
         self.home.mkdir()
         self.local_store = self.root / "model-routing-memory" / "events.jsonl"
-        self.local_store_patcher = mock.patch.dict(os.environ, {"CODEX_MODEL_ROUTING_MEMORY": str(self.local_store)})
+        self.local_store_patcher = mock.patch.dict(os.environ, {"CODEX_MODEL_ROUTING_MEMORY": str(self.local_store), "CODEX_THREAD_ID": "", "CODEX_SESSION_ID": "", "CODEX_TASK_NAME": "", "CODEX_TASK_GROUP": ""})
         self.local_store_patcher.start()
         self.path_home_patcher = mock.patch.object(module.Path, "home", lambda: self.home)
         self.path_home_patcher.start()
@@ -127,6 +127,13 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(recommendation["obsidian_record_count"], 1)
         self.assertEqual(recommendation["merged_record_count"], 1)
         self.assertEqual(recommendation["selection_basis"], "local_and_obsidian")
+
+    def test_environment_session_becomes_active_scope_without_explicit_api_argument(self):
+        session_id = "019fc8e5-87da-7082-90b9-6d505404d229"
+        with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": session_id}, clear=False):
+            recommendation = module.recommend_model(self.project, "code", "environment-scope", task_summary="Use the active Codex session.", vault=self.vault)
+        self.assertTrue(recommendation["scope_enforced"])
+        self.assertEqual(recommendation["codex_session_key"], module.session_effort.session_key(session_id))
 
     def test_session_and_task_scope_never_cross_step_records(self):
         session_one = "019fc8e5-87da-7082-90b9-6d505404d229"

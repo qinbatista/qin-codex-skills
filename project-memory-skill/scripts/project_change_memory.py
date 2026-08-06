@@ -36,8 +36,10 @@ _SESSION_EFFORT_SPEC.loader.exec_module(_SESSION_EFFORT)
 
 def _memory_scope(project_key, module, task_name="", task_group="", session_id=""):
     resolved_session_id = _SESSION_EFFORT.resolve_session_id("", session_id)
-    normalized_task_name = _SESSION_EFFORT.normalize_task_name(task_name) if str(task_name or "").strip() else ""
-    normalized_task_group = _SESSION_EFFORT.normalize_task_name(task_group, "group") if str(task_group or "").strip() else ""
+    active_task_name = task_name or os.environ.get("CODEX_TASK_NAME", "")
+    active_task_group = task_group or os.environ.get("CODEX_TASK_GROUP", "")
+    normalized_task_name = _SESSION_EFFORT.normalize_task_name(active_task_name) if str(active_task_name or "").strip() else ""
+    normalized_task_group = _SESSION_EFFORT.normalize_task_name(active_task_group, "group") if str(active_task_group or "").strip() else ""
     task_scope = _SESSION_EFFORT.task_scope_key(project_key, "project-change", module, normalized_task_name) if normalized_task_name else ""
     group_scope = _SESSION_EFFORT.task_group_key(project_key, normalized_task_group, normalized_task_name)
     return {"codex_session_key": _SESSION_EFFORT.session_key(resolved_session_id) if resolved_session_id else "", "task_name": normalized_task_name, "task_group": normalized_task_group, "task_scope_key": task_scope, "task_group_key": group_scope, "task_scope_mode": "session+task+group" if resolved_session_id and task_scope and group_scope else "session+task" if resolved_session_id and task_scope else "session+group" if resolved_session_id and group_scope else "session" if resolved_session_id else "task+group" if task_scope and group_scope else "task" if task_scope else "group" if group_scope else "unscoped"}
