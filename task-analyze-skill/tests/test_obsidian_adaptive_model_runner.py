@@ -462,7 +462,7 @@ source_files must list both sources."""
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "SECRET RAW PROMPT MUST NOT BE STORED")
             receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
-        expected_fields = {"project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary", "step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source"}
+        expected_fields = {"project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_name", "task_scope_key", "codex_session_key", "task_summary", "step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source"}
         self.assertEqual(set(result["model_learning_context"]), expected_fields)
         self.assertEqual(receipt["model_learning_context"], result["model_learning_context"])
         self.assertEqual(result["model_learning_context"]["task_summary"], "Edit one method. Keep behavior stable.")

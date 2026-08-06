@@ -185,6 +185,7 @@ def _recommend(args, prompt=""):
         risk=args.risk,
         ambiguity=args.ambiguity,
         task_summary=args.task_summary,
+        task_name=getattr(args, "task_name", ""),
         step_kind=getattr(args, "step_kind", ""),
         capability_tags=getattr(args, "capability_tag", []),
         entry_model=getattr(args, "resolved_entry_model", None) or getattr(args, "entry_model", None) or "",
@@ -192,6 +193,7 @@ def _recommend(args, prompt=""):
         vault=args.vault,
         ladder=args.ladder,
         session_prompt=prompt,
+        session_id=getattr(args, "session_id", ""),
     )
 
 
@@ -551,7 +553,10 @@ def _model_learning_context(args):
     def clean(value, limit=600):
         return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
     capability = obsidian_model_memory.task_capability_profile(args.task_type, args.code_kind, args.operation, args.modality, args.complexity_score, args.risk, args.ambiguity, args.task_summary, getattr(args, "step_kind", ""), getattr(args, "capability_tag", []))
-    return {"project_root": clean(Path(args.project_root).expanduser().resolve(), 1200), "task_type": clean(args.task_type, 160), "module": clean(args.module, 160), "file": clean(args.file), "symbol": clean(args.symbol), "code_kind": clean(args.code_kind, 80), "operation": clean(args.operation, 80), "modality": clean(args.modality, 40), "complexity": clean(args.complexity, 40), "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "risk": clean(args.risk, 40), "ambiguity": clean(args.ambiguity, 40), "task_summary": clean(args.task_summary), "step_kind": capability["step_kind"], "capability_tags": capability["capability_tags"], "capability_fingerprint": capability["capability_fingerprint"], "entry_model": clean(getattr(args, "resolved_entry_model", ""), 120), "entry_effort": clean(getattr(args, "resolved_entry_effort", ""), 40), "entry_pair": clean(f"{getattr(args, 'resolved_entry_model', '')}|{getattr(args, 'resolved_entry_effort', '')}", 180), "entry_source": clean(getattr(args, "resolved_entry_source", ""), 80)}
+    normalized_task_name = obsidian_model_memory.session_effort.normalize_task_name(getattr(args, "task_name", "")) if getattr(args, "task_name", "") else ""
+    task_scope = obsidian_model_memory.session_effort.task_scope_key(obsidian_model_memory.project_change_memory._project_identity(args.project_root)["key"], args.task_type, args.module, normalized_task_name) if normalized_task_name else ""
+    codex_session_key = obsidian_model_memory.session_effort.session_key(getattr(args, "session_id", "")) if getattr(args, "session_id", "") else ""
+    return {"project_root": clean(Path(args.project_root).expanduser().resolve(), 1200), "task_type": clean(args.task_type, 160), "module": clean(args.module, 160), "file": clean(args.file), "symbol": clean(args.symbol), "code_kind": clean(args.code_kind, 80), "operation": clean(args.operation, 80), "modality": clean(args.modality, 40), "complexity": clean(args.complexity, 40), "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "risk": clean(args.risk, 40), "ambiguity": clean(args.ambiguity, 40), "task_name": normalized_task_name, "task_scope_key": task_scope, "codex_session_key": codex_session_key, "task_summary": clean(args.task_summary), "step_kind": capability["step_kind"], "capability_tags": capability["capability_tags"], "capability_fingerprint": capability["capability_fingerprint"], "entry_model": clean(getattr(args, "resolved_entry_model", ""), 120), "entry_effort": clean(getattr(args, "resolved_entry_effort", ""), 40), "entry_pair": clean(f"{getattr(args, 'resolved_entry_model', '')}|{getattr(args, 'resolved_entry_effort', '')}", 180), "entry_source": clean(getattr(args, "resolved_entry_source", ""), 80)}
 
 
 def _pre_execution_failure(receipt_args):
@@ -789,6 +794,8 @@ def resolve_fast_path_args(args, prompt):
     args.project_root = project_root
     args.task_type = task_type
     args.module = module_name
+    args.task_name = args.task_name or os.environ.get("CODEX_TASK_NAME", "")
+    args.session_id = obsidian_model_memory.session_effort.resolve_session_id(prompt, args.session_id)
     args.task_summary = args.task_summary or re.sub(r"\s+", " ", prompt).strip()[:280]
     args.workload_id = args.workload_id or f"fast-{digest}"
     args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
@@ -818,6 +825,8 @@ def parse_args(argv=None):
     parser.add_argument("--risk", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--ambiguity", choices=sorted(obsidian_model_memory.LEVEL_VALUES), default="low")
     parser.add_argument("--task-summary", default="")
+    parser.add_argument("--task-name", default="")
+    parser.add_argument("--session-id", default="")
     parser.add_argument("--step-kind", choices=sorted(obsidian_model_memory.STEP_KINDS), default="")
     parser.add_argument("--capability-tag", action="append", default=[])
     parser.add_argument("--workload-id")

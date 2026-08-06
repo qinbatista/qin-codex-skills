@@ -299,6 +299,20 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             self.assertEqual(len((store / "index.jsonl").read_text(encoding="utf-8").splitlines()), 1)
             self.assertFalse((vault / "Projects" / "ExampleProject").exists())
 
+    def test_project_change_recall_isolated_by_session_and_task_name(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "ExampleProject"
+            store = root / "store"
+            project.mkdir()
+            (project / "step1.py").write_text("value = 1\n", encoding="utf-8")
+            first = MEMORY.record_change(project, "routing", "file", "edit", "Step one change", "Keep step one isolated", "Step one passed", "passed", ["step1.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-one", session_id="019fc8e5-87da-7082-90b9-6d505404d229")
+            second = MEMORY.record_change(project, "routing", "file", "edit", "Step two change", "Keep step two isolated", "Step two passed", "passed", ["step1.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-two", session_id="019fc8e5-87da-7082-90b9-6d505404d230")
+            first_search = MEMORY.search_records(project, "routing", ["step1.py"], "change", 8, store, True, "step-one", "019fc8e5-87da-7082-90b9-6d505404d229")
+            second_search = MEMORY.search_records(project, "routing", ["step1.py"], "change", 8, store, True, "step-two", "019fc8e5-87da-7082-90b9-6d505404d230")
+        self.assertEqual([match["id"] for match in first_search["matches"]], [first["record_id"]])
+        self.assertEqual([match["id"] for match in second_search["matches"]], [second["record_id"]])
+
     def test_record_serialization_and_cli_result_do_not_expose_absolute_machine_paths(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

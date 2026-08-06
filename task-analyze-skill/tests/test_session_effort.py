@@ -58,6 +58,17 @@ class SessionEffortTests(unittest.TestCase):
         self.assertEqual(summary["state"], "solved_or_new_topic")
         self.assertEqual(summary["same_task_turns"], 0)
 
+    def test_session_and_explicit_task_scope_are_hashed_and_isolated(self):
+        first_session = module.session_key("019fc8e5-87da-7082-90b9-6d505404d229")
+        second_session = module.session_key("019fc8e5-87da-7082-90b9-6d505404d230")
+        first_task = module.task_scope_key("demo", "code", "pipeline", "step-one")
+        second_task = module.task_scope_key("demo", "code", "pipeline", "step-two")
+        self.assertNotEqual(first_session, second_session)
+        self.assertNotEqual(first_task, second_task)
+        self.assertTrue(module.scope_matches({"codex_session_key": first_session, "task_scope_key": first_task}, session_key_value=first_session, task_scope=first_task))
+        self.assertFalse(module.scope_matches({"codex_session_key": first_session, "task_scope_key": first_task}, session_key_value=second_session, task_scope=second_task))
+        self.assertFalse(module.scope_matches({"session_key": "", "task_scope_key": ""}, session_key_value=first_session))
+
     def test_escalation_stops_at_sol_ultra(self):
         pairs = ["gpt-5.6-luna|max", "gpt-5.6-terra|max", "gpt-5.6-sol|max", "gpt-5.6-sol|ultra"]
         self.assertEqual(module.next_escalation_pair("gpt-5.6-luna|max", pairs), "gpt-5.6-terra|max")

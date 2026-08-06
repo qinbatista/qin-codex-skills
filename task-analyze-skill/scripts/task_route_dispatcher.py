@@ -320,6 +320,8 @@ def _model_memory_arguments(node, project_root, entry_model=None, entry_effort=N
         "risk": condition.get("risk") or "low",
         "ambiguity": condition.get("ambiguity") or "low",
         "task_summary": node.get("task_summary") or "",
+        "task_name": scope.get("task_name") or node.get("task_name") or os.environ.get("CODEX_TASK_NAME", ""),
+        "session_id": os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID", ""),
         "step_kind": scope.get("step_kind") or "",
         "capability_tags": scope.get("capability_tags"),
         "entry_model": entry_model or node.get("_entry_model") or "",

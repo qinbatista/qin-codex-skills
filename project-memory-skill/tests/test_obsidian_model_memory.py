@@ -128,6 +128,23 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(recommendation["merged_record_count"], 1)
         self.assertEqual(recommendation["selection_basis"], "local_and_obsidian")
 
+    def test_session_and_task_scope_never_cross_step_records(self):
+        session_one = "019fc8e5-87da-7082-90b9-6d505404d229"
+        session_two = "019fc8e5-87da-7082-90b9-6d505404d230"
+        query = module._query(self.project, "code", "example-module", "src/example.py", "Example.run", "python", "edit", "text", "easy", 35, "low", "low", "scoped task", "implementation", None, "step-one")
+        records = []
+        for session_id, task_name, pair in ((session_one, "step-one", "gpt-5.6-terra|high"), (session_two, "step-two", "gpt-5.6-sol|high")):
+            records.append({"model_experience_schema": 1, "record_id": f"{task_name}-record", "event_id": f"{task_name}-event", "project_key": query["project"]["key"], "project_owner": "ThisIsMyOregon", "task_type": query["task_type"], "task_name": task_name, "task_scope_key": module.session_effort.task_scope_key(query["project"]["key"], query["task_type"], query["module"], task_name), "codex_session_key": module.session_effort.session_key(session_id), "session_key": module.session_effort.session_key(session_id), "task_summary": query["task_summary"], "module": query["module"], "file": query["file"], "symbol": query["symbol"], "code_kind": query["code_kind"], "operation": query["operation"], "modality": query["modality"], "complexity": query["complexity"], "complexity_score": query["complexity_score"], "complexity_band": query["complexity_band"], "risk": query["risk"], "ambiguity": query["ambiguity"], "step_kind": query["step_kind"], "capability_tags": query["capability_tags"], "capability_fingerprint": query["capability_fingerprint"], "pair": pair, "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": "pass", "failure_class": "none", "recorded_at": "2026-08-06T12:00:00Z"})
+        self.write_local_history(records, prefix="scoped")
+        first = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", complexity_score=35, risk="low", ambiguity="low", task_summary="scoped task", task_name="step-one", session_id=session_one, vault=self.vault)
+        second = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", complexity_score=35, risk="low", ambiguity="low", task_summary="scoped task", task_name="step-two", session_id=session_two, vault=self.vault)
+        self.assertTrue(first["scope_enforced"])
+        self.assertTrue(second["scope_enforced"])
+        self.assertEqual(first["matched_records"], 1)
+        self.assertEqual(second["matched_records"], 1)
+        self.assertEqual(first["task_name"], "step-one")
+        self.assertEqual(second["task_name"], "step-two")
+
 
 
 

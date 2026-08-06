@@ -19,8 +19,9 @@ else:
     import fcntl
 
 
-SESSION_SCHEMA_VERSION = 1
-LOCAL_MEMORY_SCHEMA_VERSION = 1
+SESSION_SCHEMA_VERSION = 2
+LOCAL_MEMORY_SCHEMA_VERSION = 2
+TASK_NAME_MAX_LENGTH = 96
 UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 UUID_SEARCH_PATTERN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
 PAIR_PATTERN = re.compile(r"^gpt-[^|]+\|(?:low|medium|high|xhigh|max|ultra)$")
@@ -53,8 +54,42 @@ def _codex_home():
     return Path(configured).expanduser().resolve() if configured else Path.home() / ".codex"
 
 
-def _session_key(session_id):
+def session_key(session_id):
     return hashlib.sha256(str(session_id or "").strip().lower().encode("utf-8")).hexdigest()[:24]
+
+
+def _session_key(session_id):
+    return session_key(session_id)
+
+
+def normalize_task_name(value, fallback="task"):
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    normalized = re.sub(r"(?:sk-[a-z0-9_-]{8,}|/users/[^ ]+|/home/[^ ]+|[a-z]:\\[^ ]+)", "private", normalized, flags=re.IGNORECASE)
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")[:TASK_NAME_MAX_LENGTH]
+    if slug:
+        return slug
+    digest = hashlib.sha256(str(value or fallback).encode("utf-8")).hexdigest()[:12]
+    return f"{fallback}-{digest}"
+
+
+def task_scope_key(project_key="", task_type="", module="", task_name=""):
+    payload = "|".join(normalize_task_name(value, "scope") if index == 3 else str(value or "").strip().lower() for index, value in enumerate((project_key, task_type, module, task_name)))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+
+
+def session_task_scope_key(session_key_value, task_scope):
+    return hashlib.sha256(f"{str(session_key_value or '')}|{str(task_scope or '')}".encode("utf-8")).hexdigest()[:24]
+
+
+def scope_matches(record, *, session_key_value="", task_scope=""):
+    """Return whether one memory record belongs to the active session/task scope."""
+    record_session_key = str(record.get("codex_session_key") or record.get("session_key") or "")
+    record_task_scope = str(record.get("task_scope_key") or "")
+    if session_key_value and record_session_key != str(session_key_value):
+        return False
+    if task_scope and record_task_scope != str(task_scope):
+        return False
+    return bool(session_key_value or task_scope)
 
 
 def _prompt_hash(prompt):
@@ -283,7 +318,7 @@ def _read_rollout(path, session_id):
     return {"cwd": session_cwd, "users": users, "contexts": contexts}
 
 
-def _read_local_effort_records(local_store, session_key, project_key, task_type, module):
+def _read_local_effort_records(local_store, session_key_value, project_key, task_type, module, session_task_scope=""):
     path = Path(local_store).expanduser().resolve()
     if not path.is_file():
         return []
@@ -303,7 +338,7 @@ def _read_local_effort_records(local_store, session_key, project_key, task_type,
             record = envelope.get("record")
             if not isinstance(record, dict) or record.get("session_memory_schema") != SESSION_SCHEMA_VERSION:
                 continue
-            if record.get("session_key") != session_key or record.get("project_key") != project_key or record.get("task_type") != task_type or record.get("module") != module:
+            if record.get("session_key") != session_key_value or record.get("project_key") != project_key or record.get("task_type") != task_type or record.get("module") != module or record.get("session_task_scope_key") != session_task_scope:
                 continue
             records.append(record)
     return records
@@ -373,15 +408,23 @@ def solve_route_pair(summary, previous_pair, pairs, quality_base_pair=None):
 
 
 def _summary_defaults():
-    return {"available": False, "session_key": "", "project_match": False, "state": "unavailable", "turn_count": 0, "prior_turn_count": 0, "same_task_turns": 0, "user_effort": 0, "failure_recorded": False, "last_model_pair": "", "last_model_source": "", "model_pairs": [], "task_topic_fingerprint": "", "current_turn_key": "", "current_prompt_sha256": "", "solving_surface": "", "task_length": "", "step_estimate": 0, "step_class": "", "estimated_effort": "", "information_burden": "", "model_family": "", "model_difficulty": "", "difficulty_class": "", "route_class": "", "preferred_solving_pair": "", "route_reason": "", "explicit_route_hint": "", "session_event_id": "", "session_event_status": "not_recorded"}
+    return {"available": False, "session_key": "", "codex_session_key": "", "project_match": False, "state": "unavailable", "turn_count": 0, "prior_turn_count": 0, "same_task_turns": 0, "user_effort": 0, "failure_recorded": False, "last_model_pair": "", "last_model_source": "", "model_pairs": [], "task_name": "", "task_scope_key": "", "task_scope_mode": "unscoped", "session_task_scope_key": "", "task_topic_fingerprint": "", "current_turn_key": "", "current_prompt_sha256": "", "solving_surface": "", "task_length": "", "step_estimate": 0, "step_class": "", "estimated_effort": "", "information_burden": "", "model_family": "", "model_difficulty": "", "difficulty_class": "", "route_class": "", "preferred_solving_pair": "", "route_reason": "", "explicit_route_hint": "", "session_event_id": "", "session_event_status": "not_recorded"}
 
 
-def assess_session(prompt, project_root, *, project_key="", task_type="", module="", capability_fingerprint="", operation="", modality="", complexity_score=None, task_summary="", session_id="", sessions_root=None, local_store=None):
+def assess_session(prompt, project_root, *, project_key="", task_type="", module="", capability_fingerprint="", operation="", modality="", complexity_score=None, task_summary="", task_name="", session_id="", sessions_root=None, local_store=None):
     resolved_session_id = resolve_session_id(prompt, session_id)
     summary = _summary_defaults()
+    explicit_task_name = str(task_name or os.environ.get("CODEX_TASK_NAME") or "").strip()
+    summary["task_name"] = normalize_task_name(explicit_task_name) if explicit_task_name else ""
+    stable_task_scope = task_scope_key(project_key, task_type, module, summary["task_name"] or module or task_type)
+    summary["task_scope_key"] = stable_task_scope if explicit_task_name else ""
     if not resolved_session_id:
+        summary["task_scope_mode"] = "task" if summary["task_scope_key"] else "unscoped"
         return summary
-    summary["session_key"] = _session_key(resolved_session_id)
+    summary["session_key"] = session_key(resolved_session_id)
+    summary["codex_session_key"] = summary["session_key"]
+    summary["session_task_scope_key"] = session_task_scope_key(summary["session_key"], stable_task_scope)
+    summary["task_scope_mode"] = "session+task" if summary["task_scope_key"] else "session"
     summary["current_prompt_sha256"] = _prompt_hash(prompt)
     candidates = _candidate_paths(resolved_session_id, sessions_root)
     rollout = _read_rollout(candidates[-1], resolved_session_id) if candidates else None
@@ -408,21 +451,28 @@ def assess_session(prompt, project_root, *, project_key="", task_type="", module
     prior_users = users[:current_index] if current_index is not None else users
     current_failure = _failure_signals(prompt_text)
     current_tokens = _task_tokens(prompt_text)
+    explicit_task_scope = bool(summary.get("task_scope_key"))
+    local_path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
+    local_records = _read_local_effort_records(local_path, summary["session_key"], project_key, task_type, module, summary["session_task_scope_key"])
+    task_turn_keys = {str(record.get("turn_key") or "") for record in local_records if record.get("turn_key")}
+    candidate_users = [user for user in prior_users if user.get("turn_key") in task_turn_keys] if explicit_task_scope or task_turn_keys else prior_users
     same_task = []
     overlaps = []
-    for user in prior_users:
+    for user in candidate_users:
         similarity, overlap = _topic_similarity(prompt_text, user.get("text", ""))
         if similarity > 0:
             same_task.append(user)
             overlaps.extend(overlap)
-    if not same_task and _looks_like_continuation(prompt_text) and prior_users and not current_tokens:
-        same_task.append(prior_users[-1])
+    if not same_task and _looks_like_continuation(prompt_text) and candidate_users and not current_tokens:
+        same_task.append(candidate_users[-1])
     topic_tokens = sorted(current_tokens or _task_tokens(module) or _task_tokens(capability_fingerprint))
     topic_fingerprint = hashlib.sha256("|".join(topic_tokens).encode("utf-8")).hexdigest()[:24]
     context_pairs = []
     seen_turns = set()
     for context in contexts:
         if context.get("turn_key") and context.get("turn_key") == current_turn_key:
+            continue
+        if (explicit_task_scope or task_turn_keys) and context.get("turn_key") not in task_turn_keys:
             continue
         turn_key = context.get("turn_key") or f"pair:{context.get('pair')}"
         if turn_key in seen_turns:
@@ -431,8 +481,6 @@ def assess_session(prompt, project_root, *, project_key="", task_type="", module
         if isinstance(pair, str) and pair not in context_pairs:
             context_pairs.append(pair)
         seen_turns.add(turn_key)
-    local_path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
-    local_records = _read_local_effort_records(local_path, summary["session_key"], project_key, task_type, module)
     if current_turn_key:
         local_records = [record for record in local_records if record.get("turn_key") != current_turn_key]
     local_pairs = [record.get("selected_pair") for record in local_records if isinstance(record.get("selected_pair"), str) and record.get("selected_pair")]
@@ -457,10 +505,10 @@ def record_session_effort(summary, *, project_key, task_type, module, capability
     if not isinstance(summary, dict) or not summary.get("available") or not summary.get("project_match") or not summary.get("session_key"):
         return {"status": "skipped", "written": False, "reason": "session_not_recordable"}
     current_prompt_sha256 = summary.get("current_prompt_sha256") or ""
-    event_payload = "|".join(str(value or "") for value in (summary["session_key"], project_key, task_type, module, current_prompt_sha256, summary.get("current_turn_key")))
+    event_payload = "|".join(str(value or "") for value in (summary["session_key"], summary.get("session_task_scope_key"), project_key, task_type, module, current_prompt_sha256, summary.get("current_turn_key")))
     event_id = hashlib.sha256(event_payload.encode("utf-8")).hexdigest()
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    record = {"session_memory_schema": SESSION_SCHEMA_VERSION, "event_id": event_id, "recorded_at": timestamp, "session_key": str(summary["session_key"]), "turn_key": str(summary.get("current_turn_key") or ""), "project_key": str(project_key or ""), "task_type": str(task_type or ""), "module": str(module or ""), "capability_fingerprint": str(capability_fingerprint or ""), "complexity_score": complexity_score, "complexity_band": str(complexity_band or ""), "state": str(summary.get("state") or ""), "failure_recorded": bool(summary.get("failure_recorded")), "same_task_turns": int(summary.get("same_task_turns") or 0), "user_effort": int(summary.get("user_effort") or 0), "selected_pair": str(selected_pair or ""), "requested_pair": str(requested_pair or ""), "prior_model_pair": str(summary.get("last_model_pair") or ""), "model_pairs": [str(pair) for pair in summary.get("model_pairs", []) if isinstance(pair, str)], "task_topic_fingerprint": str(summary.get("task_topic_fingerprint") or ""), "solving_surface": str(summary.get("solving_surface") or ""), "task_length": str(summary.get("task_length") or ""), "step_estimate": int(summary.get("step_estimate") or 0), "step_class": str(summary.get("step_class") or ""), "estimated_effort": str(summary.get("estimated_effort") or ""), "information_burden": str(summary.get("information_burden") or ""), "model_family": str(summary.get("model_family") or ""), "model_difficulty": str(summary.get("model_difficulty") or ""), "difficulty_class": str(summary.get("difficulty_class") or ""), "route_class": str(summary.get("route_class") or ""), "preferred_solving_pair": str(summary.get("preferred_solving_pair") or ""), "route_reason": str(summary.get("route_reason") or ""), "explicit_route_hint": str(summary.get("explicit_route_hint") or "")}
+    record = {"session_memory_schema": SESSION_SCHEMA_VERSION, "event_id": event_id, "recorded_at": timestamp, "session_key": str(summary["session_key"]), "codex_session_key": str(summary.get("codex_session_key") or summary.get("session_key") or ""), "session_task_scope_key": str(summary.get("session_task_scope_key") or ""), "task_name": str(summary.get("task_name") or ""), "task_scope_key": str(summary.get("task_scope_key") or ""), "task_scope_mode": str(summary.get("task_scope_mode") or "session"), "turn_key": str(summary.get("current_turn_key") or ""), "project_key": str(project_key or ""), "task_type": str(task_type or ""), "module": str(module or ""), "capability_fingerprint": str(capability_fingerprint or ""), "complexity_score": complexity_score, "complexity_band": str(complexity_band or ""), "state": str(summary.get("state") or ""), "failure_recorded": bool(summary.get("failure_recorded")), "same_task_turns": int(summary.get("same_task_turns") or 0), "user_effort": int(summary.get("user_effort") or 0), "selected_pair": str(selected_pair or ""), "requested_pair": str(requested_pair or ""), "prior_model_pair": str(summary.get("last_model_pair") or ""), "model_pairs": [str(pair) for pair in summary.get("model_pairs", []) if isinstance(pair, str)], "task_topic_fingerprint": str(summary.get("task_topic_fingerprint") or ""), "solving_surface": str(summary.get("solving_surface") or ""), "task_length": str(summary.get("task_length") or ""), "step_estimate": int(summary.get("step_estimate") or 0), "step_class": str(summary.get("step_class") or ""), "estimated_effort": str(summary.get("estimated_effort") or ""), "information_burden": str(summary.get("information_burden") or ""), "model_family": str(summary.get("model_family") or ""), "model_difficulty": str(summary.get("model_difficulty") or ""), "difficulty_class": str(summary.get("difficulty_class") or ""), "route_class": str(summary.get("route_class") or ""), "preferred_solving_pair": str(summary.get("preferred_solving_pair") or ""), "route_reason": str(summary.get("route_reason") or ""), "explicit_route_hint": str(summary.get("explicit_route_hint") or "")}
     path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
     lock_path = path.with_suffix(path.suffix + ".lock")
     path.parent.mkdir(parents=True, exist_ok=True)
