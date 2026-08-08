@@ -26,7 +26,7 @@ Select only the optimization form required by the inline request or admitted nod
 
 - If optimization is the user's requested artifact, implement the smallest safe change and show the completed result immediately; independent Real Verify follows in Ending Task.
 - If optimization is discovered while doing another task, do not expand the main scope; report it as a candidate. Only an admitted route may place authorized follow-up work in Ending Task.
-- Same-behavior Real Verify, token/time comparison, broad regression, and independent optimization verification run after the main result when genuinely required. Inline execution may call a different verifier directly; an admitted route uses Ending Task.
+- Every new optimization task launches Ending after the main result. Same-behavior Real Verify, token/time comparison, broad regression, and independent optimization verification run there when applicable; otherwise Ending uses the smallest completion/record check. Inline execution may call a different verifier directly; an admitted route uses Ending Task.
 - Do not call the optimization independently verified until the different verifier passes. If it fails, notify the user and reopen the task.
 
 ## Model Contract
@@ -49,7 +49,7 @@ An admitted node does not silently inherit or reselect another pair. Ineligible 
 5. Implement only the authorized optimization.
 6. Show the raw after artifact immediately; do not add a foreground verifier.
 7. After presentation, start Ending with the producer receipt when one exists, resolve the exact saved project, and hand the before/after evidence to an independent project/local Ending Real verifier without changing the locked route. Every terminal task remains visible and reports attempts, first/retry pass, suitability, next route, and Obsidian record link/status; never auto-archive or delete it.
-8. When independent proof is required, hand optimizer identity, files, commands, before/after evidence, and remaining risks to a different verifier after the main result.
+8. Hand optimizer identity, files, commands, before/after evidence, and remaining risks to a different verifier after the main result; trivial non-executable results still use the smallest completion/record check.
 
 ## Result Model Disclosure
 

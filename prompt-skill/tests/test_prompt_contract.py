@@ -44,7 +44,7 @@ class PromptContractTests(unittest.TestCase):
 
     def test_result_first_and_target_validation_are_separate(self):
         self.assertIn("Present the completed prompt or instruction artifact immediately", self.prompt_skill)
-        self.assertIn("Start the scored Ending lifecycle only for complex work or an important result that needs tests, records, or durable memory", self.prompt_skill)
+        self.assertIn("Start the scored Ending lifecycle for every new user task", self.prompt_skill)
         self.assertIn("Create separate real representative-case checks with `ending_verification_plan.py`", self.prompt_skill)
         self.assertIn("all required cases must PASS", self.prompt_skill)
         self.assertIn("before returning", self.prompt_skill)

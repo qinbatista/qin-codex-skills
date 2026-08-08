@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="1120" viewBox="0 0 640 1120" role="img" aria-labelledby="title desc">
   <title id="title">qin-codex-skills mobile overview</title>
-  <desc id="desc">Tiny adaptive bootstrap, task-strategy quality pair, cost-admitted graph, and a separate post-result Ending task.</desc>
+  <desc id="desc">Tiny adaptive bootstrap, task-strategy quality pair, cost-admitted graph, and a separate post-result Ending task for every new task.</desc>
   <rect width="640" height="1120" rx="36" fill="#07111f"/>
   <g font-family="Arial,sans-serif">
     <text x="320" y="68" text-anchor="middle" fill="#f8fafc" font-size="44" font-weight="700">qin-codex-skills</text>
@@ -10,9 +10,9 @@
     <rect x="46" y="344" width="548" height="92" rx="22" fill="#075985"/><text x="76" y="381" fill="#e0f2fe" font-size="27" font-weight="700">2 · Workflow</text><text x="76" y="413" fill="#f0f9ff" font-size="19">locked dependencies · first-result handoff</text>
     <rect x="46" y="456" width="548" height="92" rx="22" fill="#7e22ce" stroke="#e879f9"/><text x="76" y="493" fill="#fae8ff" font-size="27" font-weight="700">3 · Prompt</text><text x="76" y="525" fill="#fdf4ff" font-size="19">100% reusable-prompt gate · prose excluded</text>
     <rect x="46" y="568" width="548" height="92" rx="22" fill="#9a3412"/><text x="76" y="605" fill="#ffedd5" font-size="27" font-weight="700">4 · Code</text><text x="76" y="637" fill="#fff7ed" font-size="19">Python · C# · Unity C# · extensible</text>
-    <rect x="46" y="680" width="548" height="92" rx="22" fill="#166534"/><text x="76" y="717" fill="#dcfce7" font-size="27" font-weight="700">5 · Verify</text><text x="76" y="749" fill="#f0fdf4" font-size="19">Ending Real after presentation</text>
+    <rect x="46" y="680" width="548" height="92" rx="22" fill="#166534"/><text x="76" y="717" fill="#dcfce7" font-size="27" font-weight="700">5 · Verify</text><text x="76" y="749" fill="#f0fdf4" font-size="19">Ending Real after every task</text>
     <rect x="46" y="792" width="548" height="92" rx="22" fill="#6d28d9"/><text x="76" y="829" fill="#ede9fe" font-size="27" font-weight="700">6 · Optimization</text><text x="76" y="861" fill="#f5f3ff" font-size="19">scripts · references · assets · templates</text>
     <rect x="46" y="904" width="548" height="92" rx="22" fill="#334155"/><text x="76" y="941" fill="#e2e8f0" font-size="27" font-weight="700">7 · Management</text><text x="76" y="973" fill="#f8fafc" font-size="19">private learning · profiles · safe mirror</text>
-    <text x="320" y="1060" text-anchor="middle" fill="#5eead4" font-size="21" font-weight="700">🪝 Hookless · completed result first</text>
+    <text x="320" y="1060" text-anchor="middle" fill="#5eead4" font-size="21" font-weight="700">Every task → separate visible Ending</text>
   </g>
 </svg>

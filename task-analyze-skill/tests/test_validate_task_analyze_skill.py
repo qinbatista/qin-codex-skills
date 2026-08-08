@@ -463,8 +463,8 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Producer owns files/skills/Quick Check", bootstrap_text)
-            self.assertIn("Complex/important needs test/record/memory=>projectless End", bootstrap_text)
-            self.assertIn("Simple read/open/one-value skip", bootstrap_text)
+            self.assertIn("Every new task=>projectless End", bootstrap_text)
+            self.assertIn("terminal memory/classification/record closeout", bootstrap_text)
             self.assertIn("codex_app__create_thread projectless", bootstrap_text)
             self.assertIn("ack threadId+hostId+projectId", bootstrap_text)
             self.assertIn("End Tasks stay globally visible", bootstrap_text)

@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**Codex-only · score every task · finish the job first · use Ending only for complex or important recorded/tested results**
+**Codex-only · score every task · finish the job first · launch a separate Ending for every new task**
 
 [中文说明](./README.zh.md)
 
@@ -16,19 +16,19 @@ Small low-risk edits scoring 0–24 try Spark-low first · larger work uses the 
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: score and finish the main job, then use Ending for complex or important recorded or tested results">
+  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: score and finish the main job, then launch Ending for every new task">
 </picture>
 
-## ✅ Finish first. Use Ending for important results.
+## ✅ Finish first. Launch Ending for every new task.
 
-This lifecycle rule matters:
+Lifecycle:
 
 1. **Score every submission from 0–100, then finish the requested job** and run the proportional implementation check.
 2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
-3. **After a complex or important result needs a real check, its entry parent starts one scored/model-routed projectless `End Task-<task name>-<check>` in the global task list, one per independent check.** The locked producer never starts Ending recursively; the parent binds its receipt, keeps the originating project root as execution context, and requires a real thread acknowledgement.
-4. **Every Ending runs its assigned real check and all required checks must PASS.** PASS/FAIL/BLOCKED tasks remain visible and report stage difficulty/pairs, attempt count, first/retry pass, suitability, next route, and Obsidian record link/status. Failure or acceptance mismatch sends an exact repair prompt through `codex_app__send_message_to_thread` to the immutable origin session; that session repairs result and starts a projectless End Task to rerun it, for up to three repairs. Ending tasks and repair handoffs never auto-archive or delete themselves.
+3. **After every new result, its entry parent starts one scored/model-routed projectless `End Task-<task name>-<check>` in the global task list, one per independent check.** The producer never starts Ending recursively; the parent binds its receipt/project context and requires a real thread acknowledgement.
+4. **Every Ending runs its assigned real/completion check and terminal closeout; all required checks must PASS.** Terminal closeout always records routing classification/model history and runs the bounded personal-memory scan; no preference candidate means no preference-memory write, never no Ending. PASS/FAIL/BLOCKED tasks remain visible and report stage difficulty/pairs, attempt count, first/retry pass, suitability, next route, and Obsidian record link/status. Failure or acceptance mismatch sends an exact repair prompt through `codex_app__send_message_to_thread` to the immutable origin session; that session repairs result and starts a projectless End Task to rerun it, for up to three repairs. Ending tasks and repair handoffs never auto-archive or delete themselves.
 
-Main work and Ending verification are deliberately different task sessions. A summary is never verification: heavy changes need real tests, API evidence, builds, renders, or visual checks appropriate to the change.
+Main work and Ending use different task sessions. A summary is not verification: heavy changes need real tests, API evidence, builds, renders, or visual checks.
 
 ## ⚡ Models & private learning
 
@@ -37,8 +37,8 @@ Main work and Ending verification are deliberately different task sessions. A su
   <img src="./management-skill/assets/readme/model-router.svg" alt="Task-strategy quality ladder that retains, downgrades, or upgrades one receipt-proven rung at a time">
 </picture>
 
-- **Cold start / entry-aware:** Exact step-capability fingerprint plus difficulty history chooses the lowest correct pair. Sol/high may route down; Luna-max/lower may route up. Without a match, start at or below entry; eligible 0–24 work still tries Spark-low.
-- **Learning:** A receipt-valid Real PASS retains the pair; two matched PASS outcomes may try one weaker rung; quality failure upgrades one rung. A recovered stronger pair is reused directly for the next exact match, while implementation and local-test steps keep separate histories.
+- **Cold start / entry-aware:** Step-capability/difficulty history chooses the lowest correct pair. Sol/high may route down; Luna-max/lower may route up. Without a match, start at or below entry; eligible 0–24 work still tries Spark-low.
+- **Learning:** A receipt-valid Real PASS retains the pair; two matched PASS outcomes may try one weaker rung; quality failure upgrades one rung. Recovered pairs are reused for exact matches; implementation and local-test steps keep separate histories.
 - **Operational:** A zero-result failure gets one stronger fallback and is not learned as a quality failure.
 - **Scheduling:** Compound requests split into quantifiable owned steps; each step routes independently. Two or three read-only sources are cost-admitted before reads; dependent multi-file work stays with one contextual producer.
 - **Memory:** Native project → Model Switch → category → shared-category links hold every terminal Ending record; no JSON sidecar or full-history read. Receipt-backed outcomes may move routing; known assignments without receipts remain visible, non-learning observations.
@@ -49,7 +49,7 @@ Main work and Ending verification are deliberately different task sessions. A su
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Finish and return the completed main result before background verification.
-- **Verify:** Complex/important results use one scored End Task per check; all PASS. FAIL → Fix + fresh check, max 3. Simple reads/one-value edits skip.
+- **Verify:** Every task gets a scored End Task; all checks PASS. FAIL → origin repair + fresh Ending, max 3. Simple results use a completion/record check.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
 - **Memory:** Change history is local JSONL + optional Obsidian; project/module + code symbols (`__module__`) required; context kept as fields.
 - **Models:** Use saved ladder; explicit update refreshes the highest GPT family; eligible small edits prioritize Spark-low; missing cache preserves it.

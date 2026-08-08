@@ -1,6 +1,6 @@
-# Eligible Real-Test Ending Lifecycle
+# Mandatory Post-Result Ending Lifecycle
 
-Complex or important results record a scored local Ending lifecycle when they need tests, records, or durable memory; a personal-memory candidate makes an otherwise small result important. If the bounded per-submission memory scan finds nothing, it is a strict no-op and does not create an Ending only for memory. When the completed result needs verification—code/file edits, bug fixes, generated artifacts, UI/render work, integrations, or external actions—Ending executes real proportional checks in separate persistent Codex tasks. Prior receipts or prose summaries alone cannot PASS.
+Every new user task records a scored Ending lifecycle in a separate persistent projectless Codex task after the main result. Code/file edits, bug fixes, generated artifacts, UI/render work, integrations, and external actions execute real proportional checks; exact reads, file opens, one-value edits, and conversational answers use the smallest observable completion/record check and never fabricate a test. The bounded personal-memory scan always runs inside Ending, but an empty candidate set remains a strict no-op for preference memory. Prior receipts or prose summaries alone cannot PASS a real check.
 
 ## Parent sequence
 

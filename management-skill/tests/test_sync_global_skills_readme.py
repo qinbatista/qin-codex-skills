@@ -207,7 +207,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
         self.assertIn("# 🚀 Auto Best Model", readme)
-        self.assertIn("**Codex-only · score every task · finish the job first · use Ending only for complex or important recorded/tested results**", readme)
+        self.assertIn("**Codex-only · score every task · finish the job first · launch a separate Ending for every new task**", readme)
         self.assertNotIn("AutoBestModel", readme)
         self.assertIn("**Mirrors:** `qin-codex-skills` · `auto-best-model`", readme)
         self.assertIn("Saved highest-family quality ladder", readme)
@@ -226,6 +226,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("zero-result failure gets one stronger fallback", readme)
         self.assertIn("finish the job first", readme)
         self.assertIn("one scored/model-routed projectless `End Task-<task name>-<check>` in the global task list", readme)
+        self.assertIn("Every Ending runs its assigned real/completion check and terminal closeout", readme)
+        self.assertIn("no preference candidate means no preference-memory write, never no Ending", readme)
         self.assertIn("all required checks must PASS", readme)
         self.assertIn("PASS/FAIL/BLOCKED tasks remain visible", readme)
         self.assertIn("first/retry pass", readme)
@@ -286,6 +288,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertLessEqual(max(map(len, rule_lines)), 100)
         self.assertIn("# 🚀 Auto Best Model", readme)
         self.assertIn("专用于 Codex", readme)
+        self.assertIn("每个新任务都另开 Ending 收尾", readme)
         self.assertIn("最高版本家族质量梯级", readme)
         self.assertIn("只有你主动要求本地模型更新时才刷新", readme)
         self.assertIn("修改前回溯项目/模块/文件历史", readme)
@@ -298,6 +301,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("0–24 分的小型低风险编辑优先 Spark-low", readme)
         self.assertIn("更大任务使用已保存的质量梯级", readme)
         self.assertIn("通过 `codex_app__send_message_to_thread` 把准确修复提示词发送回不可变的原始 session", readme)
+        self.assertIn("简单查看、打开文件或改单个 value 使用最小完成/记录检查", readme)
+        self.assertIn("没有偏好候选只是不写偏好记忆，绝不代表不启动 Ending", readme)
         self.assertIn("PASS/FAIL/BLOCKED task 都保持可见", readme)
         self.assertIn("Ending task 与修复交接永不自动归档或删除", readme)
         self.assertIn("PASS/FAIL/BLOCKED task 都保持可见", readme)
@@ -606,6 +611,23 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("first-result stops", mobile_verification)
         self.assertIn("no foreground verifier", mobile_verification)
         self.assertIn("Ending Real updates the same producer", mobile_verification)
+
+    def test_current_lifecycle_visuals_make_ending_mandatory_for_every_task(self):
+        for filename in (
+            "qin-codex-skills-hero.svg",
+            "qin-codex-skills-hero-mobile.svg",
+            "task-lifecycle.svg",
+            "task-lifecycle-mobile.svg",
+            "core-flow.svg",
+            "core-flow-mobile.svg",
+        ):
+            svg_text = (README_ASSET_DIR / filename).read_text(encoding="utf-8").lower()
+            self.assertIn("every task", svg_text, filename)
+            self.assertIn("ending", svg_text, filename)
+        for filename in ("core-flow-zh.svg", "core-flow-zh-mobile.svg"):
+            svg_text = (README_ASSET_DIR / filename).read_text(encoding="utf-8")
+            self.assertIn("每个", svg_text, filename)
+            self.assertIn("Ending", svg_text, filename)
 
     def test_snapshot_renders_synthetic_registered_rust_domain_without_generator_changes(self):
         with tempfile.TemporaryDirectory() as temp_dir:

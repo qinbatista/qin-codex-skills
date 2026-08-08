@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**专用于 Codex · 每个任务评分 · 先完成主任务 · 复杂或重要结果才用 Ending 留痕验证**
+**专用于 Codex · 每个任务评分 · 先完成主任务 · 每个新任务都另开 Ending 收尾**
 
 [English](./README.md)
 
@@ -16,17 +16,17 @@
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-zh-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先评分并完成主任务，复杂或重要结果才运行 Ending">
+  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先评分并完成主任务，每个新任务都另开独立 Ending">
 </picture>
 
-## ✅ 先完成主任务，重要结果才做 Ending
+## ✅ 先完成主任务，每个新任务都做 Ending
 
 这是整个生命周期最重要的结构规则：
 
 1. **每个提交先按 0–100 评分，再完成用户要求的工作**，并运行与实现相称的基础检查。
 2. **立即返回已完成结果。** 不让用户被验证、轮询或修复流程卡住。
-3. **复杂或重要结果确实需要真实检查时，入口父任务才为每个独立检查在全局任务列表中为每个独立检查另开一个评分并选模的 projectless `End Task-<任务名>-<检查>`。** 锁定 producer 不递归启动 Ending；父任务绑定 receipt、把原项目根保留为执行上下文，并要求真实 thread 回执。
-4. **每个 Ending 必须执行分配的真实检查，所有必需检查都要 PASS。** PASS/FAIL/BLOCKED task 都保持可见（包括 End Task），并报告阶段难度与模型、尝试次数、一次过/重试通过、模型适配度、下一模型路线和 Obsidian 记录链接/状态。FAIL 或验收到最终结果与原始需求不一致时，通过 `codex_app__send_message_to_thread` 把准确修复提示词发送回不可变的原始 session；原始 session 修复授权范围内的结果，再启动全新的 projectless End Task 重跑，最多修复三次。Ending task 与修复交接永不自动归档或删除。
+3. **每个新任务返回结果后，入口父任务都为每个独立检查在全局任务列表中另开一个评分并选模的 projectless `End Task-<任务名>-<检查>`。** 简单查看、打开文件或改单个 value 使用最小完成/记录检查；锁定 producer 不递归启动 Ending；父任务绑定 receipt、把原项目根保留为执行上下文，并要求真实 thread 回执。
+4. **每个 Ending 必须执行分配的真实/完成检查与终态收尾，所有必需检查都要 PASS。** 终态收尾始终记录路由分类/模型历史并运行有界个人记忆扫描；没有偏好候选只是不写偏好记忆，绝不代表不启动 Ending。PASS/FAIL/BLOCKED task 都保持可见（包括 End Task），并报告阶段难度与模型、尝试次数、一次过/重试通过、模型适配度、下一模型路线和 Obsidian 记录链接/状态。FAIL 或验收到最终结果与原始需求不一致时，通过 `codex_app__send_message_to_thread` 把准确修复提示词发送回不可变的原始 session；原始 session 修复授权范围内的结果，再启动全新的 projectless End Task 重跑，最多修复三次。Ending task 与修复交接永不自动归档或删除。
 
 主工作与 Ending 验证刻意使用不同任务会话。文字总结不算验证；重型修改必须用对应的真实测试、API 证据、build、render 或视觉检查证明。
 
@@ -49,7 +49,7 @@
 - **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
 - **路由：** 只有明确要求或当前端到端证据成立时才委派。
 - **交付：** 先完成并返回主任务结果，再进行后台验证。
-- **验证：** 复杂/重要结果需真实检查时才用评分 End Task；全部 PASS。FAIL → Fix → 全新 End Task，最多三次。简单查看/改单个 value 跳过。
+- **验证：** 每个新任务都用评分 End Task；全部 PASS。FAIL → Fix → 全新 End Task，最多三次。简单查看/改单个 value 使用最小完成/记录检查。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
 - **记忆：** 本地 JSONL + 可选 Obsidian 记录项目/模块覆盖；方法代码需 symbol，模块级用 `__module__`；模型学习走原生类别链接，项目/任务等保持为字段。
 - **模型：** 使用已保存梯级；主动本地更新时选择最高数字 GPT 家族；符合条件的小编辑优先 Spark-low；缓存不可用就保留原列表。
