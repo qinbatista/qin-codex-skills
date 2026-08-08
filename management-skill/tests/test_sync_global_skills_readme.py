@@ -87,6 +87,13 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def primary_skill_paths(self):
         return [SKILLS_DIR / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]
 
+    def test_default_runtime_state_stays_under_project_cache(self):
+        self.assertEqual(
+            sync_global_skills.DEFAULT_STATE_FILE,
+            sync_global_skills.DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json",
+        )
+        self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT.parent.parent, sync_global_skills.DEFAULT_PROJECT_ROOT)
+
     def test_approved_public_mirror_is_exactly_eight_including_project_memory(self):
         expected_order = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "project-memory-skill", "verify-skill", "optimization-skill", "management-skill"]
 
