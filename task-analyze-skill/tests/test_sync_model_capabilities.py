@@ -33,7 +33,7 @@ class SyncModelCapabilitiesTests(unittest.TestCase):
             self.assertIn(registry["source"]["catalog_sha256"], snapshot)
             self.assertIn("`quick-code`", snapshot)
             self.assertIn("Active quality family: `gpt-9.9`", snapshot)
-            self.assertIn("`gpt-9.8-legacy`", snapshot)
+            self.assertNotIn("`gpt-9.8-legacy`", snapshot)
             for model in registry["models"]:
                 self.assertIn(f"`{model['id']}`", snapshot)
             self.assertIn("Only the highest registered numeric GPT family is active", snapshot)
