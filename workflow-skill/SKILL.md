@@ -84,6 +84,12 @@ Do not run broad verification before the user first sees the result; show the ma
 
 On terminal status, print the ledger's structured model assessment: task/check score and band, producer and Ending pair, attempt count, first-attempt or retry pass, suitability, next action/pair, concise evidence reason, and Obsidian model-record link/status. On real-check failure or acceptance mismatch, persist terminal FAIL evidence and emit the origin-session `repair_dispatch` automatically; the source session owns the authorized repair and next fresh Ending. Only unavailable infrastructure, external state, timeout, failed prompt submission, or exhausted repairs is BLOCKED; never expose private chain-of-thought.
 
+## Process, Execution, And Result Memory
+
+Before durable project-result closeout, the one Ending compares three independent surfaces: the current Process Skill/AGENTS contract, fresh real execution evidence, and bounded effective project-result memory. Process philosophy stays in Skill/AGENTS and is never copied into result memory. Next tasks read only effective project-result memory; a record superseded by a later correction is history, not active guidance.
+
+Classify the comparison as `aligned`, `no_prior_memory`, `memory_record_defect`, `memory_projection_defect`, `skill_contract_defect`, `execution_drift`, or `insufficient_evidence`. Only `memory_record_defect` permits the Ending to write an append-only correction that explicitly supersedes the wrong result record. `memory_projection_defect` permits projection reconciliation only and does not create a replacement result. `skill_contract_defect` and `execution_drift` write no project-result memory: they FAIL with exact evidence and return to the immutable origin session for the authorized producer or contract repair, Quick Check, new result, and fresh Ending. `insufficient_evidence` is BLOCKED. Ending never edits Skill, AGENTS, or producer files.
+
 ## Runtime Receipt And Learning
 
 Use runtime receipts only for delegated model nodes, explicit routing proof, or benchmarking. A timeout remains a failure with elapsed time and partial token lower bounds.

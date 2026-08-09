@@ -624,6 +624,25 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(len(endings[0]["acceptance_checks"]), 3)
         self.assertEqual(endings[0]["terminal_closeout"], module.ENDING_TERMINAL_CLOSEOUT)
 
+    def test_project_result_consistency_allows_only_memory_owned_correction(self):
+        aligned = module.project_result_consistency_action("aligned")
+        record_defect = module.project_result_consistency_action("memory_record_defect")
+        projection_defect = module.project_result_consistency_action("memory_projection_defect")
+        self.assertEqual(aligned, {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "return_to_origin": False})
+        self.assertEqual(record_defect, {"ending_status": "pass", "action": "append_correction", "memory_write": True, "return_to_origin": False})
+        self.assertEqual(projection_defect, {"ending_status": "pass", "action": "reconcile_projection", "memory_write": False, "return_to_origin": False})
+        self.assertEqual(module.ENDING_TERMINAL_CLOSEOUT["project_result_consistency"]["next_task_memory"], "effective_only")
+
+    def test_project_result_consistency_returns_skill_and_execution_defects_to_origin_without_memory_write(self):
+        for classification in ("skill_contract_defect", "execution_drift"):
+            action = module.project_result_consistency_action(classification)
+            self.assertEqual(action["ending_status"], "fail")
+            self.assertEqual(action["action"], "return_to_origin")
+            self.assertFalse(action["memory_write"])
+            self.assertTrue(action["return_to_origin"])
+        with self.assertRaises(ValueError):
+            module.project_result_consistency_action("unknown")
+
     def test_plan_rejects_unity_csharp_result_node_not_owned_by_code_skill(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

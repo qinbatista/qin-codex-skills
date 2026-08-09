@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import tempfile
 import unittest
 from unittest import mock
@@ -13,22 +14,90 @@ SPEC.loader.exec_module(MEMORY)
 
 
 class ProjectChangeMemoryTests(unittest.TestCase):
+    def _write_root_first_runtime(self, vault):
+        runtime = vault / "AI Memory" / "ai_memory.py"
+        runtime.parent.mkdir(parents=True, exist_ok=True)
+        runtime.write_text("import json\nfrom pathlib import Path\n\nEVENTS_PATH = Path(__file__).with_name('events.jsonl')\n\ndef import_legacy(source):\n    record = json.loads(Path(source).read_text(encoding='utf-8').strip())\n    project = record.get('project', {}).get('owner') or record.get('project', {}).get('name') or 'Unknown'\n    events = [json.loads(line) for line in EVENTS_PATH.read_text(encoding='utf-8').splitlines()] if EVENTS_PATH.exists() else []\n    fields = ('summary', 'reason', 'result', 'verification_status', 'files', 'verification', 'decisions', 'risks', 'supersedes')\n    event = {'event_id': record['id'], 'project': project, 'module_changes': [{'module': record['module']}], **{field: record.get(field) for field in fields}}\n    if not any(item.get('event_id') == event['event_id'] for item in events):\n        events.append(event)\n        EVENTS_PATH.write_text(''.join(json.dumps(item, separators=(',', ':')) + '\\\n' for item in events), encoding='utf-8')\n        return {'status': 'written', 'imported': 1}\n    return {'status': 'written', 'imported': 0}\n\ndef render_views():\n    return None\n", encoding="utf-8")
+
     def test_root_first_vault_never_creates_legacy_projection_files(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             vault = Path(temporary_directory) / "vault"
+            self._write_root_first_runtime(vault)
             runtime = vault / "AI Memory" / "ai_memory.py"
-            runtime.parent.mkdir(parents=True)
-            runtime.write_text("from pathlib import Path\n\ndef record_event(project, module, event_type, summary, reason, result, verification_status, **kwargs):\n    Path(__file__).with_name('called.txt').write_text(project + '|' + module, encoding='utf-8')\n    return {'status': 'written', 'event_id': 'root-event'}\n\ndef render_views():\n    Path(__file__).with_name('rendered.txt').write_text('yes', encoding='utf-8')\n", encoding="utf-8")
             record = {"project": {"root": ".", "name": "Example"}, "module": "runtime", "summary": "Updated runtime", "reason": "Keep one memory", "result": "Passed", "verification_status": "passed", "files": ["src.py"], "verification": [], "decisions": [], "risks": [], "id": "test-id", "recorded_at": "2026-08-01T00:00:00Z", "change_kind": "edit", "scope": "code", "supersedes": ""}
             output = MEMORY._write_obsidian(record, vault)
             self.assertEqual(output["status"], "written")
             self.assertEqual(output["root"], "AI Memory/events.jsonl")
             self.assertEqual(output["event_status"], "written")
-            self.assertEqual(output["event_id"], "root-event")
-            self.assertEqual((runtime.parent / "called.txt").read_text(encoding="utf-8"), "Example|runtime")
-            self.assertEqual((runtime.parent / "rendered.txt").read_text(encoding="utf-8"), "yes")
+            self.assertEqual(output["event_id"], record["id"])
+            self.assertEqual(MEMORY._read_records(runtime.parent / "events.jsonl")[0]["event_id"], record["id"])
             self.assertFalse((vault / "Journal").exists())
             self.assertFalse((vault / "Skills" / "Activity Index.md").exists())
+
+    def test_vault_resolution_prefers_explicit_then_validated_project_registry(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            home = root / "home"
+            project = root / "project"
+            explicit_vault = root / "explicit-vault"
+            registry_vault = root / "registry-vault"
+            environment_vault = root / "environment-vault"
+            for directory in (home, project / "Cache", explicit_vault, registry_vault, environment_vault):
+                directory.mkdir(parents=True, exist_ok=True)
+            registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": str(registry_vault), "kind": "directory", "purpose": "Project result-memory projection"}}}
+            (project / "Cache" / "cache_path.json").write_text(json.dumps(registry), encoding="utf-8")
+            with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.dict(MEMORY.os.environ, {"CODEX_OBSIDIAN_VAULT": str(environment_vault)}, clear=False):
+                explicit = MEMORY._resolve_vault(explicit_vault, project)
+                registered = MEMORY._resolve_vault(None, project)
+        self.assertEqual(explicit, explicit_vault.resolve())
+        self.assertEqual(registered, registry_vault.resolve())
+        self.assertIsNone(MEMORY.DEFAULT_VAULT)
+        self.assertNotIn("iCloud~md~obsidian", SCRIPT_PATH.read_text(encoding="utf-8"))
+
+    def test_vault_resolution_uses_only_readable_open_portable_config_and_rejects_invalid_registry(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            home = root / "home"
+            project = root / "project"
+            open_vault = root / "open-vault"
+            closed_vault = root / "closed-vault"
+            config = home / ".config" / "obsidian" / "obsidian.json"
+            (project / "Cache").mkdir(parents=True)
+            open_vault.mkdir()
+            closed_vault.mkdir()
+            config.parent.mkdir(parents=True)
+            invalid_registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": "relative-vault", "kind": "directory", "purpose": "Invalid relative path"}}}
+            (project / "Cache" / "cache_path.json").write_text(json.dumps(invalid_registry), encoding="utf-8")
+            config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}, "open": {"path": str(open_vault), "open": True}}}), encoding="utf-8")
+            with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.object(MEMORY.sys, "platform", "linux"), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
+                configured = MEMORY._resolve_vault(None, project)
+                explicit_missing = MEMORY._resolve_vault(root / "missing", project)
+                config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}}}), encoding="utf-8")
+                unavailable = MEMORY._resolve_vault(None, project)
+        self.assertEqual(configured, open_vault.resolve())
+        self.assertIsNone(explicit_missing)
+        self.assertIsNone(unavailable)
+
+    def test_project_registry_vault_is_shared_by_coverage_and_result_projection(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            home = root / "home"
+            project = home / "Documents" / "AIProject" / "qin-codex-skills"
+            store = root / "store"
+            vault = root / "vault"
+            (project / "Cache").mkdir(parents=True)
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": str(vault), "kind": "directory", "purpose": "Project result-memory projection"}}}
+            vault.mkdir()
+            self._write_root_first_runtime(vault)
+            (project / "Cache" / "cache_path.json").write_text(json.dumps(registry), encoding="utf-8")
+            with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
+                result = MEMORY.record_change(project, "runtime", "code", "edit", "Recorded registry-backed result", "Use one resolved vault for all memory layers", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, symbols=["__module__"])
+            coverage_index_exists = (vault / result["coverage"]["obsidian"]["index"]).is_file()
+        self.assertEqual(result["coverage"]["obsidian"]["status"], "written")
+        self.assertEqual(result["obsidian"]["status"], "written")
+        self.assertTrue(result["projection"]["read_back_verified"])
+        self.assertTrue(coverage_index_exists)
 
     def test_windows_file_lock_uses_msvcrt_byte_lock(self):
         lock_handle = mock.Mock()
@@ -359,7 +428,24 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         self.assertNotIn(str(root), serialized)
         self.assertNotIn(str(root), rendered_result)
 
-    def test_search_is_scoped_to_current_working_line(self):
+    def test_result_memory_rejects_private_or_secret_like_payloads(self):
+        sensitive_values = (
+            "Observed /" + "Users/example/private/result.txt",
+            "Contact owner@example.com for details",
+            "token=abcdefghijklmnop",
+        )
+        for sensitive in sensitive_values:
+            with self.subTest(sensitive=sensitive), tempfile.TemporaryDirectory() as temporary_directory:
+                root = Path(temporary_directory)
+                project = root / "project"
+                store = root / "store"
+                project.mkdir()
+                (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "private or secret-like"):
+                    MEMORY.record_change(project, "runtime", "file", "edit", "Recorded verified result", "Keep result memory sanitized", sensitive, "passed", ["script.py"], ["Focused check passed"], store=store, vault=root / "missing-vault")
+                self.assertFalse((store / "index.jsonl").exists())
+
+    def test_search_keeps_same_remote_branch_history_across_commits(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             store = root / "store"
@@ -395,8 +481,8 @@ class ProjectChangeMemoryTests(unittest.TestCase):
                 scoped = MEMORY.search_records(project, "runtime", ["src/feature.py"], "runtime", 8, store)
                 all_records = MEMORY.search_records(project, "runtime", ["src/feature.py"], "runtime", 8, store, include_ambiguous=True)
 
-            self.assertEqual(len(scoped["matches"]), 1)
-            self.assertEqual(scoped["matches"][0]["id"], main_record["record_id"])
+            self.assertEqual(len(scoped["matches"]), 2)
+            self.assertIn(main_record["record_id"], {match["id"] for match in scoped["matches"]})
             self.assertEqual(len(all_records["matches"]), 2)
 
     def test_supersede_rejects_working_line_mismatch(self):
@@ -417,7 +503,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             stale_line = {
                 "identity_scope": "scoped",
                 "canonical_remote": "https://github.com/example/project.git",
-                "branch": "main",
+                "branch": "stale",
                 "commit": "2222",
                 "version": "",
             }
@@ -466,6 +552,154 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             (project / "script.py").write_text("value = 1\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "existing record"):
                 MEMORY.record_change(project, "runtime", "file", "edit", "Repair", "Correct failure", "Passed", "passed", ["script.py"], ["test passed"], supersedes="missing-record", store=store, vault=root / "missing-vault")
+
+    def test_supersedes_rejects_a_fork_from_an_already_superseded_record(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            original = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded first result", "Capture initial state", "Initial verification failed", "failed", ["script.py"], ["Initial check failed"], store=store, vault=root / "missing-vault")
+            correction = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded first correction", "Correct initial state", "First correction passed", "passed", ["script.py"], ["First correction passed"], supersedes=original["record_id"], store=store, vault=root / "missing-vault")
+            with self.assertRaisesRegex(ValueError, f"supersede latest record {correction['record_id']}"):
+                MEMORY.record_change(project, "runtime", "file", "edit", "Forked correction", "Incorrectly fork history", "Fork passed", "passed", ["script.py"], ["Fork check passed"], supersedes=original["record_id"], store=store, vault=root / "missing-vault")
+            latest = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded latest correction", "Advance the effective chain", "Latest correction passed", "passed", ["script.py"], ["Latest check passed"], supersedes=correction["record_id"], store=store, vault=root / "missing-vault")
+            effective = MEMORY.search_records(project, "runtime", ["script.py"], "", 8, store, include_ambiguous=True)
+        self.assertEqual([match["id"] for match in effective["matches"]], [latest["record_id"]])
+
+    def test_search_returns_only_effective_records_by_default_and_audits_supersession_chain(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            failed = MEMORY.record_change(project, "runtime", "code", "edit", "Recorded incorrect runtime result", "Capture the observed failure", "Ending failed", "failed", ["script.py"], ["Observed value was wrong"], store=store, vault=root / "missing-vault", symbols=["__module__"])
+            corrected = MEMORY.record_change(project, "runtime", "code", "edit", "Recorded corrected runtime result", "Replace the incorrect result memory", "Ending passed", "passed", ["script.py"], ["Observed value is correct"], supersedes=failed["record_id"], store=store, vault=root / "missing-vault", symbols=["__module__"])
+            effective = MEMORY.search_records(project, "runtime", ["script.py"], "", 8, store, include_ambiguous=True, symbols=["__module__"])
+            audit = MEMORY.search_records(project, "runtime", ["script.py"], "", 8, store, include_ambiguous=True, include_superseded=True, symbols=["__module__"])
+        self.assertEqual([match["id"] for match in effective["matches"]], [corrected["record_id"]])
+        self.assertTrue(effective["matches"][0]["effective"])
+        by_id = {match["id"]: match for match in audit["matches"]}
+        self.assertEqual(set(by_id), {failed["record_id"], corrected["record_id"]})
+        self.assertFalse(by_id[failed["record_id"]]["effective"])
+        self.assertEqual(by_id[failed["record_id"]]["superseded_by"], [corrected["record_id"]])
+        self.assertTrue(by_id[corrected["record_id"]]["effective"])
+        self.assertEqual(by_id[corrected["record_id"]]["superseded_by"], [])
+
+    def test_symbol_recall_is_exact(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            upper = MEMORY.record_change(project, "runtime", "code", "edit", "Updated Build behavior", "Keep exact symbol ownership", "Build passed", "passed", ["script.py"], ["Build check passed"], store=store, vault=root / "missing-vault", symbols=["Build"])
+            lower = MEMORY.record_change(project, "runtime", "code", "edit", "Updated build behavior", "Keep exact symbol ownership", "build passed", "passed", ["script.py"], ["build check passed"], store=store, vault=root / "missing-vault", symbols=["build"])
+            upper_search = MEMORY.search_records(project, "runtime", ["script.py"], "", 8, store, include_ambiguous=True, symbols=["Build"])
+            missing_search = MEMORY.search_records(project, "runtime", ["script.py"], "", 8, store, include_ambiguous=True, symbols=["BUILD"])
+        self.assertEqual([match["id"] for match in upper_search["matches"]], [upper["record_id"]])
+        self.assertNotEqual(upper["record_id"], lower["record_id"])
+        self.assertEqual(missing_search["status"], "no-matches")
+
+    def test_duplicate_retries_missing_projection_and_persists_read_back_receipts(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            vault = root / "vault"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            recorded_at = datetime(2026, 8, 9, 1, 0, tzinfo=timezone.utc)
+            first = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded verified result", "Keep result memory durable", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, vault=vault, recorded_at=recorded_at)
+            self._write_root_first_runtime(vault)
+            duplicate = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded verified result", "Keep result memory durable", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, vault=vault, recorded_at=recorded_at)
+            receipts = MEMORY._projection_receipts(store)
+        self.assertEqual(first["projection"]["status"], "unavailable")
+        self.assertEqual(duplicate["status"], "duplicate")
+        self.assertEqual(duplicate["obsidian"]["status"], "written")
+        self.assertTrue(duplicate["projection"]["read_back_verified"])
+        self.assertEqual([receipt["status"] for receipt in receipts], ["unavailable", "written"])
+        self.assertEqual(receipts[-1]["event_id"], duplicate["record_id"])
+
+    def test_root_first_readback_rejects_same_id_with_stale_content(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            vault = root / "vault"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            recorded_at = datetime(2026, 8, 9, 1, 30, tzinfo=timezone.utc)
+            first = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded verified result", "Keep result memory accurate", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, vault=vault, recorded_at=recorded_at)
+            self._write_root_first_runtime(vault)
+            local_record = MEMORY._read_records(store / "index.jsonl")[0]
+            stale_event = {
+                "event_id": first["record_id"],
+                "project": local_record["project"]["name"],
+                "module_changes": [{"module": "runtime"}],
+                "summary": local_record["summary"],
+                "reason": local_record["reason"],
+                "result": "WRONG",
+                "verification_status": local_record["verification_status"],
+                "files": local_record["files"],
+                "verification": local_record["verification"],
+                "decisions": local_record["decisions"],
+                "risks": local_record["risks"],
+                "supersedes": local_record["supersedes"],
+            }
+            events = vault / "AI Memory" / "events.jsonl"
+            events.write_text(json.dumps(stale_event) + "\n", encoding="utf-8")
+            duplicate = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded verified result", "Keep result memory accurate", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, vault=vault, recorded_at=recorded_at)
+        self.assertEqual(duplicate["status"], "duplicate")
+        self.assertFalse(duplicate["projection"]["read_back_verified"])
+        self.assertTrue(MEMORY._projection_needs_reconcile(duplicate["projection"]))
+
+    def test_unverified_noop_projection_is_retried(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            vault = root / "vault"
+            project.mkdir()
+            vault.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            recorded_at = datetime(2026, 8, 9, 1, 45, tzinfo=timezone.utc)
+            first = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded verified result", "Keep projection retryable", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, vault=vault, recorded_at=recorded_at)
+            duplicate = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded verified result", "Keep projection retryable", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, vault=vault, recorded_at=recorded_at)
+            receipts = MEMORY._projection_receipts(store)
+        self.assertEqual(first["projection"]["status"], "no-op")
+        self.assertEqual(duplicate["projection"]["status"], "no-op")
+        self.assertEqual([receipt["attempt"] for receipt in receipts], [1, 2])
+
+    def test_reconcile_retries_failed_projection_and_correction_projects_supersedes_decision(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "store"
+            vault = root / "vault"
+            project.mkdir()
+            (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+            vault_runtime = vault / "AI Memory" / "ai_memory.py"
+            vault_runtime.parent.mkdir(parents=True)
+            vault_runtime.write_text("def import_legacy(source):\n    raise RuntimeError('projection unavailable')\n\ndef render_views():\n    return None\n", encoding="utf-8")
+            failed = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded stale result", "Capture the observed failure", "Runtime failed", "failed", ["script.py"], ["Failure reproduced"], store=store, vault=vault)
+            corrected = MEMORY.record_change(project, "runtime", "file", "edit", "Recorded corrected result", "Correct stale result memory", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], supersedes=failed["record_id"], store=store, vault=vault)
+            still_pending = MEMORY.reconcile_projections(project, corrected["record_id"], store, vault)
+            self._write_root_first_runtime(vault)
+            reconciled = MEMORY.reconcile_projections(project, corrected["record_id"], store, vault)
+            event = MEMORY._read_records(vault / "AI Memory" / "events.jsonl")[0]
+            receipts = [receipt for receipt in MEMORY._projection_receipts(store) if receipt["record_id"] == corrected["record_id"]]
+        self.assertEqual(corrected["projection"]["status"], "failed")
+        self.assertEqual(still_pending["status"], "pending")
+        self.assertEqual(still_pending["pending"], 1)
+        self.assertEqual(reconciled["status"], "reconciled")
+        self.assertTrue(reconciled["records"][0]["projection"]["read_back_verified"])
+        self.assertEqual(reconciled["records"][0]["projection"]["event_id"], corrected["record_id"])
+        self.assertEqual(event["event_id"], corrected["record_id"])
+        self.assertEqual([receipt["status"] for receipt in receipts], ["failed", "failed", "written"])
+        self.assertIn(f"Memory correction supersedes project result record {failed['record_id']}.", event["decisions"])
 
 
 if __name__ == "__main__":

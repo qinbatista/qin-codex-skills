@@ -9,10 +9,10 @@ import os
 import re
 import subprocess
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 ENDING_PRIMARY_PAIR = "gpt-5.3-codex-spark|xhigh"
 ENDING_FALLBACK_ROLE = "floor"
 ENDING_LAUNCH_ID = "task-ending"
@@ -28,6 +28,18 @@ TERMINAL_THREAD_POLICY = {"pass": "keep_visible", "fail": "keep_visible", "block
 CREATE_THREAD_TOOL = "codex_app__create_thread"
 ORIGIN_SESSION_RESUME_CAPABILITY = "codex_app__send_message_to_thread"
 LAUNCH_STATE_SCHEMA_VERSION = 1
+PROJECT_MEMORY_MODES = {"none", "durable"}
+PROJECT_MEMORY_SCOPES = {"project", "feature", "code", "file"}
+PROJECT_MEMORY_CHANGE_KINDS = {"add", "edit", "rename", "move", "delete", "mixed"}
+SENSITIVE_MEMORY_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9_-])(?:sk|rk|pk)-[A-Za-z0-9_-]{12,}"),
+    re.compile(r"(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s,;]{8,}", re.IGNORECASE),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"https?://[^\s/:]+:[^\s/@]+@", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[^\s]+", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\s]+", re.IGNORECASE),
+    re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
+)
 
 
 def complexity_band(score):
@@ -126,6 +138,93 @@ def _inside(root, value, field):
     return path
 
 
+def _relative_project_file(project_root, value, field):
+    candidate = Path(value).expanduser()
+    if candidate.is_absolute():
+        relative = candidate.resolve().relative_to(project_root)
+    else:
+        relative = PurePosixPath(candidate.as_posix())
+    if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+        raise ValueError(f"{field} must be a project-relative file")
+    return relative.as_posix()
+
+
+def _clean_list(values, field, maximum=600):
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        raise ValueError(f"{field} must be a JSON array")
+    if any(not isinstance(value, str) for value in values):
+        raise ValueError(f"{field} must contain only strings")
+    normalized = [re.sub(r"\s+", " ", value).strip() for value in values]
+    if any(not value or len(value) > maximum for value in normalized):
+        raise ValueError(f"{field} contains an empty or overlong value")
+    if any(pattern.search(value) for value in normalized for pattern in SENSITIVE_MEMORY_PATTERNS):
+        raise ValueError(f"{field} contains private or secret-like content")
+    return list(dict.fromkeys(normalized))
+
+
+def _clean_memory_string(value, field, maximum, required=True):
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    text = re.sub(r"\s+", " ", value).strip()
+    if required and not text:
+        raise ValueError(f"{field} is required")
+    if len(text) > maximum:
+        raise ValueError(f"{field} exceeds {maximum} characters")
+    if any(pattern.search(text) for pattern in SENSITIVE_MEMORY_PATTERNS):
+        raise ValueError(f"{field} contains private or secret-like content")
+    return text
+
+
+def _normalize_project_memory_closeout(raw, project_root):
+    if raw is None:
+        return {"mode": "none"}
+    if not isinstance(raw, dict):
+        raise ValueError("project_memory_closeout must be a JSON object")
+    mode = _clean(raw.get("mode") or "none", "project_memory_closeout.mode", 20)
+    if mode not in PROJECT_MEMORY_MODES:
+        raise ValueError("project_memory_closeout.mode must be none or durable")
+    if mode == "none":
+        if set(raw) - {"mode"}:
+            raise ValueError("project_memory_closeout mode=none contains unknown fields")
+        return {"mode": "none"}
+    allowed_fields = {"mode", "module", "scope", "change_kind", "summary", "reason", "result", "files", "symbols", "decisions", "risks", "supersedes"}
+    unknown_fields = sorted(set(raw) - allowed_fields)
+    if unknown_fields:
+        raise ValueError("project_memory_closeout contains unknown fields: " + ", ".join(unknown_fields))
+    scope = _clean_memory_string(raw.get("scope"), "project_memory_closeout.scope", 20)
+    change_kind = _clean_memory_string(raw.get("change_kind"), "project_memory_closeout.change_kind", 40)
+    if scope not in PROJECT_MEMORY_SCOPES:
+        raise ValueError("project_memory_closeout.scope is invalid")
+    if change_kind not in PROJECT_MEMORY_CHANGE_KINDS:
+        raise ValueError("project_memory_closeout.change_kind is invalid")
+    raw_files = raw.get("files")
+    if not isinstance(raw_files, list) or any(not isinstance(value, str) for value in raw_files):
+        raise ValueError("project_memory_closeout.files must be a JSON string array")
+    files = [_relative_project_file(project_root, value, "project_memory_closeout.files") for value in raw_files]
+    files = list(dict.fromkeys(files))
+    if not files:
+        raise ValueError("durable project_memory_closeout requires files")
+    symbols = _clean_list(raw.get("symbols"), "project_memory_closeout.symbols", 240)
+    if scope == "code" and not symbols:
+        raise ValueError("code project_memory_closeout requires at least one symbol")
+    return {
+        "mode": mode,
+        "module": _clean_memory_string(raw.get("module"), "project_memory_closeout.module", 160),
+        "scope": scope,
+        "change_kind": change_kind,
+        "summary": _clean_memory_string(raw.get("summary"), "project_memory_closeout.summary", 1200),
+        "reason": _clean_memory_string(raw.get("reason"), "project_memory_closeout.reason", 1200),
+        "result": _clean_memory_string(raw.get("result"), "project_memory_closeout.result", 1200),
+        "files": files,
+        "symbols": symbols,
+        "decisions": _clean_list(raw.get("decisions"), "project_memory_closeout.decisions"),
+        "risks": _clean_list(raw.get("risks"), "project_memory_closeout.risks"),
+        "supersedes": _clean_memory_string(raw.get("supersedes", ""), "project_memory_closeout.supersedes", 120, required=False),
+    }
+
+
 def normalize_check(raw, project_root, task_name, task_score, origin_session, registry=None):
     if not isinstance(raw, dict):
         raise ValueError("each check must be a JSON object")
@@ -167,13 +266,14 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
     }
 
 
-def build_plan(project_root, task_name, task_score, checks, origin_session=None):
+def build_plan(project_root, task_name, task_score, checks, origin_session=None, project_memory_closeout=None):
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
         raise ValueError("project_root must be an existing directory")
     cleaned_task = _clean(task_name, "task_name", 80)
     registry = _registry()
     normalized_origin_session = _normalize_origin_session(origin_session, root)
+    normalized_closeout = _normalize_project_memory_closeout(project_memory_closeout, root)
     tasks = [normalize_check(check, root, cleaned_task, task_score, normalized_origin_session, registry) for check in checks]
     if not tasks:
         raise ValueError("at least one real verification check is required")
@@ -192,6 +292,7 @@ def build_plan(project_root, task_name, task_score, checks, origin_session=None)
         "origin_session": normalized_origin_session,
         "ending_model_policy": _ending_model_policy(registry),
         "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": 3, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
+        "project_memory_closeout": normalized_closeout,
         "ending_tasks": tasks,
     }
 
@@ -227,10 +328,11 @@ def _repair_handoff(check, origin_session, observed, mismatch_summary=""):
     return {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session": origin_session, "origin_session_required": True, "prompt_submission": "automatic", "repair_dispatch": repair_dispatch, "repair_prompt": repair_prompt, "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
 
 
-def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_output, assigned_pair, producer_receipt=None):
+def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_output, memory_consistency_output, assigned_pair, producer_receipt=None):
     project_root = Path(plan["project_root"]).expanduser().resolve()
     relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root)
     relative_memory_candidates = Path(memory_candidates_output).expanduser().resolve().relative_to(project_root)
+    relative_memory_consistency = Path(memory_consistency_output).expanduser().resolve().relative_to(project_root)
     receipt_line = str(Path(producer_receipt).expanduser().resolve().relative_to(project_root)) if producer_receipt else "none"
     check_manifest = [
         {
@@ -254,6 +356,8 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
             f"Ending check id: {ENDING_LAUNCH_ID}",
             f"Checks and evidence outputs: {json.dumps(check_manifest, ensure_ascii=False, separators=(',', ':'))}",
             f"Personal memory candidates output relative to project root: {relative_memory_candidates}",
+            f"Project-memory consistency output relative to project root: {relative_memory_consistency}",
+            f"Project-memory closeout intent: {json.dumps(plan.get('project_memory_closeout', {'mode': 'none'}), ensure_ascii=False, separators=(',', ':'))}",
             f"Assigned Ending pair: {assigned_pair}",
             f"Primary Ending pair: {policy['primary_pair']}",
             f"Only availability fallback pair: {policy['availability_fallback_pair']}",
@@ -264,10 +368,14 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
             "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run every listed check's exact run-check command from the project root. Write one fresh evidence file per check and do not broaden the saved bounded checks.",
             "Start one lifecycle and finish it once through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py. Pass the saved verification plan, ending-check-id=task-ending, the actual assigned pair, project and origin metadata, and the producer receipt when present. If and only if the primary pair could not be launched for an allowed availability/capability reason, use the one saved fallback pair and pass the launcher's sanitized --availability-fallback-reason. Correctness, quality, protocol, timeout, or command execution failures never change the Ending pair.",
             "Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation. Producer next-pair learning stays separate from the fixed Ending pair.",
+            "Keep model-routing memory, personal preference memory, and project-result memory as three independent flows. A write or no-op in one flow never substitutes for either of the other two.",
             "PASS requires every new evidence file to report status=pass and its expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this projectless global task visible.",
             "A command PASS is not enough when the final artifact/state differs from the original user objective or acceptance contract. In that case, mark that evidence as a correctness mismatch with the plan's mismatch command, then use the repair handoff.",
             "On FAIL or a correctness mismatch, do not edit the result in this Ending. Record exact evidence, then automatically submit the generated repair_prompt by calling codex_app__send_message_to_thread with repair_dispatch.arguments (threadId, hostId, and the exact prompt) to continue the original origin session. The origin session repairs and runs Quick Check; the parent launches one fresh projectless Ending. Repeat for at most three repair attempts; unavailable or failed origin-session submission is BLOCKED.",
             "The failed Ending and its repair handoff remain visible as the audit record. Never open a replacement fixer session, self-repair, self-verify, create nested End/Fix tasks, or wait/poll for the origin session.",
+            "For project_memory_closeout mode=durable, read the current Skill/process contract, the fresh execution evidence, and only the bounded effective project-result memory. Write one sanitized memory_consistency_output classification: aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence. Include process_status, execution_status, memory_status, action, and bounded evidence.",
+            "Only memory_record_defect may append a correction that supersedes the wrong result record, and only memory_projection_defect may reconcile an unchanged correct local result into Obsidian. Never rewrite history. skill_contract_defect and execution_drift are FAIL and must return exact evidence to the immutable origin session; insufficient_evidence is BLOCKED. The Ending never edits producer or Skill files.",
+            "For a durable PASS, pass --memory-consistency-file to the terminal ledger event. The ledger owns the one project-result record/correction/reconciliation and requires effective local readback. When Obsidian is available, projection readback is also required; when it is unavailable, record projection-pending for bounded reconciliation on the next task. For project_memory_closeout mode=none, do not create or pass a project-memory consistency file.",
             "Run one bounded personal-memory scan for explicit user preferences, repeated corrections, or verified working patterns. Never copy raw prompts, raw results, paths, secrets, sensitive traits, or chain-of-thought.",
             "If no durable candidate exists, create no personal memory file and pass no --memory-candidates-file. Otherwise write only a sanitized {\"candidates\":[...]} payload to the assigned file. Personal memory is separate from model-routing and project-change memory.",
             "After the terminal ledger event, print structured model_assessment with task/check score and band, producer pair and next-pair learning, Ending pair and fallback provenance, attempts, verdict, evidence reason, and Obsidian record status. Never expose private chain-of-thought.",
@@ -313,13 +421,14 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         raise ValueError("ending_model_policy requires concrete primary and selected pairs plus an optional concrete fallback")
     title = f"End Task-{plan['task_name']}"
     memory_candidates_output = evidence_root / "task-ending.memory.json"
+    memory_consistency_output = evidence_root / "task-ending.project-memory-consistency.json"
     candidates = []
     candidate_pairs = [(primary_pair, "primary")]
     if fallback_pair:
         candidate_pairs.append((fallback_pair, "availability_fallback"))
     for pair, role in candidate_pairs:
         model, thinking = pair.split("|", 1)
-        prompt = _worker_prompt(plan_file, plan, tasks, evidence_outputs, memory_candidates_output, pair, receipt_path)
+        prompt = _worker_prompt(plan_file, plan, tasks, evidence_outputs, memory_candidates_output, memory_consistency_output, pair, receipt_path)
         arguments = {"target": dict(THREAD_TARGET), "title": title, "model": model, "thinking": thinking, "prompt": prompt}
         candidates.append(
             {
@@ -350,6 +459,8 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         "launch_candidates": candidates,
         "evidence_outputs": evidence_outputs,
         "memory_candidates_output": str(memory_candidates_output),
+        "memory_consistency_output": str(memory_consistency_output),
+        "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
         "project_id": project_value,
         "acknowledgement_required": True,
     }
@@ -369,6 +480,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         "execution": "host_persistent_create_thread",
         "origin_session": origin_session,
         "repair_policy": plan.get("repair_policy"),
+        "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
         "required_launch_count": len(launch_requests),
         "launch_requests": launch_requests,
         "launch_gate": "one_task_ending_requires_thread_host_pair_and_availability_acknowledgement",
@@ -582,6 +694,7 @@ def parse_args(argv=None):
     plan.add_argument("--task-name", required=True)
     plan.add_argument("--complexity-score", type=int, required=True)
     plan.add_argument("--origin-session-json", required=True)
+    plan.add_argument("--project-memory-closeout-json", default='{"mode":"none"}')
     plan.add_argument("--check-json", action="append", default=[])
     plan.add_argument("--output", type=Path, required=True)
     run = subparsers.add_parser("run-check")
@@ -615,7 +728,7 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     if args.command == "plan":
-        payload = build_plan(args.project_root, args.task_name, args.complexity_score, [json.loads(value) for value in args.check_json], json.loads(args.origin_session_json))
+        payload = build_plan(args.project_root, args.task_name, args.complexity_score, [json.loads(value) for value in args.check_json], json.loads(args.origin_session_json), json.loads(args.project_memory_closeout_json))
         _atomic_write(args.output, payload)
         output = {"status": "written", "output": str(args.output.expanduser().resolve()), "ending_tasks": len(payload["ending_tasks"]), "selected_pairs": [task["selected_pair"] for task in payload["ending_tasks"]]}
         code = 0

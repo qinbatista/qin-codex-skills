@@ -175,6 +175,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         unity_text = (skills_root / "code-skill" / "references" / "unity-csharp-rules.md").read_text(encoding="utf-8")
         self.assertIn("Before presenting a light/local Python edit", python_text)
         self.assertIn("build real proportional Ending checks", python_text)
+        self.assertIn("exactly one persistent projectless Ending", python_text)
+        self.assertIn("Multiple unit, integration/API, and runtime checks stay inside that one Ending", python_text)
+        self.assertNotIn("one scored/modelled persistent task per independent", python_text)
         self.assertIn("Every required check must PASS", python_text)
         self.assertIn("Before presentation, run the smallest safe local smoke", csharp_text)
         self.assertIn("one fixed Spark-xhigh projectless Ending", csharp_text)
@@ -216,6 +219,13 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertIn("apply_ending_fast_route", module.REQUIRED_DISPATCHER_ENDING_FAST_IMPLEMENTATION)
         self.assertEqual(set(module.FORBIDDEN_ENDING_PLAN_IMPLEMENTATION), {"BAND_ROLES", "ending_score_role", "separate_persistent_tasks"})
         self.assertNotIn("fixed_fast_ending", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+
+    def test_validator_enforces_process_execution_and_effective_memory_consistency(self):
+        self.assertIn("effective_only", module.REQUIRED_DISPATCHER_MEMORY_CONSISTENCY_IMPLEMENTATION)
+        self.assertIn("memory_record_defect", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("Skill/execution defects return to the immutable origin", module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT)
+        self.assertIn("Next tasks read only effective project-result memory", module.REQUIRED_WORKFLOW_MEMORY_CONSISTENCY_TEXT)
+        self.assertEqual(module.ENDING_TERMINAL_CLOSEOUT["project_result_consistency"]["correction_owner"], "ending_memory_only")
 
     def test_shared_registry_contains_only_the_highest_numeric_gpt_family_and_source_digest(self):
         payload = json.loads((Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8"))

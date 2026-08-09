@@ -106,12 +106,9 @@ ALLOWED_SPARK_EXCEPTION_CATEGORIES = {
     "quality_failure",
 }
 ENDING_SKILL = "verify-skill"
-ENDING_TERMINAL_CLOSEOUT = {
-    "project_result_memory": "after_all_checks_pass",
-    "routing_classification": "terminal",
-    "model_record": "terminal",
-    "single_closeout": True,
-}
+PROJECT_RESULT_CONSISTENCY_ACTIONS = {"aligned": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "return_to_origin": False}, "no_prior_memory": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "return_to_origin": False}, "memory_record_defect": {"ending_status": "pass", "action": "append_correction", "memory_write": True, "return_to_origin": False}, "memory_projection_defect": {"ending_status": "pass", "action": "reconcile_projection", "memory_write": False, "return_to_origin": False}, "skill_contract_defect": {"ending_status": "fail", "action": "return_to_origin", "memory_write": False, "return_to_origin": True}, "execution_drift": {"ending_status": "fail", "action": "return_to_origin", "memory_write": False, "return_to_origin": True}, "insufficient_evidence": {"ending_status": "blocked", "action": "block", "memory_write": False, "return_to_origin": False}}
+PROJECT_RESULT_CONSISTENCY_POLICY = {"layers": ["process_skill_and_agents", "real_execution", "effective_result_memory"], "correction_owner": "ending_memory_only", "producer_defect_owner": "immutable_origin", "next_task_memory": "effective_only", "actions": PROJECT_RESULT_CONSISTENCY_ACTIONS}
+ENDING_TERMINAL_CLOSEOUT = {"project_result_memory": "after_all_checks_pass", "project_result_consistency": PROJECT_RESULT_CONSISTENCY_POLICY, "routing_classification": "terminal", "model_record": "terminal", "single_closeout": True}
 
 CONTROLLED_FIELDS = [
     "task_family",
@@ -206,6 +203,12 @@ def ending_worker_prompt(node):
         f"Task-level acceptance checks (run all inside this one Ending worker): {checklist}\n"
         f"After all checks PASS, perform this terminal closeout exactly once: {closeout}"
     )
+
+
+def project_result_consistency_action(classification):
+    if classification not in PROJECT_RESULT_CONSISTENCY_ACTIONS:
+        raise ValueError(f"unknown project-result consistency classification: {classification}")
+    return dict(PROJECT_RESULT_CONSISTENCY_ACTIONS[classification])
 
 
 def ending_availability_fallback(receipt):

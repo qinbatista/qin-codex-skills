@@ -6,7 +6,7 @@ Every new user task records one scored Ending lifecycle in one separate persiste
 
 1. Complete the result and run the producer Quick Check for code.
 2. Present `CODE READY` or `MAIN RESULT READY` with paths, complexity score/band, route change, and Quick Check evidence.
-3. Define observable acceptance commands and the semantic acceptance statement. Use `scripts/ending_verification_plan.py plan` with one check per independent unit, integration/API, build, render/visual, or live-state surface, plus the exact immutable origin session (`thread_id`, `host_id`, project ID, and project root).
+3. Define observable acceptance commands and the semantic acceptance statement. Use `scripts/ending_verification_plan.py plan` with one check per independent unit, integration/API, build, render/visual, or live-state surface, plus the exact immutable origin session (`thread_id`, `host_id`, project ID, and project root). Durable project-file changes also pass one sanitized `project_memory_closeout` intent; non-persistent work explicitly uses `mode=none`.
 4. Give every check its own complexity score for scope and classification only. The Ending primary is always `gpt-5.3-codex-spark|xhigh`. Only an explicit model/effort/scheduler or required-modality availability failure permits the single registry-floor fallback, currently `gpt-5.6-luna|low`; test or acceptance failure never changes the Ending model.
 5. Start the local lifecycle with `--verification-required --verification-plan`, score/band, the exact origin session, and `--producer-receipt` when present.
 6. Resolve the exact saved project by canonical root, then create one persistent projectless `End Task-{task}` for the plan in the global task list. Preserve the project ID binding and pass all exact bounded `run-check` commands, lifecycle/receipt paths, originating project root, touched files, and repair boundary. Safe independent checks may run concurrently inside the task; shared-state checks stay ordered.
@@ -17,6 +17,22 @@ Every new user task records one scored Ending lifecycle in one separate persiste
 The one Ending worker runs `ending_verification_plan.py run-check` for every saved check. It records each real command, exit code, stdout/stderr, elapsed time, score/band, actual pair, fallback provenance, and semantic acceptance. PASS requires the expected observable result; a command that exits successfully but leaves the final artifact or state different from the original request is converted to `FAIL` with `ending_verification_plan.py mismatch --evidence ... --summary ...`. Every required check must PASS before the lifecycle final gate passes. Every terminal event writes a project-linked model record to Obsidian. A receipt-backed producer event is learning-eligible; without a receipt the known verifier assignment is an observation only and is never mislabeled as the producer. The worker then prints the ledger's structured `model_assessment`, including attempt count, first/retry pass, suitability, producer next action/pair, fixed verifier next action, and record link/status. It never calls `set_thread_archived` or deletes itself; every terminal Ending and repair handoff remains visible.
 
 After the real check, the worker performs the personal-memory scan. It creates the project-relative candidate JSON only when a supported explicit preference, repeated correction, or verified working pattern exists; otherwise it omits the file and the ledger receives no memory write. A candidate terminal event passes that file to `ending_task_ledger.py --memory-candidates-file`, which validates and projects it through the root-first Preferences owner without changing the result.
+
+For a durable result, the same worker separately compares three authorities: the active Skill/process contract, fresh execution evidence, and the bounded effective project-result memory. It writes `task-ending.project-memory-consistency.json` with schema version 1 and passes it through `ending_task_ledger.py event --memory-consistency-file`. This project-result flow is independent from both model-routing memory and the personal-memory candidate flow.
+
+The consistency classifier is deterministic:
+
+| Classification | Required evidence state | Action | Terminal status |
+|---|---|---|---|
+| `aligned` | process PASS, execution PASS, effective memory matches | append current verified result | PASS after effective local readback and available-vault projection readback |
+| `no_prior_memory` | process PASS, execution PASS, no prior result | append current verified result | PASS after effective local readback and available-vault projection readback |
+| `memory_record_defect` | process PASS, execution PASS, result memory mismatches | append a correction with `supersedes` | PASS after effective correction readback |
+| `memory_projection_defect` | correct local record, missing/mismatched Obsidian projection | reconcile the same `record_id` | PASS after verified projection, or pending only when Obsidian is unavailable |
+| `skill_contract_defect` | active process contract fails fresh evidence | send repair to immutable origin; Ending edits nothing | FAIL |
+| `execution_drift` | process contract passes, producer execution fails it | send repair to immutable origin; do not rewrite memory | FAIL |
+| `insufficient_evidence` | responsibility cannot be proven because evidence is unavailable | write nothing | BLOCKED |
+
+Corrections are append-only and preserve the wrong event as superseded history. Reconciliation repairs projection transport without creating a second semantic result. A durable PASS requires the result record to be effective in bounded local recall. When Obsidian is available, its projection receipt must also report readback verified; if the vault is unavailable, local memory remains authoritative and the terminal record is `projection-pending` for the next bounded reconciliation. An available-but-stale projection never becomes a false PASS. On the next task, recall excludes superseded records by default, then current source and the active Skill contract remain authoritative if old history disagrees.
 
 ## Real check FAIL and repair
 

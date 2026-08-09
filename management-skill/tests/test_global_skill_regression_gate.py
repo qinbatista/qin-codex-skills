@@ -20,12 +20,18 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         capability_ids = [item["id"] for item in catalog["capabilities"]]
         check_ids = {item["id"] for item in catalog["checks"]}
         referenced = {check_id for item in catalog["capabilities"] for check_id in item["checks"]}
-        self.assertEqual(len(capability_ids), 26)
+        self.assertEqual(len(capability_ids), 27)
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
         fast_ending = next(item for item in catalog["capabilities"] if item["id"] == "GSR-026")
         self.assertIn("gpt-5.3-codex-spark|xhigh", fast_ending["function"])
         self.assertIn("Luna-low", fast_ending["function"])
+        consistency = next(item for item in catalog["capabilities"] if item["id"] == "GSR-027")
+        self.assertIn("effective", consistency["function"])
+        self.assertIn("memory-execution-consistency-attestation", consistency["checks"])
+        consistency_check = next(item for item in catalog["checks"] if item["id"] == "memory-execution-consistency-attestation")
+        self.assertTrue(consistency_check["bind_evidence"])
+        self.assertTrue({"AGENTS.md", "project-memory-skill/scripts/project_change_memory.py", "verify-skill/scripts/ending_verification_plan.py", "verify-skill/scripts/ending_task_ledger.py", "workflow-skill/SKILL.md", "management-skill/scripts/global_skill_regression_gate.py"}.issubset(consistency_check["watched_files"]))
         retired = {item["id"]: item["replacement"] for item in catalog["retired_architectures"]}
         self.assertEqual(retired["RET-011"], "GSR-026")
         self.assertEqual(retired["RET-012"], "GSR-014")
@@ -84,6 +90,41 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             result = GATE.attestation_result(check, root)
             self.assertEqual(result["status"], "fail")
             self.assertIn("stale watched file", result["errors"][0])
+
+    def test_memory_execution_consistency_evidence_requires_all_positive_and_negative_scenarios(self):
+        evidence = {"schema_version": 1, "check_id": "memory-execution-consistency-attestation", "status": "pass", "scenarios": {"memory-record-correction": {"status": "pass", "classification": "memory_record_defect", "correction_written": True, "source_unchanged": True}, "memory-projection-reconcile": {"status": "pass", "classification": "memory_projection_defect", "reconciled": True}, "skill-contract-defect": {"status": "pass", "classification": "skill_contract_defect", "memory_write": False, "return_to_origin": True}, "execution-drift": {"status": "pass", "classification": "execution_drift", "memory_write": False, "return_to_origin": True}, "next-task-effective-recall": {"status": "pass", "effective_only": True, "superseded_hidden": True}}}
+        self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (5, 5))
+        evidence["scenarios"]["skill-contract-defect"]["memory_write"] = True
+        self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (5, 0))
+        evidence["scenarios"]["skill-contract-defect"]["memory_write"] = False
+        evidence["scenarios"]["next-task-effective-recall"]["superseded_hidden"] = False
+        self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (5, 0))
+
+    def test_bound_attestation_rejects_changed_real_evidence(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            watched = root / "workflow-skill" / "SKILL.md"
+            evidence = root / "Cache" / "tests" / "memory-execution-consistency" / "result.json"
+            attestation = root / "management-skill" / "assets" / "attestation.json"
+            watched.parent.mkdir(parents=True)
+            evidence.parent.mkdir(parents=True)
+            attestation.parent.mkdir(parents=True)
+            watched.write_text("contract", encoding="utf-8")
+            evidence_payload = {"schema_version": 1, "check_id": "memory-execution-consistency-attestation", "status": "pass", "scenarios": {"memory-record-correction": {"status": "pass", "classification": "memory_record_defect", "correction_written": True, "source_unchanged": True}, "memory-projection-reconcile": {"status": "pass", "classification": "memory_projection_defect", "reconciled": True}, "skill-contract-defect": {"status": "pass", "classification": "skill_contract_defect", "memory_write": False, "return_to_origin": True}, "execution-drift": {"status": "pass", "classification": "execution_drift", "memory_write": False, "return_to_origin": True}, "next-task-effective-recall": {"status": "pass", "effective_only": True, "superseded_hidden": True}}}
+            evidence.write_text(json.dumps(evidence_payload), encoding="utf-8")
+            payload = {"schema_version": 1, "check_id": "memory-execution-consistency-attestation", "status": "pass", "trial_count": 5, "passed_trials": 5, "evidence_sha256": GATE.sha256_file(evidence), "watched_files": {"workflow-skill/SKILL.md": GATE.sha256_file(watched)}}
+            attestation.write_text(json.dumps(payload), encoding="utf-8")
+            check = {"id": "memory-execution-consistency-attestation", "kind": "attestation", "path": "management-skill/assets/attestation.json", "evidence": "Cache/tests/memory-execution-consistency/result.json", "bind_evidence": True, "watched_files": ["workflow-skill/SKILL.md"]}
+            self.assertEqual(GATE.attestation_result(check, root)["status"], "pass")
+            evidence.write_text('{"changed":true}', encoding="utf-8")
+            result = GATE.attestation_result(check, root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("attestation evidence digest is stale", result["errors"])
+            payload["evidence_sha256"] = GATE.sha256_file(evidence)
+            attestation.write_text(json.dumps(payload), encoding="utf-8")
+            result = GATE.attestation_result(check, root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("memory-execution consistency evidence is not a complete real pass", result["errors"])
 
     def test_candidate_layout_installs_global_agents_and_excludes_private_local_state(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)

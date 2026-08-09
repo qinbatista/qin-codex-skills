@@ -4,7 +4,8 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "ending_task_ledger.py"
@@ -70,6 +71,60 @@ class EndingTaskLedgerTests(unittest.TestCase):
         )
         return path
 
+    def durable_ending_plan(self, root, project):
+        path = root / "durable-ending-plan.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "verification_required": True,
+                    "project_memory_closeout": {
+                        "mode": "durable",
+                        "module": "runtime",
+                        "scope": "code",
+                        "change_kind": "edit",
+                        "summary": "Added the verified runtime behavior.",
+                        "reason": "The requested behavior needs one owned implementation.",
+                        "result": "The runtime behavior passed its real check.",
+                        "files": ["script.py"],
+                        "symbols": ["run"],
+                        "decisions": ["Keep ownership in the runtime module."],
+                        "risks": [],
+                        "supersedes": "",
+                    },
+                    "ending_tasks": [{"check_id": "unit"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    def consistency_file(self, project, classification="aligned", **updates):
+        rules = {
+            "aligned": {"action": "record", "process_status": "pass", "execution_status": "pass", "memory_status": "match"},
+            "no_prior_memory": {"action": "record", "process_status": "pass", "execution_status": "pass", "memory_status": "absent"},
+            "memory_record_defect": {"action": "correction", "process_status": "pass", "execution_status": "pass", "memory_status": "mismatch", "supersedes": "old-record"},
+            "memory_projection_defect": {"action": "reconcile", "process_status": "pass", "execution_status": "pass", "memory_status": "projection_missing", "record_id": "record-1"},
+            "skill_contract_defect": {"action": "origin_repair", "process_status": "fail", "execution_status": "pass", "memory_status": "match"},
+            "execution_drift": {"action": "origin_repair", "process_status": "pass", "execution_status": "fail", "memory_status": "match"},
+            "insufficient_evidence": {"action": "blocked", "process_status": "unavailable", "execution_status": "unavailable", "memory_status": "unavailable"},
+        }
+        payload = {"schema_version": 1, "classification": classification, **rules[classification], "evidence": ["Fresh process, execution, and memory evidence were compared."]}
+        payload.update(updates)
+        path = project / "Cache" / "tests" / "ending-memory" / f"{classification}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return path
+
+    def project_memory_runtime(self, record_id="record-1"):
+        result = {"status": "written", "record_id": record_id, "local": {"written": True}, "obsidian": {"status": "written", "written": True, "read_back_verified": True}, "projection": {"record_id": record_id, "read_back_verified": True}}
+        match = {"id": record_id, "effective": True, "projection": {"record_id": record_id, "read_back_verified": True}}
+        return SimpleNamespace(record_change=Mock(return_value=result), reconcile_projections=Mock(return_value={"status": "reconciled", "records": [result]}), search_records=Mock(return_value={"status": "ok", "matches": [match]}))
+
+    def write_root_first_memory_runtime(self, vault):
+        runtime = vault / "AI Memory" / "ai_memory.py"
+        runtime.parent.mkdir(parents=True, exist_ok=True)
+        runtime.write_text("import json\nfrom pathlib import Path\n\nEVENTS_PATH = Path(__file__).with_name('events.jsonl')\n\ndef import_legacy(source):\n    record = json.loads(Path(source).read_text(encoding='utf-8').strip())\n    project = record.get('project', {}).get('owner') or record.get('project', {}).get('name') or 'Unknown'\n    fields = ('summary', 'reason', 'result', 'verification_status', 'files', 'verification', 'decisions', 'risks', 'supersedes')\n    event = {'event_id': record['id'], 'project': project, 'module_changes': [{'module': record['module']}], **{field: record.get(field) for field in fields}}\n    events = [json.loads(line) for line in EVENTS_PATH.read_text(encoding='utf-8').splitlines()] if EVENTS_PATH.exists() else []\n    if not any(item.get('event_id') == event['event_id'] for item in events):\n        events.append(event)\n        EVENTS_PATH.write_text(''.join(json.dumps(item, separators=(',', ':')) + '\\\n' for item in events), encoding='utf-8')\n        return {'status': 'written', 'imported': 1}\n    return {'status': 'written', 'imported': 0}\n\ndef render_views():\n    return None\n", encoding="utf-8")
+
     def test_passed_lifecycle_opens_final_gate(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -127,6 +182,217 @@ class EndingTaskLedgerTests(unittest.TestCase):
             started = LEDGER.start_lifecycle("code", project, "Result is ready", project, store=root / "store")
             with self.assertRaisesRegex(ValueError, "inside the lifecycle project root"):
                 LEDGER._record_personal_memory_candidates(started | {"cwd": str(project)}, "pass", root / "outside.json")
+
+    def test_durable_pass_requires_consistency_and_verified_project_memory_readback(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            with self.assertRaisesRegex(ValueError, "requires a memory consistency file"):
+                LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", store=store)
+            consistency = self.consistency_file(project)
+            runtime = self.project_memory_runtime()
+            with patch.object(LEDGER, "_load_project_memory_module", return_value=runtime):
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Real verification passed", ["Focused test passed"], store=store, memory_consistency_file=consistency)
+            state = json.loads((store / "lifecycles" / f"{started['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        self.assertTrue(passed["final_gate_passed"])
+        self.assertEqual(passed["project_memory"]["status"], "verified")
+        self.assertTrue(passed["project_memory"]["local_read_back_verified"])
+        self.assertTrue(passed["project_memory"]["obsidian_read_back_verified"])
+        self.assertEqual(state["project_memory"]["record_id"], "record-1")
+        runtime.record_change.assert_called_once()
+        runtime.search_records.assert_called_once()
+
+    def test_durable_pass_uses_actual_project_memory_record_and_root_first_readback(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            vault = root / "vault"
+            memory_store = root / "project-memory-store"
+            self.write_root_first_memory_runtime(vault)
+            plan = self.durable_ending_plan(root, project)
+            store = root / "ending-store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, "no_prior_memory")
+            actual = LEDGER._load_project_memory_module()
+            bridge = SimpleNamespace(
+                record_change=lambda *args, **kwargs: actual.record_change(*args, store=memory_store, vault=vault, **kwargs),
+                reconcile_projections=lambda project_root, record_id="": actual.reconcile_projections(project_root, record_id, store=memory_store, vault=vault),
+                search_records=lambda project_root, module="", files=None, query="", max_results=8, **kwargs: actual.search_records(project_root, module, files, query, max_results, store=memory_store, **kwargs),
+            )
+            with patch.object(LEDGER, "_load_project_memory_module", return_value=bridge):
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Actual project memory closeout passed", store=store, memory_consistency_file=consistency)
+            local_records = [json.loads(line) for line in (memory_store / "index.jsonl").read_text(encoding="utf-8").splitlines()]
+            obsidian_events = [json.loads(line) for line in (vault / "AI Memory" / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(passed["project_memory"]["status"], "verified")
+        self.assertEqual(len(local_records), 1)
+        self.assertEqual(local_records[0]["scope"], "code")
+        self.assertEqual(local_records[0]["change_kind"], "edit")
+        self.assertEqual(local_records[0]["symbols"], ["run"])
+        self.assertEqual(obsidian_events[0]["module_changes"], [{"module": "runtime"}])
+        self.assertEqual(obsidian_events[0]["event_id"], local_records[0]["id"])
+
+    def test_unavailable_obsidian_keeps_local_result_authoritative_and_projection_pending(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, "no_prior_memory")
+            result = {"status": "written", "record_id": "record-1", "local": {"written": True}, "obsidian": {"status": "unavailable", "written": False}, "projection": {"record_id": "record-1", "status": "unavailable", "read_back_verified": False}}
+            match = {"id": "record-1", "effective": True, "projection": result["projection"]}
+            runtime = SimpleNamespace(record_change=Mock(return_value=result), reconcile_projections=Mock(), search_records=Mock(return_value={"status": "ok", "matches": [match]}))
+            with patch.object(LEDGER, "_load_project_memory_module", return_value=runtime):
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Local result passed with queued projection", store=store, memory_consistency_file=consistency)
+        self.assertTrue(passed["final_gate_passed"])
+        self.assertEqual(passed["project_memory"]["status"], "projection-pending")
+        self.assertTrue(passed["project_memory"]["local_read_back_verified"])
+        self.assertFalse(passed["project_memory"]["obsidian_read_back_verified"])
+        self.assertTrue(passed["project_memory"]["projection_pending"])
+
+    def test_available_projection_without_readback_cannot_open_the_final_gate(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, "no_prior_memory")
+            projection = {"record_id": "record-1", "status": "written", "read_back_verified": False}
+            result = {"status": "written", "record_id": "record-1", "local": {"written": True}, "obsidian": {"status": "written", "written": True, "read_back_verified": False}, "projection": projection}
+            match = {"id": "record-1", "effective": True, "projection": projection}
+            runtime = SimpleNamespace(record_change=Mock(return_value=result), reconcile_projections=Mock(), search_records=Mock(return_value={"status": "ok", "matches": [match]}))
+            with patch.object(LEDGER, "_load_project_memory_module", return_value=runtime), self.assertRaisesRegex(ValueError, "Obsidian readback failed"):
+                LEDGER.record_event(started["lifecycle_id"], "pass", "Projection did not read back", store=store, memory_consistency_file=consistency)
+
+    def test_skill_contract_defect_cannot_be_mislabeled_as_pass(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, "skill_contract_defect")
+            with self.assertRaisesRegex(ValueError, "requires terminal event fail"):
+                LEDGER.record_event(started["lifecycle_id"], "pass", "False PASS", store=store, memory_consistency_file=consistency)
+
+    def test_consistency_file_rejects_raw_result_fields_and_stores_relative_source(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            unsafe = self.consistency_file(project, raw_result="private result")
+            with self.assertRaisesRegex(ValueError, "unknown fields"):
+                LEDGER.record_event(started["lifecycle_id"], "pass", "Unsafe consistency", store=store, memory_consistency_file=unsafe)
+            safe = self.consistency_file(project)
+            runtime = self.project_memory_runtime()
+            with patch.object(LEDGER, "_load_project_memory_module", return_value=runtime):
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Safe consistency", store=store, memory_consistency_file=safe)
+        self.assertEqual(passed["project_memory"]["source"], "Cache/tests/ending-memory/aligned.json")
+        self.assertNotIn(str(project.resolve()), json.dumps(passed["project_memory"]))
+
+    def test_consistency_file_rejects_private_or_secret_like_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, evidence=["Observed /" + "Users/example/private/result.txt"])
+            with self.assertRaisesRegex(ValueError, "private or secret-like"):
+                LEDGER.record_event(started["lifecycle_id"], "pass", "Unsafe consistency", store=store, memory_consistency_file=consistency)
+        self.assertFalse((store / "index.jsonl").exists() and any(json.loads(line).get("event") == "pass" for line in (store / "index.jsonl").read_text(encoding="utf-8").splitlines()))
+
+    def test_memory_record_defect_appends_only_a_superseding_correction(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, "memory_record_defect")
+            runtime = self.project_memory_runtime("correction-record")
+            with patch.object(LEDGER, "_load_project_memory_module", return_value=runtime):
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Corrected result memory passed readback", store=store, memory_consistency_file=consistency)
+        self.assertEqual(passed["project_memory"]["classification"], "memory_record_defect")
+        self.assertEqual(runtime.record_change.call_args.args[12], "old-record")
+        runtime.reconcile_projections.assert_not_called()
+
+    def test_memory_projection_defect_reconciles_without_new_result_record(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, "memory_projection_defect")
+            runtime = self.project_memory_runtime()
+            with patch.object(LEDGER, "_load_project_memory_module", return_value=runtime):
+                passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Projection reconciliation passed readback", store=store, memory_consistency_file=consistency)
+        self.assertEqual(passed["project_memory"]["classification"], "memory_projection_defect")
+        runtime.reconcile_projections.assert_called_once_with(str(project.resolve()), record_id="record-1")
+        runtime.record_change.assert_not_called()
+
+    def test_skill_and_execution_defects_fail_to_origin_without_rewriting_memory(self):
+        for classification in ("skill_contract_defect", "execution_drift"):
+            with self.subTest(classification=classification), tempfile.TemporaryDirectory() as temporary_directory:
+                root = Path(temporary_directory)
+                project = root / "project"
+                project.mkdir()
+                (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+                plan = self.durable_ending_plan(root, project)
+                store = root / "store"
+                started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan, project_id="project-123", origin_thread_id="origin-thread", origin_host_id="origin-host")
+                consistency = self.consistency_file(project, classification, evidence=[f"Consistency diagnosis: {classification}."])
+                with patch.object(LEDGER, "_load_project_memory_module") as load_memory:
+                    failed = LEDGER.record_event(started["lifecycle_id"], "fail", f"{classification} found", ["Fresh command evidence conflicts."], classification, store, "correctness", memory_consistency_file=consistency)
+                self.assertFalse(failed["final_gate_passed"])
+                self.assertEqual(failed["project_memory"]["status"], "origin-repair-required")
+                self.assertEqual(failed["repair_handoff"]["origin_session"]["thread_id"], "origin-thread")
+                self.assertIn(classification.split("_")[0], failed["repair_handoff"]["repair_prompt"].lower())
+                self.assertIn(f"Consistency diagnosis: {classification}.", failed["repair_handoff"]["repair_prompt"])
+                self.assertEqual(failed["repair_handoff"]["verification"], ["Fresh command evidence conflicts.", f"Consistency diagnosis: {classification}."])
+                load_memory.assert_not_called()
+
+    def test_insufficient_evidence_is_blocked_and_cannot_be_reported_as_pass(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "script.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+            plan = self.durable_ending_plan(root, project)
+            store = root / "store"
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=store, verification_required=True, verification_plan=plan)
+            consistency = self.consistency_file(project, "insufficient_evidence")
+            with self.assertRaisesRegex(ValueError, "requires terminal event blocked"):
+                LEDGER.record_event(started["lifecycle_id"], "pass", "Cannot pass", store=store, memory_consistency_file=consistency)
+            blocked = LEDGER.record_event(started["lifecycle_id"], "blocked", "Evidence unavailable", store=store, memory_consistency_file=consistency)
+        self.assertEqual(blocked["lifecycle_status"], "blocked")
+        self.assertEqual(blocked["project_memory"]["classification"], "insufficient_evidence")
+        self.assertFalse(blocked["project_memory"]["written"])
 
     def test_failure_is_logged_before_repair_and_repair_has_own_ending(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

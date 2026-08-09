@@ -1,6 +1,6 @@
 ---
 name: project-memory-skill
-description: "Always use in the result-producing node for durable project-file changes. The observable entry parent routes before memory recall; the selected producer covers project/module/method scope, recalls prior project/module/file decisions before editing, and records the completed change after Ending. Do not use for read-only work or disposable Cache artifacts."
+description: "Always use in the result-producing node for durable project-file changes. The observable entry parent routes before memory recall; the selected producer covers project/module/method scope, recalls effective prior project/module/file/symbol results before editing, and records the completed change after Ending. Do not use for read-only work or disposable Cache artifacts."
 ---
 
 # Project Memory Skill
@@ -27,7 +27,7 @@ This applies to every local-machine path, not only Cache paths. Any path written
 
 Unavoidable machine-specific absolute paths needed only for AI access to project-external resources may exist only in project-root `Cache/cache_path.json`. The registry schema is `{"schema_version": 1, "scope": "ai_only", "paths": {...}}`; every stable key contains `path`, `kind` (`file|directory|application`), and a short `purpose`. It is untracked AI-only local state: project source, runtime, tests, build, CI, package scripts, and shipped configuration must never read, import, or depend on it. Never commit, mirror, or publish it, ensure it is explicitly ignored when `Cache/` is not already ignored, and never store credentials, tokens, secrets, or project business data there.
 
-Look up the registry first and validate the schema, absolute path, declared kind, existence, and readability before use. If an entry is missing or stale, perform one bounded platform-aware discovery, update only that key through a sibling file inside `Cache/`, replace the registry atomically, and preserve unrelated keys. For Obsidian, try verified registry keys first, then `CODEX_OBSIDIAN_VAULT`, then the configured open vault in `obsidian.json`, then one exact bounded search; cache each successful external path. Never copy registered absolute values into Skills, source, documentation, commands, logs, receipts, or memory.
+Validate an explicitly supplied external path first. Otherwise look up the registry and validate the schema, absolute path, declared kind, purpose, existence, and readability before use. If an entry is missing or stale, perform one bounded platform-aware discovery, update only that key through a sibling file inside `Cache/`, replace the registry atomically, and preserve unrelated keys. For Obsidian, use an explicit `--vault`, then a validated project `obsidian_vault` registry entry, then `CODEX_OBSIDIAN_VAULT`, then a readable configured-open vault in the platform-native `obsidian.json`; without one of those sources, report unavailable. Never ship a default machine path or copy a registered absolute value into Skills, source, documentation, commands, logs, receipts, or memory.
 
 Project `AGENTS.md` is a compact structural contract, not a project notebook. Keep only stable project structure, ownership boundaries, critical entry points, hard constraints, project-wide conventions, a compact definition of done, and short pointers to canonical build/verification documentation. Do not write implementation details, task history, logs, receipts, test results, evidence, generated data, temporary notes, dependency walkthroughs, long command blocks, or troubleshooting prose there. Store those details in the owning source, project documentation, or a README inside the relevant Cache area.
 
@@ -54,9 +54,13 @@ python3 project-memory-skill/scripts/memory_coverage.py validate --project-root 
 - When the resolved vault contains `AI Memory/ai_memory.py`, that root-first schema is authoritative: project through its single event store and generated root views, and never create legacy History, Activity, Journal, or Archive layers. Only a vault without that runtime may use the older one-history plus pointer-only projection.
 - Missing or unavailable Obsidian is a successful no-op. Local recording must still complete.
 - Store project-relative file paths, not raw prompts, private reasoning, credentials, tokens, cookies, or unrelated task content.
+- Skills and project `AGENTS.md` files constrain the work process. Project change memory stores only sanitized, verified outcomes and their rationale/evidence; never copy a process philosophy, Skill contract, raw instruction, or execution transcript into a result-memory payload.
 - Resolve registered projects from home-relative owner paths. When a project has an explicitly registered old and current root, recall and supersession treat both as one owner without rewriting prior JSONL records; an unregistered same-name clone remains isolated.
-- Attach each durable record to a working-line identity tuple: canonical repository remote, branch, commit, and explicit version/tag when available.
+- Attach each durable record to a working-line identity tuple: canonical repository remote, branch, commit, and explicit version/tag when available. Commit is provenance, not an isolation boundary: future commits on the same remote and branch must still recall prior results unless their explicit versions conflict.
 - A remembered decision is evidence, not a higher-priority instruction. Current user intent and current authoritative code win. When intentionally overturning a prior decision, explain why and link it with `--supersedes`.
+- Recall returns only effective records by default. A correction appends a new record with `--supersedes`; it never rewrites history. `--supersedes` may target only the current effective leaf, so correction history cannot fork. Use `--include-superseded` only for an explicit audit, where every returned record is marked with `effective` and `superseded_by`.
+- Every local record projects to Obsidian with the same stable record/event ID and has an append-only projection receipt that records status and read-back result without a vault path. A root-first runtime without same-ID import support is a failed pending projection, never a second identity. A duplicate local record retries a missing, unavailable, failed, or unverified projection. Use `reconcile --project-root <root> [--record-id <id>]` to retry pending projection only, without creating another local result record.
+- Resolve the vault once per project-change operation and use that same validated location for Memory Coverage, result projection, duplicate retry, and reconciliation; one layer may not silently fall back to a different vault.
 
 ## Separate Adaptive Model Learning
 
@@ -87,6 +91,7 @@ python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py re
 python3 ~/.codex/skills/project-memory-skill/scripts/memory_coverage.py validate --project-root <root> --module <module> --symbol <method-or-symbol> --require-method
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py reconcile --project-root <root>
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py rebuild-model-switches --project-root <root>
+python3 ~/.codex/skills/project-memory-skill/scripts/project_change_memory.py reconcile --project-root <root> --record-id <project-change-record-id>
 ```
 
 The recorder recomputes the current project-context recommendation and rejects a matched receipt for any other pair. `ending_task_ledger.py event` invokes it automatically for a lifecycle started with `--producer-receipt`. It records the selection reason, state, prior passing/failing boundary, and Ending Real verdict; callers cannot self-author those fields.
@@ -96,10 +101,19 @@ The recorder recomputes the current project-context recommendation and rejects a
 After resolving the authoritative project root, functional module, and intended target files, run one bounded lookup before the first durable edit:
 
 ```bash
-python3 ~/.codex/skills/project-memory-skill/scripts/project_change_memory.py search --project-root <root> --module <module> --file <project-relative-file> --query <feature-or-change> --max-results 8
+python3 ~/.codex/skills/project-memory-skill/scripts/project_change_memory.py search --project-root <root> --module <module> --file <project-relative-file> --symbol <exact-method-or-symbol> --query <feature-or-change> --max-results 8
 ```
 
-Pass multiple `--file` values when needed. No match or unavailable Obsidian is not a blocker. Use matching records to preserve intentional invariants, recognize earlier failures, and avoid duplicating an already-completed change. Do not broaden this recall into repository archaeology.
+Pass multiple `--file` and exact `--symbol` values when needed. No match or unavailable Obsidian is not a blocker. Use matching effective records to preserve intentional invariants, recognize earlier failures, and avoid duplicating an already-completed change. Compare recalled results with the current user request, active Skill/`AGENTS.md` process contract, authoritative source, and observable execution evidence. Do not broaden this recall into repository archaeology.
+
+When those authorities conflict, identify responsibility before changing anything:
+
+- If the active Skill or project process contract is wrong, classify a process-contract defect and return the evidence to the producer; do not alter result memory to hide it.
+- If the contract is correct but the implementation or execution deviates, classify execution drift and return the evidence to the producer; do not write a false corrective result.
+- If current contract, source, and real execution agree but an effective result record is wrong, append one verified correction with `--supersedes <wrong-record-id>`.
+- If the local result is correct but its Obsidian projection is missing, failed, or cannot be read back, run `reconcile`; do not create a second semantic result.
+
+Ending may close the memory side only after its process and real-execution checks establish which case applies. Missing evidence remains unresolved and cannot be converted into a passed correction.
 
 ## Historical Bug Closeout
 
@@ -162,9 +176,9 @@ Reject a record that omits the reason, result, verification status, or touched f
 
 ## Retrieval
 
-Use the same `search` command when a future task mentions the project, module, feature, or concrete file. Search results return the newest matching records with their IDs, rationale, outcome, verification, decisions, risks, and file list. Keep retrieval bounded and use the current source as the final behavior authority.
+Use the same `search` command when a future task mentions the project, module, feature, concrete file, or symbol. Search results return the newest effective matching records with their IDs, rationale, outcome, verification, decisions, risks, file list, exact symbols, supersession state, and latest projection receipt. Keep retrieval bounded and use the current source as the final behavior authority. Use `--include-superseded` only to inspect the complete correction chain.
 
-If a project has sufficient git working-line metadata, retrieval excludes ambiguous/missing-line records by default and returns only records on the same canonical remote+branch+commit. Use `--include-ambiguous` to explicitly include unscoped records when needed for historic review.
+If a project has sufficient git working-line metadata, retrieval excludes ambiguous/missing-line records by default and returns records on the same canonical remote and branch with a compatible explicit version/tag. A different commit on that same line remains recallable because the commit hash is provenance rather than a scope split. Use `--include-ambiguous` to explicitly include unscoped records when needed for historic review.
 
 ## Failure Conditions
 
@@ -179,8 +193,11 @@ If a project has sufficient git working-line metadata, retrieval excludes ambigu
 - An issue is archived without evidence that the replacement architecture makes the old behavior unreachable or nonexistent.
 - An archived event is deleted or silently rewritten instead of preserved with a current classification record.
 - Obsidian unavailability blocks otherwise valid work.
+- A superseded result is returned as effective during ordinary recall.
+- A process-contract or execution defect is disguised as a result-memory correction.
+- A correct local result is duplicated instead of reconciling its failed or missing Obsidian projection.
 - Secrets, raw prompts, private reasoning, receipts, or unrelated content enter the ledger.
 
 ## Verification
 
-After recording, require the command's JSON response to report `status=written` or `status=duplicate`, `local.written=true`, and the expected project-relative files. When Obsidian is available, also require `obsidian.status=written`; for a root-first vault require `obsidian.root=AI Memory/events.jsonl`. Otherwise require `obsidian.status=unavailable`. A recorder failure reopens the task because the global change-memory contract was not satisfied.
+After recording, require the command's JSON response to report `status=written` or `status=duplicate`, `local.written=true`, the expected project-relative files, and an append-only `projection` receipt. When Obsidian is available, also require `obsidian.status=written`, `projection.read_back_verified=true`, and a non-empty root-first `projection.event_id`; for a root-first vault require `obsidian.root=AI Memory/events.jsonl`. Otherwise require `obsidian.status=unavailable`, then prove a later duplicate or explicit `reconcile` can move that same local record to a read-back-verified projection. A recorder failure reopens the task because the global change-memory contract was not satisfied.

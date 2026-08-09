@@ -21,7 +21,7 @@ else:
 
 DEFAULT_STORE = Path.home() / ".codex" / "ending-task-memory"
 DEFAULT_MAX_REPAIR_ATTEMPTS = 3
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 TERMINAL_EVENTS = {"pass", "fail", "blocked"}
 ALL_EVENTS = TERMINAL_EVENTS | {"note"}
 FAILURE_CLASSES = {"none", "availability", "timeout", "protocol", "telemetry", "execution", "receipt", "quality", "correctness"}
@@ -42,6 +42,31 @@ REPAIR_DISPATCH_TOOL = "codex_app__send_message_to_thread"
 REQUIRED_MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
 OPTIONAL_MODEL_CONTEXT_FIELDS = ("step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source")
 MODEL_CONTEXT_FIELDS = REQUIRED_MODEL_CONTEXT_FIELDS + OPTIONAL_MODEL_CONTEXT_FIELDS
+PROJECT_MEMORY_CLASSIFICATIONS = {"aligned", "no_prior_memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift", "insufficient_evidence"}
+PROJECT_MEMORY_ACTIONS = {"record", "correction", "reconcile", "origin_repair", "blocked"}
+PROJECT_MEMORY_STATUS_VALUES = {"match", "absent", "mismatch", "projection_missing", "projection_mismatch", "unavailable"}
+CONSISTENCY_STATUS_VALUES = {"pass", "fail", "unavailable"}
+PROJECT_MEMORY_INTENT_FIELDS = {"mode", "module", "scope", "change_kind", "summary", "reason", "result", "files", "symbols", "decisions", "risks", "supersedes"}
+PROJECT_MEMORY_SCOPES = {"project", "feature", "code", "file"}
+PROJECT_MEMORY_CHANGE_KINDS = {"add", "edit", "rename", "move", "delete", "mixed"}
+SENSITIVE_MEMORY_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9_-])(?:sk|rk|pk)-[A-Za-z0-9_-]{12,}"),
+    re.compile(r"(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s,;]{8,}", re.IGNORECASE),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"https?://[^\s/:]+:[^\s/@]+@", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[^\s]+", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\s]+", re.IGNORECASE),
+    re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
+)
+PROJECT_MEMORY_CLASSIFICATION_RULES = {
+    "aligned": {"event": "pass", "action": "record", "process_status": "pass", "execution_status": "pass", "memory_status": "match"},
+    "no_prior_memory": {"event": "pass", "action": "record", "process_status": "pass", "execution_status": "pass", "memory_status": "absent"},
+    "memory_record_defect": {"event": "pass", "action": "correction", "process_status": "pass", "execution_status": "pass", "memory_status": "mismatch"},
+    "memory_projection_defect": {"event": "pass", "action": "reconcile", "process_status": "pass", "execution_status": "pass", "memory_status": {"projection_missing", "projection_mismatch"}},
+    "skill_contract_defect": {"event": "fail", "action": "origin_repair", "process_status": "fail"},
+    "execution_drift": {"event": "fail", "action": "origin_repair", "process_status": "pass", "execution_status": "fail"},
+    "insufficient_evidence": {"event": "blocked", "action": "blocked"},
+}
 
 
 def _now():
@@ -53,6 +78,13 @@ def _single_line(value, field_name, required=True, max_length=1200):
     if required and not text:
         raise ValueError(f"{field_name} is required")
     return text[:max_length]
+
+
+def _sanitized_memory_line(value, field_name, required=True, max_length=1200):
+    text = _single_line(value, field_name, required=required, max_length=max_length)
+    if any(pattern.search(text) for pattern in SENSITIVE_MEMORY_PATTERNS):
+        raise ValueError(f"{field_name} contains private or secret-like content")
+    return text
 
 
 def _normalize_files(project_root, file_values):
@@ -293,6 +325,15 @@ def _load_personal_memory_module():
     return module
 
 
+def _load_project_memory_module():
+    script_path = Path(__file__).resolve().parents[2] / "project-memory-skill" / "scripts" / "project_change_memory.py"
+    spec = importlib.util.spec_from_file_location("ending_task_project_change_memory", script_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _memory_candidate_file(state, candidate_file):
     if not candidate_file:
         return None
@@ -305,6 +346,173 @@ def _memory_candidate_file(state, candidate_file):
     except ValueError as error:
         raise ValueError("memory candidates file must stay inside the lifecycle project root") from error
     return resolved
+
+
+def _project_memory_intent(state):
+    intent = state.get("project_memory_closeout")
+    if not isinstance(intent, dict):
+        intent = {"mode": "none"}
+    mode = intent.get("mode") or "none"
+    if mode not in {"none", "durable"}:
+        raise ValueError("verification plan project_memory_closeout mode is invalid")
+    unknown_fields = sorted(set(intent) - ({"mode"} if mode == "none" else PROJECT_MEMORY_INTENT_FIELDS))
+    if unknown_fields:
+        raise ValueError("verification plan project_memory_closeout contains unknown fields: " + ", ".join(unknown_fields))
+    if mode == "durable":
+        if not state.get("project_root"):
+            raise ValueError("durable project_memory_closeout requires project_root")
+        required = {"module", "scope", "change_kind", "summary", "reason", "result", "files", "symbols", "decisions", "risks", "supersedes"}
+        if not required.issubset(intent) or not isinstance(intent.get("files"), list) or not intent["files"]:
+            raise ValueError("verification plan durable project_memory_closeout is incomplete")
+        if intent["scope"] not in PROJECT_MEMORY_SCOPES or intent["change_kind"] not in PROJECT_MEMORY_CHANGE_KINDS:
+            raise ValueError("verification plan durable project_memory_closeout has invalid scope or change_kind")
+        for field in ("module", "summary", "reason", "result"):
+            if not isinstance(intent[field], str) or _sanitized_memory_line(intent[field], f"project_memory_closeout.{field}") != intent[field]:
+                raise ValueError(f"verification plan project_memory_closeout.{field} is not sanitized")
+        for field, maximum in (("symbols", 240), ("decisions", 600), ("risks", 600)):
+            values = intent[field]
+            if not isinstance(values, list) or any(not isinstance(value, str) or _sanitized_memory_line(value, f"project_memory_closeout.{field}", max_length=maximum) != value for value in values):
+                raise ValueError(f"verification plan project_memory_closeout.{field} is not sanitized")
+        if intent["scope"] == "code" and not intent["symbols"]:
+            raise ValueError("verification plan code project_memory_closeout requires a symbol")
+        normalized_files = _normalize_files(state.get("project_root"), intent["files"])
+        if normalized_files != intent["files"]:
+            raise ValueError("verification plan project_memory_closeout.files is not normalized")
+        if not isinstance(intent["supersedes"], str) or _single_line(intent["supersedes"], "project_memory_closeout.supersedes", required=False, max_length=120) != intent["supersedes"]:
+            raise ValueError("verification plan project_memory_closeout.supersedes is not sanitized")
+    return intent
+
+
+def _memory_consistency_file(state, consistency_file):
+    if not consistency_file:
+        return None
+    path = Path(consistency_file).expanduser()
+    root_value = state.get("project_root") or state.get("cwd")
+    root = Path(root_value).expanduser().resolve() if root_value else Path.cwd().resolve()
+    resolved = (root / path).resolve() if not path.is_absolute() else path.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise ValueError("memory consistency file must stay inside the lifecycle project root") from error
+    return resolved
+
+
+def _validated_memory_consistency(state, event_name, consistency_file):
+    intent = _project_memory_intent(state)
+    if intent["mode"] == "none":
+        if consistency_file:
+            raise ValueError("project_memory_closeout mode=none must not receive a memory consistency file")
+        return {"mode": "none", "status": "not-applicable", "written": False}
+    path = _memory_consistency_file(state, consistency_file)
+    if path is None or not path.is_file():
+        raise ValueError("durable project_memory_closeout requires a memory consistency file")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("memory consistency file is not readable JSON") from error
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise ValueError("memory consistency file requires schema_version=1")
+    allowed_fields = {"schema_version", "classification", "action", "process_status", "execution_status", "memory_status", "evidence", "supersedes", "record_id"}
+    unknown_fields = sorted(set(payload) - allowed_fields)
+    if unknown_fields:
+        raise ValueError("memory consistency file contains unknown fields: " + ", ".join(unknown_fields))
+    classification = _single_line(payload.get("classification"), "memory_consistency.classification", max_length=80)
+    action = _single_line(payload.get("action"), "memory_consistency.action", max_length=80)
+    process_status = _single_line(payload.get("process_status"), "memory_consistency.process_status", max_length=40)
+    execution_status = _single_line(payload.get("execution_status"), "memory_consistency.execution_status", max_length=40)
+    memory_status = _single_line(payload.get("memory_status"), "memory_consistency.memory_status", max_length=40)
+    if classification not in PROJECT_MEMORY_CLASSIFICATIONS or action not in PROJECT_MEMORY_ACTIONS:
+        raise ValueError("memory consistency classification or action is invalid")
+    if process_status not in CONSISTENCY_STATUS_VALUES or execution_status not in CONSISTENCY_STATUS_VALUES or memory_status not in PROJECT_MEMORY_STATUS_VALUES:
+        raise ValueError("memory consistency status is invalid")
+    evidence = payload.get("evidence")
+    if not isinstance(evidence, list) or not evidence or len(evidence) > 20:
+        raise ValueError("memory consistency evidence must be a bounded non-empty list")
+    normalized_evidence = [_sanitized_memory_line(value, "memory_consistency.evidence", max_length=600) for value in evidence]
+    if normalized_evidence != evidence:
+        raise ValueError("memory consistency evidence must already be sanitized")
+    rule = PROJECT_MEMORY_CLASSIFICATION_RULES[classification]
+    if event_name != rule["event"]:
+        raise ValueError(f"{classification} requires terminal event {rule['event']}")
+    if action != rule["action"]:
+        raise ValueError(f"{classification} requires action {rule['action']}")
+    for field, observed in (("process_status", process_status), ("execution_status", execution_status), ("memory_status", memory_status)):
+        expected = rule.get(field)
+        mismatch = observed not in expected if isinstance(expected, set) else expected is not None and observed != expected
+        if mismatch:
+            raise ValueError(f"{classification} requires {field}={expected}")
+    if classification == "insufficient_evidence" and "unavailable" not in {process_status, execution_status, memory_status}:
+        raise ValueError("insufficient_evidence requires an unavailable status")
+    supersedes = _single_line(payload.get("supersedes"), "memory_consistency.supersedes", required=False, max_length=120)
+    record_id = _single_line(payload.get("record_id"), "memory_consistency.record_id", required=False, max_length=120)
+    if classification == "memory_record_defect" and not supersedes:
+        raise ValueError("memory_record_defect requires supersedes")
+    if classification == "memory_projection_defect" and not record_id:
+        raise ValueError("memory_projection_defect requires record_id")
+    root = Path(state.get("project_root") or state.get("cwd")).expanduser().resolve()
+    return {"mode": "durable", "status": "validated", "classification": classification, "action": action, "process_status": process_status, "execution_status": execution_status, "memory_status": memory_status, "evidence": normalized_evidence, "supersedes": supersedes, "record_id": record_id, "source": path.relative_to(root).as_posix(), "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def _projection_read_back(result, record_id):
+    if not isinstance(result, dict):
+        return False
+    projection = result.get("projection") if isinstance(result.get("projection"), dict) else {}
+    obsidian = result.get("obsidian") if isinstance(result.get("obsidian"), dict) else {}
+    if projection.get("record_id") in {None, "", record_id} and projection.get("read_back_verified") is True:
+        return True
+    if obsidian.get("read_back_verified") is True:
+        return True
+    for item in result.get("records", []) if isinstance(result.get("records"), list) else []:
+        if isinstance(item, dict) and item.get("record_id") == record_id and _projection_read_back(item, record_id):
+            return True
+    return False
+
+
+def _projection_status(result, record_id):
+    if not isinstance(result, dict):
+        return "missing"
+    projection = result.get("projection") if isinstance(result.get("projection"), dict) else {}
+    if projection.get("record_id") in {None, "", record_id} and projection.get("status"):
+        return projection["status"]
+    for item in result.get("records", []) if isinstance(result.get("records"), list) else []:
+        if isinstance(item, dict) and item.get("record_id") == record_id:
+            nested = _projection_status(item, record_id)
+            if nested != "missing":
+                return nested
+    return "missing"
+
+
+def _record_project_memory_closeout(state, event_name, consistency_file):
+    consistency = _validated_memory_consistency(state, event_name, consistency_file)
+    if consistency["mode"] == "none":
+        return consistency
+    if event_name != "pass":
+        return {**consistency, "status": "origin-repair-required" if event_name == "fail" else "blocked", "written": False}
+    intent = _project_memory_intent(state)
+    memory = _load_project_memory_module()
+    if consistency["action"] == "reconcile":
+        result = memory.reconcile_projections(state["project_root"], record_id=consistency["record_id"])
+        record_id = consistency["record_id"]
+    else:
+        supersedes = consistency["supersedes"] if consistency["action"] == "correction" else ""
+        result = memory.record_change(state["project_root"], intent["module"], intent["scope"], intent["change_kind"], intent["summary"], intent["reason"], intent["result"], "passed", intent["files"], consistency["evidence"], intent.get("decisions", []), intent.get("risks", []), supersedes, symbols=intent.get("symbols", []))
+        record_id = result.get("record_id") if isinstance(result, dict) else ""
+    if not record_id:
+        raise ValueError("project-memory closeout did not return a record_id")
+    search = memory.search_records(state["project_root"], intent["module"], intent["files"], "", 25, include_ambiguous=True, include_superseded=True, symbols=intent.get("symbols", []))
+    read_back = next((match for match in search.get("matches", []) if match.get("id") == record_id), None)
+    if not isinstance(read_back, dict):
+        raise ValueError("project-memory closeout local readback failed")
+    if read_back.get("effective") is False:
+        raise ValueError("project-memory closeout readback is superseded")
+    obsidian_read_back = _projection_read_back(result, record_id) or _projection_read_back(read_back, record_id)
+    projection_status = _projection_status(result, record_id)
+    if projection_status == "missing":
+        projection_status = _projection_status(read_back, record_id)
+    if not obsidian_read_back and projection_status != "unavailable":
+        raise ValueError("project-memory closeout Obsidian readback failed")
+    closeout_status = "verified" if obsidian_read_back else "projection-pending"
+    return {**consistency, "status": closeout_status, "written": consistency["action"] in {"record", "correction"}, "record_id": record_id, "local_read_back_verified": True, "obsidian_read_back_verified": obsidian_read_back, "projection_status": projection_status, "projection_pending": not obsidian_read_back, "memory_result_status": result.get("status"), "read_back_effective": read_back.get("effective", True)}
 
 
 def _record_personal_memory_candidates(state, event_name, candidate_file):
@@ -563,6 +771,13 @@ def _model_assessment(state, event_name, failure_class, model_learning, attempt_
     }
 
 
+def _repair_evidence(event):
+    evidence = list(event.get("verification", []))
+    project_memory = event.get("project_memory") if isinstance(event.get("project_memory"), dict) else {}
+    evidence.extend(project_memory.get("evidence", []) if isinstance(project_memory.get("evidence"), list) else [])
+    return list(dict.fromkeys(evidence))
+
+
 def _repair_prompt(state, event):
     project_root = Path(state["project_root"]).expanduser().resolve() if state.get("project_root") else None
     plan_text = "the saved verification plan"
@@ -573,13 +788,19 @@ def _repair_prompt(state, event):
             plan_text = "the saved verification plan"
     failure_class = event.get("failure_class") or "correctness"
     error_fingerprint = event.get("error_fingerprint") or "not-supplied"
-    if error_fingerprint == "acceptance-mismatch" or failure_class in QUALITY_FAILURES:
+    project_memory = event.get("project_memory") if isinstance(event.get("project_memory"), dict) else {}
+    consistency_class = project_memory.get("classification")
+    if consistency_class == "skill_contract_defect":
+        failure_instruction = "Fresh execution evidence conflicts with the active Skill/process contract. Repair the smallest authorized Skill producer path; the Ending verifier must not edit it."
+    elif consistency_class == "execution_drift":
+        failure_instruction = "The active Skill/process contract is correct but the producer execution drifted from it. Repair the result in this exact origin session; do not rewrite result memory to hide the drift."
+    elif error_fingerprint == "acceptance-mismatch" or failure_class in QUALITY_FAILURES:
         failure_instruction = "The final result is incorrect or differs from the original user request. Compare the delivered result and the original request before changing anything, even if the command exited successfully."
     elif failure_class == "timeout":
         failure_instruction = "The real check timed out. Determine whether the timeout is caused by the changed result or the verification environment, then repair only the result when the evidence supports it."
     else:
         failure_instruction = "The real check did not meet its expected runtime result. Inspect the exact evidence and repair the result only when the evidence identifies a producer defect."
-    evidence_text = "\n".join(f"- {value}" for value in event.get("verification", [])) or "- No additional verification text was supplied."
+    evidence_text = "\n".join(f"- {value}" for value in _repair_evidence(event)) or "- No additional verification text was supplied."
     evidence_text = evidence_text[:2400]
     files_text = ", ".join(state.get("files") or ["the files authorized by the original result task"])
     next_attempt = int(state.get("attempt_index", 0)) + 1
@@ -589,7 +810,7 @@ def _repair_prompt(state, event):
 
 
 def _repair_handoff(state, event):
-    common = {"repair_of_lifecycle_id": state["lifecycle_id"], "summary": event["summary"], "verification": event["verification"], "error_fingerprint": event["error_fingerprint"], "failure_class": event["failure_class"], "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band"), "max_repair_attempts": state.get("max_repair_attempts")}
+    common = {"repair_of_lifecycle_id": state["lifecycle_id"], "summary": event["summary"], "verification": _repair_evidence(event), "error_fingerprint": event["error_fingerprint"], "failure_class": event["failure_class"], "complexity_score": state.get("complexity_score"), "complexity_band": state.get("complexity_band"), "max_repair_attempts": state.get("max_repair_attempts")}
     origin = state.get("origin_session")
     next_attempt = int(state.get("attempt_index", 0)) + 1
     max_attempts = int(state.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS))
@@ -678,6 +899,13 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
         verification_plan_path = Path(verification_plan).expanduser().resolve() if verification_plan else None
         if verification_required and (not verification_plan_path or not verification_plan_path.is_file()):
             raise ValueError("verification-required lifecycle requires an existing verification plan")
+        project_memory_closeout = {"mode": "none"}
+        if verification_plan_path:
+            plan_payload = json.loads(verification_plan_path.read_text(encoding="utf-8"))
+            candidate_closeout = plan_payload.get("project_memory_closeout", {"mode": "none"}) if isinstance(plan_payload, dict) else {"mode": "none"}
+            if not isinstance(candidate_closeout, dict) or candidate_closeout.get("mode", "none") not in {"none", "durable"}:
+                raise ValueError("verification plan project_memory_closeout is invalid")
+            project_memory_closeout = _project_memory_intent({"project_memory_closeout": candidate_closeout, "project_root": str(project_path) if project_path else None})
         ending_assignment = None
         if verification_plan_path and selected_pair:
             ending_assignment = _ending_plan_assignment(verification_plan_path, ending_check_id, selected_pair, availability_fallback_reason)
@@ -697,7 +925,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
         model_disclosure = _model_disclosure(selected_pair, None if ending_owns_model_identity else producer_binding, requested_pair, resolved_pair, effective_pair, previous_pair, model_evidence, route_change, switch_summary, reason)
         fallback_reason_value = ending_assignment.get("availability_fallback_reason") if ending_assignment else None
         event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _model_pair(selected_pair, "selected_pair"), "availability_fallback_reason": fallback_reason_value, "ending_model_assignment": ending_assignment, "model_disclosure": model_disclosure}
-        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "project_id": project_id_value, "origin_session": origin_session, "module": _single_line(module, "module", required=False, max_length=160), "symbol": normalized_symbol, "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "availability_fallback_reason": fallback_reason_value, "ending_model_assignment": ending_assignment, "model_disclosure": model_disclosure, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
+        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "project_id": project_id_value, "origin_session": origin_session, "module": _single_line(module, "module", required=False, max_length=160), "symbol": normalized_symbol, "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "availability_fallback_reason": fallback_reason_value, "ending_model_assignment": ending_assignment, "model_disclosure": model_disclosure, "project_memory_closeout": project_memory_closeout, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
         if parent:
             parent_event = {"schema_version": SCHEMA_VERSION, "event": "repair_started", "recorded_at": created_at, "lifecycle_id": parent["lifecycle_id"], "child_lifecycle_id": lifecycle_id, "summary": f"Repair lifecycle {lifecycle_id} started"}
             parent["repair_children"].append(lifecycle_id)
@@ -710,7 +938,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
     return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "availability_fallback_reason": fallback_reason_value, "ending_model_assignment": ending_assignment, "model_disclosure": model_disclosure, "project_id": project_id_value, "origin_session": origin_session, "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
 
 
-def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none", memory_candidates_file=None):
+def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none", memory_candidates_file=None, memory_consistency_file=None):
     if event_name not in ALL_EVENTS:
         raise ValueError(f"event must be one of {', '.join(sorted(ALL_EVENTS))}")
     if failure_class not in FAILURE_CLASSES:
@@ -722,8 +950,14 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         if state["status"] != "running" and event_name != "note":
             prior_terminal = next((item for item in reversed(state["events"]) if item.get("event") in TERMINAL_EVENTS), None)
             if prior_terminal and prior_terminal.get("event") == event_name and prior_terminal.get("failure_class", "none") == failure_class:
-                return {"status": "duplicate", "lifecycle_id": lifecycle_id, "lifecycle_status": state["status"], "model_learning": state.get("model_learning"), "local": {"written": True, "store": str(store_path), "state": str(_state_path(store_path, lifecycle_id))}}
+                return {"status": "duplicate", "lifecycle_id": lifecycle_id, "lifecycle_status": state["status"], "model_learning": state.get("model_learning"), "personal_memory": state.get("personal_memory"), "project_memory": state.get("project_memory"), "local": {"written": True, "store": str(store_path), "state": str(_state_path(store_path, lifecycle_id))}}
             raise ValueError(f"lifecycle is already terminal: {state['status']}")
+        project_memory_mode = _project_memory_intent(state)["mode"]
+        if event_name == "pass" and project_memory_mode == "durable" and failure_class != "none":
+            raise ValueError("a durable Ending pass requires failure_class=none")
+        if event_name == "fail" and project_memory_mode == "durable" and failure_class == "none":
+            raise ValueError("a durable Ending fail requires an explicit failure_class")
+        project_memory = _record_project_memory_closeout(state, event_name, memory_consistency_file) if event_name in TERMINAL_EVENTS else None
         binding = state.get("producer_binding")
         model_learning = None
         attempt_context = _attempt_context(store_path, state)
@@ -750,6 +984,9 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         if model_assessment is not None:
             event["model_assessment"] = model_assessment
             state["model_assessment"] = model_assessment
+        if project_memory is not None:
+            event["project_memory"] = project_memory
+            state["project_memory"] = project_memory
         personal_memory = _record_personal_memory_candidates(state, event_name, memory_candidates_file)
         if event_name in TERMINAL_EVENTS:
             event["personal_memory"] = personal_memory
@@ -778,6 +1015,7 @@ def record_event(lifecycle_id, event_name, summary, verification=None, error_fin
         output["model_assessment"] = model_assessment
     if event_name in TERMINAL_EVENTS:
         output["personal_memory"] = event.get("personal_memory")
+        output["project_memory"] = event.get("project_memory")
     if event_name == "fail":
         output["repair_required"] = True
         output["repair_handoff"] = repair_handoff
@@ -838,13 +1076,14 @@ def main():
     event_parser.add_argument("--error-fingerprint", default="")
     event_parser.add_argument("--failure-class", choices=sorted(FAILURE_CLASSES), default="none")
     event_parser.add_argument("--memory-candidates-file", type=Path)
+    event_parser.add_argument("--memory-consistency-file", type=Path)
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("--lifecycle-id", required=True)
     args = parser.parse_args()
     if args.command == "start":
         output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair, args.requested_pair, args.resolved_pair, args.effective_pair, args.previous_pair, args.model_evidence, args.route_change, args.switch_summary, args.reason, args.project_id, args.origin_thread_id, args.origin_host_id, args.symbol, args.availability_fallback_reason)
     elif args.command == "event":
-        output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class, args.memory_candidates_file)
+        output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class, args.memory_candidates_file, args.memory_consistency_file)
     else:
         output = audit_lifecycle(args.lifecycle_id, args.store)
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))

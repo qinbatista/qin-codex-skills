@@ -251,15 +251,25 @@ def attestation_result(check: dict[str, object], project_root: Path) -> dict[str
     path = project_root / str(check["path"])
     errors: list[str] = []
     payload: dict[str, object] = {}
+    evidence_payload: dict[str, object] = {}
+    evidence_path = project_root / str(check.get("evidence", ""))
     if not path.is_file():
         errors.append("attestation is missing")
     else:
         try:
             payload = load_json(path)
+            evidence_payload = load_json(evidence_path) if check.get("bind_evidence") is True and evidence_path.is_file() else {}
         except (OSError, json.JSONDecodeError) as error:
-            errors.append(f"attestation is unreadable: {error}")
+            errors.append(f"attestation or bound evidence is unreadable: {error}")
     if payload and (payload.get("schema_version") != 1 or payload.get("status") != "pass" or payload.get("check_id") != check_id):
         errors.append("attestation identity or status is invalid")
+    if check.get("bind_evidence") is True:
+        if not evidence_path.is_file():
+            errors.append("attestation evidence is missing")
+        elif payload.get("evidence_sha256") != sha256_file(evidence_path):
+            errors.append("attestation evidence digest is stale")
+        elif check_id == "memory-execution-consistency-attestation" and validate_memory_execution_consistency(evidence_payload) != (5, 5):
+            errors.append("memory-execution consistency evidence is not a complete real pass")
     expected_files = list(map(str, check.get("watched_files", [])))
     watched = payload.get("watched_files", {}) if payload else {}
     if not isinstance(watched, dict) or sorted(watched) != sorted(expected_files):
@@ -428,6 +438,25 @@ def validate_unity_trials(evidence: dict[str, object]) -> tuple[int, int]:
     return len(trials) if isinstance(trials, list) else 0, len(trials) if passed else 0
 
 
+def validate_memory_execution_consistency(evidence: dict[str, object]) -> tuple[int, int]:
+    required_ids = {"memory-record-correction", "memory-projection-reconcile", "skill-contract-defect", "execution-drift", "next-task-effective-recall"}
+    scenarios = evidence.get("scenarios", {})
+    if not isinstance(scenarios, dict):
+        return 0, 0
+    record_correction = scenarios.get("memory-record-correction", {})
+    projection_reconcile = scenarios.get("memory-projection-reconcile", {})
+    skill_defect = scenarios.get("skill-contract-defect", {})
+    execution_drift = scenarios.get("execution-drift", {})
+    next_recall = scenarios.get("next-task-effective-recall", {})
+    all_scenarios_pass = set(scenarios) == required_ids and all(isinstance(scenario, dict) and scenario.get("status") == "pass" for scenario in scenarios.values())
+    record_correction_pass = record_correction.get("classification") == "memory_record_defect" and record_correction.get("correction_written") is True and record_correction.get("source_unchanged") is True
+    projection_reconcile_pass = projection_reconcile.get("classification") == "memory_projection_defect" and projection_reconcile.get("reconciled") is True
+    producer_defects_pass = skill_defect.get("classification") == "skill_contract_defect" and skill_defect.get("memory_write") is False and skill_defect.get("return_to_origin") is True and execution_drift.get("classification") == "execution_drift" and execution_drift.get("memory_write") is False and execution_drift.get("return_to_origin") is True
+    next_recall_pass = next_recall.get("effective_only") is True and next_recall.get("superseded_hidden") is True
+    passed = evidence.get("schema_version") == 1 and evidence.get("check_id") == "memory-execution-consistency-attestation" and evidence.get("status") == "pass" and all_scenarios_pass and record_correction_pass and projection_reconcile_pass and producer_defects_pass and next_recall_pass
+    return len(scenarios), len(scenarios) if passed else 0
+
+
 def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
     catalog = load_catalog(project_root)
     check = next((item for item in catalog["checks"] if item.get("id") == check_id), None)
@@ -441,6 +470,8 @@ def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
         trial_count, passed_trials = validate_code_samples(evidence)
     elif check_id == "unity-five-attestation":
         trial_count, passed_trials = validate_unity_trials(evidence)
+    elif check_id == "memory-execution-consistency-attestation":
+        trial_count, passed_trials = validate_memory_execution_consistency(evidence)
     else:
         raise RuntimeError(f"no evidence validator for attestation: {check_id}")
     if trial_count < 1 or passed_trials != trial_count:
@@ -454,6 +485,8 @@ def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
         "passed_trials": passed_trials,
         "watched_files": {relative: sha256_file(project_root / relative) for relative in check["watched_files"]},
     }
+    if check.get("bind_evidence") is True:
+        payload["evidence_sha256"] = sha256_file(evidence_path)
     output = project_root / str(check["path"])
     write_report(output, payload)
     return payload
@@ -470,7 +503,7 @@ def main() -> int:
     check_parser.add_argument("--history", type=Path)
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("--project-root", type=Path, default=Path.cwd())
-    attest_parser.add_argument("--check-id", choices=("code-sample-attestation", "unity-five-attestation"), required=True)
+    attest_parser.add_argument("--check-id", choices=("code-sample-attestation", "unity-five-attestation", "memory-execution-consistency-attestation"), required=True)
     args = parser.parse_args()
     project_root = args.project_root.expanduser().resolve()
     if args.command == "attest":

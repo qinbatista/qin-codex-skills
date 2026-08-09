@@ -15,8 +15,8 @@ def origin_session(root, project_id="project-123"):
     return {"thread_id": "source-session-001", "host_id": "host-local", "project_id": project_id, "project_root": str(root)}
 
 
-def build_plan(root, task_name, task_score, checks, project_id="project-123"):
-    return PLAN.build_plan(root, task_name, task_score, checks, origin_session(root, project_id))
+def build_plan(root, task_name, task_score, checks, project_id="project-123", project_memory_closeout=None):
+    return PLAN.build_plan(root, task_name, task_score, checks, origin_session(root, project_id), project_memory_closeout)
 
 
 class EndingVerificationPlanTests(unittest.TestCase):
@@ -52,7 +52,8 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])
         self.assertEqual(plan["execution"], "one_persistent_ending_runs_all_checks")
-        self.assertEqual(plan["schema_version"], 6)
+        self.assertEqual(plan["schema_version"], 7)
+        self.assertEqual(plan["project_memory_closeout"], {"mode": "none"})
         self.assertNotIn("title", plan)
         self.assertNotIn("thread_target", plan)
         self.assertNotIn("terminal_thread_policy", plan)
@@ -65,6 +66,53 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(plan["ending_model_policy"]["availability_fallback_pair"], "gpt-5.6-luna|low")
         self.assertEqual(plan["origin_session"]["thread_id"], "source-session-001")
         self.assertEqual(plan["repair_policy"]["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
+
+    def test_durable_plan_carries_sanitized_project_memory_intent_and_consistency_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "runtime.py").write_text("value = 1\n", encoding="utf-8")
+            closeout = {"mode": "durable", "module": "runtime", "scope": "code", "change_kind": "edit", "summary": "Added the runtime value.", "reason": "The requested behavior needs one owned value.", "result": "The runtime now exposes the verified value.", "files": ["runtime.py"], "symbols": ["value"], "decisions": ["Keep ownership in runtime.py."], "risks": ["Future callers must preserve the value contract."]}
+            plan_path = root / "plan.json"
+            plan_path.write_text(json.dumps(build_plan(root, "memory", 35, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], project_memory_closeout=closeout)), encoding="utf-8")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending", "project-123")
+        self.assertEqual(launch["project_memory_closeout"]["mode"], "durable")
+        self.assertEqual(launch["project_memory_closeout"]["files"], ["runtime.py"])
+        self.assertTrue(launch["launch_requests"][0]["memory_consistency_output"].endswith("task-ending.project-memory-consistency.json"))
+        prompt = launch["launch_requests"][0]["arguments"]["prompt"]
+        self.assertIn("aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence", prompt)
+        self.assertIn("only memory_projection_defect may reconcile", prompt)
+        self.assertIn("three independent flows", prompt)
+
+    def test_code_memory_closeout_requires_a_symbol(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            closeout = {"mode": "durable", "module": "runtime", "scope": "code", "change_kind": "edit", "summary": "Added runtime behavior.", "reason": "The task requires it.", "result": "The behavior is available.", "files": ["runtime.py"]}
+            with self.assertRaisesRegex(ValueError, "requires at least one symbol"):
+                build_plan(root, "memory", 35, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], project_memory_closeout=closeout)
+
+    def test_memory_closeout_rejects_raw_or_unknown_process_fields(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            closeout = {"mode": "durable", "module": "runtime", "scope": "code", "change_kind": "edit", "summary": "Added runtime behavior.", "reason": "The task requires it.", "result": "The behavior is available.", "files": ["runtime.py"], "symbols": ["run"], "raw_prompt": "private prompt", "process_contract": "raw instructions"}
+            with self.assertRaisesRegex(ValueError, "unknown fields"):
+                build_plan(root, "memory", 35, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], project_memory_closeout=closeout)
+
+    def test_memory_closeout_rejects_non_array_files_and_non_string_values(self):
+        base = {"mode": "durable", "module": "runtime", "scope": "code", "change_kind": "edit", "summary": "Added runtime behavior.", "reason": "The task requires it.", "result": "The behavior is available.", "files": ["runtime.py"], "symbols": ["run"]}
+        invalid_updates = (
+            ({"files": "runtime.py"}, "files must be a JSON string array"),
+            ({"files": [1]}, "files must be a JSON string array"),
+            ({"symbols": [{"raw": "value"}]}, "symbols must contain only strings"),
+            ({"decisions": [7]}, "decisions must contain only strings"),
+            ({"summary": {"raw": "value"}}, "summary must be a string"),
+            ({"result": "Observed /" + "Users/example/private/result.txt"}, "result contains private or secret-like content"),
+        )
+        for update, error in invalid_updates:
+            with self.subTest(update=update), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                closeout = {**base, **update}
+                with self.assertRaisesRegex(ValueError, error):
+                    build_plan(root, "memory", 35, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], project_memory_closeout=closeout)
 
     def test_run_check_executes_real_command_and_records_pass(self):
         with tempfile.TemporaryDirectory() as temporary:
