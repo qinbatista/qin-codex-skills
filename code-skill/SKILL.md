@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill for code implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
+description: "Always use as the universal process gate for every code creation, repair, feature, refactor, or test-writing task in any programming language, including when another skill owns implementation. Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. In registered domains, the selected result producer or positively admitted node also uses this skill for implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
 ---
 
 # Code Skill
@@ -11,7 +11,9 @@ Use this as the global executor for active registry-owned code work that needs d
 
 ### Required Scope
 
-Load this skill for every inline request or admitted node that writes, debugs, refactors, tests, authors probes, or needs domain-specific explanation in an active registry-owned code domain, including:
+Load this skill as the process gate for every inline request or admitted node that creates, repairs, extends, refactors, or writes tests for code in any programming language. When another domain Skill owns implementation, apply `references/code-writing-philosophy.md` before and during writing while leaving execution ownership with that Skill.
+
+In active registry-owned code domains, also use this skill as the executor for work that writes, debugs, refactors, tests, authors probes, or needs domain-specific explanation, including:
 
 - Python;
 - C# or Unity C#;
@@ -19,7 +21,9 @@ Load this skill for every inline request or admitted node that writes, debugs, r
 - Python/C# helper scripts used by another skill;
 - Python/C# optimization implementation.
 
-Use only the registered domain resolved from the inline request or admitted node; other production language domains remain with their owning production skill until explicitly registered here.
+For every code creation, repair, feature, refactor, or test-writing node, including a small edit, read and follow `references/code-writing-philosophy.md` before and during writing. It is mandatory process authority; an exact-scoped read-only lookup stays outside this gate.
+
+Use this skill's executor and language-specific references only for the registered domain resolved from the inline request or admitted node; other production language domains retain their owning production Skill while still using the universal philosophy gate.
 
 Do not load it for an exact bounded read-only source lookup/audit that supplies its source scope and output contract and requests no output artifact. The bootstrap collects that evidence once and returns. A Cache note or report is an artifact and must be produced through the adaptive runner.
 
@@ -39,6 +43,7 @@ Any new active code domain is registry-owned by `routing_policy.py::EXECUTION_DO
 Read only what the inline request or admitted node needs:
 
 - literal read-only source lookups on the one-call path: no language or coding reference; the request or admitted node supplies the exact owner path, source allowlist, output contract, and deterministic acceptance target;
+- every code-writing node: `references/code-writing-philosophy.md`;
 - all non-trivial code: `references/coding-approach.md`;
 - any registered-domain change that affects rendered UI, layout, controls, styling, editor chrome, or runtime HUD: load `references/coding-approach.md` and apply its Mandatory Basic UI Change Gate before editing;
 - Python: `references/python-rules.md`;
@@ -75,13 +80,13 @@ Do not add host branches inside a declared managed runtime merely because its re
 ## Workflow
 
 1. Confirm the request or dynamic node names an active registered code domain and `code-skill`; retain its own score, band, pair, dependencies, purpose, and stop condition.
-2. Read the relevant references and existing source.
+2. Read `references/code-writing-philosophy.md`, the relevant references, and existing source; make its explicit ownership, lifecycle-performance, and `AGENTS.md` continuity decisions before editing.
 3. Resolve important assumptions internally and choose the smallest viable design; ask only when a missing choice genuinely blocks safe implementation.
 4. Preserve Qin's existing style, naming, structure, and unrelated user changes.
 5. For UI-affecting code, enforce the six-rule UI gate before implementation and preserve any intentional exception as an explicit responsive, accessibility, localization, or product-priority decision.
 6. Keep Python signatures, calls, and literals on one line when the project/global rules require that style.
 7. Implement only the requested behavior; avoid unrequested abstractions, features, fallbacks, or compatibility layers.
-8. Run one bounded producer-side Quick Check. For light/local code, run the smallest safe smoke that exercises the changed function or direct path. For UI-affecting code, also confirm that the changed source expresses the intended alignment/container/responsive contract; this source check is not rendered proof. For external-API, large-file, expensive-build, destructive, or side-effect-heavy work, do not execute the heavy path; check syntax plus the changed function, variable, import, and direct-reference names without importing code that may trigger side effects. This is a basic completion check, not independent Real Verify.
+8. Complete the philosophy's lifecycle performance pass and confirm the `AGENTS.md` continuity decision, then run one bounded producer-side Quick Check. For light/local code, run the smallest safe smoke that exercises the changed function or direct path. For UI-affecting code, also confirm that the changed source expresses the intended alignment/container/responsive contract; this source check is not rendered proof. For external-API, large-file, expensive-build, destructive, or side-effect-heavy work, do not execute the heavy path; check syntax plus the changed function, variable, import, and direct-reference names without importing code that may trigger side effects. This is a basic completion check, not independent Real Verify.
 9. Present `CODE READY` with changed paths, concrete behavior, the complete Result Model Disclosure block, and `Quick Check: PASS` or `Quick Check: SKIPPED (heavy) — <static evidence>`. Quick Check time is included in first-result latency.
 10. Start the scored lifecycle ledger and bind the producer or aggregate graph receipt when present. End Task is mandatory for every new user task; simple reads and one-value edits use the smallest observable completion/record check. Capture the immutable origin session before launch, then build the smallest real-test plan with `verify-skill/scripts/ending_verification_plan.py` and create one independently scored/modelled projectless `End Task-{task}-{check}` per independent acceptance check. Worker prompts keep the originating project root as execution context and use project-root-relative paths. Each task runs its actual command and semantic acceptance check; all checks must PASS. PASS/FAIL/BLOCKED End Tasks remain visible in the global task list; never auto-archive or delete them. A terminal Ending reports stage difficulty and pairs, attempt count, first/retry pass, suitability, next routing action/pair, and Obsidian model-record link/status. A FAIL or acceptance mismatch records exact evidence and submits the bounded repair prompt through `codex_app__send_message_to_thread` to the immutable origin session; that source session performs the authorized repair, runs Quick Check, presents a new result, and starts a fresh projectless Ending check with `--repair-of-lifecycle-id`, for up to three repair attempts. When thread tools, origin-session metadata, or prompt submission are unavailable, return terminal `BLOCKED` plus the exact handoff; never treat the lifecycle as verified, emulate task creation, wait, poll, self-verify, create a replacement repair session, or use a same-task Ending subagent.
 

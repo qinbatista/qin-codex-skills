@@ -1,6 +1,8 @@
 # Coding Approach
 
-## Think Before Coding
+## Design Decisions After the Writing Gate
+
+`code-writing-philosophy.md` is the mandatory before/during-writing process authority. This reference adds design and UI rules after that gate; it does not duplicate or replace its four process stages.
 
 - State assumptions explicitly when they matter.
 - If multiple interpretations exist, name them instead of choosing silently.
