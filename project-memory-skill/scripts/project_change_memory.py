@@ -72,12 +72,6 @@ def _memory_scope(project_key, module, task_name="", task_group="", session_id="
     return {"codex_session_key": _SESSION_EFFORT.session_key(resolved_session_id) if resolved_session_id else "", "task_name": normalized_task_name, "task_group": normalized_task_group, "task_scope_key": task_scope, "task_group_key": group_scope, "task_scope_mode": "session+task+group" if resolved_session_id and task_scope and group_scope else "session+task" if resolved_session_id and task_scope else "session+group" if resolved_session_id and group_scope else "session" if resolved_session_id else "task+group" if task_scope and group_scope else "task" if task_scope else "group" if group_scope else "unscoped"}
 
 
-def _record_in_memory_scope(record, scope):
-    if not (scope.get("codex_session_key") or scope.get("task_scope_key") or scope.get("task_group_key")):
-        return True
-    return _SESSION_EFFORT.scope_matches(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""), task_group_key_value=scope.get("task_group_key", ""))
-
-
 def _acquire_file_lock(lock_handle):
     if os.name == "nt":
         lock_handle.seek(0, os.SEEK_END)
@@ -783,8 +777,6 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
     for record in reversed(records):
         if project and not _record_matches_project(record, project):
             continue
-        if not _record_in_memory_scope(record, scope):
-            continue
         if project and _should_exclude_from_auto_match(record, current_line, include_ambiguous=include_ambiguous):
             continue
         if not include_superseded and record.get("id") in superseded_by:
@@ -798,9 +790,10 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
         searchable = " ".join([record["summary"], record["reason"], record["result"], record["module"], *record["files"], *record.get("symbols", []), *record["verification"], *record["decisions"], *record["risks"]]).lower()
         if terms and not all(term in searchable for term in terms):
             continue
-        relation = _SESSION_EFFORT.scope_relation(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""), task_group_key_value=scope.get("task_group_key", "")) if scope.get("codex_session_key") or scope.get("task_scope_key") or scope.get("task_group_key") else {"reason": "unscoped_query"}
+        relation = _SESSION_EFFORT.scope_relation(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""), task_group_key_value=scope.get("task_group_key", "")) if scope.get("codex_session_key") or scope.get("task_scope_key") or scope.get("task_group_key") else {"reason": "unscoped_query", "matched": True}
+        relation_reason = relation["reason"] if relation.get("matched") else "project_result_scope"
         projection = latest_projections.get(record["id"])
-        matches.append({**{key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "symbols", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")}, "effective": record["id"] not in superseded_by, "superseded_by": superseded_by.get(record["id"], []), "projection": projection or {"status": "missing", "written": False, "read_back_verified": False}, "relation_reason": relation["reason"], "source_session_key": record.get("codex_session_key", "") or record.get("session_key", "")})
+        matches.append({**{key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "symbols", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")}, "effective": record["id"] not in superseded_by, "superseded_by": superseded_by.get(record["id"], []), "projection": projection or {"status": "missing", "written": False, "read_back_verified": False}, "relation_reason": relation_reason, "source_session_key": record.get("codex_session_key", "") or record.get("session_key", "")})
         if len(matches) >= max(1, min(max_results, 25)):
             break
     return {"status": "ok" if matches else "no-matches", "matches": matches}

@@ -368,21 +368,23 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             self.assertEqual(len((store / "index.jsonl").read_text(encoding="utf-8").splitlines()), 1)
             self.assertFalse((vault / "Projects" / "ExampleProject").exists())
 
-    def test_project_change_recall_isolated_by_session_and_task_name(self):
+    def test_project_change_results_recall_across_sessions_and_task_names(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project = root / "ExampleProject"
             store = root / "store"
             project.mkdir()
             (project / "step1.py").write_text("value = 1\n", encoding="utf-8")
-            first = MEMORY.record_change(project, "routing", "file", "edit", "Step one change", "Keep step one isolated", "Step one passed", "passed", ["step1.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-one", session_id="019fc8e5-87da-7082-90b9-6d505404d229")
-            second = MEMORY.record_change(project, "routing", "file", "edit", "Step two change", "Keep step two isolated", "Step two passed", "passed", ["step1.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-two", session_id="019fc8e5-87da-7082-90b9-6d505404d230")
+            first = MEMORY.record_change(project, "routing", "file", "edit", "Step one change", "Keep the result available to later tasks", "Step one passed", "passed", ["step1.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-one", session_id="019fc8e5-87da-7082-90b9-6d505404d229")
+            second = MEMORY.record_change(project, "routing", "file", "edit", "Step two change", "Keep the result available to later tasks", "Step two passed", "passed", ["step1.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-two", session_id="019fc8e5-87da-7082-90b9-6d505404d230")
             first_search = MEMORY.search_records(project, "routing", ["step1.py"], "change", 8, store, True, "step-one", "019fc8e5-87da-7082-90b9-6d505404d229")
             second_search = MEMORY.search_records(project, "routing", ["step1.py"], "change", 8, store, True, "step-two", "019fc8e5-87da-7082-90b9-6d505404d230")
-        self.assertEqual([match["id"] for match in first_search["matches"]], [first["record_id"]])
-        self.assertEqual([match["id"] for match in second_search["matches"]], [second["record_id"]])
+        expected = {first["record_id"], second["record_id"]}
+        self.assertEqual({match["id"] for match in first_search["matches"]}, expected)
+        self.assertEqual({match["id"] for match in second_search["matches"]}, expected)
+        self.assertIn("project_result_scope", {match["relation_reason"] for match in first_search["matches"]})
 
-    def test_project_change_recall_reads_related_task_group_across_sessions(self):
+    def test_project_change_result_recall_does_not_hide_other_task_groups(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project = root / "ExampleProject"
@@ -391,11 +393,10 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             (project / "pipeline.py").write_text("value = 1\n", encoding="utf-8")
             first = MEMORY.record_change(project, "routing", "file", "edit", "Step one shared change", "Use the shared pipeline scope", "Step one passed", "passed", ["pipeline.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-one", task_group="shared-pipeline", session_id="019fc8e5-87da-7082-90b9-6d505404d229")
             second = MEMORY.record_change(project, "routing", "file", "edit", "Step two shared change", "Use the shared pipeline scope", "Step two passed", "passed", ["pipeline.py"], ["scope check"], store=store, vault=root / "missing", task_name="step-two", task_group="shared-pipeline", session_id="019fc8e5-87da-7082-90b9-6d505404d230")
-            unrelated = MEMORY.record_change(project, "routing", "file", "edit", "Other pipeline change", "Use a different pipeline scope", "Other passed", "passed", ["pipeline.py"], ["scope check"], store=store, vault=root / "missing", task_name="other-step", task_group="other-pipeline", session_id="019fc8e5-87da-7082-90b9-6d505404d231")
+            other_group = MEMORY.record_change(project, "routing", "file", "edit", "Other pipeline change", "Preserve all matching project results", "Other passed", "passed", ["pipeline.py"], ["scope check"], store=store, vault=root / "missing", task_name="other-step", task_group="other-pipeline", session_id="019fc8e5-87da-7082-90b9-6d505404d231")
             search = MEMORY.search_records(project, "routing", ["pipeline.py"], "change", 8, store, True, "step-two", "019fc8e5-87da-7082-90b9-6d505404d230", "shared-pipeline")
-        self.assertEqual({match["id"] for match in search["matches"]}, {first["record_id"], second["record_id"]})
-        self.assertNotIn(unrelated["record_id"], {match["id"] for match in search["matches"]})
-        self.assertEqual({match["task_group"] for match in search["matches"]}, {"shared-pipeline"})
+        self.assertEqual({match["id"] for match in search["matches"]}, {first["record_id"], second["record_id"], other_group["record_id"]})
+        self.assertEqual({match["task_group"] for match in search["matches"]}, {"shared-pipeline", "other-pipeline"})
 
     def test_record_serialization_and_cli_result_do_not_expose_absolute_machine_paths(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
