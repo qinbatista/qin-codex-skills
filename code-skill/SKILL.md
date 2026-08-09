@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Always use as the universal process gate for every code creation, repair, feature, refactor, or test-writing task in any programming language, including when another skill owns implementation. Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. In registered domains, the selected result producer or positively admitted node also uses this skill for implementation, edit, execution, debug, refactor, authored tests/probes, or domain reasoning beyond supplied scope."
+description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill as the universal before/during-writing process gate for every code creation, repair, feature, refactor, or test-writing task in any programming language, including when another Skill owns implementation. In registered domains, it also owns implementation, edit, execution, debug, refactor, authored tests/probes, and domain reasoning beyond supplied scope."
 ---
 
 # Code Skill
