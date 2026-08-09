@@ -22,6 +22,13 @@ For every code change that affects rendered UI, layout, controls, styling, edito
 
 Accessibility, localization, readable target sizes, and narrow viewports may require wrapping or deliberate asymmetry. Treat each exception as an explicit layout decision, preserve the alignment system after reflow, and send the rendered desktop and narrow states to Ending Real verification.
 
+## User Experience Philosophy
+
+For every UI task or user-facing UI information change, apply both principles:
+
+1. **Respond first, continue safely:** immediately acknowledge a user action in the interface (for example, selected, saved, queued, or working) so the user is never left without feedback. Move non-blocking work to the background when appropriate, then replace the acknowledgement with the real completion, failure, or next-action state. Never present an unfinished operation as complete: the visible label, icon, and control state must truthfully distinguish queued, in-progress, completed, and failed work.
+2. **Make information visual first:** prefer the smallest useful visual aid — an icon, emoji, image, status treatment, or diagram — over a dense block of text when it improves comprehension. Keep the essential meaning in accessible text; visuals clarify the message and must not be the only way to understand it.
+
 ## Prefer The Simplest Viable Solution
 
 - Write the minimum code that solves the actual request.

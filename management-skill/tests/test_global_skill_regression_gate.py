@@ -36,7 +36,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         capability_ids = [item["id"] for item in catalog["capabilities"]]
         check_ids = {item["id"] for item in catalog["checks"]}
         referenced = {check_id for item in catalog["capabilities"] for check_id in item["checks"]}
-        self.assertEqual(len(capability_ids), 29)
+        self.assertEqual(len(capability_ids), 30)
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
         fast_ending = next(item for item in catalog["capabilities"] if item["id"] == "GSR-026")
@@ -52,6 +52,12 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertIn("exact-ID", integrity["function"])
         coverage_integrity = next(item for item in catalog["capabilities"] if item["id"] == "GSR-029")
         self.assertIn("canonical local store", coverage_integrity["function"])
+        ui_experience = next(item for item in catalog["capabilities"] if item["id"] == "GSR-030")
+        self.assertEqual(ui_experience["owner_skill"], "code-skill")
+        self.assertEqual(ui_experience["checks"], ["code-units", "code-sample-attestation"])
+        self.assertIn("真实状态反馈", ui_experience["function"])
+        self.assertIn("不得伪称完成", ui_experience["function"])
+        self.assertIn("图标、emoji、图片、状态样式或图示", ui_experience["function"])
         retired = {item["id"]: item["replacement"] for item in catalog["retired_architectures"]}
         self.assertEqual(retired["RET-011"], "GSR-026")
         self.assertEqual(retired["RET-012"], "GSR-014")

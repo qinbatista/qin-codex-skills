@@ -45,7 +45,7 @@ Read only what the inline request or admitted node needs:
 - literal read-only source lookups on the one-call path: no language or coding reference; the request or admitted node supplies the exact owner path, source allowlist, output contract, and deterministic acceptance target;
 - every code-writing node: `references/code-writing-philosophy.md`;
 - all non-trivial code: `references/coding-approach.md`;
-- any registered-domain change that affects rendered UI, layout, controls, styling, editor chrome, or runtime HUD: load `references/coding-approach.md` and apply its Mandatory Basic UI Change Gate before editing;
+- any registered-domain change that affects rendered UI, layout, controls, styling, editor chrome, runtime HUD, or user-facing UI information: load `references/coding-approach.md` and apply its Mandatory Basic UI Change Gate and User Experience Philosophy before editing;
 - Python: `references/python-rules.md`;
 - plain C#: `references/csharp-rules.md`;
 - Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`; every Unity game C# create/edit/repair/refactor/test node also reads `references/unity-game-code-structure-design.md` after the nearest project `AGENTS.md` and before selecting an ownership pattern;
@@ -83,7 +83,7 @@ Do not add host branches inside a declared managed runtime merely because its re
 2. Read `references/code-writing-philosophy.md`, the relevant references, and existing source; make its explicit ownership, lifecycle-performance, and `AGENTS.md` continuity decisions before editing.
 3. Resolve important assumptions internally and choose the smallest viable design; ask only when a missing choice genuinely blocks safe implementation.
 4. Preserve Qin's existing style, naming, structure, and unrelated user changes.
-5. For UI-affecting code, enforce the six-rule UI gate before implementation and preserve any intentional exception as an explicit responsive, accessibility, localization, or product-priority decision.
+5. For UI-affecting code or user-facing UI information, enforce the six-rule UI gate and User Experience Philosophy before implementation; preserve any intentional exception as an explicit responsive, accessibility, localization, or product-priority decision.
 6. Keep Python signatures, calls, and literals on one line when the project/global rules require that style.
 7. Implement only the requested behavior; avoid unrequested abstractions, features, fallbacks, or compatibility layers.
 8. Complete the philosophy's lifecycle performance pass and confirm the `AGENTS.md` continuity decision, then run one bounded producer-side Quick Check. For light/local code, run the smallest safe smoke that exercises the changed function or direct path. For UI-affecting code, also confirm that the changed source expresses the intended alignment/container/responsive contract; this source check is not rendered proof. For external-API, large-file, expensive-build, destructive, or side-effect-heavy work, do not execute the heavy path; check syntax plus the changed function, variable, import, and direct-reference names without importing code that may trigger side effects. This is a basic completion check, not independent Real Verify.

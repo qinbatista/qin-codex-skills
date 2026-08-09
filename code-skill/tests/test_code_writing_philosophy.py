@@ -46,6 +46,21 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         self.assertIn("mandatory before/during-writing process authority", self.coding_approach)
         self.assertIn("does not duplicate or replace its four process stages", self.coding_approach)
 
+    def test_user_experience_philosophy_requires_immediate_honest_feedback_and_visual_aids(self):
+        self.assertIn("## User Experience Philosophy", self.coding_approach)
+        for requirement in [
+            "immediately acknowledge a user action",
+            "Move non-blocking work to the background when appropriate",
+            "Never present an unfinished operation as complete",
+            "queued, in-progress, completed, and failed work",
+            "prefer the smallest useful visual aid",
+            "icon, emoji, image, status treatment, or diagram",
+            "must not be the only way to understand it",
+        ]:
+            self.assertIn(requirement, self.coding_approach)
+        self.assertIn("user-facing UI information", self.code_skill)
+        self.assertIn("User Experience Philosophy", self.code_skill)
+
     def test_unity_game_nodes_must_load_the_structure_reference_before_pattern_selection(self):
         self.assertIn("references/unity-game-code-structure-design.md", self.code_skill)
         self.assertIn("unity-game-code-structure-design.md", self.unity_rules)
