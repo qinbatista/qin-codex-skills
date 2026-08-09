@@ -37,6 +37,8 @@ When Cache content is reusable, retained, workflow-required, or project-influenc
 
 - Coverage is a separate native-memory layer, not a model-routing category page and not a JSON sidecar in Obsidian. The local authority is `~/.codex/project-memory-coverage/events.jsonl`; Obsidian projects it as `Memory Coverage/index.md`, `Modules/<module>.md`, and `Methods/<module>--<method>.md` under the resolved project owner.
 - Every route calls `memory_coverage.py ensure`, which creates or refreshes the project and module scopes. A real method/symbol supplied by the task also creates or refreshes the method scope. Coverage stores only sanitized project/module/method/file/source fields and never raw prompts, reasoning, receipts, or absolute project paths.
+- Coverage has one local authority: `CODEX_PROJECT_MEMORY_COVERAGE` when explicitly configured, otherwise `~/.codex/project-memory-coverage/events.jsonl`. Never derive its store from an Obsidian vault parent or a model-routing store. Production uses that canonical authority; tests and probes must configure an explicit disposable coverage store and disposable vault.
+- A coverage update holds one store lock across append, merged readback, and native Obsidian projection. Concurrent routes sharing the canonical store therefore project the complete merged scope set instead of allowing an older partial snapshot to truncate the index.
 - A durable code action that targets code must provide `--symbol <method-or-symbol>`. A deliberate file/module-level code change uses the explicit `--symbol __module__` sentinel; it is not silently treated as a method. A missing method scope blocks the route or durable result instead of allowing an untracked code change to pass.
 - Use `memory_coverage.py validate` to inspect the required scopes. Missing Obsidian is still a successful local coverage write; a missing method identity is not an Obsidian outage and remains a blocking contract failure.
 - Model-routing learning remains the six shared category pages described below. It keeps project/task/module/file/symbol as fields and does not create one model page per method; the coverage pages are the corresponding durable project-memory index.
@@ -48,12 +50,19 @@ python3 project-memory-skill/scripts/memory_coverage.py ensure --project-root <r
 python3 project-memory-skill/scripts/memory_coverage.py validate --project-root <root> --module <module> --symbol <method-or-symbol> --require-method
 ```
 
+If an older runtime created a proven rogue coverage ledger, merge its scopes into the canonical store and rebuild the native projection before deleting it. `merge-store --delete-source` refuses a mixed-project source ledger, requires target/projection readback, and deletes only the exact source JSONL plus its lock after the merge verifies.
+
+```bash
+python3 project-memory-skill/scripts/memory_coverage.py --store <canonical-store> --vault <resolved-vault> merge-store --project-root <root> --source-store <exact-rogue-store> --delete-source
+```
+
 ## Project Change-Memory Authority And Storage
 
 - For project change memory, the private local JSONL ledger at `~/.codex/project-change-memory/` is authoritative.
 - When the resolved vault contains `AI Memory/ai_memory.py`, that root-first schema is authoritative: project through its single event store and generated root views, and never create legacy History, Activity, Journal, or Archive layers. Only a vault without that runtime may use the older one-history plus pointer-only projection.
 - Missing or unavailable Obsidian is a successful no-op. Local recording must still complete.
 - Store project-relative file paths, not raw prompts, private reasoning, credentials, tokens, cookies, or unrelated task content.
+- Production result records reject placeholder-only module, summary, reason, or result semantics such as `tmp`, `test`, `dummy`, `placeholder`, `todo`, and `tbd` before coverage, local-ledger, or projection writes. Tests and probes must pass an explicit disposable `--store` and `--vault`; never redirect a production default by changing `HOME`.
 - Skills and project `AGENTS.md` files constrain the work process. Project change memory stores only sanitized, verified outcomes and their rationale/evidence; never copy a process philosophy, Skill contract, raw instruction, or execution transcript into a result-memory payload.
 - Project-result session/task/group keys are provenance, not retrieval barriers. A later task recalls matching effective results across sessions by registered project, module, working line, file, and exact symbol; session isolation remains specific to model-routing and effort learning.
 - Resolve registered projects from home-relative owner paths. When a project has an explicitly registered old and current root, recall and supersession treat both as one owner without rewriting prior JSONL records; an unregistered same-name clone remains isolated.
@@ -94,6 +103,14 @@ python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py re
 python3 ~/.codex/skills/project-memory-skill/scripts/obsidian_model_memory.py rebuild-model-switches --project-root <root>
 python3 ~/.codex/skills/project-memory-skill/scripts/project_change_memory.py reconcile --project-root <root> --record-id <project-change-record-id>
 ```
+
+If a legacy production record is proven to contain placeholder-only semantics, remove it from the authoritative local chain by exact ID. `remove-invalid` first writes an append-only tombstone, then removes that ID from the master, project, module, file, record, and projection-receipt indexes. Search, duplicate matching, supersession, and reconcile all exclude tombstoned IDs, so a partially completed cleanup cannot reproject the invalid record. It refuses valid records, malformed IDs, cross-project IDs, and records referenced by a superseding result.
+
+```bash
+python3 ~/.codex/skills/project-memory-skill/scripts/project_change_memory.py --store <authoritative-store> remove-invalid --project-root <root> --record-id <exact-record-id> --reason <verified-invalidation-reason>
+```
+
+This local maintenance command does not hand-edit a root-first vault. When the invalid ID already reached `AI Memory/events.jsonl`, remove or invalidate the same exact event through that vault runtime's supported maintenance path after the local command succeeds; never delete only the projection while leaving the authoritative local record eligible for reconcile.
 
 The recorder recomputes the current project-context recommendation and rejects a matched receipt for any other pair. `ending_task_ledger.py event` invokes it automatically for a lifecycle started with `--producer-receipt`. It records the selection reason, state, prior passing/failing boundary, and Ending Real verdict; callers cannot self-author those fields.
 
@@ -198,6 +215,7 @@ If a project has sufficient git working-line metadata, retrieval excludes ambigu
 - A process-contract or execution defect is disguised as a result-memory correction.
 - A correct local result is duplicated instead of reconciling its failed or missing Obsidian projection.
 - Secrets, raw prompts, private reasoning, receipts, or unrelated content enter the ledger.
+- A placeholder-only semantic result enters production memory, a test writes the default store/vault, or a local invalid record is removed only from its projection while remaining eligible for reconcile.
 
 ## Verification
 

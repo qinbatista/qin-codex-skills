@@ -967,11 +967,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     query.update({"task_name": query.get("task_name", ""), "task_group": query.get("task_group", ""), "task_scope_key": query.get("task_scope_key", "") if str(task_name or "").strip() else "", "task_group_key": query.get("task_group_key", ""), "codex_session_key": session_summary.get("codex_session_key") if active_scope else "", "scope_enforced": active_scope})
     entry = _entry_context(shared, pairs, entry_model, entry_effort)
     vault_path, memory_root = _memory_root(query, vault)
-    coverage_store = None
-    if local_store:
-        coverage_store = Path(local_store).expanduser().resolve().parent / "memory-coverage-events.jsonl"
-    elif vault is not None:
-        coverage_store = Path(vault).expanduser().resolve().parent / "memory-coverage-events.jsonl"
+    coverage_store = _resolve_coverage_store()
     memory_coverage_result = memory_coverage.ensure_coverage(
         project_root,
         query["module"],
@@ -1218,6 +1214,12 @@ def _atomic_write(path, text):
 
 def _resolve_local_store(local_store=None):
     configured = local_store or os.getenv("CODEX_MODEL_ROUTING_MEMORY") or DEFAULT_LOCAL_STORE
+    return Path(configured).expanduser().resolve()
+
+
+def _resolve_coverage_store():
+    """Resolve the one coverage authority without deriving state from a vault or model store."""
+    configured = os.getenv("CODEX_PROJECT_MEMORY_COVERAGE") or memory_coverage.DEFAULT_STORE
     return Path(configured).expanduser().resolve()
 
 
@@ -2222,7 +2224,7 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local
     shared, pairs = load_shared_ladder(ladder)
     vault_path = project_change_memory._resolve_vault(vault)
     local_path = _resolve_local_store(local_store)
-    coverage_store = Path(local_path).expanduser().resolve().parent / "memory-coverage-events.jsonl" if local_store else None
+    coverage_store = _resolve_coverage_store()
     local_records = _read_local_records(local_path)
     priority_producer = shared.get("priority_producer")
     priority_pair_count = len(priority_producer["adaptive_efforts"]) if isinstance(priority_producer, dict) and priority_producer.get("enabled") is True else 0

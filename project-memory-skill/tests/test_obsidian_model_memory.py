@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
@@ -22,7 +23,8 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.home = self.root / "home"
         self.home.mkdir()
         self.local_store = self.root / "model-routing-memory" / "events.jsonl"
-        self.local_store_patcher = mock.patch.dict(os.environ, {"CODEX_MODEL_ROUTING_MEMORY": str(self.local_store), "CODEX_THREAD_ID": "", "CODEX_SESSION_ID": "", "CODEX_TASK_NAME": "", "CODEX_TASK_GROUP": ""})
+        self.coverage_store = self.root / "project-memory-coverage" / "events.jsonl"
+        self.local_store_patcher = mock.patch.dict(os.environ, {"CODEX_MODEL_ROUTING_MEMORY": str(self.local_store), "CODEX_PROJECT_MEMORY_COVERAGE": str(self.coverage_store), "CODEX_THREAD_ID": "", "CODEX_SESSION_ID": "", "CODEX_TASK_NAME": "", "CODEX_TASK_GROUP": ""})
         self.local_store_patcher.start()
         self.path_home_patcher = mock.patch.object(module.Path, "home", lambda: self.home)
         self.path_home_patcher.start()
@@ -84,6 +86,61 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         recommendation = module.recommend_model(self.project, "code", "example-module", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault)
         self.write_receipt(recommendation["attempt_pair"])
         return module.record_model_result(self.project, "code", "example-module", self.receipt, "pass", "none", file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity="easy", risk="low", ambiguity="low", task_summary="Edit one bounded Python method.", vault=self.vault, recorded_at=recorded_at)
+
+    def test_explicit_vault_without_local_store_uses_canonical_coverage_authority(self):
+        rogue_store = self.vault.parent / "memory-coverage-events.jsonl"
+        recommendation = module.recommend_model(
+            self.project,
+            "code",
+            "coverage-authority",
+            file_value="src/example.py",
+            symbol="Coverage.run",
+            code_kind="python",
+            operation="edit",
+            task_summary="Verify the canonical coverage authority.",
+            vault=self.vault,
+        )
+        self.assertEqual(recommendation["memory_coverage"]["status"], "ready")
+        self.assertTrue(self.coverage_store.is_file())
+        self.assertFalse(rogue_store.exists())
+        self.assertEqual(module._resolve_coverage_store(), self.coverage_store.resolve())
+
+    def test_two_model_stores_and_concurrent_projection_preserve_all_canonical_scopes(self):
+        model_stores = [
+            self.root / "routing-one" / "events.jsonl",
+            self.root / "routing-two" / "events.jsonl",
+        ]
+
+        def recommend(index):
+            return module.recommend_model(
+                self.project,
+                "code",
+                f"concurrent-coverage-{index}",
+                file_value="src/example.py",
+                symbol=f"Coverage.run{index}",
+                code_kind="python",
+                operation="edit",
+                task_summary=f"Verify concurrent coverage scope {index}.",
+                vault=self.vault,
+                local_store=model_stores[index],
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(recommend, range(2)))
+
+        coverage_root = self.vault / "Projects" / "ThisIsMyOregon" / "Memory Coverage"
+        index_text = (coverage_root / "index.md").read_text(encoding="utf-8")
+        records = module.memory_coverage._merge_records(module.memory_coverage._read_records(self.coverage_store))
+        modules = {record.get("module") for record in records.values() if record.get("scope_kind") == "module"}
+        self.assertTrue(all(result["memory_coverage"]["status"] == "ready" for result in results))
+        self.assertEqual(modules, {"concurrent-coverage-0", "concurrent-coverage-1"})
+        self.assertIn("Modules/concurrent-coverage-0", index_text)
+        self.assertIn("Modules/concurrent-coverage-1", index_text)
+        self.assertTrue((coverage_root / "Methods" / "concurrent-coverage-0--Coverage.run0.md").is_file())
+        self.assertTrue((coverage_root / "Methods" / "concurrent-coverage-1--Coverage.run1.md").is_file())
+        self.assertFalse((model_stores[0].parent / "memory-coverage-events.jsonl").exists())
+        self.assertFalse((model_stores[1].parent / "memory-coverage-events.jsonl").exists())
+        self.assertFalse((self.vault.parent / "memory-coverage-events.jsonl").exists())
 
     def test_write_uses_one_category_page_with_one_structured_record(self):
         written = self.record()

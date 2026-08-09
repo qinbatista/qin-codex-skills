@@ -268,7 +268,7 @@ def attestation_result(check: dict[str, object], project_root: Path) -> dict[str
             errors.append("attestation evidence is missing")
         elif payload.get("evidence_sha256") != sha256_file(evidence_path):
             errors.append("attestation evidence digest is stale")
-        elif check_id == "memory-execution-consistency-attestation" and validate_memory_execution_consistency(evidence_payload) != (5, 5):
+        elif check_id == "memory-execution-consistency-attestation" and validate_memory_execution_consistency(evidence_payload) != (7, 7):
             errors.append("memory-execution consistency evidence is not a complete real pass")
     expected_files = list(map(str, check.get("watched_files", [])))
     watched = payload.get("watched_files", {}) if payload else {}
@@ -439,7 +439,7 @@ def validate_unity_trials(evidence: dict[str, object]) -> tuple[int, int]:
 
 
 def validate_memory_execution_consistency(evidence: dict[str, object]) -> tuple[int, int]:
-    required_ids = {"memory-record-correction", "memory-projection-reconcile", "skill-contract-defect", "execution-drift", "next-task-effective-recall"}
+    required_ids = {"memory-record-correction", "memory-projection-reconcile", "skill-contract-defect", "execution-drift", "next-task-effective-recall", "invalid-result-integrity", "coverage-authority-integrity"}
     scenarios = evidence.get("scenarios", {})
     if not isinstance(scenarios, dict):
         return 0, 0
@@ -448,12 +448,16 @@ def validate_memory_execution_consistency(evidence: dict[str, object]) -> tuple[
     skill_defect = scenarios.get("skill-contract-defect", {})
     execution_drift = scenarios.get("execution-drift", {})
     next_recall = scenarios.get("next-task-effective-recall", {})
+    invalid_result_integrity = scenarios.get("invalid-result-integrity", {})
+    coverage_authority_integrity = scenarios.get("coverage-authority-integrity", {})
     all_scenarios_pass = set(scenarios) == required_ids and all(isinstance(scenario, dict) and scenario.get("status") == "pass" for scenario in scenarios.values())
     record_correction_pass = record_correction.get("classification") == "memory_record_defect" and record_correction.get("correction_written") is True and record_correction.get("source_unchanged") is True
     projection_reconcile_pass = projection_reconcile.get("classification") == "memory_projection_defect" and projection_reconcile.get("reconciled") is True
     producer_defects_pass = skill_defect.get("classification") == "skill_contract_defect" and skill_defect.get("memory_write") is False and skill_defect.get("return_to_origin") is True and execution_drift.get("classification") == "execution_drift" and execution_drift.get("memory_write") is False and execution_drift.get("return_to_origin") is True
     next_recall_pass = next_recall.get("effective_only") is True and next_recall.get("superseded_hidden") is True
-    passed = evidence.get("schema_version") == 1 and evidence.get("check_id") == "memory-execution-consistency-attestation" and evidence.get("status") == "pass" and all_scenarios_pass and record_correction_pass and projection_reconcile_pass and producer_defects_pass and next_recall_pass
+    invalid_result_pass = invalid_result_integrity.get("placeholder_rejected") is True and invalid_result_integrity.get("disposable_store_and_vault") is True and invalid_result_integrity.get("canonical_owner_readback") is True and invalid_result_integrity.get("exact_id_tombstone") is True and invalid_result_integrity.get("reconcile_blocked") is True
+    coverage_authority_pass = coverage_authority_integrity.get("vault_parent_store_absent") is True and coverage_authority_integrity.get("canonical_store_used") is True and coverage_authority_integrity.get("two_model_stores_shared_authority") is True and coverage_authority_integrity.get("concurrent_projection_preserved") is True and coverage_authority_integrity.get("rogue_store_merge_verified") is True
+    passed = evidence.get("schema_version") == 1 and evidence.get("check_id") == "memory-execution-consistency-attestation" and evidence.get("status") == "pass" and all_scenarios_pass and record_correction_pass and projection_reconcile_pass and producer_defects_pass and next_recall_pass and invalid_result_pass and coverage_authority_pass
     return len(scenarios), len(scenarios) if passed else 0
 
 

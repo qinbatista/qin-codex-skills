@@ -702,6 +702,166 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         self.assertEqual([receipt["status"] for receipt in receipts], ["failed", "failed", "written"])
         self.assertIn(f"Memory correction supersedes project result record {failed['record_id']}.", event["decisions"])
 
+    def test_production_recorder_rejects_placeholder_semantic_fields(self):
+        fields = ("module", "summary", "reason", "result")
+        for field_name in fields:
+            with self.subTest(field=field_name), tempfile.TemporaryDirectory() as temporary_directory:
+                root = Path(temporary_directory)
+                project = root / "project"
+                store = root / "disposable-store"
+                vault = root / "disposable-vault"
+                project.mkdir()
+                vault.mkdir()
+                (project / "script.py").write_text("value = 1\n", encoding="utf-8")
+                values = {
+                    "module": "memory-integrity",
+                    "summary": "Recorded verified memory integrity",
+                    "reason": "Prevent invalid results from entering durable recall",
+                    "result": "Focused validation passed",
+                }
+                values[field_name] = "tmp"
+                with self.assertRaisesRegex(ValueError, "placeholder-only semantics"):
+                    MEMORY.record_change(
+                        project,
+                        values["module"],
+                        "file",
+                        "edit",
+                        values["summary"],
+                        values["reason"],
+                        values["result"],
+                        "passed",
+                        ["script.py"],
+                        ["Focused validation passed"],
+                        store=store,
+                        vault=vault,
+                    )
+                self.assertFalse((store / "index.jsonl").exists())
+
+    def test_qin_source_alias_projects_and_reads_back_as_global_owner(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            vault = Path(temporary_directory) / "disposable-vault"
+            self._write_root_first_runtime(vault)
+            record = {
+                "project": {"root": ".", "name": "qin-codex-skills", "owner": ""},
+                "module": "memory-integrity",
+                "summary": "Recorded canonical owner result",
+                "reason": "Keep source and installed global skills under one owner",
+                "result": "Projection readback passed",
+                "verification_status": "passed",
+                "files": ["project-memory-skill/SKILL.md"],
+                "verification": ["Focused projection check passed"],
+                "decisions": [],
+                "risks": [],
+                "id": "20260809T120000Z-123456789abc",
+                "recorded_at": "2026-08-09T12:00:00Z",
+                "change_kind": "edit",
+                "scope": "file",
+                "supersedes": "",
+            }
+            output = MEMORY._write_root_first_memory(record, vault)
+            event = MEMORY._read_records(vault / "AI Memory" / "events.jsonl")[0]
+        self.assertEqual(event["project"], "Global Codex Skills")
+        self.assertTrue(output["read_back_verified"])
+
+    def test_remove_invalid_rebuilds_indexes_tombstones_and_blocks_reconcile(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            store = root / "disposable-store"
+            vault = root / "disposable-vault"
+            project.mkdir()
+            vault.mkdir()
+            project_identity = MEMORY._project_identity(project)
+            invalid_id = "20260809T120000Z-aaaaaaaaaaaa"
+            valid_id = "20260809T120001Z-bbbbbbbbbbbb"
+            common = {
+                "schema_version": 1,
+                "recorded_at": "2026-08-09T12:00:00Z",
+                "project": project_identity,
+                "module": "memory-integrity",
+                "symbols": [],
+                "scope": "file",
+                "change_kind": "edit",
+                "verification_status": "passed",
+                "verification": ["Focused check passed"],
+                "decisions": [],
+                "risks": [],
+                "files": ["script.py"],
+                "supersedes": "",
+            }
+            invalid = {
+                **common,
+                "id": invalid_id,
+                "summary": "tmp",
+                "reason": "tmp",
+                "result": "tmp",
+                "fingerprint": "a" * 64,
+            }
+            valid = {
+                **common,
+                "id": valid_id,
+                "summary": "Recorded verified memory integrity",
+                "reason": "Preserve effective project results",
+                "result": "Focused check passed",
+                "fingerprint": "b" * 64,
+            }
+            project_dir = store / "projects" / project_identity["key"]
+            record_dir = project_dir / "records" / "2026" / "08"
+            indexes = (
+                store / "index.jsonl",
+                project_dir / "index.jsonl",
+                project_dir / "modules" / "memory-integrity" / "index.jsonl",
+                project_dir / "files" / "script.py-index.jsonl",
+            )
+            for index_path in indexes:
+                MEMORY._append_jsonl(index_path, invalid)
+                MEMORY._append_jsonl(index_path, valid)
+            record_dir.mkdir(parents=True)
+            (record_dir / f"{invalid_id}.json").write_text(json.dumps(invalid), encoding="utf-8")
+            (record_dir / f"{valid_id}.json").write_text(json.dumps(valid), encoding="utf-8")
+            MEMORY._append_jsonl(store / "projections.jsonl", {"record_id": invalid_id, "status": "written", "read_back_verified": False})
+            MEMORY._append_jsonl(store / "projections.jsonl", {"record_id": valid_id, "status": "written", "read_back_verified": True})
+
+            removed = MEMORY.remove_invalid_record(
+                project,
+                invalid_id,
+                "Remove a proven placeholder-only production record",
+                store=store,
+            )
+            repeated = MEMORY.remove_invalid_record(
+                project,
+                invalid_id,
+                "Resume the same exact invalid-record cleanup",
+                store=store,
+            )
+            search = MEMORY.search_records(project, store=store, include_ambiguous=True)
+            with self.assertRaisesRegex(ValueError, "existing record"):
+                MEMORY.reconcile_projections(project, invalid_id, store=store, vault=vault)
+            with self.assertRaisesRegex(ValueError, "placeholder-only semantic record"):
+                MEMORY.remove_invalid_record(
+                    project,
+                    valid_id,
+                    "Do not remove a valid durable result",
+                    store=store,
+                )
+
+            remaining_rows = []
+            for index_path in store.rglob("*.jsonl"):
+                if index_path.name != "invalidations.jsonl":
+                    remaining_rows.extend(MEMORY._read_records(index_path))
+            invalidations = MEMORY._read_records(store / "invalidations.jsonl")
+            invalid_record_exists = (record_dir / f"{invalid_id}.json").exists()
+            valid_record_exists = (record_dir / f"{valid_id}.json").exists()
+        self.assertEqual(removed["status"], "removed-invalid")
+        self.assertEqual(repeated["status"], "already-removed")
+        self.assertTrue(removed["reconcile_blocked"])
+        self.assertFalse(any(item.get("id") == invalid_id or item.get("record_id") == invalid_id for item in remaining_rows))
+        self.assertTrue(any(item.get("id") == valid_id for item in remaining_rows))
+        self.assertFalse(invalid_record_exists)
+        self.assertTrue(valid_record_exists)
+        self.assertEqual([item["record_id"] for item in invalidations], [invalid_id])
+        self.assertEqual([item["id"] for item in search["matches"]], [valid_id])
+
 
 if __name__ == "__main__":
     unittest.main()

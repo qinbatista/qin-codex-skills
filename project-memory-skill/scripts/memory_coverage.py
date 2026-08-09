@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import re
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import mkstemp
@@ -31,6 +31,7 @@ except ModuleNotFoundError:
 
 SCHEMA_VERSION = 1
 DEFAULT_STORE = Path.home() / ".codex" / "project-memory-coverage" / "events.jsonl"
+MANAGED_MARKER = "<!-- managed-by: project-memory-skill/memory-coverage -->"
 MODULE_SCOPE_SYMBOL = "__module__"
 METHOD_SENTINELS = {MODULE_SCOPE_SYMBOL, "<module>", "module-level"}
 CODE_EXTENSIONS = {
@@ -157,6 +158,29 @@ def _read_records(store):
     return records
 
 
+def _read_strict_snapshot(store):
+    """Read a migration source without silently accepting malformed or mixed rows."""
+    path = Path(store).expanduser()
+    if not path.is_file():
+        raise CoverageError("source-store must be an existing coverage JSONL file")
+    payload = path.read_bytes()
+    records = []
+    for line_number, raw_line in enumerate(payload.splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise CoverageError(f"source-store line {line_number} is not valid UTF-8 JSON") from error
+        record = event.get("record") if isinstance(event, dict) else None
+        if not isinstance(record, dict) or not record.get("scope_key") or not record.get("scope_kind"):
+            raise CoverageError(f"source-store line {line_number} is not a coverage scope record")
+        records.append(record)
+    if not records:
+        raise CoverageError("source-store has no coverage scope records")
+    return hashlib.sha256(payload).hexdigest(), records
+
+
 def _merge_records(records):
     merged = {}
     for record in records:
@@ -176,6 +200,27 @@ def _merge_records(records):
         current["last_seen"] = max(current.get("last_seen", record.get("last_seen", "")), record.get("last_seen", ""))
         current["observation_count"] = int(current.get("observation_count", 0)) + int(record.get("observation_count", 1))
     return merged
+
+
+def _record_subsumes(target, source):
+    if not isinstance(target, dict) or not isinstance(source, dict):
+        return False
+    for field in ("scope_key", "project_key", "scope_kind", "module", "symbol"):
+        if str(target.get(field) or "") != str(source.get(field) or ""):
+            return False
+    if not set(source.get("files") or []) <= set(target.get("files") or []):
+        return False
+    if not set(source.get("sources") or []) <= set(target.get("sources") or []):
+        return False
+    source_first = str(source.get("first_seen") or "")
+    target_first = str(target.get("first_seen") or "")
+    if source_first and (not target_first or target_first > source_first):
+        return False
+    source_last = str(source.get("last_seen") or "")
+    target_last = str(target.get("last_seen") or "")
+    if source_last and (not target_last or target_last < source_last):
+        return False
+    return int(target.get("observation_count") or 0) >= int(source.get("observation_count") or 0)
 
 
 @contextmanager
@@ -211,19 +256,26 @@ def _locked_append(path):
         handle.close()
 
 
-def _append_records(store, records):
+def _append_records_unlocked(store, records):
     path = Path(store).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        for record in records:
+            event = {
+                "coverage_schema": SCHEMA_VERSION,
+                "event": "scope-observed",
+                "event_id": _record_id(record["scope_key"]),
+                "record": record,
+            }
+            handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _append_records(store, records):
+    path = Path(store).expanduser()
     with _locked_append(path):
-        with path.open("a", encoding="utf-8") as handle:
-            for record in records:
-                event = {
-                    "coverage_schema": SCHEMA_VERSION,
-                    "event": "scope-observed",
-                    "event_id": _record_id(record["scope_key"]),
-                    "record": record,
-                }
-                handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+        _append_records_unlocked(path, records)
 
 
 def _atomic_write(path, text):
@@ -258,6 +310,7 @@ def _link(path):
 
 def _render_index(project, records):
     lines = [
+        MANAGED_MARKER,
         "# Memory Coverage",
         "",
         f"- Project: `{project['name']}`",
@@ -287,6 +340,7 @@ def _render_index(project, records):
 
 def _render_scope(project, record):
     lines = [
+        MANAGED_MARKER,
         f"# {record.get('scope_kind', 'scope').title()} Memory",
         "",
         f"- Project: `{project['name']}`",
@@ -321,6 +375,52 @@ def _project_index_link(vault, owner, coverage_root):
         separator = "" if text.endswith("\n") else "\n"
         _atomic_write(index, f"{text}{separator}\n{link}\n")
     return True
+
+
+def _scope_page_path(root, record):
+    folder = "Modules" if record.get("scope_kind") == "module" else "Methods"
+    slug_value = record.get("module") or record.get("symbol") or "scope"
+    if record.get("scope_kind") == "method":
+        slug_value = f"{record.get('module', 'module')}--{record.get('symbol', 'method')}"
+    return root / folder / f"{_slug(slug_value)}.md"
+
+
+def _verify_obsidian_projection(project, records, vault):
+    if not vault:
+        return False, "vault_not_configured"
+    vault_path = Path(vault).expanduser()
+    owner = project.get("owner")
+    if not vault_path.is_dir() or not owner:
+        return False, "vault_or_owner_unavailable"
+    owner_index = _owner_directory(vault_path, owner) / "index.md"
+    root = _coverage_root(vault_path, owner)
+    index = root / "index.md"
+    if not owner_index.is_file() or not index.is_file():
+        return False, "owner_or_coverage_index_missing"
+    expected_index = _render_index(project, records)
+    if index.read_text(encoding="utf-8") != expected_index:
+        return False, "coverage_index_readback_mismatch"
+    relative = root.relative_to(vault_path)
+    if f"[[{relative.as_posix()}/index|Memory Coverage]]" not in owner_index.read_text(encoding="utf-8"):
+        return False, "owner_index_link_missing"
+    expected_pages = set()
+    for record in records:
+        if record.get("scope_kind") == "project":
+            continue
+        page = _scope_page_path(root, record)
+        expected_pages.add(page)
+        if not page.is_file() or page.read_text(encoding="utf-8") != _render_scope(project, record):
+            return False, "coverage_scope_readback_mismatch"
+    for folder_name in ("Modules", "Methods"):
+        folder = root / folder_name
+        if not folder.is_dir():
+            continue
+        for page in folder.glob("*.md"):
+            if page in expected_pages:
+                continue
+            if MANAGED_MARKER in page.read_text(encoding="utf-8", errors="replace"):
+                return False, "stale_managed_scope_page"
+    return True, "verified"
 
 
 def _project_page(project, files, source, recorded_at):
@@ -375,21 +475,35 @@ def _write_obsidian(project, records, vault):
     root.mkdir(parents=True, exist_ok=True)
     project_records = [record for record in records if record.get("project_key") == project["key"]]
     _atomic_write(root / "index.md", _render_index(project, project_records))
+    expected_pages = set()
     for record in project_records:
         if record.get("scope_kind") == "project":
             continue
-        folder = root / ("Modules" if record.get("scope_kind") == "module" else "Methods")
-        slug_value = record.get("module") or record.get("symbol") or "scope"
-        if record.get("scope_kind") == "method":
-            slug_value = f"{record.get('module', 'module')}--{record.get('symbol', 'method')}"
-        _atomic_write(folder / f"{_slug(slug_value)}.md", _render_scope(project, record))
+        page = _scope_page_path(root, record)
+        expected_pages.add(page)
+        _atomic_write(page, _render_scope(project, record))
+    removed_stale_pages = []
+    for folder_name in ("Modules", "Methods"):
+        folder = root / folder_name
+        if not folder.is_dir():
+            continue
+        for page in folder.glob("*.md"):
+            if page in expected_pages:
+                continue
+            if MANAGED_MARKER in page.read_text(encoding="utf-8", errors="replace"):
+                page.unlink()
+                removed_stale_pages.append(page.relative_to(vault_path).as_posix())
     linked = _project_index_link(vault_path, owner, root)
+    readback_verified, readback_reason = _verify_obsidian_projection(project, project_records, vault_path)
     return {
         "status": "written",
         "written": True,
         "root": root.relative_to(vault_path).as_posix(),
         "index": (root / "index.md").relative_to(vault_path).as_posix(),
         "project_index_linked": linked,
+        "readback_verified": readback_verified,
+        "readback_reason": readback_reason,
+        "removed_stale_pages": removed_stale_pages,
     }
 
 
@@ -416,10 +530,11 @@ def ensure_coverage(project_root, module, *, symbol="", symbols=None, files=None
         if not is_module_scope_symbol(method)
     )
     target_store = Path(store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE") or DEFAULT_STORE).expanduser()
-    _append_records(target_store, events)
-    merged = _merge_records(_read_records(target_store))
-    project_records = [record for record in merged.values() if record.get("project_key") == project["key"]]
-    obsidian = _write_obsidian(project, project_records, vault)
+    with _locked_append(target_store):
+        _append_records_unlocked(target_store, events)
+        merged = _merge_records(_read_records(target_store))
+        project_records = [record for record in merged.values() if record.get("project_key") == project["key"]]
+        obsidian = _write_obsidian(project, project_records, vault)
     validation = validate_coverage(project_root, module, symbols=requested_symbols, files=normalized_files, require_method=strict, store=target_store)
     validation.update({"local_store": target_store.name, "obsidian": obsidian, "source": source})
     return validation
@@ -464,6 +579,84 @@ def coverage_status(project_root=None, *, store=None):
     return {"status": "ready", "local_store": target_store.name, "records": len(records), "scopes": sorted({record.get("scope_kind", "") for record in records.values()})}
 
 
+def merge_coverage_store(project_root, source_store, *, store=None, vault=None, delete_source=False):
+    """Merge one proven rogue coverage ledger into the canonical authority and reproject it."""
+    project = project_change_memory._project_identity(project_root)
+    source_path = Path(source_store).expanduser().resolve()
+    target_path = Path(store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE") or DEFAULT_STORE).expanduser().resolve()
+    if source_path == target_path:
+        raise CoverageError("source-store must differ from the canonical target store")
+    if delete_source and not vault:
+        raise CoverageError("delete-source requires a configured vault for linked projection readback")
+
+    source_records = []
+    source_scope_keys = set()
+    target_scope_keys = set()
+    merged_verified = False
+    projection_verified = False
+    source_deleted = False
+    source_digest = ""
+    obsidian = {"status": "unavailable", "written": False, "reason": "vault_not_configured"}
+    with ExitStack() as locks:
+        for path in sorted((source_path, target_path), key=lambda value: value.as_posix()):
+            locks.enter_context(_locked_append(path))
+        source_digest, source_records = _read_strict_snapshot(source_path)
+        project_source_records = [record for record in source_records if record.get("project_key") == project["key"]]
+        if not project_source_records:
+            raise CoverageError("source-store has no scopes for the requested project")
+        if delete_source and len(project_source_records) != len(source_records):
+            raise CoverageError("delete-source requires every source-store scope to belong to the requested project")
+        source_merged = _merge_records(project_source_records)
+        target_before = _merge_records(_read_records(target_path))
+        additions = [record for key, record in source_merged.items() if not _record_subsumes(target_before.get(key), record)]
+        if additions:
+            _append_records_unlocked(target_path, additions)
+        target_records = _merge_records(_read_records(target_path))
+        project_records = [record for record in target_records.values() if record.get("project_key") == project["key"]]
+        source_scope_keys = set(source_merged)
+        target_scope_keys = {record.get("scope_key") for record in project_records if record.get("scope_key")}
+        merged_verified = all(_record_subsumes(target_records.get(key), record) for key, record in source_merged.items())
+        obsidian = _write_obsidian(project, project_records, vault)
+        projection_verified = bool(
+            obsidian.get("written") is True
+            and obsidian.get("project_index_linked") is True
+            and obsidian.get("readback_verified") is True
+        )
+        current_digest, current_source_records = _read_strict_snapshot(source_path)
+        source_unchanged = current_digest == source_digest and current_source_records == source_records
+        if not merged_verified:
+            raise CoverageError("merged coverage did not pass full target readback")
+        if delete_source and not projection_verified:
+            raise CoverageError("delete-source requires linked rendered projection readback")
+        if delete_source and not source_unchanged:
+            raise CoverageError("source-store changed during migration; source was preserved")
+        if delete_source:
+            source_path.unlink()
+            source_deleted = not source_path.exists()
+            if not source_deleted:
+                raise CoverageError("source-store cleanup did not complete")
+
+    if source_deleted:
+        source_lock = Path(f"{source_path}.lock")
+        if not source_path.exists() and source_lock.exists():
+            source_lock.unlink()
+        source_deleted = not source_path.exists()
+    return {
+        "status": "ready",
+        "project_key": project["key"],
+        "source_records": len(source_records),
+        "source_digest": source_digest,
+        "merged_scope_count": len(source_scope_keys),
+        "target_scope_count": len(target_scope_keys),
+        "merge_verified": merged_verified,
+        "projection_verified": projection_verified,
+        "source_deleted": source_deleted,
+        "source_lock_deleted": source_deleted and not Path(f"{source_path}.lock").exists(),
+        "local_store": target_path.name,
+        "obsidian": obsidian,
+    }
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Enforce project/module/method memory coverage")
     parser.add_argument("--store", type=Path)
@@ -487,6 +680,10 @@ def parse_args(argv=None):
     validate.add_argument("--require-method", action="store_true")
     status = commands.add_parser("status")
     status.add_argument("--project-root", type=Path)
+    merge = commands.add_parser("merge-store")
+    merge.add_argument("--project-root", type=Path, required=True)
+    merge.add_argument("--source-store", type=Path, required=True)
+    merge.add_argument("--delete-source", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -497,6 +694,8 @@ def main(argv=None):
             output = ensure_coverage(args.project_root, args.module, symbols=args.symbol, files=args.file, task_type=args.task_type, code_kind=args.code_kind, operation=args.operation, source=args.source, require_method=args.require_method, vault=args.vault, store=args.store)
         elif args.command == "validate":
             output = validate_coverage(args.project_root, args.module, symbols=args.symbol, files=args.file, require_method=args.require_method, store=args.store)
+        elif args.command == "merge-store":
+            output = merge_coverage_store(args.project_root, args.source_store, store=args.store, vault=args.vault, delete_source=args.delete_source)
         else:
             output = coverage_status(args.project_root, store=args.store)
     except (CoverageError, ValueError, OSError) as error:

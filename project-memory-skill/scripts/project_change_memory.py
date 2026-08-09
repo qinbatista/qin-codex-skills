@@ -26,6 +26,16 @@ CHANGE_KIND_VALUES = ("add", "edit", "rename", "move", "delete", "mixed")
 VERIFICATION_STATUS_VALUES = ("passed", "partial", "failed", "not-run")
 CANONICAL_KNOWLEDGE_FOLDER = "Knowledge"
 LEGACY_KNOWLEDGE_FOLDER = "KnowledgeAreas"
+PLACEHOLDER_SEMANTIC_PATTERN = re.compile(
+    r"^(?:(?:tmp|temp|temporary|test|dummy|placeholder|todo|tbd|unknown|null|none|n/?a)"
+    r"(?:[\s._-]+(?:record|value|entry|result|reason|summary|module|change|memory))*)$",
+    re.IGNORECASE,
+)
+RECORD_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[a-f0-9]{12}$")
+PROJECT_OWNER_ALIASES = {
+    "global-codex-skills": "Global Codex Skills",
+    "qin-codex-skills": "Global Codex Skills",
+}
 SENSITIVE_PATTERNS = (
     re.compile(r"(?<![A-Za-z0-9_-])(?:sk|rk|pk)-[A-Za-z0-9_-]{12,}"),
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s,;]{8,}", re.IGNORECASE),
@@ -93,6 +103,25 @@ def _single_line(value, field_name, required=True, max_length=1200):
     return text[:max_length]
 
 
+def _semantic_line(value, field_name, max_length=1200):
+    text = _single_line(value, field_name, max_length=max_length)
+    if PLACEHOLDER_SEMANTIC_PATTERN.fullmatch(text):
+        raise ValueError(f"{field_name} contains placeholder-only semantics")
+    return text
+
+
+def _record_has_placeholder_semantics(record):
+    return any(
+        PLACEHOLDER_SEMANTIC_PATTERN.fullmatch(str(record.get(field_name, "")).strip())
+        for field_name in ("module", "summary", "reason", "result")
+    )
+
+
+def _canonical_project_owner(value):
+    normalized = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+    return PROJECT_OWNER_ALIASES.get(normalized, str(value or "").strip())
+
+
 def _slug(value, fallback="item"):
     normalized = re.sub(r"[^a-z0-9._-]+", "-", str(value).strip().lower()).strip("-._")
     return normalized[:80] or f"{fallback}-{hashlib.sha256(str(value).encode()).hexdigest()[:10]}"
@@ -108,7 +137,7 @@ def _project_identity(project_root):
         "name": name,
         "root": ".",
         "key": f"{_slug(name, 'project')}-{path_hash}",
-        "owner": _registered_owner(root) or "",
+        "owner": _canonical_project_owner(_registered_owner(root) or ""),
     }
 
 
@@ -244,6 +273,40 @@ def _append_jsonl(path, record):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def _replace_jsonl(path, records):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        replacement = Path(handle.name)
+        for record in records:
+            handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+    replacement.replace(path)
+
+
+def _invalidated_record_ids(store_path):
+    return {
+        item.get("record_id", "")
+        for item in _read_records(Path(store_path) / "invalidations.jsonl")
+        if item.get("record_id")
+    }
+
+
+def _active_local_records(store_path):
+    invalidated = _invalidated_record_ids(store_path)
+    return [
+        record
+        for record in _read_records(Path(store_path) / "index.jsonl")
+        if record.get("id") not in invalidated
+    ]
 
 
 def _projection_receipts(store_path):
@@ -479,12 +542,14 @@ def _record_matches_project(record, project):
     record_key = record_project.get("key") or record.get("project_key")
     if project_key and record_key == project_key:
         return True
-    owner = project.get("owner") or _registered_owner(project.get("root", ""))
+    owner = _canonical_project_owner(project.get("owner") or _registered_owner(project.get("root", "")))
     if not owner:
         return False
-    if record.get("project_owner") == owner:
+    if _canonical_project_owner(record.get("project_owner")) == owner:
         return True
-    if record_project.get("owner") == owner:
+    if _canonical_project_owner(record_project.get("owner")) == owner:
+        return True
+    if _canonical_project_owner(record_project.get("name")) == owner:
         return True
     record_root = record_project.get("root")
     if record_root and _registered_owner(record_root) == owner:
@@ -606,6 +671,12 @@ def _write_root_first_memory(record, vault_path):
     if not callable(getattr(runtime, "import_legacy", None)):
         raise RuntimeError("Root-first AI memory runtime must provide import_legacy for same-ID projection")
     projection_record = dict(record)
+    projection_record["project"] = dict(record.get("project", {}))
+    projection_owner = _canonical_project_owner(
+        projection_record["project"].get("owner") or projection_record["project"].get("name")
+    )
+    if projection_owner:
+        projection_record["project"]["owner"] = projection_owner
     if record.get("supersedes"):
         projection_record["decisions"] = [*record["decisions"], f"Memory correction supersedes project result record {record['supersedes']}."]
     with tempfile.TemporaryDirectory(prefix="codex-project-memory-") as temporary_directory:
@@ -614,12 +685,12 @@ def _write_root_first_memory(record, vault_path):
         output = runtime.import_legacy(source)
     runtime.render_views()
     event_id = record["id"]
-    project = record.get("project", {}).get("owner") or record.get("project", {}).get("name") or "Unknown"
+    project = projection_owner or "Unknown"
     events_path = Path(getattr(runtime, "EVENTS_PATH", vault_path / "AI Memory" / "events.jsonl"))
     events = _read_records(events_path)
     read_back_verified = bool(event_id) and any(
         event.get("event_id") == event_id
-        and event.get("project") == project
+        and _canonical_project_owner(event.get("project")) == project
         and any(change.get("module") == record["module"] for change in event.get("module_changes", []))
         and all(event.get(field) == projection_record.get(field) for field in ("summary", "reason", "result", "verification_status", "files", "verification", "decisions", "risks", "supersedes"))
         for event in events
@@ -678,11 +749,11 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     project = _project_identity(project_root)
     timestamp = recorded_at or datetime.now(timezone.utc)
     working_line = _derive_working_line(project_root)
-    normalized_module = _single_line(module, "module", max_length=160)
+    normalized_module = _semantic_line(module, "module", max_length=160)
     normalized_files = _normalize_files(resolved_project_root, files)
     normalized_symbols = [_single_line(value, "symbol", required=False, max_length=240) for value in (symbols or []) if str(value or "").strip()]
     scope_fields = _memory_scope(project["key"], normalized_module, task_name, task_group, session_id)
-    record = {"schema_version": SCHEMA_VERSION, "id": "", "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"), "project": project, "module": normalized_module, "symbols": normalized_symbols, "scope": scope, "change_kind": change_kind, "summary": _single_line(summary, "summary"), "reason": _single_line(reason, "reason"), "result": _single_line(result, "result"), "verification_status": verification_status, **scope_fields, "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "decisions": [_single_line(value, "decision", max_length=600) for value in (decisions or [])], "risks": [_single_line(value, "risk", max_length=600) for value in (risks or [])], "files": normalized_files, "supersedes": _single_line(supersedes, "supersedes", required=False, max_length=120)}
+    record = {"schema_version": SCHEMA_VERSION, "id": "", "recorded_at": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"), "project": project, "module": normalized_module, "symbols": normalized_symbols, "scope": scope, "change_kind": change_kind, "summary": _semantic_line(summary, "summary"), "reason": _semantic_line(reason, "reason"), "result": _semantic_line(result, "result"), "verification_status": verification_status, **scope_fields, "verification": [_single_line(value, "verification", max_length=600) for value in (verification or [])], "decisions": [_single_line(value, "decision", max_length=600) for value in (decisions or [])], "risks": [_single_line(value, "risk", max_length=600) for value in (risks or [])], "files": normalized_files, "supersedes": _single_line(supersedes, "supersedes", required=False, max_length=120)}
     record["project"]["working_line"] = working_line
     if scope not in SCOPE_VALUES:
         raise ValueError(f"scope must be one of {', '.join(SCOPE_VALUES)}")
@@ -713,7 +784,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     lock_path = store_path / ".lock"
     with lock_path.open("a", encoding="utf-8") as lock_handle:
         _acquire_file_lock(lock_handle)
-        existing_records = _read_records(store_path / "index.jsonl")
+        existing_records = _active_local_records(store_path)
         if record["supersedes"]:
             superseded = next((existing for existing in existing_records if existing.get("id") == record["supersedes"]), None)
             if not superseded:
@@ -759,6 +830,110 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
     return {"status": "written", "record_id": record["id"], "project": project, "files": record["files"], "symbols": record["symbols"], "coverage": coverage, "local": {"written": True, "store": store_path.name, "record": record_path.relative_to(store_path).as_posix()}, "obsidian": obsidian_status, "projection": projection}
 
 
+def remove_invalid_record(project_root, record_id, reason, store=DEFAULT_STORE):
+    """Tombstone and physically remove one proven placeholder-only local record."""
+    if not RECORD_ID_PATTERN.fullmatch(str(record_id or "")):
+        raise ValueError("record-id must be one exact project-change record ID")
+    normalized_reason = _semantic_line(reason, "reason", max_length=600)
+    project = _project_identity(project_root)
+    store_path = Path(store).expanduser().resolve()
+    store_path.mkdir(parents=True, exist_ok=True)
+    lock_path = store_path / ".lock"
+    with lock_path.open("a", encoding="utf-8") as lock_handle:
+        _acquire_file_lock(lock_handle)
+        invalidations = _read_records(store_path / "invalidations.jsonl")
+        prior_invalidation = next(
+            (item for item in reversed(invalidations) if item.get("record_id") == record_id),
+            None,
+        )
+        records = _read_records(store_path / "index.jsonl")
+        record = next((item for item in records if item.get("id") == record_id), None)
+        record_was_present = record is not None
+        if record is None:
+            if not prior_invalidation:
+                raise ValueError("record-id must reference an existing local record")
+            if prior_invalidation.get("project_key") != project.get("key") and (
+                not project.get("owner")
+                or _canonical_project_owner(prior_invalidation.get("project_owner")) != project.get("owner")
+            ):
+                raise ValueError("record-id must reference the requested project")
+            tombstone = prior_invalidation
+        else:
+            if not _record_matches_project(record, project):
+                raise ValueError("record-id must reference the requested project")
+            if not _record_has_placeholder_semantics(record):
+                raise ValueError("remove-invalid only accepts a placeholder-only semantic record")
+            successors = [item.get("id") for item in records if item.get("supersedes") == record_id]
+            if successors:
+                raise ValueError("remove-invalid cannot remove a record referenced by a superseding record")
+
+            tombstone = prior_invalidation or {
+                "schema_version": 1,
+                "record_id": record_id,
+                "invalidated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "project_key": record.get("project", {}).get("key", ""),
+                "project_owner": _canonical_project_owner(
+                    record.get("project", {}).get("owner") or record.get("project", {}).get("name")
+                ),
+                "module": record.get("module", ""),
+                "reason": normalized_reason,
+                "semantic_fingerprint": record.get("fingerprint", ""),
+            }
+            if prior_invalidation is None:
+                _append_jsonl(store_path / "invalidations.jsonl", tombstone)
+
+        rewritten_indexes = []
+        removed_rows = 0
+        for index_path in sorted(store_path.rglob("*.jsonl")):
+            if index_path == store_path / "invalidations.jsonl":
+                continue
+            rows = _read_records(index_path)
+            filtered = [
+                item
+                for item in rows
+                if item.get("id") != record_id and item.get("record_id") != record_id
+            ]
+            if len(filtered) == len(rows):
+                continue
+            removed_rows += len(rows) - len(filtered)
+            if filtered or index_path in {store_path / "index.jsonl", store_path / "projections.jsonl"}:
+                _replace_jsonl(index_path, filtered)
+            else:
+                index_path.unlink()
+            rewritten_indexes.append(index_path.relative_to(store_path).as_posix())
+
+        removed_record_files = []
+        for record_path in sorted((store_path / "projects").rglob(f"{record_id}.json")) if (store_path / "projects").is_dir() else []:
+            payload = json.loads(record_path.read_text(encoding="utf-8"))
+            if payload.get("id") != record_id:
+                continue
+            record_path.unlink()
+            removed_record_files.append(record_path.relative_to(store_path).as_posix())
+
+        projects_root = store_path / "projects"
+        if projects_root.is_dir():
+            for directory in sorted(
+                (path for path in projects_root.rglob("*") if path.is_dir()),
+                key=lambda path: len(path.parts),
+                reverse=True,
+            ):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+
+    return {
+        "status": "removed-invalid" if record_was_present or removed_rows else "already-removed",
+        "record_id": record_id,
+        "project_owner": tombstone["project_owner"],
+        "rewritten_indexes": rewritten_indexes,
+        "removed_rows": removed_rows,
+        "removed_record_files": removed_record_files,
+        "reconcile_blocked": record_id in _invalidated_record_ids(store_path),
+        "local": {"written": True, "store": store_path.name},
+    }
+
+
 def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE, include_ambiguous=False, task_name="", session_id="", task_group="", include_superseded=False, symbols=None):
     project = _project_identity(project_root) if project_root else None
     normalized_files = _normalize_files(project_root, files) if project_root and files else list(files or [])
@@ -767,7 +942,7 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
     scope = _memory_scope(project["key"], module or "project-wide", task_name, task_group, session_id) if project else {"codex_session_key": "", "task_scope_key": "", "task_group_key": ""}
     terms = [term for term in re.findall(r"[\w.+-]+", query.lower()) if len(term) >= 2][:12]
     store_path = Path(store).expanduser().resolve()
-    records = _read_records(store_path / "index.jsonl")
+    records = _active_local_records(store_path)
     latest_projections = _latest_projection_receipts(store_path)
     superseded_by = {}
     for candidate in records:
@@ -804,7 +979,7 @@ def reconcile_projections(project_root, record_id="", store=DEFAULT_STORE, vault
     resolved_vault = _resolve_vault(vault, resolved_project_root)
     project = _project_identity(resolved_project_root)
     store_path = Path(store).expanduser().resolve()
-    candidates = [record for record in _read_records(store_path / "index.jsonl") if _record_matches_project(record, project)]
+    candidates = [record for record in _active_local_records(store_path) if _record_matches_project(record, project)]
     if record_id:
         candidates = [record for record in candidates if record.get("id") == record_id]
         if not candidates:
@@ -827,7 +1002,7 @@ def reconcile_projections(project_root, record_id="", store=DEFAULT_STORE, vault
 
 def memory_status(store=DEFAULT_STORE, vault=None):
     store_path = Path(store).expanduser().resolve()
-    records = _read_records(store_path / "index.jsonl")
+    records = _active_local_records(store_path)
     vault_path = _resolve_vault(vault)
     return {"status": "ready", "local": {"store": store_path.name, "records": len(records)}, "obsidian": {"status": "available" if vault_path else "unavailable", "vault": vault_path.name if vault_path else ""}}
 
@@ -870,6 +1045,10 @@ def main():
     reconcile_parser = subparsers.add_parser("reconcile")
     reconcile_parser.add_argument("--project-root", type=Path, required=True)
     reconcile_parser.add_argument("--record-id", default="")
+    remove_invalid_parser = subparsers.add_parser("remove-invalid")
+    remove_invalid_parser.add_argument("--project-root", type=Path, required=True)
+    remove_invalid_parser.add_argument("--record-id", required=True)
+    remove_invalid_parser.add_argument("--reason", required=True)
     subparsers.add_parser("status")
     args = parser.parse_args()
     if args.command == "search":
@@ -878,6 +1057,8 @@ def main():
         output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault, None, args.task_name, args.session_id, args.task_group, symbols=args.symbol)
     elif args.command == "reconcile":
         output = reconcile_projections(args.project_root, args.record_id, args.store, args.vault)
+    elif args.command == "remove-invalid":
+        output = remove_invalid_record(args.project_root, args.record_id, args.reason, args.store)
     else:
         output = memory_status(args.store, args.vault)
     print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
