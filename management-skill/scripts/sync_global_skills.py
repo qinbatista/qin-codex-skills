@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "management-skill-sync"
 DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
+GLOBAL_REGRESSION_GATE = Path(__file__).resolve().parent / "global_skill_regression_gate.py"
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
 *.pyc
@@ -139,7 +141,7 @@ SKILL_SUMMARIES = {
     "project-memory-skill": "Recalls and records project changes with mandatory project/module/method coverage plus concrete file evidence, using a private local authority and optional native Obsidian projection.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
     "verify-skill": "Real Verify runs in Ending Task after the completed result is presented and applies its verdict to the original receipt-backed result attempt.",
-    "management-skill": "Handles Codex profile operations and global skill GitHub sync while preserving local private folders, local route history, and model-experience files from public mirrors.",
+    "management-skill": "Handles Codex profile operations and source-first global Skill deployment/publication behind a numbered retained-capability regression gate.",
 }
 CHINESE_SKILL_SUMMARIES = {
     "task-analyze-skill": "显式路由、benchmark 和维护策略：紧凑 bootstrap 把合格普通生产任务交给已保存的上下文质量档；完整 skill 负责策略和成本准入图谱。",
@@ -149,7 +151,7 @@ CHINESE_SKILL_SUMMARIES = {
     "project-memory-skill": "强制按项目、功能模块和方法建立覆盖，再用具体文件证据回溯与记录修改；本地私有记录为权威来源，Obsidian 为可选原生投影。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
     "verify-skill": "完成的主结果先立即展示；Real Verify 之后在 Ending Task 中执行，并把判定回填到原始的 receipt-backed 结果尝试。",
-    "management-skill": "处理 Codex profile 操作和全局 skill GitHub 同步，不暴露私人数据，并保留本地私有路由历史。",
+    "management-skill": "处理 Codex profile 操作，以及由编号化全能力非回归门禁保护的全局 Skill 本地部署和 GitHub 发布。",
 }
 SKILL_CONTENTS = {
     "task-analyze-skill": [
@@ -202,6 +204,7 @@ SKILL_CONTENTS = {
     ],
     "management-skill": [
         ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
+        ("Retained-capability gate", "Block local deployment and GitHub publication until every numbered retained behavior passes current source, deployed, validator, platform, parity, and real-sample checks."),
         ("GitHub Sync", "Run preuse checks, public-safety scan, sync, push, and remote hash verification for both mirrors."),
         ("Privacy-Safe Management", "Auth, tokens, cookies, raw prompts/results, receipts, logs, caches, and private learning stay local."),
     ],
@@ -257,6 +260,7 @@ CHINESE_SKILL_CONTENTS = {
     ],
     "management-skill": [
         ("Codex Switch", "管理本地 Codex auth profile 与确认后的账号切换。"),
+        ("全能力非回归门禁", "每次发布都按编号复测全部保留能力；source、deployed、validator、platform、parity 与真实样例未全过时禁止本地部署和 GitHub 发布。"),
         ("GitHub Sync", "对两个镜像运行 preuse、公开安全扫描、sync、push 和远端 hash 校验。"),
         ("隐私安全", "auth、token、cookie、原始 prompt/result、receipt、log、cache 与私人学习保持本地。"),
     ],
@@ -265,6 +269,31 @@ CHINESE_SKILL_CONTENTS = {
 
 def run_command(command, cwd=None):
     return subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True)
+
+
+def run_release_gate(source_dir, skills_dir, mode):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = Path(skills_dir).expanduser().resolve()
+    if not GLOBAL_REGRESSION_GATE.is_file():
+        raise RuntimeError(f"Refusing release because the retained-capability gate is unavailable: {GLOBAL_REGRESSION_GATE}")
+    command = [
+        sys.executable,
+        str(GLOBAL_REGRESSION_GATE),
+        "check",
+        "--project-root",
+        str(source_dir),
+        "--skills-dir",
+        str(skills_dir),
+        "--mode",
+        mode,
+    ]
+    completed = subprocess.run(command, cwd=source_dir, text=True, capture_output=True, check=False, timeout=3600)
+    if completed.stdout.strip():
+        print(completed.stdout.strip())
+    if completed.returncode != 0:
+        details = completed.stderr.strip() or completed.stdout.strip() or "no gate output"
+        raise RuntimeError(f"Refusing release because the retained-capability regression gate failed in {mode} mode:\n{details}")
+    return completed
 
 
 @contextmanager
@@ -881,6 +910,7 @@ def print_lines(title, lines):
 
 
 def mirror_repository_to_local(repository_dir, skills_dir):
+    run_release_gate(repository_dir, skills_dir, "source")
     assert_no_symlinks([repository_dir], "repository tree")
     assert_repository_skill_set(repository_dir)
     remote_paths = skill_directories(repository_dir)
@@ -897,6 +927,7 @@ def mirror_repository_to_local(repository_dir, skills_dir):
             changed_names.append(path.name)
     if deploy_global_agents(repository_dir, skills_dir):
         print("Deployed the remote Task Lifecycle contract into the local global AGENTS.md.")
+    run_release_gate(repository_dir, skills_dir, "deployed")
     return changed_names
 
 
@@ -910,6 +941,7 @@ def deploy(source_dir, skills_dir):
     assert_public_safe(skill_paths)
     checker_module = load_skill_platform_checker(source_dir)
     checker_module.assert_skill_platform_safe(source_dir, source_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
+    run_release_gate(source_dir, skills_dir, "source")
     skills_dir.mkdir(parents=True, exist_ok=True)
     changed_names = []
     for path in skill_paths:
@@ -924,6 +956,7 @@ def deploy(source_dir, skills_dir):
         print("Deployed the repository Task Lifecycle contract into the local global AGENTS.md.")
     if not changed_names and not agents_changed:
         print("Local global skills already match the repository source.")
+    run_release_gate(source_dir, skills_dir, "deployed")
     return changed_names
 
 
@@ -981,6 +1014,8 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
 
 
 def push_global_snapshot(repository, skills_dir, message, dry_run):
+    if not dry_run:
+        raise RuntimeError("Installed global Skills are not a publication source. Publish the maintained repository with the push command.")
     with temporary_workspace("qin-codex-skills-") as sandbox:
         repository_dir = clone_repository(repository, sandbox)
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
@@ -1018,7 +1053,7 @@ def source_repository_root(source_dir):
 
 def publishable_source_path(relative_path):
     relative_path = Path(relative_path)
-    if relative_path.as_posix() in {"README.md", "README.zh.md"}:
+    if relative_path.as_posix() in {"AGENTS.md", "README.md", "README.zh.md"}:
         return True
     if not relative_path.parts or relative_path.parts[0] not in APPROVED_GLOBAL_SKILL_NAMES:
         return False
@@ -1046,6 +1081,23 @@ def assert_publishable_staged_paths(source_dir):
     return staged_paths
 
 
+def assert_publishable_worktree_paths(source_dir):
+    output = run_command(["git", "status", "--porcelain", "--untracked-files=all"], cwd=source_dir).stdout
+    paths = []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        value = line[3:]
+        if " -> " in value:
+            value = value.split(" -> ", 1)[1]
+        paths.append(Path(value.strip('"')))
+    refused = [path for path in paths if not publishable_source_path(path)]
+    if refused:
+        details = "\n".join(f"- {path.as_posix()}" for path in refused)
+        raise RuntimeError(f"Refusing publication while unrelated or non-public worktree paths are dirty:\n{details}")
+    return paths
+
+
 def render_source_readmes(source_dir, skill_paths, dry_run=False):
     expected = {
         source_dir / "README.md": build_readme(skill_paths, language="en"),
@@ -1065,7 +1117,7 @@ def remote_branch_head(source_dir, branch_name):
     return output.split()[0] if output else ""
 
 
-def push(repository, source_dir, message, dry_run):
+def push(repository, source_dir, message, dry_run, skills_dir=None):
     source_dir = source_repository_root(source_dir)
     skill_paths = skill_directories(source_dir)
     assert_approved_global_skill_set(skill_paths)
@@ -1075,6 +1127,12 @@ def push(repository, source_dir, message, dry_run):
     assert_public_safe(skill_paths)
     checker_module = load_skill_platform_checker(source_dir)
     checker_module.assert_skill_platform_safe(source_dir, source_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
+    agents_path = source_dir / "AGENTS.md"
+    if not agents_path.is_file() or secret_value_issue(agents_path):
+        raise RuntimeError("Refusing publication because the root AGENTS.md is missing or contains secret-like content")
+    assert_publishable_worktree_paths(source_dir)
+    if not dry_run:
+        run_release_gate(source_dir, skills_dir or Path.home() / ".codex" / "skills", "release")
     readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=dry_run)
     branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
     if not branch_name:
@@ -1092,7 +1150,7 @@ def push(repository, source_dir, message, dry_run):
         return
     if readme_changes:
         print_lines("Rendered source README files:", readme_changes)
-    run_command(["git", "add", "--", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER], cwd=source_dir)
+    run_command(["git", "add", "--", "AGENTS.md", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER], cwd=source_dir)
     staged_paths = assert_publishable_staged_paths(source_dir)
     if staged_paths:
         run_command(["git", "commit", "-m", message], cwd=source_dir)
@@ -1105,6 +1163,9 @@ def push(repository, source_dir, message, dry_run):
             f"Remote verification failed after push: local {local_head}, remote {observed_remote_head or 'missing'}"
         )
     write_sync_state(DEFAULT_STATE_FILE, repository, local_head, snapshot_hash(skill_paths), snapshot_hash(skill_paths))
+    remaining = run_command(["git", "status", "--porcelain", "--untracked-files=all"], cwd=source_dir).stdout.strip()
+    if remaining:
+        raise RuntimeError(f"Publication reached the remote but the maintained source worktree is not clean:\n{remaining}")
     print(f"Pushed maintained source {local_head} to {repository}:{branch_name} and verified the remote hash.")
 
 
@@ -1125,7 +1186,7 @@ def sync(repository, skills_dir, message):
         remote_changed = remote_head != state.get("remote_head") or remote_hash != state.get("remote_hash")
         if local_changed and not remote_changed:
             print("Local global skills are newer than the last synced state. Pushing to GitHub.")
-            push_global_snapshot(repository, skills_dir, message, False)
+            raise RuntimeError("Installed global Skills changed. Deploy the maintained repository source, then publish it with push.")
         elif remote_changed and not local_changed:
             print("Remote global skills are newer than the last synced state. Pulling into ~/.codex/skills.")
             changed_names = mirror_repository_to_local(repository_dir, skills_dir)
@@ -1133,7 +1194,7 @@ def sync(repository, skills_dir, message):
             print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
         elif latest_local_timestamp(local_paths) >= repository_timestamp(repository_dir):
             print("Both sides differ; local files are newest. Pushing to GitHub.")
-            push_global_snapshot(repository, skills_dir, message, False)
+            raise RuntimeError("Installed global Skills are not a publication source. Reconcile the maintained source explicitly.")
         else:
             print("Both sides differ; remote commit is newest. Pulling into ~/.codex/skills.")
             changed_names = mirror_repository_to_local(repository_dir, skills_dir)
@@ -1181,7 +1242,7 @@ def main():
         else:
             print("Repository source skills match the deployed global skills.")
         print("Local global AGENTS.md matches the installed Task Lifecycle asset." if parity["status"] == "pass" else f"Local deployment mismatch: {parity['reason']} ({parity['target']})")
-        push(args.repo, source_dir, "Update global Codex skills", True)
+        push(args.repo, source_dir, "Update global Codex skills", True, status_skills_dir)
         if parity["status"] != "pass" or deployment_differences:
             raise SystemExit(1)
     elif args.command == "deploy":
@@ -1193,7 +1254,7 @@ def main():
         args.output.expanduser().resolve().write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
         print(f"Rendered public README: {args.output.expanduser().resolve()}")
     elif args.command == "push":
-        push(args.repo, args.source_dir, args.message, False)
+        push(args.repo, args.source_dir, args.message, False, args.skills_dir)
 
 
 if __name__ == "__main__":

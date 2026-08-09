@@ -152,7 +152,10 @@ def audit_skill(skill_dir, skills_root=None):
         if resolved_path and not resolved_path.exists():
             result["errors"].append(f"missing linked file: {raw_link}")
     for raw_path in command_paths(text):
-        resolved_path = resolve_reference(raw_path.rstrip(".,)"), skill_dir, skills_root)
+        clean_path = raw_path.rstrip(".,)")
+        if clean_path != raw_path and not Path(clean_path).suffix:
+            continue
+        resolved_path = resolve_reference(clean_path, skill_dir, skills_root)
         if resolved_path and not resolved_path.exists():
             result["errors"].append(f"missing command/reference path: {raw_path}")
 

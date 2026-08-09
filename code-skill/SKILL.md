@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill as the universal before/during-writing process gate for every code creation, repair, feature, refactor, or test-writing task in any programming language, including when another Skill owns implementation. In registered domains, it also owns implementation, edit, execution, debug, refactor, authored tests/probes, and domain reasoning beyond supplied scope."
+description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill as the universal before/during-writing process gate for every code creation, repair, feature, refactor, or test-writing task in any programming language, including when another Skill owns implementation. Every Unity game C# writing node must also load the global Unity Game Code Structure Design reference; a project may tighten that Controller/Manager/ScriptableObject contract but cannot silently weaken it. In registered domains, this skill also owns implementation, edit, execution, debug, refactor, authored tests/probes, and domain reasoning beyond supplied scope."
 ---
 
 # Code Skill
@@ -33,7 +33,7 @@ Do not load it for an exact bounded read-only source lookup/audit that supplies 
 |---|---|---|
 | Python | `python` | `references/python-rules.md` |
 | Plain non-Unity C# | `csharp` | `references/csharp-rules.md` |
-| Unity C# | `unity_csharp` | `references/csharp-rules.md` then `references/unity-csharp-rules.md` |
+| Unity C# | `unity_csharp` | `references/csharp-rules.md`, `references/unity-csharp-rules.md`, then `references/unity-game-code-structure-design.md` for game runtime code |
 | Legacy code with no domain | `code_unspecified` | migration/history-only; do not use for new work |
 
 Any new active code domain is registry-owned by `routing_policy.py::EXECUTION_DOMAINS` and follows the [extension guide](../task-analyze-skill/references/router-extension-guide.md). Do not infer a new domain from a similar name.
@@ -48,7 +48,7 @@ Read only what the inline request or admitted node needs:
 - any registered-domain change that affects rendered UI, layout, controls, styling, editor chrome, or runtime HUD: load `references/coding-approach.md` and apply its Mandatory Basic UI Change Gate before editing;
 - Python: `references/python-rules.md`;
 - plain C#: `references/csharp-rules.md`;
-- Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`;
+- Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`; every Unity game C# create/edit/repair/refactor/test node also reads `references/unity-game-code-structure-design.md` after the nearest project `AGENTS.md` and before selecting an ownership pattern;
 - prompt-in-code: always load the global `prompt-skill` first, then use `references/prompt-generation.md` for executable-string and language-specific details; a missing or skipped `prompt-skill` is a prompt-task routing failure, not a fallback condition;
 - code or commands that may execute on a developer or host operating system: load the global `cross-platform-execution` skill before editing, classify the project execution boundary, and apply its platform contract;
 - safe repeated/parallel registered-code work: `references/parallelization.md`;

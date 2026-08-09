@@ -1,6 +1,6 @@
 # Unity C# rules
 
-Use `execution_domain=unity_csharp` in routing evidence for Unity C# work. Unity uses this file plus [`csharp-rules.md`](csharp-rules.md); the general rules apply unless a Unity-specific rule below is tighter. This domain shares `code-skill` with plain C# and Python but is not interchangeable with their evidence keys.
+Use `execution_domain=unity_csharp` in routing evidence for Unity C# work. Unity uses this file plus [`csharp-rules.md`](csharp-rules.md); the general rules apply unless a Unity-specific rule below is tighter. Every Unity game C# create/edit/repair/refactor/test node also reads [`unity-game-code-structure-design.md`](unity-game-code-structure-design.md) after the nearest project `AGENTS.md`. A project may refine paths, bootstrap, naming, and tighter ownership, but it cannot silently weaken the global Controller/Manager/ScriptableObject core. This domain shares `code-skill` with plain C# and Python but is not interchangeable with their evidence keys.
 
 Apply these rules for Unity projects and C# code, including MonoBehaviours, ScriptableObjects, managers, gameplay systems, runtime scripts, reviews, explanations, refactors, and performance work.
 
@@ -17,6 +17,9 @@ Apply these rules for Unity projects and C# code, including MonoBehaviours, Scri
 - Then briefly explain what changed and why in 1-3 short sentences unless the user asks for code only.
 
 ## Unity Structure
+
+- Apply the game-code structure reference before choosing Factory, Observer, Object Pool, State, Command, Prototype, Singleton, or a related pattern. Patterns solve a demonstrated lifecycle or coordination need; they are never required ceremony.
+- Keep GameObject-bound local behavior in named Controllers and feature-wide lifecycle coordination in single-instance Managers. Every Manager functional/tuning value and Controller configuration comes from the owning ScriptableObject; a project may tighten this boundary but does not replace it with Manager-owned tuning.
 
 - Use `Awake()` for data and component initialization owned by the script, such as `Rigidbody`, `Collider`, `Animator`, and internal fields.
 - Use `Start()` for work that depends on other scripts, ScriptableObjects, services, or external references.

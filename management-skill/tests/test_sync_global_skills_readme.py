@@ -84,6 +84,11 @@ def svg_bounds_issues(svg_path):
 
 
 class SyncGlobalSkillsReadmeTest(unittest.TestCase):
+    def setUp(self):
+        self.release_gate_patcher = mock.patch.object(sync_global_skills, "run_release_gate")
+        self.release_gate = self.release_gate_patcher.start()
+        self.addCleanup(self.release_gate_patcher.stop)
+
     def primary_skill_paths(self):
         return [SKILLS_DIR / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]
 
@@ -773,6 +778,16 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertTrue(unrelated.is_file())
             self.assertEqual(global_agents.read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
+            self.assertEqual([call.args[2] for call in self.release_gate.call_args_list], ["source", "deployed"])
+
+    def test_deploy_gate_failure_precedes_every_target_write(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            self.release_gate.side_effect = RuntimeError("regression failed")
+            with self.assertRaisesRegex(RuntimeError, "regression failed"):
+                sync_global_skills.deploy(SKILLS_DIR, target_dir)
+            self.assertFalse(target_dir.exists())
+            self.assertFalse((target_dir.parent / "AGENTS.md").exists())
 
     def test_deploy_cli_accepts_skills_dir_after_subcommand(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -812,10 +827,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             sync_global_skills.DEFAULT_SOURCE_DIR,
             "source-first smoke",
             False,
+            Path.home() / ".codex" / "skills",
         )
 
     def test_publishable_source_paths_exclude_unrelated_or_private_content(self):
         self.assertTrue(sync_global_skills.publishable_source_path(Path("verify-skill/SKILL.md")))
+        self.assertTrue(sync_global_skills.publishable_source_path(Path("AGENTS.md")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path("README.zh.md")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("notes.txt")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("task-analyze-skill/local/private.json")))
@@ -828,6 +845,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             remote_dir = sandbox / "remote.git"
             source_dir.mkdir()
             sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
+            (source_dir / "AGENTS.md").write_text((SKILLS_DIR / "AGENTS.md").read_text(encoding="utf-8"), encoding="utf-8")
             sync_global_skills.run_command(["git", "init"], cwd=source_dir)
             sync_global_skills.run_command(["git", "branch", "-M", "master"], cwd=source_dir)
             sync_global_skills.run_command(["git", "config", "user.name", "Source Publish Test"], cwd=source_dir)
@@ -849,6 +867,34 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(current_head, remote_head)
             self.assertEqual(sync_global_skills.run_command(["git", "status", "--short"], cwd=source_dir).stdout, "")
             self.assertTrue(state_file.is_file())
+
+    def test_push_gate_failure_precedes_readme_index_commit_and_remote_mutation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir) / "source"
+            source_dir.mkdir()
+            sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
+            (source_dir / "AGENTS.md").write_text((SKILLS_DIR / "AGENTS.md").read_text(encoding="utf-8"), encoding="utf-8")
+            sync_global_skills.run_command(["git", "init"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "branch", "-M", "master"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "config", "user.name", "Gate Test"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "config", "user.email", "gate@example.invalid"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "add", "-A"], cwd=source_dir)
+            sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
+            changed = source_dir / "verify-skill" / "SKILL.md"
+            changed.write_text(changed.read_text(encoding="utf-8") + "\nGate candidate.\n", encoding="utf-8")
+            before_readmes = [(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")]
+            before_head = sync_global_skills.repository_head(source_dir)
+            self.release_gate.side_effect = RuntimeError("full regression failed")
+            with self.assertRaisesRegex(RuntimeError, "full regression failed"):
+                sync_global_skills.push("fixture/repository", source_dir, "must not publish", False, Path(temp_dir) / "deployed")
+            self.assertEqual([(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")], before_readmes)
+            self.assertEqual(sync_global_skills.repository_head(source_dir), before_head)
+            self.assertEqual(sync_global_skills.staged_source_paths(source_dir), [])
+
+    def test_installed_snapshot_cannot_bypass_source_first_publication(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(RuntimeError, "not a publication source"):
+                sync_global_skills.push_global_snapshot("fixture/repository", Path(temp_dir), "forbidden", False)
 
     def test_deploy_reports_no_change_only_when_skills_and_global_agents_match(self):
         with tempfile.TemporaryDirectory() as temp_dir:

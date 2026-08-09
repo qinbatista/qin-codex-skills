@@ -19,15 +19,6 @@
       "rule": "SPG001"
     },
     {
-      "column": 43,
-      "fingerprint": "25ac1c6bbda978169084828403476398560bf91e7ab6bd9c0080079b639ec3ef",
-      "language": "python",
-      "line": 154,
-      "message": "platform-only command is not inside an explicit platform guard",
-      "relative_path": "hatch-pet/scripts/validate_atlas.py",
-      "rule": "SPG002"
-    },
-    {
       "column": 35,
       "fingerprint": "ab87c243c38166f2c5d3514c37add736944cc851af8fff590614ec7bb0049273",
       "language": "python",

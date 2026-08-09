@@ -18,6 +18,8 @@ Never control Obsidian UI.Validate `Cache/cache_path.json` entries;then `CODEX_O
 
 Host code loads `cross-platform-execution`:portable Python for Windows/macOS/Linux;no `.cmd`/`.sh` selectors.Docker/Unity keep runtime.Skill code runs `prompt-skill` platform checks.
 
+Global Skill change:`management-skill/assets/global-skill-capability-catalog.json` is mandatory;full gate PASS before local deploy/GitHub commit/push;missing/stale/fail blocks;only user retires;process≠result memory.
+
 ## Project Cache artifact policy
 
 Before project-support writes,resolve `<project-root>`;put test scripts, intermediate code, logs, debug, receipts, and probes in `<project-root>/Cache/` under `Cache/tests/<task>`, `Cache/debug/<task>`, or `Cache/images/<task>`.Never use `~/.codex/cache`,`~/.codex/tmp`,or project-root `tmp/`,`tests/`,`work/`;OS/tool temp is excluded.
@@ -26,4 +28,4 @@ All local-machine paths, not only Cache paths, in skills/scripts/code/config/doc
 
 Unavoidable external absolute paths may be in project-external `Cache/cache_path.json`;it is untracked AI-only state, must be validated with bounded platform-aware discovery, preserve unrelated keys, and never store credentials or publish. Project code must never read it.
 
-project-root `AGENTS.md` is a compact structural contract,not a project notebook.Keep stable structure,ownership boundaries,critical entry points,hard constraints,and one registry entry with path+role+owner/source+retention/version-control status.important Cache gets one registry pointer;never remove it without explicit authorization.Do not write implementation details,task history,test results,generated data,or troubleshooting;put details in source/docs/README.Update only when structure/ownership/entrypoint/constraint changes.
+project-root `AGENTS.md` is a compact structural contract,not a project notebook:ownership boundaries,critical entry points,hard constraints,owner/source,important Cache.Never remove it without explicit authorization.Do not write implementation details,task history,test results,generated data,or troubleshooting;use source/docs/README.Update only for structural changes.

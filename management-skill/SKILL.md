@@ -13,7 +13,7 @@ Select only what the inline request or admitted locked plan requires:
 
 - **Model-experience route**: inspect project-scoped recommendations/status or record an authorized Ending Real handoff through `../project-memory-skill/scripts/obsidian_model_memory.py`; inspect the old local routing JSON only when the user explicitly asks for legacy history.
 - **Profile route**: inspect saved profiles, refresh login state, import/backup a profile, show sanitized status, or switch the active profile after explicit confirmation.
-- **Global skill mirror route**: inspect authoritative local skills, generate a privacy-safe snapshot, compare local/remote state, pull, or explicitly sync/push.
+- **Global skill mirror route**: inspect authoritative source, run the retained-capability release gate, compare source/deployed/remote state, deploy locally, or explicitly push the maintained source.
 - Use multiple routes only when the inline request or admitted locked plan requires them.
 
 ## Personal Routing Performance
@@ -48,6 +48,8 @@ The public mirror set and order are exactly:
 
 The local global skill directory may contain unrelated skills such as `chronicle`. Mirror selection, hashing, status, pull, and deletion logic must ignore and preserve those unrelated local folders. The remote mirror itself must contain exactly the approved eight.
 
+`assets/global-skill-capability-catalog.json` is the numbered authority for retained behavior. Read `references/global-skill-release-gate.md` before changing, deploying, or publishing any managed Skill. Every retained capability remains a non-regression requirement until the user explicitly retires or replaces it. A new feature may extend this catalog but cannot silently drop an older check. The gate reports current check runs, passed runs, test/sample counts, and status per capability; a missing, stale, failed, timed-out, or zero-test required check blocks release.
+
 ## Privacy And Authorization
 
 - Never reveal or publish tokens, auth files, cookies, profile IDs, private keys, private logs, state databases, receipts with raw prompts, or temporary artifacts.
@@ -79,10 +81,11 @@ Use the maintained scripts instead of ad hoc profile or mirror logic:
 - `scripts/manage_auth_profiles.py`
 - `scripts/show_all_auth_status.py`
 - `scripts/sync_global_skills.py`
+- `scripts/global_skill_regression_gate.py`
 
-The maintained Git repository is the publication source of truth; the installed global directory is a deployment target, never the source for repository edits. Run `sync_global_skills.py push --source-dir <repository-root> --message <message>` from that repository. The command validates the approved public files, renders both root READMEs, commits the source repository itself when needed, pushes its current branch, and verifies that the remote branch hash equals local `HEAD`. It must not report success while the maintained source is still an uncommitted or unpushed copy.
+The maintained Git repository is the publication source of truth; the installed global directory is a deployment target, never the source for repository edits. Run `sync_global_skills.py push --source-dir <repository-root> --message <message>` from that repository. Before its first README, index, commit, or remote mutation, the command reruns the full source/deployed retained-capability gate and requires deployment/global-AGENTS parity. Only after PASS may it validate public files, render both root READMEs, commit the authorized source including the compact root `AGENTS.md`, push the current branch, verify the remote branch hash equals local `HEAD`, and require a clean worktree. It must not report success while the maintained source is still an uncommitted or unpushed copy.
 
-Use `sync_global_skills.py deploy --source-dir <repository-root> --skills-dir <global-skills-directory>` for an explicit local installation from the maintained repository source. It validates the approved eight-skill set, public safety, and platform compatibility, preserves unrelated local skills and `task-analyze-skill/local/`, atomically installs the canonical `task-analyze-skill/assets/global-agents-entry-rule.md` contract into both the sibling `.codex/AGENTS.md` and the host-discoverable user-level `AGENTS.md`, and does not publish to GitHub. Deployment is incomplete when the eight folders match but either always-loaded entry contract does not.
+Use `sync_global_skills.py deploy --source-dir <repository-root> --skills-dir <global-skills-directory>` for an explicit local installation from the maintained repository source. Before its first target write, it runs every source suite, validator, platform check, and current real-sample attestation from the retained-capability catalog in a disposable installed layout. Only after PASS may it preserve unrelated local skills and `task-analyze-skill/local/`, install the eight managed Skills, and install the canonical Task Lifecycle contract into both the sibling `.codex/AGENTS.md` and host-discoverable user-level `AGENTS.md`; it then runs the deployed gate and parity postcondition. It does not publish to GitHub. Deployment is incomplete when any retained capability, managed folder, or always-loaded entry contract differs.
 
 `sync_global_skills.py status --source-dir <repository-root> --skills-dir <global-skills-directory>` compares repository source with both the remote branch and the deployed global folders, checks both local `AGENTS.md` targets for parity against the repository Task Lifecycle asset, and exits nonzero on deployment drift.
 

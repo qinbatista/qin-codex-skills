@@ -48,6 +48,14 @@ class AuditGlobalSkillsTest(unittest.TestCase):
 
         self.assertIn("missing command/reference path: verify-skill/scripts/missing_ending_ledger.py", audit_result["errors"])
 
+    def test_prose_slash_list_with_trailing_punctuation_is_not_a_path(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            skills_root = Path(temporary_directory)
+            checked_skill = self.write_skill(skills_root, "checked-skill", "Keep scripts/results/fixtures, logs, and receipts under Cache.")
+            audit_result = audit_global_skills.audit_skill(checked_skill, skills_root)
+
+        self.assertNotIn("missing command/reference path: scripts/results/fixtures,", audit_result["errors"])
+
     def test_command_paths_preserve_absolute_skill_paths_without_hyphen_suffixes(self):
         text = "Use `~/.codex/skills/task-analyze-skill/assets/model-capability-ladder.json` and `~/.codex/skills/project-memory-skill/scripts/project_change_memory.py`; leave https://example.test//not-a-local-path alone."
         command_paths = audit_global_skills.command_paths(text)

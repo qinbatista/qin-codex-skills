@@ -11,9 +11,12 @@
 
 - Route admitted work with `task-analyze-skill/scripts/obsidian_adaptive_model_runner.py`.
 - Publish only through `management-skill/scripts/sync_global_skills.py` when authorized.
+- Treat `management-skill/assets/global-skill-capability-catalog.json` as the retained global behavior authority; `management-skill/scripts/global_skill_regression_gate.py` must PASS before local deployment or GitHub publication.
 - Keep support artifacts under `Cache/`; never embed machine-specific paths, secrets, or task history in Skill source.
 - Keep `AGENTS.md` structural: ownership, entry points, hard constraints, conventions, and definition of done only.
+- Important Cache: `Cache/tests/unity-game-code-structure-design/` is the untracked portable structural-trial harness for the Unity game-code ownership reference; owner: `code-skill`; retain for focused local checks.
+- Important Cache: `Cache/tests/global-skill-regression/` is the untracked current/cumulative release-gate report store; owner: `management-skill`; retain for non-regression audit history.
 
 ## Definition of done
 
-- Preserve the owning Skill's scope and public contract, add focused regression coverage for durable behavior changes, and run the smallest relevant validation before handoff.
+- Preserve every retained capability, add focused regression coverage for durable behavior changes, and require the full source/deployed release gate before deployment or publication.

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import shutil
 import tempfile
 import unittest
@@ -28,6 +29,12 @@ class SkillPlatformCheckTest(unittest.TestCase):
 
     def empty_baseline(self):
         return {"schema_version": skill_platform_check.SCHEMA_VERSION, "generated_by": skill_platform_check.BASELINE_GENERATOR, "findings": []}
+
+    def test_repository_baseline_only_names_approved_public_skills(self):
+        baseline_path = SKILLS_DIR / "code-skill" / "assets" / "skill-platform-baseline.json"
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        owners = {finding["relative_path"].split("/", 1)[0] for finding in baseline["findings"]}
+        self.assertTrue(owners.issubset(sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES))
 
     def test_portable_python_helper_passes(self):
         temporary_directory, root = self.fixture_root("from pathlib import Path\nimport os\nimport shutil\nimport tempfile\nhome = Path.home()\ncache = os.getenv('CACHE_DIR')\ntemporary = tempfile.gettempdir()\ntool = shutil.which('git')\n")
