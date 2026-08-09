@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 ENDING_PRIMARY_PAIR = "gpt-5.3-codex-spark|xhigh"
 ENDING_FALLBACK_ROLE = "floor"
 ENDING_LAUNCH_ID = "task-ending"
@@ -28,6 +28,7 @@ TERMINAL_THREAD_POLICY = {"pass": "keep_visible", "fail": "keep_visible", "block
 CREATE_THREAD_TOOL = "codex_app__create_thread"
 ORIGIN_SESSION_RESUME_CAPABILITY = "codex_app__send_message_to_thread"
 LAUNCH_STATE_SCHEMA_VERSION = 1
+LIFECYCLE_ID_PATTERN = re.compile(r"\A\d{8}T\d{6}-[0-9a-f]{12}\Z")
 PROJECT_MEMORY_MODES = {"none", "durable"}
 PROJECT_MEMORY_SCOPES = {"project", "feature", "code", "file"}
 PROJECT_MEMORY_CHANGE_KINDS = {"add", "edit", "rename", "move", "delete", "mixed"}
@@ -70,6 +71,18 @@ def _normalize_origin_session(raw, project_root):
     if resume_capability != ORIGIN_SESSION_RESUME_CAPABILITY:
         raise ValueError(f"origin_session.resume_capability must be {ORIGIN_SESSION_RESUME_CAPABILITY}")
     return {"thread_id": thread_id, "host_id": host_id, "project_id": project_id, "project_root": str(project_root), "resume_capability": resume_capability, "immutable": True}
+
+
+def _normalize_repair_of_lifecycle_id(value):
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str) or not LIFECYCLE_ID_PATTERN.fullmatch(value):
+        raise ValueError("repair_of_lifecycle_id must use YYYYMMDDTHHMMSS-12hex format")
+    try:
+        datetime.strptime(value[:15], "%Y%m%dT%H%M%S")
+    except ValueError as error:
+        raise ValueError("repair_of_lifecycle_id must contain a valid UTC timestamp") from error
+    return value
 
 
 def _registry():
@@ -266,7 +279,7 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
     }
 
 
-def build_plan(project_root, task_name, task_score, checks, origin_session=None, project_memory_closeout=None):
+def build_plan(project_root, task_name, task_score, checks, origin_session=None, project_memory_closeout=None, repair_of_lifecycle_id=""):
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
         raise ValueError("project_root must be an existing directory")
@@ -274,6 +287,7 @@ def build_plan(project_root, task_name, task_score, checks, origin_session=None,
     registry = _registry()
     normalized_origin_session = _normalize_origin_session(origin_session, root)
     normalized_closeout = _normalize_project_memory_closeout(project_memory_closeout, root)
+    normalized_repair_of_lifecycle_id = _normalize_repair_of_lifecycle_id(repair_of_lifecycle_id)
     tasks = [normalize_check(check, root, cleaned_task, task_score, normalized_origin_session, registry) for check in checks]
     if not tasks:
         raise ValueError("at least one real verification check is required")
@@ -290,8 +304,9 @@ def build_plan(project_root, task_name, task_score, checks, origin_session=None,
         "execution": "one_persistent_ending_runs_all_checks",
         "all_checks_must_pass": True,
         "origin_session": normalized_origin_session,
+        "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id,
         "ending_model_policy": _ending_model_policy(registry),
-        "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": 3, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
+        "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": 3, "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
         "project_memory_closeout": normalized_closeout,
         "ending_tasks": tasks,
     }
@@ -328,7 +343,7 @@ def _repair_handoff(check, origin_session, observed, mismatch_summary=""):
     return {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session": origin_session, "origin_session_required": True, "prompt_submission": "automatic", "repair_dispatch": repair_dispatch, "repair_prompt": repair_prompt, "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
 
 
-def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_output, memory_consistency_output, assigned_pair, producer_receipt=None):
+def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_output, memory_consistency_output, assigned_pair, producer_receipt=None, repair_of_lifecycle_id=None):
     project_root = Path(plan["project_root"]).expanduser().resolve()
     relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root)
     relative_memory_candidates = Path(memory_candidates_output).expanduser().resolve().relative_to(project_root)
@@ -347,6 +362,8 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
         for check in checks
     ]
     policy = plan["ending_model_policy"]
+    repair_parent_line = f"Repair parent lifecycle id: {repair_of_lifecycle_id or 'none'}"
+    repair_start_instruction = f"This is a fresh repair Ending. When starting its lifecycle with ending_task_ledger.py, pass --repair-of-lifecycle-id {repair_of_lifecycle_id} exactly; do not start an unlinked root lifecycle." if repair_of_lifecycle_id else "This is an initial Ending. Do not pass --repair-of-lifecycle-id when starting its lifecycle."
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
@@ -365,6 +382,8 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
             f"Task complexity: {plan['task_complexity']['complexity_score']}/100 ({plan['task_complexity']['complexity_band']}); score scopes the real check and classification only, never the Ending model.",
             f"Origin producer session (immutable): {json.dumps(plan.get('origin_session'), ensure_ascii=False, separators=(',', ':'))}",
             f"Producer receipt relative to project root: {receipt_line}",
+            repair_parent_line,
+            repair_start_instruction,
             "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run every listed check's exact run-check command from the project root. Write one fresh evidence file per check and do not broaden the saved bounded checks.",
             "Start one lifecycle and finish it once through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py. Pass the saved verification plan, ending-check-id=task-ending, the actual assigned pair, project and origin metadata, and the producer receipt when present. If and only if the primary pair could not be launched for an allowed availability/capability reason, use the one saved fallback pair and pass the launcher's sanitized --availability-fallback-reason. Correctness, quality, protocol, timeout, or command execution failures never change the Ending pair.",
             "Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation. Producer next-pair learning stays separate from the fixed Ending pair.",
@@ -384,7 +403,7 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
     )
 
 
-def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None):
+def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None, repair_of_lifecycle_id=""):
     plan_file, plan = _read_json(plan_path, "plan")
     project_root = Path(plan.get("project_root", "")).expanduser().resolve()
     if not project_root.is_dir():
@@ -396,6 +415,15 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         raise ValueError("origin_session is required for a repair-capable Ending launch")
     if origin_session["project_id"] != project_value:
         raise ValueError("origin_session.project_id must match project_id")
+    plan_repair_of_lifecycle_id = _normalize_repair_of_lifecycle_id(plan.get("repair_of_lifecycle_id"))
+    launch_repair_of_lifecycle_id = _normalize_repair_of_lifecycle_id(repair_of_lifecycle_id)
+    if plan_repair_of_lifecycle_id and launch_repair_of_lifecycle_id and plan_repair_of_lifecycle_id != launch_repair_of_lifecycle_id:
+        raise ValueError("create-launches repair_of_lifecycle_id conflicts with the saved plan")
+    resolved_repair_of_lifecycle_id = launch_repair_of_lifecycle_id or plan_repair_of_lifecycle_id
+    repair_policy = plan.get("repair_policy")
+    if not isinstance(repair_policy, dict):
+        raise ValueError("plan requires repair_policy")
+    resolved_repair_policy = {**repair_policy, "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id}
     evidence_root = _inside(project_root, evidence_dir, "evidence_dir")
     receipt_path = None
     if producer_receipt:
@@ -428,7 +456,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         candidate_pairs.append((fallback_pair, "availability_fallback"))
     for pair, role in candidate_pairs:
         model, thinking = pair.split("|", 1)
-        prompt = _worker_prompt(plan_file, plan, tasks, evidence_outputs, memory_candidates_output, memory_consistency_output, pair, receipt_path)
+        prompt = _worker_prompt(plan_file, plan, tasks, evidence_outputs, memory_candidates_output, memory_consistency_output, pair, receipt_path, resolved_repair_of_lifecycle_id)
         arguments = {"target": dict(THREAD_TARGET), "title": title, "model": model, "thinking": thinking, "prompt": prompt}
         candidates.append(
             {
@@ -461,6 +489,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         "memory_candidates_output": str(memory_candidates_output),
         "memory_consistency_output": str(memory_consistency_output),
         "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
+        "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
         "project_id": project_value,
         "acknowledgement_required": True,
     }
@@ -479,7 +508,8 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         },
         "execution": "host_persistent_create_thread",
         "origin_session": origin_session,
-        "repair_policy": plan.get("repair_policy"),
+        "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
+        "repair_policy": resolved_repair_policy,
         "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
         "required_launch_count": len(launch_requests),
         "launch_requests": launch_requests,
@@ -694,6 +724,7 @@ def parse_args(argv=None):
     plan.add_argument("--task-name", required=True)
     plan.add_argument("--complexity-score", type=int, required=True)
     plan.add_argument("--origin-session-json", required=True)
+    plan.add_argument("--repair-of-lifecycle-id", default="")
     plan.add_argument("--project-memory-closeout-json", default='{"mode":"none"}')
     plan.add_argument("--check-json", action="append", default=[])
     plan.add_argument("--output", type=Path, required=True)
@@ -709,6 +740,7 @@ def parse_args(argv=None):
     launch.add_argument("--evidence-dir", type=Path, required=True)
     launch.add_argument("--project-id", required=True)
     launch.add_argument("--producer-receipt", type=Path)
+    launch.add_argument("--repair-of-lifecycle-id", default="")
     launch.add_argument("--output", type=Path, required=True)
     acknowledge = subparsers.add_parser("ack-launch")
     acknowledge.add_argument("--launch-spec", type=Path, required=True)
@@ -728,9 +760,9 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     if args.command == "plan":
-        payload = build_plan(args.project_root, args.task_name, args.complexity_score, [json.loads(value) for value in args.check_json], json.loads(args.origin_session_json), json.loads(args.project_memory_closeout_json))
+        payload = build_plan(args.project_root, args.task_name, args.complexity_score, [json.loads(value) for value in args.check_json], json.loads(args.origin_session_json), json.loads(args.project_memory_closeout_json), args.repair_of_lifecycle_id)
         _atomic_write(args.output, payload)
-        output = {"status": "written", "output": str(args.output.expanduser().resolve()), "ending_tasks": len(payload["ending_tasks"]), "selected_pairs": [task["selected_pair"] for task in payload["ending_tasks"]]}
+        output = {"status": "written", "output": str(args.output.expanduser().resolve()), "ending_tasks": len(payload["ending_tasks"]), "selected_pairs": [task["selected_pair"] for task in payload["ending_tasks"]], "repair_of_lifecycle_id": payload["repair_of_lifecycle_id"]}
         code = 0
     elif args.command == "run-check":
         output = run_check(args.plan, args.check_id, args.evidence_output)
@@ -739,9 +771,9 @@ def main(argv=None):
         output = record_requirement_mismatch(args.evidence, args.summary)
         code = 0 if output["status"] == "pass" else 1
     elif args.command == "create-launches":
-        output = build_launch_spec(args.plan, args.evidence_dir, args.project_id, args.producer_receipt)
+        output = build_launch_spec(args.plan, args.evidence_dir, args.project_id, args.producer_receipt, args.repair_of_lifecycle_id)
         _atomic_write(args.output, output)
-        output = {"status": "written", "output": str(args.output.expanduser().resolve()), "required_launch_count": output["required_launch_count"], "selected_pairs": [item["selected_pair"] for item in output["launch_requests"]]}
+        output = {"status": "written", "output": str(args.output.expanduser().resolve()), "required_launch_count": output["required_launch_count"], "selected_pairs": [item["selected_pair"] for item in output["launch_requests"]], "repair_of_lifecycle_id": output["repair_of_lifecycle_id"]}
         code = 0
     elif args.command == "ack-launch":
         output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.project_id, args.state_output, args.selected_pair, args.availability_reason)

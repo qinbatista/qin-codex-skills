@@ -1,4 +1,6 @@
+import contextlib
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
@@ -15,8 +17,8 @@ def origin_session(root, project_id="project-123"):
     return {"thread_id": "source-session-001", "host_id": "host-local", "project_id": project_id, "project_root": str(root)}
 
 
-def build_plan(root, task_name, task_score, checks, project_id="project-123", project_memory_closeout=None):
-    return PLAN.build_plan(root, task_name, task_score, checks, origin_session(root, project_id), project_memory_closeout)
+def build_plan(root, task_name, task_score, checks, project_id="project-123", project_memory_closeout=None, repair_of_lifecycle_id=""):
+    return PLAN.build_plan(root, task_name, task_score, checks, origin_session(root, project_id), project_memory_closeout, repair_of_lifecycle_id)
 
 
 class EndingVerificationPlanTests(unittest.TestCase):
@@ -52,7 +54,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])
         self.assertEqual(plan["execution"], "one_persistent_ending_runs_all_checks")
-        self.assertEqual(plan["schema_version"], 7)
+        self.assertEqual(plan["schema_version"], 8)
         self.assertEqual(plan["project_memory_closeout"], {"mode": "none"})
         self.assertNotIn("title", plan)
         self.assertNotIn("thread_target", plan)
@@ -66,6 +68,54 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(plan["ending_model_policy"]["availability_fallback_pair"], "gpt-5.6-luna|low")
         self.assertEqual(plan["origin_session"]["thread_id"], "source-session-001")
         self.assertEqual(plan["repair_policy"]["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
+
+    def test_saved_plan_repair_parent_propagates_to_launch_and_worker_command(self):
+        repair_parent = "20260809T200317-f2d0890fdeb2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = PLAN.main(["plan", "--project-root", str(root), "--task-name", "repair", "--complexity-score", "45", "--origin-session-json", json.dumps(origin_session(root)), "--repair-of-lifecycle-id", repair_parent, "--check-json", json.dumps({"name": "unit", "command": ["python3", "-c", "print('pass')"]}), "--output", str(plan_path)])
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending", "project-123")
+        self.assertEqual(code, 0)
+        self.assertEqual(plan["repair_of_lifecycle_id"], repair_parent)
+        self.assertEqual(plan["repair_policy"]["repair_of_lifecycle_id"], repair_parent)
+        self.assertEqual(launch["repair_of_lifecycle_id"], repair_parent)
+        self.assertEqual(launch["repair_policy"]["repair_of_lifecycle_id"], repair_parent)
+        self.assertEqual(launch["launch_requests"][0]["repair_of_lifecycle_id"], repair_parent)
+        for candidate in launch["launch_requests"][0]["launch_candidates"]:
+            self.assertIn(f"Repair parent lifecycle id: {repair_parent}", candidate["arguments"]["prompt"])
+            self.assertIn(f"pass --repair-of-lifecycle-id {repair_parent} exactly", candidate["arguments"]["prompt"])
+
+    def test_create_launches_cli_repair_flag_propagates_when_plan_has_no_parent(self):
+        repair_parent = "20260809T201501-a1b2c3d4e5f6"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            launch_path = root / "launch.json"
+            plan_path.write_text(json.dumps(build_plan(root, "repair", 45, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}])), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = PLAN.main(["create-launches", "--plan", str(plan_path), "--evidence-dir", str(root / "Cache" / "tests" / "ending"), "--project-id", "project-123", "--repair-of-lifecycle-id", repair_parent, "--output", str(launch_path)])
+            launch = json.loads(launch_path.read_text(encoding="utf-8"))
+        self.assertEqual(code, 0)
+        self.assertEqual(launch["repair_of_lifecycle_id"], repair_parent)
+        self.assertEqual(launch["repair_policy"]["repair_of_lifecycle_id"], repair_parent)
+        self.assertIn(f"pass --repair-of-lifecycle-id {repair_parent} exactly", launch["launch_requests"][0]["arguments"]["prompt"])
+
+    def test_repair_parent_rejects_malformed_invalid_timestamp_and_conflict(self):
+        invalid_values = ["../20260809T200317-f2d0890fdeb2", "20260809T200317-F2D0890FDEB2", "20261340T250000-f2d0890fdeb2", "20260809T200317-f2d0890fdeb"]
+        for invalid_value in invalid_values:
+            with self.subTest(invalid_value=invalid_value), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                with self.assertRaisesRegex(ValueError, "repair_of_lifecycle_id"):
+                    build_plan(root, "repair", 45, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], repair_of_lifecycle_id=invalid_value)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            plan_path.write_text(json.dumps(build_plan(root, "repair", 45, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], repair_of_lifecycle_id="20260809T200317-f2d0890fdeb2")), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "conflicts with the saved plan"):
+                PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending", "project-123", repair_of_lifecycle_id="20260809T201501-a1b2c3d4e5f6")
 
     def test_durable_plan_carries_sanitized_project_memory_intent_and_consistency_output(self):
         with tempfile.TemporaryDirectory() as temporary:

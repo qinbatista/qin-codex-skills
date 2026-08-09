@@ -2,7 +2,7 @@
   "schema_version": 1,
   "check_id": "memory-execution-consistency-attestation",
   "status": "pass",
-  "created_at": "2026-08-09T22:31:22.718981+00:00",
+  "created_at": "2026-08-09T23:02:14.635151+00:00",
   "trial_count": 7,
   "passed_trials": 7,
   "watched_files": {
@@ -19,10 +19,10 @@
     "project-memory-skill/tests/test_project_change_memory.py": "9011593c9d94db90b56280d3ea0ac7720a683464edc4d3b2735f611b83495811",
     "project-memory-skill/tests/test_memory_coverage.py": "b38a68594347e599621026d39945dbfcfc72aef02f76313117e3e6d9546a1d01",
     "project-memory-skill/tests/test_obsidian_model_memory.py": "3e40311fcae6128adf0de3d25b59212740e7aee4119f0ac4d157c7f8b7d9ed18",
-    "verify-skill/SKILL.md": "e4d5dfff2bf308ed53e562e24ce274276af8dad3674777c139c129b6c9136cb8",
-    "verify-skill/scripts/ending_verification_plan.py": "29aa6e7054b487d4df94ca9064f3da9767feda54d9fc310879ab1e88cb5073f9",
+    "verify-skill/SKILL.md": "5391eac55e9fda9ac43a3de05680e935aff92399175538b085743667fbc88570",
+    "verify-skill/scripts/ending_verification_plan.py": "278541090e00254a8062c3671edce19bfc7d608fb54ad9cce201226fef028de6",
     "verify-skill/scripts/ending_task_ledger.py": "beec01b4dd3ec33e1252fcb9f087de3d49371f125565757e9573f2aabc43b9cd",
-    "management-skill/assets/global-skill-capability-catalog.json": "f351382a9f1dcefa2b944b485e5245691de55feb1a58d5b0ade17bd321fb3f30",
+    "management-skill/assets/global-skill-capability-catalog.json": "2fd71744d54af11f38cbc53a78ff50bc175848ac98b83f9dee00c423ca6bde89",
     "management-skill/scripts/global_skill_regression_gate.py": "bf4ca1703f2f9741c23e8ace6c07df341a089057da4efc10f223f27edbec0666",
     "management-skill/tests/test_global_skill_regression_gate.py": "fe118c89a12019b03301abc0b83ad875d44e3158da2623dfe7e9802d56bd9e95"
   },
