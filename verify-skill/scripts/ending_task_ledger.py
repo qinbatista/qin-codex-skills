@@ -30,6 +30,14 @@ OPERATIONAL_FAILURES = FAILURE_CLASSES - QUALITY_FAILURES - {"none"}
 MODEL_EVIDENCE_LEVELS = {"runtime_receipt", "verified_entry", "task_assignment", "configured_selection", "unavailable"}
 ROUTE_CHANGES = {"upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"}
 UNKNOWN_MODEL_PAIR = "unknown|unknown"
+ENDING_LAUNCH_ID = "task-ending"
+AVAILABILITY_FALLBACK_REASONS = {
+    "primary_model_unavailable",
+    "primary_effort_unsupported",
+    "primary_pair_not_in_registry",
+    "scheduler_unavailable",
+    "required_modality_unavailable",
+}
 REPAIR_DISPATCH_TOOL = "codex_app__send_message_to_thread"
 REQUIRED_MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
 OPTIONAL_MODEL_CONTEXT_FIELDS = ("step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source")
@@ -129,6 +137,49 @@ def _origin_session(thread_id="", host_id=""):
     if not thread_id:
         return None
     return {"thread_id": _single_line(thread_id, "origin_thread_id", max_length=160), "host_id": _single_line(host_id, "origin_host_id", max_length=160)}
+
+
+def _ending_plan_assignment(plan_path, ending_check_id, selected_pair, availability_reason=""):
+    payload = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    policy = payload.get("ending_model_policy") if isinstance(payload, dict) else None
+    if not isinstance(policy, dict):
+        tasks = payload.get("ending_tasks") if isinstance(payload, dict) else None
+        check = next((item for item in tasks if isinstance(item, dict) and item.get("check_id") == ending_check_id), None) if isinstance(tasks, list) else None
+        if not check:
+            return None
+        planned_pair = _model_pair(check.get("selected_pair"), "plan selected_pair")
+        if not planned_pair or selected_pair != planned_pair:
+            raise ValueError("actual Ending selected_pair does not match the verification plan")
+        if availability_reason:
+            raise ValueError("legacy verification plan does not authorize an availability fallback")
+        return {"primary_pair": planned_pair, "availability_fallback_pair": None, "selected_pair": selected_pair, "availability_fallback_reason": None}
+    task_ids = [item.get("check_id") for item in payload.get("ending_tasks", []) if isinstance(item, dict)]
+    if ending_check_id != ENDING_LAUNCH_ID and ending_check_id not in task_ids:
+        raise ValueError("ending_check_id does not match the verification plan")
+    primary_pair = _model_pair(policy.get("primary_pair"), "plan primary_pair")
+    fallback_pair = _model_pair(policy.get("availability_fallback_pair"), "plan availability_fallback_pair")
+    approved_pairs = policy.get("approved_pairs")
+    if not primary_pair or not isinstance(approved_pairs, list) or selected_pair not in approved_pairs:
+        raise ValueError("actual Ending selected_pair is not approved by the verification plan")
+    reason_value = _single_line(availability_reason, "availability_fallback_reason", required=False, max_length=80) or None
+    allowed_reasons = policy.get("availability_fallback_reasons")
+    if fallback_pair and selected_pair == fallback_pair:
+        if reason_value not in AVAILABILITY_FALLBACK_REASONS or reason_value not in (allowed_reasons or []):
+            raise ValueError("availability fallback requires a sanitized availability reason")
+    elif selected_pair == primary_pair:
+        if reason_value:
+            raise ValueError("primary Ending pair must not claim an availability fallback reason")
+    else:
+        raise ValueError("actual Ending selected_pair is neither the primary nor availability fallback pair")
+    return {
+        "primary_pair": primary_pair,
+        "availability_fallback_pair": fallback_pair,
+        "selected_pair": selected_pair,
+        "availability_fallback_reason": reason_value,
+        "primary_selection_reason": policy.get("primary_selection_reason"),
+        "score_controls": policy.get("score_controls"),
+        "quality_failure_model_fallback": False,
+    }
 
 
 def _model_disclosure(selected_pair, producer_binding, requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason=""):
@@ -404,11 +455,12 @@ def _attempt_context(store, state):
 def _model_assessment(state, event_name, failure_class, model_learning, attempt_context):
     learning = model_learning if isinstance(model_learning, dict) else {}
     binding = state.get("producer_binding") if isinstance(state.get("producer_binding"), dict) else {}
+    has_producer = bool(binding)
     attempt_number = attempt_context["attempt_number"]
     producer_pair = binding.get("effective_pair") or UNKNOWN_MODEL_PAIR
     model_record_pair = learning.get("pair") or producer_pair
     ending_pair = state.get("selected_pair") or UNKNOWN_MODEL_PAIR
-    next_pair = learning.get("next_pair") or model_record_pair
+    next_pair = (learning.get("next_pair") or producer_pair) if has_producer else UNKNOWN_MODEL_PAIR
     prior_quality = attempt_context["prior_quality_failure_count"]
     prior_operational = attempt_context["prior_operational_failure_count"]
     quality_failures = prior_quality + int(event_name == "fail" and failure_class in QUALITY_FAILURES)
@@ -416,46 +468,61 @@ def _model_assessment(state, event_name, failure_class, model_learning, attempt_
     if event_name == "pass" and attempt_number == 1:
         pass_shape = "first_attempt_pass"
         if learning.get("next_pair_direction") == "downgrade" and next_pair != producer_pair:
-            suitability = "suitable_downgrade_candidate"
-            routing_action = "trial_downgrade_one_rung_next_matching_task"
+            suitability = "producer_suitable_downgrade_candidate"
+            routing_action = "producer_trial_downgrade_one_rung_next_matching_task"
             reason = "The first Ending attempt passed; accumulated matching Real PASS evidence reached the one-rung downgrade threshold."
         else:
-            suitability = "suitable"
-            routing_action = "retain_until_second_matching_first_pass"
+            suitability = "producer_suitable"
+            routing_action = "producer_retain_until_second_matching_first_pass"
             reason = "The first Ending attempt passed; retain this pair until the matching Real PASS threshold supports a one-rung trial."
     elif event_name == "pass" and prior_quality:
         pass_shape = "retry_pass"
-        suitability = "initial_pair_too_weak_recovered"
-        routing_action = "reuse_lowest_successful_recovery_pair"
-        reason = "A prior correctness or quality attempt failed and this retry passed; keep the lowest pair that produced the verified recovery."
+        suitability = "producer_recovered_after_quality_repair"
+        routing_action = "reuse_lowest_successful_producer_recovery_pair"
+        reason = "A prior correctness or quality check failed and this retry passed; keep the lowest producer pair that produced the verified recovery. The Ending pair does not change."
     elif event_name == "pass":
         pass_shape = "retry_pass"
-        suitability = "suitable_after_operational_recovery"
-        routing_action = "retain_quality_boundary"
+        suitability = "producer_suitable_after_operational_recovery"
+        routing_action = "producer_retain_quality_boundary"
         reason = "The retry passed after an operational interruption; the interruption is quality-neutral."
     elif event_name == "fail" and failure_class in QUALITY_FAILURES:
         pass_shape = "failed_attempt"
-        suitability = "too_weak_for_verified_result"
-        routing_action = "upgrade_one_rung_for_repair"
-        reason = "The real check found a correctness or quality defect; the next repair route moves one rung up."
+        suitability = "producer_result_failed_quality_check"
+        routing_action = "repair_producer_with_recorded_next_pair"
+        reason = "The real check found a correctness or quality defect in the producer result. Producer learning may select a repair pair; the fixed Ending pair never upgrades from this failure."
     elif event_name == "fail":
         pass_shape = "failed_attempt"
-        suitability = "quality_unproven_operational_failure"
-        routing_action = "retry_without_quality_penalty"
-        reason = "The check failed operationally, so model quality is not downgraded or upgraded from this evidence."
+        suitability = "producer_quality_unproven_operational_failure"
+        routing_action = "producer_retry_without_quality_penalty"
+        reason = "The check failed operationally, so producer quality is not downgraded or upgraded and the fixed Ending pair does not change."
     else:
         pass_shape = "blocked"
-        suitability = "unproven"
-        routing_action = "none_until_blocker_clears"
+        suitability = "producer_unproven"
+        routing_action = "producer_none_until_blocker_clears"
         reason = "The Ending check was blocked before a quality verdict was available."
-    suitability = learning.get("model_suitability") or suitability
-    routing_action = learning.get("routing_action") or routing_action
+    if has_producer:
+        suitability = learning.get("model_suitability") or suitability
+        routing_action = learning.get("routing_action") or routing_action
+    else:
+        suitability = "producer_unavailable_verifier_observation_only"
+        routing_action = "no_producer_route_movement"
+        next_pair = UNKNOWN_MODEL_PAIR
+    ending_assignment = state.get("ending_model_assignment") if isinstance(state.get("ending_model_assignment"), dict) else {}
+    availability_reason = state.get("availability_fallback_reason")
+    ending_is_fallback = bool(availability_reason and ending_pair == ending_assignment.get("availability_fallback_pair"))
+    if ending_pair == UNKNOWN_MODEL_PAIR:
+        ending_suitability = "ending_pair_unassigned"
+        ending_routing_action = "no_ending_route_assignment"
+    else:
+        ending_suitability = "availability_fallback_closeout" if ending_is_fallback else "fixed_fast_closeout"
+        ending_routing_action = "availability_fallback_only" if ending_is_fallback else "retain_fixed_fast_ending_pair"
     current_attempt = {
         "attempt": attempt_number,
         "lifecycle_id": state.get("lifecycle_id"),
         "status": event_name,
         "failure_class": failure_class if event_name == "fail" else "none",
         "pair": producer_pair if producer_pair != UNKNOWN_MODEL_PAIR else ending_pair,
+        "pair_role": "producer" if producer_pair != UNKNOWN_MODEL_PAIR else "ending_observation",
     }
     task_context = binding.get("model_learning_context") if isinstance(binding.get("model_learning_context"), dict) else {}
     return {
@@ -465,6 +532,11 @@ def _model_assessment(state, event_name, failure_class, model_learning, attempt_
         "ending_complexity_band": state.get("complexity_band"),
         "producer_pair": producer_pair,
         "ending_pair": ending_pair,
+        "ending_primary_pair": ending_assignment.get("primary_pair"),
+        "ending_availability_fallback_pair": ending_assignment.get("availability_fallback_pair"),
+        "ending_availability_fallback_reason": availability_reason,
+        "ending_model_suitability": ending_suitability,
+        "ending_routing_action": ending_routing_action,
         "model_record_pair": model_record_pair,
         "initial_pair": attempt_context["initial_pair"],
         "attempt_count": attempt_number,
@@ -475,6 +547,9 @@ def _model_assessment(state, event_name, failure_class, model_learning, attempt_
         "model_suitability": suitability,
         "routing_action": routing_action,
         "next_pair": next_pair,
+        "producer_model_suitability": suitability,
+        "producer_routing_action": routing_action,
+        "producer_next_pair": next_pair,
         "recovery_from_pair": learning.get("recovery_from_pair"),
         "matched_pass_count_after": learning.get("matched_pass_count_after"),
         "minimum_passes_before_downgrade": learning.get("minimum_passes_before_downgrade"),
@@ -527,7 +602,7 @@ def _repair_handoff(state, event):
     return {**common, "action": "send_repair_prompt_to_origin_session_then_fresh_ending", "requires_origin_session": True, "origin_session": origin, "repair_dispatch": dispatch, "repair_prompt": prompt, "next_step": "origin_session_repairs_then_starts_fresh_ending"}
 
 
-def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair="", requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason="", project_id="", origin_thread_id="", origin_host_id="", symbol=""):
+def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair="", requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason="", project_id="", origin_thread_id="", origin_host_id="", symbol="", availability_fallback_reason=""):
     cwd_path = Path(cwd).expanduser().resolve()
     if not cwd_path.is_dir():
         raise ValueError("cwd must be an existing directory")
@@ -589,6 +664,13 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
                 raise ValueError("repair lifecycle must preserve the origin session")
             origin_session = origin_session or parent_origin
             project_id_value = project_id_value or parent.get("project_id")
+            if project_path is None and parent.get("project_root"):
+                project_path = Path(parent["project_root"]).expanduser().resolve()
+            verification_required = bool(verification_required or parent.get("verification_required"))
+            verification_plan = verification_plan or parent.get("verification_plan")
+            ending_check_id = ending_check_id or parent.get("ending_check_id") or ""
+            selected_pair = selected_pair or parent.get("selected_pair") or ""
+            availability_fallback_reason = availability_fallback_reason or parent.get("availability_fallback_reason") or ""
         if origin_session and not project_path:
             raise ValueError("origin session requires project_root")
         if origin_session and not project_id_value:
@@ -596,10 +678,26 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
         verification_plan_path = Path(verification_plan).expanduser().resolve() if verification_plan else None
         if verification_required and (not verification_plan_path or not verification_plan_path.is_file()):
             raise ValueError("verification-required lifecycle requires an existing verification plan")
+        ending_assignment = None
+        if verification_plan_path and selected_pair:
+            ending_assignment = _ending_plan_assignment(verification_plan_path, ending_check_id, selected_pair, availability_fallback_reason)
+        if ending_assignment and ending_assignment.get("availability_fallback_reason"):
+            requested_pair = requested_pair or ending_assignment["primary_pair"]
+            resolved_pair = resolved_pair or ending_assignment["primary_pair"]
+            effective_pair = effective_pair or selected_pair
+            previous_pair = previous_pair or ending_assignment["primary_pair"]
+            model_evidence = model_evidence or "task_assignment"
+            route_change = route_change or "operational_fallback"
+            switch_summary = switch_summary or f"Availability fallback from {ending_assignment['primary_pair']} to {selected_pair}."
+            reason = reason or f"Ending primary pair was unavailable: {ending_assignment['availability_fallback_reason']}."
+        elif ending_assignment and ending_assignment.get("primary_selection_reason"):
+            model_evidence = model_evidence or "configured_selection"
+            reason = reason or f"Ending registry selected its primary pair: {ending_assignment['primary_selection_reason']}."
         ending_owns_model_identity = bool(selected_pair and (verification_required or ending_check_id))
         model_disclosure = _model_disclosure(selected_pair, None if ending_owns_model_identity else producer_binding, requested_pair, resolved_pair, effective_pair, previous_pair, model_evidence, route_change, switch_summary, reason)
-        event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _model_pair(selected_pair, "selected_pair"), "model_disclosure": model_disclosure}
-        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "project_id": project_id_value, "origin_session": origin_session, "module": _single_line(module, "module", required=False, max_length=160), "symbol": normalized_symbol, "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
+        fallback_reason_value = ending_assignment.get("availability_fallback_reason") if ending_assignment else None
+        event = {"schema_version": SCHEMA_VERSION, "event": "started", "recorded_at": created_at, "lifecycle_id": lifecycle_id, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "summary": _single_line(summary, "summary"), "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": _single_line(ending_check_id, "ending_check_id", required=False, max_length=80) or None, "selected_pair": _model_pair(selected_pair, "selected_pair"), "availability_fallback_reason": fallback_reason_value, "ending_model_assignment": ending_assignment, "model_disclosure": model_disclosure}
+        state = {"schema_version": SCHEMA_VERSION, "lifecycle_id": lifecycle_id, "created_at": created_at, "updated_at": created_at, "status": "running", "task_kind": _single_line(task_kind, "task_kind", max_length=80), "cwd": str(cwd_path), "summary": event["summary"], "project_root": str(project_path) if project_path else None, "project_id": project_id_value, "origin_session": origin_session, "module": _single_line(module, "module", required=False, max_length=160), "symbol": normalized_symbol, "files": normalized_files, "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "availability_fallback_reason": fallback_reason_value, "ending_model_assignment": ending_assignment, "model_disclosure": model_disclosure, "repair_of_lifecycle_id": repair_of_lifecycle_id or None, "attempt_index": attempt_index, "max_repair_attempts": repair_limit, "repair_children": [], "producer_binding": producer_binding, "events": [event]}
         if parent:
             parent_event = {"schema_version": SCHEMA_VERSION, "event": "repair_started", "recorded_at": created_at, "lifecycle_id": parent["lifecycle_id"], "child_lifecycle_id": lifecycle_id, "summary": f"Repair lifecycle {lifecycle_id} started"}
             parent["repair_children"].append(lifecycle_id)
@@ -609,7 +707,7 @@ def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files
             _append_event(store_path, parent_event)
         state_path = _write_state(store_path, state)
         _append_event(store_path, event)
-    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "model_disclosure": model_disclosure, "project_id": project_id_value, "origin_session": origin_session, "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
+    return {"status": "written", "lifecycle_id": lifecycle_id, "lifecycle_status": "running", "complexity_score": complexity_score, "complexity_band": complexity_band or None, "verification_required": bool(verification_required), "verification_plan": str(verification_plan_path) if verification_plan_path else None, "ending_check_id": event["ending_check_id"], "selected_pair": event["selected_pair"], "availability_fallback_reason": fallback_reason_value, "ending_model_assignment": ending_assignment, "model_disclosure": model_disclosure, "project_id": project_id_value, "origin_session": origin_session, "local": {"written": True, "store": str(store_path), "state": str(state_path)}}
 
 
 def record_event(lifecycle_id, event_name, summary, verification=None, error_fingerprint="", store=DEFAULT_STORE, failure_class="none", memory_candidates_file=None):
@@ -696,7 +794,7 @@ def audit_lifecycle(lifecycle_id, store=DEFAULT_STORE):
     else:
         terminal_status = active["status"] if active["status"] in {"passed", "blocked"} else "pending"
     chain = [root["lifecycle_id"], *(state["lifecycle_id"] for state in descendants)]
-    return {"status": "pass" if terminal_status == "passed" else terminal_status, "root_lifecycle_id": root["lifecycle_id"], "active_lifecycle_id": active["lifecycle_id"], "terminal_status": terminal_status, "complexity_score": active.get("complexity_score"), "complexity_band": active.get("complexity_band"), "attempt_count": int(active.get("attempt_index", 0)) + 1, "model_assessment": active.get("model_assessment"), "chain": chain, "descendants": [state["lifecycle_id"] for state in descendants], "final_gate_passed": terminal_status == "passed"}
+    return {"status": "pass" if terminal_status == "passed" else terminal_status, "root_lifecycle_id": root["lifecycle_id"], "active_lifecycle_id": active["lifecycle_id"], "terminal_status": terminal_status, "complexity_score": active.get("complexity_score"), "complexity_band": active.get("complexity_band"), "selected_pair": active.get("selected_pair"), "availability_fallback_reason": active.get("availability_fallback_reason"), "attempt_count": int(active.get("attempt_index", 0)) + 1, "model_assessment": active.get("model_assessment"), "chain": chain, "descendants": [state["lifecycle_id"] for state in descendants], "final_gate_passed": terminal_status == "passed"}
 
 
 def main():
@@ -731,6 +829,7 @@ def main():
     start_parser.add_argument("--project-id", default="")
     start_parser.add_argument("--origin-thread-id", default="")
     start_parser.add_argument("--origin-host-id", default="")
+    start_parser.add_argument("--availability-fallback-reason", choices=sorted(AVAILABILITY_FALLBACK_REASONS), default="")
     event_parser = subparsers.add_parser("event")
     event_parser.add_argument("--lifecycle-id", required=True)
     event_parser.add_argument("--event", choices=sorted(ALL_EVENTS), required=True)
@@ -743,7 +842,7 @@ def main():
     audit_parser.add_argument("--lifecycle-id", required=True)
     args = parser.parse_args()
     if args.command == "start":
-        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair, args.requested_pair, args.resolved_pair, args.effective_pair, args.previous_pair, args.model_evidence, args.route_change, args.switch_summary, args.reason, args.project_id, args.origin_thread_id, args.origin_host_id, args.symbol)
+        output = start_lifecycle(args.task_kind, args.cwd, args.summary, args.project_root, args.module, args.file, args.repair_of_lifecycle_id, args.store, args.max_repair_attempts, args.producer_receipt, args.complexity_score, args.complexity_band, args.verification_required, args.verification_plan, args.ending_check_id, args.selected_pair, args.requested_pair, args.resolved_pair, args.effective_pair, args.previous_pair, args.model_evidence, args.route_change, args.switch_summary, args.reason, args.project_id, args.origin_thread_id, args.origin_host_id, args.symbol, args.availability_fallback_reason)
     elif args.command == "event":
         output = record_event(args.lifecycle_id, args.event, args.summary, args.verification, args.error_fingerprint, args.store, args.failure_class, args.memory_candidates_file)
     else:

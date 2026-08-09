@@ -35,6 +35,8 @@ class GraduatedRouteLifecycleTests(unittest.TestCase):
         self.assertEqual(implementation["candidate_ladder"], dispatcher.normal_adaptive_pair_texts())
         self.assertEqual(len(implementation["candidate_ladder"]), sum(len(efforts) for efforts in dispatcher.ACTIVE_MODEL_EFFORTS.values()))
         self.assertEqual(implementation["hard_floor"], dispatcher.MODEL_ROLE_PAIRS["floor"])
+        ending = next(node for node in plan["nodes"] if node["phase"] == "ending")
+        self.assertEqual({field: ending[field] for field in ("model", "effort", "selection_basis", "allow_fallback", "fallback_policy")}, dispatcher.ending_fast_route_fields())
 
     def test_run_plan_release_then_ending_dispatches_the_producer_verifier(self):
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))

@@ -42,6 +42,7 @@ class ModelRegistryTests(unittest.TestCase):
         self.assertTrue(registry["policy"]["priority_producer_first_small_edits"])
         self.assertTrue(registry["policy"]["priority_producer_scheduled_sources"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources_only"])
+        self.assertEqual(registry["ending_fast"], {"selection_basis": "ending_fast_primary", "primary_pair": "gpt-5.3-codex-spark|xhigh", "availability_fallback_pair": "gpt-5.6-luna|low", "fallback_policy": "availability_only", "score_scope": "check_only"})
         self.assertIn("answer", registry["priority_producer"]["eligible_operations"])
         self.assertIn("work", registry["priority_producer"]["eligible_operations"])
         self.assertEqual(registry["complexity_scale"]["bands"][0], {"id": "small", "minimum": 0, "maximum": 24})
@@ -79,6 +80,16 @@ class ModelRegistryTests(unittest.TestCase):
         self.assertFalse(registry["policy"]["priority_producer_first_small_edits"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources_only"])
+        self.assertEqual(registry["ending_fast"], {"selection_basis": "ending_fast_primary", "primary_pair": "gpt-8-economy|low", "availability_fallback_pair": None, "fallback_policy": "availability_only", "score_scope": "check_only"})
+        model_registry.validate_registry(registry)
+
+    def test_fast_ending_uses_floor_when_spark_lacks_xhigh(self):
+        current = self.current_catalog()
+        spark = next(model for model in current["models"] if model["slug"] == "gpt-5.3-codex-spark")
+        spark["supported_reasoning_levels"] = [level for level in spark["supported_reasoning_levels"] if level["effort"] != "xhigh"]
+        registry = model_registry.build_registry(current, "a" * 64)
+        self.assertEqual(registry["ending_fast"]["primary_pair"], "gpt-5.6-luna|low")
+        self.assertIsNone(registry["ending_fast"]["availability_fallback_pair"])
         model_registry.validate_registry(registry)
 
     def test_older_visible_catalog_models_do_not_change_selected_digest_or_registry(self):

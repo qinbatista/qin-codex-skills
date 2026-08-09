@@ -23,7 +23,7 @@ class PromptContractTests(unittest.TestCase):
             self.assertIn(contract_text, self.global_entry_rule)
 
     def test_loader_interface_repeats_the_trigger_without_expanding_scope(self):
-        for contract_text in ["100% global gate", "Always use $prompt-skill", "Ordinary prose does not trigger it", "present the completed prompt first"]:
+        for contract_text in ["100% global prompt-task gate", "Always use $prompt-skill", "ordinary prose does not trigger it", "present the artifact first"]:
             self.assertIn(contract_text, self.agent_config)
         default_prompt = self.agent_config.split("default_prompt: >-", 1)[1].strip()
         self.assertLessEqual(len(default_prompt), 1024)
@@ -44,10 +44,12 @@ class PromptContractTests(unittest.TestCase):
 
     def test_result_first_and_target_validation_are_separate(self):
         self.assertIn("Present the completed prompt or instruction artifact immediately", self.prompt_skill)
-        self.assertIn("Start the scored Ending lifecycle for every new user task", self.prompt_skill)
-        self.assertIn("Create separate real representative-case checks with `ending_verification_plan.py`", self.prompt_skill)
-        self.assertIn("all required cases must PASS", self.prompt_skill)
-        self.assertIn("before returning", self.prompt_skill)
+        self.assertIn("Start one scored projectless Ending lifecycle for every new user task", self.prompt_skill)
+        self.assertIn("Keep representative cases as distinct checks in one `ending_verification_plan.py` plan", self.prompt_skill)
+        self.assertIn("gpt-5.3-codex-spark|xhigh", self.prompt_skill)
+        self.assertIn("registry-floor Luna-low", self.prompt_skill)
+        self.assertIn("all must PASS", self.prompt_skill)
+        self.assertIn("Do not put an external trial run, validator, report, or closeout step before that first presentation", self.prompt_skill)
 
     def test_conflict_resolutions_are_explicit(self):
         for required_rule in ["Ask only when missing information would materially change", "Do not expose private chain-of-thought", "Do not make every task follow a visible step-by-step", "examples as illustrations", "Prefer explicit and measurable instructions"]:

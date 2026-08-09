@@ -323,6 +323,8 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertIn("Prefer direct defining-source facts", result_nodes[-1]["prompt"])
         self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
         self.assertEqual(result_nodes[-1]["routing_recommendation"]["attempt_pair"], "gpt-5.6-terra|medium")
+        ending = next(node for node in plan["nodes"] if node["phase"] == "ending")
+        self.assertEqual({field: ending[field] for field in ("model", "effort", "selection_basis", "allow_fallback", "fallback_policy")}, module.task_route_dispatcher.ending_fast_route_fields())
         self.assertEqual(merge_recommendation, adaptive)
 
     def test_exact_owned_three_source_schedule_fuses_final_source_with_merge(self):

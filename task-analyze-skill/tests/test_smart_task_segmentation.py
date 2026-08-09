@@ -132,19 +132,17 @@ class TestSmartTaskSegmentation(unittest.TestCase):
         integration["effort"] = floor_effort
         integration["complexity_score"] = 45
         integration["complexity_band"] = module.complexity_band(45)
-        ending_model, ending_effort = module.score_role_pair(42).split("|", 1)
+        ending_route = module.ending_fast_route_fields()
         ending = {
             "id": "ending-verify",
             "phase": "ending",
             "skill": "verify-skill",
-            "model": ending_model,
-            "effort": ending_effort,
+            **ending_route,
             "dependencies": ["integration"],
             "prompt": "Run ending verification.",
             "sandbox": "read-only",
             "complexity_score": 42,
             "complexity_band": module.complexity_band(42),
-            "selection_basis": "ending_score_role",
         }
         advanced["nodes"] = [writing, testing, design, integration, ending]
         advanced["main_result_node"] = "integration"
@@ -365,19 +363,17 @@ class TestSmartTaskSegmentation(unittest.TestCase):
             plan["main_result_node"] = "integration"
             plan["nodes"] = [main_node]
             plan["decomposition"]["stage_inventory"] = [stage for stage in plan["decomposition"]["stage_inventory"] if stage.get("node_id") == "integration"]
-            ending_model, ending_effort = module.score_role_pair(42).split("|", 1)
+            ending_route = module.ending_fast_route_fields()
             ending_verify = {
                 "id": "ending-verify",
                 "phase": "ending",
                 "skill": "verify-skill",
-                "model": ending_model,
-                "effort": ending_effort,
+                **ending_route,
                 "dependencies": ["integration"],
                 "prompt": "Run ending verify.",
                 "sandbox": "read-only",
                 "complexity_score": 42,
                 "complexity_band": module.complexity_band(42),
-                "selection_basis": "ending_score_role",
             }
             plan["nodes"].append(ending_verify)
 
@@ -451,7 +447,7 @@ class TestSmartTaskSegmentation(unittest.TestCase):
                         "process_elapsed_ms": 4,
                         "complexity_score": node.get("complexity_score", 42),
                         "complexity_band": node.get("complexity_band", "standard"),
-                        "selection_basis": node.get("selection_basis", "ending_score_role"),
+                        "selection_basis": node.get("selection_basis", "ending_fast_primary"),
                         "dependencies": list(node.get("dependencies", [])),
                     }
 

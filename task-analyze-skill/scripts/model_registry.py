@@ -25,6 +25,10 @@ MODEL_SWITCH_CATEGORIES = ("normal-script-update", "code-design", "finding-bugs"
 COMPLEXITY_BANDS = ({"id": "small", "minimum": 0, "maximum": 24}, {"id": "standard", "minimum": 25, "maximum": 49}, {"id": "complex", "minimum": 50, "maximum": 74}, {"id": "advanced", "minimum": 75, "maximum": 100})
 NUMERIC_GPT_FAMILY_PATTERN = re.compile(r"^gpt-(\d+(?:\.\d+)*)(?:-|$)", re.IGNORECASE)
 SEMANTIC_MODEL_FIELDS = ("slug", "display_name", "description", "default_reasoning_level", "visibility", "supported_in_api", "priority", "additional_speed_tiers", "input_modalities", "context_window")
+ENDING_FAST_MODEL_ID = "gpt-5.3-codex-spark"
+ENDING_FAST_EFFORT = "xhigh"
+ENDING_FAST_SELECTION_BASIS = "ending_fast_primary"
+ENDING_FAST_FALLBACK_POLICY = "availability_only"
 
 
 def _selected_catalog_models(catalog):
@@ -48,7 +52,7 @@ def _selected_catalog_models(catalog):
         return visible_models
     _, highest_numeric_version = max((family for _, family in family_candidates), key=lambda family: family[1])
     active_ids = {model["slug"] for model, family in family_candidates if family[1] == highest_numeric_version}
-    return [model for model in visible_models if model is priority_model or model["slug"] in active_ids]
+    return [model for model in visible_models if model is priority_model or model["slug"] == ENDING_FAST_MODEL_ID or model["slug"] in active_ids]
 
 
 def semantic_catalog_sha256(catalog):
@@ -162,6 +166,14 @@ def _priority_producer_row(model, effort_order):
     return {"enabled": True, "id": model["slug"], "display_name": model.get("display_name", model["slug"]), "routing_role": "bounded_task_segment_or_small_edit_priority", "provider_priority": model["priority"], "provider_positioning": model.get("description", ""), "supported_in_api": bool(model.get("supported_in_api")), "input_modalities": list(model.get("input_modalities", [])), "context_window": model.get("context_window"), "codex_efforts": efforts, "adaptive_efforts": list(dict.fromkeys((easy_effort, complex_effort))), "effort_by_complexity": {"easy": easy_effort, "complex": complex_effort}, "eligible_task_types": list(PRIORITY_PRODUCER_TASK_TYPES), "eligible_modalities": ["text"], "eligible_operations": list(PRIORITY_PRODUCER_OPERATIONS), "small_edit_task_types": list(SMALL_EDIT_TASK_TYPES), "small_edit_operations": list(SMALL_EDIT_OPERATIONS), "small_edit_maximum_complexity_score": 24, "task_segment_purposes": list(TASK_SEGMENT_PURPOSES), "task_segment_maximum_complexity_score": 24, "excluded_operations": ["audit", "lookup", "read", "review", "status", "verify"], "operational_fallback": "contextual_quality_pair", "quality_failure": "suppress_matching_complexity_band_and_upgrade"}
 
 
+def _ending_fast_config(visible_models, floor_pair):
+    spark_model = next((model for model in visible_models if model["slug"] == ENDING_FAST_MODEL_ID), None)
+    spark_efforts = _supported_efforts(spark_model, _catalog_effort_order(visible_models)) if spark_model is not None else []
+    primary_pair = f"{ENDING_FAST_MODEL_ID}|{ENDING_FAST_EFFORT}" if ENDING_FAST_EFFORT in spark_efforts else floor_pair
+    fallback_pair = floor_pair if primary_pair != floor_pair else None
+    return {"selection_basis": ENDING_FAST_SELECTION_BASIS, "primary_pair": primary_pair, "availability_fallback_pair": fallback_pair, "fallback_policy": ENDING_FAST_FALLBACK_POLICY, "score_scope": "check_only"}
+
+
 def build_registry(catalog, catalog_sha256=None):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("client_version"), str) or not isinstance(catalog.get("fetched_at"), str) or not isinstance(catalog.get("models"), list):
         raise ValueError("Codex model catalog is incomplete")
@@ -194,11 +206,11 @@ def build_registry(catalog, catalog_sha256=None):
     model_rows = [_model_row(model, rank, effort_order, role_models) for rank, model in enumerate(quality_models, start=1)]
     active_model_ids = {model["id"] for model in model_rows}
     catalog_models = []
-    selected_catalog_ids = {model["slug"] for model in visible_models if model is priority_model or model["slug"] in active_model_ids}
+    selected_catalog_ids = {model["slug"] for model in visible_models if model is priority_model or model["slug"] == ENDING_FAST_MODEL_ID or model["slug"] in active_model_ids}
     for model in sorted(visible_models, key=lambda model: (model["priority"], model["slug"])):
         if model["slug"] not in selected_catalog_ids:
             continue
-        catalog_role = "priority_producer" if model is priority_model else "active_quality"
+        catalog_role = "priority_producer" if model is priority_model else "ending_fast_primary" if model["slug"] == ENDING_FAST_MODEL_ID else "active_quality"
         catalog_models.append({**_model_metadata(model, effort_order), "catalog_role": catalog_role})
     models_by_id = {model["id"]: model for model in model_rows}
     weak = models_by_id[role_models["weak"]]
@@ -215,7 +227,7 @@ def build_registry(catalog, catalog_sha256=None):
     cold_starts["code-design"] = cold_starts["code"]
     cold_starts["finding-bugs"] = cold_starts["debug"]
     cold_starts["documentation-instructions"] = cold_starts["document"]
-    return {"schema_version": REGISTRY_SCHEMA_VERSION, "registry_id": REGISTRY_ID, "scope": "shared_non_personal", "source": {"models_cache": "~/.codex/models_cache.json", "client_version": catalog["client_version"], "fetched_at": catalog["fetched_at"], "catalog_sha256": catalog_sha256}, "active_family": {"id": active_family_id, "numeric_version": list(active_numeric_version), "selection": "highest_numeric_gpt_family", "model_count": len(model_rows)}, "catalog_models": catalog_models, "ladder_direction": "weakest_to_strongest", "effort_order": effort_order, "complexity_scale": {"minimum": 0, "maximum": 100, "bands": list(COMPLEXITY_BANDS), "quality_complex_threshold": 50}, "role_models": role_models, "role_pairs": {"floor": floor_pair, "weak_default": weak_default_pair, "balanced_default": balanced_default_pair, "balanced_complex": balanced_complex_pair, "frontier_complex": frontier_complex_pair}, "policy": {"enabled": True, "quality_first": True, "downgrade_after_repeated_real_passes": True, "minimum_real_passes_before_downgrade": 2, "upgrade_after_quality_failure": True, "operational_failures_are_neutral": True, "freeze_lowest_verified_pair": True, "priority_producer_first_text_code": priority_model is not None, "priority_producer_first_small_edits": priority_model is not None, "priority_producer_task_segments": priority_model is not None, "priority_producer_scheduled_sources": priority_model is not None, "priority_producer_scheduled_sources_only": False, "minimum_pair": floor_pair}, "priority_producer": _priority_producer_row(priority_model, effort_order), "private_learning_contract": {"authority": "dual_local_and_obsidian", "local_path_template": "~/.codex/model-routing-memory/events.jsonl", "projection_path_template": "Model Switch.md", "record_path_template": "<owner-routing>/<Category>.md", "native_wikilink_graph": True, "stable_categories": list(MODEL_SWITCH_CATEGORIES), "event_id_dedupe": True, "specificity_order": ["project_task", "module", "file", "symbol"], "fields_only": True, "hierarchy_notes": False, "legacy_local_json": "read_only_inactive"}, "default_cold_start": balanced_default_pair, "cold_start_defaults": cold_starts, "models": model_rows}
+    return {"schema_version": REGISTRY_SCHEMA_VERSION, "registry_id": REGISTRY_ID, "scope": "shared_non_personal", "source": {"models_cache": "~/.codex/models_cache.json", "client_version": catalog["client_version"], "fetched_at": catalog["fetched_at"], "catalog_sha256": catalog_sha256}, "active_family": {"id": active_family_id, "numeric_version": list(active_numeric_version), "selection": "highest_numeric_gpt_family", "model_count": len(model_rows)}, "catalog_models": catalog_models, "ladder_direction": "weakest_to_strongest", "effort_order": effort_order, "complexity_scale": {"minimum": 0, "maximum": 100, "bands": list(COMPLEXITY_BANDS), "quality_complex_threshold": 50}, "role_models": role_models, "role_pairs": {"floor": floor_pair, "weak_default": weak_default_pair, "balanced_default": balanced_default_pair, "balanced_complex": balanced_complex_pair, "frontier_complex": frontier_complex_pair}, "policy": {"enabled": True, "quality_first": True, "downgrade_after_repeated_real_passes": True, "minimum_real_passes_before_downgrade": 2, "upgrade_after_quality_failure": True, "operational_failures_are_neutral": True, "freeze_lowest_verified_pair": True, "priority_producer_first_text_code": priority_model is not None, "priority_producer_first_small_edits": priority_model is not None, "priority_producer_task_segments": priority_model is not None, "priority_producer_scheduled_sources": priority_model is not None, "priority_producer_scheduled_sources_only": False, "minimum_pair": floor_pair}, "priority_producer": _priority_producer_row(priority_model, effort_order), "ending_fast": _ending_fast_config(visible_models, floor_pair), "private_learning_contract": {"authority": "dual_local_and_obsidian", "local_path_template": "~/.codex/model-routing-memory/events.jsonl", "projection_path_template": "Model Switch.md", "record_path_template": "<owner-routing>/<Category>.md", "native_wikilink_graph": True, "stable_categories": list(MODEL_SWITCH_CATEGORIES), "event_id_dedupe": True, "specificity_order": ["project_task", "module", "file", "symbol"], "fields_only": True, "hierarchy_notes": False, "legacy_local_json": "read_only_inactive"}, "default_cold_start": balanced_default_pair, "cold_start_defaults": cold_starts, "models": model_rows}
 
 
 def validate_registry(registry):
@@ -255,7 +267,7 @@ def validate_registry(registry):
     catalog_ids = []
     catalog_priorities = []
     for model in catalog_models:
-        if not isinstance(model, dict) or not isinstance(model.get("id"), str) or model["id"] in catalog_ids or model.get("catalog_role") not in {"active_quality", "priority_producer", "catalog_only"} or isinstance(model.get("provider_priority"), bool) or not isinstance(model.get("provider_priority"), (int, float)):
+        if not isinstance(model, dict) or not isinstance(model.get("id"), str) or model["id"] in catalog_ids or model.get("catalog_role") not in {"active_quality", "priority_producer", "ending_fast_primary", "catalog_only"} or isinstance(model.get("provider_priority"), bool) or not isinstance(model.get("provider_priority"), (int, float)):
             raise ValueError("model registry catalog metadata is invalid")
         efforts = model.get("codex_efforts")
         if not isinstance(efforts, list) or not efforts or efforts != [effort for effort in effort_order if effort in efforts]:
@@ -300,6 +312,14 @@ def validate_registry(registry):
             raise ValueError("model registry task-segment producer policy is invalid")
     if bool(priority_producer) != bool(policy.get("priority_producer_first_text_code")) or policy.get("priority_producer_scheduled_sources_only") is not False or bool(priority_producer) != bool(policy.get("priority_producer_first_small_edits")) or bool(priority_producer) != bool(policy.get("priority_producer_task_segments")) or bool(priority_producer) != bool(policy.get("priority_producer_scheduled_sources")):
         raise ValueError("model registry priority producer admission is inconsistent")
+    ending_fast = registry.get("ending_fast")
+    catalog_efforts = {model["id"]: model["codex_efforts"] for model in catalog_models}
+    preferred_pair = f"{ENDING_FAST_MODEL_ID}|{ENDING_FAST_EFFORT}"
+    expected_primary_pair = preferred_pair if ENDING_FAST_EFFORT in catalog_efforts.get(ENDING_FAST_MODEL_ID, []) else role_pairs["floor"]
+    expected_fallback_pair = role_pairs["floor"] if expected_primary_pair != role_pairs["floor"] else None
+    expected_ending_fast = {"selection_basis": ENDING_FAST_SELECTION_BASIS, "primary_pair": expected_primary_pair, "availability_fallback_pair": expected_fallback_pair, "fallback_policy": ENDING_FAST_FALLBACK_POLICY, "score_scope": "check_only"}
+    if ending_fast != expected_ending_fast:
+        raise ValueError("model registry fast Ending policy is invalid")
     if policy.get("downgrade_after_repeated_real_passes") is not True or policy.get("minimum_real_passes_before_downgrade") != 2 or policy.get("upgrade_after_quality_failure") is not True:
         raise ValueError("model registry adaptive learning policy is invalid")
     priority_producer_id = priority_producer.get("id") if isinstance(priority_producer, dict) else None
@@ -312,7 +332,7 @@ def validate_registry(registry):
         raise ValueError("model registry catalog has no numeric GPT quality family")
     highest_family_id, highest_numeric_version = max((family for _, family in numeric_catalog_families), key=lambda family: family[1])
     expected_active_ids = {model["id"] for model, family in numeric_catalog_families if family[1] == highest_numeric_version}
-    expected_roles = {model["id"]: "priority_producer" if model["id"] == priority_producer_id else "active_quality" if model["id"] in expected_active_ids else "catalog_only" for model in catalog_models}
+    expected_roles = {model["id"]: "priority_producer" if model["id"] == priority_producer_id else "ending_fast_primary" if model["id"] == ENDING_FAST_MODEL_ID else "active_quality" if model["id"] in expected_active_ids else "catalog_only" for model in catalog_models}
     if (highest_family_id, highest_numeric_version) != (expected_family_id, active_numeric_version) or set(model_ids) != expected_active_ids or any(model["catalog_role"] != expected_roles[model["id"]] for model in catalog_models):
         raise ValueError("model registry active family does not match the highest catalog family")
     private_contract = registry.get("private_learning_contract")

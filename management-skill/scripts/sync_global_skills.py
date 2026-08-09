@@ -135,22 +135,22 @@ CHINESE_CATEGORY_LABELS = {
 }
 SKILL_SUMMARIES = {
     "task-analyze-skill": "Explicit routing, benchmark, and maintenance strategy. The compact bootstrap sends eligible ordinary production to the saved contextual quality pair; full Task Analyze owns strategy and cost-admitted graphs.",
-    "workflow-skill": "Executes only positively admitted locked routes. Ordinary adaptive production uses one producer; cost-admitted nodes keep exact pairs and receipts, return the result, then hand evidence to Ending.",
+    "workflow-skill": "Executes only positively admitted locked routes. Producers retain exact pairs and receipts, return the result, then hand bounded checks to one fast Ending.",
     "prompt-skill": "The 100% global gate for reusable prompt and durable-instruction creation, review, edit, repair, standardization, testing, summarization, and optimization. The selected producer loads it; ordinary prose is excluded.",
-    "code-skill": "Adaptive or admitted-route executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. The saved task-strategy pair executes ordinary work; Spark is schedule-source-only.",
+    "code-skill": "Adaptive or admitted-route executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. The saved task-strategy pair executes ordinary work; eligible small work may try Spark.",
     "project-memory-skill": "Recalls and records project changes with mandatory project/module/method coverage plus concrete file evidence, using a private local authority and optional native Obsidian projection.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
-    "verify-skill": "Real Verify runs in Ending Task after the completed result is presented and applies its verdict to the original receipt-backed result attempt.",
+    "verify-skill": "One post-result Ending uses fixed Spark-xhigh for the smallest real checks and terminal memory/classification; only explicit availability/capability failure permits Luna-low.",
     "management-skill": "Handles Codex profile operations and source-first global Skill deployment/publication behind a numbered retained-capability regression gate.",
 }
 CHINESE_SKILL_SUMMARIES = {
     "task-analyze-skill": "显式路由、benchmark 和维护策略：紧凑 bootstrap 把合格普通生产任务交给已保存的上下文质量档；完整 skill 负责策略和成本准入图谱。",
-    "workflow-skill": "只执行已通过准入的锁定路线。普通 Auto 使用一个上下文 producer；已准入节点保留准确 pair 和 receipt，先返回结果，再把证据交给 Ending。",
+    "workflow-skill": "只执行已通过准入的锁定路线。Producer 保留准确 pair 和 receipt，先返回结果，再把有界检查交给一个快速 Ending。",
     "prompt-skill": "可复用 prompt 与持久 AI 指令创建、审查、编辑、修复、标准化、测试、总结和优化的全局 100% 入口。选中的 producer 加载它；普通文案不会误触发。",
-    "code-skill": "活动注册代码域的自适应或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务使用任务策略质量档；Spark 只用于 schedule source。",
+    "code-skill": "活动注册代码域的自适应或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务使用任务策略质量档；合格小任务可先试 Spark。",
     "project-memory-skill": "强制按项目、功能模块和方法建立覆盖，再用具体文件证据回溯与记录修改；本地私有记录为权威来源，Obsidian 为可选原生投影。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
-    "verify-skill": "完成的主结果先立即展示；Real Verify 之后在 Ending Task 中执行，并把判定回填到原始的 receipt-backed 结果尝试。",
+    "verify-skill": "主结果先展示；一个 Ending 固定使用 Spark-xhigh 做最小真实检查与记忆/分类收尾，仅明确不可用时回退 Luna-low。",
     "management-skill": "处理 Codex profile 操作，以及由编号化全能力非回归门禁保护的全局 Skill 本地部署和 GitHub 发布。",
 }
 SKILL_CONTENTS = {
@@ -198,9 +198,9 @@ SKILL_CONTENTS = {
     "verify-skill": [
         ("Proportional completion evidence", "The producer owns the bounded Quick Check before presentation."),
         ("Persistent End Task", "Create and rename a projectless task exactly End Task-<related task>; every terminal status remains visible."),
-        ("Deterministic manifest", "Ending runs the supplied fixed validator instead of guessing schema fields or reinterpreting prose."),
-        ("Real-check boundary", "Ending runs its assigned proportional real check; a failing verifier records evidence and hands repair to another task."),
-        ("Terminal verdict", "Durable evidence precedes a visible verdict and structured model suitability/next-route summary."),
+        ("Fixed fast executor", "Use Spark-xhigh for every Ending; score scopes checks, and only explicit availability/capability failure permits registry-floor Luna-low."),
+        ("Real-check boundary", "Run the smallest supplied real checks once; a failing verifier records evidence and returns repair to the immutable origin."),
+        ("Terminal verdict", "One visible verdict closes routing classification, project-result memory when applicable, and the bounded preference scan."),
     ],
     "management-skill": [
         ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
@@ -254,9 +254,9 @@ CHINESE_SKILL_CONTENTS = {
     "verify-skill": [
         ("成比例完成证据", "Producer 在展示前负责边界明确的 Quick Check。"),
         ("持久 End Task", "创建并准确命名 projectless End Task-<相关任务>；所有终态都保持可见。"),
-        ("确定性 Manifest", "Ending 执行给定固定 validator，不猜 schema 字段，也不重新解释自然语言。"),
-        ("真实检查边界", "Ending 执行分配的成比例真实检查；失败 verifier 记录证据并交给另一个任务修复。"),
-        ("终局判定", "持久证据先于可见终局和结构化模型适配度/下一路线总结。"),
+        ("固定快速执行器", "所有 Ending 首选 Spark-xhigh；分数只控制检查，只有明确不可用时才回退 registry-floor Luna-low。"),
+        ("真实检查边界", "最小真实检查只执行一次；失败 verifier 记录证据并把修复退回不可变 origin。"),
+        ("终局判定", "一次可见终局完成路由分类、适用的项目结果记忆与有界偏好扫描。"),
     ],
     "management-skill": [
         ("Codex Switch", "管理本地 Codex auth profile 与确认后的账号切换。"),

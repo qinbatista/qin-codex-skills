@@ -20,28 +20,49 @@ def build_plan(root, task_name, task_score, checks, project_id="project-123"):
 
 
 class EndingVerificationPlanTests(unittest.TestCase):
-    def test_score_bands_select_increasing_quality_roles(self):
+    def test_score_bands_scope_checks_but_keep_fixed_spark_xhigh(self):
         routes = [PLAN.pair_for_score(score) for score in (12, 35, 60, 90)]
         self.assertEqual([route["complexity_band"] for route in routes], ["small", "standard", "complex", "advanced"])
-        self.assertEqual(len({route["selected_pair"] for route in routes}), 4)
+        self.assertEqual({route["selected_pair"] for route in routes}, {"gpt-5.3-codex-spark|xhigh"})
+        self.assertTrue(all(route["selection_basis"] == "ending_fast_primary" for route in routes))
+        self.assertTrue(all(route["score_controls"] == "check_scope_and_classification_only" for route in routes))
+        self.assertTrue(all(route["quality_failure_model_fallback"] is False for route in routes))
 
-    def test_each_independent_check_becomes_its_own_ending_task(self):
+    def test_missing_spark_capability_uses_only_the_registry_floor(self):
+        registry = json.loads(json.dumps(PLAN._registry()))
+        registry["catalog_models"] = [model for model in registry["catalog_models"] if model["id"] != "gpt-5.3-codex-spark"]
+        registry["ending_fast"] = {
+            "selection_basis": "ending_fast_primary",
+            "primary_pair": registry["role_pairs"]["floor"],
+            "availability_fallback_pair": None,
+            "fallback_policy": "availability_only",
+            "score_scope": "check_only",
+        }
+        route = PLAN.pair_for_score(90, registry)
+        self.assertEqual(route["complexity_band"], "advanced")
+        self.assertEqual(route["selected_pair"], registry["role_pairs"]["floor"])
+        self.assertEqual(route["primary_selection_reason"], "primary_pair_not_in_registry")
+        self.assertEqual(route["approved_pairs"], [registry["role_pairs"]["floor"]])
+
+    def test_plan_keeps_bounded_checks_for_one_task_ending(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan = build_plan(root, "routing", 60, [
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"], "complexity_score": 20},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])
-        self.assertEqual(plan["execution"], "separate_persistent_tasks")
-        self.assertEqual(plan["schema_version"], 4)
-        self.assertEqual(plan["thread_target"]["type"], "projectless")
-        self.assertNotIn("environment", plan["thread_target"])
-        self.assertEqual(plan["thread_target"]["project_root"], str(root.resolve()))
-        self.assertEqual(plan["terminal_thread_policy"], {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"})
-        self.assertEqual([task["title"] for task in plan["ending_tasks"]], ["End Task-routing-unit", "End Task-routing-integration"])
-        self.assertTrue(all(task["thread_target"]["type"] == "projectless" for task in plan["ending_tasks"]))
-        self.assertTrue(all(task["terminal_thread_policy"]["pass"] == "keep_visible" for task in plan["ending_tasks"]))
-        self.assertNotEqual(plan["ending_tasks"][0]["selected_pair"], plan["ending_tasks"][1]["selected_pair"])
+        self.assertEqual(plan["execution"], "one_persistent_ending_runs_all_checks")
+        self.assertEqual(plan["schema_version"], 6)
+        self.assertNotIn("title", plan)
+        self.assertNotIn("thread_target", plan)
+        self.assertNotIn("terminal_thread_policy", plan)
+        thread_fields = {"title", "thread_target", "terminal_thread_policy", "tool", "arguments", "launch_candidates"}
+        self.assertTrue(all(thread_fields.isdisjoint(task) for task in plan["ending_tasks"]))
+        self.assertTrue(all("terminal_thread_policy" not in task["on_failure"] for task in plan["ending_tasks"]))
+        legacy_launchable_checks = [task for task in plan["ending_tasks"] if {"title", "thread_target"}.issubset(task)]
+        self.assertEqual(legacy_launchable_checks, [])
+        self.assertEqual({task["selected_pair"] for task in plan["ending_tasks"]}, {"gpt-5.3-codex-spark|xhigh"})
+        self.assertEqual(plan["ending_model_policy"]["availability_fallback_pair"], "gpt-5.6-luna|low")
         self.assertEqual(plan["origin_session"]["thread_id"], "source-session-001")
         self.assertEqual(plan["repair_policy"]["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
 
@@ -78,7 +99,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(evidence["repair_handoff"]["error"]["exit_code"], 7)
         self.assertIn("broken", evidence["repair_handoff"]["error"]["stderr"])
 
-    def test_launch_spec_requires_one_real_projectless_thread_per_check(self):
+    def test_launch_spec_requires_one_projectless_thread_for_all_checks(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path = root / "plan.json"
@@ -88,27 +109,38 @@ class EndingVerificationPlanTests(unittest.TestCase):
             ])), encoding="utf-8")
             launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123")
         self.assertEqual(launch["execution"], "host_persistent_create_thread")
-        self.assertEqual(launch["required_launch_count"], 2)
+        self.assertEqual(launch["required_launch_count"], 1)
         self.assertEqual({item["tool"] for item in launch["launch_requests"]}, {"codex_app__create_thread"})
         self.assertEqual(launch["project_binding"]["project_root"], str(root.resolve()))
         self.assertEqual(launch["origin_session"]["thread_id"], "source-session-001")
         self.assertTrue(all(item["arguments"]["target"] == {"type": "projectless"} for item in launch["launch_requests"]))
         self.assertTrue(all(item["arguments"]["prompt"].startswith("ENDING_TASK_WORKER\n") for item in launch["launch_requests"]))
         self.assertTrue(all("Verification plan relative to project root: plan.json" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
-        self.assertTrue(all("Evidence output relative to project root: Cache/tests/ending-evidence/" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
-        self.assertTrue(all("Personal memory candidates output relative to project root: Cache/tests/ending-evidence/" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertEqual(launch["launch_requests"][0]["check_id"], "task-ending")
+        self.assertEqual(launch["launch_requests"][0]["title"], "End Task-routing")
+        self.assertEqual(launch["launch_requests"][0]["thread_target"], {"type": "projectless"})
+        self.assertEqual(launch["launch_requests"][0]["terminal_thread_policy"], {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"})
+        self.assertEqual(launch["launch_requests"][0]["check_ids"], ["unit", "integration"])
+        self.assertEqual(set(launch["launch_requests"][0]["evidence_outputs"]), {"unit", "integration"})
+        self.assertIn("Checks and evidence outputs:", launch["launch_requests"][0]["arguments"]["prompt"])
+        self.assertIn("Personal memory candidates output relative to project root: Cache/tests/ending-evidence/", launch["launch_requests"][0]["arguments"]["prompt"])
         self.assertTrue(all(str(root / "plan.json") not in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("Never call set_thread_archived" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("structured model_assessment" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
-        self.assertTrue(all("If the scan finds no durable preference" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all("If no durable candidate exists" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("Origin producer session (immutable)" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("automatically submit the generated repair_prompt" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertEqual(
             [f"{item['arguments']['model']}|{item['arguments']['thinking']}" for item in launch["launch_requests"]],
             [item["selected_pair"] for item in launch["launch_requests"]],
         )
+        request = launch["launch_requests"][0]
+        self.assertEqual([candidate["pair"] for candidate in request["launch_candidates"]], ["gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low"])
+        self.assertIn("scheduler_unavailable", request["availability_fallback_reasons"])
+        self.assertIn("required_modality_unavailable", request["availability_fallback_reasons"])
+        self.assertIn("Correctness, quality, protocol, timeout, or command execution failures never change the Ending pair.", request["arguments"]["prompt"])
 
-    def test_launch_audit_blocks_until_every_thread_is_acknowledged(self):
+    def test_launch_audit_requires_the_single_task_ending_acknowledgement(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path = root / "plan.json"
@@ -121,19 +153,15 @@ class EndingVerificationPlanTests(unittest.TestCase):
             launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123")
             launch_path.write_text(json.dumps(launch), encoding="utf-8")
             not_launched = PLAN.audit_launches(launch_path, state_path)
-            PLAN.acknowledge_launch(launch_path, "unit", "thread-unit", "host-unit", "project-123", state_path)
-            blocked = PLAN.audit_launches(launch_path, state_path)
-            PLAN.acknowledge_launch(launch_path, "integration", "thread-integration", "host-integration", "project-123", state_path)
+            PLAN.acknowledge_launch(launch_path, "task-ending", "thread-ending", "host-ending", "project-123", state_path)
             passed = PLAN.audit_launches(launch_path, state_path)
         self.assertEqual(not_launched["status"], "blocked")
         self.assertEqual(not_launched["end_task_trigger_rate"], "0%")
-        self.assertEqual(blocked["status"], "blocked")
-        self.assertEqual(blocked["end_task_trigger_rate"], "50%")
         self.assertEqual(passed["status"], "pass")
         self.assertEqual(passed["end_task_trigger_rate"], "100%")
-        self.assertEqual(passed["launched_count"], 2)
+        self.assertEqual(passed["launched_count"], 1)
 
-    def test_one_thread_cannot_acknowledge_two_checks(self):
+    def test_availability_fallback_requires_an_approved_reason(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path = root / "plan.json"
@@ -144,9 +172,22 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"]},
             ])), encoding="utf-8")
             launch_path.write_text(json.dumps(PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123")), encoding="utf-8")
-            PLAN.acknowledge_launch(launch_path, "unit", "same-thread", "host", "project-123", state_path)
-            with self.assertRaisesRegex(ValueError, "cannot acknowledge multiple checks"):
-                PLAN.acknowledge_launch(launch_path, "integration", "same-thread", "host", "project-123", state_path)
+            with self.assertRaisesRegex(ValueError, "sanitized availability reason"):
+                PLAN.acknowledge_launch(launch_path, "task-ending", "fallback-thread", "host", "project-123", state_path, "gpt-5.6-luna|low")
+            acknowledged = PLAN.acknowledge_launch(
+                launch_path,
+                "task-ending",
+                "fallback-thread",
+                "host",
+                "project-123",
+                state_path,
+                "gpt-5.6-luna|low",
+                "primary_model_unavailable",
+            )
+            passed = PLAN.audit_launches(launch_path, state_path)
+        self.assertEqual(acknowledged["selected_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(acknowledged["availability_fallback_reason"], "primary_model_unavailable")
+        self.assertEqual(passed["status"], "pass")
 
     def test_requirement_mismatch_turns_a_passing_command_into_source_session_repair(self):
         with tempfile.TemporaryDirectory() as temporary:

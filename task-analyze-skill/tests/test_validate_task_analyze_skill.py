@@ -177,7 +177,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertIn("build real proportional Ending checks", python_text)
         self.assertIn("Every required check must PASS", python_text)
         self.assertIn("Before presentation, run the smallest safe local smoke", csharp_text)
-        self.assertIn("separate scored/modelled End Tasks", csharp_text)
+        self.assertIn("one fixed Spark-xhigh projectless Ending", csharp_text)
+        self.assertIn("score scopes checks only", csharp_text)
+        self.assertIn("only Spark availability/capability failure permits Luna-low", csharp_text)
         self.assertIn("All required checks must PASS", csharp_text)
         self.assertNotIn("check before the main result", csharp_text.lower())
         self.assertIn("uses this file plus", unity_text)
@@ -203,6 +205,17 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertIn("task_capability_profile", module.REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION)
         self.assertIn("capability_fingerprint", module.REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION)
         self.assertEqual(tuple(module.ACTIVE_MODEL_EFFORTS), module.ACTIVE_MODEL_ORDER)
+
+    def test_validator_enforces_fixed_fast_ending_and_rejects_score_routing(self):
+        self.assertIn("ending_fast_primary", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("availability_only", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("scheduler_unavailable", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("required_modality_unavailable", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("ending_fast_route_fields", module.REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION)
+        self.assertIn("ENDING_FAST_FALLBACK_PAIR", module.REQUIRED_ROUTING_POLICY_ENDING_FAST_IMPLEMENTATION)
+        self.assertIn("apply_ending_fast_route", module.REQUIRED_DISPATCHER_ENDING_FAST_IMPLEMENTATION)
+        self.assertEqual(set(module.FORBIDDEN_ENDING_PLAN_IMPLEMENTATION), {"BAND_ROLES", "ending_score_role", "separate_persistent_tasks"})
+        self.assertNotIn("fixed_fast_ending", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
 
     def test_shared_registry_contains_only_the_highest_numeric_gpt_family_and_source_digest(self):
         payload = json.loads((Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8"))
@@ -281,8 +294,13 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                 main_result_node = plan["main_result_node"]
                 main = next(node for node in plan["nodes"] if node["id"] == main_result_node)
                 self.assertEqual(main["phase"], "result")
-                for ending in (node for node in plan["nodes"] if node["phase"] == "ending"):
-                    self.assertIn(main_result_node, ending["dependencies"])
+                endings = [node for node in plan["nodes"] if node["phase"] == "ending"]
+                self.assertEqual(len(endings), 1)
+                ending = endings[0]
+                self.assertEqual(ending["dependencies"], [main_result_node])
+                self.assertEqual((ending["model"], ending["effort"]), (module.ENDING_FAST_MODEL, module.ENDING_FAST_EFFORT))
+                self.assertGreaterEqual(len(ending["acceptance_checks"]), 1)
+                self.assertEqual(ending["terminal_closeout"], module.ENDING_TERMINAL_CLOSEOUT)
 
     def test_plan_rejects_legacy_foreground_mini_phase(self):
         plan = json.loads(json.dumps(next(iter(module.sample_plans().values()))))
@@ -322,7 +340,16 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         plan = json.loads(json.dumps(next(iter(module.sample_plans().values()))))
         plan["nodes"] = [node for node in plan["nodes"] if node["skill"] != "verify-skill"]
         failures = module.validate_plan(plan, APPROVED)
-        self.assertIn("plan must contain exactly one post-result Real verifier for the main result", failures)
+        self.assertIn("plan must contain exactly one task-level post-result Ending; acceptance checks and closeout stay inside it", failures)
+
+    def test_plan_rejects_sibling_ending_nodes_even_when_each_is_bounded(self):
+        plan = json.loads(json.dumps(next(iter(module.sample_plans().values()))))
+        sibling = dict(next(node for node in plan["nodes"] if node["phase"] == "ending"))
+        sibling["id"] = "ending-records"
+        sibling["acceptance_checks"] = [{"check_id": "records", "acceptance": "Write terminal records."}]
+        plan["nodes"].append(sibling)
+        failures = module.validate_plan(plan, APPROVED)
+        self.assertIn("plan must contain exactly one task-level post-result Ending; acceptance checks and closeout stay inside it", failures)
 
     def test_downstream_pairs_may_equal_entry_pair(self):
         sample_plans = module.sample_plans()
@@ -467,7 +494,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             self.assertIn("terminal memory/classification/record closeout", bootstrap_text)
             self.assertIn("codex_app__create_thread projectless", bootstrap_text)
             self.assertIn("ack threadId+hostId+projectId", bootstrap_text)
-            self.assertIn("End Tasks stay globally visible", bootstrap_text)
+            self.assertIn("End Task stays globally visible", bootstrap_text)
             self.assertIn("never auto-archive/delete", bootstrap_text)
             self.assertIn("attempts,first/retry pass", bootstrap_text)
             self.assertIn("FAIL records evidence", bootstrap_text)

@@ -273,6 +273,13 @@
     "operational_fallback": "contextual_quality_pair",
     "quality_failure": "suppress_matching_complexity_band_and_upgrade"
   },
+  "ending_fast": {
+    "selection_basis": "ending_fast_primary",
+    "primary_pair": "gpt-5.3-codex-spark|xhigh",
+    "availability_fallback_pair": "gpt-5.6-luna|low",
+    "fallback_policy": "availability_only",
+    "score_scope": "check_only"
+  },
   "private_learning_contract": {
     "authority": "dual_local_and_obsidian",
     "local_path_template": "~/.codex/model-routing-memory/events.jsonl",

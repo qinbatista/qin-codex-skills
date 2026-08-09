@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import inspect
 import json
 import os
 import time
@@ -70,7 +71,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         floor_pair = module.MODEL_ROLE_PAIRS["floor"]
         floor_model, floor_effort = module.routing_history_module.parse_pair(floor_pair)
         fingerprint = module.routing_history_module.profile_fingerprint(condition, module.routing_history_module.canonical_pairs(ladder), (floor_model, floor_effort), (floor_model, floor_effort))
-        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "sandbox": "read-only"}], "main_result_node": "direct"}
+        return {"schema_version": 2, "complexity": "easy", "topology": "sequential", "cache_dir": str(cache_dir), "entry": {"model": "gpt-5.6-terra", "effort": "low"}, "nodes": [{"id": "direct", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": [], "prompt": "Return RESULT=12", "sandbox": "read-only", "routing_condition": condition, "task_summary": "Return a direct arithmetic answer for this task.", "candidate_ladder": ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"}}, {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Run Real Verify after the result is released.", "acceptance_checks": [{"check_id": "result-value", "acceptance": "The released result contains RESULT=12."}], "sandbox": "read-only"}], "main_result_node": "direct"}
 
     def dependent_plan(self, cache_dir):
         plan = self.plan(cache_dir)
@@ -91,9 +92,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         main_node = plan["nodes"][1]
         main_node.update({"complexity_score": 58, "complexity_band": "complex", "selection_basis": "adaptive_quality"})
         ending = plan["nodes"][2]
-        ending_pair = module.score_role_pair(42)
-        ending["model"], ending["effort"] = ending_pair.split("|", 1)
-        ending.update({"complexity_score": 42, "complexity_band": "standard", "selection_basis": "ending_score_role"})
+        ending.update({**module.ending_fast_route_fields(), "complexity_score": 42, "complexity_band": "standard"})
         plan["decomposition"] = {
             "policy": "max_safe",
             "stage_inventory": [
@@ -145,64 +144,14 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         pair = f"{args.model}|{args.effort}"
         return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": pair, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": pair, "status": status, "failure_class": failure_class, "route_attempts": [], "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}, "result_published": True, "result_ready_monotonic_ns": ready_monotonic_ns}
 
-    def plan_with_ending_optimization(self, cache_dir):
-        condition = {
-            "task_family": "direct",
-            "artifact": "answer",
-            "scope": "single",
-            "ambiguity": "low",
-            "modality": "text",
-            "risk": "low",
-            "complexity": "easy",
-            "owning_skill": "workflow-skill",
-            "project_family": "global",
-            "verification_shape": "real",
-            "execution_domain": "general",
-        }
-        ladder = module.normal_adaptive_pair_texts()
-        floor_pair = module.MODEL_ROLE_PAIRS["floor"]
-        floor_model, floor_effort = module.routing_history_module.parse_pair(floor_pair)
-        fingerprint = module.routing_history_module.profile_fingerprint(condition, module.routing_history_module.canonical_pairs(ladder), (floor_model, floor_effort), (floor_model, floor_effort))
-        return {
-            "schema_version": 2,
-            "complexity": "easy",
-            "topology": "sequential",
-            "cache_dir": str(cache_dir),
-            "entry": {"model": "gpt-5.6-terra", "effort": "low"},
-            "nodes": [
-                {
-                    "id": "direct",
-                    "phase": "result",
-                    "skill": "workflow-skill",
-                    "model": floor_model,
-                    "effort": floor_effort,
-                    "dependencies": [],
-                    "prompt": "Return a base result",
-                    "sandbox": "read-only",
-                    "routing_condition": condition,
-                    "task_summary": "Return a validated result for this task.",
-                    "candidate_ladder": ladder,
-                    "static_suggestion": floor_pair,
-                    "hard_floor": floor_pair,
-                    "trial": False,
-                    "routing_recommendation": {"selected_pair": floor_pair, "trial": False, "reason": "shared_cold_start", "profile_fingerprint": fingerprint, "calibration_state": "cold_start", "best_pair": None, "selection_basis": "dual_model_history"},
-                },
-                {"id": "optimization", "phase": "ending", "skill": "optimization-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Optimize this result independently.", "sandbox": "read-only"},
-                {
-                    "id": "optimization-verify",
-                    "phase": "ending",
-                    "skill": "verify-skill",
-                    "model": floor_model,
-                    "effort": floor_effort,
-                    "dependencies": ["direct", "optimization"],
-                    "verifies_node": "optimization",
-                    "prompt": "Verify optimization output.",
-                    "sandbox": "read-only",
-                },
-                {"id": "real-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["direct"], "prompt": "Run real verify.", "sandbox": "read-only"},
-            ],
-            "main_result_node": "direct",
-        }
+    def plan_with_multi_check_ending(self, cache_dir):
+        plan = self.plan(cache_dir)
+        plan["nodes"][-1]["acceptance_checks"] = [
+            {"check_id": "real-result", "acceptance": "Run the bounded real result check."},
+            {"check_id": "release-state", "acceptance": "Confirm the released state matches the acceptance contract."},
+            {"check_id": "memory-closeout", "acceptance": "Record sanitized terminal memory and classification once after PASS."},
+        ]
+        return plan
 
     def _release_ending_handoff(self, handoff):
         handoff.setdefault("cache_dir", str(Path(handoff["ending_handoff_path"]).resolve().parent))
@@ -224,6 +173,19 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
         self.assertEqual(f"{plan['nodes'][0]['model']}|{plan['nodes'][0]['effort']}", module.MODEL_ROLE_PAIRS["floor"])
+        ending = plan["nodes"][-1]
+        self.assertEqual({field: ending[field] for field in ("model", "effort", "selection_basis", "allow_fallback", "fallback_policy")}, module.ending_fast_route_fields())
+
+    def test_ending_route_is_fixed_across_all_score_bands(self):
+        for score in (0, 24, 25, 49, 50, 74, 75, 100):
+            with self.subTest(score=score), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                plan = self.plan(root / "work" / "cache" / "route")
+                ending = plan["nodes"][-1]
+                ending.update({"model": "gpt-5.6-sol", "effort": "ultra", "complexity_score": score, "complexity_band": module.complexity_band(score), "selection_basis": "ending_score_role", "allow_fallback": [], "fallback_policy": "quality"})
+                failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+            self.assertEqual(failures, [])
+            self.assertEqual({field: ending[field] for field in ("model", "effort", "selection_basis", "allow_fallback", "fallback_policy")}, module.ending_fast_route_fields())
 
     def test_valid_plan_accepts_project_relative_cache_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -611,7 +573,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan = self.plan(root / "work" / "cache" / "route")
             plan["nodes"][-1]["skill"] = "management-skill"
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(any("exactly one non-targeted Ending verify-skill" in failure for failure in failures))
+        self.assertTrue(any("task-level Ending must use verify-skill" in failure for failure in failures))
 
     def test_non_tiny_profile_requires_the_complete_catalog_quality_ladder(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -632,30 +594,35 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertTrue(any("entry pair" in failure for failure in failures))
         self.assertTrue(any("unsafe automatic sandbox" in failure for failure in failures))
 
-    def test_plan_requires_optimization_node_verifier_with_missing_verifies_node(self):
+    def test_plan_rejects_multiple_sibling_ending_nodes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            plan = self.plan_with_ending_optimization(root / "work" / "cache" / "route")
-            plan["nodes"][2].pop("verifies_node")
+            plan = self.plan(root / "work" / "cache" / "route")
+            sibling = dict(plan["nodes"][-1])
+            sibling["id"] = "ending-records"
+            sibling["acceptance_checks"] = [{"check_id": "records", "acceptance": "Write terminal records."}]
+            plan["nodes"].append(sibling)
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(
-            any("must have exactly one ending verify-skill verifier targeting it" in failure for failure in failures)
-        )
+        self.assertTrue(any("exactly one task-level Ending node" in failure for failure in failures))
 
-    def test_plan_rejects_optimization_node_with_wrong_verifies_node(self):
+    def test_plan_rejects_obsolete_targeted_verifier(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            plan = self.plan_with_ending_optimization(root / "work" / "cache" / "route")
-            plan["nodes"][2]["verifies_node"] = "missing-target"
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][-1]["verifies_node"] = "direct"
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
-        self.assertTrue(any("verifies_node must reference an existing node" in failure for failure in failures))
+        self.assertTrue(any("verifies_node is obsolete" in failure for failure in failures))
 
-    def test_plan_allows_optimization_node_with_valid_verifies_node(self):
+    def test_plan_allows_multiple_checks_inside_one_task_level_ending(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            plan = self.plan_with_ending_optimization(root / "work" / "cache" / "route")
+            plan = self.plan_with_multi_check_ending(root / "work" / "cache" / "route")
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
+        endings = [node for node in plan["nodes"] if node["phase"] == "ending"]
+        self.assertEqual(len(endings), 1)
+        self.assertEqual(len(endings[0]["acceptance_checks"]), 3)
+        self.assertEqual(endings[0]["terminal_closeout"], module.ENDING_TERMINAL_CLOSEOUT)
 
     def test_plan_rejects_unity_csharp_result_node_not_owned_by_code_skill(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -751,6 +718,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "effective_pair": f"{args.model}|{args.effort}", "status": "pass", "failure_class": None, "route_attempts": [], "process_elapsed_ms": 150, "tokens": {"total_tokens": 1}, "result_published": True, "result_ready_monotonic_ns": ready_ns}
 
             with patch.object(module.receipt_module, "run_receipt", side_effect=delayed_receipt), ThreadPoolExecutor(max_workers=1) as executor:
+                submitted_ns = time.monotonic_ns()
                 future = executor.submit(module.run_plan, plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json", result_ready_callback=controller_ready)
                 result_path = cache_dir / "direct-result.md"
                 self.assertTrue(ready_event.wait(timeout=1))
@@ -761,7 +729,10 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "pass", manifest["failures"])
         self.assertTrue(manifest["result_published"])
         self.assertEqual(Path(ready_records[0][0]).resolve(), (cache_dir / "direct-result.md").resolve())
-        self.assertLess(manifest["first_result_elapsed_ms"], 100)
+        direct_record = manifest["nodes"][0]
+        self.assertLess(ready_records[0][1], direct_record["settled_monotonic_ns"])
+        self.assertGreaterEqual((direct_record["settled_monotonic_ns"] - ready_records[0][1]) / 1_000_000, 100)
+        self.assertLessEqual(manifest["first_result_elapsed_ms"], round((ready_records[0][1] - submitted_ns) / 1_000_000) + 2)
         self.assertEqual(manifest["ending_nodes_pending"], ["ending-verify"])
 
     def test_dependent_result_starts_before_upstream_receipt_settles_and_main_timing_excludes_receipt_tail(self):
@@ -1047,20 +1018,21 @@ class TaskRouteDispatcherTests(unittest.TestCase):
 
             def fake_run_receipt(_args, _prompt):
                 calls.append((_args.model, _args.effort))
+                pair = f"{_args.model}|{_args.effort}"
                 return {
                     "schema_version": 1,
-                    "requested_model": "gpt-5.6-luna",
-                    "requested_effort": "low",
-                    "requested_pair": "gpt-5.6-luna|low",
-                    "resolved_model": "gpt-5.6-luna",
-                    "resolved_effort": "low",
-                    "effective_model": "gpt-5.6-luna",
+                    "requested_model": _args.model,
+                    "requested_effort": _args.effort,
+                    "requested_pair": pair,
+                    "resolved_model": _args.model,
+                    "resolved_effort": _args.effort,
+                    "effective_model": _args.model,
                     "status": "pass",
                     "route_attempts": [{
-                        "requested_pair": "gpt-5.6-luna|low",
-                        "resolved_pair": "gpt-5.6-luna|low",
-                        "effective_pair": "gpt-5.6-luna|low",
-                        "executed_pair": "gpt-5.6-luna|low",
+                        "requested_pair": pair,
+                        "resolved_pair": pair,
+                        "effective_pair": pair,
+                        "executed_pair": pair,
                         "status": "pass",
                         "failure_class": None,
                         "model_match": True,
@@ -1077,9 +1049,59 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 cache_dir.mkdir(parents=True, exist_ok=True)
                 (cache_dir / "ending-verify-result.md").write_text("ENDING_TASK=FAIL\n", encoding="utf-8")
                 completed = module.run_node(node, cache_dir, {"main": {"status": "pass", "result_path": str(cache_dir / "main-result.md")}}, root / "state.sqlite", root)
-            self.assertEqual(calls, [("gpt-5.6-luna", "low")])
+            self.assertEqual(calls, [("gpt-5.3-codex-spark", "xhigh")])
             self.assertEqual(completed["status"], "fail")
             self.assertEqual(completed["result_path"], str(cache_dir / "ending-verify-result.md"))
+
+    def test_run_node_falls_back_ending_only_for_explicit_availability(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            cache_dir.mkdir(parents=True)
+            node = {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-sol", "effort": "ultra", "dependencies": ["main"], "prompt": "Close out quickly.", "sandbox": "read-only"}
+            calls = []
+
+            def fake_run_receipt(args, _prompt):
+                pair = f"{args.model}|{args.effort}"
+                calls.append(pair)
+                if len(calls) == 1:
+                    return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": pair, "status": "fail", "failure_class": "availability", "turn_completed": False, "pre_execution_failure": True, "route_attempts": [{"requested_pair": pair, "tokens": {"total_tokens": 0}}], "process_elapsed_ms": 1, "tokens": {"total_tokens": 0}}
+                args.result_output.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
+                return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": pair, "resolved_model": args.model, "resolved_effort": args.effort, "resolved_pair": pair, "effective_model": args.model, "effective_pair": pair, "status": "pass", "failure_class": None, "turn_completed": True, "route_attempts": [{"requested_pair": pair, "tokens": {"total_tokens": 2}}], "process_elapsed_ms": 2, "tokens": {"total_tokens": 2}}
+
+            with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
+                completed = module.run_node(node, cache_dir, {"main": {"status": "pass"}}, root / "state.sqlite", root)
+            receipt = json.loads((cache_dir / "ending-verify-receipt.json").read_text(encoding="utf-8"))
+        self.assertEqual(calls, ["gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low"])
+        self.assertEqual(completed["status"], "pass")
+        self.assertEqual(receipt["fallback_policy"], "availability_only")
+        self.assertTrue(receipt["operational_fallback"])
+
+    def test_ending_availability_fallback_requires_no_completed_or_published_result(self):
+        receipt = {"status": "fail", "failure_class": "availability", "turn_completed": False, "result_published": False}
+        self.assertTrue(module.ending_availability_fallback(receipt))
+        self.assertFalse(module.ending_availability_fallback({**receipt, "turn_completed": True}))
+        self.assertFalse(module.ending_availability_fallback({**receipt, "result_published": True}))
+        self.assertFalse(module.ending_availability_fallback({**receipt, "failure_class": "execution"}))
+
+    def test_run_node_never_falls_back_ending_for_non_availability_failures(self):
+        for failure_class in ("execution", "timeout", "protocol", "quality", "correctness"):
+            with self.subTest(failure_class=failure_class), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                cache_dir = root / "work" / "cache" / "route"
+                cache_dir.mkdir(parents=True)
+                node = {"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": "gpt-5.6-sol", "effort": "ultra", "dependencies": ["main"], "prompt": "Close out quickly.", "sandbox": "read-only"}
+                calls = []
+
+                def fake_run_receipt(args, _prompt):
+                    pair = f"{args.model}|{args.effort}"
+                    calls.append(pair)
+                    return {"schema_version": 1, "requested_model": args.model, "requested_effort": args.effort, "requested_pair": pair, "status": "fail", "failure_class": failure_class, "turn_completed": False, "pre_execution_failure": True, "route_attempts": [{"requested_pair": pair, "tokens": {"total_tokens": 0}}], "process_elapsed_ms": 1, "tokens": {"total_tokens": 0}}
+
+                with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
+                    completed = module.run_node(node, cache_dir, {"main": {"status": "pass"}}, root / "state.sqlite", root)
+            self.assertEqual(calls, ["gpt-5.3-codex-spark|xhigh"])
+            self.assertEqual(completed["status"], "fail")
 
     def test_run_node_skips_operational_fallback_when_deadline_cannot_cover_attempt_and_reserve(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1189,7 +1211,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             plan["nodes"][-1]["dependencies"] = []
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("every result node" in failure for failure in failures))
-        self.assertTrue(any("depend directly on the main result node" in failure for failure in failures))
+        self.assertTrue(any("depend only and directly on the main result node" in failure for failure in failures))
 
     def test_frontier_entry_is_not_used_for_role_floor_downstream_nodes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1199,7 +1221,8 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-sol", "ultra", root)
         self.assertEqual(failures, [])
         floor_model, floor_effort = module.routing_history_module.parse_pair(module.MODEL_ROLE_PAIRS["floor"])
-        self.assertTrue(all((node["model"], node["effort"]) == (floor_model, floor_effort) for node in plan["nodes"]))
+        self.assertTrue(all((node["model"], node["effort"]) == (floor_model, floor_effort) for node in plan["nodes"] if node["phase"] == "result"))
+        self.assertEqual(f"{plan['nodes'][-1]['model']}|{plan['nodes'][-1]['effort']}", module.ENDING_FAST_PRIMARY_PAIR)
 
     def test_parallel_plan_returns_after_ready_branches_and_merge(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1441,13 +1464,13 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(main_summary["status"], "fail")
         self.assertEqual(main_summary["failure_class"], "quality")
 
-    def test_ending_handoff_runs_ending_optimization_then_targeted_verifier_by_wave(self):
+    def test_ending_handoff_runs_one_worker_with_all_checks_and_one_closeout(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             cache_dir = root / "work" / "cache" / "route"
             cache_dir.mkdir(parents=True, exist_ok=True)
-            plan = self.plan_with_ending_optimization(cache_dir)
-            route_run_id = "route-end-wave-001"
+            plan = self.plan_with_multi_check_ending(cache_dir)
+            route_run_id = "route-one-task-ending-001"
             handoff = {
                 "schema_version": 2,
                 "cwd": str(root.resolve()),
@@ -1465,137 +1488,23 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
             self._release_ending_handoff(handoff)
             calls = []
-            identities = {
-                "optimization": "opt-target",
-                "optimization-verify": "opt-verifier",
-                "real-verify": "real-worker",
-            }
 
             def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
-                calls.append(node["id"])
+                calls.append(node)
                 ending_receipt = cache_dir / f"{node['id']}-receipt.json"
                 ending_result = cache_dir / f"{node['id']}-result.md"
                 ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
                 ending_receipt.write_text("{}", encoding="utf-8")
-                return {
-                    "id": node["id"],
-                    "phase": node["phase"],
-                    "status": "pass",
-                    "receipt_path": str(ending_receipt),
-                    "result_path": str(ending_result),
-                    "worker_identity": identities[node["id"]],
-                    "skill": node["skill"],
-                }
+                return {"id": node["id"], "phase": node["phase"], "status": "pass", "receipt_path": str(ending_receipt), "result_path": str(ending_result), "skill": node["skill"]}
 
             with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", return_value={"status": "recorded"}):
                 manifest = module.run_ending_handoff(handoff_path)
         self.assertEqual(manifest["status"], "pass")
-        self.assertLess(calls.index("optimization"), calls.index("optimization-verify"))
-
-    def test_ending_handoff_fails_targeted_verifier_when_worker_identity_matches_target(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            cache_dir = root / "work" / "cache" / "route"
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            plan = self.plan_with_ending_optimization(cache_dir)
-            route_run_id = "route-end-worker-001"
-            handoff = {
-                "schema_version": 2,
-                "cwd": str(root.resolve()),
-                "state_db": str((root / "state.db").resolve()),
-                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
-                "route_run_id": route_run_id,
-                "plan": plan,
-                "completed": [
-                    {"id": "direct", "status": "pass", "phase": "result", "model": "gpt-5.6-luna", "effort": "low", "receipt_path": str(cache_dir / "direct-receipt.json"), "result_path": str(cache_dir / "direct-result.md"), "worker_identity": "main-worker"},
-                ],
-                "ending_handoff_path": str(cache_dir / "ending-handoff.json"),
-                "ending_manifest_path": str(cache_dir / "ending-dispatch-manifest.json"),
-            }
-            handoff_path = cache_dir / "ending-handoff.json"
-            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
-            self._release_ending_handoff(handoff)
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
-                ending_receipt = cache_dir / f"{node['id']}-receipt.json"
-                ending_result = cache_dir / f"{node['id']}-result.md"
-                ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
-                ending_receipt.write_text("{}", encoding="utf-8")
-                return {
-                    "id": node["id"],
-                    "phase": node["phase"],
-                    "status": "pass",
-                    "receipt_path": str(ending_receipt),
-                    "result_path": str(ending_result),
-                    "worker_identity": "shared-worker",
-                }
-
-            recorded_calls = []
-            def fake_record_event(result_path, verify_level, verify_status, receipt, run_id, main_node, project_root, execution_domain=None):
-                recorded_calls.append(SimpleNamespace(verify_level=verify_level, verify_status=verify_status, failure_class="none" if verify_status == "pass" else ("quality" if verify_status == "fail" else "execution"), run_id=run_id, receipt=receipt))
-                return {"status": "recorded"}
-            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", side_effect=fake_record_event):
-                manifest = module.run_ending_handoff(handoff_path)
-        self.assertEqual(manifest["status"], "fail")
-        self.assertEqual(len(recorded_calls), 1)
-        self.assertEqual(recorded_calls[0].verify_level, "real")
-
-    def test_ending_handoff_targeted_verifier_does_not_record_real_status_updates(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            cache_dir = root / "work" / "cache" / "route"
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            plan = self.plan_with_ending_optimization(cache_dir)
-            route_run_id = "route-end-targeted-record-001"
-            handoff = {
-                "schema_version": 2,
-                "cwd": str(root.resolve()),
-                "state_db": str((root / "state.db").resolve()),
-                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
-                "route_run_id": route_run_id,
-                "plan": plan,
-                "completed": [
-                    {"id": "direct", "status": "pass", "phase": "result", "model": "gpt-5.6-luna", "effort": "low", "receipt_path": str(cache_dir / "direct-receipt.json"), "result_path": str(cache_dir / "direct-result.md"), "worker_identity": "main-worker"},
-                ],
-                "ending_handoff_path": str(cache_dir / "ending-handoff.json"),
-                "ending_manifest_path": str(cache_dir / "ending-dispatch-manifest.json"),
-            }
-            handoff_path = cache_dir / "ending-handoff.json"
-            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
-            self._release_ending_handoff(handoff)
-
-            identities = {
-                "optimization": "opt-target-worker",
-                "optimization-verify": "opt-verifier-worker",
-                "real-verify": "real-worker",
-            }
-
-            def fake_run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
-                ending_receipt = cache_dir / f"{node['id']}-receipt.json"
-                ending_result = cache_dir / f"{node['id']}-result.md"
-                ending_result.write_text("ENDING_TASK=PASS\n", encoding="utf-8")
-                ending_receipt.write_text("{}", encoding="utf-8")
-                return {
-                    "id": node["id"],
-                    "phase": node["phase"],
-                    "status": "pass",
-                    "receipt_path": str(ending_receipt),
-                    "result_path": str(ending_result),
-                    "worker_identity": identities[node["id"]],
-                    "skill": node["skill"],
-                }
-
-            recorded_calls = []
-            def fake_record_event(result_path, verify_level, verify_status, receipt, run_id, main_node, project_root, execution_domain=None):
-                recorded_calls.append(SimpleNamespace(verify_level=verify_level, verify_status=verify_status, failure_class="none" if verify_status == "pass" else ("quality" if verify_status == "fail" else "execution"), run_id=run_id, receipt=receipt))
-                return {"status": "recorded"}
-            with patch.object(module, "run_node", side_effect=fake_run_node), patch.object(module, "_run_record", side_effect=fake_record_event):
-                manifest = module.run_ending_handoff(handoff_path)
-        self.assertEqual(manifest["status"], "pass")
-        self.assertEqual(len(recorded_calls), 1)
-        self.assertEqual(recorded_calls[0].verify_level, "real")
-        self.assertEqual(recorded_calls[0].verify_status, "pass")
-        self.assertEqual(recorded_calls[0].run_id, route_run_id)
-        self.assertEqual(recorded_calls[0].receipt, str(cache_dir / "direct-receipt.json"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["id"], "ending-verify")
+        self.assertEqual(len(calls[0]["acceptance_checks"]), 3)
+        self.assertEqual(calls[0]["terminal_closeout"], module.ENDING_TERMINAL_CLOSEOUT)
+        self.assertNotIn("ThreadPoolExecutor", inspect.getsource(module.run_ending_handoff))
 
     def test_ending_handoff_uses_original_route_run_id_and_main_receipt_on_pass(self):
         with tempfile.TemporaryDirectory() as temp_dir:

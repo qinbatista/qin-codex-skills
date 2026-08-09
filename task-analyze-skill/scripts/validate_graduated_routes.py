@@ -69,8 +69,8 @@ def _validate_dispatcher_template(template, skills_root, failures):
         failures.append("admitted_dispatcher_template must be an object")
         return
     dispatcher = _dispatcher_module()
-    supported_pairs = set(dispatcher.normal_adaptive_pair_texts())
-    required_pairs = {"design": dispatcher.MODEL_ROLE_PAIRS["frontier_complex"], "implementation": dispatcher.MODEL_ROLE_PAIRS["balanced_complex"], "ending_real": dispatcher.MODEL_ROLE_PAIRS["balanced_complex"]}
+    supported_pairs = {*dispatcher.normal_adaptive_pair_texts(), dispatcher.ENDING_FAST_PRIMARY_PAIR}
+    required_pairs = {"design": dispatcher.MODEL_ROLE_PAIRS["frontier_complex"], "implementation": dispatcher.MODEL_ROLE_PAIRS["balanced_complex"], "ending_real": dispatcher.ENDING_FAST_PRIMARY_PAIR}
     if template.get("activation") != "explicit_and_performance_admitted" or template.get("admission_precondition") != "positive_end_to_end_evidence_required":
         failures.append("admitted dispatcher template lacks explicit positive performance-admission precondition")
     if template.get("authorization") != "topology_only_not_execution_proof":
@@ -109,6 +109,10 @@ def _validate_dispatcher_template(template, skills_root, failures):
         pair_key = {"design": "design", "implementation": "implementation", "ending-real": "ending_real"}[node["id"]]
         if f"{node.get('model')}|{node.get('effort')}" != template["illustrative_cold_start_pairs"].get(pair_key):
             failures.append(f"admitted dispatcher plan pair is incorrect for {node['id']}")
+    ending = next(node for node in template_nodes if node.get("id") == "ending-real")
+    expected_ending = dispatcher.ending_fast_route_fields()
+    if any(ending.get(field) != value for field, value in expected_ending.items()):
+        failures.append("admitted dispatcher Ending route does not match the fixed fast policy")
     implementation = next(node for node in template_nodes if node.get("id") == "implementation")
     expected_ladder = dispatcher.normal_adaptive_pair_texts()
     if implementation.get("candidate_ladder") != expected_ladder or implementation.get("hard_floor") != dispatcher.MODEL_ROLE_PAIRS["floor"]:

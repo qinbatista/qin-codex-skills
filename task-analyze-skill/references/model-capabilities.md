@@ -21,7 +21,7 @@ Only the highest registered numeric GPT family is active. Within that family, mo
 
 ## Catalog-visible models
 
-Only the highest numeric GPT family and the priority producer are retained in this routing snapshot. Older visible models may be present in the machine cache, but they are excluded from the registry, semantic digest, and routing candidates so background catalog refreshes cannot reintroduce them.
+Only the highest numeric GPT family plus the catalog-backed priority producer and fixed Ending primary are retained in this routing snapshot. Older unrelated visible models may be present in the machine cache, but they are excluded from the registry, semantic digest, and routing candidates so background catalog refreshes cannot reintroduce them.
 
 | Display name | Model ID | Catalog role | Provider priority | Supported efforts |
 |---|---|---|---:|---|
@@ -37,6 +37,13 @@ Only the highest numeric GPT family and the priority producer are retained in th
 - Inputs: text; API: no
 - Easy / complex effort: `low` / `high`
 - This producer is attempted before eligible low-risk text/code/write/execute task segments scoring 0-24, regardless of parent score, and is not part of the weakest-to-strongest quality ladder.
+
+## Fast Ending route
+
+- Primary: `gpt-5.3-codex-spark|xhigh`
+- Availability-only fallback: `gpt-5.6-luna|low`
+- Selection basis: `ending_fast_primary`; fallback policy: `availability_only`.
+- Complexity score and band scope the proportional check only; they never select the Ending model.
 
 ## Private learning contract
 

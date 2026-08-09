@@ -7,7 +7,7 @@
   </defs>
   <rect width="720" height="1040" rx="28" fill="url(#background)"/>
   <text x="40" y="58" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="30" font-weight="700">Finish first. Ending always follows.</text>
-  <text x="40" y="88" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17">Each independent real check gets a scored Ending.</text>
+  <text x="40" y="88" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17">Every task gets one fixed Spark-xhigh Ending.</text>
 
   <path d="M360 180V210 M360 390V420 M360 652V682 M360 800V830" fill="none" stroke="#64748b" stroke-width="4" marker-end="url(#arrow)"/>
 
@@ -38,8 +38,8 @@
 
   <rect x="110" y="830" width="500" height="130" rx="22" fill="#2b1c42" stroke="#c084fc" stroke-width="2"/>
   <text x="360" y="870" text-anchor="middle" fill="#e9d5ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" font-weight="700">4  EVERY TASK: ENDING</text>
-  <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="700">Run real checks · all PASS</text>
+  <text x="360" y="908" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="700">Smallest real checks · all PASS</text>
   <text x="360" y="936" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">FAIL → origin session repair prompt → fresh Ending, up to 3.</text>
 
-  <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">Score → finish → return → independent Ending</text>
+  <text x="360" y="1002" text-anchor="middle" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">Spark unavailable → Luna-low · never quality escalation</text>
 </svg>

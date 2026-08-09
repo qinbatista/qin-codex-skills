@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and execute real-test Ending tasks with score-based model selection."""
+"""Build and execute fast, real-test Ending tasks with fixed model routing."""
 
 import argparse
 import hashlib
@@ -12,8 +12,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = 4
-BAND_ROLES = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}
+SCHEMA_VERSION = 6
+ENDING_PRIMARY_PAIR = "gpt-5.3-codex-spark|xhigh"
+ENDING_FALLBACK_ROLE = "floor"
+ENDING_LAUNCH_ID = "task-ending"
+AVAILABILITY_FALLBACK_REASONS = {
+    "primary_model_unavailable",
+    "primary_effort_unsupported",
+    "primary_pair_not_in_registry",
+    "scheduler_unavailable",
+    "required_modality_unavailable",
+}
 THREAD_TARGET = {"type": "projectless"}
 TERMINAL_THREAD_POLICY = {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"}
 CREATE_THREAD_TOOL = "codex_app__create_thread"
@@ -59,12 +68,53 @@ def _registry():
     return module.load_registry()
 
 
+def _ending_model_policy(registry=None):
+    payload = registry or _registry()
+    registry_policy = payload.get("ending_fast")
+    if not isinstance(registry_policy, dict):
+        raise ValueError("model registry requires ending_fast policy")
+    primary_pair = registry_policy.get("primary_pair")
+    fallback_pair = registry_policy.get("availability_fallback_pair")
+    floor_pair = payload.get("role_pairs", {}).get(ENDING_FALLBACK_ROLE)
+    if not isinstance(primary_pair, str) or "|" not in primary_pair:
+        raise ValueError("model registry ending_fast requires a concrete primary pair")
+    if fallback_pair is not None and (not isinstance(fallback_pair, str) or "|" not in fallback_pair):
+        raise ValueError("model registry ending_fast fallback pair must be concrete or null")
+    if not isinstance(floor_pair, str) or "|" not in floor_pair or (fallback_pair is not None and fallback_pair != floor_pair) or (primary_pair != ENDING_PRIMARY_PAIR and primary_pair != floor_pair):
+        raise ValueError("model registry ending_fast must use the registry floor when Spark-xhigh is unavailable")
+    if registry_policy.get("selection_basis") != "ending_fast_primary" or registry_policy.get("fallback_policy") != "availability_only" or registry_policy.get("score_scope") != "check_only":
+        raise ValueError("model registry ending_fast policy is inconsistent")
+    approved_pairs = list(dict.fromkeys(pair for pair in (primary_pair, fallback_pair) if pair))
+    primary_supported = primary_pair == ENDING_PRIMARY_PAIR
+    return {
+        "selection_basis": registry_policy["selection_basis"],
+        "preferred_pair": ENDING_PRIMARY_PAIR,
+        "primary_pair": primary_pair,
+        "primary_supported_by_registry": primary_supported,
+        "availability_fallback_pair": fallback_pair,
+        "availability_fallback_reasons": sorted(AVAILABILITY_FALLBACK_REASONS),
+        "approved_pairs": approved_pairs,
+        "selected_pair": primary_pair,
+        "primary_selection_reason": None if primary_supported else "primary_pair_not_in_registry",
+        "default_availability_reason": None,
+        "fallback_policy": registry_policy["fallback_policy"],
+        "score_controls": "check_scope_and_classification_only",
+        "quality_failure_model_fallback": False,
+    }
+
+
 def pair_for_score(score, registry=None):
     band = complexity_band(score)
-    payload = registry or _registry()
-    pair = payload["role_pairs"][BAND_ROLES[band]]
+    policy = _ending_model_policy(registry)
+    pair = policy["selected_pair"]
     model, effort = pair.split("|", 1)
-    return {"complexity_score": score, "complexity_band": band, "selected_pair": pair, "model": model, "effort": effort}
+    return {
+        "complexity_score": score,
+        "complexity_band": band,
+        **policy,
+        "model": model,
+        "effort": effort,
+    }
 
 
 def _inside(root, value, field):
@@ -98,9 +148,6 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
     return {
         "check_id": check_id,
         "name": name,
-        "title": f"End Task-{task_name}-{name}",
-        "thread_target": {**THREAD_TARGET, "project_root": str(project_root)},
-        "terminal_thread_policy": TERMINAL_THREAD_POLICY,
         "cwd": str(cwd),
         "command": command,
         "expected_exit_code": expected_exit,
@@ -112,7 +159,6 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
         "on_failure": {
             "action": "send_repair_prompt_to_origin_session_then_fresh_ending",
             "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY,
-            "terminal_thread_policy": TERMINAL_THREAD_POLICY,
             "error_fields": ["exit_code", "stdout", "stderr", "timed_out"],
             "max_repair_attempts": 3,
             "origin_session_required": True,
@@ -141,11 +187,10 @@ def build_plan(project_root, task_name, task_score, checks, origin_session=None)
         "task_name": cleaned_task,
         "task_complexity": pair_for_score(task_score, registry),
         "verification_required": True,
-        "execution": "separate_persistent_tasks",
-        "thread_target": {**THREAD_TARGET, "project_root": str(root)},
-        "terminal_thread_policy": TERMINAL_THREAD_POLICY,
+        "execution": "one_persistent_ending_runs_all_checks",
         "all_checks_must_pass": True,
         "origin_session": normalized_origin_session,
+        "ending_model_policy": _ending_model_policy(registry),
         "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": 3, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
         "ending_tasks": tasks,
     }
@@ -182,41 +227,50 @@ def _repair_handoff(check, origin_session, observed, mismatch_summary=""):
     return {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session": origin_session, "origin_session_required": True, "prompt_submission": "automatic", "repair_dispatch": repair_dispatch, "repair_prompt": repair_prompt, "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
 
 
-def _worker_prompt(plan_path, plan, check, evidence_output, memory_candidates_output, producer_receipt=None):
+def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_output, assigned_pair, producer_receipt=None):
     project_root = Path(plan["project_root"]).expanduser().resolve()
     relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root)
-    relative_cwd = Path(check["cwd"]).expanduser().resolve().relative_to(project_root)
-    relative_evidence = Path(evidence_output).expanduser().resolve().relative_to(project_root)
     relative_memory_candidates = Path(memory_candidates_output).expanduser().resolve().relative_to(project_root)
     receipt_line = str(Path(producer_receipt).expanduser().resolve().relative_to(project_root)) if producer_receipt else "none"
-    command_text = json.dumps(check["command"], ensure_ascii=False, separators=(",", ":"))
+    check_manifest = [
+        {
+            "check_id": check["check_id"],
+            "cwd": Path(check["cwd"]).expanduser().resolve().relative_to(project_root).as_posix() or ".",
+            "evidence_output": Path(evidence_outputs[check["check_id"]]).expanduser().resolve().relative_to(project_root).as_posix(),
+            "command": check["command"],
+            "acceptance": check["acceptance"],
+            "complexity_score": check["complexity_score"],
+            "complexity_band": check["complexity_band"],
+        }
+        for check in checks
+    ]
+    policy = plan["ending_model_policy"]
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
-            "Execute one independent persistent projectless End Task. Do not restart Task Analyze or Workflow.",
+            "Execute the one independent persistent projectless End Task for this user task. Do not restart Task Analyze or Workflow.",
             f"Project root: {plan['project_root']}",
-            f"Working directory relative to project root: {relative_cwd}",
             f"Verification plan relative to project root: {relative_plan}",
-            f"Check id: {check['check_id']}",
-            f"Evidence output relative to project root: {relative_evidence}",
+            f"Ending check id: {ENDING_LAUNCH_ID}",
+            f"Checks and evidence outputs: {json.dumps(check_manifest, ensure_ascii=False, separators=(',', ':'))}",
             f"Personal memory candidates output relative to project root: {relative_memory_candidates}",
-            f"Assigned pair: {check['selected_pair']}",
-            f"Complexity: {check['complexity_score']}/100 ({check['complexity_band']})",
-            f"Expected command: {command_text}",
-            f"Original acceptance contract: {check['acceptance']}",
-            f"Authorized repair scope: {check['repair_scope']}",
+            f"Assigned Ending pair: {assigned_pair}",
+            f"Primary Ending pair: {policy['primary_pair']}",
+            f"Only availability fallback pair: {policy['availability_fallback_pair']}",
+            f"Allowed availability reason codes: {json.dumps(policy['availability_fallback_reasons'], separators=(',', ':'))}",
+            f"Task complexity: {plan['task_complexity']['complexity_score']}/100 ({plan['task_complexity']['complexity_band']}); score scopes the real check and classification only, never the Ending model.",
             f"Origin producer session (immutable): {json.dumps(plan.get('origin_session'), ensure_ascii=False, separators=(',', ':'))}",
             f"Producer receipt relative to project root: {receipt_line}",
-            "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the plan's exact run-check command from the project root.",
-            "Start and finish the lifecycle through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py; when starting it, persist --project-id, --origin-thread-id, and --origin-host-id from origin_session and bind the producer receipt when present. Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation.",
-            "PASS requires the new evidence file to report status=pass and the expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this projectless global task visible.",
-            "A command PASS is not enough when the final artifact/state differs from the original user objective or acceptance contract. In that case, mark the evidence as a correctness mismatch with the plan's mismatch command, then use the repair handoff.",
-            "On FAIL or a correctness mismatch, do not edit the result in this Ending. Record exact evidence, then automatically submit the generated repair_prompt by calling codex_app__send_message_to_thread with repair_dispatch.arguments (threadId, hostId, and the exact prompt) to continue the original origin session. The prompt must identify the observed defect or requirement gap, original acceptance, evidence, authorized repair scope, and required next result. The origin session must repair, run Quick Check, and present a new result and producer receipt; the parent lifecycle then launches a fresh projectless Ending with the same check. Repeat this loop for at most three repair attempts; unavailable or failed origin-session submission is BLOCKED.",
-            "The failed Ending and its repair handoff remain visible as the audit record; the original producer session is the only repair executor. Never open a replacement fixer session, self-repair, self-verify, create nested End/Fix tasks, or wait/poll for the origin session.",
-            "Every Codex submission receives a bounded personal-memory scan. Analyze only explicit user preferences, repeated user corrections, or verified working patterns relevant to this task; do not infer sensitive traits and never copy raw prompts, raw results, paths, secrets, or chain-of-thought.",
-            "If the scan finds no durable preference or technical working trait, do not create the personal memory candidates file and pass no --memory-candidates-file option. If it finds candidates, write only {\"candidates\":[...]} to the assigned file using kind=preference|technical-trait, area=ui|workflow|technical|general, basis=explicit_user_request|repeated_user_correction|verified_work_pattern, confidence=high|medium, source=ending, statement, and compact evidence; then pass --memory-candidates-file with the relative path to the terminal ledger event.",
-            "Personal memory is separate from model-routing and project-change memory. A candidate write must not alter the requested result; an empty candidate set must be a strict no-op.",
-            "After the terminal ledger event, print its structured model_assessment: task/check score and band, producer pair, Ending pair, attempt count, first-attempt or retry result, suitability, next routing action and pair, concise evidence reason, and Obsidian model-record link/status. Never expose private chain-of-thought.",
+            "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run every listed check's exact run-check command from the project root. Write one fresh evidence file per check and do not broaden the saved bounded checks.",
+            "Start one lifecycle and finish it once through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py. Pass the saved verification plan, ending-check-id=task-ending, the actual assigned pair, project and origin metadata, and the producer receipt when present. If and only if the primary pair could not be launched for an allowed availability/capability reason, use the one saved fallback pair and pass the launcher's sanitized --availability-fallback-reason. Correctness, quality, protocol, timeout, or command execution failures never change the Ending pair.",
+            "Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation. Producer next-pair learning stays separate from the fixed Ending pair.",
+            "PASS requires every new evidence file to report status=pass and its expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this projectless global task visible.",
+            "A command PASS is not enough when the final artifact/state differs from the original user objective or acceptance contract. In that case, mark that evidence as a correctness mismatch with the plan's mismatch command, then use the repair handoff.",
+            "On FAIL or a correctness mismatch, do not edit the result in this Ending. Record exact evidence, then automatically submit the generated repair_prompt by calling codex_app__send_message_to_thread with repair_dispatch.arguments (threadId, hostId, and the exact prompt) to continue the original origin session. The origin session repairs and runs Quick Check; the parent launches one fresh projectless Ending. Repeat for at most three repair attempts; unavailable or failed origin-session submission is BLOCKED.",
+            "The failed Ending and its repair handoff remain visible as the audit record. Never open a replacement fixer session, self-repair, self-verify, create nested End/Fix tasks, or wait/poll for the origin session.",
+            "Run one bounded personal-memory scan for explicit user preferences, repeated corrections, or verified working patterns. Never copy raw prompts, raw results, paths, secrets, sensitive traits, or chain-of-thought.",
+            "If no durable candidate exists, create no personal memory file and pass no --memory-candidates-file. Otherwise write only a sanitized {\"candidates\":[...]} payload to the assigned file. Personal memory is separate from model-routing and project-change memory.",
+            "After the terminal ledger event, print structured model_assessment with task/check score and band, producer pair and next-pair learning, Ending pair and fallback provenance, attempts, verdict, evidence reason, and Obsidian record status. Never expose private chain-of-thought.",
             "Never call set_thread_archived or delete this End Task automatically.",
         ]
     )
@@ -243,41 +297,63 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
     tasks = plan.get("ending_tasks")
     if not isinstance(tasks, list) or not tasks:
         raise ValueError("plan must contain ending_tasks")
-    launch_requests = []
+    evidence_outputs = {}
     for check in tasks:
         check_id = check.get("check_id") if isinstance(check, dict) else None
         if not isinstance(check_id, str) or not check_id:
             raise ValueError("every ending task requires check_id")
-        selected_pair = check.get("selected_pair")
-        if not isinstance(selected_pair, str) or "|" not in selected_pair:
-            raise ValueError(f"ending task {check_id} requires selected_pair")
-        model, thinking = selected_pair.split("|", 1)
-        evidence_output = evidence_root / f"{check_id}.json"
-        memory_candidates_output = evidence_root / f"{check_id}.memory.json"
-        prompt = _worker_prompt(plan_file, plan, check, evidence_output, memory_candidates_output, receipt_path)
-        request = {
-            "check_id": check_id,
-            "title": check["title"],
-            "selected_pair": selected_pair,
-            "complexity_score": check["complexity_score"],
-            "complexity_band": check["complexity_band"],
-            "tool": CREATE_THREAD_TOOL,
-            "arguments": {
-                "target": dict(THREAD_TARGET),
-                "title": check["title"],
-                "model": model,
-                "thinking": thinking,
-                "prompt": prompt,
-            },
-            "evidence_output": str(evidence_output),
-            "memory_candidates_output": str(memory_candidates_output),
-            "project_id": project_value,
-            "acknowledgement_required": True,
-        }
-        request["request_sha256"] = hashlib.sha256(
-            json.dumps(request["arguments"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
-        launch_requests.append(request)
+        evidence_outputs[check_id] = str(evidence_root / f"{check_id}.json")
+    policy = plan.get("ending_model_policy")
+    if not isinstance(policy, dict):
+        raise ValueError("plan requires ending_model_policy")
+    primary_pair = policy.get("primary_pair")
+    fallback_pair = policy.get("availability_fallback_pair")
+    selected_pair = policy.get("selected_pair")
+    if any(not isinstance(pair, str) or "|" not in pair for pair in (primary_pair, selected_pair)) or (fallback_pair is not None and (not isinstance(fallback_pair, str) or "|" not in fallback_pair)):
+        raise ValueError("ending_model_policy requires concrete primary and selected pairs plus an optional concrete fallback")
+    title = f"End Task-{plan['task_name']}"
+    memory_candidates_output = evidence_root / "task-ending.memory.json"
+    candidates = []
+    candidate_pairs = [(primary_pair, "primary")]
+    if fallback_pair:
+        candidate_pairs.append((fallback_pair, "availability_fallback"))
+    for pair, role in candidate_pairs:
+        model, thinking = pair.split("|", 1)
+        prompt = _worker_prompt(plan_file, plan, tasks, evidence_outputs, memory_candidates_output, pair, receipt_path)
+        arguments = {"target": dict(THREAD_TARGET), "title": title, "model": model, "thinking": thinking, "prompt": prompt}
+        candidates.append(
+            {
+                "role": role,
+                "pair": pair,
+                "arguments": arguments,
+                "request_sha256": hashlib.sha256(json.dumps(arguments, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
+            }
+        )
+    selected_candidate = next(candidate for candidate in candidates if candidate["pair"] == selected_pair)
+    request = {
+        "check_id": ENDING_LAUNCH_ID,
+        "check_ids": [check["check_id"] for check in tasks],
+        "title": title,
+        "thread_target": dict(THREAD_TARGET),
+        "terminal_thread_policy": TERMINAL_THREAD_POLICY,
+        "selected_pair": selected_pair,
+        "primary_pair": primary_pair,
+        "availability_fallback_pair": fallback_pair,
+        "availability_fallback_reasons": policy["availability_fallback_reasons"],
+        "default_availability_reason": policy.get("default_availability_reason"),
+        "approved_pairs": list(policy["approved_pairs"]),
+        "complexity_score": plan["task_complexity"]["complexity_score"],
+        "complexity_band": plan["task_complexity"]["complexity_band"],
+        "tool": CREATE_THREAD_TOOL,
+        "arguments": selected_candidate["arguments"],
+        "request_sha256": selected_candidate["request_sha256"],
+        "launch_candidates": candidates,
+        "evidence_outputs": evidence_outputs,
+        "memory_candidates_output": str(memory_candidates_output),
+        "project_id": project_value,
+        "acknowledgement_required": True,
+    }
+    launch_requests = [request]
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -291,16 +367,15 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
             "resolver": "codex_app__list_projects exact canonical project root",
         },
         "execution": "host_persistent_create_thread",
-        "thread_target": dict(THREAD_TARGET),
         "origin_session": origin_session,
         "repair_policy": plan.get("repair_policy"),
         "required_launch_count": len(launch_requests),
         "launch_requests": launch_requests,
-        "launch_gate": "all_requests_require_thread_and_host_acknowledgement",
+        "launch_gate": "one_task_ending_requires_thread_host_pair_and_availability_acknowledgement",
     }
 
 
-def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_id, state_output):
+def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_id, state_output, selected_pair="", availability_reason=""):
     launch_file, launch_spec = _read_json(launch_spec_path, "launch_spec")
     request = next((item for item in launch_spec.get("launch_requests", []) if item.get("check_id") == check_id), None)
     if not isinstance(request, dict):
@@ -311,6 +386,22 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
     expected_project_id = launch_spec.get("project_binding", {}).get("project_id")
     if project_value != expected_project_id or request.get("project_id") != expected_project_id:
         raise ValueError("project_id does not match the launch specification")
+    actual_pair = _clean(selected_pair or request.get("selected_pair"), "selected_pair", 160)
+    candidates = {item.get("pair"): item for item in request.get("launch_candidates", []) if isinstance(item, dict)}
+    candidate = candidates.get(actual_pair)
+    if not isinstance(candidate, dict) or actual_pair not in request.get("approved_pairs", []):
+        raise ValueError("selected_pair is not an approved Ending launch pair")
+    primary_pair = request.get("primary_pair")
+    fallback_pair = request.get("availability_fallback_pair")
+    availability_reason_value = _clean(availability_reason, "availability_reason", 80) if availability_reason else None
+    if actual_pair == fallback_pair:
+        if availability_reason_value not in request.get("availability_fallback_reasons", []):
+            raise ValueError("availability fallback requires a sanitized availability reason")
+    elif actual_pair == primary_pair:
+        if availability_reason_value:
+            raise ValueError("primary Ending launch must not claim an availability fallback reason")
+    else:
+        raise ValueError("selected_pair is not the primary or availability fallback pair")
     state_path = Path(state_output).expanduser().resolve()
     state = {
         "schema_version": LAUNCH_STATE_SCHEMA_VERSION,
@@ -329,8 +420,11 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
         {
             "check_id": check_id,
             "title": request["title"],
-            "selected_pair": request["selected_pair"],
-            "request_sha256": request["request_sha256"],
+            "selected_pair": actual_pair,
+            "primary_pair": primary_pair,
+            "availability_fallback_pair": fallback_pair,
+            "availability_fallback_reason": availability_reason_value,
+            "request_sha256": candidate["request_sha256"],
             "thread_id": thread_value,
             "host_id": host_value,
             "project_id": project_value,
@@ -340,7 +434,15 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
     )
     state["launches"] = sorted(launches, key=lambda item: item["check_id"])
     _atomic_write(state_path, state)
-    return {"status": "acknowledged", "check_id": check_id, "thread_id": thread_value, "host_id": host_value, "state": str(state_path)}
+    return {
+        "status": "acknowledged",
+        "check_id": check_id,
+        "thread_id": thread_value,
+        "host_id": host_value,
+        "selected_pair": actual_pair,
+        "availability_fallback_reason": availability_reason_value,
+        "state": str(state_path),
+    }
 
 
 def audit_launches(launch_spec_path, state_path):
@@ -376,7 +478,20 @@ def audit_launches(launch_spec_path, state_path):
         thread_ids.append(launch.get("thread_id"))
         if launch.get("status") != "launched" or not launch.get("thread_id") or not launch.get("host_id") or not launch.get("project_id"):
             failures.append(f"End Task {check_id} lacks a persistent thread acknowledgement")
-        if any(launch.get(field) != request.get(field) for field in ("title", "selected_pair", "request_sha256", "project_id")):
+        candidates = {item.get("pair"): item for item in request.get("launch_candidates", []) if isinstance(item, dict)}
+        selected_pair = launch.get("selected_pair")
+        candidate = candidates.get(selected_pair)
+        if selected_pair not in request.get("approved_pairs", []) or not isinstance(candidate, dict):
+            failures.append(f"End Task {check_id} used an unapproved Ending pair")
+        if selected_pair == request.get("availability_fallback_pair"):
+            if launch.get("availability_fallback_reason") not in request.get("availability_fallback_reasons", []):
+                failures.append(f"End Task {check_id} fallback lacks an approved availability reason")
+        elif selected_pair == request.get("primary_pair"):
+            if launch.get("availability_fallback_reason"):
+                failures.append(f"End Task {check_id} primary launch has an invalid fallback reason")
+        else:
+            failures.append(f"End Task {check_id} pair is neither primary nor availability fallback")
+        if launch.get("title") != request.get("title") or launch.get("request_sha256") != (candidate or {}).get("request_sha256") or launch.get("project_id") != request.get("project_id"):
             failures.append(f"End Task {check_id} acknowledgement does not match its launch request")
     if len(thread_ids) != len(set(thread_ids)):
         failures.append("End Task launch acknowledgements must use unique thread ids")
@@ -413,11 +528,12 @@ def run_check(plan_path, check_id, evidence_output):
         stderr = (error.stderr or "")[-12000:] if isinstance(error.stderr, str) else ""
     passed = not timed_out and exit_code == check["expected_exit_code"]
     finished = datetime.now(timezone.utc)
+    ending_title = f"End Task-{plan['task_name']}"
     evidence = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass" if passed else "fail",
         "check_id": check_id,
-        "title": check["title"],
+        "title": ending_title,
         "selected_pair": check["selected_pair"],
         "complexity_score": check["complexity_score"],
         "complexity_band": check["complexity_band"],
@@ -436,7 +552,7 @@ def run_check(plan_path, check_id, evidence_output):
         "plan_sha256": hashlib.sha256(plan_file.read_bytes()).hexdigest(),
     }
     if not passed:
-        evidence["repair_handoff"] = {**_repair_handoff(check, plan.get("origin_session"), evidence), "failed_ending_title": check["title"], "failed_check_id": check_id, "error": {key: evidence[key] for key in check["on_failure"]["error_fields"]}, "terminal_thread_policy": check["on_failure"]["terminal_thread_policy"]}
+        evidence["repair_handoff"] = {**_repair_handoff(check, plan.get("origin_session"), evidence), "failed_ending_title": ending_title, "failed_check_id": check_id, "error": {key: evidence[key] for key in check["on_failure"]["error_fields"]}, "terminal_thread_policy": TERMINAL_THREAD_POLICY}
     _atomic_write(evidence_output, evidence)
     return evidence
 
@@ -488,6 +604,8 @@ def parse_args(argv=None):
     acknowledge.add_argument("--host-id", required=True)
     acknowledge.add_argument("--project-id", required=True)
     acknowledge.add_argument("--state-output", type=Path, required=True)
+    acknowledge.add_argument("--selected-pair", default="")
+    acknowledge.add_argument("--availability-reason", choices=sorted(AVAILABILITY_FALLBACK_REASONS), default="")
     audit = subparsers.add_parser("audit-launches")
     audit.add_argument("--launch-spec", type=Path, required=True)
     audit.add_argument("--launch-state", type=Path, required=True)
@@ -513,7 +631,7 @@ def main(argv=None):
         output = {"status": "written", "output": str(args.output.expanduser().resolve()), "required_launch_count": output["required_launch_count"], "selected_pairs": [item["selected_pair"] for item in output["launch_requests"]]}
         code = 0
     elif args.command == "ack-launch":
-        output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.project_id, args.state_output)
+        output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.project_id, args.state_output, args.selected_pair, args.availability_reason)
         code = 0
     else:
         output = audit_launches(args.launch_spec, args.launch_state)

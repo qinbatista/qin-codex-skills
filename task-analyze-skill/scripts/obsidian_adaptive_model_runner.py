@@ -491,7 +491,7 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     main_node["trial"] = recommendation.get("trial") is True
     main_node["routing_recommendation"] = proof
     nodes.append(main_node)
-    nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", "model": floor_model, "effort": floor_effort, "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
+    nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", **task_route_dispatcher.ending_fast_route_fields(), "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
     return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": "parallel_sources_fused_final" if fused_source else "parallel_independent_sources", "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900)}, recommendation
 
 

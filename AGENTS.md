@@ -12,6 +12,7 @@
 - Route admitted work with `task-analyze-skill/scripts/obsidian_adaptive_model_runner.py`.
 - Publish only through `management-skill/scripts/sync_global_skills.py` when authorized.
 - Treat `management-skill/assets/global-skill-capability-catalog.json` as the retained global behavior authority; `management-skill/scripts/global_skill_regression_gate.py` must PASS before local deployment or GitHub publication.
+- Every new task closes in one projectless Ending using fixed Spark-xhigh, with score used only for check scope and a registry-floor fallback allowed only for explicit Spark availability/capability failure.
 - Keep support artifacts under `Cache/`; never embed machine-specific paths, secrets, or task history in Skill source.
 - Keep `AGENTS.md` structural: ownership, entry points, hard constraints, conventions, and definition of done only.
 - Important Cache: `Cache/tests/unity-game-code-structure-design/` is the untracked portable structural-trial harness for the Unity game-code ownership reference; owner: `code-skill`; retain for focused local checks.

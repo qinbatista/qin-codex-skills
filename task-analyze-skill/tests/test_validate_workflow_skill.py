@@ -177,7 +177,7 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         self.assertIn("Every new task=>projectless End", required)
         self.assertIn("terminal memory/classification/record closeout", required)
         self.assertIn("codex_app__create_thread projectless", required)
-        self.assertIn("End Tasks stay globally visible", required)
+        self.assertIn("End Task stays globally visible", required)
         self.assertIn("never auto-archive/delete", required)
         self.assertIn("all checks PASS", required)
         self.assertIn("fresh projectless End Task", required)

@@ -1636,7 +1636,11 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
     """Persist a visible, non-learning model observation when no runtime receipt exists."""
     shared, pairs = load_shared_ladder(ladder)
     priority = shared.get("priority_producer")
-    priority_pairs = {f"{priority['id']}|{effort}" for effort in priority["adaptive_efforts"]} if isinstance(priority, dict) and priority.get("enabled") is True else set()
+    # Unreceipted observations never move routing, so they may record any
+    # currently supported priority-producer effort used by a fixed lifecycle
+    # worker. Receipt-backed producer learning remains restricted to
+    # adaptive_efforts in record_model_result below.
+    priority_pairs = {f"{priority['id']}|{effort}" for effort in priority["codex_efforts"]} if isinstance(priority, dict) and priority.get("enabled") is True else set()
     pair = _single_line(pair, "pair", maximum=160)
     if pair not in set(pairs) | priority_pairs:
         raise ValueError("observed pair is outside the shared active producer contract")

@@ -687,7 +687,7 @@ class ObsidianModelMemoryTests(unittest.TestCase):
             self.project,
             "verification",
             "structure-record",
-            "gpt-5.6-luna|medium",
+            "gpt-5.3-codex-spark|xhigh",
             "pass",
             "none",
             observation_id="ending-structure-record-1",
@@ -702,7 +702,7 @@ class ObsidianModelMemoryTests(unittest.TestCase):
             self.project,
             "verification",
             "structure-record",
-            "gpt-5.6-luna|medium",
+            "gpt-5.3-codex-spark|xhigh",
             "pass",
             "none",
             observation_id="ending-structure-record-1",
@@ -724,9 +724,26 @@ class ObsidianModelMemoryTests(unittest.TestCase):
         self.assertEqual(record["receipt_status"], "unavailable")
         self.assertEqual(record["model_evidence"], "task_assignment")
         self.assertFalse(record["learning_eligible"])
+        self.assertEqual(record["pair"], "gpt-5.3-codex-spark|xhigh")
         self.assertEqual(record["routing_action"], "record_only_require_receipted_evidence_before_model_movement")
         self.assertEqual(after["attempt_pair"], before["attempt_pair"])
         self.assertIn("task_assignment / pass / 1 / first_attempt_pass", category.read_text(encoding="utf-8"))
+
+    def test_unreceipted_observation_rejects_an_unregistered_pair(self):
+        with self.assertRaisesRegex(ValueError, "outside the shared active producer contract"):
+            module.record_model_observation(
+                self.project,
+                "verification",
+                "structure-record",
+                "gpt-unknown-fast|xhigh",
+                "pass",
+                "none",
+                observation_id="ending-unknown-pair",
+                operation="verify",
+                complexity_score=18,
+                task_summary="Reject an unregistered Ending assignment.",
+                vault=self.vault,
+            )
 
     def test_migration_preserves_foreign_records_and_keeps_model_switch_compact(self):
         own = self.quality_record("gpt-5.6-terra|medium")

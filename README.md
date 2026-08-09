@@ -25,10 +25,8 @@ Lifecycle:
 
 1. **Score every submission from 0–100, then finish the requested job** and run the proportional implementation check.
 2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
-3. **After every new result, its entry parent starts one scored/model-routed projectless `End Task-<task name>-<check>` in the global task list, one per independent check.** The producer never starts Ending recursively; the parent binds its receipt/project context and requires a real thread acknowledgement.
-4. **Every Ending runs its assigned real/completion check and terminal closeout; all required checks must PASS.** Terminal closeout always records routing classification/model history and runs the bounded personal-memory scan; no preference candidate means no preference-memory write, never no Ending. PASS/FAIL/BLOCKED tasks remain visible and report stage difficulty/pairs, attempt count, first/retry pass, suitability, next route, and Obsidian record link/status. Failure or acceptance mismatch sends an exact repair prompt through `codex_app__send_message_to_thread` to the immutable origin session; that session repairs result and starts a projectless End Task to rerun it, for up to three repairs. Ending tasks and repair handoffs never auto-archive or delete themselves.
-
-Main work and Ending use different task sessions. A summary is not verification: heavy changes need real tests, API evidence, builds, renders, or visual checks.
+3. **After every new result, its entry parent starts exactly one projectless `End Task-<task name>` in the global task list.** Its primary is fixed `gpt-5.3-codex-spark|xhigh`; the 0–100 score only scopes checks. Only an explicit Spark model/effort/scheduler or required-modality availability failure permits the registry-floor `gpt-5.6-luna|low` fallback. The producer never starts Ending recursively; the parent binds its receipt/project context and requires a real thread acknowledgement of the actual pair.
+4. **The one Ending runs the smallest real/completion checks and one terminal closeout; all required checks must PASS.** Reuse a current immutable release report by checking its digest and final state instead of rerunning the exhaustive gate. Closeout records routing classification/model history, sanitized project-change results when applicable, and the bounded personal-memory scan; no preference candidate means no preference write, never no Ending. Failure, timeout, or mismatch does not escalate the verifier: it sends exact evidence through `codex_app__send_message_to_thread` to the immutable origin, which repairs the result and starts a fresh Spark-first Ending, up to three repairs. PASS/FAIL/BLOCKED stays visible; nothing auto-archives or deletes itself.
 
 ## ⚡ Models & private learning
 
@@ -49,7 +47,7 @@ Main work and Ending use different task sessions. A summary is not verification:
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Finish and return the completed main result before background verification.
-- **Verify:** Every task gets a scored End Task; all checks PASS. FAIL → origin repair + fresh Ending, max 3. Simple results use a completion/record check.
+- **Verify:** One Spark-xhigh End Task per task; scores scope checks. Spark unavailable → Luna-low. All checks PASS; failure returns to origin, max 3.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
 - **Memory:** Change history is local JSONL + optional Obsidian; project/module + code symbols (`__module__`) required; context kept as fields.
 - **Models:** Use saved ladder; explicit update refreshes the highest GPT family; eligible small edits prioritize Spark-low; missing cache preserves it.

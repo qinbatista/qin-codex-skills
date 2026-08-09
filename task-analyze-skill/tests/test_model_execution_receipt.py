@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import textwrap
+import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -430,14 +431,13 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
             rollout = {"turn_context": {"turn_id": "benchmark-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
             args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, bootstrap_task=False, benchmark_run_id="benchmark-stream-result", result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="stream-result", allow_fallback=[])
-            with patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), patch("builtins.print") as print_mock, ThreadPoolExecutor(max_workers=1) as executor:
+            result_published = threading.Event()
+            with patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), patch("builtins.print", side_effect=lambda *_args, **_kwargs: result_published.set()) as print_mock, ThreadPoolExecutor(max_workers=1) as executor:
                 started = time.monotonic()
                 future = executor.submit(module.run_receipt, args, "exact raw prompt")
                 time.sleep(0.05)
                 self.assertFalse(result_path.exists())
-                deadline = time.monotonic() + 1
-                while not result_path.is_file() and time.monotonic() < deadline:
-                    time.sleep(0.005)
+                self.assertTrue(result_published.wait(timeout=args.timeout + 1))
                 first_result_elapsed = time.monotonic() - started
                 first_published_result = result_path.read_text(encoding="utf-8")
                 self.assertFalse(future.done())

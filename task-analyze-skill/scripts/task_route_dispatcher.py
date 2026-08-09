@@ -39,10 +39,13 @@ DISCLOSURE_SPEC.loader.exec_module(model_identity_disclosure)
 try:
     from routing_policy import (
         ACTIVE_MODEL_EFFORTS,
+        ENDING_FAST_CONFIG,
+        ENDING_FAST_PRIMARY_PAIR,
         EXECUTION_DOMAINS,
         MODEL_ROLE_PAIRS,
         PRIORITY_PRODUCER_CONFIG,
         adaptive_pair_texts_for_profile,
+        ending_fast_route_fields,
         execution_domain_is_active,
         expected_owner_skill,
         is_code_execution_domain,
@@ -59,10 +62,13 @@ except ModuleNotFoundError:
     _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
     _routing_policy_spec.loader.exec_module(_routing_policy)
     ACTIVE_MODEL_EFFORTS = _routing_policy.ACTIVE_MODEL_EFFORTS
+    ENDING_FAST_CONFIG = _routing_policy.ENDING_FAST_CONFIG
+    ENDING_FAST_PRIMARY_PAIR = _routing_policy.ENDING_FAST_PRIMARY_PAIR
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
     MODEL_ROLE_PAIRS = _routing_policy.MODEL_ROLE_PAIRS
     PRIORITY_PRODUCER_CONFIG = _routing_policy.PRIORITY_PRODUCER_CONFIG
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
+    ending_fast_route_fields = _routing_policy.ending_fast_route_fields
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
     is_code_execution_domain = _routing_policy.is_code_execution_domain
@@ -99,7 +105,13 @@ ALLOWED_SPARK_EXCEPTION_CATEGORIES = {
     "external_dependency",
     "quality_failure",
 }
-ENDING_SKILLS = {"verify-skill", "optimization-skill", "management-skill"}
+ENDING_SKILL = "verify-skill"
+ENDING_TERMINAL_CLOSEOUT = {
+    "project_result_memory": "after_all_checks_pass",
+    "routing_classification": "terminal",
+    "model_record": "terminal",
+    "single_closeout": True,
+}
 
 CONTROLLED_FIELDS = [
     "task_family",
@@ -135,6 +147,69 @@ def score_role_pair(score):
     band = complexity_band(score)
     role = {"small": "weak_default", "standard": "balanced_default", "complex": "balanced_complex", "advanced": "frontier_complex"}[band]
     return MODEL_ROLE_PAIRS[role]
+
+
+def apply_ending_fast_route(plan):
+    nodes = plan.get("nodes") if isinstance(plan, dict) else None
+    if not isinstance(nodes, list):
+        return plan
+    route_fields = ending_fast_route_fields()
+    for node in nodes:
+        if isinstance(node, dict) and node.get("phase") == "ending":
+            node.update(route_fields)
+            if "acceptance_checks" not in node:
+                prompt = node.get("prompt")
+                node["acceptance_checks"] = [
+                    {
+                        "check_id": "task-acceptance",
+                        "acceptance": prompt.strip() if isinstance(prompt, str) else "",
+                    }
+                ]
+            node["terminal_closeout"] = dict(ENDING_TERMINAL_CLOSEOUT)
+    return plan
+
+
+def ending_checklist_failures(node):
+    node_id = node.get("id", "<missing>")
+    checks = node.get("acceptance_checks")
+    if not isinstance(checks, list) or not checks:
+        return [f"{node_id} task-level Ending requires a non-empty acceptance_checks list"]
+    if len(checks) > 12:
+        return [f"{node_id} task-level Ending supports at most 12 bounded acceptance checks"]
+    failures = []
+    check_ids = []
+    for check in checks:
+        if not isinstance(check, dict):
+            failures.append(f"{node_id} acceptance_checks entries must be objects")
+            continue
+        check_id = check.get("check_id")
+        acceptance = check.get("acceptance")
+        if not isinstance(check_id, str) or not NODE_ID_PATTERN.fullmatch(check_id):
+            failures.append(f"{node_id} acceptance check ids must be lowercase kebab-case")
+        else:
+            check_ids.append(check_id)
+        if not isinstance(acceptance, str) or not acceptance.strip() or len(acceptance) > 1200:
+            failures.append(f"{node_id} acceptance checks require 1 to 1200 acceptance characters")
+        command = check.get("command")
+        if command is not None and (not isinstance(command, list) or not command or any(not isinstance(item, str) or not item for item in command)):
+            failures.append(f"{node_id} acceptance check command must be a non-empty string array when present")
+    if len(check_ids) != len(set(check_ids)):
+        failures.append(f"{node_id} acceptance check ids must be unique")
+    return failures
+
+
+def ending_worker_prompt(node):
+    checklist = json.dumps(node.get("acceptance_checks", []), ensure_ascii=False, separators=(",", ":"))
+    closeout = json.dumps(node.get("terminal_closeout", {}), ensure_ascii=False, separators=(",", ":"))
+    return (
+        f"{node['prompt'].rstrip()}\n"
+        f"Task-level acceptance checks (run all inside this one Ending worker): {checklist}\n"
+        f"After all checks PASS, perform this terminal closeout exactly once: {closeout}"
+    )
+
+
+def ending_availability_fallback(receipt):
+    return bool(isinstance(receipt, dict) and receipt.get("status") != "pass" and receipt.get("failure_class") == "availability" and receipt.get("turn_completed") is not True and receipt.get("result_published") is not True)
 
 
 def _get_node_decomposition(node, decomposition):
@@ -638,6 +713,7 @@ def validate_plan(
     enforce_current_recommendation=False,
     history_path=None,
 ):
+    apply_ending_fast_route(plan)
     skills_root = resolve_skills_root(skills_root)
     failures = []
     try:
@@ -697,7 +773,8 @@ def validate_plan(
         effort = node.get("effort")
         stage = _get_node_decomposition(node, plan.get("decomposition")) if dynamic_graph else None
         priority_branch = _priority_result_node(node, stage)
-        if not priority_branch and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
+        ending_fast_node = node.get("phase") == "ending" and f"{model}|{effort}" == ENDING_FAST_PRIMARY_PAIR
+        if not priority_branch and not ending_fast_node and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
             failures.append(f"{node_id} must use a model/effort from the catalog quality ladder")
         if "priority_producer" in node and not priority_branch:
             failures.append(f"{node_id} priority_producer is valid only for an eligible bounded task segment or single-source read-only branch")
@@ -727,13 +804,11 @@ def validate_plan(
                 if node.get("complexity_band") != node_score_band:
                     failures.append(f"{node_id} complexity_band does not match complexity_score")
             selection_basis = node.get("selection_basis")
-            if selection_basis not in {"spark_priority", "score_role", "adaptive_quality", "ending_score_role"}:
+            if selection_basis not in {"spark_priority", "score_role", "adaptive_quality", "ending_fast_primary"}:
                 failures.append(f"{node_id} has invalid selection_basis")
             if phase == "ending":
-                if selection_basis != "ending_score_role":
-                    failures.append(f"{node_id} Ending Task must use ending_score_role")
-                if node_score_band is not None and f"{model}|{effort}" != score_role_pair(node["complexity_score"]):
-                    failures.append(f"{node_id} Ending Task pair must match its node score")
+                if selection_basis != ENDING_FAST_CONFIG["selection_basis"]:
+                    failures.append(f"{node_id} Ending Task must use {ENDING_FAST_CONFIG['selection_basis']}")
             elif priority_branch:
                 if not _dynamic_spark_eligible(node, stage):
                     failures.append(f"{node_id} Spark task segment must have eligible stage operation and no external side effects")
@@ -788,6 +863,12 @@ def validate_plan(
                     failures.append(f"{node_id} allow_fallback must stay inside the catalog quality ladder")
             except (TypeError, ValueError):
                 failures.append(f"{node_id} allow_fallback contains unsupported model|effort pairs")
+        if phase == "ending":
+            expected_fallbacks = [ENDING_FAST_CONFIG["availability_fallback_pair"]] if ENDING_FAST_CONFIG.get("availability_fallback_pair") else []
+            if node.get("allow_fallback") != expected_fallbacks:
+                failures.append(f"{node_id} Ending Task must allow exactly the configured floor fallback")
+            if node.get("fallback_policy") != ENDING_FAST_CONFIG["fallback_policy"]:
+                failures.append(f"{node_id} Ending Task must use availability_only fallback policy")
 
         spark_exception = node.get("spark_exception_reason", "")
         if not isinstance(spark_exception, str) or len(spark_exception) > 240:
@@ -977,59 +1058,21 @@ def validate_plan(
                 failures.append("grounded read-only answers allow multiple result nodes only for disjoint source branches plus either a dependency-only merge or one disjoint owned source fused into the main merge")
 
     ending_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
-    optimization_ids = {node_id for node_id, node in node_by_id.items() if node.get("skill") == "optimization-skill"}
-    if not ending_ids:
-        failures.append("the locked plan must include at least one post-result Ending Task node")
-    if len(ending_ids) > 3:
-        failures.append("Ending Task supports at most three bounded sibling nodes")
-    for node_id in sorted(ending_ids):
-        ending_dependencies = node_by_id[node_id].get("dependencies", [])
-        ending_node = node_by_id[node_id]
-        ending_skill = ending_node.get("skill")
-        if main_result_node not in ending_dependencies:
-            failures.append(f"{node_id} must depend directly on the main result node")
-        if ending_skill == "verify-skill":
-            verifies_node = ending_node.get("verifies_node")
-            if verifies_node is not None:
-                target_node = node_by_id.get(verifies_node)
-                if not isinstance(verifies_node, str):
-                    failures.append(f"{node_id} verifies_node must be a node id string")
-                elif not target_node:
-                    failures.append(f"{node_id} verifies_node must reference an existing node: {verifies_node}")
-                elif target_node.get("skill") != "optimization-skill":
-                    failures.append(f"{node_id} verifies_node must target an optimization-skill node: {verifies_node}")
-                elif verifies_node not in ending_dependencies:
-                    failures.append(f"{node_id} must depend directly on its verifies_node target: {verifies_node}")
-                elif node_id == verifies_node:
-                    failures.append(f"{node_id} cannot verify itself")
-                other_ending_dependencies = [
-                    dependency
-                    for dependency in ending_dependencies
-                    if dependency in ending_ids and dependency != verifies_node
-                ]
-                if other_ending_dependencies:
-                    failures.append(f"{node_id} can only depend on an Ending node for its verifies_node target: {other_ending_dependencies[0]}")
-        elif any(dependency in ending_ids for dependency in ending_dependencies):
-            failures.append(f"Ending Task node {node_id} must be an independent sibling, not depend on another Ending node")
-        if ending_node.get("skill") not in ENDING_SKILLS:
-            failures.append(
-                f"Ending Task node {node_id} must use verify-skill, optimization-skill, or management-skill"
-            )
-    for optimization_node_id in sorted(optimization_ids):
-        optimization_verifiers = [
-            verifier_id
-            for verifier_id, verifier_node in node_by_id.items()
-            if verifier_node.get("phase") == "ending"
-            and verifier_node.get("skill") == "verify-skill"
-            and verifier_node.get("verifies_node") == optimization_node_id
-        ]
-        if len(optimization_verifiers) != 1:
-            failures.append(
-                f"optimization-skill node {optimization_node_id} must have exactly one ending verify-skill verifier targeting it"
-            )
-    producer_verifiers = [node_id for node_id in ending_ids if node_by_id[node_id].get("skill") == "verify-skill" and not node_by_id[node_id].get("verifies_node")]
-    if len(producer_verifiers) != 1:
-        failures.append("plans require exactly one non-targeted Ending verify-skill producer verifier")
+    if len(ending_ids) != 1:
+        failures.append("the locked plan must include exactly one task-level Ending node; put every acceptance check inside that node")
+    else:
+        ending_id = next(iter(ending_ids))
+        ending_node = node_by_id[ending_id]
+        ending_dependencies = ending_node.get("dependencies", [])
+        if ending_dependencies != [main_result_node]:
+            failures.append(f"{ending_id} must depend only and directly on the main result node")
+        if ending_node.get("skill") != ENDING_SKILL:
+            failures.append(f"{ending_id} task-level Ending must use {ENDING_SKILL}; management, optimization, memory, classification, and records are internal closeout actions")
+        if "verifies_node" in ending_node:
+            failures.append(f"{ending_id} verifies_node is obsolete; targeted checks belong in acceptance_checks")
+        failures.extend(ending_checklist_failures(ending_node))
+        if ending_node.get("terminal_closeout") != ENDING_TERMINAL_CLOSEOUT:
+            failures.append(f"{ending_id} must use the single canonical terminal closeout")
 
     if main_candidate_pairs:
         candidate_pair_text = {routing_history_module.pair_text(*pair) for pair in main_candidate_pairs}
@@ -1341,6 +1384,10 @@ def _has_mismatched_release_record(cache_dir, route_run_id):
 
 
 def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
+    if node.get("phase") == "ending":
+        node = dict(node)
+        apply_ending_fast_route({"nodes": [node]})
+        node["prompt"] = ending_worker_prompt(node)
     skills_root = resolve_skills_root(skills_root)
     node_id = node["id"]
     receipt_path = cache_dir / f"{node_id}-receipt.json"
@@ -1513,19 +1560,26 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
             attempt_receipt["selection_basis"] = node.get("selection_basis")
         attempt_receipt["result_published"] = bool(result_path.is_file() and result_path.stat().st_size > 0)
         attempt_receipt = receipt_module.annotate_operational_fallback(attempt_receipt)
+        if node["phase"] == "ending":
+            attempt_receipt["fallback_eligible"] = ending_availability_fallback(attempt_receipt)
+            if attempt_receipt.get("route_attempts"):
+                attempt_receipt["route_attempts"][-1]["fallback_eligible"] = attempt_receipt["fallback_eligible"]
         attempt_receipt_path.write_text(json.dumps(attempt_receipt, indent=2) + "\n", encoding="utf-8")
         route_attempts.append(_normalize_route_attempt(attempt_receipt, pair_text, status, failure_class))
         receipt = attempt_receipt
         if status == "pass":
             break
-        if node["phase"] != "result" or not receipt_module.immediate_operational_fallback(attempt_receipt):
+        result_fallback = node["phase"] == "result" and receipt_module.immediate_operational_fallback(attempt_receipt)
+        ending_fallback = node["phase"] == "ending" and node.get("fallback_policy") == "availability_only" and ending_availability_fallback(attempt_receipt)
+        if not result_fallback and not ending_fallback:
             break
 
     attempt_metrics = _aggregate_attempt_metrics(route_attempts)
     receipt["route_attempts"] = route_attempts
     receipt["priority_attempt_pair"] = priority_attempt_pair
     receipt["selected_pair"] = selected_pair
-    receipt["active_fallback_pair"] = selected_pair if priority_attempt_pair != selected_pair else None
+    receipt["active_fallback_pair"] = fallback_pairs[0] if node["phase"] == "ending" and fallback_pairs else selected_pair if priority_attempt_pair != selected_pair else None
+    receipt["fallback_policy"] = node.get("fallback_policy")
     receipt["allowed_fallback_pairs"] = planned_pairs[1:]
     receipt["operational_failure_pairs"] = [
         attempted_pair
@@ -2099,99 +2153,46 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         if isinstance(node, dict) and isinstance(node.get("id"), str)
     }
 
-    runnable_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
+    ending_ids = [node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"]
     main_node = node_by_id.get(plan.get("main_result_node"), {})
     main_record = completed.get(plan.get("main_result_node"), {})
     ordered = []
     routing_learning = None
     if not failures:
-        while runnable_ids:
-            ready = sorted(
-                node_id for node_id in runnable_ids
-                if all(dependency in completed for dependency in node_by_id[node_id].get("dependencies", []))
+        ending_id = ending_ids[0]
+        ending_node = dict(node_by_id[ending_id])
+        ending_node["_entry_model"] = entry.get("model")
+        ending_node["_entry_effort"] = entry.get("effort")
+        if not all(dependency in completed for dependency in ending_node.get("dependencies", [])):
+            failures.append("task-level Ending dependency was not satisfied")
+        else:
+            ending_record = run_node(
+                ending_node,
+                cache_dir,
+                dict(completed),
+                state_db,
+                cwd,
+                codex_bin,
+                skills_root,
             )
-            if not ready:
-                failures.append("Ending Task sibling dependencies were not satisfied")
-                break
-            completed_snapshot = dict(completed)
-            ready_nodes = {}
-            for node_id in ready:
-                ready_node = dict(node_by_id[node_id])
-                ready_node["_entry_model"] = entry.get("model")
-                ready_node["_entry_effort"] = entry.get("effort")
-                ready_nodes[node_id] = ready_node
-            with ThreadPoolExecutor(max_workers=min(3, len(ready))) as executor:
-                futures = {
-                    node_id: executor.submit(
-                        run_node,
-                        ready_nodes[node_id],
-                        cache_dir,
-                        completed_snapshot,
-                        state_db,
-                        cwd,
-                        codex_bin,
-                        skills_root,
-                    )
-                    for node_id in ready
-                }
-                wave_records = [futures[node_id].result() for node_id in ready]
-            ordered.extend(wave_records)
-            for record in wave_records:
-                runnable_ids.remove(record["id"])
-                if record.get("status") == "pass":
-                    completed[record["id"]] = record
-                else:
-                    failures.append(f"Ending Task node {record['id']} failed")
-
-            for record in wave_records:
-                verify_node = node_by_id.get(record["id"], {})
-                if verify_node.get("skill") != "verify-skill":
-                    continue
-                verifies_node = verify_node.get("verifies_node")
-                if not verifies_node:
-                    continue
-
-                target_record = completed.get(verifies_node)
-                if not target_record:
-                    failures.append(f"Targeted verifier {record['id']} could not read target node {verifies_node}")
-                    record["status"] = "fail"
-                    continue
-                target_identity = target_record.get("worker_identity")
-                verifier_identity = record.get("worker_identity")
-                if not target_identity:
-                    failures.append(f"Targeted verifier {record['id']} target {verifies_node} missing worker identity")
-                    record["status"] = "fail"
-                    continue
-                if not verifier_identity:
-                    failures.append(f"Targeted verifier {record['id']} missing worker identity")
-                    record["status"] = "fail"
-                    continue
-                if verifier_identity == target_identity:
-                    failures.append(
-                        f"Targeted verifier {record['id']} must use a distinct execution worker from target {verifies_node}"
-                    )
-                    record["status"] = "fail"
-                    continue
-
-        for ending_record in ordered:
-            if node_by_id.get(ending_record.get("id"), {}).get("skill") != "verify-skill" or not main_record or not main_node:
-                continue
-            if node_by_id.get(ending_record.get("id"), {}).get("verifies_node"):
-                continue
+            ordered.append(ending_record)
+            if ending_record.get("status") != "pass":
+                failures.append(f"Ending Task node {ending_record['id']} failed")
             ending_status = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
             if ending_status != "pass":
-                failures.append(f"Non-targeted Ending verify node {ending_record['id']} did not pass ENDING_TASK marker")
-            recorded_learning = _run_record(
-                main_record.get("receipt_path"),
-                "real",
-                ending_status if ending_status in {"pass", "fail"} else "unknown",
-                main_record.get("receipt_path"),
-                route_run_id,
-                main_node,
-                cwd,
-                execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
-            )
-            routing_learning = recorded_learning if isinstance(recorded_learning, dict) else None
+                failures.append(f"Task-level Ending node {ending_record['id']} did not pass ENDING_TASK marker")
+            if main_record and main_node:
+                recorded_learning = _run_record(
+                    main_record.get("receipt_path"),
+                    "real",
+                    ending_status if ending_status in {"pass", "fail"} else "unknown",
+                    main_record.get("receipt_path"),
+                    route_run_id,
+                    main_node,
+                    cwd,
+                    execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
+                )
+                routing_learning = recorded_learning if isinstance(recorded_learning, dict) else None
 
     status = (
         "pass"
@@ -2234,7 +2235,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
             ending_node = node_by_id.get(ending_record.get("id"), {})
             ending_verdict = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
             verified_quality_failure = ending_record.get("failure_class") == "quality" or ending_verdict == "fail"
-            if ending_node.get("skill") == "verify-skill" and not ending_node.get("verifies_node") and ending_record.get("status") != "pass" and verified_quality_failure:
+            if ending_node.get("skill") == ENDING_SKILL and ending_record.get("status") != "pass" and verified_quality_failure:
                 if plan.get("main_result_node"):
                     quality_failure_nodes.append(plan.get("main_result_node"))
     model_switch_summary = build_model_switch_summary(

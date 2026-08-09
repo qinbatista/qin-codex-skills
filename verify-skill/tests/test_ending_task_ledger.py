@@ -44,6 +44,32 @@ class EndingTaskLedgerTests(unittest.TestCase):
         path.write_text(json.dumps(receipt), encoding="utf-8")
         return project, path
 
+    def ending_plan(self, root):
+        path = root / "ending-plan.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "verification_required": True,
+                    "ending_model_policy": {
+                        "primary_pair": "gpt-5.3-codex-spark|xhigh",
+                        "availability_fallback_pair": "gpt-5.6-luna|low",
+                        "availability_fallback_reasons": [
+                            "primary_effort_unsupported",
+                            "primary_model_unavailable",
+                            "primary_pair_not_in_registry",
+                            "required_modality_unavailable",
+                            "scheduler_unavailable",
+                        ],
+                        "approved_pairs": ["gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low"],
+                        "score_controls": "check_scope_and_classification_only",
+                    },
+                    "ending_tasks": [{"check_id": "unit"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
     def test_passed_lifecycle_opens_final_gate(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -184,7 +210,8 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(state["producer_binding"]["status"], "recorded")
         self.assertEqual(passed["model_assessment"]["pass_shape"], "first_attempt_pass")
         self.assertEqual(passed["model_assessment"]["attempt_count"], 1)
-        self.assertEqual(passed["model_assessment"]["model_suitability"], "suitable")
+        self.assertEqual(passed["model_assessment"]["model_suitability"], "producer_suitable")
+        self.assertEqual(passed["model_assessment"]["ending_routing_action"], "no_ending_route_assignment")
         self.assertEqual(duplicate["status"], "duplicate")
 
     def test_retry_pass_reports_original_pair_failure_and_verified_recovery(self):
@@ -220,14 +247,15 @@ class EndingTaskLedgerTests(unittest.TestCase):
             with patch.object(LEDGER, "_record_bound_model_result", return_value=passed_learning) as passed_record:
                 passed = LEDGER.record_event(repair["lifecycle_id"], "pass", "Second check passed", ["regression pass"], store=store)
             audit = LEDGER.audit_lifecycle(original["lifecycle_id"], store)
-        self.assertEqual(failed["model_assessment"]["model_suitability"], "too_weak_for_verified_result")
+        self.assertEqual(failed["model_assessment"]["model_suitability"], "producer_result_failed_quality_check")
+        self.assertEqual(failed["model_assessment"]["ending_routing_action"], "retain_fixed_fast_ending_pair")
         self.assertEqual(failed_record.call_args.kwargs["ending_attempt_number"], 1)
         self.assertEqual(passed_record.call_args.kwargs["ending_attempt_number"], 2)
         self.assertEqual(passed_record.call_args.kwargs["prior_quality_failure_count"], 1)
         self.assertEqual(passed["model_assessment"]["pass_shape"], "retry_pass")
         self.assertEqual(passed["model_assessment"]["attempt_count"], 2)
-        self.assertEqual(passed["model_assessment"]["model_suitability"], "initial_pair_too_weak_recovered")
-        self.assertEqual(passed["model_assessment"]["routing_action"], "reuse_lowest_successful_recovery_pair")
+        self.assertEqual(passed["model_assessment"]["model_suitability"], "producer_recovered_after_quality_repair")
+        self.assertEqual(passed["model_assessment"]["routing_action"], "reuse_lowest_successful_producer_recovery_pair")
         self.assertEqual(passed["model_assessment"]["next_pair"], "gpt-5.6-terra|medium")
         self.assertEqual(passed["model_assessment"]["model_record_link"], "[[Projects/project/Model Routing/Tests and Verification]]")
         self.assertEqual(audit["attempt_count"], 2)
@@ -409,6 +437,112 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(state["model_disclosure"], {"assigned_pair": "gpt-5.6-terra|ultra", "current_pair": "gpt-5.6-terra|ultra", "model_evidence": "task_assignment", "requested_pair": "gpt-5.6-terra|ultra", "resolved_pair": "gpt-5.6-terra|ultra", "effective_pair": "gpt-5.6-terra|ultra", "previous_pair": "same as current", "route_change": "no_switch", "switch_summary": "No model switch", "reason": "Best-known pair used; receipt not available.", "effective_evidence_level": "UNVERIFIED (no runtime receipt)"})
         self.assertEqual(state["events"][0]["model_disclosure"], state["model_disclosure"])
 
+    def test_real_plan_accepts_primary_and_rejects_unapproved_ending_pair(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            plan = self.ending_plan(root)
+            started = LEDGER.start_lifecycle(
+                "verification",
+                root,
+                "Run the task Ending",
+                project_root=root,
+                verification_required=True,
+                verification_plan=plan,
+                ending_check_id="task-ending",
+                selected_pair="gpt-5.3-codex-spark|xhigh",
+                store=root / "store",
+            )
+            with self.assertRaisesRegex(ValueError, "not approved"):
+                LEDGER.start_lifecycle(
+                    "verification",
+                    root,
+                    "Run an unapproved Ending",
+                    project_root=root,
+                    verification_required=True,
+                    verification_plan=plan,
+                    ending_check_id="task-ending",
+                    selected_pair="gpt-5.6-terra|medium",
+                    store=root / "other-store",
+                )
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        self.assertEqual(state["ending_model_assignment"]["primary_pair"], "gpt-5.3-codex-spark|xhigh")
+        self.assertIsNone(state["availability_fallback_reason"])
+
+    def test_real_plan_fallback_requires_availability_reason_and_records_provenance(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            plan = self.ending_plan(root)
+            with self.assertRaisesRegex(ValueError, "sanitized availability reason"):
+                LEDGER.start_lifecycle(
+                    "verification",
+                    root,
+                    "Run fallback without evidence",
+                    project_root=root,
+                    verification_required=True,
+                    verification_plan=plan,
+                    ending_check_id="task-ending",
+                    selected_pair="gpt-5.6-luna|low",
+                    store=root / "invalid-store",
+                )
+            with self.assertRaisesRegex(ValueError, "sanitized availability reason"):
+                LEDGER.start_lifecycle(
+                    "verification",
+                    root,
+                    "Try quality fallback",
+                    project_root=root,
+                    verification_required=True,
+                    verification_plan=plan,
+                    ending_check_id="task-ending",
+                    selected_pair="gpt-5.6-luna|low",
+                    availability_fallback_reason="quality",
+                    store=root / "quality-store",
+                )
+            started = LEDGER.start_lifecycle(
+                "verification",
+                root,
+                "Use availability fallback",
+                project_root=root,
+                verification_required=True,
+                verification_plan=plan,
+                ending_check_id="task-ending",
+                selected_pair="gpt-5.6-luna|low",
+                availability_fallback_reason="primary_model_unavailable",
+                store=root / "store",
+            )
+            passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Fast closeout passed", store=root / "store")
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        self.assertEqual(state["availability_fallback_reason"], "primary_model_unavailable")
+        self.assertEqual(state["model_disclosure"]["route_change"], "operational_fallback")
+        self.assertEqual(passed["model_assessment"]["ending_routing_action"], "availability_fallback_only")
+        self.assertEqual(passed["model_assessment"]["producer_next_pair"], "unknown|unknown")
+
+    def test_correctness_failure_moves_only_the_producer_learning_pair(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root)
+            plan = self.ending_plan(project)
+            started = LEDGER.start_lifecycle(
+                "verification",
+                project,
+                "Verify producer result",
+                project_root=project,
+                producer_receipt=receipt,
+                verification_required=True,
+                verification_plan=plan,
+                ending_check_id="task-ending",
+                selected_pair="gpt-5.3-codex-spark|xhigh",
+                store=root / "store",
+            )
+            learning = {"status": "written", "written": True, "pair": "gpt-5.3-codex-spark|low", "next_pair": "gpt-5.6-luna|medium", "next_pair_direction": "upgrade"}
+            with patch.object(LEDGER, "_record_bound_model_result", return_value=learning):
+                failed = LEDGER.record_event(started["lifecycle_id"], "fail", "Acceptance mismatch", ["wrong result"], store=root / "store", failure_class="correctness")
+        assessment = failed["model_assessment"]
+        self.assertEqual(assessment["ending_pair"], "gpt-5.3-codex-spark|xhigh")
+        self.assertEqual(assessment["ending_routing_action"], "retain_fixed_fast_ending_pair")
+        self.assertEqual(assessment["producer_next_pair"], "gpt-5.6-luna|medium")
+        self.assertEqual(assessment["producer_routing_action"], "repair_producer_with_recorded_next_pair")
+        self.assertNotIn("upgrade", assessment["ending_routing_action"])
+
     def test_receipt_effective_pair_overrides_assignment_and_keeps_resolved_pair(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -487,7 +621,8 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(passed["model_assessment"]["ending_pair"], "gpt-5.6-luna|medium")
         self.assertEqual(passed["model_assessment"]["model_record_pair"], "gpt-5.6-luna|medium")
         self.assertEqual(passed["model_assessment"]["model_record_status"], "written")
-        self.assertEqual(passed["model_assessment"]["routing_action"], "record_only_require_receipted_evidence_before_model_movement")
+        self.assertEqual(passed["model_assessment"]["routing_action"], "no_producer_route_movement")
+        self.assertEqual(passed["model_assessment"]["producer_next_pair"], "unknown|unknown")
         self.assertFalse(state["model_learning"]["learning_eligible"])
 
     def test_runtime_receipt_evidence_requires_a_validated_receipt(self):

@@ -31,10 +31,15 @@ ACTIVE_MODEL_DEFINITIONS = {row["id"]: {"efforts": list(row["codex_efforts"])} f
 PRIORITY_PRODUCER_CONFIG = dict(MODEL_CAPABILITY_CONFIG["priority_producer"] or {})
 PRIORITY_PRODUCER_MODEL = PRIORITY_PRODUCER_CONFIG.get("id")
 PRIORITY_PRODUCER_DEFINITIONS = {PRIORITY_PRODUCER_MODEL: {"efforts": list(PRIORITY_PRODUCER_CONFIG["codex_efforts"])}} if PRIORITY_PRODUCER_MODEL else {}
+ENDING_FAST_CONFIG = dict(MODEL_CAPABILITY_CONFIG["ending_fast"])
+ENDING_FAST_PRIMARY_PAIR = ENDING_FAST_CONFIG["primary_pair"]
+ENDING_FAST_PRIMARY_MODEL, ENDING_FAST_PRIMARY_EFFORT = ENDING_FAST_PRIMARY_PAIR.split("|", 1)
+ENDING_FAST_FALLBACK_PAIR = ENDING_FAST_CONFIG.get("availability_fallback_pair")
+ENDING_FAST_DEFINITIONS = {model["id"]: {"efforts": list(model["codex_efforts"])} for model in MODEL_CAPABILITY_CONFIG["catalog_models"] if model["id"] == ENDING_FAST_PRIMARY_MODEL}
 SPARK_FIRST_CONFIG = PRIORITY_PRODUCER_CONFIG
 SPARK_MODEL = PRIORITY_PRODUCER_MODEL
 SPARK_MODEL_DEFINITIONS = PRIORITY_PRODUCER_DEFINITIONS
-MODEL_DEFINITIONS = {**PRIORITY_PRODUCER_DEFINITIONS, **ACTIVE_MODEL_DEFINITIONS}
+MODEL_DEFINITIONS = {**PRIORITY_PRODUCER_DEFINITIONS, **ENDING_FAST_DEFINITIONS, **ACTIVE_MODEL_DEFINITIONS}
 
 MODEL_ORDER = list(MODEL_DEFINITIONS.keys())
 MODEL_EFFORT_ORDER = list(MODEL_CAPABILITY_CONFIG["effort_order"])
@@ -440,6 +445,11 @@ def scheduled_source_pair(complexity="easy"):
     return (PRIORITY_PRODUCER_MODEL, effort) if effort in PRIORITY_PRODUCER_CONFIG["adaptive_efforts"] else None
 
 
+def ending_fast_route_fields():
+    fallback_pairs = [ENDING_FAST_FALLBACK_PAIR] if ENDING_FAST_FALLBACK_PAIR else []
+    return {"model": ENDING_FAST_PRIMARY_MODEL, "effort": ENDING_FAST_PRIMARY_EFFORT, "selection_basis": ENDING_FAST_CONFIG["selection_basis"], "allow_fallback": fallback_pairs, "fallback_policy": ENDING_FAST_CONFIG["fallback_policy"]}
+
+
 def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
     return [pair_text(*pair) for pair in adaptive_ladder_for_profile(task_family, modality, risk, complexity, ambiguity)]
 
@@ -504,6 +514,7 @@ def public_model_capability_rows():
         "role_pairs": dict(MODEL_ROLE_PAIRS),
         "policy": dict(ADAPTIVE_POLICY),
         "priority_producer": dict(PRIORITY_PRODUCER_CONFIG) if PRIORITY_PRODUCER_CONFIG else None,
+        "ending_fast": dict(ENDING_FAST_CONFIG),
         "spark_first": dict(SPARK_FIRST_CONFIG),
         "private_learning_contract": dict(MODEL_CAPABILITY_CONFIG["private_learning_contract"]),
         "default_cold_start": MODEL_CAPABILITY_CONFIG["default_cold_start"],

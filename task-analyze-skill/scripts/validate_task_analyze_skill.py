@@ -77,6 +77,14 @@ ACTIVE_MODEL_ORDER = tuple(model["id"] for model in MODEL_REGISTRY["models"])
 ACTIVE_MODEL_EFFORTS = {model["id"]: tuple(model["codex_efforts"]) for model in MODEL_REGISTRY["models"]}
 PRIORITY_PRODUCER = MODEL_REGISTRY.get("priority_producer")
 PRIORITY_PRODUCER_MODEL = PRIORITY_PRODUCER.get("id") if isinstance(PRIORITY_PRODUCER, dict) else None
+ENDING_FAST_POLICY = MODEL_REGISTRY["ending_fast"]
+ENDING_FAST_MODEL, ENDING_FAST_EFFORT = ENDING_FAST_POLICY["primary_pair"].split("|", 1)
+ENDING_TERMINAL_CLOSEOUT = {
+    "project_result_memory": "after_all_checks_pass",
+    "routing_classification": "terminal",
+    "model_record": "terminal",
+    "single_closeout": True,
+}
 REQUIRED_FILES = [
     ".gitignore",
     "SKILL.md",
@@ -98,6 +106,7 @@ REQUIRED_FILES = [
     "scripts/obsidian_adaptive_model_runner.py",
     "scripts/task_complexity_score.py",
     "scripts/model_registry.py",
+    "scripts/routing_policy.py",
     "scripts/sync_model_capabilities.py",
     "scripts/strategy_performance.py",
     "scripts/benchmark_suite_gate.py",
@@ -151,7 +160,7 @@ REQUIRED_SKILL_TEXT = [
     "ack-launch",
     "end_task_trigger_rate=100%",
     "Never inspect or invoke app-server internals",
-    "outer host must create the persistent End Task",
+    "outer host must create it",
     "substitute a same-task subtask",
     "origin final is complete after the result presentation",
     "concurrent or missing evidence is terminal BLOCKED, not a user question",
@@ -326,11 +335,13 @@ REQUIRED_ADAPTIVE_TEXT = [
     "`strategy_performance.py` remains the separate authority",
     "automatically writes a receipt-backed producer outcome",
 ]
-REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status", "pending", "resolve_fast_path_args", "infer_complexity_score", "infer_memory_symbol", "complexity_score", "complexity_band", "step_kind", "capability_tags", "capability_fingerprint", "switch_direction", "switch_change", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "scheduled_result_node_count", "parallel_branch_count", "model-switch-notice", "user_visible_message", "increased the model to", "_graph_model_route_notice"]
+REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_real_status", "pending", "resolve_fast_path_args", "infer_complexity_score", "infer_memory_symbol", "complexity_score", "complexity_band", "step_kind", "capability_tags", "capability_fingerprint", "switch_direction", "switch_change", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "ending_fast_route_fields", "scheduled_result_node_count", "parallel_branch_count", "model-switch-notice", "user_visible_message", "increased the model to", "_graph_model_route_notice"]
 REQUIRED_MODEL_SWITCH_CATEGORIES = ["normal-script-update", "code-design", "finding-bugs", "tests-verification", "documentation-instructions", "general-work"]
 REQUIRED_MODEL_SWITCH_DIRECTIONS = ["initial", "upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"]
 REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "DEFAULT_LOCAL_STORE", "model-routing-memory", "model-capability-ladder.json", "Model Switch.md", "_read_local_records", "_merge_model_records", "_transferable_local_records", "cross_project_", "local_transfer_history", "transfer_record_count", "reconcile_local_model_history", "event_id", "outcome_reason", "recovery_from_pair", "attempt_chain", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "complexity_score", "complexity_band", "task_capability_profile", "step_kind", "capability_tags", "capability_fingerprint", "DISTINCTIVE_CAPABILITY_TAGS", "verified_quality_boundary", "_priority_producer_pair", "_priority_history", "spark_verify_failure_suppresses_", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "record_model_observation", "learning_eligible", "observation_id", "receipt_status", "turn_completed", "model_match", "effort_match", "memory_coverage", "ensure_coverage", "_model_routing_directory", "_category_page", "_category_reference", "model_record_document", "model_record_link", "_shared_category_page", "_native_model_records", "_refresh_shared_category", "route_capsule", "pages_read", "candidate_records"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
-REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "complexity_scale", "small_edit_task_types", "small_edit_operations", "TASK_SEGMENT_PURPOSES", "task_segment_maximum_complexity_score", "suppress_matching_complexity_band_and_upgrade", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
+REQUIRED_MODEL_REGISTRY_IMPLEMENTATION = ["REGISTRY_SCHEMA_VERSION = 2", "models_cache.json", "catalog_sha256", "visibility", "parse_numeric_gpt_family", "active_family", "highest_numeric_gpt_family", "catalog_models", "catalog_role", "active_quality", "catalog_only", "provider_priority", "priority_producer", "ENDING_FAST_MODEL_ID", "gpt-5.3-codex-spark", "ENDING_FAST_EFFORT", "xhigh", "ENDING_FAST_SELECTION_BASIS", "ending_fast_primary", "ENDING_FAST_FALLBACK_POLICY", "availability_only", "_ending_fast_config", "ending_fast", "score_scope", "check_only", "complexity_scale", "small_edit_task_types", "small_edit_operations", "TASK_SEGMENT_PURPOSES", "task_segment_maximum_complexity_score", "suppress_matching_complexity_band_and_upgrade", "atomic_write_registry", "ensure_registry", "refresh_registry", "registry_matches_catalog", "validate_registry"]
+REQUIRED_ROUTING_POLICY_ENDING_FAST_IMPLEMENTATION = ["ENDING_FAST_CONFIG", "ENDING_FAST_PRIMARY_PAIR", "ENDING_FAST_FALLBACK_PAIR", "ENDING_FAST_DEFINITIONS", "ending_fast_route_fields"]
+REQUIRED_DISPATCHER_ENDING_FAST_IMPLEMENTATION = ["ENDING_FAST_CONFIG", "ENDING_FAST_PRIMARY_PAIR", "ending_fast_route_fields", "apply_ending_fast_route", "ending_fast_primary", "availability_only", "ending_availability_fallback", "failure_class"]
 REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "route_selection_elapsed_ms", "calibration_failure_elapsed_ms", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
 REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "ENTRY_CONTEXT_ENV",
@@ -357,31 +368,33 @@ REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "executes Spark-low first", "Ending quality FAIL suppresses that fingerprint", "Dependency-ready independent nodes run parallel",
     "shared writes/order/output deps stay linear", "resolve CODEX_HOME", "pipe exact task once via platform Python",
     "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "LOCKED_ROUTE_NODE does result/Quick Check only",
-    "parent launches one End after every new task receipt", "ENDING_TASK_WORKER does assigned check only:no nested lifecycle", "dynamic_task_graph",
+    "parent launches one End after every new task receipt", "ENDING_TASK_WORKER does assigned checks only:no nested lifecycle", "dynamic_task_graph",
     "task_route_dispatcher.py run-plan", "no benchmark", "Exact one-source/tool/image read-only uses `task_complexity_score.py`", "no reread/full-read/precheck", "output artifact MUST runner",
     "2 Real PASS trial down 1 rung", "quality FAIL up 1", "missing Obsidian queues projection;local history continues",
     "Producer owns files/skills/Quick Check", "Every new task=>projectless End", "codex_app__create_thread projectless",
     "resolve root with codex_app__list_projects", "ending_verification_plan.py create-launches --project-id",
-    "ack threadId+hostId+projectId", "audit-launches end_task_trigger_rate=100%", "handoff pending", "all checks PASS",
-    "End Tasks stay globally visible", "never auto-archive/delete", "attempts,first/retry pass", "suitability", "Obsidian link/status",
+    "ack threadId+hostId+projectId+actual pair", "audit-launches end_task_trigger_rate=100%", "handoff pending", "all checks PASS",
+    "End Task stays globally visible", "never auto-archive/delete", "attempts,first/retry pass", "suitability", "Obsidian link/status",
     "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "fresh projectless End Task", "--repair-of-lifecycle-id", "up to 3 repairs", "missing source session or failed prompt submission is BLOCKED",
     "never same-task subtask/emulate/wait/self-verify", "Terminal events write local+same-ID Obsidian records", "only receipts move routing",
     "future routes merge/dedupe pairs,fingerprint,score/band,direction,recovery", "AUTO_BENCHMARK_ENTRY", "Direct Sol-ultra no Skill",
     "Auto Luna-max stable child/graph", "MUST child/graph then return child JSON", "gate owns separate Ending", "excludes only controller",
     "compare task vs +Ending", "all exact PASS", "all result/Ending PASS", "Primary=time+tokens", "totals lower",
     "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "Final Ending PASS/BLOCKED",
+    "one independent projectless Ending", "gpt-5.3-codex-spark|xhigh", "score scopes checks only", "registry-floor Luna-low",
 ]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "· Model:", "· Route:", "Evidence:", "runtime receipt", "verified entry (no runtime receipt)", "task assignment (no runtime receipt)", "configured selection (no runtime receipt)", "Model path:", "Model stages", "changed route", "unknown|unknown", "full routing data"]
 RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS = ["compact Result Model Disclosure", "task-analyze-skill/references/route-contract.md", "Do not expand"]
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "build real proportional Ending checks", "Every required check must PASS", "codex_app__send_message_to_thread", "immutable origin session", "fresh Ending", "--repair-of-lifecycle-id"]
-REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "separate scored/modelled End Tasks", "All required checks must PASS", "acceptance mismatch", "immutable origin session", "fresh verifier"]
+REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "one fixed Spark-xhigh projectless Ending", "score scopes checks only", "only Spark availability/capability failure permits Luna-low", "All required checks must PASS", "acceptance mismatch", "immutable origin session", "fresh Spark-first verifier"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
-REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "Start the scored Ending lifecycle for every new user task", "ending_verification_plan.py", "projectless global End Tasks", "Every terminal End Task stays visible", "Never auto-archive or delete", "fresh projectless verifier"]
-REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "present the completed prompt first"]
-REQUIRED_VERIFY_SKILL_TEXT = ["mandatory post-result Ending Real Verify for every new user task", "smallest observable completion/record check", "execute a real proportional test", "ending_verification_plan.py", "own `0-100` check score", "All required checks must PASS", "{\"type\":\"projectless\"", "create-launches", "ack-launch", "end_task_trigger_rate=100%", "remain visible", "Never call `set_thread_archived`", "global task list", "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "acceptance mismatch", "structured `model_assessment`", "fresh projectless Ending", "BLOCKED does not count as verified", "mandatory Ending", "strict no-op for preference memory"]
-REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "weak_default", "balanced_default", "balanced_complex", "frontier_complex", "separate_persistent_tasks", "THREAD_TARGET", "ORIGIN_SESSION_RESUME_CAPABILITY", "projectless", "TERMINAL_THREAD_POLICY", "keep_visible", "project_binding", "subprocess.run", "send_repair_prompt_to_origin_session_then_fresh_ending", "max_repair_attempts", "codex_app__send_message_to_thread", "repair_dispatch", "repair_prompt", "record_requirement_mismatch", "create-launches", "ack-launch", "audit-launches", "end_task_trigger_rate", "structured model_assessment", "Never call set_thread_archived"]
+REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "Start one scored projectless Ending lifecycle for every new user task", "ending_verification_plan.py", "distinct checks in one", "gpt-5.3-codex-spark|xhigh", "registry-floor Luna-low", "Every terminal End Task stays visible", "Never auto-archive or delete", "fresh projectless verifier"]
+REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "ordinary prose does not trigger it", "present the artifact first", "gpt-5.3-codex-spark|xhigh", "registry-floor Luna-low", "fresh Spark-first Ending"]
+REQUIRED_VERIFY_SKILL_TEXT = ["mandatory post-result Ending Real Verify for every new user task", "smallest observable completion/record check", "execute a real proportional test", "ending_verification_plan.py", "each check keeps its own `0-100` score", "All required checks must PASS", "exactly one persistent projectless", "gpt-5.3-codex-spark|xhigh", "score/band controls proportional scope and classification only", "one approved availability fallback", "{\"type\":\"projectless\"", "create-launches", "ack-launch", "end_task_trigger_rate=100%", "remains visible", "Never call `set_thread_archived`", "global task list", "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "acceptance mismatch", "structured `model_assessment`", "fresh projectless Ending", "BLOCKED does not count as verified", "mandatory Ending", "strict no-op for preference memory"]
+REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["ENDING_PRIMARY_PAIR", "gpt-5.3-codex-spark|xhigh", "ENDING_FALLBACK_ROLE", "AVAILABILITY_FALLBACK_REASONS", "primary_model_unavailable", "primary_effort_unsupported", "primary_pair_not_in_registry", "scheduler_unavailable", "required_modality_unavailable", "ending_fast_primary", "availability_only", "approved_pairs", "score_controls", "check_scope_and_classification_only", "quality_failure_model_fallback", "one_persistent_ending_runs_all_checks", "THREAD_TARGET", "ORIGIN_SESSION_RESUME_CAPABILITY", "projectless", "TERMINAL_THREAD_POLICY", "keep_visible", "project_binding", "subprocess.run", "send_repair_prompt_to_origin_session_then_fresh_ending", "max_repair_attempts", "codex_app__send_message_to_thread", "repair_dispatch", "repair_prompt", "record_requirement_mismatch", "create-launches", "ack-launch", "audit-launches", "end_task_trigger_rate", "structured model_assessment", "Never call set_thread_archived"]
+FORBIDDEN_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "ending_score_role", "separate_persistent_tasks"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
 MAX_GLOBAL_BOOTSTRAP_BYTES = 6500
@@ -621,9 +634,10 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
         skill = node.get("skill")
         if node.get("phase") not in {"result", "ending"}:
             failures.append(f"{node_id} phase must be result or ending")
-        if PRIORITY_PRODUCER_MODEL is not None and model == PRIORITY_PRODUCER_MODEL:
+        ending_fast_node = node.get("phase") == "ending" and (model, effort) == (ENDING_FAST_MODEL, ENDING_FAST_EFFORT)
+        if PRIORITY_PRODUCER_MODEL is not None and model == PRIORITY_PRODUCER_MODEL and not ending_fast_node:
             failures.append(f"{node_id} schedule producer is valid only for a disjoint source branch and cannot be a schema-2 quality node")
-        elif model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set()):
+        elif not ending_fast_node and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
             failures.append(f"{node_id} has unsupported model/effort")
         if skill not in installed and resolve_skill_path(skill, skills_root) is None:
             failures.append(f"{node_id} names unavailable skill {skill}")
@@ -670,8 +684,8 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
     main = node_by_id.get(main_result_node)
     if not result_ids:
         failures.append("plan must contain at least one result node")
-    if not ending_ids:
-        failures.append("plan must contain post-result Ending work")
+    if len(ending_ids) != 1:
+        failures.append("plan must contain exactly one task-level post-result Ending; acceptance checks and closeout stay inside it")
     if not main or main.get("phase") != "result":
         failures.append("main_result_node must name a result node")
     else:
@@ -681,16 +695,21 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
     for result_id in sorted(result_ids):
         if any(dependency in ending_ids for dependency in node_by_id[result_id].get("dependencies", [])):
             failures.append(f"{result_id} must not depend on Ending work")
-    for ending_id in sorted(ending_ids):
-        if main_result_node not in node_by_id[ending_id].get("dependencies", []):
-            failures.append(f"{ending_id} must depend directly on main_result_node")
-    producer_real_verifiers = [
-        node_id
-        for node_id in ending_ids
-        if node_by_id[node_id].get("skill") == "verify-skill" and not node_by_id[node_id].get("verifies_node")
-    ]
-    if len(producer_real_verifiers) != 1:
-        failures.append("plan must contain exactly one post-result Real verifier for the main result")
+    if len(ending_ids) == 1:
+        ending_id = next(iter(ending_ids))
+        ending = node_by_id[ending_id]
+        if ending.get("dependencies") != [main_result_node]:
+            failures.append(f"{ending_id} must depend only and directly on main_result_node")
+        if ending.get("skill") != "verify-skill":
+            failures.append(f"{ending_id} task-level Ending must use verify-skill")
+        if "verifies_node" in ending:
+            failures.append(f"{ending_id} verifies_node is obsolete")
+        checks = ending.get("acceptance_checks")
+        check_ids = [check.get("check_id") for check in checks if isinstance(check, dict)] if isinstance(checks, list) else []
+        if not isinstance(checks, list) or not checks or len(check_ids) != len(checks) or len(check_ids) != len(set(check_ids)) or any(not isinstance(check_id, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", check_id) for check_id in check_ids):
+            failures.append(f"{ending_id} must contain a non-empty unique acceptance_checks list")
+        if ending.get("terminal_closeout") != ENDING_TERMINAL_CLOSEOUT:
+            failures.append(f"{ending_id} must contain the single canonical terminal closeout")
     return failures
 def _easy_followup_node_pair():
     return tuple(MODEL_REGISTRY["role_pairs"]["floor"].split("|", 1))
@@ -728,8 +747,7 @@ def sample_plans():
                         "dependencies": [],
                         "execution_domain": "general",
                     },
-                    {"id": "ending-real", "phase": "ending", "skill": "verify-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["direct"], "execution_domain": "general"},
-                    {"id": "records", "phase": "ending", "skill": "workflow-skill", "model": easy_followup_model, "effort": easy_followup_effort, "dependencies": ["direct"], "execution_domain": "general"},
+                    {"id": "ending-real", "phase": "ending", "skill": "verify-skill", "model": ENDING_FAST_MODEL, "effort": ENDING_FAST_EFFORT, "dependencies": ["direct"], "execution_domain": "general", "acceptance_checks": [{"check_id": "real-result", "acceptance": "Run the proportional real check."}, {"check_id": "terminal-records", "acceptance": "Complete sanitized memory, classification, and records after PASS."}], "terminal_closeout": dict(ENDING_TERMINAL_CLOSEOUT)},
                 ],
                 "main_result_node": "direct",
             }
@@ -760,8 +778,7 @@ def sample_plans():
                         "language": "python",
                         "purpose": "implement",
                     },
-                    {"id": "ending-real", "phase": "ending", "skill": "verify-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["implement"], "execution_domain": "general"},
-                    {"id": "records", "phase": "ending", "skill": "workflow-skill", "model": complex_followup_model, "effort": complex_followup_effort, "dependencies": ["implement"], "execution_domain": "general"},
+                    {"id": "ending-real", "phase": "ending", "skill": "verify-skill", "model": ENDING_FAST_MODEL, "effort": ENDING_FAST_EFFORT, "dependencies": ["implement"], "execution_domain": "general", "acceptance_checks": [{"check_id": "real-result", "acceptance": "Run every bounded acceptance check."}, {"check_id": "terminal-records", "acceptance": "Complete sanitized memory, classification, and records after PASS."}], "terminal_closeout": dict(ENDING_TERMINAL_CLOSEOUT)},
                 ],
                 "main_result_node": "implement",
             }
@@ -805,6 +822,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     strategy_performance_text = read_text(paths["scripts/strategy_performance.py"])
     dispatcher_text = read_text(paths["scripts/task_route_dispatcher.py"])
     model_registry_text = read_text(paths["scripts/model_registry.py"])
+    routing_policy_text = read_text(paths["scripts/routing_policy.py"])
     sync_model_capabilities_text = read_text(paths["scripts/sync_model_capabilities.py"])
     entry_asset_text = read_text(paths["assets/global-agents-entry-rule.md"])
     benchmark_evidence_text = read_text(paths["TEST_AND_BENCHMARK.md"])
@@ -816,7 +834,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ stages=>per-stage graph", "final Model stages has every difficulty/pair/status", "History picks lowest-correct", "entry moves up/down", "no-history<=entry", "obsidian_adaptive_model_runner.py", "LOCKED_ROUTE_NODE produces result/Quick Check only", "parent captures immutable origin session", "Small low-risk edit<=24 tries Spark-low", "quality FAIL suppresses band", "Every new user task requires a projectless global End Task", "smallest completion/record check", "ending_verification_plan.py", "bind exact project and origin session", "projectless End/check", "ack(threadId+hostId+projectId)", "audit=100%", "all PASS,visible", "never auto-archive/delete", "Assessment:stage difficulty/pairs,attempt,first/retry,suitability", "Obsidian link", "No receipt still records non-learning observation", "repair_prompt", "codex_app__send_message_to_thread", "fresh projectless End<=3", "BLOCKED is not verified", "Never emulate", "same-task/self-verify forbidden"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ result stages=>graph", "Model stages lists every pair/status", "history picks lowest-correct", "entry moves up/down", "obsidian_adaptive_model_runner.py", "LOCKED_ROUTE_NODE=result/Quick Check only", "small low-risk edit<=24 tries Spark-low", "Every new task gets one projectless global End", "read/open/one-value smallest checks", "ending_verification_plan.py", "gpt-5.3-codex-spark|xhigh", "score scopes check only", "registry-floor gpt-5.6-luna|low", "never switches verifier", "Bind immutable origin/project", "ack actual pair", "trigger=100%", "all checks PASS;visible", "repair_prompt", "codex_app__send_message_to_thread", "fresh Spark-first End<=3", "BLOCKED is not verified", "no emulate/same-task/self-verify"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("Task Analyze result disclosure", skill_text, RESULT_MODEL_DISCLOSURE_TERMS))
@@ -836,6 +854,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     failures.extend(missing_terms("Obsidian adaptive runner", adaptive_runner_text, REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION))
     failures.extend(missing_terms("Obsidian model memory", obsidian_memory_text, REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION))
     failures.extend(missing_terms("dynamic model registry", model_registry_text, REQUIRED_MODEL_REGISTRY_IMPLEMENTATION))
+    failures.extend(missing_terms("fixed fast Ending routing policy", routing_policy_text, REQUIRED_ROUTING_POLICY_ENDING_FAST_IMPLEMENTATION))
     failures.extend(missing_terms("model capability sync", sync_model_capabilities_text, ["model_registry", "load_catalog", "build_registry", "refresh_registry", "registry_matches_catalog", "model-capabilities.md", "--update", "--check"]))
     for label, implementation_text in (("Obsidian adaptive runner", adaptive_runner_text), ("Obsidian model memory", obsidian_memory_text)):
         if "model_experience.json" in implementation_text or "local/adaptive-routing" in implementation_text:
@@ -849,6 +868,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     failures.extend(missing_terms("dispatcher result verifier boundary", dispatcher_text, ["verify-skill result nodes require user_requested_verification_result=true", "user_requested_verification_result is valid only on a result-phase verify-skill node", "Completed dependency handoff"]))
     failures.extend(missing_terms("strategy performance admission", strategy_performance_text, REQUIRED_STRATEGY_PERFORMANCE))
     failures.extend(missing_terms("dispatcher role authorization", dispatcher_text, ["with receipt_module.dispatcher_node_authorization(args.node_role)"]))
+    failures.extend(missing_terms("dispatcher fixed fast Ending", dispatcher_text, REQUIRED_DISPATCHER_ENDING_FAST_IMPLEMENTATION))
     if "/local/" not in read_text(paths[".gitignore"]):
         failures.append("task-analyze-skill .gitignore must exclude /local/")
     for obsolete_path in (skill_dir / "assets" / "hooks.json", skill_dir / "scripts" / "task_entry_hook.py", skill_dir / "tests" / "test_task_entry_hook.py"):
@@ -914,7 +934,11 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     if not ending_plan_path.exists():
         failures.append(f"Ending verification planner missing: {ending_plan_path}")
     else:
-        failures.extend(missing_terms("Ending verification planner", read_text(ending_plan_path), REQUIRED_ENDING_PLAN_IMPLEMENTATION))
+        ending_plan_text = read_text(ending_plan_path)
+        failures.extend(missing_terms("Ending verification planner", ending_plan_text, REQUIRED_ENDING_PLAN_IMPLEMENTATION))
+        for forbidden in FORBIDDEN_ENDING_PLAN_IMPLEMENTATION:
+            if forbidden in ending_plan_text:
+                failures.append(f"Ending verification planner contains retired score-routed implementation: {forbidden}")
     nested_skill_files = [path for path in global_skills_root.rglob("SKILL.md") if ".system" not in path.relative_to(global_skills_root).parts and path.parent.parent != global_skills_root]
     if nested_skill_files:
         failures.append(f"loader-visible nested SKILL.md files remain under global skills: {len(nested_skill_files)}")

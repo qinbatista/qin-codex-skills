@@ -20,9 +20,15 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         capability_ids = [item["id"] for item in catalog["capabilities"]]
         check_ids = {item["id"] for item in catalog["checks"]}
         referenced = {check_id for item in catalog["capabilities"] for check_id in item["checks"]}
-        self.assertEqual(len(capability_ids), 25)
+        self.assertEqual(len(capability_ids), 26)
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
+        fast_ending = next(item for item in catalog["capabilities"] if item["id"] == "GSR-026")
+        self.assertIn("gpt-5.3-codex-spark|xhigh", fast_ending["function"])
+        self.assertIn("Luna-low", fast_ending["function"])
+        retired = {item["id"]: item["replacement"] for item in catalog["retired_architectures"]}
+        self.assertEqual(retired["RET-011"], "GSR-026")
+        self.assertEqual(retired["RET-012"], "GSR-014")
         self.assertTrue(catalog["policy"]["local_deployment_requires_pass"])
         self.assertTrue(catalog["policy"]["github_publication_requires_pass"])
 

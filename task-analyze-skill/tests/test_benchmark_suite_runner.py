@@ -429,7 +429,11 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(result["run_count"], 12)
         self.assertEqual(result["overall_status"], "pass")
         self.assertEqual(summary["overall_status"], "pass")
-        self.assertTrue(all(summary["tiers"][tier]["paired_wins"] == {"steady_state_logical_tokens": 2, "steady_state_execution_elapsed_ms": 2, "first_result_elapsed_ms": 2, "total_wall_elapsed_ms": 2} for tier in module.TIERS))
+        for tier in module.TIERS:
+            paired_wins = summary["tiers"][tier]["paired_wins"]
+            self.assertEqual({metric: paired_wins[metric] for metric in module.benchmark_suite_gate.GATED_METRICS}, {"steady_state_logical_tokens": 2, "steady_state_execution_elapsed_ms": 2})
+            self.assertEqual(set(paired_wins), {*module.benchmark_suite_gate.GATED_METRICS, "first_result_elapsed_ms", "total_wall_elapsed_ms"})
+            self.assertTrue(all(isinstance(paired_wins[metric], int) and 0 <= paired_wins[metric] <= 2 for metric in {"first_result_elapsed_ms", "total_wall_elapsed_ms"}))
         performance_calls = [call for call in calls if not call["run_id"].endswith("-sol-entry-probe")]
         probe_calls = [call for call in calls if call["run_id"].endswith("-sol-entry-probe")]
         self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[:6]], [("simple-r01-direct", True), ("simple-r01-global", False), ("medium-r01-direct", True), ("medium-r01-global", False), ("complex-r01-direct", True), ("complex-r01-global", False)])

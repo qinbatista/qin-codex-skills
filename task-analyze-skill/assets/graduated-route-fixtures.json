@@ -67,7 +67,7 @@
     "illustrative_cold_start_pairs": {
       "design": "gpt-5.6-sol|high",
       "implementation": "gpt-5.6-terra|high",
-      "ending_real": "gpt-5.6-terra|high"
+      "ending_real": "gpt-5.3-codex-spark|xhigh"
     },
     "adaptive_result_producer": "implementation",
     "controller_transitions": {
@@ -165,14 +165,19 @@
           "id": "ending-real",
           "phase": "ending",
           "skill": "verify-skill",
-          "model": "gpt-5.6-terra",
-          "effort": "high",
+          "model": "gpt-5.3-codex-spark",
+          "effort": "xhigh",
           "dependencies": [
             "implementation"
           ],
           "prompt": "Run post-result responsive, console, navigation, accessibility, and visual checks.",
           "sandbox": "read-only",
-          "execution_domain": "general"
+          "execution_domain": "general",
+          "selection_basis": "ending_fast_primary",
+          "allow_fallback": [
+            "gpt-5.6-luna|low"
+          ],
+          "fallback_policy": "availability_only"
         }
       ],
       "main_result_node": "implementation"
