@@ -147,11 +147,12 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     directory.rmdir()
 
     def test_management_sync_default_paths_are_derived_from_the_project(self):
-        expected_project_root = SYNC_SCRIPT_PATH.resolve().parents[3]
-        self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, SYNC_SCRIPT_PATH.resolve().parents[2])
+        expected_project_root = SYNC_SCRIPT_PATH.resolve().parents[2]
+        expected_cache_root = expected_project_root / "Cache" / "management-skill-sync"
+        self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, expected_project_root)
         self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, expected_project_root)
-        self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_project_root / "Cache" / "management-skill-sync")
-        self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_project_root / "state" / "management-skill-sync.json")
+        self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_cache_root)
+        self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_cache_root / "state" / "management-skill-sync.json")
 
     def test_important_cache_content_is_registered_in_project_agents(self):
         task_root = SKILLS_ROOT / "management-skill" / "Cache" / "tests" / "cache-agents-registration-smoke"
