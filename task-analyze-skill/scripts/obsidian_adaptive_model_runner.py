@@ -43,6 +43,11 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
     print(json.dumps({"schema_version": 1, "stage": "result-ready", "result_path": str(result_path), "result_ready_monotonic_ns": ready_monotonic_ns}, separators=(",", ":")), flush=True)
 
 
+def _emit_ending_required(summary):
+    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "ack_required": True, "ending_real_status": summary.get("ending_real_status"), "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
+    print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+
 def _route_part_label(args, recommendation, node=None):
     session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
     surface = session_summary.get("solving_surface") or ""
@@ -551,10 +556,15 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["switch_direction"] = "no_switch"
     receipt["switch_change"] = "scheduled_graph"
     receipt["model_route_notice"] = graph_notice
+    receipt["ending_required"] = True
+    receipt["ending_requirement"] = "required"
+    receipt["ending_real_status"] = "pending"
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
     summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_real_status": "pending", "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice}
+    summary["ending_required"] = True
+    summary["ending_requirement"] = "required"
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary
@@ -738,6 +748,19 @@ def run(args, prompt):
             pass
         else:
             _atomic_write_text(args.result_output, normalized_result.rstrip("\n") + "\n")
+    successful_result = receipt.get("status") == "pass" and result_published
+    ending_required = bool(successful_result and (admission is not None or receipt["complexity_band"] != "small" or args.risk != "low"))
+    if not successful_result:
+        ending_real_status = "not_started"
+    elif not ending_required:
+        ending_real_status = "intentionally_skipped_simple_task"
+    elif admission is None:
+        ending_real_status = "missing_expected_non_simple"
+    else:
+        ending_real_status = "pending"
+    receipt["ending_required"] = ending_required
+    receipt["ending_requirement"] = "required" if ending_required else "simple_task_exempt"
+    receipt["ending_real_status"] = ending_real_status
     _atomic_write_json(args.receipt_output, receipt)
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     ready_ns = receipt.get("result_ready_monotonic_ns")
@@ -771,7 +794,9 @@ def run(args, prompt):
         "total_tokens": tokens.get("total_tokens"),
         "elapsed_ms": receipt.get("process_elapsed_ms"),
         "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else None,
-        "ending_real_status": "pending" if receipt.get("status") == "pass" and result_published else "not_started",
+        "ending_required": ending_required,
+        "ending_requirement": receipt["ending_requirement"],
+        "ending_real_status": ending_real_status,
         "model_learning_context": learning_context,
         "model_route_notice": receipt["model_route_notice"],
     }
@@ -871,6 +896,8 @@ def main(argv=None):
         summary = run(args, prompt)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         summary = {"status": "fail", "reason": str(error)[:120] or "runner_validation_failed"}
+    if summary.get("status") == "pass" and summary.get("ending_required") is True:
+        _emit_ending_required(summary)
     print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))
     return 0 if summary["status"] == "pass" else 1
 

@@ -174,7 +174,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         csharp_text = (skills_root / "code-skill" / "references" / "csharp-rules.md").read_text(encoding="utf-8")
         unity_text = (skills_root / "code-skill" / "references" / "unity-csharp-rules.md").read_text(encoding="utf-8")
         self.assertIn("Before presenting a light/local Python edit", python_text)
-        self.assertIn("build real proportional Ending checks", python_text)
+        self.assertIn("intentionally_skipped_simple_task", python_text)
+        self.assertIn("All other code work is Ending-required", python_text)
+        self.assertIn("emit `ending-required`", python_text)
         self.assertIn("exactly one persistent projectless Ending", python_text)
         self.assertIn("Multiple unit, integration/API, and runtime checks stay inside that one Ending", python_text)
         self.assertNotIn("one scored/modelled persistent task per independent", python_text)
@@ -493,14 +495,16 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
-    def test_inline_bootstrap_requires_universal_post_result_ending_and_no_pre_result_verify(self):
+    def test_inline_bootstrap_requires_material_ending_handoff_and_no_pre_result_verify(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             bootstrap_text = global_agents.read_text(encoding="utf-8")
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Producer owns files/skills/Quick Check", bootstrap_text)
-            self.assertIn("Every new task=>projectless End", bootstrap_text)
+            self.assertIn("`ending-required` or `ending_required=true`=>one independent projectless Ending", bootstrap_text)
+            self.assertIn("`intentionally_skipped_simple_task`=>no End Task", bootstrap_text)
+            self.assertIn("missing acknowledgement=>BLOCKED", bootstrap_text)
             self.assertIn("terminal memory/classification/record closeout", bootstrap_text)
             self.assertIn("codex_app__create_thread projectless", bootstrap_text)
             self.assertIn("ack threadId+hostId+projectId", bootstrap_text)

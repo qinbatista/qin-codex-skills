@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1060" viewBox="0 0 1600 1060" role="img" aria-labelledby="title desc">
   <title id="title">Hookless first-result lifecycle</title>
-  <desc id="desc">Eligible production uses the adaptive route while exact one-source, tool-only, and image work stays inline. Every path presents the completed result before a separate Ending task, so every new task gets Ending.</desc>
+  <desc id="desc">Eligible production uses the adaptive route while exact one-source, tool-only, and image work stays inline. Ending-required work presents the result before a separate Ending task.</desc>
   <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#15233d"/></linearGradient><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker></defs>
   <rect width="1600" height="1060" rx="30" fill="url(#bg)"/>
   <g font-family="Inter,Arial,sans-serif">
@@ -11,7 +11,7 @@
     <rect x="350" y="276" width="900" height="106" rx="22" fill="#0d2e35" stroke="#2dd4bf" stroke-width="2"/><text x="390" y="318" fill="#99f6e4" font-size="18" font-weight="800">⚡ 100% MICRO BOOTSTRAP · HOOKLESS</text><text x="390" y="355" fill="#f8fafc" font-size="25" font-weight="700">fewest rounds/output · present immediately</text>
     <path d="M800 382V430H525V466 M800 430H1075V466" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#a)"/>
     <rect x="250" y="466" width="550" height="176" rx="24" fill="#123227" stroke="#34d399" stroke-width="2"/>
-    <text x="290" y="510" fill="#a7f3d0" font-size="19" font-weight="800">ELIGIBLE · ORDINARY PRODUCTION</text><text x="290" y="552" fill="#f8fafc" font-size="28" font-weight="750">Adaptive producer executes</text><text x="290" y="590" fill="#cbd5e1" font-size="21">saved contextual pair · receipt-backed</text><text x="290" y="620" fill="#cbd5e1" font-size="20">Quick Check · every task gets Ending</text>
+    <text x="290" y="510" fill="#a7f3d0" font-size="19" font-weight="800">ELIGIBLE · ORDINARY PRODUCTION</text><text x="290" y="552" fill="#f8fafc" font-size="28" font-weight="750">Adaptive producer executes</text><text x="290" y="590" fill="#cbd5e1" font-size="21">saved contextual pair · receipt-backed</text><text x="290" y="620" fill="#cbd5e1" font-size="20">Quick Check · material work gets Ending</text>
     <rect x="800" y="466" width="550" height="176" rx="24" fill="#201a3a" stroke="#a78bfa" stroke-width="2"/>
     <text x="840" y="510" fill="#ddd6fe" font-size="18" font-weight="800">EXPLICIT ROUTING / DEPENDENCY GRAPH</text><text x="840" y="552" fill="#f8fafc" font-size="28" font-weight="750">Load Task Analyze</text><text x="840" y="590" fill="#cbd5e1" font-size="20">quality pair → source-cost admission</text><text x="840" y="620" fill="#cbd5e1" font-size="20">small sources → one producer</text>
     <path d="M1075 642V692" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
@@ -19,6 +19,6 @@
     <path d="M525 642V844H800 M1075 812V844H800V870" stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#a)"/>
     <rect x="350" y="872" width="900" height="80" rx="22" fill="#162d28" stroke="#34d399" stroke-width="2"/><text x="800" y="922" text-anchor="middle" fill="#f8fafc" font-size="27" font-weight="750">📣 Present the completed result immediately</text>
     <path d="M800 952V980" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
-    <rect x="220" y="984" width="1160" height="54" rx="27" fill="#2b1c42" stroke="#c084fc"/><text x="800" y="1018" text-anchor="middle" fill="#e9d5ff" font-size="21" font-weight="700">🌙 Every task → separate Ending Real · regression · records · sanitized learning</text>
+    <rect x="220" y="984" width="1160" height="54" rx="27" fill="#2b1c42" stroke="#c084fc"/><text x="800" y="1018" text-anchor="middle" fill="#e9d5ff" font-size="21" font-weight="700">🌙 Material work → separate Ending Real · regression · records · sanitized learning</text>
   </g>
 </svg>

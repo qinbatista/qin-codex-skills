@@ -12,7 +12,7 @@
 - Route admitted work with `task-analyze-skill/scripts/obsidian_adaptive_model_runner.py`.
 - Publish only through `management-skill/scripts/sync_global_skills.py` when authorized.
 - Treat `management-skill/assets/global-skill-capability-catalog.json` as the retained global behavior authority; `management-skill/scripts/global_skill_regression_gate.py` must PASS before local deployment or GitHub publication.
-- Every new task closes in one projectless Ending using fixed Spark-xhigh, with score used only for check scope and a registry-floor fallback allowed only for explicit Spark availability/capability failure.
+- Ending-required work closes in one projectless Ending using fixed Spark-xhigh. A low-risk, single-result small task may explicitly skip Ending; standard/complex/advanced, medium/high-risk, and multi-stage work require it. Score controls check scope, with a registry-floor fallback allowed only for explicit Spark availability/capability failure.
 - Before durable work, compare the active Skill/AGENTS process contract, current execution evidence, and effective scoped project-result memory. Ending may append a superseding memory correction or reconcile its projection only for a proven memory defect; Skill or execution defects return to the immutable origin task.
 - Keep support artifacts under `Cache/`; never embed machine-specific paths, secrets, or task history in Skill source.
 - Keep `AGENTS.md` structural: ownership, entry points, hard constraints, conventions, and definition of done only.

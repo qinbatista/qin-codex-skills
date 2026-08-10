@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**专用于 Codex · 每个任务评分 · 先完成主任务 · 每个新任务都另开 Ending 收尾**
+**专用于 Codex · 每个任务评分 · 先完成主任务 · 材料任务必须另开 Ending 收尾**
 
 [English](./README.md)
 
@@ -16,17 +16,17 @@
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-zh-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先评分并完成主任务，每个新任务都另开独立 Ending">
+  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="核心流程：先评分并完成主任务，材料任务另开独立 Ending">
 </picture>
 
-## ✅ 先完成主任务，每个新任务都做 Ending
+## ✅ 先完成主任务，材料任务必须做 Ending
 
 这是整个生命周期最重要的结构规则：
 
 1. **每个提交先按 0–100 评分，再完成用户要求的工作**，并运行与实现相称的基础检查。
 2. **立即返回已完成结果。** 不让用户被验证、轮询或修复流程卡住。
-3. **每个新任务返回结果后，入口父任务在全局任务列表中只开一个 projectless `End Task-<任务名>`。** Ending 固定首选 `gpt-5.3-codex-spark|xhigh`，0–100 分只控制检查范围；只有 Spark 模型、effort、调度或必需输入模态明确不可用时，才允许 registry floor `gpt-5.6-luna|low`。父任务绑定 receipt/项目上下文，并要求真实 thread 回执记录实际 pair。
-4. **这一个 Ending 执行最小真实/完成检查并做一次终态收尾，所有必需检查都要 PASS。** 已有当前且不可变绑定的 release PASS 报告时，只复查 digest 与最终状态，不重复整套大门禁。收尾记录路由分类/模型历史、适用时的净化项目变更结果，并运行有界个人记忆扫描；没有候选就不写偏好记忆，但绝不跳过 Ending。失败、超时或验收不符都不升级 verifier，而是通过 `codex_app__send_message_to_thread` 把精确证据送回不可变 origin；origin 修复后再开新的 Spark-first Ending，最多三次。PASS/FAIL/BLOCKED 永久可见，不自动归档或删除。
+3. **低风险、单结果 small（`0–24`）任务记录 `intentionally_skipped_simple_task`，不创建 End Task。** standard/complex/advanced、任何中高风险或多阶段工作发出 `ending-required`；只有这些材料任务返回结果后，入口父任务才在全局任务列表中只开一个 projectless `End Task-<任务名>`。Ending 固定首选 `gpt-5.3-codex-spark|xhigh`，0–100 分只控制检查范围；只有 Spark 模型、effort、调度或必需输入模态明确不可用时，才允许 registry floor `gpt-5.6-luna|low`。父任务绑定 receipt/项目上下文，并要求真实 thread 回执记录实际 pair。
+4. **这一个 Ending 执行最小真实/完成检查并做一次终态收尾，所有必需检查都要 PASS。** 已有当前且不可变绑定的 release PASS 报告时，只复查 digest 与最终状态，不重复整套大门禁。收尾记录路由分类/模型历史、适用时的净化项目变更结果，并运行有界个人记忆扫描；缺少 thread 回执就是 BLOCKED。失败、超时或验收不符都不升级 verifier，而是通过 `codex_app__send_message_to_thread` 把精确证据送回不可变 origin；origin 修复后再开新的 Spark-first Ending，最多三次。PASS/FAIL/BLOCKED 永久可见，不自动归档或删除。
 
 主工作与 Ending 刻意使用不同任务会话。文字总结不算验证，但收尾必须按比例，只跑能证明交付状态的最小真实检查。
 
@@ -49,7 +49,7 @@
 - **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
 - **路由：** 只有明确要求或当前端到端证据成立时才委派。
 - **交付：** 先完成并返回主任务结果，再进行后台验证。
-- **验证：** 每任务一个 Spark-xhigh End Task；分数只控检查。Spark 不可用才用 Luna-low。全部 PASS；失败回 origin 修复，最多三次。
+- **验证：** Ending-required 任务用 Spark-xhigh；低风险 small 单结果显式跳过。分数只控检查；Spark 不可用才 Luna-low；全部 PASS。
 - **文件：** 修改前回溯项目/模块/文件历史；修改后记录已验证结果。
 - **记忆：** 本地 JSONL + 可选 Obsidian 记录项目/模块覆盖；方法代码需 symbol，模块级用 `__module__`；模型学习走原生类别链接，项目/任务等保持为字段。
 - **模型：** 使用已保存梯级；主动本地更新时选择最高数字 GPT 家族；符合条件的小编辑优先 Spark-low；缓存不可用就保留原列表。

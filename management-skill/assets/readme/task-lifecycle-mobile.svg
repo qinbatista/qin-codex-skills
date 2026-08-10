@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="1050" viewBox="0 0 640 1050" role="img" aria-labelledby="title desc">
   <title id="title">Hookless first-result lifecycle mobile</title>
-  <desc id="desc">Micro adaptive bootstrap, contextual producer path, cost-admitted graph path, immediate result presentation, and a separate post-result Ending task for every new task.</desc>
+  <desc id="desc">Micro adaptive bootstrap, contextual producer path, cost-admitted graph path, immediate result presentation, and a separate post-result Ending task for Ending-required work.</desc>
   <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker></defs>
   <rect width="640" height="1050" rx="36" fill="#07111f"/>
   <g font-family="Arial,sans-serif" text-anchor="middle">
     <text x="320" y="62" fill="#f8fafc" font-size="38" font-weight="700">First-result lifecycle</text>
     <rect x="60" y="96" width="520" height="86" rx="23" fill="#0f766e"/><text x="320" y="130" fill="#ccfbf1" font-size="25" font-weight="700">100% micro bootstrap</text><text x="320" y="160" fill="#f0fdfa" font-size="20">fewest rounds · result first · hookless</text>
     <line x1="320" y1="182" x2="320" y2="222" stroke="#64748b" stroke-width="5" marker-end="url(#a)"/>
-    <rect x="60" y="230" width="520" height="126" rx="23" fill="#166534"/><text x="320" y="269" fill="#dcfce7" font-size="25" font-weight="700">Ordinary: adaptive producer</text><text x="320" y="302" fill="#f0fdf4" font-size="20">saved contextual pair · receipt-backed</text><text x="320" y="331" fill="#bbf7d0" font-size="18">Quick Check · every task gets Ending</text>
+    <rect x="60" y="230" width="520" height="126" rx="23" fill="#166534"/><text x="320" y="269" fill="#dcfce7" font-size="25" font-weight="700">Ordinary: adaptive producer</text><text x="320" y="302" fill="#f0fdf4" font-size="20">saved contextual pair · receipt-backed</text><text x="320" y="331" fill="#bbf7d0" font-size="18">Quick Check · material work gets Ending</text>
     <text x="320" y="399" fill="#94a3b8" font-size="19">or, only for explicit routing / dependency work</text>
     <rect x="60" y="425" width="520" height="126" rx="23" fill="#6d28d9"/><text x="320" y="464" fill="#ede9fe" font-size="25" font-weight="700">Load Task Analyze</text><text x="320" y="497" fill="#f5f3ff" font-size="20">quality + source-cost admission</text><text x="320" y="526" fill="#ddd6fe" font-size="18">small sources stay one producer</text>
     <line x1="320" y1="551" x2="320" y2="591" stroke="#64748b" stroke-width="5" marker-end="url(#a)"/>
@@ -16,6 +16,6 @@
     <rect x="60" y="759" width="520" height="104" rx="23" fill="#0f766e"/><text x="320" y="799" fill="#ccfbf1" font-size="25" font-weight="700">📣 Present completed result</text><text x="320" y="833" fill="#f0fdfa" font-size="19">immediately when requested work is done</text>
     <line x1="320" y1="863" x2="320" y2="903" stroke="#64748b" stroke-width="5" marker-end="url(#a)"/>
     <rect x="60" y="911" width="520" height="72" rx="23" fill="#172554"/><text x="320" y="956" fill="#dbeafe" font-size="23" font-weight="700">⏱ First-result clock stops here</text>
-    <text x="320" y="1022" fill="#e9d5ff" font-size="19" font-weight="700">🌙 Every task gets separate Ending Real</text>
+    <text x="320" y="1022" fill="#e9d5ff" font-size="19" font-weight="700">🌙 Material work gets separate Ending Real</text>
   </g>
 </svg>

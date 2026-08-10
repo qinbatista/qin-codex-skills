@@ -452,6 +452,20 @@ source_files must list both sources."""
         self.assertEqual(args.sandbox, "workspace-write")
         self.assertTrue(args.emit_result)
 
+    def test_main_emits_ending_required_event_before_the_summary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            summary = {"status": "pass", "ending_required": True, "ending_real_status": "missing_expected_non_simple", "complexity_score": 25, "complexity_band": "standard", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
+            stream = io.StringIO()
+            with patch.object(module.sys, "stdin", io.StringIO("Repair the lifecycle")), patch.object(module.sys, "stdout", stream), patch.object(module, "resolve_fast_path_args", return_value=args), patch.object(module, "run", return_value=summary):
+                status = module.main([])
+        events = [json.loads(line) for line in stream.getvalue().splitlines()]
+        self.assertEqual(status, 0)
+        self.assertEqual(events[0]["stage"], "ending-required")
+        self.assertEqual(events[0]["parent_action"], "create_projectless_end_task")
+        self.assertTrue(events[0]["ack_required"])
+        self.assertEqual(events[1], summary)
+
     def test_receipt_and_summary_embed_only_sanitized_model_learning_context(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
@@ -580,7 +594,27 @@ source_files must list both sources."""
                 result = module.run(args, "Do the work")
         self.assertEqual(calls, ["gpt-5.6-terra|medium"])
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["ending_real_status"], "pending")
+        self.assertFalse(result["ending_required"])
+        self.assertEqual(result["ending_requirement"], "simple_task_exempt")
+        self.assertEqual(result["ending_real_status"], "intentionally_skipped_simple_task")
+
+    def test_non_simple_result_requires_an_ending_handoff(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.complexity_score = 25
+
+            def fake_run(receipt_args, prompt):
+                receipt_args.result_output.write_text("STANDARD RESULT", encoding="utf-8")
+                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "effective_pair": "gpt-5.6-terra|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 3, "tokens": {"total_tokens": 9}}
+
+            with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+                result = module.run(args, "Do the standard work")
+            receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
+        self.assertTrue(result["ending_required"])
+        self.assertEqual(result["ending_requirement"], "required")
+        self.assertEqual(result["ending_real_status"], "missing_expected_non_simple")
+        self.assertTrue(receipt["ending_required"])
+        self.assertEqual(receipt["ending_real_status"], "missing_expected_non_simple")
 
 
 if __name__ == "__main__":

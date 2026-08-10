@@ -44,7 +44,9 @@ class PromptContractTests(unittest.TestCase):
 
     def test_result_first_and_target_validation_are_separate(self):
         self.assertIn("Present the completed prompt or instruction artifact immediately", self.prompt_skill)
-        self.assertIn("Start one scored projectless Ending lifecycle for every new user task", self.prompt_skill)
+        self.assertIn("A low-risk single-result small task", self.prompt_skill)
+        self.assertIn("intentionally_skipped_simple_task", self.prompt_skill)
+        self.assertIn("Ending-required", self.prompt_skill)
         self.assertIn("Keep representative cases as distinct checks in one `ending_verification_plan.py` plan", self.prompt_skill)
         self.assertIn("gpt-5.3-codex-spark|xhigh", self.prompt_skill)
         self.assertIn("registry-floor Luna-low", self.prompt_skill)

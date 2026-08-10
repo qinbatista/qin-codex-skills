@@ -26,7 +26,7 @@ Select only the optimization form required by the inline request or admitted nod
 
 - If optimization is the user's requested artifact, implement the smallest safe change and show the completed result immediately; independent Real Verify follows in Ending Task.
 - If optimization is discovered while doing another task, do not expand the main scope; report it as a candidate. Only an admitted route may place authorized follow-up work in Ending Task.
-- Every new optimization task launches Ending after the main result. Same-behavior Real Verify, token/time comparison, broad regression, and independent optimization verification run there when applicable; otherwise Ending uses the smallest completion/record check. Inline execution may call a different verifier directly; an admitted route uses Ending Task.
+- A low-risk single-result small optimization task records `intentionally_skipped_simple_task` and returns without an Ending. All other optimization work is Ending-required: it emits `ending-required`, then the parent launches the projectless Ending after the main result. Same-behavior Real Verify, token/time comparison, broad regression, and independent optimization verification run there when applicable. Inline execution may call a different verifier directly; an admitted route uses Ending Task.
 - Do not call the optimization independently verified until the different verifier passes. If it fails, notify the user and reopen the task.
 
 ## Model Contract

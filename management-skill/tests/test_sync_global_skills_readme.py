@@ -219,7 +219,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertIn(f"./{skill_name}/SKILL.md", readme)
 
         self.assertIn("# 🚀 Auto Best Model", readme)
-        self.assertIn("**Codex-only · score every task · finish the job first · launch a separate Ending for every new task**", readme)
+        self.assertIn("**Codex-only · score every task · finish first · require an Ending for material work**", readme)
         self.assertNotIn("AutoBestModel", readme)
         self.assertIn("**Mirrors:** `qin-codex-skills` · `auto-best-model`", readme)
         self.assertIn("Saved highest-family quality ladder", readme)
@@ -236,14 +236,16 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("## ⚡ Models & private learning", readme)
         self.assertIn("Cold start", readme)
         self.assertIn("zero-result failure gets one stronger fallback", readme)
-        self.assertIn("finish the job first", readme)
+        self.assertIn("Finish first. Require Ending for material work", readme)
         self.assertIn("exactly one projectless `End Task-<task name>` in the global task list", readme)
         self.assertIn("gpt-5.3-codex-spark|xhigh", readme)
         self.assertIn("the 0–100 score only scopes checks", readme)
         self.assertIn("registry-floor `gpt-5.6-luna|low` fallback", readme)
         self.assertIn("The one Ending runs the smallest real/completion checks and one terminal closeout", readme)
         self.assertIn("current immutable release report by checking its digest and final state", readme)
-        self.assertIn("no preference candidate means no preference write, never no Ending", readme)
+        self.assertIn("A low-risk, single-result small task", readme)
+        self.assertIn("A missing acknowledgement is BLOCKED", readme)
+        self.assertNotIn("no preference candidate means no preference write, never no Ending", readme)
         self.assertIn("all required checks must PASS", readme)
         self.assertIn("PASS/FAIL/BLOCKED stays visible", readme)
         self.assertIn("routing classification/model history", readme)
@@ -303,7 +305,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertLessEqual(max(map(len, rule_lines)), 100)
         self.assertIn("# 🚀 Auto Best Model", readme)
         self.assertIn("专用于 Codex", readme)
-        self.assertIn("每个新任务都另开 Ending 收尾", readme)
+        self.assertIn("材料任务必须另开 Ending 收尾", readme)
         self.assertIn("最高版本家族质量梯级", readme)
         self.assertIn("只有你主动要求本地模型更新时才刷新", readme)
         self.assertIn("修改前回溯项目/模块/文件历史", readme)
@@ -317,7 +319,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("更大任务使用已保存的质量梯级", readme)
         self.assertIn("通过 `codex_app__send_message_to_thread` 把精确证据送回不可变 origin", readme)
         self.assertIn("最小真实/完成检查", readme)
-        self.assertIn("没有候选就不写偏好记忆，但绝不跳过 Ending", readme)
+        self.assertIn("低风险、单结果 small", readme)
+        self.assertIn("缺少 thread 回执就是 BLOCKED", readme)
+        self.assertNotIn("没有候选就不写偏好记忆，但绝不跳过 Ending", readme)
         self.assertIn("PASS/FAIL/BLOCKED 永久可见", readme)
         self.assertIn("不自动归档或删除", readme)
         self.assertIn("## 规则", readme)
@@ -630,7 +634,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("Fixed Spark-xhigh", mobile_verification)
         self.assertIn("Luna-low only when Spark is unavailable", mobile_verification)
 
-    def test_current_lifecycle_visuals_make_ending_mandatory_for_every_task(self):
+    def test_current_lifecycle_visuals_distinguish_material_ending_policy(self):
         for filename in (
             "qin-codex-skills-hero.svg",
             "qin-codex-skills-hero-mobile.svg",
@@ -640,11 +644,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             "core-flow-mobile.svg",
         ):
             svg_text = (README_ASSET_DIR / filename).read_text(encoding="utf-8").lower()
-            self.assertIn("every task", svg_text, filename)
+            self.assertIn("material", svg_text, filename)
             self.assertIn("ending", svg_text, filename)
         for filename in ("core-flow-zh.svg", "core-flow-zh-mobile.svg"):
             svg_text = (README_ASSET_DIR / filename).read_text(encoding="utf-8")
-            self.assertIn("每个", svg_text, filename)
+            self.assertIn("材料", svg_text, filename)
             self.assertIn("Ending", svg_text, filename)
 
     def test_snapshot_renders_synthetic_registered_rust_domain_without_generator_changes(self):
@@ -810,6 +814,14 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 sync_global_skills.main()
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
             self.assertEqual((target_dir.parent / "AGENTS.md").read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
+
+    def test_render_readme_cli_uses_chinese_template_for_zh_output(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "README.zh.md"
+            argv = ["sync_global_skills.py", "--skills-dir", str(SKILLS_DIR), "render-readme", "--output", str(output)]
+            with mock.patch.object(sys, "argv", argv):
+                sync_global_skills.main()
+            self.assertEqual(output.read_text(encoding="utf-8"), sync_global_skills.build_readme(self.primary_skill_paths(), language="zh"))
 
     def test_deploy_installs_both_codex_and_host_discoverable_global_agents(self):
         with tempfile.TemporaryDirectory() as temp_dir:

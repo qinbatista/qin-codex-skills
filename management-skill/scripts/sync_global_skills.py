@@ -566,6 +566,10 @@ def build_readme(skill_paths, language="en"):
     return template.replace(marker, execution_domain_table(load_staged_routing_policy(skill_paths)))
 
 
+def readme_language_for_output(output_path):
+    return "zh" if Path(output_path).name.lower().endswith(".zh.md") else "en"
+
+
 def skill_category(skill_name, description):
     text = f"{skill_name} {description}".lower()
     if skill_name in {"task-analyze-skill", "workflow-skill"}:
@@ -1251,7 +1255,7 @@ def main():
         skill_paths = skill_directories(args.skills_dir)
         assert_approved_global_skill_set(skill_paths)
         assert_public_safe(skill_paths)
-        args.output.expanduser().resolve().write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
+        args.output.expanduser().resolve().write_text(build_readme(skill_paths, language=readme_language_for_output(args.output)), encoding="utf-8")
         print(f"Rendered public README: {args.output.expanduser().resolve()}")
     elif args.command == "push":
         push(args.repo, args.source_dir, args.message, False, args.skills_dir)
