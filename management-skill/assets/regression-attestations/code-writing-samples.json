@@ -2,14 +2,14 @@
   "schema_version": 1,
   "check_id": "code-sample-attestation",
   "status": "pass",
-  "created_at": "2026-08-10T20:08:27.999440+00:00",
+  "created_at": "2026-08-11T05:31:51.838582+00:00",
   "trial_count": 3,
   "passed_trials": 3,
   "watched_files": {
-    "code-skill/SKILL.md": "cbe7e5eb36358cce474426b917e16c55ee952e608bebca2561e800870bc9570c",
-    "code-skill/agents/openai.yaml": "12e1d5a8de31e9f10c02a526e6d19d5b630446cca63b62c3ce791974e76edd3b",
+    "code-skill/SKILL.md": "93ba82d4ff93f69a289eba23dd485aa8d82d03a6dfaad368e9970b239877bd1a",
+    "code-skill/agents/openai.yaml": "4da53f0852cf229add022d177cade39a53d3157937277ce2ef56d671b87d6eb4",
     "code-skill/references/code-writing-philosophy.md": "ec98061bd7e7777cfa3c276546514aecbd39c7906173ba99233c3e46ca1bf788",
     "code-skill/references/coding-approach.md": "1a7513827decfd6ceb88f35c67f31d946d8537fa7f2b353f749680553878ea34",
-    "code-skill/tests/test_code_writing_philosophy.py": "bf780aaed280bc4ade0d435eeb9984a9c37021ec76c6ef51924eb758a5b41f0c"
+    "code-skill/tests/test_code_writing_philosophy.py": "2f754c64e755a1566dca83cc66a6fd4ac942abee38977ec8f7ee45d42decccbe"
   }
 }

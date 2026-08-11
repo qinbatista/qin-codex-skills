@@ -177,8 +177,10 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(command[-1], "-")
         self.assertTrue(run_mock.call_args.kwargs["input"].startswith("LOCKED_ROUTE_NODE"))
         self.assertIn("This is the result node only", run_mock.call_args.kwargs["input"])
-        self.assertIn("Do not create, launch, wait for, or summarize End/Fix tasks", run_mock.call_args.kwargs["input"])
-        self.assertIn("entry parent owns post-result lifecycle after this node's passing receipt", run_mock.call_args.kwargs["input"])
+        self.assertIn("run exactly one smallest safe local Quick Check", run_mock.call_args.kwargs["input"])
+        self.assertIn("publish CODE READY immediately", run_mock.call_args.kwargs["input"])
+        self.assertIn("Do not run broad tests", run_mock.call_args.kwargs["input"])
+        self.assertIn("entry parent owns the one detached End Task", run_mock.call_args.kwargs["input"])
         self.assertIn(f"canonical working directory `{Path('/tmp').resolve()}`", run_mock.call_args.kwargs["input"])
         self.assertTrue(run_mock.call_args.kwargs["input"].endswith("same prompt"))
         self.assertTrue(run_mock.call_args.kwargs["shell"] is False)
@@ -189,8 +191,10 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_route_markers_define_non_recursive_lifecycle_ownership(self):
         result_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
         ending_boundary = module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
-        self.assertIn("entry parent owns post-result lifecycle", result_boundary)
-        self.assertIn("never create a nested End/Fix task", ending_boundary)
+        check_boundary = module.route_node_lifecycle_boundary("ENDING_CHECK_WORKER")
+        self.assertIn("entry parent owns the one detached End Task", result_boundary)
+        self.assertIn("delegate only saved capability-routed checks", ending_boundary)
+        self.assertIn("never edit producer files", check_boundary)
         with self.assertRaisesRegex(ValueError, "unsupported route marker"):
             module.route_node_lifecycle_boundary("UNKNOWN")
 

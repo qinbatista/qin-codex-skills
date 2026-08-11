@@ -165,7 +165,7 @@ SKILL_CONTENTS = {
     "workflow-skill": [
         ("Locked route execution", "Execute only a positively admitted plan with exact pairs, dependencies, allowlists, and receipts."),
         ("Single-producer default", "Dependency-coupled work and small independent sources stay with one contextual producer."),
-        ("Result-first handoff", "The producer completes proportional Quick Check, presents the result, then creates a projectless End Task in the global task list."),
+        ("Result-first handoff", "The producer completes one Quick Check, presents the result, then creates a global-only projectless End Task and confirms list_threads reports projectId=null/absent."),
         ("Ending visibility", "PASS, FAIL, and BLOCKED remain visible; Ending tasks and repair handoffs never auto-archive or delete themselves."),
         ("Runtime proof", "Every model-generated node exposes its effective pair and token/time receipt."),
     ],
@@ -197,7 +197,7 @@ SKILL_CONTENTS = {
     ],
     "verify-skill": [
         ("Proportional completion evidence", "The producer owns the bounded Quick Check before presentation."),
-        ("Persistent End Task", "Create and rename a projectless task exactly End Task-<related task>; every terminal status remains visible."),
+        ("Persistent End Task", "Create global-only projectless End Task-<related task>, confirm list_threads reports projectId=null/absent, and keep every terminal status visible."),
         ("Fixed fast executor", "Use Spark-xhigh for every Ending; score scopes checks, and only explicit availability/capability failure permits registry-floor Luna-low."),
         ("Real-check boundary", "Run the smallest supplied real checks once; a failing verifier records evidence and returns repair to the immutable origin."),
         ("Terminal verdict", "One visible verdict closes routing classification, project-result memory when applicable, and the bounded preference scan."),
@@ -221,7 +221,7 @@ CHINESE_SKILL_CONTENTS = {
     "workflow-skill": [
         ("锁定路线执行", "只执行 pair、依赖、allowlist 与 receipt 都准确的已准入计划。"),
         ("单 Producer 默认", "依赖耦合工作和小型独立 source 都使用一个上下文 producer。"),
-        ("结果优先交接", "Producer 完成 Quick Check、展示结果，再在全局任务列表中创建 projectless End Task。"),
+        ("结果优先交接", "Producer 完成一次 Quick Check、展示结果，再创建全局 projectless End Task，并确认 list_threads 返回 projectId=null/无字段。"),
         ("Ending 可见性", "PASS、FAIL、BLOCKED 都保持可见；Ending task 与修复交接永不自动归档或删除。"),
         ("运行证明", "每个模型节点都公开实际 effective pair 和 token/time receipt。"),
     ],
@@ -253,7 +253,7 @@ CHINESE_SKILL_CONTENTS = {
     ],
     "verify-skill": [
         ("成比例完成证据", "Producer 在展示前负责边界明确的 Quick Check。"),
-        ("持久 End Task", "创建并准确命名 projectless End Task-<相关任务>；所有终态都保持可见。"),
+        ("持久 End Task", "创建并准确命名全局 projectless End Task-<相关任务>，确认 list_threads 返回 projectId=null/无字段；所有终态都保持可见。"),
         ("固定快速执行器", "所有 Ending 首选 Spark-xhigh；分数只控制检查，只有明确不可用时才回退 registry-floor Luna-low。"),
         ("真实检查边界", "最小真实检查只执行一次；失败 verifier 记录证据并把修复退回不可变 origin。"),
         ("终局判定", "一次可见终局完成路由分类、适用的项目结果记忆与有界偏好扫描。"),

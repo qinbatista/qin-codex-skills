@@ -49,11 +49,11 @@
     {"id": "GSR-007", "owner_skill": "task-analyze-skill", "name": "多阶段独立路由", "function": "实现、测试和部署阶段独立选模；Ending 分数只控制检查范围；只并行依赖就绪且无共享写入的节点。", "checks": ["task-analyze-units", "workflow-validator"]},
     {"id": "GSR-008", "owner_skill": "task-analyze-skill", "name": "准确模型身份披露", "function": "结果公开 Complexity、Model、Route、Evidence；多阶段列出全部实际阶段且 receipt 优先。", "checks": ["task-analyze-units", "task-analyze-validator"]},
     {"id": "GSR-009", "owner_skill": "task-analyze-skill", "name": "模型路由记忆", "function": "本地 receipt ledger 为快速权威，Obsidian 使用原生链接并保留项目、任务、模块、文件和 symbol 范围。", "checks": ["task-analyze-units", "project-memory-units"]},
-    {"id": "GSR-010", "owner_skill": "project-memory-skill", "name": "Ending-required 个人记忆候选", "function": "Ending-required 工作在 Ending 内做有界候选扫描；small 低风险单结果显式跳过；无候选不写；只保存脱敏持久偏好。", "checks": ["project-memory-units", "verify-units"]},
+    {"id": "GSR-010", "owner_skill": "project-memory-skill", "name": "Ending-required 个人记忆候选", "function": "Ending-required 工作在 Ending 内做有界候选扫描；只有 small 低风险单结果非代码工作可显式跳过；无候选不写；只保存脱敏持久偏好。", "checks": ["project-memory-units", "verify-units"]},
     {"id": "GSR-011", "owner_skill": "project-memory-skill", "name": "项目模块方法记忆覆盖", "function": "修改前按项目、模块、文件和 symbol 回溯；方法级代码必须有 symbol，模块级用 __module__，Ending PASS 后才记结果。", "checks": ["project-memory-units", "verify-units"]},
-    {"id": "GSR-012", "owner_skill": "workflow-skill", "name": "主结果优先", "function": "主任务只完成生产结果和 bounded Quick Check，立即返回，不等待或轮询 Ending。", "checks": ["task-analyze-units", "workflow-validator"]},
-    {"id": "GSR-013", "owner_skill": "workflow-skill", "name": "材料任务 Ending 强制交接", "function": "small 低风险单结果显式记录 intentionally_skipped_simple_task；standard/complex/advanced、中高风险或多阶段工作发出 ending-required，父任务必须创建并确认 projectless End Task。", "checks": ["task-analyze-units", "workflow-validator", "verify-units"]},
-    {"id": "GSR-014", "owner_skill": "verify-skill", "name": "独立 projectless Ending", "function": "每个 Ending-required 任务只创建一个持久 projectless End Task；计划内保留独立检查，携带原项目 binding，真实创建并 100% ack；缺少 ack 为 BLOCKED。", "checks": ["verify-units", "workflow-validator"]},
+    {"id": "GSR-012", "owner_skill": "workflow-skill", "name": "代码结果优先", "function": "生产者先读取所有相关代码、哲学、语言、平台和领域 Skill，完成代码后只运行一次最小本地 Quick Check，立即返回 CODE READY；广泛测试、构建、UI、全量 lint、日志清理和重复审查不得阻塞首个结果。", "checks": ["task-analyze-units", "workflow-validator", "code-units"]},
+    {"id": "GSR-013", "owner_skill": "workflow-skill", "name": "材料任务 Ending 强制交接", "function": "每个代码改动都发出 ending-required；只有 small 低风险单结果非代码工作可记录 intentionally_skipped_simple_task。standard/complex/advanced、中高风险或多阶段工作同样必须创建并确认一个全局 projectless End Task。", "checks": ["task-analyze-units", "workflow-validator", "verify-units"]},
+    {"id": "GSR-014", "owner_skill": "verify-skill", "name": "全局独立 projectless Ending", "function": "每个 Ending-required 任务只创建一个持久全局 projectless End Task；create_thread target 必须精确为 projectless 且不含项目、环境、当前任务或 parent attachment。原项目 binding 只用于执行上下文；list_threads 必须读回 projectId=null 或无项目字段后才能 ack。项目 session、当前任务、同任务 subtask、缺少读回或 ack 均为 BLOCKED。", "checks": ["verify-units", "workflow-validator", "task-analyze-validator"]},
     {"id": "GSR-015", "owner_skill": "verify-skill", "name": "Ending 最小真实验证", "function": "执行能证明交付状态的最小真实命令、API、构建、渲染、视觉或状态检查；文字不能代替证据，当前不可变 PASS 报告只复查绑定 digest 与最终状态。", "checks": ["verify-units", "workflow-validator"]},
     {"id": "GSR-016", "owner_skill": "verify-skill", "name": "失败返回原 session 修复", "function": "Verifier 不改生产文件；精确证据返回 immutable origin；原 session 修复后把合法 failed-parent lifecycle ID 从 plan 或 create-launches 贯穿到 launch spec 和 worker，并强制 fresh Ending 用同一 --repair-of-lifecycle-id 启动；最多三次，否则 BLOCKED。", "checks": ["verify-units", "project-memory-units", "workflow-validator"]},
     {"id": "GSR-017", "owner_skill": "verify-skill", "name": "Ending 终态永久可见", "function": "PASS、FAIL、BLOCKED 不自动归档或删除，并报告尝试、适配度、下一路线与记忆状态。", "checks": ["verify-units", "workflow-validator"]},
@@ -65,11 +65,12 @@
     {"id": "GSR-023", "owner_skill": "management-skill", "name": "公开 README、SVG 与 benchmark 证据", "function": "中英文模板和桌面/移动 SVG 可解析且无裁切；benchmark 只声明来源明确的稳定结果并分离 controller、retry 与 Ending。", "checks": ["management-units", "task-analyze-units"]},
     {"id": "GSR-024", "owner_skill": "optimization-skill", "name": "Optimization 有界触发", "function": "只在明确优化或稳定重复工作时触发，把已验证流程固化为 portable 资产且保持行为。", "checks": ["optimization-units", "optimization-audit", "platform-check"]},
     {"id": "GSR-025", "owner_skill": "management-skill", "name": "全能力非回归发布门禁", "function": "任何全局 Skill 新增或修改都重跑保留能力目录；本地部署和 GitHub commit/push 在门禁 PASS 前全部阻断。", "checks": ["management-units", "public-skill-set", "deployment-parity", "global-agents-parity", "git-diff-check"]},
-    {"id": "GSR-026", "owner_skill": "verify-skill", "name": "Spark-xhigh 快速 Ending", "function": "所有 Ending 固定首选 gpt-5.3-codex-spark|xhigh；分数只控制检查范围。只有明确模型、effort、调度或必需模态不可用时才回退 registry-floor Luna-low；质量、协议、执行、超时或验收失败只修 producer，不升级 verifier。", "checks": ["task-analyze-units", "verify-units", "project-memory-units", "workflow-validator", "management-units"]},
+    {"id": "GSR-026", "owner_skill": "verify-skill", "name": "Spark-xhigh 快速 Ending 主控", "function": "所有 Ending 的唯一生命周期主控固定首选 gpt-5.3-codex-spark|xhigh；分数只控制检查范围和检查 worker。只有主控模型、effort、调度或必需模态明确不可用时才回退 registry-floor Luna-low；质量、协议、执行、超时或验收失败只修 producer，不更换 Ending 主控。", "checks": ["task-analyze-units", "verify-units", "project-memory-units", "workflow-validator", "management-units"]},
     {"id": "GSR-027", "owner_skill": "project-memory-skill", "name": "过程、执行与有效结果记忆一致", "function": "当前过程 Skill/AGENTS、真实执行证据和 effective 项目结果记忆必须三方一致。Ending 只可为纯记忆缺陷追加纠正或重投影；Skill/执行缺陷不得写结果记忆，必须返回 immutable origin 修复；下一任务只读取 effective 结果并隐藏已 supersede 的记录。", "checks": ["memory-execution-consistency-attestation", "task-analyze-units", "task-analyze-validator", "workflow-validator", "project-memory-units", "verify-units"]},
     {"id": "GSR-028", "owner_skill": "project-memory-skill", "name": "项目结果记忆完整性防线", "function": "生产 recorder 在写入前拒绝占位语义；测试显式使用 disposable store/vault；Global Codex Skills 与 qin-codex-skills 统一 owner 回读；已证实的非法记录只可用 exact-ID tombstone 重建本地索引并阻断 reconcile 回灌。", "checks": ["project-memory-units", "memory-execution-consistency-attestation", "platform-check"]},
     {"id": "GSR-029", "owner_skill": "project-memory-skill", "name": "唯一 Coverage 权威与无截断投影", "function": "Coverage 只读取显式 CODEX_PROJECT_MEMORY_COVERAGE 或 canonical local store，绝不从 vault/model store 推导；append、merge、projection 共用事务锁；legacy rogue store 仅在验证合并和重投影后按 exact path 删除。", "checks": ["project-memory-units", "memory-execution-consistency-attestation", "platform-check"]},
-    {"id": "GSR-030", "owner_skill": "code-skill", "name": "UI 用户体验哲学", "function": "所有 UI 与面向用户的 UI 信息先给出真实状态反馈；非阻塞工作可后台继续但不得伪称完成；在有助理解时优先使用可访问的图标、emoji、图片、状态样式或图示，而非密集文字。", "checks": ["code-units", "code-sample-attestation"]}
+    {"id": "GSR-030", "owner_skill": "code-skill", "name": "UI 用户体验哲学", "function": "所有 UI 与面向用户的 UI 信息先给出真实状态反馈；非阻塞工作可后台继续但不得伪称完成；在有助理解时优先使用可访问的图标、emoji、图片、状态样式或图示，而非密集文字。", "checks": ["code-units", "code-sample-attestation"]},
+    {"id": "GSR-031", "owner_skill": "verify-skill", "name": "Ending 能力路由检查 worker", "function": "一个 Spark-xhigh Ending 主控直接运行确定性检查；真实运行语义、集成、代码规范、prompt、UI 和视觉检查按保存的 surface 与分数委派给 Terra/Sol ENDING_CHECK_WORKER。worker 必须读取列出的 Skill，只执行一个保存检查并写证据，禁止编辑、修复、路由或创建生命周期。", "checks": ["task-analyze-units", "verify-units", "workflow-validator"]}
   ],
   "retired_architectures": [
     {"id": "RET-001", "name": "仅复杂任务运行 Ending", "replacement": "GSR-013"},
@@ -83,6 +84,8 @@
     {"id": "RET-009", "name": "已安装全局目录作为发布源", "replacement": "GSR-002"},
     {"id": "RET-010", "name": "旧模型家族进入活动质量梯级", "replacement": "GSR-005"},
     {"id": "RET-011", "name": "Ending 按分数进入质量梯级且禁止 Spark", "replacement": "GSR-026"},
-    {"id": "RET-012", "name": "每个独立检查创建一个 Ending thread", "replacement": "GSR-014"}
+    {"id": "RET-012", "name": "每个独立检查创建一个 Ending thread", "replacement": "GSR-014"},
+    {"id": "RET-013", "name": "生产线程在返回代码前执行广泛验证或重复审查", "replacement": "GSR-012"},
+    {"id": "RET-014", "name": "Spark 主控亲自完成所有语义和视觉判断", "replacement": "GSR-031"}
   ]
 }

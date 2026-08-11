@@ -72,6 +72,10 @@ def desired_outputs(models_cache_path):
     return registry, build_snapshot(registry)
 
 
+def _generated_policy(registry):
+    return {key: value for key, value in registry.items() if key != "source"}
+
+
 def check_outputs(models_cache_path, registry_path, snapshot_path):
     registry_path = Path(registry_path).expanduser().resolve()
     snapshot_path = Path(snapshot_path).expanduser().resolve()
@@ -92,7 +96,7 @@ def check_outputs(models_cache_path, registry_path, snapshot_path):
         registry_status = "retained"
         catalog_status = "unavailable"
     else:
-        registry_current = registry_matches_catalog(actual_registry, desired_registry["source"]["catalog_sha256"], desired_registry)
+        registry_current = registry_matches_catalog(actual_registry, desired_registry["source"]["catalog_sha256"], desired_registry) or (actual_registry is not None and _generated_policy(actual_registry) == _generated_policy(desired_registry))
         desired_snapshot = build_snapshot(actual_registry) if registry_current else desired_snapshot
         registry_status = "current" if registry_current else "stale"
         catalog_status = "available"

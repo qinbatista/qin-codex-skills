@@ -85,6 +85,25 @@ class SyncModelCapabilitiesTests(unittest.TestCase):
             self.assertEqual(snapshot_path.read_bytes(), initial_snapshot)
             self.assertEqual(snapshot_path.stat().st_mtime_ns, initial_snapshot_mtime)
 
+    def test_catalog_metadata_drift_does_not_stale_an_unchanged_generated_policy(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            cache_path = root / "models_cache.json"
+            registry_path = root / "registry.json"
+            snapshot_path = root / "model-capabilities.md"
+            current_catalog = catalog()
+            cache_path.write_text(json.dumps(current_catalog), encoding="utf-8")
+            sync_model_capabilities.sync_outputs(cache_path, registry_path, snapshot_path)
+            registry_bytes = registry_path.read_bytes()
+            snapshot_bytes = snapshot_path.read_bytes()
+            current_catalog["client_version"] = "9.9.10"
+            cache_path.write_text(json.dumps(current_catalog), encoding="utf-8")
+            checked = sync_model_capabilities.check_outputs(cache_path, registry_path, snapshot_path)
+            self.assertTrue(checked["valid"])
+            self.assertEqual(checked["registry_status"], "current")
+            self.assertEqual(registry_path.read_bytes(), registry_bytes)
+            self.assertEqual(snapshot_path.read_bytes(), snapshot_bytes)
+
     def test_explicit_update_retains_saved_registry_when_local_catalog_is_unavailable(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

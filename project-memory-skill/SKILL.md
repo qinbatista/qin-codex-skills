@@ -91,7 +91,7 @@ These adaptive model-learning rules do not alter project change-memory behavior:
 
 ## Separate Personal Preference Memory
 
-Personal preference and technical-working-trait memory is a third, separate stream. Ending-required work is scanned for bounded candidates inside its mandatory Ending; a low-risk single-result small task records `intentionally_skipped_simple_task` and does not scan. An empty Ending scan is a strict no-op for preference memory, never a reason to skip an Ending-required task. Only the Ending worker may submit a candidate bundle through `scripts/personal_memory.py` or `ending_task_ledger.py event --memory-candidates-file`; the bridge validates explicit/repeated/verified evidence, rejects private content, writes one root-first `AI Memory/events.jsonl` event, and updates a stable Preferences owner page. UI candidates use `Preferences/UI Style Preferences.md` when that owner exists; other candidates use `Preferences/AI Captured Preferences.md`. Missing Obsidian queues sanitized candidates locally and never discards them. This stream never changes the task result and never replaces project-change or model-routing memory.
+Personal preference and technical-working-trait memory is a third, separate stream. Every durable code change and other Ending-required result is scanned inside its mandatory Ending; only eligible low-risk single-result small non-code work may skip. An empty scan remains a strict no-op. The fixed Spark controller owns the scan and terminal record; capability-routed check workers never write preference, project-result, or model-routing memory.
 
 Use the maintained helpers instead of editing coverage or Model Switch routing records manually:
 

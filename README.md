@@ -16,23 +16,23 @@ Small low-risk edits scoring 0–24 try Spark-low first · larger work uses the 
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core flow: score and finish the main job, then launch Ending for Ending-required work">
+  <img src="./management-skill/assets/readme/core-flow.svg" alt="Core result-first lifecycle">
 </picture>
 
 ## ✅ Finish first. Require Ending for material work.
 
 Lifecycle:
 
-1. **Score every submission from 0–100, then finish the requested job** and run the proportional implementation check.
-2. **Return the completed result immediately.** The user is not held inside a verifier, poll loop, or repair cycle.
-3. **A low-risk, single-result small task (`0–24`) records `intentionally_skipped_simple_task` and does not create an End Task.** Standard/complex/advanced work, any medium/high-risk task, and multi-stage work emit `ending-required`; only then does the entry parent start exactly one projectless `End Task-<task name>` in the global task list. Its primary is fixed `gpt-5.3-codex-spark|xhigh`; the 0–100 score only scopes checks. Only an explicit Spark model/effort/scheduler or required-modality availability failure permits the registry-floor `gpt-5.6-luna|low` fallback. The producer never recurses; parent binds receipt/project context and requires real acknowledgement.
-4. **The one Ending runs the smallest real/completion checks and one terminal closeout; all required checks must PASS.** Reuse a current immutable release report by checking its digest and final state instead of rerunning the exhaustive gate. Closeout records routing classification/model history, sanitized project-change results when applicable, and the bounded personal-memory scan. A missing acknowledgement is BLOCKED. Failure, timeout, or mismatch does not escalate the verifier: it sends exact evidence through `codex_app__send_message_to_thread` to the immutable origin, which repairs the result and starts a fresh Spark-first Ending, up to three repairs. PASS/FAIL/BLOCKED stays visible; nothing auto-archives or deletes itself.
+1. **Score every submission from 0–100, load the relevant Skills, then finish the requested job.** For code, run exactly one smallest local Quick Check.
+2. **Return the completed result immediately.**
+3. **Every durable code change emits `ending-required`. A low-risk, single-result small task may skip only when eligible and non-code.** Standard/complex/advanced work, any medium/high-risk task, and multi-stage work also require exactly one acknowledged global projectless `End Task-<task name>`. The producer publishes `CODE READY` after its one Quick Check; broad tests, builds, UI review, full lint, log cleanup, release gates, and repeated review never block the first result.
+4. **The one Ending runs the smallest real/completion checks and one terminal closeout; all required checks must PASS.** `gpt-5.3-codex-spark|xhigh` is sole controller. It runs deterministic checks; saved Terra/Sol `ENDING_CHECK_WORKER` nodes run semantic checks. Workers read listed Skills, write evidence, and never edit, repair, route, or own lifecycle. Create exactly one global-only projectless `End Task-<task name>` with `create_thread.target={"type":"projectless"}`; the origin project stays execution context and is never attached to the thread. `list_threads` readback must show `projectId=null` or absent before acknowledgement. Project/current-task/same-task-subtask placement or missing readback is BLOCKED. Failure sends exact evidence through `codex_app__send_message_to_thread` to the immutable origin for a fresh Spark-first Ending. PASS/FAIL/BLOCKED stays visible; the 0–100 score only scopes checks. Controller unavailability permits the registry-floor `gpt-5.6-luna|low` fallback. Reuse a current immutable release report by checking its digest and final state. Closeout writes routing classification/model history; nothing auto-archives or deletes itself.
 
 ## ⚡ Models & private learning
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
-  <img src="./management-skill/assets/readme/model-router.svg" alt="Task-strategy quality ladder that retains, downgrades, or upgrades one receipt-proven rung at a time">
+  <img src="./management-skill/assets/readme/model-router.svg" alt="Receipt-proven model routing">
 </picture>
 
 - **Cold start / entry-aware:** Step-capability/difficulty history chooses the lowest correct pair. Sol/high may route down; Luna-max/lower may route up. Without a match, start at or below entry; eligible 0–24 work still tries Spark-low.
@@ -47,7 +47,7 @@ Lifecycle:
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Finish and return the completed main result before background verification.
-- **Verify:** Ending-required → Spark-xhigh; small low-risk single-result → explicit skip. Scores scope checks; Luna-low only if unavailable; all checks PASS.
+- **Verify:** Every code change requires Ending. Eligible small non-code may skip. Spark-xhigh controls it; Terra/Sol workers may run semantic checks; all PASS.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
 - **Memory:** Change history is local JSONL + optional Obsidian; project/module + code symbols (`__module__`) required; context kept as fields.
 - **Models:** Use saved ladder; explicit update refreshes the highest GPT family; eligible small edits prioritize Spark-low; missing cache preserves it.

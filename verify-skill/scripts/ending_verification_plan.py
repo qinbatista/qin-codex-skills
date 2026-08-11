@@ -12,8 +12,13 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 ENDING_PRIMARY_PAIR = "gpt-5.3-codex-spark|xhigh"
+ENDING_CHECK_WORKER_MARKER = "ENDING_CHECK_WORKER"
+DIRECT_CHECK_SURFACES = {"command", "syntax", "unit", "api_state", "file_state"}
+DELEGATED_CHECK_SURFACES = {"runtime_semantics", "integration_semantics", "code_quality", "ui_visual", "artifact_visual", "prompt_semantics"}
+CHECK_SURFACES = DIRECT_CHECK_SURFACES | DELEGATED_CHECK_SURFACES
+DEFAULT_WORKER_SKILLS = {"runtime_semantics": ["verify-skill"], "integration_semantics": ["verify-skill"], "code_quality": ["verify-skill", "code-skill", "cross-platform-execution"], "ui_visual": ["verify-skill", "emil-design-eng"], "artifact_visual": ["verify-skill"], "prompt_semantics": ["verify-skill", "prompt-skill"]}
 ENDING_FALLBACK_ROLE = "floor"
 ENDING_LAUNCH_ID = "task-ending"
 AVAILABILITY_FALLBACK_REASONS = {
@@ -26,8 +31,12 @@ AVAILABILITY_FALLBACK_REASONS = {
 THREAD_TARGET = {"type": "projectless"}
 TERMINAL_THREAD_POLICY = {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"}
 CREATE_THREAD_TOOL = "codex_app__create_thread"
+THREAD_READBACK_TOOL = "codex_app__list_threads"
+THREAD_SCOPE = "global"
+CREATE_THREAD_ARGUMENT_KEYS = {"target", "title", "model", "thinking", "prompt"}
+THREAD_PLACEMENT_POLICY = {"scope": THREAD_SCOPE, "target": THREAD_TARGET, "expected_project_id": None, "creation_tool": CREATE_THREAD_TOOL, "readback_tool": THREAD_READBACK_TOOL}
 ORIGIN_SESSION_RESUME_CAPABILITY = "codex_app__send_message_to_thread"
-LAUNCH_STATE_SCHEMA_VERSION = 1
+LAUNCH_STATE_SCHEMA_VERSION = 2
 LIFECYCLE_ID_PATTERN = re.compile(r"\A\d{8}T\d{6}-[0-9a-f]{12}\Z")
 PROJECT_MEMORY_MODES = {"none", "durable"}
 PROJECT_MEMORY_SCOPES = {"project", "feature", "code", "file"}
@@ -140,6 +149,21 @@ def pair_for_score(score, registry=None):
         "model": model,
         "effort": effort,
     }
+
+
+def worker_pair_for_check(score, surface, registry=None):
+    if surface in DIRECT_CHECK_SURFACES:
+        return None
+    if surface not in DELEGATED_CHECK_SURFACES:
+        raise ValueError("check.verification_surface is invalid")
+    payload = registry or _registry()
+    role_pairs = payload.get("role_pairs") if isinstance(payload.get("role_pairs"), dict) else {}
+    role = "frontier_complex" if surface in {"ui_visual", "artifact_visual"} or score >= 75 else "balanced_complex" if score >= 50 else "balanced_default"
+    pair = role_pairs.get(role)
+    if not isinstance(pair, str) or "|" not in pair:
+        raise ValueError(f"model registry requires role pair {role}")
+    model, effort = pair.split("|", 1)
+    return {"marker": ENDING_CHECK_WORKER_MARKER, "pair": pair, "model": model, "effort": effort, "selection_basis": "ending_check_capability_route", "role": role}
 
 
 def _inside(root, value, field):
@@ -257,6 +281,12 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
         raise ValueError("check.expected_exit_code must be an integer")
     acceptance = _clean(raw.get("acceptance") or name, "check.acceptance", 1200)
     repair_scope = _clean(raw.get("repair_scope") or "Only the original producer's authorized result scope.", "check.repair_scope", 600)
+    verification_surface = _clean(raw.get("verification_surface") or "command", "check.verification_surface", 80)
+    if verification_surface not in CHECK_SURFACES:
+        raise ValueError("check.verification_surface is invalid")
+    worker_route = worker_pair_for_check(score, verification_surface, registry)
+    requested_skills = _clean_list(raw.get("required_skills"), "check.required_skills", 120)
+    required_skills = list(dict.fromkeys([*(DEFAULT_WORKER_SKILLS.get(verification_surface) or []), *requested_skills])) if worker_route else []
     return {
         "check_id": check_id,
         "name": name,
@@ -267,6 +297,10 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
         "independent": bool(raw.get("independent", True)),
         "acceptance": acceptance,
         "repair_scope": repair_scope,
+        "verification_surface": verification_surface,
+        "execution_mode": "delegated_check_worker" if worker_route else "spark_controller_direct",
+        "worker_route": worker_route,
+        "required_skills": required_skills,
         **route,
         "on_failure": {
             "action": "send_repair_prompt_to_origin_session_then_fresh_ending",
@@ -332,12 +366,54 @@ def _read_json(path, field):
     return source, payload
 
 
+def _validate_projectless_create_arguments(arguments):
+    if not isinstance(arguments, dict):
+        raise ValueError("Ending create_thread arguments must be a JSON object")
+    unexpected = sorted(set(arguments) - CREATE_THREAD_ARGUMENT_KEYS)
+    if unexpected:
+        raise ValueError("Ending create_thread arguments contain project/current-task fields: " + ", ".join(unexpected))
+    if arguments.get("target") != THREAD_TARGET:
+        raise ValueError('Ending create_thread target must be exactly {"type":"projectless"}')
+
+
+def _validate_projectless_launch_request(request):
+    if not isinstance(request, dict):
+        raise ValueError("Ending launch request must be a JSON object")
+    if request.get("tool") != CREATE_THREAD_TOOL:
+        raise ValueError(f"Ending launch tool must be {CREATE_THREAD_TOOL}")
+    if request.get("thread_target") != THREAD_TARGET or request.get("thread_placement") != THREAD_PLACEMENT_POLICY:
+        raise ValueError("Ending launch placement must be global projectless")
+    if any(field in request for field in ("project_id", "projectId", "environment", "threadId", "parentThreadId")):
+        raise ValueError("Ending launch request must not contain project/current-task attachment fields")
+    _validate_projectless_create_arguments(request.get("arguments"))
+    candidates = request.get("launch_candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise ValueError("Ending launch request requires projectless launch candidates")
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            raise ValueError("Ending launch candidate must be a JSON object")
+        candidate_arguments = candidate.get("arguments")
+        _validate_projectless_create_arguments(candidate_arguments)
+        candidate_sha256 = hashlib.sha256(json.dumps(candidate_arguments, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if candidate.get("request_sha256") != candidate_sha256:
+            raise ValueError("Ending launch candidate request digest does not match its projectless arguments")
+    request_sha256 = hashlib.sha256(json.dumps(request["arguments"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    if request.get("request_sha256") != request_sha256:
+        raise ValueError("Ending launch request digest does not match its projectless arguments")
+
+
+def _normalize_thread_project_id(value):
+    if value is None or (isinstance(value, str) and value.strip().lower() == "null"):
+        return None
+    raise ValueError("thread_project_id must be null after codex_app__list_threads readback")
+
+
 def _repair_handoff(check, origin_session, observed, mismatch_summary=""):
     mismatch = _clean(mismatch_summary, "requirement_mismatch", 1200) if mismatch_summary else ""
     if not origin_session:
         return {"action": "blocked_origin_session_unavailable", "origin_session": None, "origin_session_required": True, "reason": "The exact producer session was not captured before Ending launched."}
     evidence_reason = mismatch or ("The real acceptance command did not produce the expected exit result." if observed.get("timed_out") or observed.get("exit_code") != check["expected_exit_code"] else "The observed final result did not satisfy the original acceptance contract.")
-    prompt_lines = ["Continue the original producer task in this exact origin session.", "Do not restart Task Analyze, do not let the Ending verifier edit the result, and do not ask the user to copy this prompt.", f"Original acceptance contract: {check['acceptance']}", f"Observed Ending issue: {evidence_reason}", f"Observed exit code: {observed.get('exit_code')}", f"Observed stdout: {observed.get('stdout') or '<empty>'}", f"Observed stderr: {observed.get('stderr') or '<empty>'}", f"Repair scope: {check['repair_scope']}", "Repair the result so it satisfies the original user objective and acceptance contract, run the bounded Quick Check, and return the corrected result plus a new producer receipt to the parent lifecycle. The parent will launch a fresh projectless Ending for the same check; do not create or wait for that Ending here."]
+    prompt_lines = ["Continue the original producer task in this exact origin session.", "Do not restart Task Analyze, do not let the Ending verifier edit the result, and do not ask the user to copy this prompt.", f"Original acceptance contract: {check['acceptance']}", f"Observed Ending issue: {evidence_reason}", f"Observed exit code: {observed.get('exit_code')}", f"Observed stdout: {observed.get('stdout') or '<empty>'}", f"Observed stderr: {observed.get('stderr') or '<empty>'}", f"Repair scope: {check['repair_scope']}", "Repair the result so it satisfies the original user objective and acceptance contract, run the bounded Quick Check, and return the corrected result plus a new producer receipt to the parent lifecycle. The parent will launch a fresh global projectless Ending for the same check; do not create or wait for that Ending here."]
     repair_prompt = "\n".join(prompt_lines)
     repair_dispatch = {"tool": ORIGIN_SESSION_RESUME_CAPABILITY, "arguments": {"threadId": origin_session["thread_id"], "hostId": origin_session["host_id"], "prompt": repair_prompt}, "required": True}
     return {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session": origin_session, "origin_session_required": True, "prompt_submission": "automatic", "repair_dispatch": repair_dispatch, "repair_prompt": repair_prompt, "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
@@ -358,6 +434,10 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
             "acceptance": check["acceptance"],
             "complexity_score": check["complexity_score"],
             "complexity_band": check["complexity_band"],
+            "verification_surface": check["verification_surface"],
+            "execution_mode": check["execution_mode"],
+            "worker_route": check["worker_route"],
+            "required_skills": check["required_skills"],
         }
         for check in checks
     ]
@@ -367,7 +447,7 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
-            "Execute the one independent persistent projectless End Task for this user task. Do not restart Task Analyze or Workflow.",
+            "Execute the one independent persistent global projectless End Task for this user task. This thread must have no project attachment and must not be the origin/current task or a same-task subtask. You are the fixed Spark-xhigh Ending controller; do not restart the producer route or create another Ending lifecycle.",
             f"Project root: {plan['project_root']}",
             f"Verification plan relative to project root: {relative_plan}",
             f"Ending check id: {ENDING_LAUNCH_ID}",
@@ -384,14 +464,15 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
             f"Producer receipt relative to project root: {receipt_line}",
             repair_parent_line,
             repair_start_instruction,
-            "Resolve CODEX_HOME, then use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run every listed check's exact run-check command from the project root. Write one fresh evidence file per check and do not broaden the saved bounded checks.",
+            "Resolve CODEX_HOME. For execution_mode=spark_controller_direct, use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the exact run-check command from the project root. For execution_mode=delegated_check_worker, launch one bounded subagent with the saved worker_route pair; begin its prompt with ENDING_CHECK_WORKER, require it to read every listed required_skills instruction before checking, and have it run only that check's exact run-check command. Write one fresh evidence file per check and do not broaden the saved checks.",
+            "Delegated check workers are internal verification workers, not projectless End/Fix tasks. They may inspect or execute only the saved check scope and write its evidence under Cache; they never edit producer files, record the lifecycle terminal event, launch routing, or repair. The Spark controller remains the sole Ending owner and accepts only the fresh evidence file, never worker prose alone.",
             "Start one lifecycle and finish it once through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py. Pass the saved verification plan, ending-check-id=task-ending, the actual assigned pair, project and origin metadata, and the producer receipt when present. If and only if the primary pair could not be launched for an allowed availability/capability reason, use the one saved fallback pair and pass the launcher's sanitized --availability-fallback-reason. Correctness, quality, protocol, timeout, or command execution failures never change the Ending pair.",
             "Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation. Producer next-pair learning stays separate from the fixed Ending pair.",
             "Keep model-routing memory, personal preference memory, and project-result memory as three independent flows. A write or no-op in one flow never substitutes for either of the other two.",
-            "PASS requires every new evidence file to report status=pass and its expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this projectless global task visible.",
+            "PASS requires every new evidence file to report status=pass and its expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this global projectless task visible; a project-attached, current-task, or same-task-subtask Ending is a launch protocol failure.",
             "A command PASS is not enough when the final artifact/state differs from the original user objective or acceptance contract. In that case, mark that evidence as a correctness mismatch with the plan's mismatch command, then use the repair handoff.",
-            "On FAIL or a correctness mismatch, do not edit the result in this Ending. Record exact evidence, then automatically submit the generated repair_prompt by calling codex_app__send_message_to_thread with repair_dispatch.arguments (threadId, hostId, and the exact prompt) to continue the original origin session. The origin session repairs and runs Quick Check; the parent launches one fresh projectless Ending. Repeat for at most three repair attempts; unavailable or failed origin-session submission is BLOCKED.",
-            "The failed Ending and its repair handoff remain visible as the audit record. Never open a replacement fixer session, self-repair, self-verify, create nested End/Fix tasks, or wait/poll for the origin session.",
+            "On FAIL or a correctness mismatch, do not edit the result in this Ending. Record exact evidence, then automatically submit the generated repair_prompt by calling codex_app__send_message_to_thread with repair_dispatch.arguments (threadId, hostId, and the exact prompt) to continue the original origin session. The origin session repairs and runs Quick Check; the parent launches one fresh global projectless Ending. Repeat for at most three repair attempts; unavailable or failed origin-session submission is BLOCKED.",
+            "The failed Ending and its repair handoff remain visible as the audit record. Never open a replacement fixer session, self-repair, create nested End/Fix tasks, or wait/poll for the origin session. Waiting only for dependency-ready ENDING_CHECK_WORKER evidence inside this detached Ending is allowed.",
             "For project_memory_closeout mode=durable, read the current Skill/process contract, the fresh execution evidence, and only the bounded effective project-result memory. Write one sanitized memory_consistency_output classification: aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence. Include process_status, execution_status, memory_status, action, and bounded evidence.",
             "Only memory_record_defect may append a correction that supersedes the wrong result record, and only memory_projection_defect may reconcile an unchanged correct local result into Obsidian. Never rewrite history. skill_contract_defect and execution_drift are FAIL and must return exact evidence to the immutable origin session; insufficient_evidence is BLOCKED. The Ending never edits producer or Skill files.",
             "For a durable PASS, pass --memory-consistency-file to the terminal ledger event. The ledger owns the one project-result record/correction/reconciliation and requires effective local readback. When Obsidian is available, projection readback is also required; when it is unavailable, record projection-pending for bounded reconciliation on the next task. For project_memory_closeout mode=none, do not create or pass a project-memory consistency file.",
@@ -472,6 +553,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         "check_ids": [check["check_id"] for check in tasks],
         "title": title,
         "thread_target": dict(THREAD_TARGET),
+        "thread_placement": {**THREAD_PLACEMENT_POLICY, "target": dict(THREAD_TARGET)},
         "terminal_thread_policy": TERMINAL_THREAD_POLICY,
         "selected_pair": selected_pair,
         "primary_pair": primary_pair,
@@ -490,9 +572,9 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         "memory_consistency_output": str(memory_consistency_output),
         "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
         "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
-        "project_id": project_value,
         "acknowledgement_required": True,
     }
+    _validate_projectless_launch_request(request)
     launch_requests = [request]
     return {
         "schema_version": SCHEMA_VERSION,
@@ -504,8 +586,9 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
             "project_id": project_value,
             "project_root": str(project_root),
             "environment": {"type": "local"},
-            "resolver": "codex_app__list_projects exact canonical project root",
+            "resolver": "codex_app__list_projects exact canonical project root; execution context only, never create_thread target",
         },
+        "thread_placement_policy": {**THREAD_PLACEMENT_POLICY, "target": dict(THREAD_TARGET)},
         "execution": "host_persistent_create_thread",
         "origin_session": origin_session,
         "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
@@ -513,21 +596,29 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
         "required_launch_count": len(launch_requests),
         "launch_requests": launch_requests,
-        "launch_gate": "one_task_ending_requires_thread_host_pair_and_availability_acknowledgement",
+        "launch_gate": "one_global_projectless_ending_requires_thread_host_pair_list_threads_null_project_readback_and_availability_acknowledgement",
     }
 
 
-def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_id, state_output, selected_pair="", availability_reason=""):
+def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_id, state_output, thread_scope, thread_project_id, placement_readback_tool, selected_pair="", availability_reason=""):
     launch_file, launch_spec = _read_json(launch_spec_path, "launch_spec")
     request = next((item for item in launch_spec.get("launch_requests", []) if item.get("check_id") == check_id), None)
     if not isinstance(request, dict):
         raise ValueError(f"unknown check_id: {check_id}")
+    _validate_projectless_launch_request(request)
     thread_value = _clean(thread_id, "thread_id", 160)
     host_value = _clean(host_id, "host_id", 160)
     project_value = _clean(project_id, "project_id", 200)
     expected_project_id = launch_spec.get("project_binding", {}).get("project_id")
-    if project_value != expected_project_id or request.get("project_id") != expected_project_id:
-        raise ValueError("project_id does not match the launch specification")
+    if project_value != expected_project_id:
+        raise ValueError("project_id does not match the origin project binding")
+    thread_scope_value = _clean(thread_scope, "thread_scope", 40)
+    if thread_scope_value != THREAD_SCOPE:
+        raise ValueError("Ending thread_scope must be global projectless")
+    observed_thread_project_id = _normalize_thread_project_id(thread_project_id)
+    placement_readback_tool_value = _clean(placement_readback_tool, "placement_readback_tool", 160)
+    if placement_readback_tool_value != THREAD_READBACK_TOOL:
+        raise ValueError(f"Ending placement must be read back with {THREAD_READBACK_TOOL}")
     actual_pair = _clean(selected_pair or request.get("selected_pair"), "selected_pair", 160)
     candidates = {item.get("pair"): item for item in request.get("launch_candidates", []) if isinstance(item, dict)}
     candidate = candidates.get(actual_pair)
@@ -553,6 +644,8 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
     }
     if state_path.is_file():
         _, state = _read_json(state_path, "launch_state")
+        if state.get("schema_version") != LAUNCH_STATE_SCHEMA_VERSION:
+            raise ValueError("launch_state schema does not enforce global projectless placement")
         if state.get("launch_spec_sha256") != hashlib.sha256(launch_file.read_bytes()).hexdigest():
             raise ValueError("launch_state belongs to a different launch_spec")
     launches = [item for item in state.get("launches", []) if isinstance(item, dict) and item.get("check_id") != check_id]
@@ -569,7 +662,11 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
             "request_sha256": candidate["request_sha256"],
             "thread_id": thread_value,
             "host_id": host_value,
-            "project_id": project_value,
+            "origin_project_id": project_value,
+            "thread_scope": thread_scope_value,
+            "thread_target": dict(THREAD_TARGET),
+            "thread_project_id": observed_thread_project_id,
+            "placement_readback_tool": placement_readback_tool_value,
             "status": "launched",
             "acknowledged_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -581,6 +678,9 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
         "check_id": check_id,
         "thread_id": thread_value,
         "host_id": host_value,
+        "thread_scope": thread_scope_value,
+        "thread_project_id": observed_thread_project_id,
+        "placement_readback_tool": placement_readback_tool_value,
         "selected_pair": actual_pair,
         "availability_fallback_reason": availability_reason_value,
         "state": str(state_path),
@@ -591,6 +691,17 @@ def audit_launches(launch_spec_path, state_path):
     launch_file, launch_spec = _read_json(launch_spec_path, "launch_spec")
     launch_sha256 = hashlib.sha256(launch_file.read_bytes()).hexdigest()
     required = {item["check_id"]: item for item in launch_spec.get("launch_requests", []) if isinstance(item, dict) and item.get("check_id")}
+    failures = []
+    invalid_request_ids = set()
+    for check_id, request in required.items():
+        try:
+            _validate_projectless_launch_request(request)
+        except ValueError as error:
+            invalid_request_ids.add(check_id)
+            failures.append(f"End Task {check_id} has invalid global projectless placement: {error}")
+    placement_policy_valid = launch_spec.get("thread_placement_policy") == THREAD_PLACEMENT_POLICY
+    if not placement_policy_valid:
+        failures.append("launch_spec thread placement policy is not global projectless")
     try:
         _, state = _read_json(state_path, "launch_state")
     except ValueError:
@@ -600,10 +711,12 @@ def audit_launches(launch_spec_path, state_path):
             "required_launch_count": len(required),
             "launched_count": 0,
             "threads": [],
-            "failures": ["launch_state is unavailable; End Task has not been acknowledged"],
+            "failures": [*failures, "launch_state is unavailable; End Task has not been acknowledged"],
         }
     observed = {item["check_id"]: item for item in state.get("launches", []) if isinstance(item, dict) and item.get("check_id")}
-    failures = []
+    state_schema_valid = state.get("schema_version") == LAUNCH_STATE_SCHEMA_VERSION
+    if not state_schema_valid:
+        failures.append("launch_state schema does not enforce global projectless placement")
     if state.get("launch_spec_sha256") != launch_sha256:
         failures.append("launch_state does not match launch_spec")
     missing = sorted(set(required) - set(observed))
@@ -613,13 +726,20 @@ def audit_launches(launch_spec_path, state_path):
     if extra:
         failures.append("unexpected End Task launch acknowledgements: " + ", ".join(extra))
     thread_ids = []
+    qualified_launches = 0
+    expected_origin_project_id = launch_spec.get("project_binding", {}).get("project_id")
     for check_id, request in required.items():
         launch = observed.get(check_id)
         if not launch:
             continue
+        prior_failure_count = len(failures)
         thread_ids.append(launch.get("thread_id"))
-        if launch.get("status") != "launched" or not launch.get("thread_id") or not launch.get("host_id") or not launch.get("project_id"):
+        if launch.get("status") != "launched" or not launch.get("thread_id") or not launch.get("host_id") or not launch.get("origin_project_id"):
             failures.append(f"End Task {check_id} lacks a persistent thread acknowledgement")
+        if launch.get("origin_project_id") != expected_origin_project_id or "project_id" in launch or "projectId" in launch:
+            failures.append(f"End Task {check_id} origin binding is invalid or confused with thread placement")
+        if launch.get("thread_scope") != THREAD_SCOPE or launch.get("thread_target") != THREAD_TARGET or "thread_project_id" not in launch or launch.get("thread_project_id") is not None or launch.get("placement_readback_tool") != THREAD_READBACK_TOOL:
+            failures.append(f"End Task {check_id} was not read back as a global projectless thread with projectId=null")
         candidates = {item.get("pair"): item for item in request.get("launch_candidates", []) if isinstance(item, dict)}
         selected_pair = launch.get("selected_pair")
         candidate = candidates.get(selected_pair)
@@ -633,12 +753,14 @@ def audit_launches(launch_spec_path, state_path):
                 failures.append(f"End Task {check_id} primary launch has an invalid fallback reason")
         else:
             failures.append(f"End Task {check_id} pair is neither primary nor availability fallback")
-        if launch.get("title") != request.get("title") or launch.get("request_sha256") != (candidate or {}).get("request_sha256") or launch.get("project_id") != request.get("project_id"):
+        if launch.get("title") != request.get("title") or launch.get("request_sha256") != (candidate or {}).get("request_sha256"):
             failures.append(f"End Task {check_id} acknowledgement does not match its launch request")
+        if check_id not in invalid_request_ids and placement_policy_valid and state_schema_valid and len(failures) == prior_failure_count:
+            qualified_launches += 1
     if len(thread_ids) != len(set(thread_ids)):
         failures.append("End Task launch acknowledgements must use unique thread ids")
     required_count = len(required)
-    launched_count = sum(1 for check_id in required if check_id in observed and observed[check_id].get("status") == "launched")
+    launched_count = qualified_launches
     trigger_rate = round(100 * launched_count / required_count) if required_count else 0
     return {
         "status": "pass" if not failures and launched_count == required_count else "blocked",
@@ -749,6 +871,9 @@ def parse_args(argv=None):
     acknowledge.add_argument("--host-id", required=True)
     acknowledge.add_argument("--project-id", required=True)
     acknowledge.add_argument("--state-output", type=Path, required=True)
+    acknowledge.add_argument("--thread-scope", choices=[THREAD_SCOPE], required=True)
+    acknowledge.add_argument("--thread-project-id", choices=["null"], required=True)
+    acknowledge.add_argument("--placement-readback-tool", choices=[THREAD_READBACK_TOOL], required=True)
     acknowledge.add_argument("--selected-pair", default="")
     acknowledge.add_argument("--availability-reason", choices=sorted(AVAILABILITY_FALLBACK_REASONS), default="")
     audit = subparsers.add_parser("audit-launches")
@@ -776,7 +901,7 @@ def main(argv=None):
         output = {"status": "written", "output": str(args.output.expanduser().resolve()), "required_launch_count": output["required_launch_count"], "selected_pairs": [item["selected_pair"] for item in output["launch_requests"]], "repair_of_lifecycle_id": output["repair_of_lifecycle_id"]}
         code = 0
     elif args.command == "ack-launch":
-        output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.project_id, args.state_output, args.selected_pair, args.availability_reason)
+        output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.project_id, args.state_output, args.thread_scope, args.thread_project_id, args.placement_readback_tool, args.selected_pair, args.availability_reason)
         code = 0
     else:
         output = audit_launches(args.launch_spec, args.launch_state)

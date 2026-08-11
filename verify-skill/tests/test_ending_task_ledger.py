@@ -667,7 +667,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(handoff["repair_dispatch"]["arguments"]["threadId"], "source-session-001")
         self.assertEqual(handoff["repair_dispatch"]["arguments"]["hostId"], "host-local")
         self.assertIn("missing", handoff["repair_prompt"])
-        self.assertIn("Start a fresh Ending", handoff["repair_prompt"])
+        self.assertIn("Start a fresh global projectless Ending", handoff["repair_prompt"])
         self.assertEqual(state["origin_session"], {"thread_id": "source-session-001", "host_id": "host-local"})
         self.assertEqual(repair_state["origin_session"], state["origin_session"])
         self.assertEqual(repair_state["project_id"], "project-123")

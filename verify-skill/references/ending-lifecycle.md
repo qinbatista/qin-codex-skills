@@ -1,20 +1,27 @@
 # Mandatory Post-Result Ending Lifecycle
 
-A low-risk single-result small task (`0-24`) records `intentionally_skipped_simple_task` and does not create an Ending. Code/file edits, bug fixes, generated artifacts, UI/render work, integrations, external actions, standard/complex/advanced work, and any medium/high-risk or multi-stage task are Ending-required: the producer emits `ending-required` and the parent creates one separate persistent projectless Codex task after the main result. Ending-required work executes the smallest real proportional checks; simple work never fabricates a test. The bounded personal-memory scan runs inside an Ending, but an empty candidate set remains a strict no-op for preference memory. Prior prose alone cannot PASS; a current immutable PASS report may be digest/state-checked instead of rerunning its exhaustive producer gate.
+Every durable code/file change, bug fix, generated artifact, UI/render result, integration, external action, standard/complex/advanced result, and medium/high-risk or multi-stage task is Ending-required. Only eligible low-risk single-result small non-code work records `intentionally_skipped_simple_task`. The producer runs exactly one smallest Quick Check and presents immediately; the parent then creates one persistent global projectless Ending. Its fixed Spark-xhigh controller runs direct checks and may use saved Terra/Sol `ENDING_CHECK_WORKER` nodes for semantic runtime, integration, code-quality, prompt, UI, or visual evidence. Prior prose cannot PASS; a current immutable PASS report may be digest/state-checked.
 
 ## Parent sequence
 
 1. Complete the result and run the producer Quick Check for code.
 2. Present `CODE READY` or `MAIN RESULT READY` with paths, complexity score/band, route change, and Quick Check evidence.
 3. Define observable acceptance commands and the semantic acceptance statement. Use `scripts/ending_verification_plan.py plan` with one check per independent unit, integration/API, build, render/visual, or live-state surface, plus the exact immutable origin session (`thread_id`, `host_id`, project ID, and project root). Durable project-file changes also pass one sanitized `project_memory_closeout` intent; non-persistent work explicitly uses `mode=none`.
-4. Give every check its own complexity score for scope and classification only. The Ending primary is always `gpt-5.3-codex-spark|xhigh`. Only an explicit model/effort/scheduler or required-modality availability failure permits the single registry-floor fallback, currently `gpt-5.6-luna|low`; test or acceptance failure never changes the Ending model.
+4. Give every check its own complexity score, verification surface, execution mode, and required Skills. The Ending controller is always `gpt-5.3-codex-spark|xhigh`; only controller availability permits registry-floor Luna-low. Direct deterministic checks stay on Spark, while semantic checks may use the plan-saved Terra/Sol check-worker pair.
 5. Start the local lifecycle with `--verification-required --verification-plan`, score/band, the exact origin session, and `--producer-receipt` when present.
-6. Resolve the exact saved project by canonical root, then create one persistent projectless `End Task-{task}` for the plan in the global task list. Preserve the project ID binding and pass all exact bounded `run-check` commands, lifecycle/receipt paths, originating project root, touched files, and repair boundary. Safe independent checks may run concurrently inside the task; shared-state checks stay ordered.
+6. Resolve the exact saved project by canonical root only for execution/repair binding. Create one persistent global projectless `End Task-{task}` by invoking the generated `codex_app__create_thread` arguments unchanged: target exactly `{"type":"projectless"}`, with no project ID, environment, current-thread, parent-thread, or same-task-subtask attachment. Read the exact returned thread through `codex_app__list_threads`; require its project context to be null/absent, represent that as `--thread-project-id null`, then acknowledge the origin project binding separately. Any other placement is BLOCKED. Pass all exact bounded `run-check` commands, lifecycle/receipt paths, originating project root, touched files, and repair boundary. Safe independent checks may run concurrently inside the task; shared-state checks stay ordered.
 7. Link the task and return the origin without polling. Missing task creation is terminal BLOCKED and is not verification.
+
+## Capability-routed check workers
+
+- `command`, `syntax`, `unit`, `api_state`, and `file_state` checks run directly on Spark.
+- `runtime_semantics`, `integration_semantics`, `code_quality`, `prompt_semantics`, `ui_visual`, and `artifact_visual` checks use the plan's Terra/Sol `ENDING_CHECK_WORKER` pair.
+- A check worker begins with `ENDING_CHECK_WORKER`, reads every listed Skill, executes exactly one saved check, writes fresh evidence under Cache, and exits. It never edits producer files, launches routing or another Ending, records terminal lifecycle, or repairs.
+- The Spark controller accepts only the assigned evidence file, owns PASS/FAIL/BLOCKED, and sends any repair to the immutable origin.
 
 ## Real check PASS
 
-The one Ending worker runs `ending_verification_plan.py run-check` for every saved check. It records each real command, exit code, stdout/stderr, elapsed time, score/band, actual pair, fallback provenance, and semantic acceptance. PASS requires the expected observable result; a command that exits successfully but leaves the final artifact or state different from the original request is converted to `FAIL` with `ending_verification_plan.py mismatch --evidence ... --summary ...`. Every required check must PASS before the lifecycle final gate passes. Every terminal event writes a project-linked model record to Obsidian. A receipt-backed producer event is learning-eligible; without a receipt the known verifier assignment is an observation only and is never mislabeled as the producer. The worker then prints the ledger's structured `model_assessment`, including attempt count, first/retry pass, suitability, producer next action/pair, fixed verifier next action, and record link/status. It never calls `set_thread_archived` or deletes itself; every terminal Ending and repair handoff remains visible.
+The Spark controller runs every direct check and launches only saved dependency-ready check workers for delegated checks. Each path uses `ending_verification_plan.py run-check` and records the real command, exit code, stdout/stderr, elapsed time, score/band, controller pair, optional worker pair, and semantic acceptance. PASS requires every fresh evidence file; worker prose alone is invalid. The controller owns one terminal event and never edits the producer result.
 
 After the real check, the worker performs the personal-memory scan. It creates the project-relative candidate JSON only when a supported explicit preference, repeated correction, or verified working pattern exists; otherwise it omits the file and the ledger receives no memory write. A candidate terminal event passes that file to `ending_task_ledger.py --memory-candidates-file`, which validates and projects it through the root-first Preferences owner without changing the result.
 
@@ -46,7 +53,7 @@ Corrections are append-only and preserve the wrong event as superseded history. 
 ## Split and model boundary
 
 - Keep independent acceptance surfaces as explicit check records inside the one Ending so one vague summary cannot hide a failure.
-- Keep the fixed fast Ending primary independent from task/check score; score only bounds the check scope and classification.
+- Keep the fixed Spark Ending controller independent from task/check score; score and surface may select only a bounded check-worker pair.
 - Keep checks focused and proportional; do not run unrelated exhaustive suites.
 - Order checks that share mutable state. Parallelize only independent safe checks.
 - A simple conversational answer may have a score/history-only Ending record when no observable verification is applicable; never fabricate a test.

@@ -578,7 +578,7 @@ source_files must list both sources."""
         self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.6-terra|medium"])
         self.assertEqual(len(receipt["route_attempts"]), 2)
 
-    def test_selected_pair_published_result_never_foreground_fallbacks(self):
+    def test_small_code_result_returns_after_quick_check_and_requires_detached_ending(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
             calls = []
@@ -594,9 +594,33 @@ source_files must list both sources."""
                 result = module.run(args, "Do the work")
         self.assertEqual(calls, ["gpt-5.6-terra|medium"])
         self.assertEqual(result["status"], "pass")
-        self.assertFalse(result["ending_required"])
-        self.assertEqual(result["ending_requirement"], "simple_task_exempt")
-        self.assertEqual(result["ending_real_status"], "intentionally_skipped_simple_task")
+        self.assertTrue(result["ending_required"])
+        self.assertEqual(result["ending_requirement"], "required")
+        self.assertEqual(result["ending_real_status"], "missing_expected_code_ending")
+        self.assertEqual(result["producer_check_scope"], "one_smallest_local_quick_check")
+        self.assertEqual(result["first_result_release"], "immediate_after_quick_check")
+        self.assertEqual(result["deferred_verification_owner"], "projectless_ending")
+
+    def test_result_lifecycle_policy_replays_sanitized_today_task_classes(self):
+        cases = [
+            ("remove-debug-log", "code", 8, "low", False, True),
+            ("local-model-route", "code", 18, "low", False, True),
+            ("global-skill-flow", "code", 35, "low", True, True),
+            ("file-copy", "question", 30, "low", False, True),
+            ("git-release", "question", 60, "medium", True, True),
+            ("read-only-monitor", "question", 12, "low", False, False),
+            ("calendar-ui", "question", 35, "medium", False, True),
+            ("visual-artifact", "question", 45, "medium", False, True),
+        ]
+        for name, task_type, score, risk, multi_stage, expected_ending in cases:
+            with self.subTest(name=name):
+                policy = module.result_lifecycle_policy(True, task_type, score, risk, multi_stage)
+                self.assertEqual(policy["ending_required"], expected_ending)
+                self.assertEqual(policy["first_result_release"], "immediate_after_quick_check")
+                self.assertEqual(policy["deferred_verification_owner"], "projectless_ending" if expected_ending else "none")
+
+    def test_fast_path_default_producer_timeout_is_five_minutes(self):
+        self.assertEqual(module.parse_args([]).timeout, 300)
 
     def test_non_simple_result_requires_an_ending_handoff(self):
         with tempfile.TemporaryDirectory() as temporary:

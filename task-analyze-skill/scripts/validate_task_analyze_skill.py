@@ -124,14 +124,15 @@ REQUIRED_SKILL_TEXT = [
     "hookless bootstrap",
     "exact-project Obsidian history",
     "strongly matched transferable local history",
-    "A low-risk, single-result small task records `intentionally_skipped_simple_task`",
-    "Ending-required; their parent must create and acknowledge one projectless End Task",
+    "Every durable code change is Ending-required",
+    "only an eligible low-risk, single-result small non-code task records `intentionally_skipped_simple_task`",
+    "their parent must create and acknowledge one global projectless End Task",
     "A `LOCKED_ROUTE_NODE` produces only its assigned result and Quick Check",
     "entry parent owns post-receipt lifecycle",
     "automatically activates multi-node routing",
     "visible 0-100 complexity score",
     "small low-risk edits",
-    "every `ending-required` result must create one End Task",
+    "Every code receipt emits `ending-required`",
     "nested cache/fixture `SKILL.md`",
     "Activation Boundary",
     "Ordinary Inline Bootstrap",
@@ -152,7 +153,7 @@ REQUIRED_SKILL_TEXT = [
     "rather than the parent score",
     "no separate foreground self-review, Mini, or verification pass",
     "Show the requested result immediately after that check",
-    "Quick Check (the user-facing Mini Test)",
+    "run exactly one producer Quick Check",
     "When `create_thread` is callable",
     "create-launches",
     "ack-launch",
@@ -216,17 +217,20 @@ REQUIRED_SKILL_TEXT = [
 ]
 REQUIRED_ROUTE_TEXT = [
     "## First Result Principle",
-    "show the completed result immediately",
-    "Do not run Mini/Fast Verify before first presentation",
+    "run exactly one smallest safe local Quick Check",
+    "show `CODE READY` immediately",
     "## Ordinary Entry Contract",
     "Complexity: N/100 (band)",
-    "A low-risk single-result small task",
+    "Every durable code change emits `ending-required`",
+    "Semantic runtime/integration/code-quality/prompt/UI/visual checks",
     "intentionally_skipped_simple_task",
     "ending-required",
     "missing acknowledgement is BLOCKED",
     "Model stages (N):",
     "ending_verification_plan.py create-launches",
     "ack-launch",
+    "codex_app__list_threads",
+    "threadProjectId=null",
     "end_task_trigger_rate=100%",
     "Eligible single-node text/code production calls `obsidian_adaptive_model_runner.py` exactly once even on cold start",
     "Every node has its own score, band, exact pair",
@@ -336,7 +340,7 @@ REQUIRED_ADAPTIVE_TEXT = [
     "`strategy_performance.py` remains the separate authority",
     "automatically writes a receipt-backed producer outcome",
 ]
-REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "ending_required", "ending_requirement", "ending_real_status", "intentionally_skipped_simple_task", "missing_expected_non_simple", "_emit_ending_required", "ending-required", "create_projectless_end_task", "ack_required", "pending", "resolve_fast_path_args", "infer_complexity_score", "infer_memory_symbol", "complexity_score", "complexity_band", "step_kind", "capability_tags", "capability_fingerprint", "switch_direction", "switch_change", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "ending_fast_route_fields", "scheduled_result_node_count", "parallel_branch_count", "model-switch-notice", "user_visible_message", "increased the model to", "_graph_model_route_notice"]
+REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION = ["project-memory-skill", "obsidian_model_memory.py", "obsidian_model_memory.recommend_model", "model_execution_receipt.adaptive_producer_authorization", "node_role=\"result-producer\"", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "immediate_operational_fallback", "result_lifecycle_policy", "ending_required", "ending_requirement", "ending_real_status", "intentionally_skipped_simple_task", "missing_expected_code_ending", "missing_expected_non_simple", "producer_check_scope", "one_smallest_local_quick_check", "first_result_release", "immediate_after_quick_check", "deferred_verification_owner", "_emit_ending_required", "ending-required", "create_projectless_end_task", "ack_required", "pending", "resolve_fast_path_args", "infer_complexity_score", "infer_memory_symbol", "complexity_score", "complexity_band", "step_kind", "capability_tags", "capability_fingerprint", "switch_direction", "switch_change", "hashlib.sha256", "explicit_fields", "fast_path", "adaptive-producer", "workspace-write", "scheduled_source_paths", "schedule_admission", "SINGLE_PRODUCER_SOURCE_BYTE_LIMIT", "single_producer_lower_estimated_logical_tokens", "parallel_independent_sources", "parallel_sources_fused_final", "fuses_owned_source_with_dependencies", "task_route_dispatcher.run_plan", "ending_fast_route_fields", "scheduled_result_node_count", "parallel_branch_count", "model-switch-notice", "user_visible_message", "increased the model to", "_graph_model_route_notice"]
 REQUIRED_MODEL_SWITCH_CATEGORIES = ["normal-script-update", "code-design", "finding-bugs", "tests-verification", "documentation-instructions", "general-work"]
 REQUIRED_MODEL_SWITCH_DIRECTIONS = ["initial", "upgrade", "downgrade", "freeze", "no_switch", "operational_fallback"]
 REQUIRED_OBSIDIAN_MEMORY_IMPLEMENTATION = ["DEFAULT_LADDER", "DEFAULT_LOCAL_STORE", "model-routing-memory", "model-capability-ladder.json", "Model Switch.md", "_read_local_records", "_merge_model_records", "_transferable_local_records", "cross_project_", "local_transfer_history", "transfer_record_count", "reconcile_local_model_history", "event_id", "outcome_reason", "recovery_from_pair", "attempt_chain", "_task_category", "_switch_details", "switch_direction", "rebuild_model_switches", "task_type", "module", "file", "symbol", "code_kind", "modality", "complexity_score", "complexity_band", "task_capability_profile", "step_kind", "capability_tags", "capability_fingerprint", "DISTINCTIVE_CAPABILITY_TAGS", "verified_quality_boundary", "_priority_producer_pair", "_priority_history", "spark_verify_failure_suppresses_", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "record_model_observation", "learning_eligible", "observation_id", "receipt_status", "turn_completed", "model_match", "effort_match", "memory_coverage", "ensure_coverage", "_model_routing_directory", "_category_page", "_category_reference", "model_record_document", "model_record_link", "_shared_category_page", "_native_model_records", "_refresh_shared_category", "route_capsule", "pages_read", "candidate_records"] + REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS
@@ -357,9 +361,11 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
     "route_node_lifecycle_boundary",
-    "Do not create, launch, wait for, or summarize End/Fix tasks",
-    "entry parent owns post-result lifecycle after this node's passing receipt",
-    "never create a nested End/Fix task",
+    "run exactly one smallest safe local Quick Check",
+    "publish CODE READY immediately",
+    "the entry parent owns the one detached End Task after this node's passing receipt",
+    "ENDING_CHECK_WORKER",
+    "never edit producer files",
 ]
 REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "notify user early",
@@ -369,39 +375,39 @@ REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "each result/Ending records score,band,pair,purpose,deps,stop", "Eligible low-risk low-ambiguity text/code/write/execute score<=24",
     "executes Spark-low first", "Ending quality FAIL suppresses that fingerprint", "Dependency-ready independent nodes run parallel",
     "shared writes/order/output deps stay linear", "resolve CODEX_HOME", "pipe exact task once via platform Python",
-    "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "LOCKED_ROUTE_NODE does result/Quick Check only",
-    "parent launches one End after every `ending-required` receipt", "ENDING_TASK_WORKER does assigned checks only:no nested lifecycle", "dynamic_task_graph",
+    "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "LOCKED_ROUTE_NODE loads required Skills,does code/result+one Quick Check,emits CODE READY,stops",
+    "parent launches one End after every `ending-required` receipt", "ENDING_TASK_WORKER is the sole lifecycle controller", "ENDING_CHECK_WORKER reads listed Skills", "dynamic_task_graph",
     "task_route_dispatcher.py run-plan", "no benchmark", "Exact one-source/tool/image read-only uses `task_complexity_score.py`", "no reread/full-read/precheck", "output artifact MUST runner",
     "2 Real PASS trial down 1 rung", "quality FAIL up 1", "missing Obsidian queues projection;local history continues",
-    "Producer owns files/skills/Quick Check", "`ending-required` or `ending_required=true`=>one independent projectless Ending", "`intentionally_skipped_simple_task`=>no End Task", "missing acknowledgement=>BLOCKED", "codex_app__create_thread projectless",
-    "resolve root with codex_app__list_projects", "ending_verification_plan.py create-launches --project-id",
-    "ack threadId+hostId+projectId+actual pair", "audit-launches end_task_trigger_rate=100%", "all checks PASS",
+    "Producer owns files/skills/one Quick Check only", "`ending-required` or `ending_required=true`=>one independent global projectless Ending", "`intentionally_skipped_simple_task`=>no End Task and only for eligible non-code", "missing acknowledgement=>BLOCKED", "call exact codex_app__create_thread target",
+    "resolve root with codex_app__list_projects", "ending_verification_plan.py create-launches --project-id(context-only)", "codex_app__list_threads", "projectId=null/absent",
+    "ack threadId+hostId+originProjectId+threadProjectId=null+actual pair", "audit-launches end_task_trigger_rate=100%", "project/current-task/same-task-subtask placement", "all checks PASS",
     "End Task stays globally visible", "never auto-archive/delete", "attempts,first/retry pass", "suitability", "Obsidian link/status",
-    "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "fresh projectless End Task", "--repair-of-lifecycle-id", "up to 3 repairs", "missing source session or failed prompt submission is BLOCKED",
-    "never same-task subtask/emulate/wait/self-verify", "Terminal events write local+same-ID Obsidian records", "only receipts move routing",
+    "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "fresh global projectless End Task", "--repair-of-lifecycle-id", "up to 3 repairs", "missing source session or failed prompt submission is BLOCKED",
+    "never emulate another Ending,repair in verifier,or wait for origin", "bounded check-worker waits occur only inside detached Ending", "Terminal events write local+same-ID Obsidian records", "only producer receipts move routing",
     "future routes merge/dedupe pairs,fingerprint,score/band,direction,recovery", "AUTO_BENCHMARK_ENTRY", "Direct Sol-ultra no Skill",
     "Auto Luna-max stable child/graph", "MUST child/graph then return child JSON", "gate owns separate Ending", "excludes only controller",
     "compare task vs +Ending", "all exact PASS", "all result/Ending PASS", "Primary=time+tokens", "totals lower",
     "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "Final Ending PASS/BLOCKED",
-    "one independent projectless Ending", "gpt-5.3-codex-spark|xhigh", "score scopes checks only", "registry-floor Luna-low",
-    "Process Skill/AGENTS, real execution, and effective project-result memory must agree", "Ending may append only a memory-only correction", "Skill/execution defects return to the immutable origin", "Next tasks read effective project-result memory only",
+    "one independent global projectless Ending", "gpt-5.3-codex-spark|xhigh", "score scopes checks only", "registry-floor Luna-low",
+    "Process Skill/AGENTS,real execution,effective project-result memory agree", "Ending appends only memory-only correction", "Skill/execution defects return origin", "Next tasks read effective project-result memory only",
 ]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "· Model:", "· Route:", "Evidence:", "runtime receipt", "verified entry (no runtime receipt)", "task assignment (no runtime receipt)", "configured selection (no runtime receipt)", "Model path:", "Model stages", "changed route", "unknown|unknown", "full routing data"]
 RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS = ["compact Result Model Disclosure", "task-analyze-skill/references/route-contract.md", "Do not expand"]
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
-REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "Before presenting a light/local Python edit", "intentionally_skipped_simple_task", "All other code work is Ending-required", "emit `ending-required`", "exactly one persistent projectless Ending", "Multiple unit, integration/API, and runtime checks stay inside that one Ending", "Every required check must PASS", "effective project-result memory", "memory-only defect", "Skill or execution defects", "codex_app__send_message_to_thread", "immutable origin session", "fresh Ending", "--repair-of-lifecycle-id"]
+REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "run the smallest safe focused smoke", "Present `CODE READY` immediately after exactly one Quick Check", "Every durable Python change", "only eligible non-code work may record `intentionally_skipped_simple_task`", "persistent global projectless Ending", "list_threads", "projectId=null", "capability-routed Terra/Sol `ENDING_CHECK_WORKER`", "Multiple checks stay inside that one Ending lifecycle", "every required check must PASS", "effective project-result memory", "memory-only defect", "Skill or execution defects", "codex_app__send_message_to_thread", "immutable origin session", "fresh Ending", "--repair-of-lifecycle-id"]
 REQUIRED_WORKFLOW_MEMORY_CONSISTENCY_TEXT = ["Process Skill/AGENTS", "fresh real execution evidence", "effective project-result memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift", "append-only correction", "immutable origin session", "Next tasks read only effective project-result memory"]
-REQUIRED_CSHARP_REFERENCE_TEXT = ["Before presentation, run the smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "intentionally_skipped_simple_task", "All other code work is Ending-required", "one fixed Spark-xhigh projectless Ending", "score scopes checks only", "only Spark availability/capability failure permits Luna-low", "All required checks must PASS", "acceptance mismatch", "immutable origin session", "fresh Spark-first verifier"]
+REQUIRED_CSHARP_REFERENCE_TEXT = ["run exactly one smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "Present `CODE READY` immediately", "Every durable C# change emits `ending-required`", "`intentionally_skipped_simple_task` is non-code-only", "Create one Spark-xhigh-controlled global projectless Ending", "list_threads", "projectId=null", "Terra/Sol `ENDING_CHECK_WORKER`", "Only Spark availability/capability failure permits Luna-low", "All required checks must PASS", "acceptance mismatch", "immutable origin session", "fresh Spark-first Ending"]
 REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first"]
-REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "A low-risk single-result small task", "intentionally_skipped_simple_task", "Ending-required", "ending-required", "ending_verification_plan.py", "distinct checks in one", "gpt-5.3-codex-spark|xhigh", "registry-floor Luna-low", "Every terminal End Task stays visible", "Never auto-archive or delete", "fresh projectless verifier"]
-REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "ordinary prose does not trigger it", "present the artifact first", "gpt-5.3-codex-spark|xhigh", "registry-floor Luna-low", "fresh Spark-first Ending"]
-REQUIRED_VERIFY_SKILL_TEXT = ["mandatory post-result Ending Real Verify for Ending-required work", "A low-risk single-result small task", "intentionally_skipped_simple_task", "Standard/complex/advanced, medium/high-risk, and multi-stage work require an Ending", "execute a real proportional test", "ending_verification_plan.py", "each check keeps its own `0-100` score", "All required checks must PASS", "exactly one persistent projectless", "gpt-5.3-codex-spark|xhigh", "score/band controls proportional scope and classification only", "one approved availability fallback", "{\"type\":\"projectless\"", "create-launches", "ack-launch", "end_task_trigger_rate=100%", "remains visible", "Never call `set_thread_archived`", "global task list", "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "acceptance mismatch", "structured `model_assessment`", "fresh projectless Ending", "BLOCKED does not count as verified", "strict no-op for preference memory"]
-REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["ENDING_PRIMARY_PAIR", "gpt-5.3-codex-spark|xhigh", "ENDING_FALLBACK_ROLE", "AVAILABILITY_FALLBACK_REASONS", "primary_model_unavailable", "primary_effort_unsupported", "primary_pair_not_in_registry", "scheduler_unavailable", "required_modality_unavailable", "ending_fast_primary", "availability_only", "approved_pairs", "score_controls", "check_scope_and_classification_only", "quality_failure_model_fallback", "one_persistent_ending_runs_all_checks", "THREAD_TARGET", "ORIGIN_SESSION_RESUME_CAPABILITY", "projectless", "TERMINAL_THREAD_POLICY", "keep_visible", "project_binding", "subprocess.run", "send_repair_prompt_to_origin_session_then_fresh_ending", "max_repair_attempts", "codex_app__send_message_to_thread", "repair_dispatch", "repair_prompt", "record_requirement_mismatch", "create-launches", "ack-launch", "audit-launches", "end_task_trigger_rate", "structured model_assessment", "Never call set_thread_archived", "memory_consistency_output", "effective project-result memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift"]
+REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "eligible low-risk single-result small non-code prompt task", "every prompt-in-code change", "ending-required", "global projectless Ending", "Spark-xhigh remains its controller", "Terra/Sol `ENDING_CHECK_WORKER`", "All checks must PASS", "Luna-low controller fallback", "Never auto-archive or delete Ending tasks", "fresh global projectless verifier"]
+REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "ordinary prose does not trigger it", "present the artifact first", "Every prompt-in-code change is Ending-required", "global-only projectless Ending", "list_threads", "projectId=null/absent", "gpt-5.3-codex-spark|xhigh", "ENDING_CHECK_WORKER", "fresh Spark-first Ending"]
+REQUIRED_VERIFY_SKILL_TEXT = ["mandatory post-result Ending Real Verify", "Every durable code change", "only eligible low-risk single-result small non-code work records `intentionally_skipped_simple_task`", "persistent global projectless", "gpt-5.3-codex-spark|xhigh", "sole lifecycle controller", "Terra/Sol `ENDING_CHECK_WORKER`", "run every direct plan item", "delegated_check_worker", "All required checks must PASS", "{\"type\":\"projectless\"", "codex_app__list_threads", "projectId=null", "--thread-scope global --thread-project-id null", "create-launches", "ack-launch", "end_task_trigger_rate=100%", "remains visible", "Never call `set_thread_archived`", "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "structured `model_assessment`", "fresh global projectless Ending", "BLOCKED does not count as verified", "strict no-op for preference memory"]
+REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["ENDING_PRIMARY_PAIR", "gpt-5.3-codex-spark|xhigh", "ENDING_FALLBACK_ROLE", "AVAILABILITY_FALLBACK_REASONS", "scheduler_unavailable", "required_modality_unavailable", "ending_fast_primary", "availability_only", "one_persistent_ending_runs_all_checks", "ENDING_CHECK_WORKER_MARKER", "DIRECT_CHECK_SURFACES", "DELEGATED_CHECK_SURFACES", "worker_pair_for_check", "verification_surface", "execution_mode", "delegated_check_worker", "required_skills", "ending_check_capability_route", "THREAD_TARGET", "THREAD_SCOPE", "THREAD_READBACK_TOOL", "THREAD_PLACEMENT_POLICY", "_validate_projectless_launch_request", "_normalize_thread_project_id", "thread_project_id", "placement_readback_tool", "projectId=null", "ORIGIN_SESSION_RESUME_CAPABILITY", "projectless", "TERMINAL_THREAD_POLICY", "keep_visible", "project_binding", "subprocess.run", "send_repair_prompt_to_origin_session_then_fresh_ending", "max_repair_attempts", "codex_app__send_message_to_thread", "repair_dispatch", "repair_prompt", "create-launches", "ack-launch", "audit-launches", "end_task_trigger_rate", "structured model_assessment", "Never call set_thread_archived", "memory_consistency_output", "effective project-result memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift"]
 FORBIDDEN_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "ending_score_role", "separate_persistent_tasks"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json"]
 GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
-MAX_GLOBAL_BOOTSTRAP_BYTES = 6500
+MAX_GLOBAL_BOOTSTRAP_BYTES = 7000
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
     "The entry is a bounded controller",
@@ -838,7 +844,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ result stages=>graph", "Model stages lists every pair/status", "history picks lowest-correct", "entry moves up/down", "obsidian_adaptive_model_runner.py", "LOCKED_ROUTE_NODE=result/Quick Check only", "small low-risk edit<=24 tries Spark-low", "intentionally_skipped_simple_task", "standard+ or medium/high-risk/multi-stage=>ending-required", "parent creates projectless global End", "missing ack=>BLOCKED", "ending_verification_plan.py", "gpt-5.3-codex-spark|xhigh", "score scopes check only", "registry-floor gpt-5.6-luna|low", "never switches verifier", "Bind immutable origin/project", "ack actual pair", "trigger=100%", "all checks PASS;visible", "repair_prompt", "codex_app__send_message_to_thread", "fresh Spark-first End<=3", "BLOCKED is not verified", "no emulate/same-task/self-verify"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ result stages=>graph", "Model stages lists every pair/status", "history picks lowest-correct", "entry moves up/down", "obsidian_adaptive_model_runner.py", "LOCKED_ROUTE_NODE loads required Skills", "one smallest Quick Check", "publishes CODE READY", "Every code change", "intentionally_skipped_simple_task is non-code-only", "one global-only projectless End", "ending_verification_plan.py", "exact create_thread target", "codex_app__list_threads", "projectId=null/absent", "same-task-subtask placement is BLOCKED", "returns without polling", "gpt-5.3-codex-spark|xhigh", "registry-floor gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "never edit/repair/route/lifecycle", "Bind immutable origin", "trigger=100%", "all checks PASS;visible", "repair_prompt", "codex_app__send_message_to_thread", "fresh Spark-first End<=3", "BLOCKED is not verified"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("Task Analyze result disclosure", skill_text, RESULT_MODEL_DISCLOSURE_TERMS))

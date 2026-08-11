@@ -123,6 +123,19 @@ def _emit_route_ready(args, recommendation):
     _emit_model_route_notice(notice)
 
 
+def result_lifecycle_policy(successful_result, task_type, complexity_score, risk, multi_stage=False):
+    band = obsidian_model_memory.complexity_band(complexity_score)
+    code_change = task_type == "code"
+    ending_required = bool(successful_result and (code_change or multi_stage or band != "small" or risk != "low"))
+    if not successful_result:
+        ending_real_status = "not_started"
+    elif ending_required:
+        ending_real_status = "missing_expected_code_ending" if code_change and band == "small" and risk == "low" and not multi_stage else "missing_expected_non_simple"
+    else:
+        ending_real_status = "intentionally_skipped_simple_task"
+    return {"ending_required": ending_required, "ending_requirement": "required" if ending_required else "simple_non_code_task_exempt", "ending_real_status": ending_real_status, "producer_check_scope": "one_smallest_local_quick_check" if code_change else "completion_check_only", "first_result_release": "immediate_after_quick_check", "deferred_verification_owner": "projectless_ending" if ending_required else "none"}
+
+
 def _atomic_write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
@@ -558,13 +571,14 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["model_route_notice"] = graph_notice
     receipt["ending_required"] = True
     receipt["ending_requirement"] = "required"
-    receipt["ending_real_status"] = "pending"
+    receipt["ending_real_status"] = "missing_expected_non_simple"
+    receipt["producer_check_scope"] = "one_smallest_local_quick_check" if args.task_type == "code" else "completion_check_only"
+    receipt["first_result_release"] = "immediate_after_quick_check"
+    receipt["deferred_verification_owner"] = "projectless_ending"
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
-    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_real_status": "pending", "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice}
-    summary["ending_required"] = True
-    summary["ending_requirement"] = "required"
+    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_required": True, "ending_requirement": "required", "ending_real_status": "missing_expected_non_simple", "producer_check_scope": receipt["producer_check_scope"], "first_result_release": receipt["first_result_release"], "deferred_verification_owner": receipt["deferred_verification_owner"], "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice}
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary
@@ -749,18 +763,8 @@ def run(args, prompt):
         else:
             _atomic_write_text(args.result_output, normalized_result.rstrip("\n") + "\n")
     successful_result = receipt.get("status") == "pass" and result_published
-    ending_required = bool(successful_result and (admission is not None or receipt["complexity_band"] != "small" or args.risk != "low"))
-    if not successful_result:
-        ending_real_status = "not_started"
-    elif not ending_required:
-        ending_real_status = "intentionally_skipped_simple_task"
-    elif admission is None:
-        ending_real_status = "missing_expected_non_simple"
-    else:
-        ending_real_status = "pending"
-    receipt["ending_required"] = ending_required
-    receipt["ending_requirement"] = "required" if ending_required else "simple_task_exempt"
-    receipt["ending_real_status"] = ending_real_status
+    lifecycle_policy = result_lifecycle_policy(successful_result, args.task_type, args.complexity_score, args.risk, admission is not None)
+    receipt.update(lifecycle_policy)
     _atomic_write_json(args.receipt_output, receipt)
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     ready_ns = receipt.get("result_ready_monotonic_ns")
@@ -794,9 +798,7 @@ def run(args, prompt):
         "total_tokens": tokens.get("total_tokens"),
         "elapsed_ms": receipt.get("process_elapsed_ms"),
         "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else None,
-        "ending_required": ending_required,
-        "ending_requirement": receipt["ending_requirement"],
-        "ending_real_status": ending_real_status,
+        **lifecycle_policy,
         "model_learning_context": learning_context,
         "model_route_notice": receipt["model_route_notice"],
     }
@@ -879,7 +881,7 @@ def parse_args(argv=None):
     parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "state_5.sqlite")
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--sandbox", choices=("read-only", "workspace-write", "danger-full-access"))
-    parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--ignore-user-config", action="store_true")
     parser.add_argument("--allow-fallback", action="append", default=[])
     parser.add_argument("--entry-model")

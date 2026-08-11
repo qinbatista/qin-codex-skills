@@ -40,7 +40,7 @@ except ModuleNotFoundError:
     _benchmark_prompt_spec.loader.exec_module(_benchmark_prompt_contract)
     auto_benchmark_execution_prompt = _benchmark_prompt_contract.auto_benchmark_execution_prompt
 
-ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER"}
+ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER", "ENDING_CHECK_WORKER"}
 RESULT_READY_BEGIN = "RESULT_READY_BEGIN"
 RESULT_READY_END = "RESULT_READY_END"
 RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
@@ -55,11 +55,15 @@ _NODE_AUTHORIZATION = contextvars.ContextVar("task_analyze_receipt_node_authoriz
 def route_node_lifecycle_boundary(marker):
     if marker == "LOCKED_ROUTE_NODE":
         return (
-            "This is the result node only. Do not create, launch, wait for, or summarize End/Fix tasks; "
-            "the entry parent owns post-result lifecycle after this node's passing receipt."
+            "This is the result node only. Load every owning, coding-philosophy, language, platform, and domain Skill required by the assigned change before editing. "
+            "Finish the requested code first, run exactly one smallest safe local Quick Check, publish CODE READY immediately, and stop. "
+            "Do not run broad tests, full builds, UI or visual verification, repository-wide lint, log cleanup, release gates, repeated source review, or independent acceptance here; "
+            "the entry parent owns the one detached End Task after this node's passing receipt."
         )
     if marker == "ENDING_TASK_WORKER":
-        return "Execute only the assigned Ending check; never create a nested End/Fix task or restart routing."
+        return "Own only the one detached Ending lifecycle. Run direct checks yourself and delegate only saved capability-routed checks to ENDING_CHECK_WORKER nodes; never create a nested End/Fix lifecycle or edit the producer result."
+    if marker == "ENDING_CHECK_WORKER":
+        return "Execute only the assigned verification check under the saved pair and required Skills. Write fresh evidence, never edit producer files, never start routing or an End/Fix lifecycle, and return the evidence to the Spark Ending controller."
     raise ValueError(f"unsupported route marker {marker}")
 
 
@@ -83,7 +87,8 @@ def receipt_node_role(args):
         if explicit_role not in NODE_ROLES - {"entry"}:
             raise ReceiptAuthorizationError("node_role_invalid")
         return explicit_role
-    return "ending" if getattr(args, "route_marker", "LOCKED_ROUTE_NODE") == "ENDING_TASK_WORKER" else "result-producer"
+    route_marker = getattr(args, "route_marker", "LOCKED_ROUTE_NODE")
+    return "ending" if route_marker == "ENDING_TASK_WORKER" else "verification" if route_marker == "ENDING_CHECK_WORKER" else "result-producer"
 
 
 def receipt_node_type(args):

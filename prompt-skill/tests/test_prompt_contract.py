@@ -19,7 +19,7 @@ class PromptContractTests(unittest.TestCase):
     def test_global_prompt_gate_is_mandatory_and_owned_by_the_selected_producer(self):
         for contract_text in ["Always use for every task", "100% global prompt-task gate across projects", "Do not trigger merely because an ordinary request is text", "Prompt-in-code also uses its owning code executor"]:
             self.assertIn(contract_text, self.prompt_skill)
-        for contract_text in ["Producer owns files/skills/Quick Check"]:
+        for contract_text in ["Producer owns files/skills/one Quick Check only"]:
             self.assertIn(contract_text, self.global_entry_rule)
 
     def test_loader_interface_repeats_the_trigger_without_expanding_scope(self):
@@ -46,7 +46,7 @@ class PromptContractTests(unittest.TestCase):
         self.assertIn("Present the completed prompt or instruction artifact immediately", self.prompt_skill)
         self.assertIn("A low-risk single-result small task", self.prompt_skill)
         self.assertIn("intentionally_skipped_simple_task", self.prompt_skill)
-        self.assertIn("Ending-required", self.prompt_skill)
+        self.assertIn("ending-required", self.prompt_skill)
         self.assertIn("Keep representative cases as distinct checks in one `ending_verification_plan.py` plan", self.prompt_skill)
         self.assertIn("gpt-5.3-codex-spark|xhigh", self.prompt_skill)
         self.assertIn("registry-floor Luna-low", self.prompt_skill)
