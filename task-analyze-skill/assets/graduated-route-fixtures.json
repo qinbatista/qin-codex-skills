@@ -44,11 +44,11 @@
       "prompt": "Design a website like YouTube for me",
       "complexity": "complex",
       "route_type": "inline_production",
-      "skill": "build-web-apps:frontend-app-builder",
+      "skill": "sites:sites-building",
       "execution_surface": "current_model_inline",
       "route": [
         "inline-current-model",
-        "build-web-apps:frontend-app-builder"
+        "sites:sites-building"
       ],
       "ending_real_condition": "A rendered draft exists and core interaction paths render",
       "timing_evidence": "wall_clock_to_first_result_excluding_ending"
@@ -58,11 +58,11 @@
     "activation": "explicit_and_performance_admitted",
     "admission_precondition": "positive_end_to_end_evidence_required",
     "authorization": "topology_only_not_execution_proof",
-    "skill": "build-web-apps:frontend-app-builder",
+    "skill": "sites:sites-building",
     "route": [
       "task-analyze-skill",
       "workflow-skill",
-      "build-web-apps:frontend-app-builder"
+      "sites:sites-building"
     ],
     "illustrative_cold_start_pairs": {
       "design": "gpt-5.6-sol|high",
@@ -89,7 +89,7 @@
         {
           "id": "design",
           "phase": "result",
-          "skill": "build-web-apps:frontend-app-builder",
+          "skill": "sites:sites-building",
           "model": "gpt-5.6-sol",
           "effort": "high",
           "dependencies": [],
@@ -100,7 +100,7 @@
         {
           "id": "implementation",
           "phase": "result",
-          "skill": "build-web-apps:frontend-app-builder",
+          "skill": "sites:sites-building",
           "model": "gpt-5.6-terra",
           "effort": "high",
           "dependencies": [
@@ -123,7 +123,7 @@
             "modality": "text",
             "risk": "medium",
             "complexity": "complex",
-            "owning_skill": "build-web-apps:frontend-app-builder",
+            "owning_skill": "sites:sites-building",
             "project_family": "global",
             "verification_shape": "real",
             "execution_domain": "general"
@@ -155,7 +155,7 @@
             "selected_pair": "gpt-5.6-terra|high",
             "trial": false,
             "reason": "shared_cold_start",
-            "profile_fingerprint": "af4400a8824bfe69cf34260f196bc429139b6e232e4b390fc855cde921744589",
+            "profile_fingerprint": "3108b60a341aea9d8db1278301e7828e9ba47762d74ea5864dde5d72cdf4032f",
             "calibration_state": "cold_start",
             "best_pair": null,
             "selection_basis": "dual_model_history"

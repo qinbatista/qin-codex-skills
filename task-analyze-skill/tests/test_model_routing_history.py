@@ -195,8 +195,8 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertEqual(condition["execution_domain"], "code_unspecified")
 
     def test_validate_condition_accepts_canonical_plugin_owning_skill(self):
-        condition = module.validate_condition(dict(CONDITION, owning_skill="build-web-apps:frontend-app-builder", execution_domain="general"))
-        self.assertEqual(condition["owning_skill"], "build-web-apps:frontend-app-builder")
+        condition = module.validate_condition(dict(CONDITION, owning_skill="sites:sites-building", execution_domain="general"))
+        self.assertEqual(condition["owning_skill"], "sites:sites-building")
 
     def test_validate_condition_rejects_unknown_domain_without_crashing(self):
         with self.assertRaises(ValueError) as error:

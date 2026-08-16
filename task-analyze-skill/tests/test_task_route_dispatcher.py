@@ -668,19 +668,19 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             synthetic_skills_root = root / "skills"
-            plugin_skill = root / "plugins" / "cache" / "openai-curated-remote" / "build-web-apps" / "1.0.0" / "skills" / "frontend-app-builder" / "SKILL.md"
+            plugin_skill = root / "plugins" / "cache" / "openai-bundled" / "sites" / "1.0.0" / "skills" / "sites-building" / "SKILL.md"
             plugin_skill.parent.mkdir(parents=True)
-            plugin_skill.write_text("frontend-app-builder\n", encoding="utf-8")
+            plugin_skill.write_text("sites-building\n", encoding="utf-8")
             for skill_name in ("workflow-skill", "verify-skill"):
                 skill_path = synthetic_skills_root / skill_name / "SKILL.md"
                 skill_path.parent.mkdir(parents=True, exist_ok=True)
                 skill_path.write_text(f"{skill_name}\n", encoding="utf-8")
             plan = self.plan(root / "work" / "cache" / "route")
             node = plan["nodes"][0]
-            node["skill"] = "build-web-apps:frontend-app-builder"
+            node["skill"] = "sites:sites-building"
             node["purpose"] = "implement"
             node["execution_domain"] = "general"
-            node["routing_condition"]["owning_skill"] = "build-web-apps:frontend-app-builder"
+            node["routing_condition"]["owning_skill"] = "sites:sites-building"
             self.refresh_recommendation(node)
             with patch.object(module, "validate_execution_domain_registry"):
                 self.assertEqual(module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root), [])
@@ -693,7 +693,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             with patch.object(module.receipt_module, "run_receipt", side_effect=fake_run_receipt):
                 record = module.run_node(node, root / "work" / "cache" / "route", {}, root / "state.sqlite", root, skills_root=synthetic_skills_root)
             self.assertEqual(record["status"], "pass")
-            self.assertIn("skills/frontend-app-builder/SKILL.md", captured[0])
+            self.assertIn("skills/sites-building/SKILL.md", captured[0])
 
     def test_run_plan_returns_after_result_without_foreground_verify(self):
         with tempfile.TemporaryDirectory() as temp_dir:

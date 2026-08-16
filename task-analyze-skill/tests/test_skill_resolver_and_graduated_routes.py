@@ -93,7 +93,7 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
                 reference_path = skills_root / reference
                 reference_path.parent.mkdir(parents=True, exist_ok=True)
                 reference_path.write_text("reference\n", encoding="utf-8")
-            for plugin_id, skill_name in (("chrome", "control-chrome"), ("build-web-apps", "frontend-app-builder")):
+            for plugin_id, skill_name in (("chrome", "control-chrome"), ("sites", "sites-building")):
                 skill_path = root / "plugins" / "cache" / "openai-curated-remote" / plugin_id / "1.0.0" / "skills" / skill_name / "SKILL.md"
                 skill_path.parent.mkdir(parents=True)
                 skill_path.write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")
@@ -109,7 +109,7 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
                 skill_path.write_text(skill_name, encoding="utf-8")
             failures = validator.validate_fixture(validator.FIXTURE_PATH, skills_root, True)
         self.assertTrue(any("skill is not installed: verify-skill" in failure for failure in failures))
-        self.assertTrue(any("skill is not installed: build-web-apps:frontend-app-builder" in failure for failure in failures))
+        self.assertTrue(any("skill is not installed: sites:sites-building" in failure for failure in failures))
         self.assertTrue(any("skill is not installed: chrome:control-chrome" in failure for failure in failures))
 
     def test_plugin_symlink_outside_cache_is_rejected(self):

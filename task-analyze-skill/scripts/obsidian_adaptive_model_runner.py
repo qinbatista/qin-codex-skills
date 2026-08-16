@@ -44,7 +44,7 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
 
 
 def _emit_ending_required(summary):
-    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "ack_required": True, "ending_real_status": summary.get("ending_real_status"), "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
+    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "launch_state": "required_unacknowledged", "host_tool": "codex_app__create_thread", "thread_target": {"type": "projectless"}, "placement_readback_tool": "codex_app__list_threads", "ack_required": True, "ending_real_status": summary.get("ending_real_status"), "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
     print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
@@ -827,6 +827,8 @@ def resolve_fast_path_args(args, prompt):
     if fast_path and args.operation == "work":
         args.operation = infer_operation(prompt)
     args.symbol = args.symbol or infer_memory_symbol(prompt_text)
+    if task_type == "code" and not args.symbol:
+        args.symbol = "__module__"
     complexity_band = obsidian_model_memory.complexity_band(args.complexity_score)
     args.complexity_band = complexity_band
     identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, getattr(args, "step_kind", ""), ",".join(getattr(args, "capability_tag", [])), prompt))

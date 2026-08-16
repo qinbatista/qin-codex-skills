@@ -189,6 +189,13 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(args.sandbox, "read-only")
         self.assertFalse(args.emit_result)
         self.assertEqual(args.complexity, "easy")
+        self.assertEqual(args.symbol, "__module__")
+
+    def test_fast_path_defaults_an_unscoped_code_request_to_module_memory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "Fix the lifecycle trigger and deploy it.")
+        self.assertEqual(args.task_type, "code")
+        self.assertEqual(args.symbol, "__module__")
 
     def test_fast_path_infers_numeric_and_multifile_complexity(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -463,6 +470,10 @@ source_files must list both sources."""
         self.assertEqual(status, 0)
         self.assertEqual(events[0]["stage"], "ending-required")
         self.assertEqual(events[0]["parent_action"], "create_projectless_end_task")
+        self.assertEqual(events[0]["launch_state"], "required_unacknowledged")
+        self.assertEqual(events[0]["host_tool"], "codex_app__create_thread")
+        self.assertEqual(events[0]["thread_target"], {"type": "projectless"})
+        self.assertEqual(events[0]["placement_readback_tool"], "codex_app__list_threads")
         self.assertTrue(events[0]["ack_required"])
         self.assertEqual(events[1], summary)
 

@@ -152,7 +152,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             reference.parent.mkdir(parents=True, exist_ok=True)
             source_reference = source.parent / relative
             reference.write_text(source_reference.read_text(encoding="utf-8") if source_reference.exists() else f"reference: {relative}\n", encoding="utf-8")
-        for plugin_id, skill_name in (("chrome", "control-chrome"), ("build-web-apps", "frontend-app-builder")):
+        for plugin_id, skill_name in (("chrome", "control-chrome"), ("sites", "sites-building")):
             plugin_skill = temp_dir / "plugins" / "cache" / "openai-curated-remote" / plugin_id / "1.0.0" / "skills" / skill_name
             plugin_skill.mkdir(parents=True)
             (plugin_skill / "SKILL.md").write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")

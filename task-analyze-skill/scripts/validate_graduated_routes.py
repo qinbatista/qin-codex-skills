@@ -14,8 +14,8 @@ DIRECT_PROMPTS = ["Open Chrome", "Open Chrome and open YouTube", "Open Chrome, o
 COMPLEX_PROMPT = "Design a website like YouTube for me"
 DIRECT_REAL_CONDITIONS = {"Open Chrome": "Chrome is open", "Open Chrome and open YouTube": "youtube.com is loaded", "Open Chrome, open YouTube, and search CCTV": "CCTV query and visible results are present"}
 DIRECT_ROUTE = ["inline-current-model", "chrome:control-chrome"]
-COMPLEX_ROUTE = ["inline-current-model", "build-web-apps:frontend-app-builder"]
-ADMITTED_ROUTE = ["task-analyze-skill", "workflow-skill", "build-web-apps:frontend-app-builder"]
+COMPLEX_ROUTE = ["inline-current-model", "sites:sites-building"]
+ADMITTED_ROUTE = ["task-analyze-skill", "workflow-skill", "sites:sites-building"]
 ENDING_CHECKS = ["responsive", "console", "navigation", "accessibility", "visual"]
 SCENARIO_ALLOWED_KEYS = {"prompt", "complexity", "route_type", "skill", "execution_surface", "route", "ending_real_condition", "timing_evidence"}
 PSEUDO_ROUTE_IDS = {"inline-current-model"}
@@ -93,7 +93,7 @@ def _validate_dispatcher_template(template, skills_root, failures):
     design_model, design_effort = required_pairs["design"].split("|", 1)
     implementation_model, implementation_effort = required_pairs["implementation"].split("|", 1)
     ending_model, ending_effort = required_pairs["ending_real"].split("|", 1)
-    expected_roles = {"design": ("result", "build-web-apps:frontend-app-builder", design_model, design_effort, [], "general"), "implementation": ("result", "build-web-apps:frontend-app-builder", implementation_model, implementation_effort, ["design"], "general"), "ending-real": ("ending", "verify-skill", ending_model, ending_effort, ["implementation"], "general")}
+    expected_roles = {"design": ("result", "sites:sites-building", design_model, design_effort, [], "general"), "implementation": ("result", "sites:sites-building", implementation_model, implementation_effort, ["design"], "general"), "ending-real": ("ending", "verify-skill", ending_model, ending_effort, ["implementation"], "general")}
     template_nodes = plan.get("nodes", [])
     if [node.get("id") for node in template_nodes if isinstance(node, dict)] != expected_nodes:
         failures.append("admitted dispatcher plan node topology is incorrect")
@@ -162,8 +162,8 @@ def validate_fixture(path=FIXTURE_PATH, skills_root=None, require_installed=Fals
         if set(scenario) - SCENARIO_ALLOWED_KEYS:
             failures.append(f"{prompt}: inline route leaks dispatch or model execution")
     scenario = by_prompt.get(COMPLEX_PROMPT, {})
-    if scenario.get("complexity") != "complex" or scenario.get("route_type") != "inline_production" or scenario.get("skill") != "build-web-apps:frontend-app-builder":
-        failures.append("website scenario must be complex inline_production with canonical frontend skill")
+    if scenario.get("complexity") != "complex" or scenario.get("route_type") != "inline_production" or scenario.get("skill") != "sites:sites-building":
+        failures.append("website scenario must be complex inline_production with the built-in Sites skill")
     if scenario.get("execution_surface") != "current_model_inline" or scenario.get("route") != COMPLEX_ROUTE:
         failures.append(f"website scenario must stay on {COMPLEX_ROUTE}")
     if scenario.get("ending_real_condition") != "A rendered draft exists and core interaction paths render":

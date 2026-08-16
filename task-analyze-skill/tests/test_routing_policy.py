@@ -150,8 +150,8 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(ladder, module.normal_adaptive_pair_texts())
         self.assertFalse(any(pair.startswith(f"{module.PRIORITY_PRODUCER_MODEL}|") for pair in ladder))
 
-    def test_plugin_frontend_implementation_without_language_is_general(self):
-        self.assertEqual(module.resolve_execution_domain(owning_skill="build-web-apps:frontend-app-builder", task_family="integration", purpose="implement"), "general")
+    def test_sites_implementation_without_language_is_general(self):
+        self.assertEqual(module.resolve_execution_domain(owning_skill="sites:sites-building", task_family="integration", purpose="implement"), "general")
 
     def setUp(self):
         self.pairs = module.canonical_pairs(

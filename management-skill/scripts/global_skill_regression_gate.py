@@ -111,7 +111,7 @@ def copy_candidate(source_root: Path, candidate_root: Path, managed_skills: list
 
 
 def copy_required_plugin_contracts(plugin_cache: Path, candidate_cache: Path) -> None:
-    for skill_name in ("control-chrome", "frontend-app-builder"):
+    for skill_name in ("control-chrome", "sites-building"):
         matches = sorted(plugin_cache.glob(f"*/*/*/skills/{skill_name}/SKILL.md")) if plugin_cache.is_dir() else []
         if not matches:
             continue

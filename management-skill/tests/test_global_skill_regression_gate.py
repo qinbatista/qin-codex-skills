@@ -177,10 +177,18 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             private = deployed / "task-analyze-skill" / "local" / "events.jsonl"
             private.parent.mkdir(parents=True)
             private.write_text("private", encoding="utf-8")
+            for plugin_id, skill_name in (("chrome", "control-chrome"), ("sites", "sites-building")):
+                plugin_skill = deployed.parent / "plugins" / "cache" / "openai-bundled" / plugin_id / "1.0.0" / "skills" / skill_name / "SKILL.md"
+                plugin_skill.parent.mkdir(parents=True)
+                plugin_skill.write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")
             with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
                 self.assertTrue((roots["source"].parent / "AGENTS.md").is_file())
                 self.assertTrue((roots["deployed"].parent / "AGENTS.md").is_file())
                 self.assertFalse((roots["deployed"] / "task-analyze-skill" / "local").exists())
+                for root in roots.values():
+                    candidate_cache = root.parent / "plugins" / "cache"
+                    self.assertTrue(any(candidate_cache.glob("*/*/*/skills/control-chrome/SKILL.md")))
+                    self.assertTrue(any(candidate_cache.glob("*/*/*/skills/sites-building/SKILL.md")))
 
     def test_runner_uses_argument_arrays_without_shell_execution(self):
         text = MODULE_PATH.read_text(encoding="utf-8")
