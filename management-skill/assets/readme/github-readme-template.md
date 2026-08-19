@@ -55,7 +55,7 @@ Lifecycle:
 
 ## 📊 Real adaptive benchmark: finish first, verify in background
 
-Current frozen v47 compares **Without skill** fixed at `gpt-5.6-sol | ultra` with **With skill** entering at `gpt-5.6-luna | max`, then routing each step from frozen history. The primary metric starts after the correct route is frozen: selected producer/graph execution is counted, while entry matching, controller work, calibration failures, retry/fallback/repair, and Ending are reported separately.
+Frozen v47 compares fixed **Without skill** `gpt-5.6-sol | ultra` and **With skill** entry `gpt-5.6-luna | max`. Its steady-state metric counts selected producer/graph execution after route freeze; entry, controller, calibration, retry/fallback/repair, and Ending are separate.
 
 <picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Current Direct versus Auto benchmark: all results and Endings pass; aggregate steady-state time and tokens improve, with simple and medium regressions shown"></picture>
 
@@ -71,6 +71,7 @@ Current frozen v47 compares **Without skill** fixed at `gpt-5.6-sol | ultra` wit
 **Measured result: correctness/evidence PASS; frozen-route aggregate performance PASS.** Stable execution saved 26.520s and 162,720 logical tokens. Actual first-result time was slower (`117.619s → 211.145s`) because 120.046s of route/controller work is deliberately excluded from the steady-state claim and shown separately. Simple and medium token regressions remain visible; this is cohort evidence, not a universal or billing-price claim.
 
 [Read the exact v47 report.](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [Open sanitized benchmark evidence.](./task-analyze-skill/assets/model-routing-benchmark-example.json)
+**Latest routing check (2026-08-19):** **46/46 ×100=4,600; 0.0872 ms median; 417.156 ms total.** Local-only classifier. Release: 31/31, 1,696/1,696; projectless Ending PASS.
 
 ## 🧩 Eight public Skills
 
