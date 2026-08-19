@@ -1784,6 +1784,9 @@ def _release_main_result(handoff):
         return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["ending handoff is missing the main result record"]}
     if main_record.get("status") != "pass":
         return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["main result must complete before release"]}
+    unfinished_result_nodes = [node["id"] for node in plan.get("nodes", []) if isinstance(node, dict) and node.get("phase") == "result" and completed.get(node.get("id"), {}).get("status") != "pass"]
+    if unfinished_result_nodes:
+        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["all result nodes must complete before release: " + ", ".join(unfinished_result_nodes)]}
     main_result_path = Path(main_record.get("result_path") or "")
     if not main_result_path.is_file() or main_result_path.stat().st_size == 0:
         return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["main result output must exist and be non-empty before release"]}

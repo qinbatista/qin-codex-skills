@@ -303,6 +303,66 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "pass")
         scheduled.assert_called_once()
 
+    def test_scheduled_graph_releases_every_result_before_emitting_ending_ready(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            args = self.arguments(root)
+            args.resolved_entry_model = "gpt-5.6-sol"
+            args.resolved_entry_effort = "ultra"
+            args.resolved_entry_source = "explicit"
+            args.result_output.write_text("MERGED RESULT", encoding="utf-8")
+            branch_receipt = root / "branch-receipt.json"
+            main_receipt = root / "main-receipt.json"
+            receipt = {"status": "pass", "result_published": True, "turn_completed": True, "node_type": "locked-route-node", "node_role": "result-producer", "tokens": {"total_tokens": 4}, "route_attempts": []}
+            branch_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+            main_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+            handoff_path = root / "ending-handoff.json"
+            handoff = {
+                "schema_version": 2,
+                "route_run_id": "graph-final",
+                "cache_dir": str(root / "Cache" / "task-analyze"),
+                "plan": {"nodes": [{"id": "branch", "phase": "result"}, {"id": "merge", "phase": "result"}]},
+                "completed": [
+                    {"id": "branch", "status": "pass", "phase": "result", "receipt_path": str(branch_receipt), "result_path": str(root / "branch-result.md")},
+                    {"id": "merge", "status": "pass", "phase": "result", "receipt_path": str(main_receipt), "result_path": str(args.result_output)},
+                ],
+                "main_result_node": "merge",
+                "ending_handoff_path": str(handoff_path),
+            }
+            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            plan = {
+                "main_result_node": "merge",
+                "schedule_mode": "parallel_independent_sources",
+                "parallel_branch_count": 1,
+                "fused_source": None,
+                "nodes": [
+                    {"id": "branch", "phase": "result", "model": "gpt-5.6-terra", "effort": "medium", "dependencies": []},
+                    {"id": "merge", "phase": "result", "model": "gpt-5.6-terra", "effort": "medium", "dependencies": ["branch"]},
+                ],
+            }
+            manifest = {
+                "status": "pass",
+                "route_run_id": "graph-final",
+                "manifest_path": str(root / "manifest.json"),
+                "ending_handoff_path": str(handoff_path),
+                "first_result_elapsed_ms": 12,
+                "nodes": [
+                    {"id": "branch", "phase": "result", "receipt_path": str(branch_receipt), "requested_model": "gpt-5.6-terra", "requested_effort": "medium", "model": "gpt-5.6-terra", "effort": "medium", "tokens": {"total_tokens": 4}},
+                    {"id": "merge", "phase": "result", "receipt_path": str(main_receipt), "requested_model": "gpt-5.6-terra", "requested_effort": "medium", "model": "gpt-5.6-terra", "effort": "medium", "tokens": {"total_tokens": 4}},
+                ],
+            }
+            with patch.object(module, "_scheduled_plan", return_value=(plan, recommendation())), patch.object(module.task_route_dispatcher, "run_plan", return_value=manifest):
+                summary = module._run_scheduled_graph(args, "Audit both sources", ["a.py", "b.py"], recommendation(), time.monotonic_ns(), {"admitted": True})
+            outer_receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
+            release_exists = Path(summary["aggregate_result_release_path"]).is_file()
+        self.assertEqual(summary["status"], "pass")
+        self.assertTrue(summary["ending_launch_ready"])
+        self.assertTrue(outer_receipt["final_aggregate_receipt"])
+        self.assertTrue(outer_receipt["all_result_nodes_settled"])
+        self.assertTrue(outer_receipt["subprocesses_settled"])
+        self.assertEqual(outer_receipt["aggregate_result_state"], "released")
+        self.assertTrue(release_exists)
+
     def test_schedule_admission_prefers_one_producer_for_small_sources(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -489,7 +549,7 @@ source_files must list both sources."""
     def test_main_emits_ending_required_event_before_the_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            summary = {"status": "pass", "ending_required": True, "ending_real_status": "missing_expected_non_simple", "complexity_score": 25, "complexity_band": "standard", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
+            summary = {"status": "pass", "ending_required": True, "ending_launch_ready": True, "final_aggregate_receipt": True, "aggregate_result_state": "released", "ending_real_status": "missing_expected_non_simple", "complexity_score": 25, "complexity_band": "standard", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
             stream = io.StringIO()
             with patch.object(module.sys, "stdin", io.StringIO("Repair the lifecycle")), patch.object(module.sys, "stdout", stream), patch.object(module, "resolve_fast_path_args", return_value=args), patch.object(module, "run", return_value=summary):
                 status = module.main([])
@@ -502,7 +562,20 @@ source_files must list both sources."""
         self.assertEqual(events[0]["thread_target"], {"type": "projectless"})
         self.assertEqual(events[0]["placement_readback_tool"], "codex_app__list_threads")
         self.assertTrue(events[0]["ack_required"])
+        self.assertTrue(events[0]["final_aggregate_receipt"])
+        self.assertEqual(events[0]["aggregate_result_state"], "released")
         self.assertEqual(events[1], summary)
+
+    def test_main_waits_when_a_child_or_subprocess_receipt_is_not_final(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            summary = {"status": "pass", "ending_required": True, "ending_launch_ready": False, "ending_real_status": "missing_expected_non_simple", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
+            stream = io.StringIO()
+            with patch.object(module.sys, "stdin", io.StringIO("Wait for all results")), patch.object(module.sys, "stdout", stream), patch.object(module, "resolve_fast_path_args", return_value=args), patch.object(module, "run", return_value=summary):
+                status = module.main([])
+        events = [json.loads(line) for line in stream.getvalue().splitlines()]
+        self.assertEqual(status, 0)
+        self.assertEqual(events, [summary])
 
     def test_receipt_and_summary_embed_only_sanitized_model_learning_context(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -677,6 +750,9 @@ source_files must list both sources."""
         self.assertEqual(result["ending_real_status"], "missing_expected_non_simple")
         self.assertTrue(receipt["ending_required"])
         self.assertEqual(receipt["ending_real_status"], "missing_expected_non_simple")
+        self.assertTrue(receipt["final_aggregate_receipt"])
+        self.assertTrue(receipt["ending_launch_ready"])
+        self.assertEqual(receipt["aggregate_result_state"], "single_result_released")
 
 
 if __name__ == "__main__":

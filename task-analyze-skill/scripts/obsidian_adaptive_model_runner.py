@@ -46,8 +46,25 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
 
 
 def _emit_ending_required(summary):
-    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "launch_state": "required_unacknowledged", "host_tool": "codex_app__create_thread", "thread_target": {"type": "projectless"}, "placement_readback_tool": "codex_app__list_threads", "ack_required": True, "ending_real_status": summary.get("ending_real_status"), "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
+    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "launch_state": "required_unacknowledged", "host_tool": "codex_app__create_thread", "thread_target": {"type": "projectless"}, "placement_readback_tool": "codex_app__list_threads", "ack_required": True, "final_aggregate_receipt": True, "aggregate_result_state": summary.get("aggregate_result_state"), "ending_real_status": summary.get("ending_real_status"), "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
     print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+
+def _final_aggregate_fields(receipt, result_node_count, aggregate_result_state, release_path=None, route_run_id=None):
+    final = receipt.get("status") == "pass" and receipt.get("result_published") is True and receipt.get("turn_completed") is True
+    fields = {
+        "final_aggregate_receipt": final,
+        "all_result_nodes_settled": final,
+        "subprocesses_settled": final,
+        "aggregate_result_node_count": result_node_count if final else 0,
+        "aggregate_result_state": aggregate_result_state if final else "not_released",
+        "ending_launch_ready": bool(final and receipt.get("ending_required") is True),
+    }
+    if release_path is not None:
+        fields["aggregate_result_release_path"] = str(release_path)
+    if route_run_id is not None:
+        fields["aggregate_result_route_run_id"] = route_run_id
+    return fields
 
 
 def _route_part_label(args, recommendation, node=None):
@@ -489,6 +506,14 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     manifest = task_route_dispatcher.run_plan(plan, entry_model, entry_effort, args.workdir, state_db=args.state_db, codex_bin=args.codex_bin, skills_root=SKILLS_ROOT, result_ready_callback=publish_result)
     if manifest.get("status") != "pass" or not args.result_output.is_file():
         return {"status": "fail", "reason": "scheduled_graph_failed", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path"), "failures": manifest.get("failures", []), "ending_real_status": "not_started"}
+    handoff_path = Path(manifest.get("ending_handoff_path") or "")
+    try:
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"status": "fail", "reason": "scheduled_graph_release_handoff_missing", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path"), "ending_real_status": "not_started"}
+    release = task_route_dispatcher._release_main_result(handoff)
+    if release.get("status") != "pass":
+        return {"status": "fail", "reason": "scheduled_graph_release_failed", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path"), "failures": release.get("failures", []), "ending_real_status": "not_started"}
     result_nodes = [node for node in manifest.get("nodes", []) if node.get("phase") == "result"]
     main_node = next(node for node in result_nodes if node.get("id") == plan["main_result_node"])
     main_receipt = json.loads(Path(main_node["receipt_path"]).read_text(encoding="utf-8"))
@@ -533,6 +558,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["producer_check_scope"] = "one_smallest_local_quick_check" if args.task_type == "code" else "completion_check_only"
     receipt["first_result_release"] = "immediate_after_quick_check"
     receipt["deferred_verification_owner"] = "projectless_ending"
+    receipt.update(_final_aggregate_fields(receipt, len(result_nodes), "released", release["release_path"], manifest.get("route_run_id")))
     execution_summary = _light_execution_summary(
         args.task_type,
         args.complexity_score,
@@ -550,6 +576,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
     summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_required": True, "ending_requirement": "required", "ending_real_status": "missing_expected_non_simple", "producer_check_scope": receipt["producer_check_scope"], "first_result_release": receipt["first_result_release"], "deferred_verification_owner": receipt["deferred_verification_owner"], "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_summary": execution_summary}
+    summary.update({"aggregate_result_release_path": receipt["aggregate_result_release_path"], "final_aggregate_receipt": receipt["final_aggregate_receipt"], "aggregate_result_state": receipt["aggregate_result_state"], "ending_launch_ready": receipt["ending_launch_ready"]})
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary
@@ -749,6 +776,7 @@ def run(args, prompt):
     successful_result = receipt.get("status") == "pass" and result_published
     lifecycle_policy = result_lifecycle_policy(successful_result, args.task_type, args.complexity_score, args.risk, admission is not None)
     receipt.update(lifecycle_policy)
+    receipt.update(_final_aggregate_fields(receipt, 1, "single_result_released"))
     execution_summary = _light_execution_summary(
         args.task_type,
         args.complexity_score,
@@ -797,6 +825,9 @@ def run(args, prompt):
         "receipt_path": str(args.receipt_output),
         "result_path": str(args.result_output),
         "result_published": result_published,
+        "final_aggregate_receipt": receipt["final_aggregate_receipt"],
+        "aggregate_result_state": receipt["aggregate_result_state"],
+        "ending_launch_ready": receipt["ending_launch_ready"],
         "total_tokens": tokens.get("total_tokens"),
         "elapsed_ms": receipt.get("process_elapsed_ms"),
         "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else None,
@@ -906,7 +937,7 @@ def main(argv=None):
         summary = run(args, prompt)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         summary = {"status": "fail", "reason": str(error)[:120] or "runner_validation_failed"}
-    if summary.get("status") == "pass" and summary.get("ending_required") is True:
+    if summary.get("status") == "pass" and summary.get("ending_required") is True and summary.get("ending_launch_ready") is True:
         _emit_ending_required(summary)
     print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))
     return 0 if summary["status"] == "pass" else 1

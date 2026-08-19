@@ -49,10 +49,13 @@ class EndingBackendTests(unittest.TestCase):
                 {"thread_id": "source-session", "host_id": "host", "project_id": "project", "project_root": str(root)},
             )
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            producer_receipt = root / "producer-receipt.json"
+            producer_receipt.write_text(json.dumps({"status": "pass", "result_published": True, "turn_completed": True, "node_type": "locked-route-node", "node_role": "result-producer", "final_aggregate_receipt": True, "all_result_nodes_settled": True, "subprocesses_settled": True, "ending_launch_ready": True, "aggregate_result_state": "single_result_released", "aggregate_result_node_count": 1}), encoding="utf-8")
             launch = PLAN.build_launch_spec(
                 plan_path,
                 root / "Cache" / "tests" / "ending",
                 "project",
+                producer_receipt,
                 backend_capabilities={"projectless_host": False, "standard_subagent": True, "local_codex_exec": True},
             )
             launch_path.write_text(json.dumps(launch), encoding="utf-8")

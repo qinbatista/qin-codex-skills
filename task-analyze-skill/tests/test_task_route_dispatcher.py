@@ -1724,6 +1724,22 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(release["status"], "fail")
         self.assertEqual(release.get("failures"), ["main result must complete before release"])
 
+    def test_release_main_result_requires_every_result_node_to_finish(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            handoff = {
+                "schema_version": 2,
+                "route_run_id": "route-release-child-still-running",
+                "entry": {"model": "gpt-5.6-terra", "effort": "low"},
+                "plan": {"nodes": [{"id": "main-result", "phase": "result"}, {"id": "child-result", "phase": "result"}]},
+                "completed": [{"id": "main-result", "status": "pass", "phase": "result", "receipt_path": str(root / "main-receipt.json"), "result_path": str(root / "main-result.md")}],
+                "main_result_node": "main-result",
+            }
+            (root / "main-result.md").write_text("RESULT=12\n", encoding="utf-8")
+            release = module._release_main_result(handoff)
+        self.assertEqual(release["status"], "fail")
+        self.assertEqual(release.get("failures"), ["all result nodes must complete before release: child-result"])
+
     def test_release_main_result_persists_ack_and_marks_handoff(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

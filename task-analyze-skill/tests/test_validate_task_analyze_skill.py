@@ -505,7 +505,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 self.assertIn(required_term, bootstrap_text)
             self.assertIn("Producer owns files/skills/one Quick Check only", bootstrap_text)
-            self.assertIn("`ending-required` or `ending_required=true`=>one independent global projectless Ending", bootstrap_text)
+            self.assertIn("Only the final aggregate `ending-required` or `ending_required=true` receipt after all result nodes settle=>one independent global projectless Ending", bootstrap_text)
+            self.assertIn("child/subprocess receipts never launch it", bootstrap_text)
+            self.assertIn("same End Task continues one bounded action at a time", bootstrap_text)
             self.assertIn("`intentionally_skipped_simple_task`=>no End Task", bootstrap_text)
             self.assertIn("missing acknowledgement=>BLOCKED", bootstrap_text)
             self.assertIn("terminal memory/classification/record closeout", bootstrap_text)

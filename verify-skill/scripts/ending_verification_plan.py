@@ -22,7 +22,7 @@ _ROUTING_POLICY = importlib.util.module_from_spec(_ROUTING_POLICY_SPEC)
 _ROUTING_POLICY_SPEC.loader.exec_module(_ROUTING_POLICY)
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 ENDING_PRIMARY_PAIR = "gpt-5.3-codex-spark|xhigh"
 ENDING_CHECK_WORKER_MARKER = "ENDING_CHECK_WORKER"
 DIRECT_CHECK_SURFACES = {"command", "syntax", "unit", "api_state", "file_state"}
@@ -430,67 +430,47 @@ def _repair_handoff(check, origin_session, observed, mismatch_summary=""):
     return {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session": origin_session, "origin_session_required": True, "prompt_submission": "automatic", "repair_dispatch": repair_dispatch, "repair_prompt": repair_prompt, "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
 
 
-def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_output, memory_consistency_output, assigned_pair, producer_receipt=None, repair_of_lifecycle_id=None):
+def _final_producer_receipt(project_root, producer_receipt):
+    if producer_receipt is None:
+        raise ValueError("producer_receipt is required before launching an Ending")
+    receipt_path = _inside(project_root, producer_receipt, "producer_receipt")
+    if not receipt_path.is_file():
+        raise ValueError("producer_receipt must be an existing file")
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("producer_receipt is not readable JSON") from error
+    if not isinstance(receipt, dict):
+        raise ValueError("producer_receipt must prove a final passing published aggregate result")
+    final_aggregate = receipt.get("final_aggregate_receipt") is True and receipt.get("all_result_nodes_settled") is True and receipt.get("subprocesses_settled") is True and receipt.get("ending_launch_ready") is True and receipt.get("aggregate_result_state") in {"released", "single_result_released"} and isinstance(receipt.get("aggregate_result_node_count"), int) and receipt["aggregate_result_node_count"] >= 1
+    if receipt.get("status") != "pass" or receipt.get("result_published") is not True or receipt.get("turn_completed") is not True or receipt.get("node_type") != "locked-route-node" or receipt.get("node_role") != "result-producer" or not final_aggregate:
+        raise ValueError("producer_receipt must prove a final passing published aggregate result")
+    return {"path": receipt_path, "sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest()}
+
+
+def _worker_prompt(plan_path, plan, evidence_outputs, assigned_pair, producer_receipt, repair_of_lifecycle_id=None):
     project_root = Path(plan["project_root"]).expanduser().resolve()
-    relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root)
-    relative_memory_candidates = Path(memory_candidates_output).expanduser().resolve().relative_to(project_root)
-    relative_memory_consistency = Path(memory_consistency_output).expanduser().resolve().relative_to(project_root)
-    receipt_line = str(Path(producer_receipt).expanduser().resolve().relative_to(project_root)) if producer_receipt else "none"
-    check_manifest = [
-        {
-            "check_id": check["check_id"],
-            "cwd": Path(check["cwd"]).expanduser().resolve().relative_to(project_root).as_posix() or ".",
-            "evidence_output": Path(evidence_outputs[check["check_id"]]).expanduser().resolve().relative_to(project_root).as_posix(),
-            "command": check["command"],
-            "acceptance": check["acceptance"],
-            "complexity_score": check["complexity_score"],
-            "complexity_band": check["complexity_band"],
-            "verification_surface": check["verification_surface"],
-            "execution_mode": check["execution_mode"],
-            "worker_route": check["worker_route"],
-            "required_skills": check["required_skills"],
-        }
-        for check in checks
-    ]
+    relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root).as_posix()
+    relative_evidence_dir = Path(next(iter(evidence_outputs.values()))).expanduser().resolve().parent.relative_to(project_root).as_posix()
+    receipt_line = Path(producer_receipt).expanduser().resolve().relative_to(project_root).as_posix()
     policy = plan["ending_model_policy"]
     repair_parent_line = f"Repair parent lifecycle id: {repair_of_lifecycle_id or 'none'}"
-    repair_start_instruction = f"This is a fresh repair Ending. When starting its lifecycle with ending_task_ledger.py, pass --repair-of-lifecycle-id {repair_of_lifecycle_id} exactly; do not start an unlinked root lifecycle. Audit that parent first: if it is already passed because a later independent release mismatch created this repair plan, also pass --late-repair-reason post-ending-verification-mismatch; otherwise do not supply that option." if repair_of_lifecycle_id else "This is an initial Ending. Do not pass --repair-of-lifecycle-id when starting its lifecycle."
+    repair_start_instruction = f"This is a repair Ending: pass --repair-of-lifecycle-id {repair_of_lifecycle_id} exactly when starting the ledger; add --late-repair-reason post-ending-verification-mismatch only for a later independent release mismatch." if repair_of_lifecycle_id else "This is an initial Ending: do not pass --repair-of-lifecycle-id."
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
-            "Execute the one independent persistent global projectless End Task for this user task. This thread must have no project attachment and must not be the origin/current task or a same-task subtask. You are the fixed Spark-xhigh Ending controller; do not restart the producer route or create another Ending lifecycle.",
-            f"Project root: {plan['project_root']}",
-            f"Verification plan relative to project root: {relative_plan}",
-            f"Ending check id: {ENDING_LAUNCH_ID}",
-            f"Checks and evidence outputs: {json.dumps(check_manifest, ensure_ascii=False, separators=(',', ':'))}",
-            f"Personal memory candidates output relative to project root: {relative_memory_candidates}",
-            f"Project-memory consistency output relative to project root: {relative_memory_consistency}",
-            f"Project-memory closeout intent: {json.dumps(plan.get('project_memory_closeout', {'mode': 'none'}), ensure_ascii=False, separators=(',', ':'))}",
-            f"Assigned Ending pair: {assigned_pair}",
-            f"Primary Ending pair: {policy['primary_pair']}",
-            f"Only availability fallback pair: {policy['availability_fallback_pair']}",
-            f"Allowed availability reason codes: {json.dumps(policy['availability_fallback_reasons'], separators=(',', ':'))}",
-            f"Task complexity: {plan['task_complexity']['complexity_score']}/100 ({plan['task_complexity']['complexity_band']}); score scopes the real check and classification only, never the Ending model.",
-            f"Origin producer session (immutable): {json.dumps(plan.get('origin_session'), ensure_ascii=False, separators=(',', ':'))}",
-            f"Producer receipt relative to project root: {receipt_line}",
+            "Operate the one already-created global projectless Ending. Do not restart the producer, attach this thread to a project, or create another Ending.",
+            f"Saved plan: {relative_plan}; evidence directory: {relative_evidence_dir}; final producer receipt: {receipt_line}.",
+            f"Assigned Ending pair: {assigned_pair}. Primary: {policy['primary_pair']}; availability-only fallback: {policy['availability_fallback_pair']}.",
             repair_parent_line,
             repair_start_instruction,
-            "Resolve CODEX_HOME. For execution_mode=spark_controller_direct, use the platform Python launcher with skills/verify-skill/scripts/ending_verification_plan.py to run the exact run-check command from the project root. For execution_mode=delegated_check_worker, launch one bounded subagent with the saved worker_route pair; begin its prompt with ENDING_CHECK_WORKER, require it to read every listed required_skills instruction before checking, and have it run only that check's exact run-check command. Write one fresh evidence file per check and do not broaden the saved checks.",
-            "Delegated check workers are internal verification workers, not projectless End/Fix tasks. They may inspect or execute only the saved check scope and write its evidence under Cache; they never edit producer files, record the lifecycle terminal event, launch routing, or repair. The Spark controller remains the sole Ending owner and accepts only the fresh evidence file, never worker prose alone.",
-            "Start one lifecycle and finish it once through CODEX_HOME skills/verify-skill/scripts/ending_task_ledger.py. Pass the saved verification plan, ending-check-id=task-ending, the actual assigned pair, project and origin metadata, and the producer receipt when present. If and only if the primary pair could not be launched for an allowed availability/capability reason, use the one saved fallback pair and pass the launcher's sanitized --availability-fallback-reason. Correctness, quality, protocol, timeout, or command execution failures never change the Ending pair.",
-            "Every terminal event updates local and Obsidian model history; without a receipt it records a non-learning assignment observation. Producer next-pair learning stays separate from the fixed Ending pair.",
-            "Keep model-routing memory, personal preference memory, and project-result memory as three independent flows. A write or no-op in one flow never substitutes for either of the other two.",
-            "PASS requires every new evidence file to report status=pass and its expected exit code. PASS/FAIL/BLOCKED must preserve exact evidence and keep this global projectless task visible; a project-attached, current-task, or same-task-subtask Ending is a launch protocol failure.",
-            "A command PASS is not enough when the final artifact/state differs from the original user objective or acceptance contract. In that case, mark that evidence as a correctness mismatch with the plan's mismatch command, then use the repair handoff.",
-            "On FAIL or a correctness mismatch, do not edit the result in this Ending. Record exact evidence, then automatically submit the generated repair_prompt by calling codex_app__send_message_to_thread with repair_dispatch.arguments (threadId, hostId, and the exact prompt) to continue the original origin session. The origin session repairs and runs Quick Check; the parent launches one fresh global projectless Ending. Repeat for at most three repair attempts; unavailable or failed origin-session submission is BLOCKED.",
-            "The failed Ending and its repair handoff remain visible as the audit record. Never open a replacement fixer session, self-repair, create nested End/Fix tasks, or wait/poll for the origin session. Waiting only for dependency-ready ENDING_CHECK_WORKER evidence inside this detached Ending is allowed.",
-            "For project_memory_closeout mode=durable, read the current Skill/process contract, the fresh execution evidence, and only the bounded effective project-result memory. Write one sanitized memory_consistency_output classification: aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence. Include process_status, execution_status, memory_status, action, and bounded evidence.",
-            "Only memory_record_defect may append a correction that supersedes the wrong result record, and only memory_projection_defect may reconcile an unchanged correct local result into Obsidian. Never rewrite history. skill_contract_defect and execution_drift are FAIL and must return exact evidence to the immutable origin session; insufficient_evidence is BLOCKED. The Ending never edits producer or Skill files.",
-            "For a durable PASS, pass --memory-consistency-file to the terminal ledger event. The ledger owns the one project-result record/correction/reconciliation and requires effective local readback. When Obsidian is available, projection readback is also required; when it is unavailable, record projection-pending for bounded reconciliation on the next task. For project_memory_closeout mode=none, do not create or pass a project-memory consistency file.",
-            "Run one bounded personal-memory scan for explicit user preferences, repeated corrections, or verified working patterns. Never copy raw prompts, raw results, paths, secrets, sensitive traits, or chain-of-thought.",
-            "If no durable candidate exists, create no personal memory file and pass no --memory-candidates-file. Otherwise write only a sanitized {\"candidates\":[...]} payload to the assigned file. Personal memory is separate from model-routing and project-change memory.",
-            "After the terminal ledger event, print structured model_assessment with task/check score and band, producer pair and next-pair learning, Ending pair and fallback provenance, attempts, verdict, evidence reason, and Obsidian record status. Never expose private chain-of-thought.",
-            "Never call set_thread_archived or delete this End Task automatically.",
+            "Start only after the origin's final aggregate result is released. A finished child, subprocess, or partial receipt is not a trigger; if origin work is still active, leave this task pending and do not start a ledger.",
+            "Read the saved plan before each action. Run only the next incomplete saved check with ending_verification_plan.py run-check. For a delegated check, launch exactly one ENDING_CHECK_WORKER with its saved pair and Skills; it writes evidence only.",
+            "Keep this same End Task active for later bounded checks or closeout. Use a compact continuation for the next saved action; never embed the full plan, check manifest, or lifecycle policy in a prompt.",
+            "When all fresh evidence exists, run ending_task_ledger.py once with the saved plan, ending-check-id=task-ending, assigned pair, final producer receipt, and repair parent when present. Correctness, quality, protocol, timeout, or command failure never changes the Ending pair.",
+            "For durable closeout, compare the active process contract, fresh evidence, and effective project-result memory; classify only as aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence, then write memory_consistency_output only for the plan's durable mode. Run the bounded personal-memory scan without raw prompts, results, paths, secrets, or reasoning.",
+            "PASS requires every saved check to pass. On failure or mismatch, do not edit; use the saved repair_dispatch and repair_prompt to resume the immutable origin. The failed Ending remains visible; do not wait for the origin.",
+            "After terminal closeout, print structured model_assessment. Never call set_thread_archived or delete this End Task automatically.",
         ]
     )
 
@@ -516,7 +496,7 @@ def _independent_backend_prompt(plan_path, plan, checks, evidence_outputs, assig
     )
 
 
-def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None, repair_of_lifecycle_id="", backend_capabilities=None):
+def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, repair_of_lifecycle_id="", backend_capabilities=None):
     plan_file, plan = _read_json(plan_path, "plan")
     project_root = Path(plan.get("project_root", "")).expanduser().resolve()
     if not project_root.is_dir():
@@ -538,11 +518,8 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         raise ValueError("plan requires repair_policy")
     resolved_repair_policy = {**repair_policy, "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id}
     evidence_root = _inside(project_root, evidence_dir, "evidence_dir")
-    receipt_path = None
-    if producer_receipt:
-        receipt_path = _inside(project_root, producer_receipt, "producer_receipt")
-        if not receipt_path.is_file():
-            raise ValueError("producer_receipt must be an existing file")
+    final_receipt = _final_producer_receipt(project_root, producer_receipt)
+    receipt_path = final_receipt["path"]
     tasks = plan.get("ending_tasks")
     if not isinstance(tasks, list) or not tasks:
         raise ValueError("plan must contain ending_tasks")
@@ -595,6 +572,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
             "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
             "repair_policy": resolved_repair_policy,
             "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
+            "final_producer_receipt": {"path": str(receipt_path), "sha256": final_receipt["sha256"]},
             "required_launch_count": 0,
             "launch_requests": [],
             "independent_verification_request_count": len(independent_requests),
@@ -607,7 +585,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         candidate_pairs.append((fallback_pair, "availability_fallback"))
     for pair, role in candidate_pairs:
         model, thinking = pair.split("|", 1)
-        prompt = _worker_prompt(plan_file, plan, tasks, evidence_outputs, memory_candidates_output, memory_consistency_output, pair, receipt_path, resolved_repair_of_lifecycle_id)
+        prompt = _worker_prompt(plan_file, plan, evidence_outputs, pair, receipt_path, resolved_repair_of_lifecycle_id)
         arguments = {"target": dict(THREAD_TARGET), "title": title, "model": model, "thinking": thinking, "prompt": prompt}
         candidates.append(
             {
@@ -641,6 +619,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         "memory_candidates_output": str(memory_candidates_output),
         "memory_consistency_output": str(memory_consistency_output),
         "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
+        "final_producer_receipt": {"path": str(receipt_path), "sha256": final_receipt["sha256"]},
         "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
         "acknowledgement_required": True,
     }
@@ -935,7 +914,7 @@ def parse_args(argv=None):
     launch.add_argument("--plan", type=Path, required=True)
     launch.add_argument("--evidence-dir", type=Path, required=True)
     launch.add_argument("--project-id", required=True)
-    launch.add_argument("--producer-receipt", type=Path)
+    launch.add_argument("--producer-receipt", type=Path, required=True)
     launch.add_argument("--repair-of-lifecycle-id", default="")
     launch.add_argument("--output", type=Path, required=True)
     acknowledge = subparsers.add_parser("ack-launch")
