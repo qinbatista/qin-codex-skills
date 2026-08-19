@@ -105,6 +105,7 @@ REQUIRED_FILES = [
     "scripts/model_registry.py",
     "scripts/routing_policy.py",
     "scripts/sync_model_capabilities.py",
+    "scripts/session_effort.py",
     "scripts/strategy_performance.py",
     "scripts/benchmark_suite_gate.py",
     "scripts/benchmark_suite_runner.py",
@@ -118,6 +119,7 @@ REQUIRED_FILES = [
     "assets/model-routing-benchmark-example.json",
     "scripts/validate_task_analyze_skill.py",
     "tests/test_result_model_disclosure.py",
+    "tests/test_session_effort.py",
 ]
 REQUIRED_SKILL_TEXT = [
     "full routing and model-strategy skill",
@@ -282,6 +284,8 @@ REQUIRED_SELECTION_TEXT = [
     "multi-node production task runs one `dynamic_task_graph`",
     "based on its own score, not the parent task score",
 ]
+REQUIRED_SESSION_OUTCOME_SKILL_TEXT = ["current turn", "terminal runtime outcome", "verified pass", "explicit corrective feedback", "new topic"]
+REQUIRED_SESSION_OUTCOME_IMPLEMENTATION = ["_read_session_history", "current_turn_match", "semantic_tail", "unmatched_tail_excluded", "session_event_id", "verified_terminal", "verified_pass", "verified_fail"]
 REQUIRED_RECEIPT_TEXT = [
     "requested model and effort",
     "resolved model and effort",
@@ -834,6 +838,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     model_registry_text = read_text(paths["scripts/model_registry.py"])
     routing_policy_text = read_text(paths["scripts/routing_policy.py"])
     sync_model_capabilities_text = read_text(paths["scripts/sync_model_capabilities.py"])
+    session_effort_text = read_text(paths["scripts/session_effort.py"])
     entry_asset_text = read_text(paths["assets/global-agents-entry-rule.md"])
     benchmark_evidence_text = read_text(paths["TEST_AND_BENCHMARK.md"])
     metadata = parse_frontmatter(skill_text)
@@ -856,6 +861,8 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
             continue
         failures.extend(missing_terms(f"{disclosure_skill} result disclosure", read_text(disclosure_path), RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS))
     failures.extend(missing_terms("model-selection", selection_text, REQUIRED_SELECTION_TEXT))
+    failures.extend(missing_terms("SKILL.md same-session outcome gate", skill_text, REQUIRED_SESSION_OUTCOME_SKILL_TEXT))
+    failures.extend(missing_terms("session effort outcome implementation", session_effort_text, REQUIRED_SESSION_OUTCOME_IMPLEMENTATION))
     failures.extend(missing_terms("runtime-receipts", receipt_text, REQUIRED_RECEIPT_TEXT))
     failures.extend(missing_terms("adaptive-routing", adaptive_text, REQUIRED_ADAPTIVE_TEXT))
     failures.extend(missing_terms("SKILL.md model switch", skill_text, REQUIRED_MODEL_SWITCH_CATEGORIES + REQUIRED_MODEL_SWITCH_DIRECTIONS))

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Detect repeated same-task user effort inside one Codex session.
+"""Detect unresolved repeated work inside one Codex session.
 
 This module keeps session evidence local and prompt-free. It reads the native
-Codex rollout only to derive a hashed task fingerprint, continuity count,
-failure signal, and the model pair used before the current submission.
+Codex rollout for topic continuity, then links prior route observations to
+their terminal runtime outcomes before deciding whether a new correction
+requires a stronger solving route.
 """
 
 import hashlib
@@ -30,10 +31,12 @@ EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max", "ultra")
 EFFORT_ALIASES = {"light": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max", "ultra": "ultra"}
 QUALITY_EFFORTS = {"gpt-5.6-luna": ("low", "medium", "high", "xhigh", "max"), "gpt-5.6-terra": EFFORT_ORDER, "gpt-5.6-sol": EFFORT_ORDER}
 KNOWN_QUALITY_PAIRS = tuple(f"{model}|{effort}" for model in MODEL_ORDER for effort in QUALITY_EFFORTS[model])
-REPAIR_SIGNALS = frozenset({"again", "already", "broken", "didnt", "failed", "fix", "incorrect", "issue", "problem", "redo", "remove", "repair", "retry", "same", "still", "wrong", "not", "nothing"})
+REPAIR_SIGNALS = frozenset({"again", "already", "broken", "didnt", "failed", "incorrect", "nothing", "redo", "repair", "retry", "still", "unchanged", "wrong"})
+QUALITY_FAILURE_CLASSES = frozenset({"quality", "correctness"})
 TASK_SIGNALS = frozenset({"check", "change", "create", "debug", "edit", "fix", "implement", "inspect", "make", "modify", "repair", "solve", "test", "update", "write"})
 STOPWORDS = frozenset({"a", "about", "after", "all", "also", "am", "an", "and", "any", "are", "as", "at", "be", "because", "before", "but", "by", "can", "could", "did", "do", "does", "for", "from", "get", "give", "has", "have", "here", "how", "i", "if", "in", "is", "it", "just", "me", "my", "no", "of", "on", "one", "or", "should", "show", "so", "that", "the", "then", "these", "this", "to", "two", "use", "was", "we", "what", "when", "where", "which", "with", "why", "will", "you", "your"})
 GENERIC_TOPIC = frozenset({"change", "check", "code", "edit", "fix", "issue", "make", "problem", "repair", "solve", "task", "test", "update", "work"})
+CONTINUATION_ONLY_TERMS = REPAIR_SIGNALS | frozenset({"continue", "continuing", "result", "same"})
 TOKEN_ALIASES = {"conner": "corner", "conners": "corner", "corners": "corner", "dots": "dot", "lines": "line", "intersections": "intersection", "intersecting": "intersection", "sleeves": "sleeve", "skills": "skill", "models": "model", "svgdrawer": "svg"}
 CORE_SOLVING_TERMS = frozenset({"algorithm", "analyze", "architecture", "build", "code", "compare", "corner", "debug", "decide", "design", "diagnose", "edit", "fix", "geometry", "implement", "integration", "intersection", "line", "migrate", "outline", "path", "plan", "problem", "research", "repair", "review", "shape", "solve", "svg", "synthesize", "test", "trace", "transform", "understand", "update"})
 IMAGE_INSPECTION_TERMS = frozenset({"compare", "image", "inspect", "look", "read", "screenshot", "view", "visual"})
@@ -156,12 +159,18 @@ def _task_tokens(text):
     return set(tokens)
 
 
+def _has_substantive_task_tokens(tokens):
+    return bool(set(tokens) - GENERIC_TOPIC - CONTINUATION_ONLY_TERMS)
+
+
 def _failure_signals(text):
     tokens = set(re.findall(r"[a-z0-9]+", str(text or "").lower()))
     normalized = re.sub(r"\s+", " ", str(text or "")).strip().lower()
     signals = tokens & REPAIR_SIGNALS
     if re.search(r"\b(?:not|never|didn['’]?t|doesn['’]?t|isn['’]?t)\s+(?:solve|solved|work|working|change|changed|fix|fixed|remove|removed)\b", normalized):
         signals.add("explicit_failure")
+    if re.search(r"\b(?:need|needs|want|wants)\s+(?:another|a)\s+(?:fix|repair|attempt)\b", normalized):
+        signals.add("another_attempt")
     if re.search(r"\b(?:keep|keeps|kept)\s+(?:using|giving|making|showing)\b", normalized):
         signals.add("repeated_behavior")
     return sorted(signals)
@@ -301,7 +310,14 @@ def classify_task(prompt, *, task_type="", operation="", modality="", complexity
 
 
 def _extract_user_text(message):
-    text = str(message or "")
+    if isinstance(message, list):
+        text = " ".join(str(item.get("text") or "") for item in message if isinstance(item, dict))
+    elif isinstance(message, dict):
+        text = str(message.get("text") or "")
+        if not text:
+            return _extract_user_text(message.get("content"))
+    else:
+        text = str(message or "")
     marker = "My request for Codex:"
     if marker in text:
         text = text.split(marker, 1)[1]
@@ -329,6 +345,7 @@ def _read_rollout(path, session_id):
     matched = False
     active_turn_key = ""
     users = []
+    seen_user_messages = set()
     contexts = []
     try:
         handle = path.open(encoding="utf-8", errors="ignore")
@@ -354,39 +371,72 @@ def _read_rollout(path, session_id):
                 active_turn_key = hashlib.sha256(turn_id.encode("utf-8")).hexdigest()[:24] if turn_id else ""
                 if isinstance(model, str) and isinstance(effort, str):
                     contexts.append({"turn_key": active_turn_key, "pair": f"{model}|{effort}"})
-            if event.get("type") == "event_msg" and payload.get("type") == "user_message":
-                text = _extract_user_text(payload.get("message"))
-                if text:
+            raw_user_message = payload.get("message") if event.get("type") == "event_msg" and payload.get("type") == "user_message" else payload.get("content") if event.get("type") == "response_item" and payload.get("role") == "user" and payload.get("type") == "message" else None
+            if raw_user_message is not None and active_turn_key:
+                text = _extract_user_text(raw_user_message)
+                user_message_key = (active_turn_key, _prompt_hash(text))
+                if text and user_message_key not in seen_user_messages:
+                    seen_user_messages.add(user_message_key)
                     users.append({"text": text, "turn_key": active_turn_key})
     if not matched:
         return None
     return {"cwd": session_cwd, "users": users, "contexts": contexts}
 
 
-def _read_local_effort_records(local_store, session_key_value, project_key, task_type, module, session_task_scope=""):
+def _record_matches_session_scope(record, session_key_value, project_key, task_type, module, session_task_scope):
+    record_session_key = str(record.get("codex_session_key") or record.get("session_key") or "")
+    return bool(record_session_key == session_key_value and record.get("project_key") == project_key and record.get("task_type") == task_type and record.get("module") == module and record.get("session_task_scope_key") == session_task_scope)
+
+
+def _terminal_outcome(record):
+    pair = str(record.get("completed_pair") or record.get("pair") or "")
+    runtime_verified = record.get("model_evidence") == "runtime_receipt" and record.get("receipt_status") == "pass" and record.get("turn_completed") is True and record.get("model_match") is True and record.get("effort_match") is True
+    if not runtime_verified:
+        return {"state": "unverified", "pair": pair, "recorded_at": str(record.get("recorded_at") or "")}
+    if record.get("real_status") == "pass" and record.get("failure_class") == "none":
+        return {"state": "verified_pass", "pair": pair, "recorded_at": str(record.get("recorded_at") or "")}
+    if record.get("real_status") == "fail" and record.get("failure_class") in QUALITY_FAILURE_CLASSES:
+        return {"state": "verified_fail", "pair": pair, "recorded_at": str(record.get("recorded_at") or "")}
+    if record.get("real_status") == "fail":
+        return {"state": "operational_failure", "pair": pair, "recorded_at": str(record.get("recorded_at") or "")}
+    return {"state": "unverified", "pair": pair, "recorded_at": str(record.get("recorded_at") or "")}
+
+
+def _read_session_history(local_store, session_key_value, project_key, task_type, module, session_task_scope=""):
     path = Path(local_store).expanduser().resolve()
     if not path.is_file():
-        return []
-    records = []
+        return [], {}
+    effort_records = []
+    terminal_records = []
     try:
         handle = path.open(encoding="utf-8", errors="ignore")
     except OSError:
-        return []
+        return [], {}
     with handle:
         for raw_line in handle:
             try:
                 envelope = json.loads(raw_line)
             except json.JSONDecodeError:
                 continue
-            if envelope.get("local_model_memory_schema") != LOCAL_MEMORY_SCHEMA_VERSION or envelope.get("event") != "session-effort":
-                continue
             record = envelope.get("record")
-            if not isinstance(record, dict) or record.get("session_memory_schema") != SESSION_SCHEMA_VERSION:
+            if not isinstance(record, dict) or not _record_matches_session_scope(record, session_key_value, project_key, task_type, module, session_task_scope):
                 continue
-            if record.get("session_key") != session_key_value or record.get("project_key") != project_key or record.get("task_type") != task_type or record.get("module") != module or record.get("session_task_scope_key") != session_task_scope:
-                continue
-            records.append(record)
-    return records
+            if envelope.get("local_model_memory_schema") == LOCAL_MEMORY_SCHEMA_VERSION and envelope.get("event") == "session-effort" and record.get("session_memory_schema") == SESSION_SCHEMA_VERSION:
+                effort_records.append(record)
+            elif envelope.get("local_model_memory_schema") == 1 and envelope.get("event") == "model-result" and record.get("model_experience_schema") == 1:
+                terminal_records.append(record)
+    effort_by_event_id = {str(record.get("event_id") or ""): record for record in effort_records if record.get("event_id")}
+    outcomes_by_turn = {}
+    for terminal_record in terminal_records:
+        effort_record = effort_by_event_id.get(str(terminal_record.get("session_event_id") or ""))
+        if effort_record is None or not effort_record.get("turn_key"):
+            continue
+        turn_key = str(effort_record["turn_key"])
+        outcome = _terminal_outcome(terminal_record)
+        existing = outcomes_by_turn.get(turn_key)
+        if existing is None or outcome["recorded_at"] >= existing["recorded_at"]:
+            outcomes_by_turn[turn_key] = outcome
+    return effort_records, outcomes_by_turn
 
 
 def resolve_session_id(prompt="", explicit=None):
@@ -445,7 +495,7 @@ def solve_route_pair(summary, previous_pair, pairs, quality_base_pair=None):
         return {"pair": previous_pair, "reason": "solving_route_frontier_reached", "frontier_reached": True}
     if previous_model_index < preferred_model_index or previous_model == preferred_model and EFFORT_ORDER.index(previous_effort) < EFFORT_ORDER.index(preferred_effort):
         return {"pair": preferred_pair, "reason": summary.get("route_reason") or "session_task_class_route", "frontier_reached": False}
-    if previous_model == preferred_model and EFFORT_ORDER.index(previous_effort) > EFFORT_ORDER.index(preferred_effort) and summary.get("last_model_source") == "context":
+    if previous_model == preferred_model and EFFORT_ORDER.index(previous_effort) > EFFORT_ORDER.index(preferred_effort) and summary.get("last_model_source") in {"context", "entry_context"}:
         return {"pair": preferred_pair, "reason": "entry_to_task_class_solving_route", "frontier_reached": False}
     if previous_model_index > preferred_model_index or previous_model == preferred_model and EFFORT_ORDER.index(previous_effort) > EFFORT_ORDER.index(preferred_effort):
         return {"pair": previous_pair, "reason": "solving_route_frontier_reached", "frontier_reached": True}
@@ -453,7 +503,7 @@ def solve_route_pair(summary, previous_pair, pairs, quality_base_pair=None):
 
 
 def _summary_defaults():
-    return {"available": False, "session_key": "", "codex_session_key": "", "project_match": False, "state": "unavailable", "turn_count": 0, "prior_turn_count": 0, "same_task_turns": 0, "user_effort": 0, "failure_recorded": False, "last_model_pair": "", "last_model_source": "", "model_pairs": [], "task_name": "", "task_group": "", "task_scope_key": "", "task_group_key": "", "task_scope_mode": "unscoped", "session_task_scope_key": "", "task_topic_fingerprint": "", "current_turn_key": "", "current_prompt_sha256": "", "solving_surface": "", "task_length": "", "step_estimate": 0, "step_class": "", "estimated_effort": "", "information_burden": "", "model_family": "", "model_difficulty": "", "difficulty_class": "", "route_class": "", "preferred_solving_pair": "", "route_reason": "", "explicit_route_hint": "", "session_event_id": "", "session_event_status": "not_recorded"}
+    return {"available": False, "session_key": "", "codex_session_key": "", "project_match": False, "state": "unavailable", "resolution_state": "unavailable", "current_turn_match": "unmatched", "latest_terminal_outcome": "unavailable", "verified_outcome_count": 0, "verified_pass_count": 0, "verified_failure_count": 0, "unresolved_turn_count": 0, "turn_count": 0, "prior_turn_count": 0, "same_task_turns": 0, "user_effort": 0, "failure_recorded": False, "last_model_pair": "", "last_model_source": "", "model_pairs": [], "task_name": "", "task_group": "", "task_scope_key": "", "task_group_key": "", "task_scope_mode": "unscoped", "session_task_scope_key": "", "task_topic_fingerprint": "", "current_turn_key": "", "current_prompt_sha256": "", "solving_surface": "", "task_length": "", "step_estimate": 0, "step_class": "", "estimated_effort": "", "information_burden": "", "model_family": "", "model_difficulty": "", "difficulty_class": "", "route_class": "", "preferred_solving_pair": "", "route_reason": "", "explicit_route_hint": "", "session_event_id": "", "session_event_status": "not_recorded"}
 
 
 def assess_session(prompt, project_root, *, project_key="", task_type="", module="", capability_fingerprint="", operation="", modality="", complexity_score=None, task_summary="", task_name="", task_group="", session_id="", sessions_root=None, local_store=None):
@@ -496,14 +546,21 @@ def assess_session(prompt, project_root, *, project_key="", task_type="", module
             current_index = index
             current_turn_key = users[index].get("turn_key", "")
             break
-    prior_users = users[:current_index] if current_index is not None else users
+    if current_index is not None:
+        prior_users = users[:current_index]
+        summary["current_turn_match"] = "exact"
+    elif users:
+        tail_similarity, _ = _topic_similarity(prompt_text, users[-1].get("text", ""))
+        prior_users = users[:-1]
+        current_turn_key = users[-1].get("turn_key", "") if tail_similarity > 0 else ""
+        summary["current_turn_match"] = "semantic_tail" if tail_similarity > 0 else "unmatched_tail_excluded"
+    else:
+        prior_users = []
     current_failure = _failure_signals(prompt_text)
     current_tokens = _task_tokens(prompt_text)
-    explicit_task_scope = bool(summary.get("task_scope_key"))
     local_path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
-    local_records = _read_local_effort_records(local_path, summary["session_key"], project_key, task_type, module, summary["session_task_scope_key"])
-    task_turn_keys = {str(record.get("turn_key") or "") for record in local_records if record.get("turn_key")}
-    candidate_users = [user for user in prior_users if user.get("turn_key") in task_turn_keys] if explicit_task_scope or task_turn_keys else prior_users
+    local_records, outcomes_by_turn = _read_session_history(local_path, summary["session_key"], project_key, task_type, module, summary["session_task_scope_key"])
+    candidate_users = prior_users
     same_task = []
     overlaps = []
     for user in candidate_users:
@@ -511,16 +568,23 @@ def assess_session(prompt, project_root, *, project_key="", task_type="", module
         if similarity > 0:
             same_task.append(user)
             overlaps.extend(overlap)
-    if not same_task and _looks_like_continuation(prompt_text) and candidate_users and not current_tokens:
+    if not same_task and _looks_like_continuation(prompt_text) and candidate_users and not _has_substantive_task_tokens(current_tokens):
         same_task.append(candidate_users[-1])
     topic_tokens = sorted(current_tokens or _task_tokens(module) or _task_tokens(capability_fingerprint))
     topic_fingerprint = hashlib.sha256("|".join(topic_tokens).encode("utf-8")).hexdigest()[:24]
+    prior_task_turn_keys = [str(user.get("turn_key") or "") for user in same_task if user.get("turn_key")]
+    prior_task_turn_key_set = set(prior_task_turn_keys)
+    terminal_outcomes = [outcomes_by_turn[turn_key] for turn_key in prior_task_turn_keys if turn_key in outcomes_by_turn]
+    verified_pass_count = sum(outcome["state"] == "verified_pass" for outcome in terminal_outcomes)
+    verified_failure_count = sum(outcome["state"] == "verified_fail" for outcome in terminal_outcomes)
+    latest_task_turn = same_task[-1].get("turn_key", "") if same_task else ""
+    latest_outcome = outcomes_by_turn.get(str(latest_task_turn), {"state": "unverified", "pair": "", "recorded_at": ""})
     context_pairs = []
     seen_turns = set()
     for context in contexts:
         if context.get("turn_key") and context.get("turn_key") == current_turn_key:
             continue
-        if (explicit_task_scope or task_turn_keys) and context.get("turn_key") not in task_turn_keys:
+        if context.get("turn_key") not in prior_task_turn_key_set:
             continue
         turn_key = context.get("turn_key") or f"pair:{context.get('pair')}"
         if turn_key in seen_turns:
@@ -529,15 +593,31 @@ def assess_session(prompt, project_root, *, project_key="", task_type="", module
         if isinstance(pair, str) and pair not in context_pairs:
             context_pairs.append(pair)
         seen_turns.add(turn_key)
-    if current_turn_key:
-        local_records = [record for record in local_records if record.get("turn_key") != current_turn_key]
-    local_pairs = [record.get("selected_pair") for record in local_records if isinstance(record.get("selected_pair"), str) and record.get("selected_pair")]
+    local_pairs = [record.get("selected_pair") for record in local_records if record.get("turn_key") in prior_task_turn_key_set and isinstance(record.get("selected_pair"), str) and record.get("selected_pair")]
+    terminal_pairs = [outcome["pair"] for outcome in terminal_outcomes if outcome.get("pair")]
     model_pairs = []
-    for pair in context_pairs + local_pairs:
+    for pair in context_pairs + local_pairs + terminal_pairs:
         if pair not in model_pairs:
             model_pairs.append(pair)
-    last_model_pair = local_pairs[-1] if local_pairs else context_pairs[-1] if context_pairs else ""
-    summary.update({"turn_count": len(users), "prior_turn_count": len(prior_users), "same_task_turns": len(same_task), "user_effort": len(same_task) + 1 if same_task else 1, "failure_recorded": bool(summary["project_match"] and same_task and current_failure), "last_model_pair": last_model_pair, "last_model_source": "local" if local_pairs else "context" if context_pairs else "", "model_pairs": model_pairs, "task_topic_fingerprint": topic_fingerprint, "current_turn_key": current_turn_key})
+    if latest_outcome.get("state") in {"verified_pass", "verified_fail"} and latest_outcome.get("pair"):
+        last_model_pair = latest_outcome["pair"]
+        last_model_source = "verified_terminal"
+    elif local_pairs:
+        last_model_pair = local_pairs[-1]
+        last_model_source = "route_assignment"
+    else:
+        last_model_pair = context_pairs[-1] if context_pairs else ""
+        last_model_source = "entry_context" if context_pairs else ""
+    failure_recorded = bool(summary["project_match"] and same_task and (current_failure or latest_outcome.get("state") == "verified_fail"))
+    if failure_recorded:
+        resolution_state = "feedback_unresolved" if current_failure else "verified_failure"
+    elif latest_outcome.get("state") == "verified_pass":
+        resolution_state = "verified_pass"
+    elif same_task:
+        resolution_state = "unverified_continuation"
+    else:
+        resolution_state = "new_topic"
+    summary.update({"turn_count": len(users), "prior_turn_count": len(prior_users), "same_task_turns": len(same_task), "user_effort": len(same_task) + 1 if same_task else 1, "failure_recorded": failure_recorded, "resolution_state": resolution_state, "latest_terminal_outcome": latest_outcome.get("state", "unverified"), "verified_outcome_count": verified_pass_count + verified_failure_count, "verified_pass_count": verified_pass_count, "verified_failure_count": verified_failure_count, "unresolved_turn_count": len(same_task) - verified_pass_count, "last_model_pair": last_model_pair, "last_model_source": last_model_source, "model_pairs": model_pairs, "task_topic_fingerprint": topic_fingerprint, "current_turn_key": current_turn_key})
     if not summary["project_match"]:
         summary["state"] = "foreign_project"
     elif summary["failure_recorded"]:
@@ -556,7 +636,7 @@ def record_session_effort(summary, *, project_key, task_type, module, capability
     event_payload = "|".join(str(value or "") for value in (summary["session_key"], summary.get("session_task_scope_key"), project_key, task_type, module, current_prompt_sha256, summary.get("current_turn_key")))
     event_id = hashlib.sha256(event_payload.encode("utf-8")).hexdigest()
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    record = {"session_memory_schema": SESSION_SCHEMA_VERSION, "event_id": event_id, "recorded_at": timestamp, "session_key": str(summary["session_key"]), "codex_session_key": str(summary.get("codex_session_key") or summary.get("session_key") or ""), "session_task_scope_key": str(summary.get("session_task_scope_key") or ""), "task_name": str(summary.get("task_name") or ""), "task_group": str(summary.get("task_group") or ""), "task_scope_key": str(summary.get("task_scope_key") or ""), "task_group_key": str(summary.get("task_group_key") or ""), "task_scope_mode": str(summary.get("task_scope_mode") or "session"), "turn_key": str(summary.get("current_turn_key") or ""), "project_key": str(project_key or ""), "task_type": str(task_type or ""), "module": str(module or ""), "capability_fingerprint": str(capability_fingerprint or ""), "complexity_score": complexity_score, "complexity_band": str(complexity_band or ""), "state": str(summary.get("state") or ""), "failure_recorded": bool(summary.get("failure_recorded")), "same_task_turns": int(summary.get("same_task_turns") or 0), "user_effort": int(summary.get("user_effort") or 0), "selected_pair": str(selected_pair or ""), "requested_pair": str(requested_pair or ""), "prior_model_pair": str(summary.get("last_model_pair") or ""), "model_pairs": [str(pair) for pair in summary.get("model_pairs", []) if isinstance(pair, str)], "task_topic_fingerprint": str(summary.get("task_topic_fingerprint") or ""), "solving_surface": str(summary.get("solving_surface") or ""), "task_length": str(summary.get("task_length") or ""), "step_estimate": int(summary.get("step_estimate") or 0), "step_class": str(summary.get("step_class") or ""), "estimated_effort": str(summary.get("estimated_effort") or ""), "information_burden": str(summary.get("information_burden") or ""), "model_family": str(summary.get("model_family") or ""), "model_difficulty": str(summary.get("model_difficulty") or ""), "difficulty_class": str(summary.get("difficulty_class") or ""), "route_class": str(summary.get("route_class") or ""), "preferred_solving_pair": str(summary.get("preferred_solving_pair") or ""), "route_reason": str(summary.get("route_reason") or ""), "explicit_route_hint": str(summary.get("explicit_route_hint") or "")}
+    record = {"session_memory_schema": SESSION_SCHEMA_VERSION, "event_id": event_id, "recorded_at": timestamp, "session_key": str(summary["session_key"]), "codex_session_key": str(summary.get("codex_session_key") or summary.get("session_key") or ""), "session_task_scope_key": str(summary.get("session_task_scope_key") or ""), "task_name": str(summary.get("task_name") or ""), "task_group": str(summary.get("task_group") or ""), "task_scope_key": str(summary.get("task_scope_key") or ""), "task_group_key": str(summary.get("task_group_key") or ""), "task_scope_mode": str(summary.get("task_scope_mode") or "session"), "turn_key": str(summary.get("current_turn_key") or ""), "current_turn_match": str(summary.get("current_turn_match") or "unmatched"), "project_key": str(project_key or ""), "task_type": str(task_type or ""), "module": str(module or ""), "capability_fingerprint": str(capability_fingerprint or ""), "complexity_score": complexity_score, "complexity_band": str(complexity_band or ""), "state": str(summary.get("state") or ""), "resolution_state": str(summary.get("resolution_state") or ""), "latest_terminal_outcome": str(summary.get("latest_terminal_outcome") or ""), "verified_outcome_count": int(summary.get("verified_outcome_count") or 0), "verified_pass_count": int(summary.get("verified_pass_count") or 0), "verified_failure_count": int(summary.get("verified_failure_count") or 0), "unresolved_turn_count": int(summary.get("unresolved_turn_count") or 0), "failure_recorded": bool(summary.get("failure_recorded")), "same_task_turns": int(summary.get("same_task_turns") or 0), "user_effort": int(summary.get("user_effort") or 0), "selected_pair": str(selected_pair or ""), "requested_pair": str(requested_pair or ""), "prior_model_pair": str(summary.get("last_model_pair") or ""), "prior_model_source": str(summary.get("last_model_source") or ""), "model_pairs": [str(pair) for pair in summary.get("model_pairs", []) if isinstance(pair, str)], "task_topic_fingerprint": str(summary.get("task_topic_fingerprint") or ""), "solving_surface": str(summary.get("solving_surface") or ""), "task_length": str(summary.get("task_length") or ""), "step_estimate": int(summary.get("step_estimate") or 0), "step_class": str(summary.get("step_class") or ""), "estimated_effort": str(summary.get("estimated_effort") or ""), "information_burden": str(summary.get("information_burden") or ""), "model_family": str(summary.get("model_family") or ""), "model_difficulty": str(summary.get("model_difficulty") or ""), "difficulty_class": str(summary.get("difficulty_class") or ""), "route_class": str(summary.get("route_class") or ""), "preferred_solving_pair": str(summary.get("preferred_solving_pair") or ""), "route_reason": str(summary.get("route_reason") or ""), "explicit_route_hint": str(summary.get("explicit_route_hint") or "")}
     path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
     lock_path = path.with_suffix(path.suffix + ".lock")
     path.parent.mkdir(parents=True, exist_ok=True)
