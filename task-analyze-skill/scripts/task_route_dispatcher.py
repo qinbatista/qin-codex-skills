@@ -1811,7 +1811,7 @@ def run_plan(
     entry_model,
     entry_effort,
     cwd,
-    state_db=Path.home() / ".codex" / "state_5.sqlite",
+    state_db=None,
     codex_bin="codex",
     skills_root=None,
     history_path=None,
@@ -2008,7 +2008,7 @@ def run_plan(
         ending_handoff = {
             "schema_version": DISPATCH_SCHEMA_VERSION,
             "cwd": str(cwd.resolve()),
-            "state_db": str(state_db.expanduser().resolve()),
+            "state_db": str(Path(state_db).expanduser().resolve()) if state_db else None,
             "entry": {"model": entry_model, "effort": entry_effort},
             "route_run_id": route_run_id,
             "plan": plan,
@@ -2110,7 +2110,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     normalize_legacy_dynamic_plan(plan)
     cwd = Path(handoff.get("cwd") or Path.cwd()).expanduser().resolve()
     entry = handoff.get("entry") if isinstance(handoff.get("entry"), dict) else {}
-    state_db = Path(handoff.get("state_db") or Path.home() / ".codex" / "state_5.sqlite").expanduser().resolve()
+    state_db = Path(handoff["state_db"]).expanduser().resolve() if handoff.get("state_db") else None
     route_run_id = handoff.get("route_run_id")
     failures = []
     if not route_run_id:
@@ -2281,7 +2281,7 @@ def main():
     plan_parser = subparsers.add_parser("run-plan")
     plan_parser.add_argument("plan", type=Path)
     plan_parser.add_argument("--cwd", type=Path, default=Path.cwd())
-    plan_parser.add_argument("--state-db", type=Path, default=Path.home() / ".codex" / "state_5.sqlite")
+    plan_parser.add_argument("--state-db", type=Path, help="Optional explicit Codex runtime SQLite database; runtime discovery is used when omitted.")
     plan_parser.add_argument("--codex-bin", default="codex")
     plan_parser.add_argument("--skills-root", type=Path)
     ending_parser = subparsers.add_parser("run-ending")
@@ -2301,7 +2301,7 @@ def main():
             entry.get("model"),
             entry.get("effort"),
             args.cwd.expanduser().resolve(),
-            args.state_db.expanduser().resolve(),
+            args.state_db.expanduser().resolve() if args.state_db else None,
             args.codex_bin,
             args.skills_root,
             result_ready_callback=_emit_result_ready_event,

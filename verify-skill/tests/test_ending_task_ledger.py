@@ -420,6 +420,26 @@ class EndingTaskLedgerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "failed parent"):
                 LEDGER.start_lifecycle("repair", root, "Invalid early repair", repair_of_lifecycle_id=original["lifecycle_id"], store=store)
 
+    def test_post_pass_repair_requires_an_explicit_reason_and_reopens_the_audit_chain(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            store = root / "store"
+            original = LEDGER.start_lifecycle("verification", root, "Original Ending passed", store=store)
+            LEDGER.record_event(original["lifecycle_id"], "pass", "Original verification passed", store=store)
+            with self.assertRaisesRegex(ValueError, "passed parent requires a non-empty late_repair_reason"):
+                LEDGER.start_lifecycle("verification", root, "Unlinked post-pass repair", repair_of_lifecycle_id=original["lifecycle_id"], store=store)
+            repair = LEDGER.start_lifecycle("verification", root, "Late release mismatch repair", repair_of_lifecycle_id=original["lifecycle_id"], store=store, late_repair_reason="post-ending-release-mismatch")
+            pending = LEDGER.audit_lifecycle(original["lifecycle_id"], store)
+            LEDGER.record_event(repair["lifecycle_id"], "pass", "Late release verification passed", store=store)
+            audited = LEDGER.audit_lifecycle(original["lifecycle_id"], store)
+            parent = json.loads((store / "lifecycles" / f"{original['lifecycle_id']}.json").read_text(encoding="utf-8"))
+        self.assertEqual(repair["late_repair_reason"], "post-ending-release-mismatch")
+        self.assertEqual(pending["terminal_status"], "pending")
+        self.assertEqual(audited["terminal_status"], "passed")
+        self.assertEqual(audited["chain"], [original["lifecycle_id"], repair["lifecycle_id"]])
+        self.assertEqual(parent["events"][-1]["event"], "post_pass_repair_started")
+        self.assertEqual(parent["events"][-1]["late_repair_reason"], "post-ending-release-mismatch")
+
     def test_root_wide_repair_attempts_normalize_siblings_and_enforce_the_limit(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

@@ -22,6 +22,7 @@ DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/tests/global-skill-regression/latest.
 DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/tests/global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
+REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"))
 
 
 def utc_now() -> str:
@@ -111,14 +112,30 @@ def copy_candidate(source_root: Path, candidate_root: Path, managed_skills: list
 
 
 def copy_required_plugin_contracts(plugin_cache: Path, candidate_cache: Path) -> None:
-    for skill_name in ("control-chrome", "sites-building"):
-        matches = sorted(plugin_cache.glob(f"*/*/*/skills/{skill_name}/SKILL.md")) if plugin_cache.is_dir() else []
+    """Populate only candidate-time plugin contracts needed by structural checks.
+
+    A release gate running in GitHub has no access to a user's installed plugin
+    cache.  Its validators need discoverability of the two externally owned
+    skills, but never execute their implementation.  Use a clearly marked
+    ephemeral contract fixture only in that isolated candidate when a real
+    cache is unavailable; runtime/deployment still resolves the real plugin.
+    """
+    for plugin_id, skill_name in REQUIRED_PLUGIN_CONTRACTS:
+        matches = sorted(plugin_cache.glob(f"*/{plugin_id}/*/skills/{skill_name}/SKILL.md")) if plugin_cache.is_dir() else []
         if not matches:
-            continue
-        source = matches[-1].parent
-        target = candidate_cache / source.relative_to(plugin_cache)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(source, target)
+            fixture = candidate_cache / "ci-contract-fixture" / plugin_id / "0.0.0" / "skills" / skill_name / "SKILL.md"
+            fixture.parent.mkdir(parents=True, exist_ok=True)
+            fixture.write_text(
+                f"# Candidate-only contract fixture for {plugin_id}:{skill_name}\n\n"
+                "This file exists only while structural release validation runs. "
+                "It is not an installed runtime plugin.\n",
+                encoding="utf-8",
+            )
+        else:
+            source = matches[-1].parent
+            target = candidate_cache / source.relative_to(plugin_cache)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source, target)
 
 
 @contextmanager

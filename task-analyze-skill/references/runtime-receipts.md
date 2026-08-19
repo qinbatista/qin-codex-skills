@@ -45,9 +45,13 @@ On timeout, preserve the prompt/workload hashes, measured elapsed time, partial 
 
 ## Local Evidence Level
 
-`codex exec --json` provides thread and token events, but not resolved model/effort by itself. A persistent run can be joined to `~/.codex/state_5.sqlite`, and its rollout can be allowlist-parsed for `turn_context`, `model_reroute`, `token_count`, and `task_complete` fields.
+`codex exec --json` provides thread and token events, but not resolved model/effort by itself. A persistent run resolves its runtime SQLite database through the explicit override, configured SQLite home, `CODEX_SQLITE_HOME`, `CODEX_HOME`, then the platform default. It discovers only `state_*.sqlite` candidates that pass a `threads.id` schema check, so a future state-file version cannot silently select unrelated data. Readers inspect `PRAGMA table_info(threads)` and degrade cleanly when optional fields such as `rollout_path`, model, effort, or token count are absent.
 
 This is strong operational evidence from the local Codex runtime. It is not a cryptographically signed backend attestation. State that limitation exactly; do not overclaim.
+
+## Structured Operational Failures
+
+Receipts retain a bounded failure detail, never raw process output: `process_launch_failure`, `timeout`, `non_zero_exit`, `invalid_json_events`, `model_unavailable`, `permission_denied`, `sandbox_denied`, `context_overflow`, `rate_limited`, `network_api_failure`, or runtime metadata/protocol detail. The producer may make at most one operational fallback after its selected route. Repeated quality, protocol, timeout, or acceptance failures do not create an unbounded retry loop.
 
 ## Savings Comparison
 

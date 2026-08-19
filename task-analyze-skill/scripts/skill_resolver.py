@@ -2,6 +2,7 @@
 """Resolve global and canonical plugin-qualified skill IDs safely."""
 
 import re
+import os
 from pathlib import Path
 
 
@@ -39,15 +40,34 @@ def _plugin_skill_matches(skill_name, cache_root, plugin_id=None):
     return matches
 
 
-def resolve_skill_path(skill_id, skills_root, plugins_cache_root=None):
+def compatible_skill_roots(skills_root=None, agents_skills_root=None, environment=None):
+    """Return canonical Codex and compatible Agents skill roots in precedence order."""
+    values = environment if environment is not None else os.environ
+    codex_home = Path(values.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
+    agents_home = Path(values.get("CODEX_AGENTS_HOME") or Path.home() / ".agents").expanduser()
+    candidates = [skills_root or codex_home / "skills", agents_skills_root or agents_home / "skills"]
+    roots = []
+    for candidate in candidates:
+        root = Path(candidate).expanduser().resolve()
+        if root not in roots:
+            roots.append(root)
+    return tuple(roots)
+
+
+def resolve_skill_path(skill_id, skills_root, plugins_cache_root=None, allowed_skill_roots=()):
     parts = validate_skill_id(skill_id)
     skills_root = Path(skills_root).resolve()
     if len(parts) == 1:
         skill_path = skills_root / parts[0] / "SKILL.md"
         resolved_skill_path = skill_path.resolve()
-        try:
-            resolved_skill_path.relative_to(skills_root)
-        except ValueError:
+        allowed_roots = (skills_root, *[Path(root).expanduser().resolve() for root in allowed_skill_roots])
+        def inside(root):
+            try:
+                resolved_skill_path.relative_to(root)
+                return True
+            except ValueError:
+                return False
+        if not any(inside(root) for root in allowed_roots):
             return None
         return resolved_skill_path if resolved_skill_path.is_file() else None
 
@@ -55,6 +75,21 @@ def resolve_skill_path(skill_id, skills_root, plugins_cache_root=None):
     cache_root = Path(plugins_cache_root).resolve() if plugins_cache_root is not None else skills_root.parent / "plugins" / "cache"
     matches = [path for package, path in _plugin_skill_matches(skill_name, cache_root, plugin_id) if package == plugin_id]
     return matches[-1] if matches else None
+
+
+def resolve_compatible_skill_path(skill_id, skills_root=None, agents_skills_root=None, plugins_cache_root=None, environment=None):
+    """Resolve a skill through canonical Codex then Agents compatibility roots.
+
+    Agents aliases may be directory symlinks into the canonical root.  They are
+    accepted only when their resolved target stays under that canonical root.
+    """
+    roots = compatible_skill_roots(skills_root, agents_skills_root, environment)
+    canonical_root = roots[0]
+    for root in roots:
+        path = resolve_skill_path(skill_id, root, plugins_cache_root, allowed_skill_roots=(canonical_root,))
+        if path is not None:
+            return path
+    return None
 
 
 def canonicalize_installed_skill_id(skill_id, skills_root, plugins_cache_root=None):

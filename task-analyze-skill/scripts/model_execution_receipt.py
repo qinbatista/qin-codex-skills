@@ -2,6 +2,7 @@
 import argparse
 import contextvars
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -30,6 +31,17 @@ except ModuleNotFoundError:
     pair_text = _routing_policy.pair_text
 
 try:
+    from codex_sqlite import CodexSQLiteResolutionError, resolve_codex_sqlite_db, thread_column_capabilities
+except ModuleNotFoundError:
+    _sqlite_resolver_path = Path(__file__).with_name("codex_sqlite.py")
+    _sqlite_resolver_spec = importlib.util.spec_from_file_location("task_analyze_codex_sqlite", _sqlite_resolver_path)
+    _sqlite_resolver = importlib.util.module_from_spec(_sqlite_resolver_spec)
+    _sqlite_resolver_spec.loader.exec_module(_sqlite_resolver)
+    CodexSQLiteResolutionError = _sqlite_resolver.CodexSQLiteResolutionError
+    resolve_codex_sqlite_db = _sqlite_resolver.resolve_codex_sqlite_db
+    thread_column_capabilities = _sqlite_resolver.thread_column_capabilities
+
+try:
     from benchmark_prompt_contract import auto_benchmark_execution_prompt
 except ModuleNotFoundError:
     import importlib.util
@@ -44,6 +56,7 @@ ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER", "ENDING_CHECK_WORKER
 RESULT_READY_BEGIN = "RESULT_READY_BEGIN"
 RESULT_READY_END = "RESULT_READY_END"
 RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
+FAILURE_DETAILS = {"process_launch_failure", "timeout", "non_zero_exit", "invalid_json_events", "model_unavailable", "permission_denied", "sandbox_denied", "context_overflow", "rate_limited", "network_api_failure", "runtime_metadata_missing", "model_protocol_mismatch", "stream_result_protocol", "benchmark_launch_protocol", "turn_not_completed"}
 TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "uncached_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens")
 BENCHMARK_RUN_ID_PATTERN = re.compile(r"^benchmark-[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 ENTRY_CONTEXT_ENV = "CODEX_TASK_ANALYZE_ENTRY_CONTEXT"
@@ -243,6 +256,56 @@ def annotate_operational_fallback(receipt):
     return receipt
 
 
+def infer_failure_detail(process, timed_out, stdout_summary, stderr_text, process_launch_error, model_match, effort_match, pair_match, token_consistent, streamed_result_required=False, streamed_result_match=True, benchmark_launch_verified=True):
+    if timed_out:
+        return "timeout"
+    if process_launch_error is not None:
+        return "process_launch_failure"
+    normalized_error = str(stderr_text or "").casefold()
+    failure_signals = set(stdout_summary.get("failure_signals") or [])
+    if "sandbox_denied" in failure_signals or "sandbox" in normalized_error and any(marker in normalized_error for marker in ("deny", "forbid", "permission")):
+        return "sandbox_denied"
+    if "permission_denied" in failure_signals or any(marker in normalized_error for marker in ("permission denied", "operation not permitted", "access denied")):
+        return "permission_denied"
+    if "context_overflow" in failure_signals or any(marker in normalized_error for marker in ("context length", "context window", "too many tokens", "maximum context")):
+        return "context_overflow"
+    if "rate_limited" in failure_signals or any(marker in normalized_error for marker in ("rate limit", "usage limit", "too many requests", "quota", "credits")):
+        return "rate_limited"
+    if "network_api_failure" in failure_signals or any(marker in normalized_error for marker in ("network", "connection refused", "connection reset", "timed out", "dns", "api error", "http 5")):
+        return "network_api_failure"
+    if "model_unavailable" in failure_signals or any(marker in normalized_error for marker in ("model unavailable", "temporarily unavailable", "model not found", "capacity")):
+        return "model_unavailable"
+    if stdout_summary.get("invalid_json_event_count", 0) and stdout_summary.get("json_event_count", 0) == 0:
+        return "invalid_json_events"
+    if process is not None and process.returncode != 0:
+        return "non_zero_exit"
+    if streamed_result_required and not streamed_result_match:
+        return "stream_result_protocol"
+    if not benchmark_launch_verified:
+        return "benchmark_launch_protocol"
+    if not stdout_summary.get("turn_completed"):
+        return "turn_not_completed"
+    if not model_match or not effort_match or not pair_match:
+        return "model_protocol_mismatch"
+    if not token_consistent:
+        return "runtime_metadata_missing"
+    return None
+
+
+def failure_class_for_detail(detail, availability_failure=False):
+    if detail is None:
+        return None
+    if detail == "timeout":
+        return "timeout"
+    if detail in {"model_unavailable", "rate_limited", "network_api_failure"} or availability_failure:
+        return "availability"
+    if detail in {"invalid_json_events", "model_protocol_mismatch", "stream_result_protocol", "benchmark_launch_protocol"}:
+        return "protocol"
+    if detail == "runtime_metadata_missing":
+        return "telemetry"
+    return "execution"
+
+
 def infer_failure_class(process, status, turn_completed, turn_failed, availability_failure, model_match, effort_match, pair_match, token_consistent):
     if status == "pass":
         return None
@@ -272,6 +335,7 @@ def route_attempt_summary(
     execution_failure_class,
     tokens=None,
     thread_id=None,
+    failure_detail=None,
 ):
     resolved_pair = pair_text(*resolved_pair) if resolved_pair else None
     effective_pair = pair_text(*effective_pair) if effective_pair else None
@@ -291,6 +355,7 @@ def route_attempt_summary(
         "executed_pair": executed_pair,
         "status": "pass" if status == "pass" else "fail",
         "failure_class": execution_failure_class if status != "pass" else None,
+        "failure_detail": failure_detail if status != "pass" else None,
         "model_match": bool(model_match),
         "effort_match": bool(effort_match),
         "pair_match": bool(pair_match),
@@ -303,7 +368,7 @@ def route_attempt_summary(
     }
 
 
-def failed_run_receipt(args, failure_class):
+def failed_run_receipt(args, failure_class, failure_detail=None):
     requested_pair = f"{args.model}|{args.effort}"
     attempt = {
         "requested_pair": requested_pair,
@@ -312,6 +377,7 @@ def failed_run_receipt(args, failure_class):
         "executed_pair": requested_pair,
         "status": "fail",
         "failure_class": failure_class,
+        "failure_detail": failure_detail,
         "model_match": False,
         "effort_match": False,
         "pair_match": False,
@@ -345,6 +411,7 @@ def failed_run_receipt(args, failure_class):
         "turn_completed": False,
         "status": "fail",
         "failure_class": failure_class,
+        "failure_detail": failure_detail,
         "route_attempts": [attempt],
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "limitations": "Execution failed before complete runtime metadata was available; no model execution success is claimed.",
@@ -363,12 +430,16 @@ def rejected_run_receipt(args, error):
 
 
 def parse_stdout_events(stdout_text):
-    summary = {"thread_id": None, "usage": {}, "output_hash": None, "turn_completed": False, "turn_failed": False, "availability_failure": False}
+    summary = {"thread_id": None, "usage": {}, "output_hash": None, "turn_completed": False, "turn_failed": False, "availability_failure": False, "failure_signals": [], "json_event_count": 0, "invalid_json_event_count": 0}
     for raw_line in stdout_text.splitlines():
+        if not raw_line.strip():
+            continue
         try:
             event = json.loads(raw_line)
         except json.JSONDecodeError:
+            summary["invalid_json_event_count"] += 1
             continue
+        summary["json_event_count"] += 1
         event_type = event.get("type")
         if event_type == "thread.started":
             summary["thread_id"] = event.get("thread_id")
@@ -380,7 +451,12 @@ def parse_stdout_events(stdout_text):
             summary["turn_failed"] = True
             summary["turn_completed"] = False
             failure_message = event.get("message") or (event.get("error") or {}).get("message") or ""
-            summary["availability_failure"] = summary["availability_failure"] or any(marker in failure_message.lower() for marker in ("usage limit", "rate limit", "purchase more credits", "capacity", "temporarily unavailable"))
+            normalized_message = str(failure_message).casefold()
+            signal_patterns = {"rate_limited": ("usage limit", "rate limit", "purchase more credits", "quota", "credits"), "model_unavailable": ("capacity", "temporarily unavailable", "model unavailable", "model not found"), "permission_denied": ("permission denied", "operation not permitted", "access denied"), "sandbox_denied": ("sandbox denied", "sandbox forbidden"), "context_overflow": ("context length", "context window", "maximum context"), "network_api_failure": ("network", "connection refused", "connection reset", "dns", "api error")}
+            for signal, markers in signal_patterns.items():
+                if any(marker in normalized_message for marker in markers) and signal not in summary["failure_signals"]:
+                    summary["failure_signals"].append(signal)
+            summary["availability_failure"] = summary["availability_failure"] or bool({"rate_limited", "model_unavailable"} & set(summary["failure_signals"]))
         elif event_type == "item.completed" and isinstance(event.get("item"), dict) and event["item"].get("type") == "agent_message":
             summary["output_hash"] = sha256_text(event["item"].get("text", ""))
     return summary
@@ -563,26 +639,52 @@ def run_streaming_result_process(command, execution_prompt, args, command_enviro
 
 
 def read_thread_state(state_db_path, thread_id):
-    if not state_db_path.exists() or not thread_id:
+    if not thread_id:
         return None
+    try:
+        configured_path = Path(state_db_path).expanduser().resolve() if state_db_path else None
+        if configured_path is not None and configured_path.is_dir():
+            resolved_database = resolve_codex_sqlite_db(sqlite_home=configured_path, strict_sqlite_home=True)
+        elif configured_path is not None:
+            # An explicit CLI path is already an exact database selection. Its
+            # capability check happens below with the same read-only connection
+            # used for the thread lookup, so mocked and locked runtimes retain
+            # their bounded retry behavior.
+            resolved_database = configured_path
+        else:
+            resolved_database = resolve_codex_sqlite_db()
+    except CodexSQLiteResolutionError as error:
+        return {"metadata_status": "unavailable", "metadata_error": str(error)[:160]}
+    if resolved_database is None:
+        return None
+
+    def read_row(connection):
+        available_columns = {row[1] for row in connection.execute("PRAGMA table_info(threads)").fetchall()}
+        if "id" not in available_columns:
+            raise sqlite3.OperationalError("threads.id capability is missing")
+        selected_columns = ["id", *[column for column in ("rollout_path", "model", "reasoning_effort", "tokens_used", "cli_version", "model_provider", "source") if column in available_columns]]
+        row = connection.execute(f"SELECT {', '.join(selected_columns)} FROM threads WHERE id = ?", (thread_id,)).fetchone()
+        return row, selected_columns
+
     for attempt in range(20):
         connection = None
         operational_error = None
         row = None
+        selected_columns = []
         try:
-            connection = sqlite3.connect(f"file:{state_db_path}?mode=ro", uri=True)
-            row = connection.execute("SELECT rollout_path, model, reasoning_effort, tokens_used, cli_version, model_provider, source FROM threads WHERE id = ?", (thread_id,)).fetchone()
+            connection = sqlite3.connect(f"file:{resolved_database}?mode=ro", uri=True)
+            row, selected_columns = read_row(connection)
         except sqlite3.OperationalError as error:
             operational_error = error
         finally:
             if connection is not None:
                 connection.close()
-        immutable_fallback_allowed = not Path(f"{state_db_path}-wal").exists() and not Path(f"{state_db_path}-shm").exists()
+        immutable_fallback_allowed = not Path(f"{resolved_database}-wal").exists() and not Path(f"{resolved_database}-shm").exists()
         if operational_error is not None and immutable_fallback_allowed:
             connection = None
             try:
-                connection = sqlite3.connect(f"file:{state_db_path}?mode=ro&immutable=1", uri=True)
-                row = connection.execute("SELECT rollout_path, model, reasoning_effort, tokens_used, cli_version, model_provider, source FROM threads WHERE id = ?", (thread_id,)).fetchone()
+                connection = sqlite3.connect(f"file:{resolved_database}?mode=ro&immutable=1", uri=True)
+                row, selected_columns = read_row(connection)
                 operational_error = None
             except sqlite3.OperationalError as error:
                 operational_error = error
@@ -595,7 +697,11 @@ def read_thread_state(state_db_path, thread_id):
             time.sleep(0.1)
             continue
         if row:
-            return {"rollout_path": Path(row[0]), "model": row[1], "effort": row[2], "tokens_used": row[3], "cli_version": row[4], "model_provider": row[5], "source": row[6]}
+            values = dict(zip(selected_columns, row))
+            rollout_path = values.get("rollout_path")
+            optional_columns = ("rollout_path", "model", "reasoning_effort", "tokens_used", "cli_version", "model_provider", "source")
+            missing_columns = [column for column in optional_columns if column not in selected_columns]
+            return {"rollout_path": Path(rollout_path) if isinstance(rollout_path, str) and rollout_path else None, "model": values.get("model"), "effort": values.get("reasoning_effort"), "tokens_used": values.get("tokens_used"), "cli_version": values.get("cli_version"), "model_provider": values.get("model_provider"), "source": values.get("source"), "metadata_status": "degraded" if missing_columns else "complete", "metadata_missing_columns": missing_columns, "runtime_database": str(resolved_database)}
         time.sleep(0.1)
     return None
 
@@ -732,6 +838,7 @@ def run_receipt(args, prompt_text):
     streamed_matching_result = None
     result_ready_monotonic_ns = None
     duplicate_result_detected = False
+    process_launch_error = None
     if benchmark_stream_ready and not callable(getattr(args, "result_ready_callback", None)):
         args.result_ready_callback = partial(emit_benchmark_result_ready_event, args)
     if (benchmark_stream_ready or stream_result_ready) and args.result_output.exists():
@@ -754,27 +861,32 @@ def run_receipt(args, prompt_text):
             command_environment["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"] = args.effort
             benchmark_cache_root = Path(args.result_output).parent / "auto-route-cache" if args.result_output is not None else Path(args.workdir) / "Cache" / "task-analyze" / args.workload_id
             command_environment["CODEX_AUTO_BENCHMARK_CACHE_ROOT"] = str(benchmark_cache_root)
-    if benchmark_stream_ready or stream_result_ready:
-        stream_mode = "benchmark" if benchmark_stream_ready else "production"
-        streamed_process = run_streaming_result_process(command, execution_prompt, args, command_environment or os.environ.copy(), stream_mode)
-        process = streamed_process["process"]
-        timed_out = streamed_process["timed_out"]
-        process_stdout = streamed_process["stdout"]
-        process_stderr = streamed_process["stderr"]
-        streamed_matching_result = streamed_process["matching_result"]
-        result_ready_monotonic_ns = streamed_process["result_ready_monotonic_ns"]
-        duplicate_result_detected = streamed_process["duplicate_result_detected"]
-    else:
-        try:
-            process = subprocess.run(command, input=execution_prompt, text=True, cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout, **({"env": command_environment} if command_environment is not None else {}))
-        except subprocess.TimeoutExpired as error:
-            process = None
-            timed_out = True
-            process_stdout = error.stdout.decode("utf-8", errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
-            process_stderr = error.stderr.decode("utf-8", errors="replace") if isinstance(error.stderr, bytes) else error.stderr or ""
+    try:
+        if benchmark_stream_ready or stream_result_ready:
+            stream_mode = "benchmark" if benchmark_stream_ready else "production"
+            streamed_process = run_streaming_result_process(command, execution_prompt, args, command_environment or os.environ.copy(), stream_mode)
+            process = streamed_process["process"]
+            timed_out = streamed_process["timed_out"]
+            process_stdout = streamed_process["stdout"]
+            process_stderr = streamed_process["stderr"]
+            streamed_matching_result = streamed_process["matching_result"]
+            result_ready_monotonic_ns = streamed_process["result_ready_monotonic_ns"]
+            duplicate_result_detected = streamed_process["duplicate_result_detected"]
         else:
+            process = subprocess.run(command, input=execution_prompt, text=True, cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout, **({"env": command_environment} if command_environment is not None else {}))
+
             process_stdout = process.stdout.decode("utf-8", errors="replace") if isinstance(process.stdout, bytes) else process.stdout or ""
             process_stderr = process.stderr.decode("utf-8", errors="replace") if isinstance(process.stderr, bytes) else process.stderr or ""
+    except subprocess.TimeoutExpired as error:
+        process = None
+        timed_out = True
+        process_stdout = error.stdout.decode("utf-8", errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
+        process_stderr = error.stderr.decode("utf-8", errors="replace") if isinstance(error.stderr, bytes) else error.stderr or ""
+    except OSError as error:
+        process = None
+        process_launch_error = error
+        process_stdout = ""
+        process_stderr = ""
     benchmark_launch_required = bool(getattr(args, "bootstrap_task", False) and args.result_output is not None)
     benchmark_launch_evidence = benchmark_auto_launch_evidence(benchmark_cache_root, sha256_text(prompt_text), pair_text(args.model, args.effort)) if benchmark_launch_required else None
     stdout_summary = parse_stdout_events(process_stdout)
@@ -793,7 +905,7 @@ def run_receipt(args, prompt_text):
     if benchmark_stream_ready or stream_result_ready:
         stdout_summary["output_hash"] = sha256_text(streamed_matching_result) if streamed_matching_result is not None else None
     thread_state = read_thread_state(args.state_db, stdout_summary["thread_id"])
-    rollout = parse_rollout_allowlist(thread_state["rollout_path"] if thread_state else None)
+    rollout = parse_rollout_allowlist((thread_state or {}).get("rollout_path"))
     turn_context = rollout["turn_context"] if rollout.get("turn_context") else {}
     reroutes = rollout["reroutes"]
     has_turn_context = bool(turn_context.get("model") and turn_context.get("effort"))
@@ -815,14 +927,16 @@ def run_receipt(args, prompt_text):
     streamed_result_required = benchmark_stream_ready or stream_result_ready
     streamed_result_match = not streamed_result_required or streamed_matching_result is not None
     benchmark_launch_verified = not benchmark_launch_required or benchmark_launch_evidence["verified"] is True
-    status = "pass" if not timed_out and process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and pair_match and token_consistent and streamed_result_match and not duplicate_result_detected and benchmark_launch_verified else "fail"
+    status = "pass" if not timed_out and process is not None and process.returncode == 0 and stdout_summary["turn_completed"] and not stdout_summary["turn_failed"] and pair_match and token_consistent and streamed_result_match and not duplicate_result_detected and benchmark_launch_verified else "fail"
     task_complete = rollout["task_complete"] or {}
-    failure_class = "timeout" if timed_out else "protocol" if (streamed_result_required and (streamed_matching_result is None or duplicate_result_detected)) or not benchmark_launch_verified else infer_failure_class(process, status, stdout_summary["turn_completed"], stdout_summary["turn_failed"], stdout_summary["availability_failure"], model_match, effort_match, pair_match, token_consistent)
+    failure_detail = infer_failure_detail(process, timed_out, stdout_summary, process_stderr, process_launch_error, model_match, effort_match, pair_match, token_consistent, streamed_result_required, streamed_result_match and not duplicate_result_detected, benchmark_launch_verified)
+    failure_class = failure_class_for_detail(failure_detail, stdout_summary["availability_failure"])
     requested_pair = f"{args.model}|{args.effort}"
-    attempt = route_attempt_summary(requested_pair=requested_pair, resolved_pair=(resolved_model, resolved_effort) if resolved_model and resolved_effort else None, effective_pair=(effective_model, resolved_effort) if effective_model and resolved_effort else None, status=status, model_match=model_match, effort_match=effort_match, pair_match=pair_match, process_elapsed_ms=elapsed_ms, task_complete=task_complete, execution_failure_class=failure_class, tokens=usage, thread_id=stdout_summary["thread_id"])
+    attempt = route_attempt_summary(requested_pair=requested_pair, resolved_pair=(resolved_model, resolved_effort) if resolved_model and resolved_effort else None, effective_pair=(effective_model, resolved_effort) if effective_model and resolved_effort else None, status=status, model_match=model_match, effort_match=effort_match, pair_match=pair_match, process_elapsed_ms=elapsed_ms, task_complete=task_complete, execution_failure_class=failure_class, tokens=usage, thread_id=stdout_summary["thread_id"], failure_detail=failure_detail)
     if status == "pass":
         failure_class = None
-    receipt = {"schema_version": 1, "proof_level": "local-operational-not-cryptographic", "workload_id": args.workload_id, "node_type": receipt_node_type(args), **authorization, "workload_prompt_sha256": sha256_text(prompt_text), "prompt_sha256": sha256_text(execution_prompt), "output_sha256": stdout_summary["output_hash"], "thread_id": stdout_summary["thread_id"], "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": resolved_model, "resolved_effort": resolved_effort, "resolved_pair": f"{resolved_model}|{resolved_effort}" if resolved_model and resolved_effort else None, "effective_model": effective_model, "effective_effort": resolved_effort, "effective_pair": f"{effective_model}|{resolved_effort}" if effective_model and resolved_effort else None, "reroutes": reroutes, "allowed_fallback_pairs": allowed_fallback_pairs, "model_match": model_match, "effort_match": effort_match, "pair_match": pair_match, "tokens": usage, "metrics_complete": not timed_out and stdout_summary["turn_completed"] and token_consistent, "tokens_lower_bound": timed_out and usage["total_tokens"] is not None, "pre_execution_failure": False, "availability": rollout.get("availability"), "state_tokens_used": (thread_state or {}).get("tokens_used"), "token_total_consistent": token_consistent, "model_turn_duration_ms": task_complete.get("duration_ms"), "time_to_first_token_ms": task_complete.get("time_to_first_token_ms"), "process_elapsed_ms": elapsed_ms, "exit_code": process.returncode if process is not None else None, "turn_completed": False if timed_out else stdout_summary["turn_completed"], "stderr_line_count": len(process_stderr.splitlines()), "cli_version": (thread_state or {}).get("cli_version"), "model_provider": (thread_state or {}).get("model_provider"), "source": (thread_state or {}).get("source"), "status": status, "recorded_at": datetime.now(timezone.utc).isoformat(), "limitations": "Resolved/effective values come from local Codex runtime metadata and reroute events; this is not a cryptographically signed backend attestation."}
+        failure_detail = None
+    receipt = {"schema_version": 1, "proof_level": "local-operational-not-cryptographic", "workload_id": args.workload_id, "node_type": receipt_node_type(args), **authorization, "workload_prompt_sha256": sha256_text(prompt_text), "prompt_sha256": sha256_text(execution_prompt), "output_sha256": stdout_summary["output_hash"], "thread_id": stdout_summary["thread_id"], "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": resolved_model, "resolved_effort": resolved_effort, "resolved_pair": f"{resolved_model}|{resolved_effort}" if resolved_model and resolved_effort else None, "effective_model": effective_model, "effective_effort": resolved_effort, "effective_pair": f"{effective_model}|{resolved_effort}" if effective_model and resolved_effort else None, "reroutes": reroutes, "allowed_fallback_pairs": allowed_fallback_pairs, "model_match": model_match, "effort_match": effort_match, "pair_match": pair_match, "tokens": usage, "metrics_complete": not timed_out and stdout_summary["turn_completed"] and token_consistent, "tokens_lower_bound": timed_out and usage["total_tokens"] is not None, "pre_execution_failure": False, "availability": rollout.get("availability"), "state_tokens_used": (thread_state or {}).get("tokens_used"), "token_total_consistent": token_consistent, "runtime_metadata_status": (thread_state or {}).get("metadata_status", "missing"), "runtime_metadata_missing_columns": (thread_state or {}).get("metadata_missing_columns", []), "runtime_metadata_error": (thread_state or {}).get("metadata_error"), "runtime_database": (thread_state or {}).get("runtime_database"), "model_turn_duration_ms": task_complete.get("duration_ms"), "time_to_first_token_ms": task_complete.get("time_to_first_token_ms"), "process_elapsed_ms": elapsed_ms, "exit_code": process.returncode if process is not None else None, "turn_completed": False if timed_out else stdout_summary["turn_completed"], "stderr_line_count": len(process_stderr.splitlines()), "cli_version": (thread_state or {}).get("cli_version"), "model_provider": (thread_state or {}).get("model_provider"), "source": (thread_state or {}).get("source"), "status": status, "failure_detail": failure_detail, "recorded_at": datetime.now(timezone.utc).isoformat(), "limitations": "Resolved/effective values come from local Codex runtime metadata and reroute events; this is not a cryptographically signed backend attestation."}
     if getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):
         receipt["benchmark_run_id"] = args.benchmark_run_id
         if benchmark_stream_ready:
@@ -952,7 +1066,7 @@ def parse_args(argv=None):
     run_parser.add_argument("--result-output", type=Path, help="Optional task-cache path for the final child result. Raw stdout/stderr are never stored in the receipt.")
     run_parser.add_argument("--emit-result", action="store_true", help="Return the saved final result in the command summary for a bounded parent fast path; never stores it in the receipt.")
     run_parser.add_argument("--workdir", type=Path, default=Path.cwd())
-    run_parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "state_5.sqlite")
+    run_parser.add_argument("--state-db", type=Path, help="Optional explicit Codex runtime SQLite database; otherwise resolve CODEX_SQLITE_HOME, CODEX_HOME, then the default runtime root.")
     run_parser.add_argument("--codex-bin", default="codex")
     run_parser.add_argument("--sandbox", choices=["read-only", "workspace-write", "danger-full-access"], default="read-only")
     run_parser.add_argument("--allow-fallback", action="append", default=[])

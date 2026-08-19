@@ -36,7 +36,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--result-output", type=Path, required=True)
     parser.add_argument("--workdir", required=True)
-    parser.add_argument("--state-db", required=True)
+    parser.add_argument("--state-db", type=Path)
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--sandbox", required=True)
     parser.add_argument("--timeout", required=True)
@@ -47,6 +47,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     parser.add_argument("--benchmark-prompt-path")
     args = parser.parse_args()
     prompt_text = sys.stdin.read()
+    state_db = args.state_db or Path(os.environ["CODEX_SQLITE_HOME"]) / "state_6.sqlite"
 
     def auto_execution_prompt(raw_workload):
         workload_sha256 = hashlib.sha256(raw_workload.encode("utf-8")).hexdigest()
@@ -71,7 +72,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     rollout_path = sessions_root / f"rollout-{thread_id}.jsonl"
     rollout_events = [{"type": "session_meta", "payload": {"id": thread_id, "source": "exec"}}, {"type": "turn_context", "payload": {"model": args.model, "effort": args.effort}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": total_tokens}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
     rollout_path.write_text("\\n".join(json.dumps(event) for event in rollout_events) + "\\n", encoding="utf-8")
-    connection = sqlite3.connect(args.state_db)
+    connection = sqlite3.connect(state_db)
     connection.execute("CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
     connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (thread_id, str(rollout_path), "exec", args.model, args.effort, total_tokens))
     connection.commit()
@@ -83,7 +84,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         adaptive_rollout_events = [{"type": "session_meta", "payload": {"id": adaptive_thread_id, "source": "subagent"}}, {"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "max"}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": adaptive_tokens}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
         adaptive_rollout_path.write_text("\\n".join(json.dumps(event) for event in adaptive_rollout_events) + "\\n", encoding="utf-8")
         adaptive_source = json.dumps({"subagent": {"thread_spawn": {"parent_thread_id": thread_id}}})
-        connection = sqlite3.connect(args.state_db)
+        connection = sqlite3.connect(state_db)
         connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (adaptive_thread_id, str(adaptive_rollout_path), adaptive_source, "gpt-5.6-luna", "max", adaptive_tokens))
         connection.commit()
         connection.close()
@@ -109,7 +110,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         ending_rollout_events = [{"type": "session_meta", "payload": {"id": ending_thread_id, "source": "subagent"}}, {"type": "turn_context", "payload": {"model": args.model, "effort": args.effort}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": ending_tokens}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
         ending_rollout_path.write_text("\\n".join(json.dumps(event) for event in ending_rollout_events) + "\\n", encoding="utf-8")
         ending_source = json.dumps({"subagent": {"thread_spawn": {"parent_thread_id": thread_id}}})
-        connection = sqlite3.connect(args.state_db)
+        connection = sqlite3.connect(state_db)
         connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (ending_thread_id, str(ending_rollout_path), ending_source, args.model, args.effort, ending_tokens))
         connection.commit()
         connection.close()
@@ -131,7 +132,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         receipt["benchmark_selected_execution"] = {"schema_version": 2, "receipt_sha256": hashlib.sha256(adaptive_thread_id.encode("utf-8")).hexdigest(), "selected_pair": selected_pair, "effective_pair": selected_pair, "steady_state_logical_tokens": adaptive_tokens, "steady_state_execution_elapsed_ms": 1, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": route_signature}
     args.output.write_text(json.dumps(receipt) + "\\n", encoding="utf-8")
     suite_root = args.output.parents[2]
-    call_record = {"run_id": args.workload_id, "direct": args.direct_task, "entry": False, "bootstrap": args.bootstrap_task, "entry_env_present": "CODEX_TASK_ANALYZE_ENTRY_CONTEXT" in os.environ, "benchmark_run_id": args.benchmark_run_id, "model": args.model, "effort": args.effort, "workdir": args.workdir, "state_db": args.state_db, "codex_home": os.environ.get("CODEX_HOME"), "sandbox": args.sandbox, "prompt_sha256": workload_prompt_sha256, "plan_exists": (suite_root / "suite-plan.json").is_file()}
+    call_record = {"run_id": args.workload_id, "direct": args.direct_task, "entry": False, "bootstrap": args.bootstrap_task, "entry_env_present": "CODEX_TASK_ANALYZE_ENTRY_CONTEXT" in os.environ, "benchmark_run_id": args.benchmark_run_id, "model": args.model, "effort": args.effort, "workdir": args.workdir, "state_db": str(state_db), "codex_home": os.environ.get("CODEX_HOME"), "sandbox": args.sandbox, "prompt_sha256": workload_prompt_sha256, "plan_exists": (suite_root / "suite-plan.json").is_file()}
     with (suite_root / "call-order.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(call_record) + "\\n")
 """).strip() + "\n"
@@ -442,7 +443,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertTrue(all(call["plan_exists"] for call in calls))
         self.assertTrue(all((call["model"], call["effort"]) == (("gpt-5.6-sol", "ultra") if call["direct"] else ("gpt-5.6-luna", "max")) and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in performance_calls))
         self.assertTrue(all((call["model"], call["effort"]) == ("gpt-5.6-sol", "ultra") and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in probe_calls))
-        self.assertTrue(all(Path(call["state_db"]).is_absolute() and Path(call["state_db"]).parent == Path(call["codex_home"]) for call in calls))
+        self.assertTrue(all(Path(call["state_db"]).is_absolute() and Path(call["state_db"]).parent == Path(call["codex_home"]) / "runtime-sqlite" for call in calls))
         self.assertTrue(all(call["benchmark_run_id"] == f"benchmark-{call['run_id']}" for call in calls))
         self.assertTrue(all(call["direct"] != call["bootstrap"] and call["entry"] is False and call["entry_env_present"] is False for call in calls))
         for tier in module.TIERS:

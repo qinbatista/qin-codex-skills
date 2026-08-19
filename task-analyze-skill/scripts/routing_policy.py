@@ -2,6 +2,8 @@
 """Load the shared model ladder and expose deterministic routing helpers."""
 
 import importlib.util
+import re
+import unicodedata
 from pathlib import Path
 
 MODEL_CAPABILITY_CONFIG_PATH = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
@@ -54,6 +56,178 @@ NORMAL_ADAPTIVE_LADDER = [(model, effort) for model in NORMAL_ADAPTIVE_MODELS fo
 MODEL_ROLE_PAIRS = dict(MODEL_CAPABILITY_CONFIG["role_pairs"])
 # Retained only so the legacy local-history reader can parse old records.
 LEARNING_FIELDS = ("task_family", "artifact", "scope", "ambiguity", "modality", "risk", "complexity", "execution_domain")
+
+# Keep prompt-only admission thresholds in one place. Runtime evidence and an
+# explicit caller score remain authoritative over this lightweight classifier.
+ROUTING_THRESHOLDS = {
+    "fast_path_maximum_score": 24,
+    "complex_route_minimum_score": 50,
+    "advanced_route_minimum_score": 75,
+    "maximum_route_attempts": 2,
+    "maximum_ending_repair_rounds": 3,
+}
+HIGH_RISK_ROUTING_TERMS = ("security", "authentication", "authorization", "payment", "database migration", "production config", "credential", "deployment", "destructive", "安全", "认证", "授权", "支付", "数据迁移", "生产配置", "凭证", "部署", "删除全部", "破坏性")
+_UNICODE_ROUTING_TRANSLATION = str.maketrans({"。": ".", "！": "!", "？": "?", "：": ":", "，": ",", "；": ";", "、": ",", "（": "(", "）": ")", "“": '"', "”": '"', "‘": "'", "’": "'"})
+_CODE_ACTION_PATTERNS = (
+    ("rename", r"\brename\b|重命名|改名|改个名字"),
+    ("replace", r"\breplace\b|替换"),
+    ("delete", r"\bdelete\b|删除"),
+    ("fix", r"\bfix\b|\brepair\b|修复|修正"),
+    ("migrate", r"\bmigrat(?:e|ion)\b|迁移(?:系统|数据|数据库|存档|格式)"),
+    ("refactor", r"\brefactor\b|重构|拆分|拆成"),
+    ("test", r"\btest(?:ing)?\b|测试|验证"),
+    ("write", r"\b(?:write|implement|add|create)\b|实现|新增|编写"),
+    ("edit", r"\b(?:edit|change|modify|update)\b|修改|改成|更改|调整|优化"),
+)
+_QUESTION_PATTERNS = (r"^(?:what|who|when|where|which|why|how|calculate|convert|is|are|can|does|do)\b", r"(?:什么|为什么|为何|怎么|如何|是否|哪[个里]|几[个]|干什么|有什么作用|有什么问题|请解释|解释一下|帮我分析|分析一下|是什么意思|天气怎么样)")
+_CONCEPT_EXPLANATION_PATTERNS = (r"(?:请解释|解释(?:一下)?|是什么意思|什么是|分别是什么意思|介绍一下|定义是)" , r"\b(?:what is|explain|define|meaning of)\b")
+_FILE_PATTERN = re.compile(r"(?<![\w./-])[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)(?![\w/-])", re.IGNORECASE)
+
+
+def normalize_routing_input(prompt):
+    """Normalize punctuation and spacing before deterministic prompt routing."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", str(prompt or "")).translate(_UNICODE_ROUTING_TRANSLATION)).strip()
+
+
+def _routing_text(prompt):
+    return normalize_routing_input(prompt).casefold()
+
+
+def _matches_any(text, patterns):
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def infer_prompt_task_type(prompt):
+    """Classify task intent without conflating a question with its complexity."""
+    text = _routing_text(prompt)
+    if not text:
+        return "unknown"
+    matched_operations = [operation for operation, pattern in _CODE_ACTION_PATTERNS if re.search(pattern, text, re.IGNORECASE)]
+    action_found = any(operation != "test" for operation in matched_operations)
+    explicit_mutation = any(operation in {"rename", "replace", "delete", "fix", "refactor", "write", "edit"} for operation in matched_operations)
+    question_found = text.endswith(("?", "!")) or _matches_any(text, _QUESTION_PATTERNS)
+    if question_found:
+        return "question"
+    if not explicit_mutation and _matches_any(text, (r"^(?:analyze|audit|investigate)\b", r"^(?:请)?(?:分析|审计|调查|排查)")):
+        return "analysis"
+    if action_found:
+        return "code"
+    if _FILE_PATTERN.search(text):
+        return "code"
+    if _matches_any(text, (r"\b(?:research|investigate)\b", r"调研|研究")):
+        return "research"
+    if _matches_any(text, (r"\b(?:write|draft|translate)\b", r"写一[篇份]|起草|翻译")):
+        return "writing"
+    if _matches_any(text, (r"\b(?:analyze|audit|investigate)\b", r"分析|审计|调查|排查")):
+        return "analysis"
+    return "unknown"
+
+
+def infer_prompt_operation(prompt, task_type=None):
+    """Return a bounded operation label for a normalized prompt."""
+    text = _routing_text(prompt)
+    resolved_type = task_type or infer_prompt_task_type(prompt)
+    if resolved_type == "question":
+        return "answer"
+    for operation, pattern in _CODE_ACTION_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return operation
+    if resolved_type == "analysis":
+        return "analyze"
+    if resolved_type == "research":
+        return "research"
+    if resolved_type == "writing":
+        return "write"
+    return "work"
+
+
+def _prompt_file_count(text):
+    return len(set(_FILE_PATTERN.findall(text)))
+
+
+def analyze_prompt_routing(prompt, risk="low", ambiguity="low"):
+    """Produce deterministic bilingual task type, score, reasons, and fast-path admission."""
+    normalized = normalize_routing_input(prompt)
+    text = normalized.casefold()
+    explicit = re.search(r"(?:complexity|复杂度)(?:\s*score)?\s*[:=]\s*(100|[1-9]?\d)\b", text, re.IGNORECASE)
+    task_type = infer_prompt_task_type(normalized)
+    operation = infer_prompt_operation(normalized, task_type)
+    if explicit:
+        score = int(explicit.group(1))
+        reasons = ["explicit complexity score"]
+    else:
+        score = 12 if task_type == "question" else 18 if task_type == "code" else 20
+        reasons = ["question baseline" if task_type == "question" else "code baseline" if task_type == "code" else "general baseline"]
+        additions = []
+        scope_patterns = (r"\b(?:project[- ]wide|entire project|whole project|across the project|cross[- ]project)\b", r"整个项目|全项目|整个\s*unity\s*项目|跨项目")
+        multi_file_patterns = (r"\b(?:multi[- ]file|multiple files|(?:\d+|six)[- ]file|across files|cross[- ]file|multiple modules|cross[- ]module)\b", r"多个文件|跨文件|多个模块|跨模块")
+        architecture_patterns = (r"\b(?:architecture|refactor|distributed)\b", r"架构|重构|拆分|拆成")
+        concern_patterns = (
+            ("database", (r"\bdatabase\b", r"数据库"), 5),
+            ("migration", (r"\b(?:data(?:base)? migration|migration)\b", r"数据迁移|迁移|存档迁移"), 10),
+            ("concurrency", (r"\b(?:concurrency|parallelism|race condition|deadlock|async)\b", r"并发|线程|异步|竞态|死锁"), 10),
+            ("rollback", (r"\brollback\b", r"回滚"), 8),
+            ("compatibility", (r"\b(?:compatibility|backward compatible)\b", r"兼容|向后兼容|旧存档|旧版本"), 8),
+            ("performance", (r"\b(?:performance|optimization|optimize)\b", r"性能|优化"), 8),
+            ("security", (r"\b(?:security|authentication|authorization|permission)\b", r"安全|认证|授权|权限"), 10),
+            ("validation", (r"\b(?:test(?:ing)?|verification|regression|end-to-end|integration test)\b", r"测试|验证|回归|端到端|集成测试"), 7),
+            ("deployment", (r"\b(?:deploy(?:ment)?|\bci\b|\bcd\b)\b", r"部署|持续集成|持续部署"), 7),
+            ("integration", (r"\b(?:integration|external api|network|server|client)\b", r"集成|网络|服务器|客户端|addressables|ecs"), 6),
+            ("workflow", (r"\b(?:pipeline|workflow graph|orchestration)\b", r"流程图|编排"), 12),
+            ("serialization", (r"\b(?:serialization|prefab|addressables|ecs)\b", r"序列化|prefab|addressables|ecs|场景|存档"), 5),
+            ("global lifecycle", (r"\b(?:lifecycle|model routing|global skill|global task|ending)\b", r"生命周期|模型路由|全局\s*skill|全局任务|结束验证"), 22),
+            ("repair orchestration", (r"\b(?:repair loops?|retry|fresh verifier|fallback|independent (?:checks?|tasks?))\b", r"修复循环|重试|独立验证|回退"), 8),
+        )
+        if _matches_any(text, scope_patterns):
+            additions.append(("project-wide scope", 22))
+        if _matches_any(text, multi_file_patterns):
+            additions.append(("cross-file scope", 18))
+        file_count = _prompt_file_count(text)
+        if file_count > 1:
+            additions.append((f"{file_count} named files", min(15, (file_count - 1) * 5)))
+        if _matches_any(text, architecture_patterns):
+            additions.append(("architecture or refactor scope", 10))
+        action_count = sum(bool(re.search(pattern, text, re.IGNORECASE)) for _, pattern in _CODE_ACTION_PATTERNS)
+        if action_count > 1:
+            additions.append(("multiple requested actions", min(12, (action_count - 1) * 4)))
+        for concern, patterns, weight in concern_patterns:
+            if _matches_any(text, patterns):
+                additions.append((concern, weight))
+        for label, weight in additions:
+            score += weight
+            reasons.append(f"{label} +{weight}")
+        system_terms = sum(term in text for term in ("skill", "script", "validator", "documentation", "tests", "memory", "obsidian", "model", "ending"))
+        if task_type == "code" and system_terms >= 3:
+            system_weight = min(20, (system_terms - 2) * 4)
+            score += system_weight
+            reasons.append(f"multi-surface system delivery +{system_weight}")
+        direct_small_edit = task_type == "code" and not additions and _matches_any(text, (r"\b(?:one[- ]line|single|small|tiny|typo)\b", r"这一行|一个变量|从\s*\d+\s*改成\s*\d+|拼写错误|改个名字"))
+        if direct_small_edit:
+            score = min(score, 16)
+            reasons.append("bounded single edit cap")
+        concept_explanation = task_type == "question" and _matches_any(text, _CONCEPT_EXPLANATION_PATTERNS) and not _matches_any(text, scope_patterns + multi_file_patterns)
+        if concept_explanation:
+            score = min(score, ROUTING_THRESHOLDS["fast_path_maximum_score"])
+            reasons.append("concept explanation cap")
+        numeric_signals = sum(marker in text for marker in ("decimal", "round_half_up", "round half up", "tax", "currency", "cents", "percent"))
+        if numeric_signals >= 2:
+            score += 32
+            reasons.append("multi-part numeric correctness +32")
+        word_count = len(text.split())
+        if word_count >= 80:
+            score += 8
+            reasons.append("long request +8")
+        if word_count >= 160:
+            score += 8
+            reasons.append("very long request +8")
+    normalized_risk = str(risk or "low").strip().casefold()
+    risk_override = normalized_risk not in {"", "low"} or _matches_any(text, tuple(re.escape(term) for term in HIGH_RISK_ROUTING_TERMS))
+    if risk_override and score <= ROUTING_THRESHOLDS["fast_path_maximum_score"]:
+        score = ROUTING_THRESHOLDS["fast_path_maximum_score"] + 1
+        reasons.append("risk override exits fast path")
+    score = max(0, min(100, score))
+    fast_path = score <= ROUTING_THRESHOLDS["fast_path_maximum_score"] and normalized_risk in {"", "low"} and not risk_override and str(ambiguity or "low").strip().casefold() in {"", "low"} and task_type in {"code", "question", "writing"}
+    return {"normalized_prompt": normalized, "task_type": task_type, "operation": operation, "complexity_score": score, "reasons": reasons, "fast_path_eligible": fast_path, "risk_override": risk_override}
 
 EXECUTION_DOMAIN_REGISTRY_VERSION = 1
 EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"

@@ -11,6 +11,16 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+_ENDING_BACKEND_PATH = Path(__file__).with_name("ending_backend.py")
+_ENDING_BACKEND_SPEC = importlib.util.spec_from_file_location("ending_verification_backend", _ENDING_BACKEND_PATH)
+ending_backend = importlib.util.module_from_spec(_ENDING_BACKEND_SPEC)
+_ENDING_BACKEND_SPEC.loader.exec_module(ending_backend)
+
+_ROUTING_POLICY_PATH = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "routing_policy.py"
+_ROUTING_POLICY_SPEC = importlib.util.spec_from_file_location("ending_verification_routing_policy", _ROUTING_POLICY_PATH)
+_ROUTING_POLICY = importlib.util.module_from_spec(_ROUTING_POLICY_SPEC)
+_ROUTING_POLICY_SPEC.loader.exec_module(_ROUTING_POLICY)
+
 
 SCHEMA_VERSION = 10
 ENDING_PRIMARY_PAIR = "gpt-5.3-codex-spark|xhigh"
@@ -41,6 +51,7 @@ LIFECYCLE_ID_PATTERN = re.compile(r"\A\d{8}T\d{6}-[0-9a-f]{12}\Z")
 PROJECT_MEMORY_MODES = {"none", "durable"}
 PROJECT_MEMORY_SCOPES = {"project", "feature", "code", "file"}
 PROJECT_MEMORY_CHANGE_KINDS = {"add", "edit", "rename", "move", "delete", "mixed"}
+MAX_ENDING_REPAIR_ROUNDS = _ROUTING_POLICY.ROUTING_THRESHOLDS["maximum_ending_repair_rounds"]
 SENSITIVE_MEMORY_PATTERNS = (
     re.compile(r"(?<![A-Za-z0-9_-])(?:sk|rk|pk)-[A-Za-z0-9_-]{12,}"),
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s,;]{8,}", re.IGNORECASE),
@@ -306,7 +317,7 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
             "action": "send_repair_prompt_to_origin_session_then_fresh_ending",
             "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY,
             "error_fields": ["exit_code", "stdout", "stderr", "timed_out"],
-            "max_repair_attempts": 3,
+            "max_repair_attempts": MAX_ENDING_REPAIR_ROUNDS,
             "origin_session_required": True,
             "origin_session": origin_session,
         },
@@ -340,7 +351,7 @@ def build_plan(project_root, task_name, task_score, checks, origin_session=None,
         "origin_session": normalized_origin_session,
         "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id,
         "ending_model_policy": _ending_model_policy(registry),
-        "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": 3, "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
+        "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": MAX_ENDING_REPAIR_ROUNDS, "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
         "project_memory_closeout": normalized_closeout,
         "ending_tasks": tasks,
     }
@@ -443,7 +454,7 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
     ]
     policy = plan["ending_model_policy"]
     repair_parent_line = f"Repair parent lifecycle id: {repair_of_lifecycle_id or 'none'}"
-    repair_start_instruction = f"This is a fresh repair Ending. When starting its lifecycle with ending_task_ledger.py, pass --repair-of-lifecycle-id {repair_of_lifecycle_id} exactly; do not start an unlinked root lifecycle." if repair_of_lifecycle_id else "This is an initial Ending. Do not pass --repair-of-lifecycle-id when starting its lifecycle."
+    repair_start_instruction = f"This is a fresh repair Ending. When starting its lifecycle with ending_task_ledger.py, pass --repair-of-lifecycle-id {repair_of_lifecycle_id} exactly; do not start an unlinked root lifecycle. Audit that parent first: if it is already passed because a later independent release mismatch created this repair plan, also pass --late-repair-reason post-ending-verification-mismatch; otherwise do not supply that option." if repair_of_lifecycle_id else "This is an initial Ending. Do not pass --repair-of-lifecycle-id when starting its lifecycle."
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
@@ -484,7 +495,28 @@ def _worker_prompt(plan_path, plan, checks, evidence_outputs, memory_candidates_
     )
 
 
-def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None, repair_of_lifecycle_id=""):
+def _independent_backend_prompt(plan_path, plan, checks, evidence_outputs, assigned_pair, producer_receipt, backend_id):
+    """Give a portable verifier saved scope without claiming terminal proof."""
+    project_root = Path(plan["project_root"]).expanduser().resolve()
+    relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root).as_posix()
+    receipt_line = Path(producer_receipt).expanduser().resolve().relative_to(project_root).as_posix() if producer_receipt else "none"
+    return "\n".join(
+        [
+            "INDEPENDENT_ENDING_EVIDENCE_WORKER",
+            f"Backend: {backend_id}.",
+            "You are an independent verifier. Start without producer conversational context, read only the saved plan and supplied artifacts, and run only the listed checks.",
+            f"Verification plan relative to project root: {relative_plan}.",
+            f"Checks: {', '.join(check['check_id'] for check in checks)}.",
+            f"Producer receipt relative to project root: {receipt_line}.",
+            f"Assigned pair: {assigned_pair}.",
+            "Use skills/verify-skill/scripts/ending_verification_plan.py run-check for each saved check and write only the declared evidence outputs under Cache.",
+            "Never edit producer files, reroute models, create a task/thread, repair the result, write project memory, or claim PASS for the global projectless Ending lifecycle.",
+            "Return the evidence locations and an independent evidence verdict only. The caller must still obtain projectless host creation plus readback before a terminal lifecycle PASS is possible.",
+        ]
+    )
+
+
+def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None, repair_of_lifecycle_id="", backend_capabilities=None):
     plan_file, plan = _read_json(plan_path, "plan")
     project_root = Path(plan.get("project_root", "")).expanduser().resolve()
     if not project_root.is_dir():
@@ -514,6 +546,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
     tasks = plan.get("ending_tasks")
     if not isinstance(tasks, list) or not tasks:
         raise ValueError("plan must contain ending_tasks")
+    backend_resolution = ending_backend.resolve_ending_backend(backend_capabilities)
     evidence_outputs = {}
     for check in tasks:
         check_id = check.get("check_id") if isinstance(check, dict) else None
@@ -531,6 +564,43 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
     title = f"End Task-{plan['task_name']}"
     memory_candidates_output = evidence_root / "task-ending.memory.json"
     memory_consistency_output = evidence_root / "task-ending.project-memory-consistency.json"
+    if backend_resolution["status"] != "launchable":
+        selected_backend = backend_resolution.get("selected") if isinstance(backend_resolution.get("selected"), dict) else None
+        independent_requests = []
+        if selected_backend is not None:
+            independent_requests.append(
+                {
+                    "backend": selected_backend["backend"],
+                    "tool": selected_backend["launch_tool"],
+                    "execution": "independent_evidence_only",
+                    "independent_context": selected_backend["independent_context"],
+                    "producer_context_reuse": selected_backend["producer_context_reuse"],
+                    "check_ids": [check["check_id"] for check in tasks],
+                    "selected_pair": selected_pair,
+                    "arguments": {"title": title, "prompt": _independent_backend_prompt(plan_file, plan, tasks, evidence_outputs, selected_pair, receipt_path, selected_backend["backend"])},
+                    "evidence_outputs": evidence_outputs,
+                }
+            )
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "plan": str(plan_file),
+            "plan_sha256": hashlib.sha256(plan_file.read_bytes()).hexdigest(),
+            "project_root": str(project_root),
+            "project_binding": {"project_id": project_value, "project_root": str(project_root), "environment": {"type": "local"}, "resolver": "codex_app__list_projects exact canonical project root; execution context only, never create_thread target"},
+            "thread_placement_policy": {**THREAD_PLACEMENT_POLICY, "target": dict(THREAD_TARGET)},
+            "execution": "independent_evidence_only",
+            "backend": backend_resolution,
+            "origin_session": origin_session,
+            "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
+            "repair_policy": resolved_repair_policy,
+            "project_memory_closeout": plan.get("project_memory_closeout", {"mode": "none"}),
+            "required_launch_count": 0,
+            "launch_requests": [],
+            "independent_verification_request_count": len(independent_requests),
+            "independent_verification_requests": independent_requests,
+            "launch_gate": "blocked_until_a_projectless_host_can_create_and_read_back_the_global_end_task",
+        }
     candidates = []
     candidate_pairs = [(primary_pair, "primary")]
     if fallback_pair:
@@ -590,6 +660,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt=None
         },
         "thread_placement_policy": {**THREAD_PLACEMENT_POLICY, "target": dict(THREAD_TARGET)},
         "execution": "host_persistent_create_thread",
+        "backend": backend_resolution,
         "origin_session": origin_session,
         "repair_of_lifecycle_id": resolved_repair_of_lifecycle_id,
         "repair_policy": resolved_repair_policy,
@@ -689,6 +760,9 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
 
 def audit_launches(launch_spec_path, state_path):
     launch_file, launch_spec = _read_json(launch_spec_path, "launch_spec")
+    backend = launch_spec.get("backend") if isinstance(launch_spec.get("backend"), dict) else {}
+    if backend.get("terminal_lifecycle") is not True:
+        return {"status": "blocked", "end_task_trigger_rate": "0%", "required_launch_count": launch_spec.get("required_launch_count", 0), "launched_count": 0, "threads": [], "failures": [backend.get("reason") or "no terminal projectless Ending backend is available"]}
     launch_sha256 = hashlib.sha256(launch_file.read_bytes()).hexdigest()
     required = {item["check_id"]: item for item in launch_spec.get("launch_requests", []) if isinstance(item, dict) and item.get("check_id")}
     failures = []

@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import importlib.util
 import json
 import os
 import re
@@ -13,6 +14,13 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+
+_CODEX_SQLITE_PATH = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "codex_sqlite.py"
+_CODEX_SQLITE_SPEC = importlib.util.spec_from_file_location("management_codex_sqlite", _CODEX_SQLITE_PATH)
+_CODEX_SQLITE = importlib.util.module_from_spec(_CODEX_SQLITE_SPEC)
+_CODEX_SQLITE_SPEC.loader.exec_module(_CODEX_SQLITE)
+resolve_codex_sqlite_db = _CODEX_SQLITE.resolve_codex_sqlite_db
+thread_column_capabilities = _CODEX_SQLITE.thread_column_capabilities
 
 try:
     from wcwidth import wcswidth
@@ -348,13 +356,16 @@ def choose_cached_or_fallback_usage(profile, fallback_usage, cached_profiles):
 
 
 def load_recent_rollout_paths(codex_home, limit):
-    state_db = codex_home / "state_5.sqlite"
+    state_db = resolve_codex_sqlite_db(sqlite_home=codex_home)
     rollout_paths = []
     seen = set()
-    if state_db.exists():
+    if state_db is not None:
         try:
             con = sqlite3.connect(state_db)
             cur = con.cursor()
+            columns = {row[1] for row in cur.execute("PRAGMA table_info(threads)")}
+            if not {"rollout_path", "updated_at"}.issubset(columns):
+                raise sqlite3.OperationalError("threads rollout capabilities are missing")
             rows = cur.execute(
                 "select rollout_path from threads order by updated_at desc limit ?",
                 (limit,),
@@ -486,12 +497,13 @@ def find_thread_ids_for_account(codex_home, account_id, limit):
     if not account_id:
         return []
     thread_ids = []
+    state_db = resolve_codex_sqlite_db(sqlite_home=codex_home, require_compatible=False)
     db_specs = [
-        (codex_home / "state_5.sqlite", "logs", "message"),
+        (state_db, "logs", "message"),
         (codex_home / "logs_1.sqlite", "logs", "feedback_log_body"),
     ]
     for db_path, table_name, column_name in db_specs:
-        if not db_path.exists():
+        if db_path is None or not db_path.exists():
             continue
         try:
             con = sqlite3.connect(db_path)
@@ -516,10 +528,13 @@ def find_thread_ids_for_account(codex_home, account_id, limit):
 
 
 def resolve_rollout_path_for_thread(codex_home, thread_id):
-    state_db = codex_home / "state_5.sqlite"
-    if not state_db.exists():
+    state_db = resolve_codex_sqlite_db(sqlite_home=codex_home)
+    if state_db is None:
         return None
     try:
+        capabilities = thread_column_capabilities(state_db)
+        if "rollout_path" not in capabilities["available"]:
+            return None
         con = sqlite3.connect(state_db)
         cur = con.cursor()
         row = cur.execute("select rollout_path from threads where id = ?", (thread_id,)).fetchone()

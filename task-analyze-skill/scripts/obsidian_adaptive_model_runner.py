@@ -28,6 +28,7 @@ model_execution_receipt = _load_file("obsidian_adaptive_receipt", SCRIPT_DIR / "
 task_route_dispatcher = _load_file("obsidian_adaptive_dispatcher", SCRIPT_DIR / "task_route_dispatcher.py")
 resolve_entry_model = _load_file("obsidian_adaptive_entry", SCRIPT_DIR / "resolve_entry_model.py")
 model_identity_disclosure = _load_file("obsidian_adaptive_identity_disclosure", SCRIPT_DIR / "model_identity_disclosure.py")
+routing_policy = _load_file("obsidian_adaptive_routing_policy", SCRIPT_DIR / "routing_policy.py")
 obsidian_model_memory = _load_file(
     "obsidian_adaptive_memory",
     SKILLS_ROOT / "project-memory-skill" / "scripts" / "obsidian_model_memory.py",
@@ -36,7 +37,8 @@ obsidian_model_memory = _load_file(
 SINGLE_PRODUCER_SOURCE_BYTE_LIMIT = 180_000
 ESTIMATED_SESSION_CONTEXT_TOKENS = 36_000
 ESTIMATED_CHARS_PER_TOKEN = 4
-SMALL_EDIT_MAXIMUM_COMPLEXITY_SCORE = 24
+SMALL_EDIT_MAXIMUM_COMPLEXITY_SCORE = routing_policy.ROUTING_THRESHOLDS["fast_path_maximum_score"]
+MAX_PRODUCER_ROUTE_ATTEMPTS = routing_policy.ROUTING_THRESHOLDS["maximum_route_attempts"]
 
 
 def _emit_result_ready(result_path, ready_monotonic_ns):
@@ -115,7 +117,7 @@ def _emit_model_route_notice(notice):
 def _emit_route_ready(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
     notice = _model_route_notice(args, recommendation)
-    event = {"schema_version": 1, "stage": "route-ready", "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "entry_pair": f"{args.resolved_entry_model}|{args.resolved_entry_effort}", "entry_source": args.resolved_entry_source, "selected_pair": recommendation.get("selected_pair"), "attempt_pair": attempt_pair, "active_fallback_pair": recommendation.get("active_fallback_pair"), "switch_direction": recommendation.get("switch_direction", "no_switch"), "switch_change": recommendation.get("switch_change", f"initial->{attempt_pair}"), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": notice["message"], "model_route_notice": notice}
+    event = {"schema_version": 1, "stage": "route-ready", "task_type": args.task_type, "operation": args.operation, "complexity_score": args.complexity_score, "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "fast_path_eligible": bool(getattr(args, "fast_path_eligible", False)), "routing_reasons": list(getattr(args, "routing_reasons", [])), "entry_pair": f"{args.resolved_entry_model}|{args.resolved_entry_effort}", "entry_source": args.resolved_entry_source, "selected_pair": recommendation.get("selected_pair"), "attempt_pair": attempt_pair, "active_fallback_pair": recommendation.get("active_fallback_pair"), "switch_direction": recommendation.get("switch_direction", "no_switch"), "switch_change": recommendation.get("switch_change", f"initial->{attempt_pair}"), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": notice["message"], "model_route_notice": notice}
     session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
     if session_summary.get("available"):
         event.update({"session_state": session_summary.get("state"), "session_user_effort": session_summary.get("user_effort"), "session_failure_recorded": session_summary.get("failure_recorded"), "session_escalation": recommendation.get("session_escalation")})
@@ -220,60 +222,31 @@ def _zero_token_map():
     return {field: 0 for field in model_execution_receipt.TOKEN_FIELDS}
 
 
+def _light_execution_summary(task_type, complexity_score, entry_pair, selected_pair, executed_pair, fast_path, producer_count, verification_backend, tokens, elapsed_ms, fallback_reason=None):
+    """Return bounded route observability without prompt, result, or raw logs."""
+    model, effort = (executed_pair.split("|", 1) if isinstance(executed_pair, str) and "|" in executed_pair else (None, None))
+    return {
+        "task_type": task_type,
+        "complexity_score": complexity_score,
+        "complexity_band": obsidian_model_memory.complexity_band(complexity_score),
+        "entry_pair": entry_pair,
+        "selected_pair": selected_pair,
+        "executed_pair": executed_pair,
+        "selected_model": model,
+        "reasoning_effort": effort,
+        "fast_path": bool(fast_path),
+        "producer_count": producer_count,
+        "verification_backend": verification_backend,
+        "repair_rounds": 0,
+        "total_tokens": (tokens or {}).get("total_tokens"),
+        "duration_ms": elapsed_ms,
+        "fallback_reason": fallback_reason,
+    }
+
+
 def infer_complexity_score(prompt):
     """Score task complexity from 0 to 100 without reading task files."""
-    text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
-    explicit = re.search(r"\bcomplexity(?: score)?\s*[:=]\s*(100|[1-9]?\d)\b", text)
-    if explicit:
-        return int(explicit.group(1))
-    score = 30
-    scope_weight = 0
-    weighted_signals = (
-        (r"\b(?:multi[- ]file|multiple files|six[- ]file|across files|project[- ]wide|cross[- ]project)\b", 18),
-        (r"\b(?:architecture|migration|distributed|rollback)\b", 18),
-        (r"\b(?:integration|pipeline|workflow graph|orchestration)\b", 12),
-        (r"\b(?:security|database|concurrency|parallelism|performance|external api)\b", 15),
-        (r"\b(?:lifecycle|model routing|global skill|global skills|global task)\b", 18),
-        (r"\b(?:verification|verify|testing|tests|benchmark|regression|render|visual)\b", 10),
-        (r"\b(?:repair loops?|retry|fresh verifier|downgrade|upgrade|fallback)\b", 8),
-        (r"\b(?:separate tasks?|independent (?:checks?|tasks?)|subtasks?|own model)\b", 8),
-    )
-    for pattern, weight in weighted_signals:
-        if re.search(pattern, text):
-            scope_weight += weight
-    system_terms = sum(term in text for term in ("skill", "script", "validator", "documentation", "tests", "memory", "obsidian", "model", "ending"))
-    if system_terms >= 3:
-        scope_weight += min(20, (system_terms - 2) * 4)
-    score += scope_weight
-    if scope_weight < 20 and re.search(r"\b(?:small|tiny|simple|localized|one[- ]line|single[- ]file|exact (?:function|method|symbol)|typo|copy edit|text edit)\b", text):
-        score -= 14
-    if scope_weight < 20 and re.search(r"\b(?:edit|change|fix|modify|rename|replace|update)\b", text):
-        score -= 6
-    if re.search(r"\b(?:large[- ]file|large|heavy|exhaustive)\b", text):
-        score += 12
-    numeric_signals = sum(marker in text for marker in ("decimal", "round_half_up", "round half up", "tax", "currency", "cents", "percent"))
-    if numeric_signals >= 2:
-        score += 20
-    file_count = len(set(re.findall(r"(?<![\w./-])[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)(?![\w/-])", text)))
-    if file_count > 1:
-        score += min(20, (file_count - 1) * 5)
-    word_count = len(text.split())
-    simple_question = (
-        scope_weight == 0
-        and word_count <= 24
-        and (
-            bool(re.match(r"^(?:what|who|when|where|which|why|how|calculate|convert|is|are|can|does|do)\b", text))
-            or text.endswith("?")
-        )
-        and not re.search(r"\b(?:edit|change|fix|modify|rename|replace|update|write|implement|file|script)\b", text)
-    )
-    if simple_question:
-        score = min(score, 12)
-    if word_count >= 80:
-        score += 8
-    if word_count >= 160:
-        score += 8
-    return max(0, min(100, score))
+    return routing_policy.analyze_prompt_routing(prompt)["complexity_score"]
 
 
 def infer_memory_symbol(prompt):
@@ -287,30 +260,15 @@ def infer_memory_symbol(prompt):
 
 
 def infer_complexity(prompt):
-    return "complex" if infer_complexity_score(prompt) >= 50 else "easy"
+    return "complex" if infer_complexity_score(prompt) >= routing_policy.ROUTING_THRESHOLDS["complex_route_minimum_score"] else "easy"
 
 
 def infer_task_type(prompt):
-    text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
-    if re.search(r"\b(?:edit|change|fix|modify|rename|replace|update|write|implement)\b", text):
-        return "code"
-    if re.search(r"[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)\b", text):
-        return "code"
-    if re.match(r"^(?:what|who|when|where|which|why|how|calculate|convert|is|are|can|does|do)\b", text) or text.endswith("?"):
-        return "question"
-    return "code"
+    return routing_policy.infer_prompt_task_type(prompt)
 
 
 def infer_operation(prompt):
-    text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
-    for operation in ("rename", "replace", "update", "modify", "edit", "fix", "write"):
-        if re.search(rf"\b{operation}\b", text):
-            return operation
-    if re.search(r"\bchang(?:e|ing)\b", text):
-        return "edit"
-    if infer_task_type(prompt) == "question":
-        return "answer"
-    return "work"
+    return routing_policy.infer_prompt_operation(prompt)
 
 
 def scheduled_source_paths(prompt, workdir):
@@ -575,10 +533,23 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["producer_check_scope"] = "one_smallest_local_quick_check" if args.task_type == "code" else "completion_check_only"
     receipt["first_result_release"] = "immediate_after_quick_check"
     receipt["deferred_verification_owner"] = "projectless_ending"
+    execution_summary = _light_execution_summary(
+        args.task_type,
+        args.complexity_score,
+        receipt["entry_pair"],
+        merge_recommendation.get("selected_pair"),
+        receipt.get("effective_pair") or receipt.get("requested_pair"),
+        False,
+        len(result_nodes),
+        receipt["deferred_verification_owner"],
+        tokens,
+        manifest.get("first_result_elapsed_ms"),
+    )
+    receipt["execution_summary"] = execution_summary
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
-    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_required": True, "ending_requirement": "required", "ending_real_status": "missing_expected_non_simple", "producer_check_scope": receipt["producer_check_scope"], "first_result_release": receipt["first_result_release"], "deferred_verification_owner": receipt["deferred_verification_owner"], "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice}
+    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_required": True, "ending_requirement": "required", "ending_real_status": "missing_expected_non_simple", "producer_check_scope": receipt["producer_check_scope"], "first_result_release": receipt["first_result_release"], "deferred_verification_owner": receipt["deferred_verification_owner"], "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_summary": execution_summary}
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
     return summary
@@ -609,6 +580,14 @@ def _pre_execution_failure(receipt_args):
     return model_execution_receipt.annotate_operational_fallback(receipt)
 
 
+def _fast_path_recommendation(args):
+    selected = routing_policy.priority_first_pair(args.task_type, args.modality, args.operation, args.complexity, args.complexity_score)
+    if selected is None:
+        return None
+    selected_pair = f"{selected[0]}|{selected[1]}"
+    return {"source": "fast_path_static_policy", "memory_available": False, "selected_pair": selected_pair, "selected_model": selected[0], "selected_effort": selected[1], "attempt_pair": selected_pair, "active_fallback_pair": None, "attempt_trial": False, "attempt_reason": "bounded_fast_path", "attempt_calibration_state": "not-applicable", "trial": False, "reason": "bounded_fast_path", "calibration_state": "not-applicable", "specificity": "prompt", "matched_records": 0, "project_key": "not-read"}
+
+
 def _attempt_pairs(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation["selected_pair"]
     active_pair = recommendation.get("active_fallback_pair")
@@ -619,7 +598,7 @@ def _attempt_pairs(args, recommendation):
     for pair in model_execution_receipt.normalize_fallback_pairs(args.allow_fallback):
         if pair in active_pairs and pair not in pairs:
             pairs.append(pair)
-    return pairs
+    return pairs[:MAX_PRODUCER_ROUTE_ATTEMPTS]
 
 
 def _exact_contract_recommendation(prompt, recommendation):
@@ -692,7 +671,8 @@ def run(args, prompt):
     if not hasattr(args, "complexity_score") or args.complexity_score is None:
         args.complexity_score = 65 if args.complexity == "complex" else 35
     args.resolved_entry_model, args.resolved_entry_effort, args.resolved_entry_source = _resolved_entry_pair(args)
-    recommendation = _exact_contract_recommendation(prompt, _recommend(args, prompt))
+    recommendation = _fast_path_recommendation(args) if getattr(args, "fast_path_eligible", False) else None
+    recommendation = _exact_contract_recommendation(prompt, recommendation or _recommend(args, prompt))
     _emit_route_ready(args, recommendation)
     sources = scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None
@@ -734,6 +714,10 @@ def run(args, prompt):
     receipt["trial"] = recommendation.get("attempt_trial", recommendation.get("trial"))
     receipt["complexity_score"] = args.complexity_score
     receipt["complexity_band"] = obsidian_model_memory.complexity_band(args.complexity_score)
+    receipt["task_type"] = args.task_type
+    receipt["operation"] = args.operation
+    receipt["fast_path_eligible"] = bool(getattr(args, "fast_path_eligible", False))
+    receipt["routing_reasons"] = list(getattr(args, "routing_reasons", []))
     receipt["switch_direction"] = recommendation.get("switch_direction", "no_switch")
     receipt["switch_change"] = recommendation.get("switch_change", f"initial->{pair}")
     receipt["entry_model"] = args.resolved_entry_model
@@ -765,6 +749,20 @@ def run(args, prompt):
     successful_result = receipt.get("status") == "pass" and result_published
     lifecycle_policy = result_lifecycle_policy(successful_result, args.task_type, args.complexity_score, args.risk, admission is not None)
     receipt.update(lifecycle_policy)
+    execution_summary = _light_execution_summary(
+        args.task_type,
+        args.complexity_score,
+        receipt["entry_pair"],
+        recommendation.get("selected_pair"),
+        receipt.get("effective_pair") or receipt.get("requested_pair"),
+        getattr(args, "fast_path_eligible", False),
+        len(receipts),
+        lifecycle_policy["deferred_verification_owner"],
+        receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {},
+        receipt.get("process_elapsed_ms"),
+        "operational_fallback" if len(receipts) > 1 else None,
+    )
+    receipt["execution_summary"] = execution_summary
     _atomic_write_json(args.receipt_output, receipt)
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     ready_ns = receipt.get("result_ready_monotonic_ns")
@@ -782,8 +780,12 @@ def run(args, prompt):
         "active_fallback_pair": active_pair,
         "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"),
         "quality_pair": recommendation.get("selected_pair"),
+        "task_type": args.task_type,
+        "operation": args.operation,
         "complexity_score": args.complexity_score,
         "complexity_band": receipt["complexity_band"],
+        "fast_path_eligible": bool(getattr(args, "fast_path_eligible", False)),
+        "routing_reasons": list(getattr(args, "routing_reasons", [])),
         "switch_direction": receipt["switch_direction"],
         "switch_change": receipt["switch_change"],
         "operational_failure_pairs": receipt.get("operational_failure_pairs", []),
@@ -801,6 +803,7 @@ def run(args, prompt):
         **lifecycle_policy,
         "model_learning_context": learning_context,
         "model_route_notice": receipt["model_route_notice"],
+        "execution_summary": execution_summary,
     }
     if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
         summary["session_effort"] = recommendation["session_effort"]
@@ -815,17 +818,18 @@ def resolve_fast_path_args(args, prompt):
     fast_path = not all(getattr(args, field) is not None for field in explicit_fields)
     workdir = Path(args.workdir).expanduser().resolve()
     project_root = Path(args.project_root or os.environ.get("CODEX_PROJECT_ROOT") or workdir).expanduser().resolve()
-    prompt_text = str(prompt or "")
-    read_only_answer = bool(re.search(r"\b(?:read[- ]only|no edits?)\b", prompt_text, re.IGNORECASE) and re.search(r"[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)\b", prompt_text))
-    task_type = args.task_type or ("question" if read_only_answer else infer_task_type(prompt))
+    routing = routing_policy.analyze_prompt_routing(prompt, args.risk, args.ambiguity)
+    prompt_text = routing["normalized_prompt"]
+    read_only_answer = bool(re.search(r"\b(?:read[- ]only|no edits?)\b|只读|不修改", prompt_text, re.IGNORECASE) and re.search(r"[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)\b", prompt_text))
+    task_type = args.task_type or ("question" if read_only_answer else routing["task_type"])
     module_name = args.module or project_root.name or "workspace"
     if args.complexity_score is None:
-        args.complexity_score = 65 if args.complexity == "complex" else 35 if args.complexity == "easy" else infer_complexity_score(prompt) if fast_path else 35
+        args.complexity_score = 65 if args.complexity == "complex" else 35 if args.complexity == "easy" else routing["complexity_score"] if fast_path else 35
     if isinstance(args.complexity_score, bool) or not 0 <= args.complexity_score <= 100:
         raise ValueError("complexity_score must be an integer from 0 to 100")
-    args.complexity = "complex" if args.complexity_score >= 50 else "easy"
+    args.complexity = "complex" if args.complexity_score >= routing_policy.ROUTING_THRESHOLDS["complex_route_minimum_score"] else "easy"
     if fast_path and args.operation == "work":
-        args.operation = infer_operation(prompt)
+        args.operation = "answer" if read_only_answer else routing["operation"]
     args.symbol = args.symbol or infer_memory_symbol(prompt_text)
     if task_type == "code" and not args.symbol:
         args.symbol = "__module__"
@@ -838,10 +842,12 @@ def resolve_fast_path_args(args, prompt):
     args.project_root = project_root
     args.task_type = task_type
     args.module = module_name
+    args.routing_reasons = list(routing["reasons"])
+    args.fast_path_eligible = bool(fast_path and args.complexity_score <= routing_policy.ROUTING_THRESHOLDS["fast_path_maximum_score"] and not routing["risk_override"] and args.risk == "low" and args.ambiguity == "low" and task_type in {"code", "question", "writing"})
     args.task_name = args.task_name or os.environ.get("CODEX_TASK_NAME", "")
     args.task_group = args.task_group or os.environ.get("CODEX_TASK_GROUP", "")
     args.session_id = obsidian_model_memory.session_effort.resolve_session_id(prompt, args.session_id)
-    args.task_summary = args.task_summary or re.sub(r"\s+", " ", prompt).strip()[:280]
+    args.task_summary = args.task_summary or prompt_text[:280]
     args.workload_id = args.workload_id or f"fast-{digest}"
     args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
     args.result_output = Path(args.result_output) if args.result_output is not None else default_output_root / "result.txt"
@@ -880,7 +886,7 @@ def parse_args(argv=None):
     parser.add_argument("--result-output", type=Path)
     parser.add_argument("--cache-root", type=Path, help="Runtime-derived root for scheduled graph support artifacts; defaults to project Cache/task-analyze.")
     parser.add_argument("--workdir", type=Path, default=Path.cwd())
-    parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "state_5.sqlite")
+    parser.add_argument("--state-db", type=Path, help="Optional explicit Codex runtime SQLite database; otherwise resolve CODEX_SQLITE_HOME, CODEX_HOME, then the default runtime root.")
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--sandbox", choices=("read-only", "workspace-write", "danger-full-access"))
     parser.add_argument("--timeout", type=int, default=300)

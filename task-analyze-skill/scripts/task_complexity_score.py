@@ -23,9 +23,14 @@ def main(argv=None):
     if not prompt.strip():
         print(json.dumps({"status": "fail", "reason": "prompt_required"}, separators=(",", ":")))
         return 1
+    # Keep the long-standing runner entry points as the score/operation
+    # contract.  The richer routing object adds metadata without bypassing
+    # callers that instrument or wrap these public helpers.
     score = RUNNER.infer_complexity_score(prompt)
+    operation = RUNNER.infer_operation(prompt)
+    routing = RUNNER.routing_policy.analyze_prompt_routing(prompt)
     band = RUNNER.obsidian_model_memory.complexity_band(score)
-    print(json.dumps({"status": "pass", "complexity_score": score, "complexity_band": band, "operation": RUNNER.infer_operation(prompt)}, separators=(",", ":")))
+    print(json.dumps({"status": "pass", "task_type": routing["task_type"], "complexity_score": score, "complexity_band": band, "operation": operation, "fast_path_eligible": routing["fast_path_eligible"] and score <= RUNNER.routing_policy.ROUTING_THRESHOLDS["fast_path_maximum_score"], "routing_reasons": routing["reasons"]}, ensure_ascii=False, separators=(",", ":")))
     return 0
 
 

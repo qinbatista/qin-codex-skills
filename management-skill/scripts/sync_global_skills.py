@@ -1057,7 +1057,7 @@ def source_repository_root(source_dir):
 
 def publishable_source_path(relative_path):
     relative_path = Path(relative_path)
-    if relative_path.as_posix() in {"AGENTS.md", "README.md", "README.zh.md"}:
+    if relative_path.as_posix() in {"AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml"}:
         return True
     if not relative_path.parts or relative_path.parts[0] not in APPROVED_GLOBAL_SKILL_NAMES:
         return False
@@ -1154,7 +1154,10 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
         return
     if readme_changes:
         print_lines("Rendered source README files:", readme_changes)
-    run_command(["git", "add", "--", "AGENTS.md", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER], cwd=source_dir)
+    publication_paths = ["AGENTS.md", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER]
+    if (source_dir / ".github" / "workflows" / "ci.yml").is_file():
+        publication_paths.insert(3, ".github/workflows/ci.yml")
+    run_command(["git", "add", "--", *publication_paths], cwd=source_dir)
     staged_paths = assert_publishable_staged_paths(source_dir)
     if staged_paths:
         run_command(["git", "commit", "-m", message], cwd=source_dir)

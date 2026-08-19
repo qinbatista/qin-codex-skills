@@ -190,6 +190,21 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                     self.assertTrue(any(candidate_cache.glob("*/*/*/skills/control-chrome/SKILL.md")))
                     self.assertTrue(any(candidate_cache.glob("*/*/*/skills/sites-building/SKILL.md")))
 
+    def test_candidate_layout_uses_ephemeral_contract_fixtures_without_plugin_cache(self):
+        catalog = GATE.load_catalog(PROJECT_ROOT)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            deployed = Path(temp_dir) / "deployed"
+            deployed.mkdir()
+            for skill_name in catalog["managed_skills"]:
+                GATE.shutil.copytree(PROJECT_ROOT / skill_name, deployed / skill_name)
+            with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
+                for root in roots.values():
+                    candidate_cache = root.parent / "plugins" / "cache"
+                    for plugin_id, skill_name in GATE.REQUIRED_PLUGIN_CONTRACTS:
+                        fixture = candidate_cache / "ci-contract-fixture" / plugin_id / "0.0.0" / "skills" / skill_name / "SKILL.md"
+                        self.assertTrue(fixture.is_file())
+                        self.assertIn("Candidate-only contract fixture", fixture.read_text(encoding="utf-8"))
+
     def test_runner_uses_argument_arrays_without_shell_execution(self):
         text = MODULE_PATH.read_text(encoding="utf-8")
         self.assertNotIn("shell=True", text)

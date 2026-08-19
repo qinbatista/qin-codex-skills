@@ -51,6 +51,27 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertTrue(summary["availability_failure"])
         self.assertNotIn("purchase more credits", json.dumps(summary).lower())
 
+    def test_structured_failure_details_are_bounded_and_retry_classifiable(self):
+        base_summary = {"failure_signals": [], "invalid_json_event_count": 0, "json_event_count": 1, "turn_completed": True}
+        cases = (
+            (None, True, base_summary, "", None, "timeout", "timeout"),
+            (None, False, base_summary, "", OSError("missing executable"), "process_launch_failure", "execution"),
+            (SimpleNamespace(returncode=7), False, base_summary, "", None, "non_zero_exit", "execution"),
+            (SimpleNamespace(returncode=0), False, {**base_summary, "invalid_json_event_count": 1, "json_event_count": 0}, "", None, "invalid_json_events", "protocol"),
+            (SimpleNamespace(returncode=1), False, {**base_summary, "failure_signals": ["model_unavailable"]}, "", None, "model_unavailable", "availability"),
+            (SimpleNamespace(returncode=1), False, {**base_summary, "failure_signals": ["permission_denied"]}, "", None, "permission_denied", "execution"),
+            (SimpleNamespace(returncode=1), False, {**base_summary, "failure_signals": ["sandbox_denied"]}, "", None, "sandbox_denied", "execution"),
+            (SimpleNamespace(returncode=1), False, {**base_summary, "failure_signals": ["context_overflow"]}, "", None, "context_overflow", "execution"),
+            (SimpleNamespace(returncode=1), False, {**base_summary, "failure_signals": ["rate_limited"]}, "", None, "rate_limited", "availability"),
+            (SimpleNamespace(returncode=1), False, {**base_summary, "failure_signals": ["network_api_failure"]}, "", None, "network_api_failure", "availability"),
+        )
+        for process, timed_out, summary, stderr, launch_error, expected_detail, expected_class in cases:
+            with self.subTest(detail=expected_detail):
+                detail = module.infer_failure_detail(process, timed_out, summary, stderr, launch_error, True, True, True, True)
+                self.assertEqual(detail, expected_detail)
+                self.assertEqual(module.failure_class_for_detail(detail), expected_class)
+                self.assertIn(detail, module.FAILURE_DETAILS)
+
     def test_parse_stdout_uses_latest_terminal_turn_event(self):
         recovered = "\n".join([
             json.dumps({"type": "error", "message": "transient tool stream error"}),
@@ -91,9 +112,11 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 self.error = error
                 self.closed = False
 
-            def execute(self, _query, _parameters):
+            def execute(self, query, _parameters=()):
                 if self.error is not None:
                     raise self.error
+                if query.startswith("PRAGMA table_info"):
+                    return SimpleNamespace(fetchall=lambda: [(0, "id"), (1, "rollout_path"), (2, "model"), (3, "reasoning_effort"), (4, "tokens_used"), (5, "cli_version"), (6, "model_provider"), (7, "source")])
                 return SimpleNamespace(fetchone=lambda: self.row)
 
             def close(self):
@@ -104,7 +127,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             state_db.touch()
             Path(f"{state_db}-wal").touch()
             failed_connection = FakeConnection(error=module.sqlite3.OperationalError("temporarily unavailable"))
-            row = (str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 42, "test", "openai", "exec")
+            row = ("thread-1", str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 42, "test", "openai", "exec")
             successful_connection = FakeConnection(row=row)
             with patch.object(module.sqlite3, "connect", side_effect=[failed_connection, successful_connection]) as connect, patch.object(module.time, "sleep") as sleep:
                 observed = module.read_thread_state(state_db, "thread-1")
@@ -123,9 +146,11 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 self.error = error
                 self.closed = False
 
-            def execute(self, _query, _parameters):
+            def execute(self, query, _parameters=()):
                 if self.error is not None:
                     raise self.error
+                if query.startswith("PRAGMA table_info"):
+                    return SimpleNamespace(fetchall=lambda: [(0, "id"), (1, "rollout_path"), (2, "model"), (3, "reasoning_effort"), (4, "tokens_used"), (5, "cli_version"), (6, "model_provider"), (7, "source")])
                 return SimpleNamespace(fetchone=lambda: self.row)
 
             def close(self):
@@ -135,13 +160,13 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             state_db = Path(temp_dir) / "state.sqlite"
             state_db.touch()
             primary_connection = FakeConnection(error=module.sqlite3.OperationalError("readonly shm unavailable"))
-            row = (str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 77, "test", "openai", "exec")
+            row = ("thread-immutable", str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 77, "test", "openai", "exec")
             immutable_connection = FakeConnection(row=row)
             with patch.object(module.sqlite3, "connect", side_effect=[primary_connection, immutable_connection]) as connect, patch.object(module.time, "sleep") as sleep:
                 observed = module.read_thread_state(state_db, "thread-immutable")
         self.assertEqual(connect.call_count, 2)
-        self.assertEqual(connect.call_args_list[0].args[0], f"file:{state_db}?mode=ro")
-        self.assertEqual(connect.call_args_list[1].args[0], f"file:{state_db}?mode=ro&immutable=1")
+        self.assertEqual(connect.call_args_list[0].args[0], f"file:{state_db.resolve()}?mode=ro")
+        self.assertEqual(connect.call_args_list[1].args[0], f"file:{state_db.resolve()}?mode=ro&immutable=1")
         self.assertTrue(connect.call_args_list[0].kwargs["uri"])
         self.assertTrue(connect.call_args_list[1].kwargs["uri"])
         sleep.assert_not_called()
@@ -426,7 +451,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 sys.stderr.flush()
                 time.sleep(0.1)
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{ \\"answer\\": 0 }"}})
-                time.sleep(0.2)
+                while not __import__("os").path.exists("allow-finish"):
+                    time.sleep(0.01)
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{\\n  \\"answer\\": 1\\n}"}})
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "commentary after result"}})
                 emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
@@ -445,6 +471,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 first_result_elapsed = time.monotonic() - started
                 first_published_result = result_path.read_text(encoding="utf-8")
                 self.assertFalse(future.done())
+                (root / "allow-finish").write_text("continue", encoding="utf-8")
                 receipt = future.result(timeout=2)
                 result_ready_event = json.loads(print_mock.call_args.args[0])
             final_result = result_path.read_text(encoding="utf-8")

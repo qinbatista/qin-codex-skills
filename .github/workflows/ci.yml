@@ -1,0 +1,41 @@
+name: deterministic-skill-ci
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Unit and deterministic routing tests
+        run: |
+          python -B -m unittest discover -s task-analyze-skill/tests -p 'test_*.py' -q
+          python -B -m unittest discover -s verify-skill/tests -p 'test_*.py' -q
+          python -B -m unittest discover -s project-memory-skill/tests -p 'test_*.py' -q
+          python -B -m unittest discover -s management-skill/tests -p 'test_*.py' -q
+      - name: Skill structure and retained-capability validation
+        run: |
+          python -B task-analyze-skill/scripts/validate_task_analyze_skill.py --skill-dir task-analyze-skill --global-skills-root .
+          python -B management-skill/scripts/global_skill_regression_gate.py check --project-root . --skills-dir . --mode source --output Cache/tests/ci/global-skill-gate.json
+      - name: Frozen CJK and Unity routing benchmark
+        run: |
+          python -B task-analyze-skill/scripts/routing_benchmark.py --iterations 50 --output Cache/tests/ci/routing-benchmark.json
+      - name: Upload deterministic benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: deterministic-routing-${{ matrix.python-version }}
+          path: Cache/tests/ci/
+
+# Live Codex execution and terminal projectless Ending checks are deliberately
+# excluded from PR/push CI. Run them only from a credentialed manual environment
+# using benchmark_suite_runner.py and the real host lifecycle tools.

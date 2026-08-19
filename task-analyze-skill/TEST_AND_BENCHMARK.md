@@ -16,13 +16,45 @@ This report is the current reproducible evidence for step-capability model memor
 | --- | --- |
 | `test_validate_task_analyze_skill.py` | PASS — 39 tests |
 | `validate_task_analyze_skill.py` | PASS — 34 supported model/effort route fixtures and 4/4 graduated prompt scenarios |
-| Full Task Analyze test discovery | PASS — 500 tests |
-| Project model/change memory | PASS — 55 tests |
-| Real-test Ending and repair lifecycle | PASS — 20 focused tests; executable checks capture real stdout/stderr/exit status, score each verifier, split independent checks, emit exact repair handoffs, and require fresh verification |
+| Full Task Analyze test discovery | PASS — 551 tests |
+| Project model/change memory | PASS — 102 tests |
+| Verify Skill / Ending lifecycle discovery | PASS — 65 tests; executable checks capture real stdout/stderr/exit status, score each verifier, split independent checks, emit exact repair handoffs, preserve post-PASS release-mismatch linkage, and require fresh verification |
 | `test_benchmark_suite_gate.py` | PASS — 41 tests |
 | `test_benchmark_suite_runner.py` | PASS — 29 tests |
+| CJK routing regression | PASS — 8 tests |
+| Non-benchmark routing holdout | PASS — 2 tests |
+| SQLite portability resolver | PASS — 4 tests |
+| Canonical `.codex` / `.agents` aliases | PASS — 3 tests |
+| Global Skill source release gate | PASS — 851/851 checks across 31/31 retained capabilities |
 
 The routing tests cover both entry directions. A Sol-ultra entry can assign a very similar proven step to a lower pair, while a Luna-max-or-lower entry can jump directly to the stronger pair that previously recovered the same capability. When multiple pairs passed, token/time cost evidence stays diagnostic: the selector keeps the lowest passing rung above the strongest failed rung even if a stronger passing pair happened to use fewer tokens. Compound requests keep separate fingerprints and histories for steps such as implementation, local testing, image-generation control, and visual verification.
+
+## Routing portability regression
+
+The frozen deterministic routing corpus covers 46 cases: 10 Chinese simple, 10 Chinese medium, 10 Chinese complex, 8 Chinese/English mixed, and 8 Unity-specific requests. It verifies Unicode NFKC and full-width punctuation normalization, question-versus-complexity independence, safe fast-path admission, risk escalation, and the selected routing tier. The report deliberately omits prompt text and makes no model, token, or first-result claim.
+
+```bash
+python3 -B task-analyze-skill/scripts/routing_benchmark.py \
+  --iterations 100 \
+  --output Cache/tests/routing-benchmark/routing-benchmark.json
+```
+
+The routing benchmark reports classification latency only. `time_to_first_result`, total tokens, controller overhead, Ending overhead, and repair overhead remain `null` because no model is launched. Live Direct-versus-Auto measurements remain a separate credentialed/manual benchmark; PR and push CI run deterministic tests and this frozen routing corpus only.
+
+The test suite also keeps a separate six-case routing holdout that is disjoint from the frozen benchmark corpus. It is source-visible for reproducibility, rather than falsely described as a secret test set; a genuinely private holdout must run in a separately controlled CI environment.
+
+### Latest deterministic routing run
+
+The latest local run completed on 2026-08-19 with 100 iterations per case (4,600 classifications): **46/46 cases passed**, median classification latency was **0.0872 ms**, and total wall time was **417.156 ms**. Cohort results were CJK simple 10/10 (all fast priority), CJK medium 10/10, CJK complex 10/10, mixed language 8/8, and Unity 8/8. This is a deterministic classification regression benchmark, not a live-model performance or cost benchmark.
+
+## Runtime portability and bounded failure behavior
+
+- Runtime SQLite selection is centralized in `codex_sqlite.py`: explicit database override, configured SQLite home, `CODEX_SQLITE_HOME`, `CODEX_HOME`, then the platform default. Discovery accepts future `state_*.sqlite` names only after a compatible `threads.id` schema check.
+- Receipt, benchmark, and management readers inspect `PRAGMA table_info(threads)`. Missing optional columns degrade metadata rather than crashing verification; a missing required `id` is rejected.
+- A 0–24 safe path bypasses history-based recommendation and uses the fixed priority producer, but code changes still emit `ending-required`. Security, credentials, payment, production configuration, migration, deployment, or destructive-scope signals exit the fast path.
+- Producer attempts are capped at the selected route plus one operational fallback. Failure receipts use bounded detail codes for launch, timeout, exit, JSON, availability, permission/sandbox, context, rate-limit, network, and metadata cases.
+- Each producer emits a bounded `execution_summary`: task type, score/band, entry/selected/effective route, effort, fast-path state, producer count, verification backend, repair count, tokens, duration, and fallback reason. It contains no raw prompt, result, stdout, or stderr.
+- Projectless host creation is the only terminal Ending proof. When it is unavailable, an independent subagent or local-exec backend can produce evidence, but the terminal lifecycle stays `BLOCKED` until projectless creation and readback are possible.
 
 ## Frozen real benchmark v47
 

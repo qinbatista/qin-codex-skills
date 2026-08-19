@@ -250,7 +250,7 @@ def parse_args(argv=None):
     parser.add_argument("--result-output", type=Path, required=True)
     parser.add_argument("--emit-result", action="store_true", help="Return the saved passing result in the command summary; never store it in routing history or the receipt.")
     parser.add_argument("--workdir", type=Path, default=Path.cwd())
-    parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "state_5.sqlite")
+    parser.add_argument("--state-db", type=Path, help="Optional explicit Codex runtime SQLite database; otherwise resolve CODEX_SQLITE_HOME, CODEX_HOME, then the default runtime root.")
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--sandbox", choices=["read-only", "workspace-write", "danger-full-access"], default="read-only")
     parser.add_argument("--timeout", type=int, default=900)

@@ -14,6 +14,17 @@ import sys
 import time
 from pathlib import Path
 
+try:
+    from codex_sqlite import CodexSQLiteResolutionError, resolve_codex_sqlite_db, thread_column_capabilities
+except ModuleNotFoundError:
+    _sqlite_resolver_path = Path(__file__).with_name("codex_sqlite.py")
+    _sqlite_resolver_spec = importlib.util.spec_from_file_location("task_analyze_benchmark_codex_sqlite", _sqlite_resolver_path)
+    _sqlite_resolver = importlib.util.module_from_spec(_sqlite_resolver_spec)
+    _sqlite_resolver_spec.loader.exec_module(_sqlite_resolver)
+    CodexSQLiteResolutionError = _sqlite_resolver.CodexSQLiteResolutionError
+    resolve_codex_sqlite_db = _sqlite_resolver.resolve_codex_sqlite_db
+    thread_column_capabilities = _sqlite_resolver.thread_column_capabilities
+
 
 TIERS = ("simple", "medium", "complex")
 SANDBOXES = ("read-only", "workspace-write", "danger-full-access")
@@ -262,7 +273,7 @@ def read_runtime_rollout_snapshot(codex_home):
     return {"available": True, "complete": True, "thread_ids": thread_ids}
 
 
-def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout_seconds=RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=None, quiescence_seconds=RUNTIME_CENSUS_QUIESCENCE_SECONDS):
+def read_runtime_thread_snapshot(state_db_path=None, required_thread_id=None, timeout_seconds=RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=None, quiescence_seconds=RUNTIME_CENSUS_QUIESCENCE_SECONDS):
     deadline = time.monotonic() + timeout_seconds
     stable_signature = None
     started = time.monotonic()
@@ -270,9 +281,14 @@ def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout
         diagnostics.update({"attempt_count": 0, "successful_read_count": 0, "sqlite_error_count": 0, "normal_sqlite_error_count": 0, "immutable_attempt_count": 0, "immutable_success_count": 0, "immutable_error_count": 0, "last_sqlite_error_code": None, "last_sqlite_error_name": None, "last_sqlite_error_category": None, "status": "running", "elapsed_ms": None})
     while True:
         retry_interval_seconds = RUNTIME_CENSUS_RETRY_INTERVAL_SECONDS
+        try:
+            configured_path = Path(state_db_path).expanduser().resolve() if state_db_path else None
+            runtime_database = resolve_codex_sqlite_db(sqlite_home=configured_path, strict_sqlite_home=True) if configured_path is not None and configured_path.is_dir() else configured_path or resolve_codex_sqlite_db()
+        except CodexSQLiteResolutionError:
+            runtime_database = None
         if diagnostics is not None:
             diagnostics["attempt_count"] += 1
-        if not state_db_path.exists():
+        if runtime_database is None or not runtime_database.exists():
             if required_thread_id is None:
                 if diagnostics is not None:
                     diagnostics.update({"status": "complete", "elapsed_ms": round((time.monotonic() - started) * 1000)})
@@ -281,10 +297,16 @@ def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout
             remaining_seconds = max(0.001, deadline - time.monotonic())
             busy_timeout_ms = min(RUNTIME_CENSUS_BUSY_TIMEOUT_MS, max(1, int(remaining_seconds * 1000)))
             connection = None
+            query = None
             try:
-                connection = sqlite3.connect(f"file:{state_db_path}?mode=ro", uri=True, timeout=busy_timeout_ms / 1000)
+                connection = sqlite3.connect(f"file:{runtime_database}?mode=ro", uri=True, timeout=busy_timeout_ms / 1000)
                 connection.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
-                rows = connection.execute("SELECT id, rollout_path, source, model, reasoning_effort, tokens_used FROM threads").fetchall()
+                thread_columns = {row[1] for row in connection.execute("PRAGMA table_info(threads)")}
+                if "id" not in thread_columns:
+                    raise sqlite3.OperationalError("threads.id capability is missing")
+                selected_columns = ["id", *[column for column in ("rollout_path", "source", "model", "reasoning_effort", "tokens_used") if column in thread_columns]]
+                query = f"SELECT {', '.join(selected_columns)} FROM threads"
+                rows = connection.execute(query).fetchall()
             except sqlite3.Error as error:
                 rows = None
                 error_text = str(error).lower()
@@ -308,9 +330,9 @@ def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout
             finally:
                 if connection is not None:
                     connection.close()
-            wal_path = Path(f"{state_db_path}-wal")
+            wal_path = Path(f"{runtime_database}-wal")
             try:
-                immutable_safe_before = sqlite_main_database_is_wal(state_db_path) and (not wal_path.exists() or wal_path.stat().st_size == 0)
+                immutable_safe_before = sqlite_main_database_is_wal(runtime_database) and (not wal_path.exists() or wal_path.stat().st_size == 0)
             except OSError:
                 immutable_safe_before = False
             if rows is None and immutable_safe_before:
@@ -318,8 +340,13 @@ def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout
                 if diagnostics is not None:
                     diagnostics["immutable_attempt_count"] += 1
                 try:
-                    immutable_connection = sqlite3.connect(f"file:{state_db_path}?mode=ro&immutable=1", uri=True)
-                    immutable_rows = immutable_connection.execute("SELECT id, rollout_path, source, model, reasoning_effort, tokens_used FROM threads").fetchall()
+                    immutable_connection = sqlite3.connect(f"file:{runtime_database}?mode=ro&immutable=1", uri=True)
+                    thread_columns = {row[1] for row in immutable_connection.execute("PRAGMA table_info(threads)")}
+                    if "id" not in thread_columns:
+                        raise sqlite3.OperationalError("threads.id capability is missing")
+                    selected_columns = ["id", *[column for column in ("rollout_path", "source", "model", "reasoning_effort", "tokens_used") if column in thread_columns]]
+                    query = f"SELECT {', '.join(selected_columns)} FROM threads"
+                    immutable_rows = immutable_connection.execute(query).fetchall()
                     immutable_safe_after = not wal_path.exists() or wal_path.stat().st_size == 0
                     rows = immutable_rows if immutable_safe_after else None
                     if rows is not None and diagnostics is not None:
@@ -337,7 +364,12 @@ def read_runtime_thread_snapshot(state_db_path, required_thread_id=None, timeout
             if rows is not None:
                 if diagnostics is not None:
                     diagnostics["successful_read_count"] += 1
-                threads = {row[0]: {"thread_id": row[0], "rollout_path": row[1], "source": row[2], "model": row[3], "effort": row[4], "tokens_used": row[5]} for row in rows if isinstance(row[0], str) and row[0]}
+                threads = {}
+                for row in rows:
+                    values = dict(zip(selected_columns, row))
+                    thread_id = values.get("id")
+                    if isinstance(thread_id, str) and thread_id:
+                        threads[thread_id] = {"thread_id": thread_id, "rollout_path": values.get("rollout_path"), "source": values.get("source"), "model": values.get("model"), "effort": values.get("reasoning_effort"), "tokens_used": values.get("tokens_used")}
                 if required_thread_id is None:
                     if diagnostics is not None:
                         diagnostics.update({"status": "complete", "elapsed_ms": round((time.monotonic() - started) * 1000)})
@@ -727,9 +759,11 @@ def execute_run(args, run_plan, prompt_text):
     receipt_path.parent.mkdir(parents=True, exist_ok=False)
     environment = run_plan["environment"]
     codex_home = Path(environment["codex_home"])
-    state_db_path = (codex_home / "state_5.sqlite").absolute()
+    sqlite_home = codex_home / "runtime-sqlite"
+    sqlite_home.mkdir(parents=True, exist_ok=True)
+    state_db_path = sqlite_home
     run_model, run_effort = run_plan["selected_entry_pair"].split("|", 1)
-    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", run_model, "--effort", run_effort, "--workload-id", run_plan["run_id"], "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--state-db", str(state_db_path), "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout)]
+    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", run_model, "--effort", run_effort, "--workload-id", run_plan["run_id"], "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout)]
     if run_plan["arm"] == "direct":
         command.extend(["--direct-task", "--benchmark-run-id", f"benchmark-{run_plan['run_id']}"])
     else:
@@ -737,6 +771,7 @@ def execute_run(args, run_plan, prompt_text):
     command_environment = os.environ.copy()
     command_environment.pop(ENTRY_CONTEXT_ENV, None)
     command_environment["CODEX_HOME"] = str(codex_home)
+    command_environment["CODEX_SQLITE_HOME"] = str(sqlite_home)
     command_environment["CODEX_MODEL_ROUTING_MEMORY"] = str(codex_home / "memories" / FROZEN_ROUTING_MEMORY_NAME)
     command_environment["CODEX_OBSIDIAN_VAULT"] = str(codex_home / "memories" / FROZEN_OBSIDIAN_VAULT_NAME)
     stdout_path = receipt_path.parent / "runner.stdout.log"
@@ -844,11 +879,14 @@ def execute_dual_entry_probe(args, run_plan, prompt_text):
     probe_root.mkdir(parents=True, exist_ok=False)
     environment = run_plan["environment"]
     codex_home = Path(environment["codex_home"])
+    sqlite_home = codex_home / "runtime-sqlite"
+    sqlite_home.mkdir(parents=True, exist_ok=True)
     probe_run_id = f"{run_plan['run_id']}-sol-entry-probe"
-    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", probe_run_id, "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--state-db", str((codex_home / "state_5.sqlite").absolute()), "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout), "--bootstrap-task", "--benchmark-run-id", f"benchmark-{probe_run_id}", "--benchmark-prompt-path", run_plan["prompt_path"]]
+    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", probe_run_id, "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout), "--bootstrap-task", "--benchmark-run-id", f"benchmark-{probe_run_id}", "--benchmark-prompt-path", run_plan["prompt_path"]]
     command_environment = os.environ.copy()
     command_environment.pop(ENTRY_CONTEXT_ENV, None)
     command_environment["CODEX_HOME"] = str(codex_home)
+    command_environment["CODEX_SQLITE_HOME"] = str(sqlite_home)
     command_environment["CODEX_MODEL_ROUTING_MEMORY"] = str(codex_home / "memories" / FROZEN_ROUTING_MEMORY_NAME)
     command_environment["CODEX_OBSIDIAN_VAULT"] = str(codex_home / "memories" / FROZEN_OBSIDIAN_VAULT_NAME)
     summary = {"schema_version": 1, "status": "fail", "reason": "probe_execution_failed", "tier": run_plan["tier"], "primary_run_id": run_plan["run_id"], "primary_entry_pair": run_plan["selected_entry_pair"], "probe_entry_pair": probe["entry_pair"], "expected_result_sha256": run_plan["expected_sha256"], "primary_result_sha256": None, "probe_result_sha256": None, "primary_route_signature": None, "probe_route_signature": None, "route_signature_match": False, "capability_assignment_match": False}

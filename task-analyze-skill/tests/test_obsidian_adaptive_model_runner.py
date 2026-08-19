@@ -149,7 +149,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             event = events[0]
             notice_event = events[1]
         expected_notice = module._model_route_notice(args, adaptive)
-        self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "complexity_score": 12, "complexity_band": "small", "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
+        self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "task_type": "code", "operation": "edit", "complexity_score": 12, "complexity_band": "small", "fast_path_eligible": False, "routing_reasons": [], "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
         self.assertEqual(notice_event, {"schema_version": 1, "stage": "model-switch-notice", "user_visible": True, **expected_notice})
         self.assertGreaterEqual(stream.flush_count, 1)
         self.assertEqual(result["status"], "pass")
@@ -196,6 +196,33 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "Fix the lifecycle trigger and deploy it.")
         self.assertEqual(args.task_type, "code")
         self.assertEqual(args.symbol, "__module__")
+
+    def test_safe_fast_path_bypasses_history_recommendation_but_keeps_code_ending_requirement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "修改 PlayerController.cs，把 jumpHeight 从5改成6")
+
+            def fake_run(receipt_args, _prompt):
+                self.assertEqual((receipt_args.model, receipt_args.effort), ("gpt-5.3-codex-spark", "low"))
+                receipt_args.result_output.parent.mkdir(parents=True, exist_ok=True)
+                receipt_args.result_output.write_text("RESULT", encoding="utf-8")
+                return {"status": "pass", "requested_pair": "gpt-5.3-codex-spark|low", "effective_pair": "gpt-5.3-codex-spark|low", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
+
+            with patch.object(module, "_recommend", side_effect=AssertionError("history must not be read on the safe fast path")), patch.object(module, "_resolved_entry_pair", return_value=("gpt-5.6-terra", "medium", "configured")), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+                result = module.run(args, "修改 PlayerController.cs，把 jumpHeight 从5改成6")
+        self.assertEqual(result["memory_source"], "fast_path_static_policy")
+        self.assertEqual(result["selected_pair"], "gpt-5.3-codex-spark|low")
+        self.assertTrue(result["ending_required"])
+        self.assertEqual(result["execution_summary"], {"task_type": "code", "complexity_score": 16, "complexity_band": "small", "entry_pair": "gpt-5.6-terra|medium", "selected_pair": "gpt-5.3-codex-spark|low", "executed_pair": "gpt-5.3-codex-spark|low", "selected_model": "gpt-5.3-codex-spark", "reasoning_effort": "low", "fast_path": True, "producer_count": 1, "verification_backend": "projectless_ending", "repair_rounds": 0, "total_tokens": 1, "duration_ms": 1, "fallback_reason": None})
+
+    def test_route_attempts_are_bounded_to_primary_plus_one_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.allow_fallback = ["gpt-5.6-luna|low", "gpt-5.6-sol|high"]
+            recommendation_value = recommendation("gpt-5.6-terra|medium", "gpt-5.6-terra|high")
+            with patch.object(module.obsidian_model_memory, "load_shared_ladder", return_value=({}, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high", "gpt-5.6-luna|low", "gpt-5.6-sol|high"])):
+                pairs = module._attempt_pairs(args, recommendation_value)
+        self.assertEqual(pairs, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high"])
+        self.assertEqual(len(pairs), module.MAX_PRODUCER_ROUTE_ATTEMPTS)
 
     def test_fast_path_infers_numeric_and_multifile_complexity(self):
         with tempfile.TemporaryDirectory() as temporary:

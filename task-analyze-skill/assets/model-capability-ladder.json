@@ -222,6 +222,7 @@
     "eligible_operations": [
       "answer",
       "command",
+      "delete",
       "edit",
       "execute",
       "fix",
@@ -243,6 +244,7 @@
       "documentation-instructions"
     ],
     "small_edit_operations": [
+      "delete",
       "edit",
       "fix",
       "modify",

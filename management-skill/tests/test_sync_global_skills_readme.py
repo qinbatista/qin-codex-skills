@@ -854,7 +854,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertTrue(sync_global_skills.publishable_source_path(Path("verify-skill/SKILL.md")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path("AGENTS.md")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path("README.zh.md")))
+        self.assertTrue(sync_global_skills.publishable_source_path(Path(".github/workflows/ci.yml")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("notes.txt")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path(".github/workflows/other.yml")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("task-analyze-skill/local/private.json")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("verify-skill/auth.json")))
 
