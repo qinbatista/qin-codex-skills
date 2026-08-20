@@ -2,14 +2,14 @@
   "schema_version": 1,
   "check_id": "unity-five-attestation",
   "status": "pass",
-  "created_at": "2026-08-20T07:25:41.106180+00:00",
+  "created_at": "2026-08-20T08:38:42.550357+00:00",
   "trial_count": 5,
   "passed_trials": 5,
   "watched_files": {
-    "code-skill/SKILL.md": "099c99b5bcae0b309ee2f4b35999187738af9722b626712d207ed4220f34dbfa",
-    "code-skill/agents/openai.yaml": "fb94f0bcb519a7dff7b9d870673d98a310d2de129c5df0bcc27136d51c31ddd0",
-    "code-skill/references/unity-csharp-rules.md": "d3e8dfff13b052574f5f4f2c8267cbd3326074d19810a389fc3be59527b03440",
+    "code-skill/SKILL.md": "9aafb22962dc4436c004e6998b5983da4433865ab58642e2fdd9c42feb104606",
+    "code-skill/agents/openai.yaml": "2b43a3d49cc03a969a42a9ab699a992a943a9aa503cf950dcc2e98a966cf2813",
+    "code-skill/references/unity-csharp-rules.md": "1241714d073abca0866d0dac238b332301abfe05877cde0c5999e5d1d4df8c02",
     "code-skill/references/unity-game-code-structure-design.md": "4e1bd718f0247ca2b41697456076c762ae5e1ac9ca5e180c39e7984aef0f82e0",
-    "code-skill/tests/test_code_writing_philosophy.py": "448636472e27955acde23abe2512bf7d72c6ce2dd557427c2d007d39115d1fcc"
+    "code-skill/tests/test_code_writing_philosophy.py": "1e3fefb60ed324ebb81e6cbf4edae27adc58745b073b7b8974cd9a460f2d59a7"
   }
 }

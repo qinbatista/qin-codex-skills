@@ -79,6 +79,14 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
             self.assertIn(required_fragment, self.unity_rules)
         self.assertNotIn("new InAppPurchaseProduct(\n", self.unity_rules)
 
+    def test_unity_code_that_fits_stays_on_one_line(self):
+        required_fragments = ["every self-contained Unity C# statement or expression that fits clearly on one physical line", "declarations, assignments, returns, conditions, calls, logs, constructors, object creation, initializer entries, and ternary expressions", "Do not vertically wrap code that fits", "split a ternary assignment only to indent its branches", "wrap only when it cannot fit without harming readability, correctness, or tooling"]
+        for required_fragment in required_fragments:
+            self.assertIn(required_fragment, self.unity_rules)
+            self.assertIn(required_fragment, self.code_skill)
+        self.assertIn("every self-contained Unity C# statement/expression that fits clearly on one physical line", self.agent_metadata)
+        self.assertIn("do not vertically wrap code that fits or split a ternary assignment only to indent its branches unless required or requested", self.agent_metadata)
+
     def test_agent_metadata_preserves_prior_lifecycle_routing_and_unity_requirements(self):
         required = [
             "$code-skill: artifact-free exact read-only lookup/audit stays skill-free",

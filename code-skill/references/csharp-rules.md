@@ -7,6 +7,7 @@ Use `execution_domain=csharp` for non-Unity C#. These rules apply to ordinary li
 - Keep one-statement `if` expressions on one line without braces; use braces for multi-statement blocks.
 - Use `switch` or a switch expression for three or more outcomes instead of long `else if` chains.
 - Keep calls and log calls on one line unless the project style explicitly requires wrapping.
+- Do not vertically wrap a complete simple expression that fits, and never split a ternary assignment only to indent its branches; keep multi-statement blocks braced.
 - Keep constructor calls and object-creation expressions on one physical line, including long argument lists, unless wrapping is explicitly requested.
 - Avoid one-use helpers and new abstractions unless they make the requested behavior clearer or are required by the existing design.
 - Preserve exception behavior, ordering, side effects, async/threading semantics, and public contracts unless the request changes them.

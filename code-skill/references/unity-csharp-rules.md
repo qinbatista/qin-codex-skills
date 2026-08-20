@@ -28,6 +28,7 @@ Apply these rules for Unity projects and C# code, including MonoBehaviours, Scri
 
 ## C# Style
 
+- Keep every self-contained Unity C# statement or expression that fits clearly on one physical line on one physical line, including declarations, assignments, returns, conditions, calls, logs, constructors, object creation, initializer entries, and ternary expressions. Do not vertically wrap code that fits or split a ternary assignment only to indent its branches; wrap only when it cannot fit without harming readability, correctness, or tooling, or when explicitly requested.
 - For a single statement, keep the entire `if` on one line without braces.
 - Use braces only when the block contains more than one statement.
 - Use plain `if`/`else` for exactly two mutually exclusive outcomes.
