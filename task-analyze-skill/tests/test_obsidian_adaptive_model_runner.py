@@ -197,22 +197,28 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(args.task_type, "code")
         self.assertEqual(args.symbol, "__module__")
 
-    def test_safe_fast_path_bypasses_history_recommendation_but_keeps_code_ending_requirement(self):
+    def test_fast_path_uses_session_aware_recommendation_and_keeps_code_ending_requirement(self):
         with tempfile.TemporaryDirectory() as temporary:
-            args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), "修改 PlayerController.cs，把 jumpHeight 从5改成6")
+            prompt = "修改 PlayerController.cs，把 jumpHeight 从5改成6"
+            args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), prompt)
+            adaptive = recommendation(pair="gpt-5.6-terra|low", fallback_pair="gpt-5.6-terra|medium")
+            adaptive.update({"session_effort": {"available": True, "failure_recorded": True, "resolution_state": "feedback_unresolved", "user_effort": 3, "last_model_pair": "gpt-5.6-luna|low", "solving_surface": "core_solving", "step_estimate": 1, "estimated_effort": "low", "model_difficulty": "bounded", "information_burden": "low"}, "session_escalation": {"applied": True, "from_pair": "gpt-5.6-luna|low", "to_pair": "gpt-5.6-terra|low"}})
 
             def fake_run(receipt_args, _prompt):
-                self.assertEqual((receipt_args.model, receipt_args.effort), ("gpt-5.3-codex-spark", "low"))
+                self.assertEqual((receipt_args.model, receipt_args.effort), ("gpt-5.6-terra", "low"))
                 receipt_args.result_output.parent.mkdir(parents=True, exist_ok=True)
                 receipt_args.result_output.write_text("RESULT", encoding="utf-8")
-                return {"status": "pass", "requested_pair": "gpt-5.3-codex-spark|low", "effective_pair": "gpt-5.3-codex-spark|low", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
+                return {"status": "pass", "requested_pair": "gpt-5.6-terra|low", "effective_pair": "gpt-5.6-terra|low", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
 
-            with patch.object(module, "_recommend", side_effect=AssertionError("history must not be read on the safe fast path")), patch.object(module, "_resolved_entry_pair", return_value=("gpt-5.6-terra", "medium", "configured")), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
-                result = module.run(args, "修改 PlayerController.cs，把 jumpHeight 从5改成6")
-        self.assertEqual(result["memory_source"], "fast_path_static_policy")
-        self.assertEqual(result["selected_pair"], "gpt-5.3-codex-spark|low")
+            with patch.object(module, "_recommend", return_value=adaptive) as recommend, patch.object(module, "_resolved_entry_pair", return_value=("gpt-5.6-terra", "medium", "configured")), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+                result = module.run(args, prompt)
+        recommend.assert_called_once_with(args, prompt)
+        self.assertEqual(result["memory_source"], "local_and_obsidian_model_history")
+        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|low")
+        self.assertTrue(result["fast_path_eligible"])
+        self.assertTrue(result["session_escalation"]["applied"])
         self.assertTrue(result["ending_required"])
-        self.assertEqual(result["execution_summary"], {"task_type": "code", "complexity_score": 16, "complexity_band": "small", "entry_pair": "gpt-5.6-terra|medium", "selected_pair": "gpt-5.3-codex-spark|low", "executed_pair": "gpt-5.3-codex-spark|low", "selected_model": "gpt-5.3-codex-spark", "reasoning_effort": "low", "fast_path": True, "producer_count": 1, "verification_backend": "projectless_ending", "repair_rounds": 0, "total_tokens": 1, "duration_ms": 1, "fallback_reason": None})
+        self.assertEqual(result["execution_summary"]["selected_pair"], "gpt-5.6-terra|low")
 
     def test_route_attempts_are_bounded_to_primary_plus_one_fallback(self):
         with tempfile.TemporaryDirectory() as temporary:

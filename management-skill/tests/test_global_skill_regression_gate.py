@@ -67,6 +67,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertIn("route event", session_outcomes["function"])
         self.assertIn("runtime receipt", session_outcomes["function"])
         self.assertIn("PASS", session_outcomes["function"])
+        self.assertIn("Spark fast path", session_outcomes["function"])
         self.assertIn("禁止编辑、修复、路由或创建生命周期", check_workers["function"])
         retired = {item["id"]: item["replacement"] for item in catalog["retired_architectures"]}
         self.assertEqual(retired["RET-011"], "GSR-026")

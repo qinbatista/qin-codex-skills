@@ -8,7 +8,7 @@
 
 Saved highest-family quality ladder · refreshed only when you request a local model update
 
-Small low-risk edits scoring 0–24 try Spark-low first · larger work uses the saved quality ladder
+Small 0–24 low-risk edits try Spark-low after same-session outcome gate · larger work uses the saved quality ladder
 
 </div>
 
@@ -35,7 +35,7 @@ Lifecycle:
   <img src="./management-skill/assets/readme/model-router.svg" alt="Receipt-proven model routing">
 </picture>
 
-- **Cold start / entry-aware:** Step-capability/difficulty history chooses the lowest correct pair. Sol/high may route down; Luna-max/lower may route up. Without a match, start at or below entry; eligible 0–24 work still tries Spark-low.
+- **Cold start / entry-aware:** Step-capability/difficulty history chooses the lowest correct pair. Sol/high may route down; Luna-max/lower may route up. Without a match, start at or below entry; eligible 0–24 work tries Spark-low only after the same-session outcome gate.
 - **Learning:** A receipt-valid Real PASS retains the pair; two matched PASS outcomes may try one weaker rung; quality failure upgrades one rung. Recovered pairs are reused for exact matches; implementation and local-test steps keep separate histories.
 - **Operational:** A zero-result failure gets one stronger fallback and is not learned as a quality failure.
 - **Scheduling:** Compound requests split into quantifiable owned steps; each step routes independently. Two or three read-only sources are cost-admitted before reads; dependent multi-file work stays with one contextual producer.
@@ -50,7 +50,7 @@ Lifecycle:
 - **Verify:** Every code change requires Ending. Eligible small non-code may skip. Spark-xhigh controls it; Terra/Sol workers may run semantic checks; all PASS.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
 - **Memory:** Change history is local JSONL + optional Obsidian; project/module + code symbols (`__module__`) required; context kept as fields.
-- **Models:** Use saved ladder; explicit update refreshes the highest GPT family; eligible small edits prioritize Spark-low; missing cache preserves it.
+- **Models:** Use saved ladder; explicit update refreshes highest GPT family; small edits pass same-session gate before Spark-low; missing cache preserves it.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 
 ## 📊 Real adaptive benchmark: finish first, verify in background

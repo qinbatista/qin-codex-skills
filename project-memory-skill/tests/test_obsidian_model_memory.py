@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import hashlib
 import json
 import os
 import tempfile
@@ -76,6 +77,29 @@ class ObsidianModelMemoryTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+    def write_session_rollout(self, codex_home, session_id, turns):
+        session_path = codex_home / "sessions" / "2026" / "08" / "19" / f"rollout-{session_id}.jsonl"
+        session_path.parent.mkdir(parents=True)
+        events = [{"type": "session_meta", "payload": {"session_id": session_id, "cwd": str(self.project)}}]
+        for turn_id, text in turns:
+            events.append({"type": "turn_context", "payload": {"turn_id": turn_id, "model": "gpt-5.6-luna", "effort": "low"}})
+            events.append({"type": "event_msg", "payload": {"type": "user_message", "message": text}})
+        session_path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+
+    def write_session_terminal_outcome(self, session_id, module_name, turn_id, pair, real_status, failure_class):
+        project_key = module.project_change_memory._project_identity(self.project)["key"]
+        session_key = module.session_effort.session_key(session_id)
+        task_scope = module.session_effort.task_scope_key(project_key, "code", module_name, module_name)
+        session_task_scope = module.session_effort.session_task_scope_key(session_key, task_scope)
+        turn_key = hashlib.sha256(turn_id.encode("utf-8")).hexdigest()[:24]
+        route_event_id = f"route-{turn_id}"
+        route_record = {"session_memory_schema": 2, "event_id": route_event_id, "recorded_at": "2026-08-19T00:00:00Z", "session_key": session_key, "codex_session_key": session_key, "session_task_scope_key": session_task_scope, "turn_key": turn_key, "project_key": project_key, "task_type": "code", "module": module_name, "selected_pair": pair}
+        terminal_record = {"model_experience_schema": 1, "event_id": f"result-{turn_id}", "recorded_at": "2026-08-19T00:01:00Z", "session_key": session_key, "codex_session_key": session_key, "session_task_scope_key": session_task_scope, "project_key": project_key, "task_type": "code", "module": module_name, "session_event_id": route_event_id, "completed_pair": pair, "model_evidence": "runtime_receipt", "receipt_status": "pass", "turn_completed": True, "model_match": True, "effort_match": True, "real_status": real_status, "failure_class": failure_class}
+        self.local_store.parent.mkdir(parents=True, exist_ok=True)
+        with self.local_store.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"local_model_memory_schema": 2, "event": "session-effort", "record": route_record}) + "\n")
+            handle.write(json.dumps({"local_model_memory_schema": 1, "event": "model-result", "record": terminal_record}) + "\n")
 
     def active(self, records):
         shared, pairs = module.load_shared_ladder()
@@ -191,6 +215,37 @@ class ObsidianModelMemoryTests(unittest.TestCase):
             recommendation = module.recommend_model(self.project, "code", "environment-scope", task_summary="Use the active Codex session.", vault=self.vault)
         self.assertTrue(recommendation["scope_enforced"])
         self.assertEqual(recommendation["codex_session_key"], module.session_effort.session_key(session_id))
+
+    def test_same_session_feedback_overrides_fast_spark_priority_after_verified_pass(self):
+        session_id = "019fc8e5-87da-7082-90b9-6d505404d229"
+        module_name = "session-aware-fast-route"
+        first_prompt = "Fix the model selector session continuity behavior."
+        current_prompt = "It is still wrong, fix the model selector session continuity behavior."
+        codex_home = self.root / "codex-home"
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False):
+            self.write_session_rollout(codex_home, session_id, [("turn-1", first_prompt), ("turn-2", current_prompt)])
+            self.write_session_terminal_outcome(session_id, module_name, "turn-1", "gpt-5.6-luna|low", "pass", "none")
+            recommendation = module.recommend_model(self.project, "code", module_name, file_value="src/example.py", symbol="Example.run", code_kind="python", operation="fix", modality="text", complexity_score=16, risk="low", ambiguity="low", task_summary=current_prompt, session_prompt=current_prompt, session_id=session_id, entry_model="gpt-5.6-luna", entry_effort="low", vault=self.vault, local_store=self.local_store)
+        self.assertEqual(recommendation["session_effort"]["current_turn_match"], "exact")
+        self.assertEqual(recommendation["session_effort"]["latest_terminal_outcome"], "verified_pass")
+        self.assertEqual(recommendation["session_effort"]["resolution_state"], "feedback_unresolved")
+        self.assertTrue(recommendation["session_escalation"]["applied"])
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.6-terra|low")
+        self.assertNotEqual(recommendation["attempt_pair"], "gpt-5.3-codex-spark|low")
+
+    def test_new_session_topic_keeps_fast_spark_priority_after_prior_quality_failure(self):
+        session_id = "019fc8e5-87da-7082-90b9-6d505404d230"
+        module_name = "session-aware-fast-route"
+        first_prompt = "Fix the model selector session continuity behavior."
+        current_prompt = "Update one label in the settings panel."
+        codex_home = self.root / "codex-home"
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False):
+            self.write_session_rollout(codex_home, session_id, [("turn-1", first_prompt), ("turn-2", current_prompt)])
+            self.write_session_terminal_outcome(session_id, module_name, "turn-1", "gpt-5.6-luna|low", "fail", "correctness")
+            recommendation = module.recommend_model(self.project, "code", module_name, file_value="src/example.py", symbol="Example.run", code_kind="python", operation="edit", modality="text", complexity_score=16, risk="low", ambiguity="low", task_summary=current_prompt, session_prompt=current_prompt, session_id=session_id, entry_model="gpt-5.6-luna", entry_effort="low", vault=self.vault, local_store=self.local_store)
+        self.assertEqual(recommendation["session_effort"]["resolution_state"], "new_topic")
+        self.assertFalse(recommendation["session_escalation"]["applied"])
+        self.assertEqual(recommendation["attempt_pair"], "gpt-5.3-codex-spark|low")
 
     def test_session_and_task_scope_never_cross_step_records(self):
         session_one = "019fc8e5-87da-7082-90b9-6d505404d229"

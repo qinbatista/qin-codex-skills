@@ -607,14 +607,6 @@ def _pre_execution_failure(receipt_args):
     return model_execution_receipt.annotate_operational_fallback(receipt)
 
 
-def _fast_path_recommendation(args):
-    selected = routing_policy.priority_first_pair(args.task_type, args.modality, args.operation, args.complexity, args.complexity_score)
-    if selected is None:
-        return None
-    selected_pair = f"{selected[0]}|{selected[1]}"
-    return {"source": "fast_path_static_policy", "memory_available": False, "selected_pair": selected_pair, "selected_model": selected[0], "selected_effort": selected[1], "attempt_pair": selected_pair, "active_fallback_pair": None, "attempt_trial": False, "attempt_reason": "bounded_fast_path", "attempt_calibration_state": "not-applicable", "trial": False, "reason": "bounded_fast_path", "calibration_state": "not-applicable", "specificity": "prompt", "matched_records": 0, "project_key": "not-read"}
-
-
 def _attempt_pairs(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation["selected_pair"]
     active_pair = recommendation.get("active_fallback_pair")
@@ -698,8 +690,7 @@ def run(args, prompt):
     if not hasattr(args, "complexity_score") or args.complexity_score is None:
         args.complexity_score = 65 if args.complexity == "complex" else 35
     args.resolved_entry_model, args.resolved_entry_effort, args.resolved_entry_source = _resolved_entry_pair(args)
-    recommendation = _fast_path_recommendation(args) if getattr(args, "fast_path_eligible", False) else None
-    recommendation = _exact_contract_recommendation(prompt, recommendation or _recommend(args, prompt))
+    recommendation = _exact_contract_recommendation(prompt, _recommend(args, prompt))
     _emit_route_ready(args, recommendation)
     sources = scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None

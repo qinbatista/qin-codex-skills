@@ -511,7 +511,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             self.assertIn("`intentionally_skipped_simple_task`=>no End Task", bootstrap_text)
             self.assertIn("missing acknowledgement=>BLOCKED", bootstrap_text)
             self.assertIn("terminal memory/classification/record closeout", bootstrap_text)
-            self.assertIn("call exact codex_app__create_thread target", bootstrap_text)
+            self.assertIn("call codex_app__create_thread target", bootstrap_text)
             self.assertIn("codex_app__list_threads", bootstrap_text)
             self.assertIn("projectId=null/absent", bootstrap_text)
             self.assertIn("ack threadId+hostId+originProjectId+threadProjectId=null", bootstrap_text)
