@@ -37,6 +37,7 @@ Apply these rules for Unity projects and C# code, including MonoBehaviours, Scri
 - Do not create helper functions that are only used once, except `Update()` may call one helper used only there when it makes the per-frame flow clearer.
 - Do not create a new C# script only to simplify a very small or easy structure.
 - Keep function calls and log calls on one line.
+- Keep constructor calls and object-creation expressions on one physical line, including long argument lists. In collection, property, and array initializers, keep each `new Type(...)` entry flat; never format it as `new Type(` followed by vertically stacked arguments. For example: `new InAppPurchaseProduct(ProductId.Coin500.ToString(), "coins_500_ios", "coins_500_android", 500, 3.99m, "USD", InAppPurchaseProductKind.Consumable),`
 - Keep spaces after commas.
 - Do not fold argument lists across multiple lines unless explicitly requested.
 

@@ -69,6 +69,16 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         self.assertIn("nearest project `AGENTS.md`", self.unity_structure)
         self.assertIn("Patterns solve a demonstrated lifecycle or coordination need", self.unity_rules)
 
+    def test_unity_constructor_and_collection_entries_stay_flat(self):
+        for required_fragment in [
+            "constructor calls and object-creation expressions on one physical line",
+            "each `new Type(...)` entry flat",
+            "vertically stacked arguments",
+            "new InAppPurchaseProduct(ProductId.Coin500.ToString(), \"coins_500_ios\", \"coins_500_android\", 500, 3.99m, \"USD\", InAppPurchaseProductKind.Consumable),",
+        ]:
+            self.assertIn(required_fragment, self.unity_rules)
+        self.assertNotIn("new InAppPurchaseProduct(\n", self.unity_rules)
+
     def test_agent_metadata_preserves_prior_lifecycle_routing_and_unity_requirements(self):
         required = [
             "$code-skill: artifact-free exact read-only lookup/audit stays skill-free",
