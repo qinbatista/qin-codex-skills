@@ -1,6 +1,6 @@
 # Mandatory Post-Result Ending Lifecycle
 
-Every durable code/file change, bug fix, generated artifact, UI/render result, integration, external action, standard/complex/advanced result, and medium/high-risk or multi-stage task is Ending-required. Only eligible low-risk single-result small non-code work records `intentionally_skipped_simple_task`. The producer runs exactly one smallest Quick Check and presents immediately; only after the whole result flow is settled and the final aggregate receipt is released does the parent create one persistent global projectless Ending. A child/subprocess receipt never triggers it. Its fixed Spark-xhigh controller runs direct checks and may use saved Terra/Sol `ENDING_CHECK_WORKER` nodes for semantic runtime, integration, code-quality, prompt, UI, or visual evidence. Prior prose cannot PASS; a current immutable PASS report may be digest/state-checked.
+Ending is required only when the released result exposes `real_test`, `information_update`, or `memory_update`. A no-surface result records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update`; score, risk, stage count, or prose complexity cannot manufacture an Ending. The producer runs exactly one smallest Quick Check when the result is code and presents immediately; only after the whole result flow is settled and the final aggregate receipt is released does the parent create one persistent global projectless Ending. A child/subprocess receipt never triggers it. Its fixed Spark-xhigh controller runs direct checks and may use saved Terra/Sol `ENDING_CHECK_WORKER` nodes for semantic runtime, integration, code-quality, prompt, UI, or visual evidence. Prior prose cannot PASS; a current immutable PASS report may be digest/state-checked.
 
 ## Parent sequence
 
@@ -56,7 +56,7 @@ Corrections are append-only and preserve the wrong event as superseded history. 
 - Keep the fixed Spark Ending controller independent from task/check score; score and surface may select only a bounded check-worker pair.
 - Keep checks focused and proportional; do not run unrelated exhaustive suites.
 - Order checks that share mutable state. Parallelize only independent safe checks.
-- A simple conversational answer may have a score/history-only Ending record when no observable verification is applicable; never fabricate a test.
+- A simple conversational answer with no observable test, information, or memory surface skips Ending; record `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update` and never fabricate a test.
 
 ## Status
 

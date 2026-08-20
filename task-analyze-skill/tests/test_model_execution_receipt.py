@@ -213,6 +213,13 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertTrue(receipt["model_match"])
         self.assertTrue(receipt["effort_match"])
 
+    def test_child_command_explicitly_disables_approval_prompts_without_bypassing_sandbox(self):
+        args = argparse.Namespace(codex_bin="codex", model="gpt-5.6-luna", effort="max", sandbox="workspace-write", ignore_user_config=True)
+        command = module.build_codex_exec_command(args)
+        self.assertIn('approval_policy="never"', command)
+        self.assertIn("--sandbox", command)
+        self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", command)
+
     def test_route_markers_define_non_recursive_lifecycle_ownership(self):
         result_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
         ending_boundary = module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
@@ -236,7 +243,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="route-attempt", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
-        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "-c", "features.multi_agent=false", "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
+        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "-c", "features.multi_agent=false", "-c", 'approval_policy="never"', "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
         attempt = receipt["route_attempts"][0]
         self.assertEqual(attempt["requested_pair"], "gpt-5.6-luna|low")
         self.assertEqual(attempt["resolved_pair"], "gpt-5.6-luna|low")

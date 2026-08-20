@@ -79,7 +79,7 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
             "exactly one smallest local Quick Check",
             "publish CODE READY",
             "broad tests/builds/UI/full lint/log cleanup/repeated review move to Ending",
-            "Every durable code change emits ending-required",
+            "Code normally exposes real_test through Quick Check and emits ending-required",
             "ending_verification_plan.py",
             "projectless End Task",
             "gpt-5.3-codex-spark|xhigh",

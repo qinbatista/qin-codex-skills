@@ -174,8 +174,8 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         csharp_text = (skills_root / "code-skill" / "references" / "csharp-rules.md").read_text(encoding="utf-8")
         unity_text = (skills_root / "code-skill" / "references" / "unity-csharp-rules.md").read_text(encoding="utf-8")
         self.assertIn("Before presenting a light/local Python edit", python_text)
-        self.assertIn("Every durable Python change", python_text)
-        self.assertIn("only eligible non-code work may record `intentionally_skipped_simple_task`", python_text)
+        self.assertIn("A durable Python change normally exposes `real_test`", python_text)
+        self.assertIn("no `real_test`, `information_update`, or `memory_update` surface", python_text)
         self.assertIn("Present `CODE READY` immediately after exactly one Quick Check", python_text)
         self.assertIn("one persistent global projectless Ending", python_text)
         self.assertIn("projectId=null", python_text)
@@ -480,7 +480,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT:
                 with self.subTest(required_term=required_term):
                     self.assertIn(required_term, original_text)
-                    global_agents.write_text(original_text.replace(required_term, "removed production bootstrap term", 1), encoding="utf-8")
+                    global_agents.write_text(original_text.replace(required_term, "removed production bootstrap term"), encoding="utf-8")
                     validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
                     self.assertFalse(validation["valid"])
                     self.assertTrue(any(f"global AGENTS missing required contract: {required_term}" == failure for failure in validation["failures"]))
@@ -577,7 +577,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             for required_term in module.REQUIRED_GLOBAL_ENTRY_ASSET_TEXT:
                 with self.subTest(required_term=required_term):
                     self.assertIn(required_term, original_text)
-                    entry_asset.write_text(original_text.replace(required_term, "removed production bootstrap term", 1), encoding="utf-8")
+                    entry_asset.write_text(original_text.replace(required_term, "removed production bootstrap term"), encoding="utf-8")
                     validation = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
                     self.assertFalse(validation["valid"])
                     self.assertTrue(any(f"global entry asset missing required contract: {required_term}" == failure for failure in validation["failures"]))

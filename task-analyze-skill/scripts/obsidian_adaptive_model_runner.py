@@ -142,17 +142,62 @@ def _emit_route_ready(args, recommendation):
     _emit_model_route_notice(notice)
 
 
-def result_lifecycle_policy(successful_result, task_type, complexity_score, risk, multi_stage=False):
+ENDING_REAL_TEST_TERMS = (
+    r"\b(?:test|tests|testing|audit|audited|verify|verification|validate|validation|check|checked|review|reviewed|regression|replay|smoke|integration|live|runtime|render|visual|acceptance|compile|build)\b",
+    r"(?:测试|审计|核验|验证|校验|检查|复核|回归|重放|冒烟|集成|运行时|渲染|视觉|验收|编译|构建)",
+)
+ENDING_INFORMATION_UPDATE_TERMS = (
+    r"\b(?:update|updated|document|documentation|readme|agents\.md|skill\.md|release notes|knowledge|record|publish|deployment|deploy)\b",
+    r"(?:更新|文档|说明|知识|记录信息|发布|部署)",
+)
+ENDING_MEMORY_UPDATE_TERMS = (
+    r"\b(?:memory|remember|obsidian|project memory|history|durable record|memory update)\b",
+    r"(?:记忆|记住|历史记录|项目记忆|持久记录|记忆更新)",
+)
+
+
+def _contains_any_surface_term(prompt, patterns):
+    normalized = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    return bool(normalized and any(re.search(pattern, normalized, re.IGNORECASE) for pattern in patterns))
+
+
+def ending_surface_requirements(task_type, operation="", prompt="", real_test=False, information_update=False, memory_update=False):
+    """Identify observable work that gives a detached Ending a real purpose."""
+    task_type = str(task_type or "").strip().lower()
+    operation = str(operation or "").strip().lower()
+    return {
+        "real_test": bool(real_test or task_type == "code" or operation in {"test", "verify", "audit", "review", "validate"} or _contains_any_surface_term(prompt, ENDING_REAL_TEST_TERMS)),
+        "information_update": bool(information_update or task_type in {"writing", "documentation"} or operation in {"document", "write", "update"} or _contains_any_surface_term(prompt, ENDING_INFORMATION_UPDATE_TERMS)),
+        "memory_update": bool(memory_update or operation in {"memory", "record"} or _contains_any_surface_term(prompt, ENDING_MEMORY_UPDATE_TERMS)),
+    }
+
+
+def result_lifecycle_policy(successful_result, task_type, complexity_score, risk, multi_stage=False, prompt="", operation="", real_test=False, information_update=False, memory_update=False):
     band = obsidian_model_memory.complexity_band(complexity_score)
     code_change = task_type == "code"
-    ending_required = bool(successful_result and (code_change or multi_stage or band != "small" or risk != "low"))
+    ending_surface = ending_surface_requirements(task_type, operation, prompt, real_test, information_update, memory_update)
+    ending_triggers = [name for name, enabled in ending_surface.items() if enabled]
+    ending_required = bool(successful_result and ending_triggers)
     if not successful_result:
         ending_real_status = "not_started"
+        ending_requirement = "not_started"
     elif ending_required:
         ending_real_status = "missing_expected_code_ending" if code_change and band == "small" and risk == "low" and not multi_stage else "missing_expected_non_simple"
+        ending_requirement = "required"
     else:
         ending_real_status = "intentionally_skipped_simple_task"
-    return {"ending_required": ending_required, "ending_requirement": "required" if ending_required else "simple_non_code_task_exempt", "ending_real_status": ending_real_status, "producer_check_scope": "one_smallest_local_quick_check" if code_change else "completion_check_only", "first_result_release": "immediate_after_quick_check", "deferred_verification_owner": "projectless_ending" if ending_required else "none"}
+        ending_requirement = "no_real_ending_surface"
+    return {
+        "ending_required": ending_required,
+        "ending_requirement": ending_requirement,
+        "ending_real_status": ending_real_status,
+        "ending_surface": ending_surface,
+        "ending_triggers": ending_triggers,
+        "ending_skip_reason": None if ending_required or not successful_result else "no_real_test_or_information_or_memory_update",
+        "producer_check_scope": "one_smallest_local_quick_check" if code_change else "completion_check_only",
+        "first_result_release": "immediate_after_quick_check",
+        "deferred_verification_owner": "projectless_ending" if ending_required else "none",
+    }
 
 
 def _atomic_write_json(path, value):
@@ -484,7 +529,8 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     main_node["trial"] = recommendation.get("trial") is True
     main_node["routing_recommendation"] = proof
     nodes.append(main_node)
-    nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", **task_route_dispatcher.ending_fast_route_fields(), "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
+    if result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))["ending_required"]:
+        nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", **task_route_dispatcher.ending_fast_route_fields(), "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
     return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": "parallel_sources_fused_final" if fused_source else "parallel_independent_sources", "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900)}, recommendation
 
 
@@ -552,12 +598,8 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["switch_direction"] = "no_switch"
     receipt["switch_change"] = "scheduled_graph"
     receipt["model_route_notice"] = graph_notice
-    receipt["ending_required"] = True
-    receipt["ending_requirement"] = "required"
-    receipt["ending_real_status"] = "missing_expected_non_simple"
-    receipt["producer_check_scope"] = "one_smallest_local_quick_check" if args.task_type == "code" else "completion_check_only"
-    receipt["first_result_release"] = "immediate_after_quick_check"
-    receipt["deferred_verification_owner"] = "projectless_ending"
+    lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
+    receipt.update(lifecycle_policy)
     receipt.update(_final_aggregate_fields(receipt, len(result_nodes), "released", release["release_path"], manifest.get("route_run_id")))
     execution_summary = _light_execution_summary(
         args.task_type,
@@ -575,7 +617,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
-    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), "ending_required": True, "ending_requirement": "required", "ending_real_status": "missing_expected_non_simple", "producer_check_scope": receipt["producer_check_scope"], "first_result_release": receipt["first_result_release"], "deferred_verification_owner": receipt["deferred_verification_owner"], "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_summary": execution_summary}
+    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), **lifecycle_policy, "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_summary": execution_summary}
     summary.update({"aggregate_result_release_path": receipt["aggregate_result_release_path"], "final_aggregate_receipt": receipt["final_aggregate_receipt"], "aggregate_result_state": receipt["aggregate_result_state"], "ending_launch_ready": receipt["ending_launch_ready"]})
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
@@ -765,7 +807,7 @@ def run(args, prompt):
         else:
             _atomic_write_text(args.result_output, normalized_result.rstrip("\n") + "\n")
     successful_result = receipt.get("status") == "pass" and result_published
-    lifecycle_policy = result_lifecycle_policy(successful_result, args.task_type, args.complexity_score, args.risk, admission is not None)
+    lifecycle_policy = result_lifecycle_policy(successful_result, args.task_type, args.complexity_score, args.risk, admission is not None, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
     receipt.update(lifecycle_policy)
     receipt.update(_final_aggregate_fields(receipt, 1, "single_result_released"))
     execution_summary = _light_execution_summary(
@@ -870,6 +912,7 @@ def resolve_fast_path_args(args, prompt):
     args.task_group = args.task_group or os.environ.get("CODEX_TASK_GROUP", "")
     args.session_id = obsidian_model_memory.session_effort.resolve_session_id(prompt, args.session_id)
     args.task_summary = args.task_summary or prompt_text[:280]
+    args.ending_surface = ending_surface_requirements(args.task_type, args.operation, prompt, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
     args.workload_id = args.workload_id or f"fast-{digest}"
     args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
     args.result_output = Path(args.result_output) if args.result_output is not None else default_output_root / "result.txt"
@@ -917,6 +960,9 @@ def parse_args(argv=None):
     parser.add_argument("--entry-model")
     parser.add_argument("--entry-effort")
     parser.add_argument("--emit-result", action="store_true")
+    parser.add_argument("--real-test", action="store_true", help="Declare a real test or runtime verification surface for the detached Ending.")
+    parser.add_argument("--information-update", action="store_true", help="Declare an information/documentation update surface for the detached Ending.")
+    parser.add_argument("--memory-update", action="store_true", help="Declare a durable memory/history update surface for the detached Ending.")
     return parser.parse_args(argv)
 
 

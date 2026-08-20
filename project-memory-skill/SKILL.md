@@ -91,7 +91,7 @@ These adaptive model-learning rules do not alter project change-memory behavior:
 
 ## Separate Personal Preference Memory
 
-Personal preference and technical-working-trait memory is a third, separate stream. Every durable code change and other Ending-required result is scanned inside its mandatory Ending; only eligible low-risk single-result small non-code work may skip. An empty scan remains a strict no-op. The fixed Spark controller owns the scan and terminal record; capability-routed check workers never write preference, project-result, or model-routing memory.
+Personal preference and technical-working-trait memory is a third, separate stream. Every result with a `real_test`, `information_update`, or `memory_update` surface is scanned inside its Ending; a no-surface result records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update` and may skip. An empty scan remains a strict no-op. The fixed Spark controller owns the scan and terminal record; capability-routed check workers never write preference, project-result, or model-routing memory.
 
 Use the maintained helpers instead of editing coverage or Model Switch routing records manually:
 

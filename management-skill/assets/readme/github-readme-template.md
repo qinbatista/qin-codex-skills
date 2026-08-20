@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**Codex-only · score every task · finish first · require an Ending for material work**
+**Codex-only · score every task · finish first · Ending only for real evidence**
 
 [中文说明](./README.zh.md)
 
@@ -19,13 +19,13 @@ Small 0–24 low-risk edits try Spark-low after same-session outcome gate · lar
   <img src="./management-skill/assets/readme/core-flow.svg" alt="Core result-first lifecycle">
 </picture>
 
-## ✅ Finish first. Require Ending for material work.
+## ✅ Finish first. End only when there is real evidence.
 
 Lifecycle:
 
 1. **Score every submission from 0–100, load the relevant Skills, then finish the requested job.** For code, run exactly one smallest local Quick Check.
 2. **Return the completed result immediately.**
-3. **Every durable code change emits `ending-required`. A low-risk, single-result small task may skip only when eligible and non-code.** Standard/complex/advanced work, any medium/high-risk task, and multi-stage work also require exactly one acknowledged global projectless `End Task-<task name>`. The producer publishes `CODE READY` after its one Quick Check; broad tests, builds, UI review, full lint, log cleanup, release gates, and repeated review never block the first result.
+3. **A result emits `ending-required` only when it exposes `real_test`, `information_update`, or `memory_update`; a no-surface result records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update`, regardless of score, risk, or stage count.** Surface, not score/risk/stage count, decides Ending creation. A low-risk, single-result small task with no surface also skips Ending. Producer publishes `CODE READY` after Quick Check; broad tests/builds/UI/full lint/log cleanup/release gates/repeated review never block the first result.
 4. **The one Ending runs the smallest real/completion checks and one terminal closeout; all required checks must PASS.** `gpt-5.3-codex-spark|xhigh` is sole controller. It runs deterministic checks; saved Terra/Sol `ENDING_CHECK_WORKER` nodes run semantic checks. Workers read listed Skills, write evidence, and never edit, repair, route, or own lifecycle. Create exactly one global-only projectless `End Task-<task name>` with `create_thread.target={"type":"projectless"}`; the origin project stays execution context and is never attached to the thread. `list_threads` readback must show `projectId=null` or absent before acknowledgement. Project/current-task/same-task-subtask placement or missing readback is BLOCKED. Failure sends exact evidence through `codex_app__send_message_to_thread` to the immutable origin for a fresh Spark-first Ending. PASS/FAIL/BLOCKED stays visible; the 0–100 score only scopes checks. Controller unavailability permits the registry-floor `gpt-5.6-luna|low` fallback. Reuse a current immutable release report by checking its digest and final state. Closeout writes routing classification/model history; nothing auto-archives or deletes itself.
 
 ## ⚡ Models & private learning
@@ -39,7 +39,7 @@ Lifecycle:
 - **Learning:** A receipt-valid Real PASS retains the pair; two matched PASS outcomes may try one weaker rung; quality failure upgrades one rung. Recovered pairs are reused for exact matches; implementation and local-test steps keep separate histories.
 - **Operational:** A zero-result failure gets one stronger fallback and is not learned as a quality failure.
 - **Scheduling:** Compound requests split into quantifiable owned steps; each step routes independently. Two or three read-only sources are cost-admitted before reads; dependent multi-file work stays with one contextual producer.
-- **Memory:** Native project → Model Switch → category → shared-category links hold every terminal Ending record; no JSON sidecar or full-history read. Receipt-backed outcomes may move routing; known assignments without receipts remain visible, non-learning observations.
+- **Memory:** Change history is local JSONL + optional Obsidian; Native project → Model Switch → category → shared-category links hold every terminal Ending record; no JSON sidecar or full-history read. Receipt-backed outcomes may move routing; known assignments without receipts remain visible, non-learning observations; context kept as fields.
 
 ## Rules
 
@@ -47,9 +47,9 @@ Lifecycle:
 - **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
 - **Route:** Delegate only on explicit request or current end-to-end proof.
 - **Deliver:** Finish and return the completed main result before background verification.
-- **Verify:** Every code change requires Ending. Eligible small non-code may skip. Spark-xhigh controls it; Terra/Sol workers may run semantic checks; all PASS.
+- **Verify:** real_test/information_update/memory_update => Ending; else record skip. Spark-xhigh; workers check semantics; PASS.
 - **Files:** Recall project/module/file history before editing; record the verified change after.
-- **Memory:** Change history is local JSONL + optional Obsidian; project/module + code symbols (`__module__`) required; context kept as fields.
+- **Memory:** Local JSONL + optional Obsidian; project/module + code symbols required.
 - **Models:** Use saved ladder; explicit update refreshes highest GPT family; small edits pass same-session gate before Spark-low; missing cache preserves it.
 - **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
 

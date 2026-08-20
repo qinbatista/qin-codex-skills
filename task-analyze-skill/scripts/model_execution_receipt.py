@@ -790,6 +790,29 @@ def benchmark_auto_launch_evidence(cache_root, workload_sha256, expected_entry_p
     return {"verified": verified, "workspace_count": len(workspaces), "bridge_result_verified": bridge_result_verified, "bridge_result_text": result_text, "selected_execution": selected_execution if bridge_result_verified else None}
 
 
+def build_codex_exec_command(args):
+    """Build a non-interactive child command without dropping approval policy."""
+    command = [
+        args.codex_bin,
+        "exec",
+        "--model",
+        args.model,
+        "-c",
+        f'model_reasoning_effort="{args.effort}"',
+        "-c",
+        "features.multi_agent=false",
+        "-c",
+        'approval_policy="never"',
+        "--sandbox",
+        args.sandbox,
+        "--skip-git-repo-check",
+        "--json",
+    ]
+    command.extend(["--ignore-user-config"] if args.ignore_user_config else [])
+    command.append("-")
+    return command
+
+
 def run_receipt(args, prompt_text):
     authorization = authorize_receipt_run(args)
     benchmark_prompt_path = None
@@ -804,22 +827,7 @@ def run_receipt(args, prompt_text):
     allowed_fallback_pairs = normalize_fallback_pairs(getattr(args, "allow_fallback", []))
     requested_pair = requested_pair_tuple
     allowed_pairs = [requested_pair] + [parse_model_effort_pair(value) for value in allowed_fallback_pairs]
-    command = [
-        args.codex_bin,
-        "exec",
-        "--model",
-        args.model,
-        "-c",
-        f'model_reasoning_effort="{args.effort}"',
-        "-c",
-        "features.multi_agent=false",
-        "--sandbox",
-        args.sandbox,
-        "--skip-git-repo-check",
-        "--json",
-    ]
-    command.extend(["--ignore-user-config"] if args.ignore_user_config else [])
-    command.append("-")
+    command = build_codex_exec_command(args)
     if getattr(args, "bootstrap_task", False):
         execution_prompt = auto_benchmark_execution_prompt(prompt_text, pair_text(args.model, args.effort))
     elif args.entry_task or getattr(args, "direct_task", False):

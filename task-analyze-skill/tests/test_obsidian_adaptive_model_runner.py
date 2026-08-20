@@ -720,21 +720,42 @@ source_files must list both sources."""
 
     def test_result_lifecycle_policy_replays_sanitized_today_task_classes(self):
         cases = [
-            ("remove-debug-log", "code", 8, "low", False, True),
-            ("local-model-route", "code", 18, "low", False, True),
-            ("global-skill-flow", "code", 35, "low", True, True),
-            ("file-copy", "question", 30, "low", False, True),
-            ("git-release", "question", 60, "medium", True, True),
-            ("read-only-monitor", "question", 12, "low", False, False),
-            ("calendar-ui", "question", 35, "medium", False, True),
-            ("visual-artifact", "question", 45, "medium", False, True),
+            ("remove-debug-log", "code", 8, "low", False, "", True),
+            ("local-model-route", "code", 18, "low", False, "", True),
+            ("global-skill-flow", "code", 35, "low", True, "", True),
+            ("file-copy", "question", 30, "low", False, "", False),
+            ("git-release", "question", 60, "medium", True, "Update the release information.", True),
+            ("read-only-monitor", "question", 12, "low", False, "Read the current monitor state.", False),
+            ("calendar-ui", "question", 35, "medium", False, "Visually verify the calendar UI.", True),
+            ("visual-artifact", "question", 45, "medium", False, "Review the rendered visual artifact.", True),
         ]
-        for name, task_type, score, risk, multi_stage, expected_ending in cases:
+        for name, task_type, score, risk, multi_stage, prompt, expected_ending in cases:
             with self.subTest(name=name):
-                policy = module.result_lifecycle_policy(True, task_type, score, risk, multi_stage)
+                policy = module.result_lifecycle_policy(True, task_type, score, risk, multi_stage, prompt)
                 self.assertEqual(policy["ending_required"], expected_ending)
                 self.assertEqual(policy["first_result_release"], "immediate_after_quick_check")
                 self.assertEqual(policy["deferred_verification_owner"], "projectless_ending" if expected_ending else "none")
+
+    def test_ending_skips_complex_plain_answer_without_real_surface(self):
+        policy = module.result_lifecycle_policy(True, "question", 85, "high", True, "Explain the difference between two terms.")
+        self.assertFalse(policy["ending_required"])
+        self.assertEqual(policy["ending_requirement"], "no_real_ending_surface")
+        self.assertEqual(policy["ending_real_status"], "intentionally_skipped_simple_task")
+        self.assertEqual(policy["ending_skip_reason"], "no_real_test_or_information_or_memory_update")
+        self.assertEqual(policy["ending_surface"], {"real_test": False, "information_update": False, "memory_update": False})
+
+    def test_ending_requires_explicit_information_or_memory_surface(self):
+        information = module.result_lifecycle_policy(True, "question", 85, "low", True, "Update the project documentation.")
+        memory = module.result_lifecycle_policy(True, "question", 85, "low", True, "Record this decision in project memory.")
+        self.assertEqual(information["ending_triggers"], ["information_update"])
+        self.assertIn("memory_update", memory["ending_triggers"])
+        self.assertTrue(information["ending_required"])
+        self.assertTrue(memory["ending_required"])
+
+    def test_explicit_real_test_surface_overrides_plain_task_type(self):
+        policy = module.result_lifecycle_policy(True, "question", 10, "low", False, "Answer briefly.", real_test=True)
+        self.assertTrue(policy["ending_required"])
+        self.assertEqual(policy["ending_triggers"], ["real_test"])
 
     def test_fast_path_default_producer_timeout_is_five_minutes(self):
         self.assertEqual(module.parse_args([]).timeout, 300)
