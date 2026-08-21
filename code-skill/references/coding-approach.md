@@ -50,3 +50,11 @@ For every UI task or user-facing UI information change, apply both principles:
 - Use correct English spelling for new identifiers, file names, keys, comments, and prompt labels.
 - Keep an existing misspelled name only when required by an external API, persisted schema, third-party contract, or compatibility boundary.
 - Use clear full-word names instead of unexplained abbreviations.
+
+## Automatic spelling correction at naming boundaries
+
+- This rule covers every unambiguous English spelling error, not an allow-list of examples. When a user supplies a misspelled English word or technical name, correct it before creating or changing identifiers, file names, keys, comments, prompt labels, documentation, or user-facing technical labels. For example, normalize `Oraganization` to `Organization`; preserve the requested casing style after correction.
+- Use the surrounding domain and established project vocabulary to make a correction. If the spelling could be intentional, proprietary, or plausibly corrected in more than one way, keep the supplied form and ask instead of guessing.
+- Treat an existing misspelled name as a rename/migration: search declarations and direct references first, update every internal use to the canonical spelling, and run the smallest compile, import, or direct-reference check that proves the rename is connected.
+- At an external API, public, persisted, serialized, or third-party boundary, preserve only the compatibility alias or migration required by that boundary and use the canonical spelling internally. Do not silently rewrite user data or third-party names.
+- If a correction was made, finish with a factual mapping such as `Oraganization -> Organization`, identify the affected scope, and state any compatibility handling. Keep that mapping ahead of any requested informal tone so the user can see exactly which name is canonical.

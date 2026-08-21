@@ -49,6 +49,13 @@ Negative instructions are appropriate for critical, plausible failures such as f
 - Prefer explicit and measurable instructions over vague quality language. Replace `make it good` with the property and check that prove good.
 - Treat examples as illustrations, never as permission to override constraints or invent unavailable facts.
 
+## Spelling correction for durable instructions
+
+- This rule covers every unambiguous English spelling error, not an allow-list of examples. When a user supplies a misspelled English word or technical name, correct it at the input boundary before emitting a durable prompt or instruction. For example, normalize `Oraganization` to `Organization`; preserve the requested casing style and use the corrected form consistently in the output.
+- Use surrounding context and established project vocabulary. If the term may be intentional, proprietary, externally owned, or has more than one plausible correction, retain the supplied form and ask rather than guessing.
+- Do not silently rewrite quoted user prose, user data, external names, or persisted/public contract values. If the name is a compatibility boundary, keep the minimum required legacy alias or migration and make the canonical spelling explicit.
+- When a correction is made, the output must state the original-to-canonical mapping and affected scope before any optional tone or commentary; never claim a correction, test, or deployment that was not actually verified.
+
 ## Workflow
 
 1. Inspect the existing prompt, real inputs, bad outputs, and current validator before editing.

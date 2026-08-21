@@ -57,6 +57,20 @@ class PromptContractTests(unittest.TestCase):
         for required_rule in ["Ask only when missing information would materially change", "Do not expose private chain-of-thought", "Do not make every task follow a visible step-by-step", "examples as illustrations", "Prefer explicit and measurable instructions"]:
             self.assertIn(required_rule, self.prompt_skill)
 
+    def test_spelling_correction_is_explicit_and_preserves_contract_boundaries(self):
+        for required_fragment in [
+            "## Spelling correction for durable instructions",
+            "every unambiguous English spelling error",
+            "not an allow-list of examples",
+            "misspelled English word or technical name",
+            "Oraganization",
+            "Organization",
+            "original-to-canonical mapping",
+            "Do not silently rewrite quoted user prose, user data, external names, or persisted/public contract values",
+            "never claim a correction, test, or deployment that was not actually verified",
+        ]:
+            self.assertIn(required_fragment, self.prompt_skill)
+
     def test_code_reference_inherits_global_contract(self):
         for required_rule in ["Always apply the global `prompt-skill` first", "prompt-task routing failure", "never weakens", "Do not print this planning scaffold", "smallest applicable canonical structure", "escape literal JSON braces"]:
             self.assertIn(required_rule, self.code_reference)

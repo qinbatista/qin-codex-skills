@@ -46,6 +46,23 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         self.assertIn("mandatory before/during-writing process authority", self.coding_approach)
         self.assertIn("does not duplicate or replace its four process stages", self.coding_approach)
 
+    def test_automatic_spelling_correction_is_canonical_and_boundary_safe(self):
+        for required_fragment in [
+            "## Automatic spelling correction at naming boundaries",
+            "every unambiguous English spelling error",
+            "not an allow-list of examples",
+            "misspelled English word or technical name",
+            "Oraganization",
+            "Organization",
+            "documentation",
+            "search declarations and direct references first",
+            "update every internal use to the canonical spelling",
+            "external API, public, persisted, serialized, or third-party boundary",
+            "Do not silently rewrite user data or third-party names",
+            "finish with a factual mapping",
+        ]:
+            self.assertIn(required_fragment, self.coding_approach)
+
     def test_user_experience_philosophy_requires_immediate_honest_feedback_and_visual_aids(self):
         self.assertIn("## User Experience Philosophy", self.coding_approach)
         for requirement in [
