@@ -17,7 +17,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_ROOT = SCRIPT_DIR.parent
 DEFAULT_CASE_FILE = SKILL_ROOT / "assets" / "routing-benchmark-cases.json"
-DEFAULT_OUTPUT = SKILL_ROOT.parent / "Cache" / "remote-test" / "routing-benchmark" / "routing-benchmark.json"
+DEFAULT_OUTPUT = SKILL_ROOT.parent / "Cache" / "tmp-routing-benchmark" / "routing-benchmark.json"
 
 
 def _load_routing_policy():

@@ -2,11 +2,11 @@
   "schema_version": 1,
   "check_id": "unity-five-attestation",
   "status": "pass",
-  "created_at": "2026-08-21T04:53:52.028567+00:00",
+  "created_at": "2026-08-21T06:54:53.777307+00:00",
   "trial_count": 5,
   "passed_trials": 5,
   "watched_files": {
-    "code-skill/SKILL.md": "6a260edaa06cd800d9e505c92dcc0dc38cc39b348752388aac384ebc99743024",
+    "code-skill/SKILL.md": "16754a63dad7a626dc26cb1fd1c2e9b8b4ec04caaf9aa0a37eb67b431c352ce4",
     "code-skill/agents/openai.yaml": "2b43a3d49cc03a969a42a9ab699a992a943a9aa503cf950dcc2e98a966cf2813",
     "code-skill/references/unity-csharp-rules.md": "1241714d073abca0866d0dac238b332301abfe05877cde0c5999e5d1d4df8c02",
     "code-skill/references/unity-game-code-structure-design.md": "4e1bd718f0247ca2b41697456076c762ae5e1ac9ca5e180c39e7984aef0f82e0",

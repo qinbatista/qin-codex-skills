@@ -191,7 +191,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             plan = self.plan(root / "work" / "cache" / "route")
-            plan["cache_dir"] = "Cache/remote-test/relative-route"
+            plan["cache_dir"] = "Cache/tmp-relative-route"
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
 
