@@ -17,8 +17,9 @@
 - Before durable work, compare the active Skill/AGENTS process contract, current execution evidence, and effective scoped project-result memory. Ending may append a superseding memory correction or reconcile its projection only for a proven memory defect; Skill or execution defects return to the immutable origin task.
 - Keep support artifacts under `Cache/`; never embed machine-specific paths, secrets, or task history in Skill source.
 - Keep `AGENTS.md` structural: ownership, entry points, hard constraints, conventions, and definition of done only.
-- Important Cache: `Cache/tests/unity-game-code-structure-design/` is the untracked portable structural-trial harness for the Unity game-code ownership reference; owner: `code-skill`; retain for focused local checks.
-- Important Cache: `Cache/tests/global-skill-regression/` is the untracked current/cumulative release-gate report store; owner: `management-skill`; retain for non-regression audit history.
+- Cache top-level directories use only `tmp-<name>`, `remote-<name>`, or `<YYYYMMDD>`; `Cache/cache_path.json` is the reserved AI-only registry file. Small local tests and their evidence use `Cache/remote-test/` and must not be scattered through the repository.
+- Important Cache: `Cache/remote-test/unity-game-code-structure-design/` is the untracked portable structural-trial harness for the Unity game-code ownership reference; owner: `code-skill`; retain for focused local checks.
+- Important Cache: `Cache/remote-test/global-skill-regression/` is the untracked current/cumulative release-gate report store; owner: `management-skill`; retain for non-regression audit history.
 
 ## Definition of done
 

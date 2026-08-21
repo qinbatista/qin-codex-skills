@@ -497,7 +497,7 @@ def _scheduled_branch_pair(prompt, floor_pair):
 def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_recommendation=None):
     schedule_digest = hashlib.sha256((str(args.workdir) + "\0" + prompt).encode("utf-8")).hexdigest()[:16]
     configured_cache_root = getattr(args, "cache_root", None)
-    cache_root = Path(configured_cache_root).expanduser().resolve() if configured_cache_root is not None else Path(args.project_root).expanduser().resolve() / "Cache" / "task-analyze"
+    cache_root = Path(configured_cache_root).expanduser().resolve() if configured_cache_root is not None else Path(args.project_root).expanduser().resolve() / "Cache" / "tmp-task-analyze"
     cache_dir = cache_root / f"adaptive-schedule-{schedule_digest}"
     floor_pair = task_route_dispatcher.MODEL_ROLE_PAIRS["floor"]
     floor_model, floor_effort = floor_pair.split("|", 1)
@@ -901,7 +901,7 @@ def resolve_fast_path_args(args, prompt):
     args.complexity_band = complexity_band
     identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, getattr(args, "step_kind", ""), ",".join(getattr(args, "capability_tag", [])), prompt))
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-    default_output_root = project_root / "Cache" / "task-analyze" / "adaptive-producer" / f"fast-{digest}"
+    default_output_root = project_root / "Cache" / "tmp-task-analyze" / "adaptive-producer" / f"fast-{digest}"
     args.workdir = workdir
     args.project_root = project_root
     args.task_type = task_type
@@ -916,7 +916,7 @@ def resolve_fast_path_args(args, prompt):
     args.workload_id = args.workload_id or f"fast-{digest}"
     args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
     args.result_output = Path(args.result_output) if args.result_output is not None else default_output_root / "result.txt"
-    args.cache_root = Path(args.cache_root).expanduser().resolve() if args.cache_root is not None else project_root / "Cache" / "task-analyze"
+    args.cache_root = Path(args.cache_root).expanduser().resolve() if args.cache_root is not None else project_root / "Cache" / "tmp-task-analyze"
     args.sandbox = args.sandbox or ("workspace-write" if fast_path else "read-only")
     args.emit_result = bool(args.emit_result or fast_path)
     if args.timeout <= 0 or args.receipt_output == args.result_output:
@@ -949,7 +949,7 @@ def parse_args(argv=None):
     parser.add_argument("--workload-id")
     parser.add_argument("--receipt-output", type=Path)
     parser.add_argument("--result-output", type=Path)
-    parser.add_argument("--cache-root", type=Path, help="Runtime-derived root for scheduled graph support artifacts; defaults to project Cache/task-analyze.")
+    parser.add_argument("--cache-root", type=Path, help="Runtime-derived root for scheduled graph support artifacts; defaults to project Cache/tmp-task-analyze.")
     parser.add_argument("--workdir", type=Path, default=Path.cwd())
     parser.add_argument("--state-db", type=Path, help="Optional explicit Codex runtime SQLite database; otherwise resolve CODEX_SQLITE_HOME, CODEX_HOME, then the default runtime root.")
     parser.add_argument("--codex-bin", default="codex")

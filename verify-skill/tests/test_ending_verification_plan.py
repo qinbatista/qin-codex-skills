@@ -97,7 +97,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             plan_path = root / "plan.json"
             plan = build_plan(root, "today-replay", 60, checks)
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
-            launch = build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending")
+            launch = build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending")
         by_id = {check["check_id"]: check for check in plan["ending_tasks"]}
         self.assertEqual(by_id["file-state"]["execution_mode"], "spark_controller_direct")
         self.assertIsNone(by_id["file-state"]["worker_route"])
@@ -127,7 +127,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 code = PLAN.main(["plan", "--project-root", str(root), "--task-name", "repair", "--complexity-score", "45", "--origin-session-json", json.dumps(origin_session(root)), "--repair-of-lifecycle-id", repair_parent, "--check-json", json.dumps({"name": "unit", "command": ["python3", "-c", "print('pass')"]}), "--output", str(plan_path)])
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
-            launch = build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending")
+            launch = build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending")
         self.assertEqual(code, 0)
         self.assertEqual(plan["repair_of_lifecycle_id"], repair_parent)
         self.assertEqual(plan["repair_policy"]["repair_of_lifecycle_id"], repair_parent)
@@ -147,7 +147,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             launch_path = root / "launch.json"
             plan_path.write_text(json.dumps(build_plan(root, "repair", 45, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}])), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
-                code = PLAN.main(["create-launches", "--plan", str(plan_path), "--evidence-dir", str(root / "Cache" / "tests" / "ending"), "--project-id", "project-123", "--producer-receipt", str(final_producer_receipt(root)), "--repair-of-lifecycle-id", repair_parent, "--output", str(launch_path)])
+                code = PLAN.main(["create-launches", "--plan", str(plan_path), "--evidence-dir", str(root / "Cache" / "remote-test" / "ending"), "--project-id", "project-123", "--producer-receipt", str(final_producer_receipt(root)), "--repair-of-lifecycle-id", repair_parent, "--output", str(launch_path)])
             launch = json.loads(launch_path.read_text(encoding="utf-8"))
         self.assertEqual(code, 0)
         self.assertEqual(launch["repair_of_lifecycle_id"], repair_parent)
@@ -167,7 +167,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(build_plan(root, "repair", 45, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], repair_of_lifecycle_id="20260809T200317-f2d0890fdeb2")), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "conflicts with the saved plan"):
-                build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending", repair_of_lifecycle_id="20260809T201501-a1b2c3d4e5f6")
+                build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending", repair_of_lifecycle_id="20260809T201501-a1b2c3d4e5f6")
 
     def test_durable_plan_carries_sanitized_project_memory_intent_and_consistency_output(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -176,7 +176,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             closeout = {"mode": "durable", "module": "runtime", "scope": "code", "change_kind": "edit", "summary": "Added the runtime value.", "reason": "The requested behavior needs one owned value.", "result": "The runtime now exposes the verified value.", "files": ["runtime.py"], "symbols": ["value"], "decisions": ["Keep ownership in runtime.py."], "risks": ["Future callers must preserve the value contract."]}
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(build_plan(root, "memory", 35, [{"name": "unit", "command": ["python3", "-c", "print('pass')"]}], project_memory_closeout=closeout)), encoding="utf-8")
-            launch = build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending")
+            launch = build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending")
         self.assertEqual(launch["project_memory_closeout"]["mode"], "durable")
         self.assertEqual(launch["project_memory_closeout"]["files"], ["runtime.py"])
         self.assertTrue(launch["launch_requests"][0]["memory_consistency_output"].endswith("task-ending.project-memory-consistency.json"))
@@ -255,13 +255,13 @@ class EndingVerificationPlanTests(unittest.TestCase):
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(build_plan(root, "receipt-gate", 20, [{"name": "unit", "command": ["python3", "-c", "print('unit')"]}])), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "producer_receipt is required"):
-                PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123", None)
+                PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending-evidence", "project-123", None)
             incomplete = final_producer_receipt(root, turn_completed=False)
             with self.assertRaisesRegex(ValueError, "final passing published aggregate result"):
-                PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123", incomplete)
+                PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending-evidence", "project-123", incomplete)
             child = final_producer_receipt(root, final_aggregate_receipt=False)
             with self.assertRaisesRegex(ValueError, "final passing published aggregate result"):
-                PLAN.build_launch_spec(plan_path, root / "Cache" / "tests" / "ending-evidence", "project-123", child)
+                PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending-evidence", "project-123", child)
 
     def test_launch_spec_requires_one_projectless_thread_for_all_checks(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -271,7 +271,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"], "complexity_score": 20},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])), encoding="utf-8")
-            launch = build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending-evidence")
+            launch = build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")
         self.assertEqual(launch["execution"], "host_persistent_create_thread")
         self.assertEqual(launch["required_launch_count"], 1)
         self.assertEqual({item["tool"] for item in launch["launch_requests"]}, {"codex_app__create_thread"})
@@ -291,7 +291,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(launch["launch_requests"][0]["terminal_thread_policy"], {"pass": "keep_visible", "fail": "keep_visible", "blocked": "keep_visible"})
         self.assertEqual(launch["launch_requests"][0]["check_ids"], ["unit", "integration"])
         self.assertEqual(set(launch["launch_requests"][0]["evidence_outputs"]), {"unit", "integration"})
-        self.assertIn("evidence directory: Cache/tests/ending-evidence", launch["launch_requests"][0]["arguments"]["prompt"])
+        self.assertIn("evidence directory: Cache/remote-test/ending-evidence", launch["launch_requests"][0]["arguments"]["prompt"])
         self.assertTrue(all(str(root / "plan.json") not in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("print('unit')" not in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all(len(item["arguments"]["prompt"]) < 2400 for item in launch["launch_requests"]))
@@ -320,7 +320,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"], "complexity_score": 20},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])), encoding="utf-8")
-            launch = build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending-evidence")
+            launch = build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")
             launch_path.write_text(json.dumps(launch), encoding="utf-8")
             not_launched = PLAN.audit_launches(launch_path, state_path)
             PLAN.acknowledge_launch(launch_path, "task-ending", "thread-ending", "host-ending", "project-123", state_path, "global", None, "codex_app__list_threads")
@@ -340,7 +340,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             launch_path = root / "launch.json"
             state_path = root / "launch-state.json"
             plan_path.write_text(json.dumps(build_plan(root, "routing", 60, [{"name": "unit", "command": ["python3", "-c", "print('unit')"]}])), encoding="utf-8")
-            launch_path.write_text(json.dumps(build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending-evidence")), encoding="utf-8")
+            launch_path.write_text(json.dumps(build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "global projectless"):
                 PLAN.acknowledge_launch(launch_path, "task-ending", "project-thread", "host", "project-123", state_path, "project", "project-123", "codex_app__list_threads")
             with self.assertRaisesRegex(ValueError, "thread_project_id must be null"):
@@ -355,7 +355,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             launch_path = root / "launch.json"
             state_path = root / "launch-state.json"
             plan_path.write_text(json.dumps(build_plan(root, "routing", 60, [{"name": "unit", "command": ["python3", "-c", "print('unit')"]}])), encoding="utf-8")
-            launch_path.write_text(json.dumps(build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending-evidence")), encoding="utf-8")
+            launch_path.write_text(json.dumps(build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")), encoding="utf-8")
             PLAN.acknowledge_launch(launch_path, "task-ending", "thread-ending", "host-ending", "project-123", state_path, "global", None, "codex_app__list_threads")
             state = json.loads(state_path.read_text(encoding="utf-8"))
             state["launches"][0]["thread_project_id"] = "project-123"
@@ -373,7 +373,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             launch_path = root / "launch.json"
             state_path = root / "launch-state.json"
             plan_path.write_text(json.dumps(build_plan(root, "routing", 60, [{"name": "unit", "command": ["python3", "-c", "print('unit')"]}])), encoding="utf-8")
-            launch = build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending-evidence")
+            launch = build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")
             launch["launch_requests"][0]["arguments"]["target"] = {"type": "project", "projectId": "project-123", "environment": {"type": "local"}}
             launch_path.write_text(json.dumps(launch), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "target must be exactly"):
@@ -389,7 +389,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"]},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"]},
             ])), encoding="utf-8")
-            launch_path.write_text(json.dumps(build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending-evidence")), encoding="utf-8")
+            launch_path.write_text(json.dumps(build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "sanitized availability reason"):
                 PLAN.acknowledge_launch(launch_path, "task-ending", "fallback-thread", "host", "project-123", state_path, "global", None, "codex_app__list_threads", "gpt-5.6-luna|low")
             acknowledged = PLAN.acknowledge_launch(
@@ -430,7 +430,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(PLAN.build_plan(root, "unbound", 20, [{"name": "unit", "command": ["python3", "-c", "print('unit')"]}])), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "origin_session is required"):
-                build_launch_spec(root, plan_path, root / "Cache" / "tests" / "ending-evidence")
+                build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")
 
 
 if __name__ == "__main__":

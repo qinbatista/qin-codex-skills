@@ -110,7 +110,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
         }
         payload = {"schema_version": 1, "classification": classification, **rules[classification], "evidence": ["Fresh process, execution, and memory evidence were compared."]}
         payload.update(updates)
-        path = project / "Cache" / "tests" / "ending-memory" / f"{classification}.json"
+        path = project / "Cache" / "remote-test" / "ending-memory" / f"{classification}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload), encoding="utf-8")
         return path
@@ -161,7 +161,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
             root = Path(temporary_directory)
             project = root / "project"
             project.mkdir()
-            candidate_file = project / "Cache" / "tests" / "ending-memory" / "candidates.json"
+            candidate_file = project / "Cache" / "remote-test" / "ending-memory" / "candidates.json"
             candidate_file.parent.mkdir(parents=True)
             candidate_file.write_text(json.dumps({"candidates": [{"kind": "preference", "area": "ui", "statement": "Prefer compact status layouts.", "evidence": "Explicit user request.", "basis": "explicit_user_request", "confidence": "high", "source": "ending"}]}), encoding="utf-8")
             store = root / "store"
@@ -305,7 +305,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
             runtime = self.project_memory_runtime()
             with patch.object(LEDGER, "_load_project_memory_module", return_value=runtime):
                 passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Safe consistency", store=store, memory_consistency_file=safe)
-        self.assertEqual(passed["project_memory"]["source"], "Cache/tests/ending-memory/aligned.json")
+        self.assertEqual(passed["project_memory"]["source"], "Cache/remote-test/ending-memory/aligned.json")
         self.assertNotIn(str(project.resolve()), json.dumps(passed["project_memory"]))
 
     def test_consistency_file_rejects_private_or_secret_like_evidence(self):

@@ -36,7 +36,7 @@ The frozen deterministic routing corpus covers 46 cases: 10 Chinese simple, 10 C
 ```bash
 python3 -B task-analyze-skill/scripts/routing_benchmark.py \
   --iterations 100 \
-  --output Cache/tests/routing-benchmark/routing-benchmark.json
+  --output Cache/remote-test/routing-benchmark/routing-benchmark.json
 ```
 
 The routing benchmark reports classification latency only. `time_to_first_result`, total tokens, controller overhead, Ending overhead, and repair overhead remain `null` because no model is launched. Live Direct-versus-Auto measurements remain a separate credentialed/manual benchmark; PR and push CI run deterministic tests and this frozen routing corpus only.

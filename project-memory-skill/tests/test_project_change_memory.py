@@ -280,7 +280,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             home = temporary / "home"
-            cache_fixture = home / ".codex" / "Cache" / "tests" / "fixture-project"
+            cache_fixture = home / ".codex" / "Cache" / "remote-test" / "fixture-project"
             cache_fixture.mkdir(parents=True)
             with mock.patch.object(MEMORY.Path, "home", lambda: home):
                 owner = MEMORY._registered_owner(cache_fixture)

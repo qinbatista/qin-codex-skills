@@ -149,7 +149,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             watched = root / "workflow-skill" / "SKILL.md"
-            evidence = root / "Cache" / "tests" / "memory-execution-consistency" / "result.json"
+            evidence = root / "Cache" / "remote-test" / "memory-execution-consistency" / "result.json"
             attestation = root / "management-skill" / "assets" / "attestation.json"
             watched.parent.mkdir(parents=True)
             evidence.parent.mkdir(parents=True)
@@ -159,7 +159,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             evidence.write_text(json.dumps(evidence_payload), encoding="utf-8")
             payload = {"schema_version": 1, "check_id": "memory-execution-consistency-attestation", "status": "pass", "trial_count": 7, "passed_trials": 7, "evidence_sha256": GATE.sha256_file(evidence), "watched_files": {"workflow-skill/SKILL.md": GATE.sha256_file(watched)}}
             attestation.write_text(json.dumps(payload), encoding="utf-8")
-            check = {"id": "memory-execution-consistency-attestation", "kind": "attestation", "path": "management-skill/assets/attestation.json", "evidence": "Cache/tests/memory-execution-consistency/result.json", "bind_evidence": True, "watched_files": ["workflow-skill/SKILL.md"]}
+            check = {"id": "memory-execution-consistency-attestation", "kind": "attestation", "path": "management-skill/assets/attestation.json", "evidence": "Cache/remote-test/memory-execution-consistency/result.json", "bind_evidence": True, "watched_files": ["workflow-skill/SKILL.md"]}
             self.assertEqual(GATE.attestation_result(check, root)["status"], "pass")
             evidence.write_text('{"changed":true}', encoding="utf-8")
             result = GATE.attestation_result(check, root)

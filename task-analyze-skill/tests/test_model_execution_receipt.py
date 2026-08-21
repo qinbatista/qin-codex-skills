@@ -570,7 +570,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PYTHON"], str(Path(module.sys.executable).resolve()))
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"], "gpt-5.6-sol")
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"], "ultra")
-        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_CACHE_ROOT"], str(args.workdir / "Cache" / "task-analyze" / args.workload_id))
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_CACHE_ROOT"], str(args.workdir / "Cache" / "tmp-task-analyze" / args.workload_id))
         self.assertEqual(receipt["node_type"], "bootstrap-task")
         self.assertEqual(receipt["node_role"], "result-producer")
         self.assertFalse(receipt["entry_context_active"])
@@ -610,7 +610,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 fake_codex.chmod(0o755)
                 cache_root = result_path.parent / "auto-route-cache"
                 workspace = cache_root / "source-copy-one"
-                output_root = workspace / "Cache" / "task-analyze" / "bridge-output"
+                output_root = workspace / "Cache" / "tmp-task-analyze" / "bridge-output"
                 output_root.mkdir(parents=True)
                 (cache_root / "adaptive-entry-launch.json").write_text(json.dumps({"schema_version": 3, "workload_sha256": module.sha256_text(raw_prompt), "entry_pair": "gpt-5.6-luna|max"}) + "\n", encoding="utf-8")
                 (output_root / "result.json").write_text(bridge_receipt_result + "\n", encoding="utf-8")

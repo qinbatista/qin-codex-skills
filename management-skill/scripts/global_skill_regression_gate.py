@@ -18,8 +18,8 @@ from pathlib import Path
 
 
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
-DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/tests/global-skill-regression/latest.json")
-DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/tests/global-skill-regression/history.jsonl")
+DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/latest.json")
+DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
 REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"))
@@ -145,7 +145,7 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
     text = asset.read_text(encoding="utf-8")
     if not text.startswith(directive):
         raise RuntimeError("global AGENTS asset is missing its merge directive")
-    cache_root = project_root / "Cache" / "tests" / "global-skill-regression"
+    cache_root = project_root / "Cache" / "remote-test" / "global-skill-regression"
     cache_root.mkdir(parents=True, exist_ok=True)
     structural_agents_path = project_root / "AGENTS.md"
     structural_agents = structural_agents_path.read_text(encoding="utf-8") if structural_agents_path.is_file() else "# qin-codex-skills\n"

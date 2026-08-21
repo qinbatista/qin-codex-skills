@@ -28,7 +28,7 @@ def load_skill_platform_checker(skills_dir):
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
 DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "management-skill-sync"
+DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "tmp-management-skill-sync"
 DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
 GLOBAL_REGRESSION_GATE = Path(__file__).resolve().parent / "global_skill_regression_gate.py"
 GITIGNORE_TEXT = """.DS_Store

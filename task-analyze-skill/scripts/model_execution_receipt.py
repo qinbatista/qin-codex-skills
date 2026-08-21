@@ -755,7 +755,7 @@ def benchmark_auto_launch_evidence(cache_root, workload_sha256, expected_entry_p
     result_text = None
     bridge_result_verified = False
     if verified:
-        output_root = workspaces[0] / "Cache" / "task-analyze" / "bridge-output"
+        output_root = workspaces[0] / "Cache" / "tmp-task-analyze" / "bridge-output"
         try:
             candidate_text = (output_root / "result.json").read_text(encoding="utf-8")
             bridge_receipt = strict_json_loads((output_root / "receipt.json").read_text(encoding="utf-8"))
@@ -867,7 +867,7 @@ def run_receipt(args, prompt_text):
             command_environment["CODEX_AUTO_BENCHMARK_PYTHON"] = str(Path(sys.executable).resolve(strict=True))
             command_environment["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"] = args.model
             command_environment["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"] = args.effort
-            benchmark_cache_root = Path(args.result_output).parent / "auto-route-cache" if args.result_output is not None else Path(args.workdir) / "Cache" / "task-analyze" / args.workload_id
+            benchmark_cache_root = Path(args.result_output).parent / "auto-route-cache" if args.result_output is not None else Path(args.workdir) / "Cache" / "tmp-task-analyze" / args.workload_id
             command_environment["CODEX_AUTO_BENCHMARK_CACHE_ROOT"] = str(benchmark_cache_root)
     try:
         if benchmark_stream_ready or stream_result_ready:

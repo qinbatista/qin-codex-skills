@@ -71,7 +71,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             emit_result=True,
             entry_model="gpt-5.6-sol",
             entry_effort="ultra",
-            cache_root=project / "Cache" / "task-analyze",
+            cache_root=project / "Cache" / "tmp-task-analyze",
         )
 
     def test_executes_exact_obsidian_selected_pair_and_returns_result(self):
@@ -117,7 +117,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(args.complexity_band, module.obsidian_model_memory.complexity_band(args.complexity_score))
         self.assertRegex(args.workload_id, r"^fast-[0-9a-f]{16}$")
         self.assertEqual(args.receipt_output.parent, args.result_output.parent)
-        expected_output_root = workdir / "Cache" / "task-analyze" / "adaptive-producer" / args.workload_id
+        expected_output_root = workdir / "Cache" / "tmp-task-analyze" / "adaptive-producer" / args.workload_id
         self.assertEqual(args.receipt_output.parent, expected_output_root.resolve())
         self.assertNotIn("codex-home", str(args.receipt_output))
         self.assertEqual(args.sandbox, "workspace-write")
@@ -326,7 +326,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             handoff = {
                 "schema_version": 2,
                 "route_run_id": "graph-final",
-                "cache_dir": str(root / "Cache" / "task-analyze"),
+                "cache_dir": str(root / "Cache" / "tmp-task-analyze"),
                 "plan": {"nodes": [{"id": "branch", "phase": "result"}, {"id": "merge", "phase": "result"}]},
                 "completed": [
                     {"id": "branch", "status": "pass", "phase": "result", "receipt_path": str(branch_receipt), "result_path": str(root / "branch-result.md")},

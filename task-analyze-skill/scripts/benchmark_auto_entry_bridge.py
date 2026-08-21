@@ -197,7 +197,7 @@ def run_bridge(args):
     workload_sha256 = sha256_bytes(prompt_text.encode("utf-8"))
     claim_adaptive_launch(cache_root, workload_sha256, entry_pair)
     workspace = prepare_read_only_workspace(source_root, cache_root)
-    runtime_cache_root = workspace / "Cache" / "task-analyze"
+    runtime_cache_root = workspace / "Cache" / "tmp-task-analyze"
     output_root = runtime_cache_root / "bridge-output"
     primary_result, primary_execution = run_adaptive_entry(adaptive_runner, entry_pair, source_root, workspace, runtime_cache_root / "primary", output_root, complexity_score, codex_bin, timeout, prompt_text)
     if primary_execution["selected_pair"] != primary_execution["route_signature"]["selected_pair"]:

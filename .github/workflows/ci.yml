@@ -26,15 +26,15 @@ jobs:
       - name: Skill structure and retained-capability validation
         run: |
           python -B task-analyze-skill/scripts/validate_task_analyze_skill.py --skill-dir task-analyze-skill --global-skills-root .
-          python -B management-skill/scripts/global_skill_regression_gate.py check --project-root . --skills-dir . --mode source --output Cache/tests/ci/global-skill-gate.json
+          python -B management-skill/scripts/global_skill_regression_gate.py check --project-root . --skills-dir . --mode source --output Cache/remote-test/ci/global-skill-gate.json
       - name: Frozen CJK and Unity routing benchmark
         run: |
-          python -B task-analyze-skill/scripts/routing_benchmark.py --iterations 50 --output Cache/tests/ci/routing-benchmark.json
+          python -B task-analyze-skill/scripts/routing_benchmark.py --iterations 50 --output Cache/remote-test/ci/routing-benchmark.json
       - name: Upload deterministic benchmark evidence
         uses: actions/upload-artifact@v4
         with:
           name: deterministic-routing-${{ matrix.python-version }}
-          path: Cache/tests/ci/
+          path: Cache/remote-test/ci/
 
 # Live Codex execution and terminal projectless Ending checks are deliberately
 # excluded from PR/push CI. Run them only from a credentialed manual environment
