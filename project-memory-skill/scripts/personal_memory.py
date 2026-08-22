@@ -36,8 +36,9 @@ SENSITIVE_PATTERNS = (
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s,;]{8,}", re.IGNORECASE),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"https?://[^\s/:]+:[^\s/@]+@", re.IGNORECASE),
-    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[^\s]+", re.IGNORECASE),
-    re.compile(r"(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\s]+", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[A-Za-z0-9._-]+/", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])\\(?:Users|home)\\[A-Za-z0-9._-]+\\", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])[A-Z]:[\\/]Users[\\/][^\s]+", re.IGNORECASE),
     re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
 )
 
@@ -106,10 +107,18 @@ def _config_paths():
 def resolve_vault(vault=None):
     if vault is not None:
         explicit = Path(vault).expanduser()
-        return explicit.resolve() if explicit.is_dir() else None
+        try:
+            return explicit.resolve() if explicit.is_dir() else None
+        except OSError:
+            return None
     configured = os.environ.get("CODEX_OBSIDIAN_VAULT", "").strip()
-    if configured and Path(configured).expanduser().is_dir():
-        return Path(configured).expanduser().resolve()
+    if configured:
+        configured_path = Path(configured).expanduser()
+        try:
+            if configured_path.is_dir():
+                return configured_path.resolve()
+        except OSError:
+            pass
     for config_path in _config_paths():
         try:
             payload = json.loads(config_path.read_text(encoding="utf-8"))

@@ -58,6 +58,7 @@ EXCLUDED_PARTS = {
     ".DS_Store",
     "__pycache__",
     "cache",
+    "Cache",
     "outputs",
     "work",
     "local",
@@ -102,7 +103,8 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----"),
     re.compile(r'"(?:access_token|refresh_token|id_token|session_token|api_key|secret|password)"\s*:\s*"[^"\n]{12,}"', re.IGNORECASE),
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE),
-    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[A-Za-z0-9._-]+/"),
+    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[A-Za-z0-9._-]+/", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])\\(?:Users|home)\\[A-Za-z0-9._-]+\\", re.IGNORECASE),
     re.compile(r"(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\\\r\n]+\\", re.IGNORECASE)
 )
 CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Management", "General"]
@@ -1007,10 +1009,10 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
             shutil.rmtree(path)
         else:
             path.unlink()
-    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT)
+    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT, encoding="utf-8")
     copied_names = []
-    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"))
-    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"))
+    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
+    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"), encoding="utf-8")
     for path in skill_paths:
         copy_skill_directory(path, repository_dir / path.name)
         copied_names.append(path.name)

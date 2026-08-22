@@ -69,7 +69,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             invalid_registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": "relative-vault", "kind": "directory", "purpose": "Invalid relative path"}}}
             (project / "Cache" / "cache_path.json").write_text(json.dumps(invalid_registry), encoding="utf-8")
             config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}, "open": {"path": str(open_vault), "open": True}}}), encoding="utf-8")
-            with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.object(MEMORY.sys, "platform", "linux"), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
+            with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.object(MEMORY.os, "name", "posix"), mock.patch.object(MEMORY.sys, "platform", "linux"), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
                 configured = MEMORY._resolve_vault(None, project)
                 explicit_missing = MEMORY._resolve_vault(root / "missing", project)
                 config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}}}), encoding="utf-8")
@@ -174,7 +174,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
                 clone_target, clone_title = MEMORY._canonical_history_target({"project": {"root": str(same_name_clone)}}, Path("/tmp/vault"))
                 codex_target, _ = MEMORY._canonical_history_target({"project": {"root": str(temporary_date_root)}}, Path("/tmp/vault"))
             self.assertEqual(canonical_title, "SVGDrawer")
-            self.assertEqual(str(canonical_target), "/tmp/vault/Projects/SVGDrawer/History.md")
+            self.assertEqual(canonical_target, Path("/tmp/vault/Projects/SVGDrawer/History.md"))
             self.assertIsNone(clone_target)
             self.assertIsNone(codex_target)
 
@@ -261,9 +261,9 @@ class ProjectChangeMemoryTests(unittest.TestCase):
                 descendant_target, descendant_title = MEMORY._canonical_history_target({"project": {"root": str(descendants)}}, Path("/tmp/vault"))
                 clone_target, _ = MEMORY._canonical_history_target({"project": {"root": str(temporary / "other" / ".codex")}}, Path("/tmp/vault"))
             self.assertEqual(canonical_title, "Global Codex Skills")
-            self.assertEqual(str(canonical_target), "/tmp/vault/Skills/Global Codex Skills History.md")
+            self.assertEqual(canonical_target, Path("/tmp/vault/Skills/Global Codex Skills History.md"))
             self.assertEqual(descendant_title, "Global Codex Skills")
-            self.assertEqual(str(descendant_target), "/tmp/vault/Skills/Global Codex Skills History.md")
+            self.assertEqual(descendant_target, Path("/tmp/vault/Skills/Global Codex Skills History.md"))
             self.assertIsNone(clone_target)
 
     def test_global_codex_skill_source_checkout_shares_global_owner(self):

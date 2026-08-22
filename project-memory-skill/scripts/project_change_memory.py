@@ -41,8 +41,9 @@ SENSITIVE_PATTERNS = (
     re.compile(r"(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s,;]{8,}", re.IGNORECASE),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"https?://[^\s/:]+:[^\s/@]+@", re.IGNORECASE),
-    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[^\s]+", re.IGNORECASE),
-    re.compile(r"(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\s]+", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[A-Za-z0-9._-]+/", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])\\(?:Users|home)\\[A-Za-z0-9._-]+\\", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])[A-Z]:[\\/]Users[\\/][^\s]+", re.IGNORECASE),
     re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
 )
 
@@ -357,7 +358,10 @@ def _readable_directory(value, require_absolute=False):
     candidate = Path(value).expanduser()
     if require_absolute and not candidate.is_absolute():
         return None
-    return candidate.resolve() if candidate.is_dir() and os.access(candidate, os.R_OK) else None
+    try:
+        return candidate.resolve() if candidate.is_dir() and os.access(candidate, os.R_OK) else None
+    except OSError:
+        return None
 
 
 def _registry_vault(project_root):

@@ -1403,14 +1403,14 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         f"Owning skill: {node['skill']}\n"
         f"Node id: {node_id}\n"
         f"Phase: {node['phase']}\n"
-        f"Execute only this bounded locked node. Read and obey {skill_path}.\n\n"
+        f"Execute only this bounded locked node. Read and obey {skill_path.as_posix()}.\n\n"
         f"{node['prompt']}"
     )
     if execution_domain_is_active(_resolve_execution_domain(node)) and is_code_execution_domain(_resolve_execution_domain(node)):
         execution_domain, _ = _resolve_execution_domain_with_flag(node)
         reference_path = reference_path_for(execution_domain)
         if reference_path:
-            prompt += f"\n\nReference rules for this execution domain: {skills_root / reference_path}"
+            prompt += f"\n\nReference rules for this execution domain: {(skills_root / reference_path).as_posix()}"
     if dependency_text:
         prompt += f"\n\nCompleted dependency handoff:\n{dependency_text}"
     if node["phase"] == "ending":

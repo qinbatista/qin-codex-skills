@@ -410,7 +410,9 @@ def validate_execution_domain_registry(skills_root=None):
         if not normalized:
             raise ValueError(f"execution domain {domain} has invalid reference_path")
         reference = Path(normalized)
-        if reference.is_absolute():
+        has_root = normalized.startswith(("/", "\\"))
+        has_drive = len(normalized) >= 2 and normalized[0].isalpha() and normalized[1] == ":"
+        if reference.is_absolute() or has_root or has_drive:
             raise ValueError(f"execution domain {domain} reference_path must be relative to the skills root: {normalized}")
         if any(part == ".." for part in reference.parts):
             raise ValueError(f"execution domain {domain} reference_path must not use parent traversal: {normalized}")

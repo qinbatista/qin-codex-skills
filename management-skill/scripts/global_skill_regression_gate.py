@@ -20,7 +20,7 @@ from pathlib import Path
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
 DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/latest.json")
 DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/history.jsonl")
-EXCLUDED_PARTS = {".git", "__pycache__", "cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
 REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"))
 
@@ -188,7 +188,11 @@ def sanitized_tail(text: str, replacements: dict[str, str]) -> str:
 
 
 def command_result(check_id: str, target: str, command: list[str], root: Path, timeout_seconds: int, replacements: dict[str, str]) -> dict[str, object]:
-    completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=os.environ.copy())
+    environment = os.environ.copy()
+    if os.name == "nt":
+        environment.setdefault("PYTHONUTF8", "1")
+        environment.setdefault("PYTHONIOENCODING", "utf-8")
+    completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment)
     combined = completed.stdout + "\n" + completed.stderr
     count = parse_test_count(combined)
     passed = completed.returncode == 0 and count > 0

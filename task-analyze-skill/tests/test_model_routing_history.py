@@ -217,7 +217,8 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             loaded = module.load_history(history)
             self.assertEqual(legacy.read_text(encoding="utf-8"), source)
             self.assertEqual(loaded["schema_version"], 3)
-            self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
             with self.assertRaises(ValueError):
                 module.validate_summary("Read /private/token.txt and api_key=secret now.")
 
@@ -233,7 +234,8 @@ class ModelRoutingHistoryTests(unittest.TestCase):
             self.assertEqual(status["tasks"], 0)
             loaded = module.load_history(history)
             self.assertEqual(loaded["schema_version"], module.SCHEMA_VERSION)
-            self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(history.stat().st_mode), 0o600)
 
     def test_validate_condition_rejects_inactive_domain_in_new_profiles(self):
         with self._with_inactive_domain():

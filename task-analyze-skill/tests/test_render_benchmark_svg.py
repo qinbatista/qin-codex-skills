@@ -2,6 +2,7 @@
 import html
 import importlib.util
 import json
+import os
 import stat
 import tempfile
 import unittest
@@ -103,8 +104,9 @@ class RenderBenchmarkSvgTests(unittest.TestCase):
             encoded_value = html.escape(json.dumps(value, ensure_ascii=False)[1:-1] if isinstance(value, str) else json.dumps(value), quote=True)
             self.assertIn(encoded_value, desktop_text)
             self.assertIn(encoded_value, mobile_text)
-        self.assertEqual(desktop_mode, 0o644)
-        self.assertEqual(mobile_mode, 0o644)
+        if os.name != "nt":
+            self.assertEqual(desktop_mode, 0o644)
+            self.assertEqual(mobile_mode, 0o644)
 
     def test_valid_all_correct_strategy_failure_renders_fail_state_and_reason(self):
         with tempfile.TemporaryDirectory() as temporary:
