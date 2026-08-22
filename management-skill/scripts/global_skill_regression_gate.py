@@ -145,7 +145,8 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
     text = asset.read_text(encoding="utf-8")
     if not text.startswith(directive):
         raise RuntimeError("global AGENTS asset is missing its merge directive")
-    cache_root = project_root / "Cache" / "remote-test" / "global-skill-regression"
+    configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    cache_root = Path(configured_cache_root).expanduser() if configured_cache_root else project_root / "Cache" / "remote-test" / "global-skill-regression"
     cache_root.mkdir(parents=True, exist_ok=True)
     structural_agents_path = project_root / "AGENTS.md"
     structural_agents = structural_agents_path.read_text(encoding="utf-8") if structural_agents_path.is_file() else "# qin-codex-skills\n"
@@ -191,10 +192,10 @@ def command_result(check_id: str, target: str, command: list[str], root: Path, t
     environment = os.environ.copy()
     temporary_cache = None
     if os.name == "nt":
-        environment.setdefault("PYTHONUTF8", "1")
-        environment.setdefault("PYTHONIOENCODING", "utf-8")
+        environment["PYTHONUTF8"] = "1"
+        environment["PYTHONIOENCODING"] = "utf-8"
         temporary_cache = tempfile.mkdtemp(prefix="codex-skill-gate-")
-        environment.setdefault("CODEX_PROJECT_CACHE_ROOT", temporary_cache)
+        environment["CODEX_PROJECT_CACHE_ROOT"] = temporary_cache
     try:
         completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment)
     finally:
