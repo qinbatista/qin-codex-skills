@@ -967,7 +967,7 @@ def validate_dual_entry_probe(plan_root, run_plan, primary_receipt, expected_sha
     probe_metrics, probe_metric_failures = selected_execution_metrics(probe_receipt, "global", {}, 0)
     if probe_metric_failures:
         failures.append("entry_invariance_probe_execution")
-    probe_message = probe_result_bytes.decode("utf-8")
+    probe_message = normalize_text_newlines(probe_result_bytes.decode("utf-8"))
     probe_message = probe_message[:-1] if probe_message.endswith("\n") else probe_message
     expected_fields = {"tier": run_plan["tier"], "primary_run_id": run_plan["run_id"], "primary_entry_pair": AUTO_ENTRY_PAIR, "probe_entry_pair": SOL_ENTRY_PROBE_PAIR, "expected_result_sha256": expected_sha256, "primary_result_sha256": primary_result_sha256, "probe_result_sha256": sha256_bytes(probe_result_bytes), "primary_route_signature": primary_execution.get("route_signature") if isinstance(primary_execution, dict) else None, "probe_route_signature": probe_execution.get("route_signature") if isinstance(probe_execution, dict) else None, "route_signature_match": isinstance(primary_execution, dict) and isinstance(probe_execution, dict) and primary_execution.get("route_signature") == probe_execution.get("route_signature"), "capability_assignment_match": isinstance(primary_execution, dict) and isinstance(probe_execution, dict) and primary_execution.get("route_signature", {}).get("capability_assignment") == probe_execution.get("route_signature", {}).get("capability_assignment")}
     if any(probe_summary.get(field) != expected_value for field, expected_value in expected_fields.items()):

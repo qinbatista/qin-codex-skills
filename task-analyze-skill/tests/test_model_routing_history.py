@@ -1003,7 +1003,11 @@ class ModelRoutingHistoryTests(unittest.TestCase):
         self.assertNotEqual(module.condition_key(module.validate_condition(vars(args_py))), module.condition_key(module.validate_condition(vars(args_unity))))
 
     def test_concise_grounded_complex_preset_uses_real_identity_and_keeps_legacy_key_readable(self):
-        args = parse_profile_args(["recommend", "--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--task-summary", SUMMARY])
+        with tempfile.TemporaryDirectory() as temporary:
+            plugin_skill = Path(temporary) / "openai-curated-remote" / "muse-ai-plugin" / "1.0.0" / "skills" / "muse-ai-dev-skill"
+            plugin_skill.mkdir(parents=True)
+            (plugin_skill / "SKILL.md").write_text("# MuseAI development skill\n", encoding="utf-8")
+            args = parse_profile_args(["recommend", "--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--plugins-cache-root", temporary, "--task-summary", SUMMARY])
         condition, _, pairs, static_pair, hard_pair = module._profile(args)
         self.assertEqual(condition["verification_shape"], "real")
         self.assertEqual(module.condition_key(condition), "dc7d1ed94cf7a1c5aec354248f843f25ea98187903cd9ce60bd44957d5fa06ff")

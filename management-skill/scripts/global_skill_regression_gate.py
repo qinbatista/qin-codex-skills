@@ -398,7 +398,8 @@ def capability_results(catalog: dict[str, object], results: list[dict[str, objec
 
 def write_report(path: Path, report: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
 
 def append_history(path: Path, report: dict[str, object]) -> None:

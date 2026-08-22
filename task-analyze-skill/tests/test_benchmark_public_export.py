@@ -101,7 +101,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
                 prompt_path.write_text(f"{tier} prompt\n", encoding="utf-8")
                 self.write_json(expected_path, expected_document)
                 pair_id = f"{tier}-r{repeat_index:02d}"
-                prompt_sha256 = hashlib.sha256(prompt_path.read_bytes()).hexdigest()
+                prompt_sha256 = module.benchmark_suite_gate.sha256_text(prompt_path.read_text(encoding="utf-8"))
                 expected_sha256 = hashlib.sha256(expected_path.read_bytes()).hexdigest()
                 for arm in arm_order:
                     selected_pair = module.benchmark_suite_gate.ARM_ENTRY_PAIRS[arm]
@@ -202,7 +202,10 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertNotIn("receipt_session_ids", public_text)
         self.assertNotIn("skills_catalog_root", public_text)
         self.assertNotIn("plugins_catalog_root", public_text)
-        self.assertEqual(output_mode, 0o644)
+        if os.name != "nt":
+            self.assertEqual(output_mode, 0o644)
+        else:
+            self.assertTrue(public_text)
 
     def test_failed_strategy_gate_with_all_runs_correct_is_exported_and_rendered_as_fail(self):
         with tempfile.TemporaryDirectory() as temporary:

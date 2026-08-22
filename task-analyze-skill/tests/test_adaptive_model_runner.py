@@ -155,7 +155,11 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
         execute.assert_called_once()
 
     def test_concise_complex_preset_resolves_exact_calibrated_profile(self):
-        args = module.parse_args(["--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--task-summary", SUMMARY, "--workload-id", "preset-test", "--receipt-output", "cache/preset-receipt.json", "--result-output", "cache/preset-result.json"])
+        with tempfile.TemporaryDirectory() as temporary:
+            plugins_cache = Path(temporary) / "openai-curated-remote" / "muse-ai-plugin" / "1.0.0" / "skills" / "muse-ai-dev-skill"
+            plugins_cache.mkdir(parents=True)
+            (plugins_cache / "SKILL.md").write_text("# MuseAI development skill\n", encoding="utf-8")
+            args = module.parse_args(["--profile-preset", "grounded-repository-answer-complex", "--project-family", "museai", "--owning-skill", "muse-ai-plugin:muse-ai-dev-skill", "--plugins-cache-root", str(Path(temporary)), "--task-summary", SUMMARY, "--workload-id", "preset-test", "--receipt-output", "cache/preset-receipt.json", "--result-output", "cache/preset-result.json"])
         self.assertEqual(args.task_family, "grounded")
         self.assertEqual(args.artifact, "answer")
         self.assertEqual(args.scope, "multi")

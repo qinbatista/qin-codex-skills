@@ -65,6 +65,16 @@ DISPATCHER_FIXED_ROLES = {"verification", "repair", "ending"}
 _NODE_AUTHORIZATION = contextvars.ContextVar("task_analyze_receipt_node_authorization", default=None)
 
 
+def interpreter_binding_path(path):
+    """Resolve an interpreter binding without requiring WindowsApps aliases to be readable."""
+    candidate_path = Path(path).expanduser()
+    try:
+        candidate = os.fspath(candidate_path.resolve())
+    except OSError:
+        candidate = os.path.abspath(os.fspath(candidate_path))
+    return os.path.normpath(candidate)
+
+
 def route_node_lifecycle_boundary(marker):
     if marker == "LOCKED_ROUTE_NODE":
         return (
@@ -864,7 +874,7 @@ def run_receipt(args, prompt_text):
             command_environment["CODEX_AUTO_BENCHMARK_WORKLOAD_SHA256"] = sha256_text(prompt_text)
             command_environment["CODEX_AUTO_BENCHMARK_CODEX_BIN"] = args.codex_bin
             command_environment["CODEX_AUTO_BENCHMARK_CHILD_TIMEOUT"] = str(max(args.timeout - 90, 60))
-            command_environment["CODEX_AUTO_BENCHMARK_PYTHON"] = str(Path(sys.executable).resolve(strict=True))
+            command_environment["CODEX_AUTO_BENCHMARK_PYTHON"] = interpreter_binding_path(sys.executable)
             command_environment["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"] = args.model
             command_environment["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"] = args.effort
             benchmark_cache_root = Path(args.result_output).parent / "auto-route-cache" if args.result_output is not None else Path(args.workdir) / "Cache" / "tmp-task-analyze" / args.workload_id

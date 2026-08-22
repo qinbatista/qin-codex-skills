@@ -130,7 +130,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             "primary_entry_pair": module.AUTO_ENTRY_PAIR,
             "probe_entry_pair": module.SOL_ENTRY_PROBE_PAIR,
             "expected_result_sha256": run_plan["expected_sha256"],
-            "primary_result_sha256": hashlib.sha256((result_message + "\n").encode("utf-8")).hexdigest(),
+            "primary_result_sha256": hashlib.sha256(result_path.read_bytes()).hexdigest(),
             "probe_result_sha256": result_sha256,
             "primary_route_signature": signature,
             "probe_route_signature": signature,
@@ -195,7 +195,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             expected_document = {"tier": tier, "answer": "ok", "source_files": ["source.py"]}
             self.write_json(expected_path, expected_document)
             expected_sha256 = hashlib.sha256(expected_path.read_bytes()).hexdigest()
-            prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+            prompt_sha256 = module.sha256_text(prompt_text)
             for repeat_index in range(1, resolved_repeat_counts[tier] + 1):
                 pair_id = f"{tier}-{repeat_index}"
                 arm_order = ["direct", "global"] if repeat_index % 2 == 1 else ["global", "direct"]
@@ -789,7 +789,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                 prompt_text = f"{tier} prompt"
                 prompt_path.write_text(prompt_text, encoding="utf-8")
                 prompt_paths[tier] = prompt_path
-                prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+                prompt_sha256 = module.sha256_text(prompt_text)
                 for run_plan in plan["runs"]:
                     if run_plan["tier"] == tier:
                         run_plan["prompt_path"] = str(prompt_path)

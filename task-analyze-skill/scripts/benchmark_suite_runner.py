@@ -604,7 +604,7 @@ def build_frozen_plan(args, require_fresh=True):
         expected_path = require_file(expected_root / f"{tier}.json", f"expected_missing_{tier}")
         try:
             prompt_bytes = prompt_path.read_bytes()
-            prompt_text = prompt_bytes.decode("utf-8")
+            prompt_text = benchmark_suite_gate.normalize_text_newlines(prompt_bytes.decode("utf-8"))
             expected_document = benchmark_suite_gate.strict_json_loads(expected_path.read_bytes())
         except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
             raise BenchmarkRunnerError(f"input_invalid_{tier}")
@@ -615,7 +615,7 @@ def build_frozen_plan(args, require_fresh=True):
             benchmark_suite_gate.validate_source_files(expected_document, snapshot_root, source_pointer)
         except benchmark_suite_gate.BenchmarkGateError as error:
             raise BenchmarkRunnerError(f"expected_source_invalid_{tier}_{error.code}")
-        tier_inputs[tier] = {"prompt_path": prompt_path, "prompt_text": prompt_text, "prompt_sha256": sha256_bytes(prompt_bytes), "expected_path": expected_path, "expected_sha256": sha256_bytes(expected_path.read_bytes()), "source_files_pointer": source_pointer}
+        tier_inputs[tier] = {"prompt_path": prompt_path, "prompt_text": prompt_text, "prompt_sha256": benchmark_suite_gate.sha256_text(prompt_text), "expected_path": expected_path, "expected_sha256": sha256_bytes(expected_path.read_bytes()), "source_files_pointer": source_pointer}
     runs = []
     order_index = 1
     for repeat_index in range(1, max(tier_repeat_counts.values()) + 1):
@@ -974,7 +974,7 @@ def execute_dual_entry_probe(args, run_plan, prompt_text):
         probe_signature = probe_execution.get("route_signature") if isinstance(probe_execution, dict) else None
         summary.update({"primary_result_sha256": sha256_bytes(primary_result_bytes), "probe_result_sha256": sha256_bytes(probe_result_bytes), "primary_route_signature": primary_signature, "probe_route_signature": probe_signature, "route_signature_match": primary_signature == probe_signature, "capability_assignment_match": isinstance(primary_signature, dict) and isinstance(probe_signature, dict) and primary_signature.get("capability_assignment") == probe_signature.get("capability_assignment")})
         probe_status_fields = {"status": "pass", "failure_class": None, "node_type": "bootstrap-task", "requested_pair": probe["entry_pair"], "effective_pair": probe["entry_pair"], "benchmark_prompt_file_verified": True, "benchmark_auto_launch_verified": True, "benchmark_auto_workspace_count": 1, "benchmark_auto_bridge_result_verified": True, "result_published": True, "duplicate_result_detected": False}
-        probe_result_text = probe_result_bytes.decode("utf-8")
+        probe_result_text = benchmark_suite_gate.normalize_text_newlines(probe_result_bytes.decode("utf-8"))
         probe_result_text = probe_result_text[:-1] if probe_result_text.endswith("\n") else probe_result_text
         probe_receipt_valid = isinstance(probe_receipt, dict) and all(probe_receipt.get(field) == expected_value for field, expected_value in probe_status_fields.items()) and probe_receipt.get("output_sha256") == sha256_bytes(probe_result_text.encode("utf-8"))
         exact_output = summary["primary_result_sha256"] == run_plan["expected_sha256"] and summary["probe_result_sha256"] == run_plan["expected_sha256"]

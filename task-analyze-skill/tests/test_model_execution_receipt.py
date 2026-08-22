@@ -601,8 +601,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 prompt_path = root / "prompt.txt"
                 result_path = root / "result.json"
                 prompt_path.write_text(raw_prompt, encoding="utf-8")
-                fake_codex = root / "fake-codex"
-                fake_codex.write_text(textwrap.dedent("""\
+                fake_codex = make_fake_codex(root, textwrap.dedent("""\
                     #!/usr/bin/env python3
                     import json
                     import sys
@@ -616,8 +615,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                     emit({"type": "item.completed", "item": {"type": "agent_message", "text": "bridge launched"}})
                     emit({"type": "item.completed", "item": {"type": "agent_message", "text": terminal_message}})
                     emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
-                """).replace("__TERMINAL_MESSAGE__", repr(terminal_message)), encoding="utf-8")
-                fake_codex.chmod(0o755)
+                """).replace("__TERMINAL_MESSAGE__", repr(terminal_message)))
                 cache_root = result_path.parent / "auto-route-cache"
                 workspace = cache_root / "source-copy-one"
                 output_root = workspace / "Cache" / "tmp-task-analyze" / "bridge-output"

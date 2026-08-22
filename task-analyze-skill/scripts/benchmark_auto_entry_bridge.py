@@ -36,6 +36,16 @@ def normalize_text_newlines(text):
     return str(text).replace("\r\n", "\n").replace("\r", "\n")
 
 
+def interpreter_identity(path):
+    """Compare interpreter bindings without requiring WindowsApps aliases to resolve."""
+    candidate_path = Path(path).expanduser()
+    try:
+        candidate = os.fspath(candidate_path.resolve())
+    except OSError:
+        candidate = os.path.abspath(os.fspath(candidate_path))
+    return os.path.normcase(os.path.normpath(candidate))
+
+
 def strict_json_object(payload):
     document = json.loads(payload)
     if not isinstance(document, dict):
@@ -181,8 +191,8 @@ def run_adaptive_entry(adaptive_runner, entry_pair, source_root, workspace, runt
 def run_bridge(args):
     prompt_text = validated_prompt(args.prompt_file)
     complexity_score = benchmark_complexity_score(prompt_text)
-    configured_python = Path(os.environ[PYTHON_ENV]).expanduser().resolve(strict=True)
-    if configured_python != Path(sys.executable).resolve(strict=True):
+    configured_python = interpreter_identity(os.environ[PYTHON_ENV])
+    if configured_python != interpreter_identity(sys.executable):
         raise ValueError("benchmark bridge interpreter does not match its binding")
     codex_home = Path(os.environ["CODEX_HOME"]).expanduser().resolve(strict=True)
     adaptive_runner = codex_home / "skills" / "task-analyze-skill" / "scripts" / "obsidian_adaptive_model_runner.py"

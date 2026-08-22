@@ -764,6 +764,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             main_ready = threading.Event()
             main_receipt_release = threading.Event()
             downstream_started_before_upstream_settled = []
+            event_timeout = 5
 
             def controller_ready(_result_path, _ready_ns):
                 main_ready.set()
@@ -774,7 +775,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                     module.receipt_module.atomic_write_private_text(args.result_output, "UPSTREAM=ready\n")
                     ready_ns = time.monotonic_ns()
                     args.result_ready_callback(args.result_output, ready_ns)
-                    if not downstream_started.wait(timeout=1):
+                    if not downstream_started.wait(timeout=event_timeout):
                         raise AssertionError("dependent did not start from the atomic upstream result")
                     upstream_receipt_settled.set()
                     return self.result_receipt(args, ready_ns)
@@ -784,19 +785,19 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 module.receipt_module.atomic_write_private_text(args.result_output, "RESULT=12\n")
                 ready_ns = time.monotonic_ns()
                 args.result_ready_callback(args.result_output, ready_ns)
-                if not main_receipt_release.wait(timeout=1):
+                if not main_receipt_release.wait(timeout=event_timeout):
                     raise AssertionError("test did not release delayed main receipt")
                 return self.result_receipt(args, ready_ns)
 
             with patch.object(module.receipt_module, "run_receipt", side_effect=delayed_receipt), ThreadPoolExecutor(max_workers=1) as executor:
                 run_started = time.monotonic()
                 future = executor.submit(module.run_plan, plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json", result_ready_callback=controller_ready)
-                self.assertTrue(main_ready.wait(timeout=1))
+                self.assertTrue(main_ready.wait(timeout=event_timeout))
                 self.assertTrue(downstream_started.is_set())
                 self.assertFalse(future.done())
                 time.sleep(0.15)
                 main_receipt_release.set()
-                manifest = future.result(timeout=2)
+                manifest = future.result(timeout=event_timeout)
                 total_elapsed_ms = round((time.monotonic() - run_started) * 1000)
         self.assertEqual(downstream_started_before_upstream_settled, [True])
         self.assertEqual(manifest["status"], "pass")

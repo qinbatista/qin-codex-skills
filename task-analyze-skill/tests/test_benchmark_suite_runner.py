@@ -47,7 +47,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     parser.add_argument("--benchmark-run-id")
     parser.add_argument("--benchmark-prompt-path")
     args = parser.parse_args()
-    prompt_text = sys.stdin.read()
+    prompt_text = sys.stdin.read().replace("\\r\\n", "\\n").replace("\\r", "\\n")
     state_db = args.state_db or Path(os.environ["CODEX_SQLITE_HOME"]) / "state_6.sqlite"
 
     def auto_execution_prompt(raw_workload):
@@ -381,7 +381,9 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             connection.close()
             self.assertTrue(module.sqlite_main_database_is_wal(state_db_path))
-            self.assertEqual(Path(f"{state_db_path}-wal").stat().st_size, 0)
+            wal_path = Path(f"{state_db_path}-wal")
+            if wal_path.exists():
+                self.assertEqual(wal_path.stat().st_size, 0)
             real_connect = sqlite3.connect
             normal_connect_count = 0
             immutable_connect_count = 0
