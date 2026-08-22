@@ -32,19 +32,29 @@ def _relative_path(skills_root, path):
     return path.resolve().relative_to(skills_root.resolve()).as_posix()
 
 
+def _is_reparse_point(path):
+    try:
+        if path.is_symlink():
+            return True
+        junction_checker = getattr(path, "is_junction", None)
+        return bool(junction_checker and junction_checker())
+    except OSError:
+        return True
+
+
 def _candidate_files(skills_root, selected_files=None):
     skills_root = Path(skills_root).resolve()
     requested_paths = [(Path(path) if Path(path).is_absolute() else skills_root / path).resolve() for path in selected_files] if selected_files else None
     candidates = []
     for skill_path in sorted(skills_root.iterdir(), key=lambda path: path.name) if skills_root.is_dir() else []:
-        if not skill_path.is_dir() or skill_path.name.startswith(".") or not (skill_path / "SKILL.md").is_file():
+        if _is_reparse_point(skill_path) or not skill_path.is_dir() or skill_path.name.startswith(".") or not (skill_path / "SKILL.md").is_file():
             continue
         for runtime_name in RUNTIME_DIRECTORIES:
             runtime_path = skill_path / runtime_name
-            if not runtime_path.is_dir():
+            if _is_reparse_point(runtime_path) or not runtime_path.is_dir():
                 continue
             for candidate in sorted(runtime_path.rglob("*"), key=lambda path: path.as_posix()):
-                if not candidate.is_file() or candidate.is_symlink() or candidate.suffix.lower() not in SUFFIX_LANGUAGES:
+                if _is_reparse_point(candidate) or not candidate.is_file() or candidate.suffix.lower() not in SUFFIX_LANGUAGES:
                     continue
                 relative_parts = candidate.relative_to(skill_path).parts
                 if any(part in {"tests", "fixtures", "examples", "references", "assets", "cache", "work", "__pycache__"} or part.startswith(".") for part in relative_parts):

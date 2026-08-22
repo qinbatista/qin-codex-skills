@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 CHECKER_PATH = Path(__file__).resolve().parents[1] / "scripts" / "skill_platform_check.py"
@@ -132,6 +133,17 @@ class SkillPlatformCheckTest(unittest.TestCase):
         with temporary_directory:
             findings = skill_platform_check.collect_findings(root, [Path("sample-skill/scripts/helper.py")])
         self.assertEqual([finding["rule"] for finding in findings], ["SPG006"])
+
+    def test_reparse_point_skill_is_skipped_before_windows_traversal(self):
+        temporary_directory, root = self.fixture_root("from pathlib import Path\n")
+        reparse_skill = root / "vfx-assets-management"
+        reparse_skill.mkdir()
+        (reparse_skill / "SKILL.md").write_text("---\nname: vfx\ndescription: vfx\n---\n", encoding="utf-8")
+        (reparse_skill / "scripts").mkdir()
+        (reparse_skill / "scripts" / "helper.py").write_text("import subprocess\nsubprocess.run(['cmd.exe'])\n", encoding="utf-8")
+        with temporary_directory, patch.object(skill_platform_check, "_is_reparse_point", side_effect=lambda path: path.name == "vfx-assets-management"):
+            candidates = skill_platform_check._candidate_files(root)
+        self.assertEqual([path.relative_to(root.resolve()).as_posix() for path in candidates], ["sample-skill/scripts/helper.py"])
 
     def test_baseline_suppresses_only_existing_occurrence(self):
         temporary_directory, root = self.fixture_root("import subprocess\nsubprocess.run(['osascript'])\n")
