@@ -1994,10 +1994,10 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                     )
         self.assertEqual(result["status"], "pass")
         prompt_lines = captured["prompt"].splitlines()
-        owner_line = f"Execute only this bounded locked node. Read and obey {synthetic_skills_root.resolve() / 'code-skill/SKILL.md'}."
+        owner_line = f"Execute only this bounded locked node. Read and obey {(synthetic_skills_root.resolve() / 'code-skill/SKILL.md').as_posix()}."
         self.assertIn(owner_line, prompt_lines)
         self.assertIn(
-            f"Reference rules for this execution domain: {synthetic_skills_root.resolve() / 'code-skill/references/rust-small-code.md'}",
+            f"Reference rules for this execution domain: {(synthetic_skills_root.resolve() / 'code-skill/references/rust-small-code.md').as_posix()}",
             prompt_lines,
         )
 

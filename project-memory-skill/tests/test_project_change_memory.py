@@ -69,7 +69,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             invalid_registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": "relative-vault", "kind": "directory", "purpose": "Invalid relative path"}}}
             (project / "Cache" / "cache_path.json").write_text(json.dumps(invalid_registry), encoding="utf-8")
             config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}, "open": {"path": str(open_vault), "open": True}}}), encoding="utf-8")
-            with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.object(MEMORY.os, "name", "posix"), mock.patch.object(MEMORY.sys, "platform", "linux"), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
+            with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.object(MEMORY, "_obsidian_config_paths", return_value=[config]), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
                 configured = MEMORY._resolve_vault(None, project)
                 explicit_missing = MEMORY._resolve_vault(root / "missing", project)
                 config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}}}), encoding="utf-8")

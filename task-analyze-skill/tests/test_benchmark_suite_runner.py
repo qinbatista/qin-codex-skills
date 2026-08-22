@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -206,8 +207,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         global_home = root / "global-home"
         quota_home = root / "quota-home"
         quota_home.mkdir()
-        fake_codex = root / "fake-codex"
-        fake_codex.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        fake_codex = root / ("fake-codex.cmd" if os.name == "nt" else "fake-codex")
+        fake_codex.write_text("@echo off\r\nexit /b 1\r\n" if os.name == "nt" else "#!/bin/sh\nexit 1\n", encoding="utf-8")
         fake_codex.chmod(0o755)
         self.write_codex_home(direct_home, "direct")
         self.write_codex_home(global_home, "global")
