@@ -37,6 +37,21 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def attestation_watched_file_sha256(path: Path) -> str:
+    """Hash watched UTF-8 source text independently of checkout line endings.
+
+    Git may materialize the same text with CRLF on Windows.  Attestation
+    watches track source semantics, whereas bound evidence and release-tree
+    digests remain byte-exact.  Invalid UTF-8 stays byte-exact as well.
+    """
+    contents = path.read_bytes()
+    try:
+        contents = contents.decode("utf-8").replace("\r\n", "\n").encode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    return hashlib.sha256(contents).hexdigest()
+
+
 def load_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -311,7 +326,7 @@ def attestation_result(check: dict[str, object], project_root: Path) -> dict[str
     else:
         for relative in expected_files:
             source = project_root / relative
-            if not source.is_file() or watched.get(relative) != sha256_file(source):
+            if not source.is_file() or watched.get(relative) != attestation_watched_file_sha256(source):
                 errors.append(f"stale watched file: {relative}")
     total = payload.get("trial_count", 1) if payload else 1
     passed_count = payload.get("passed_trials", 0) if payload else 0
@@ -522,7 +537,7 @@ def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
         "created_at": utc_now(),
         "trial_count": trial_count,
         "passed_trials": passed_trials,
-        "watched_files": {relative: sha256_file(project_root / relative) for relative in check["watched_files"]},
+        "watched_files": {relative: attestation_watched_file_sha256(project_root / relative) for relative in check["watched_files"]},
     }
     if check.get("bind_evidence") is True:
         payload["evidence_sha256"] = sha256_file(evidence_path)

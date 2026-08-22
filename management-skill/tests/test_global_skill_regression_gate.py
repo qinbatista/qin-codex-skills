@@ -121,7 +121,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 "status": "pass",
                 "trial_count": 3,
                 "passed_trials": 3,
-                "watched_files": {"code-skill/SKILL.md": GATE.sha256_file(watched)},
+                "watched_files": {"code-skill/SKILL.md": GATE.attestation_watched_file_sha256(watched)},
             }), encoding="utf-8")
             check = {"id": "sample", "kind": "attestation", "path": "management-skill/assets/attestation.json", "watched_files": ["code-skill/SKILL.md"]}
             self.assertEqual(GATE.attestation_result(check, root)["status"], "pass")
@@ -129,6 +129,31 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             result = GATE.attestation_result(check, root)
             self.assertEqual(result["status"], "fail")
             self.assertIn("stale watched file", result["errors"][0])
+
+    def test_attestation_normalizes_watched_text_but_not_bound_evidence(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            watched = root / "code-skill" / "SKILL.md"
+            evidence = root / "Cache" / "remote-test" / "evidence.json"
+            attestation = root / "management-skill" / "assets" / "attestation.json"
+            watched.parent.mkdir(parents=True)
+            evidence.parent.mkdir(parents=True)
+            attestation.parent.mkdir(parents=True)
+            watched.write_bytes(b"line one\nline two\n")
+            evidence.write_bytes(b'{"line":"one"}\n')
+            payload = {"schema_version": 1, "check_id": "sample", "status": "pass", "trial_count": 1, "passed_trials": 1, "evidence_sha256": GATE.sha256_file(evidence), "watched_files": {"code-skill/SKILL.md": GATE.attestation_watched_file_sha256(watched)}}
+            attestation.write_text(json.dumps(payload), encoding="utf-8")
+            check = {"id": "sample", "kind": "attestation", "path": "management-skill/assets/attestation.json", "evidence": "Cache/remote-test/evidence.json", "bind_evidence": True, "watched_files": ["code-skill/SKILL.md"]}
+            watched.write_bytes(b"line one\r\nline two\r\n")
+            self.assertEqual(GATE.attestation_result(check, root)["status"], "pass")
+            evidence.write_bytes(b'{"line":"one"}\r\n')
+            result = GATE.attestation_result(check, root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("attestation evidence digest is stale", result["errors"])
+            watched.write_bytes(b"line one\r\nchanged\r\n")
+            result = GATE.attestation_result(check, root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("stale watched file: code-skill/SKILL.md", result["errors"])
 
     def test_memory_execution_consistency_evidence_requires_all_positive_and_negative_scenarios(self):
         evidence = self._memory_consistency_evidence()
@@ -157,7 +182,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             watched.write_text("contract", encoding="utf-8")
             evidence_payload = self._memory_consistency_evidence()
             evidence.write_text(json.dumps(evidence_payload), encoding="utf-8")
-            payload = {"schema_version": 1, "check_id": "memory-execution-consistency-attestation", "status": "pass", "trial_count": 7, "passed_trials": 7, "evidence_sha256": GATE.sha256_file(evidence), "watched_files": {"workflow-skill/SKILL.md": GATE.sha256_file(watched)}}
+            payload = {"schema_version": 1, "check_id": "memory-execution-consistency-attestation", "status": "pass", "trial_count": 7, "passed_trials": 7, "evidence_sha256": GATE.sha256_file(evidence), "watched_files": {"workflow-skill/SKILL.md": GATE.attestation_watched_file_sha256(watched)}}
             attestation.write_text(json.dumps(payload), encoding="utf-8")
             check = {"id": "memory-execution-consistency-attestation", "kind": "attestation", "path": "management-skill/assets/attestation.json", "evidence": "Cache/remote-test/memory-execution-consistency/result.json", "bind_evidence": True, "watched_files": ["workflow-skill/SKILL.md"]}
             self.assertEqual(GATE.attestation_result(check, root)["status"], "pass")
