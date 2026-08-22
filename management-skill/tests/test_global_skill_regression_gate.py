@@ -155,6 +155,24 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("stale watched file: code-skill/SKILL.md", result["errors"])
 
+    def test_deployment_parity_normalizes_known_text_but_keeps_binary_bytes_exact(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "source"
+            deployed = Path(temp_dir) / "deployed"
+            source_skill = root / "code-skill"
+            deployed_skill = deployed / "code-skill"
+            source_skill.mkdir(parents=True)
+            deployed_skill.mkdir(parents=True)
+            (source_skill / "SKILL.md").write_bytes(b"line one\nline two\n")
+            (deployed_skill / "SKILL.md").write_bytes(b"line one\r\nline two\r\n")
+            (source_skill / "fixture.bin").write_bytes(b"same\n")
+            (deployed_skill / "fixture.bin").write_bytes(b"same\n")
+            self.assertEqual(GATE.deployment_parity_result("deployment-parity", root, deployed, ["code-skill"])["status"], "pass")
+            (deployed_skill / "fixture.bin").write_bytes(b"same\r\n")
+            result = GATE.deployment_parity_result("deployment-parity", root, deployed, ["code-skill"])
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["differences"], ["code-skill"])
+
     def test_memory_execution_consistency_evidence_requires_all_positive_and_negative_scenarios(self):
         evidence = self._memory_consistency_evidence()
         self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 7))

@@ -22,6 +22,7 @@ DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/l
 DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
+CHECKOUT_NEUTRAL_TEXT_SUFFIXES = {".json", ".md", ".py", ".svg", ".yaml", ".yml"}
 REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"), ("muse-ai-plugin", "muse-ai-dev-skill"))
 
 
@@ -37,19 +38,20 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def attestation_watched_file_sha256(path: Path) -> str:
-    """Hash watched UTF-8 source text independently of checkout line endings.
-
-    Git may materialize the same text with CRLF on Windows.  Attestation
-    watches track source semantics, whereas bound evidence and release-tree
-    digests remain byte-exact.  Invalid UTF-8 stays byte-exact as well.
-    """
+def checkout_neutral_file_bytes(path: Path) -> bytes:
+    """Normalize CRLF only for known text files materialized by Git checkout."""
     contents = path.read_bytes()
+    if path.suffix.lower() not in CHECKOUT_NEUTRAL_TEXT_SUFFIXES and path.name != ".gitignore":
+        return contents
     try:
-        contents = contents.decode("utf-8").replace("\r\n", "\n").encode("utf-8")
+        return contents.decode("utf-8").replace("\r\n", "\n").encode("utf-8")
     except UnicodeDecodeError:
-        pass
-    return hashlib.sha256(contents).hexdigest()
+        return contents
+
+
+def attestation_watched_file_sha256(path: Path) -> str:
+    """Hash watched source semantics independently of checkout line endings."""
+    return hashlib.sha256(checkout_neutral_file_bytes(path)).hexdigest()
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -95,7 +97,7 @@ def tree_digest(root: Path) -> str:
         relative = path.relative_to(root).as_posix().encode("utf-8")
         digest.update(relative)
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(checkout_neutral_file_bytes(path))
         digest.update(b"\0")
     return digest.hexdigest()
 
