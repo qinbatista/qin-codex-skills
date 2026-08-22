@@ -375,7 +375,7 @@ def atomic_write_registry(registry_path, registry):
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{registry_path.name}.", suffix=".tmp", dir=registry_path.parent)
     temporary_path = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(registry, handle, ensure_ascii=False, indent=2)
             handle.write("\n")
             handle.flush()

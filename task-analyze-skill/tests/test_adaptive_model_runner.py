@@ -377,8 +377,9 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             self.assertNotIn("private-session-do-not-print", encoded)
             self.assertEqual(summary["total_tokens"], 123)
             self.assertNotIn("result", summary)
-            self.assertEqual(stat.S_IMODE(args.receipt_output.stat().st_mode), 0o600)
-            self.assertEqual(stat.S_IMODE(args.result_output.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(args.receipt_output.stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(args.result_output.stat().st_mode), 0o600)
 
     def test_entry_context_authorizes_only_the_adaptive_in_process_producer(self):
         with tempfile.TemporaryDirectory() as temporary:

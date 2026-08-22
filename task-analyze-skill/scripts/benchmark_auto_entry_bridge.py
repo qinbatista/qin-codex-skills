@@ -32,6 +32,10 @@ def sha256_bytes(payload):
     return hashlib.sha256(payload).hexdigest()
 
 
+def normalize_text_newlines(text):
+    return str(text).replace("\r\n", "\n").replace("\r", "\n")
+
+
 def strict_json_object(payload):
     document = json.loads(payload)
     if not isinstance(document, dict):
@@ -80,7 +84,7 @@ def claim_adaptive_launch(cache_root, workload_sha256, entry_pair):
         descriptor = os.open(claim_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
         raise ValueError("benchmark adaptive producer was already launched")
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+    with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(payload)
     return claim_path
 
@@ -121,9 +125,9 @@ def validated_prompt(prompt_file):
     if resolved_prompt != Path(registered_path).expanduser().resolve(strict=True) or not resolved_prompt.is_file():
         raise ValueError("benchmark prompt path does not match its binding")
     prompt_bytes = resolved_prompt.read_bytes()
-    if sha256_bytes(prompt_bytes) != expected_sha256:
+    prompt_text = normalize_text_newlines(prompt_bytes.decode("utf-8"))
+    if sha256_bytes(prompt_text.encode("utf-8")) != expected_sha256:
         raise ValueError("benchmark prompt hash does not match its binding")
-    prompt_text = prompt_bytes.decode("utf-8")
     if not prompt_text.strip():
         raise ValueError("benchmark prompt is empty")
     return prompt_text

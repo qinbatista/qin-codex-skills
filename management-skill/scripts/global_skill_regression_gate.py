@@ -22,7 +22,7 @@ DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/l
 DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
-REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"))
+REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"), ("muse-ai-plugin", "muse-ai-dev-skill"))
 
 
 def utc_now() -> str:
@@ -146,20 +146,25 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
     if not text.startswith(directive):
         raise RuntimeError("global AGENTS asset is missing its merge directive")
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
-    cache_root = Path(configured_cache_root).expanduser() if configured_cache_root else project_root / "Cache" / "remote-test" / "global-skill-regression"
+    temporary_cache_root = tempfile.TemporaryDirectory(prefix="codex-skill-candidates-") if os.name == "nt" and not configured_cache_root else None
+    cache_root = Path(configured_cache_root).expanduser() if configured_cache_root else Path(temporary_cache_root.name) if temporary_cache_root is not None else project_root / "Cache" / "remote-test" / "global-skill-regression"
     cache_root.mkdir(parents=True, exist_ok=True)
     structural_agents_path = project_root / "AGENTS.md"
     structural_agents = structural_agents_path.read_text(encoding="utf-8") if structural_agents_path.is_file() else "# qin-codex-skills\n"
-    with tempfile.TemporaryDirectory(prefix="candidate-", dir=cache_root) as temporary:
-        workspace = Path(temporary)
-        source_candidate = workspace / "source" / "skills"
-        deployed_candidate = workspace / "deployed" / "skills"
-        copy_candidate(project_root, source_candidate, managed_skills, text[len(directive):], structural_agents)
-        copy_candidate(deployed_root, deployed_candidate, managed_skills, text[len(directive):], structural_agents)
-        plugin_cache = deployed_root.resolve().parent / "plugins" / "cache"
-        copy_required_plugin_contracts(plugin_cache, source_candidate.parent / "plugins" / "cache")
-        copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
-        yield {"source": source_candidate, "deployed": deployed_candidate}
+    try:
+        with tempfile.TemporaryDirectory(prefix="candidate-", dir=cache_root) as temporary:
+            workspace = Path(temporary)
+            source_candidate = workspace / "source" / "skills"
+            deployed_candidate = workspace / "deployed" / "skills"
+            copy_candidate(project_root, source_candidate, managed_skills, text[len(directive):], structural_agents)
+            copy_candidate(deployed_root, deployed_candidate, managed_skills, text[len(directive):], structural_agents)
+            plugin_cache = deployed_root.resolve().parent / "plugins" / "cache"
+            copy_required_plugin_contracts(plugin_cache, source_candidate.parent / "plugins" / "cache")
+            copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
+            yield {"source": source_candidate, "deployed": deployed_candidate}
+    finally:
+        if temporary_cache_root is not None:
+            temporary_cache_root.cleanup()
 
 
 def parse_test_count(output: str) -> int:

@@ -6,11 +6,13 @@ import hashlib
 import importlib.util
 import json
 import os
+import queue
 import selectors
 import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -85,6 +87,15 @@ def sha256_bytes(payload):
     return hashlib.sha256(payload).hexdigest()
 
 
+def _read_stream_lines(stream, output_queue):
+    """Read a child stream on a worker thread for platforms without pipe select."""
+    try:
+        for line in stream:
+            output_queue.put(line)
+    finally:
+        output_queue.put(None)
+
+
 def require_quota_number(value, field_name):
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 100:
         raise QuotaStatusError(f"quota_{field_name}_invalid")
@@ -133,7 +144,7 @@ def read_quota_status(args, codex_home):
     command_environment = os.environ.copy()
     command_environment["CODEX_HOME"] = str(codex_home)
     process = None
-    selector = selectors.DefaultSelector()
+    selector = None
     try:
         process = subprocess.Popen(
             [args.codex_bin, "app-server", "--listen", "stdio://"],
@@ -153,32 +164,56 @@ def read_quota_status(args, codex_home):
         for request in requests:
             process.stdin.write((json.dumps(request, separators=(",", ":")) + "\n").encode("utf-8"))
         process.stdin.flush()
-        selector.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + args.quota_app_server_timeout
-        response_buffer = b""
-        while time.monotonic() < deadline:
-            ready = selector.select(timeout=max(0, deadline - time.monotonic()))
-            if not ready:
-                break
-            response_chunk = os.read(process.stdout.fileno(), 65536)
-            if not response_chunk:
-                break
-            response_buffer += response_chunk
-            while b"\n" in response_buffer:
-                raw_line, response_buffer = response_buffer.split(b"\n", 1)
+        def parse_response_line(raw_line):
+            try:
+                response = json.loads(raw_line)
+            except (UnicodeError, json.JSONDecodeError):
+                return None
+            if isinstance(response, dict) and response.get("id") == QUOTA_RESPONSE_ID:
+                if response.get("error") is not None:
+                    raise QuotaStatusError("quota_app_server_error")
+                return parse_quota_response(response)
+            return None
+
+        if os.name == "nt":
+            response_queue = queue.Queue()
+            reader = threading.Thread(target=_read_stream_lines, args=(process.stdout, response_queue), name="benchmark-quota-stdout", daemon=True)
+            reader.start()
+            while time.monotonic() < deadline:
                 try:
-                    response = json.loads(raw_line)
-                except (UnicodeError, json.JSONDecodeError):
-                    continue
-                if isinstance(response, dict) and response.get("id") == QUOTA_RESPONSE_ID:
-                    if response.get("error") is not None:
-                        raise QuotaStatusError("quota_app_server_error")
-                    return parse_quota_response(response)
+                    raw_line = response_queue.get(timeout=max(0.001, deadline - time.monotonic()))
+                except queue.Empty:
+                    break
+                if raw_line is None:
+                    break
+                parsed = parse_response_line(raw_line)
+                if parsed is not None:
+                    return parsed
+            reader.join(timeout=1)
+        else:
+            selector = selectors.DefaultSelector()
+            selector.register(process.stdout, selectors.EVENT_READ)
+            response_buffer = b""
+            while time.monotonic() < deadline:
+                ready = selector.select(timeout=max(0, deadline - time.monotonic()))
+                if not ready:
+                    break
+                response_chunk = os.read(process.stdout.fileno(), 65536)
+                if not response_chunk:
+                    break
+                response_buffer += response_chunk
+                while b"\n" in response_buffer:
+                    raw_line, response_buffer = response_buffer.split(b"\n", 1)
+                    parsed = parse_response_line(raw_line)
+                    if parsed is not None:
+                        return parsed
         raise QuotaStatusError("quota_app_server_timeout")
     except OSError as error:
         raise QuotaStatusError("quota_app_server_unavailable") from error
     finally:
-        selector.close()
+        if selector is not None:
+            selector.close()
         if process is not None:
             if process.stdin is not None:
                 try:
@@ -786,40 +821,77 @@ def execute_run(args, run_plan, prompt_text):
     outer_timed_out = False
     process = None
     try:
-        with stdout_path.open("w", encoding="utf-8") as stdout_handle, stderr_path.open("w", encoding="utf-8") as stderr_handle:
+        with stdout_path.open("w", encoding="utf-8", newline="\n") as stdout_handle, stderr_path.open("w", encoding="utf-8", newline="\n") as stderr_handle:
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr_handle, text=True, cwd=environment["workdir"], env=command_environment, shell=False, bufsize=1)
             process.stdin.write(prompt_text)
             process.stdin.close()
             deadline_ns = started_ns + (args.timeout + args.outer_timeout_grace) * 1_000_000_000
-            output_selector = selectors.DefaultSelector()
-            output_selector.register(process.stdout, selectors.EVENT_READ)
-            while output_selector.get_map():
-                for selected_key, _selected_mask in output_selector.select(timeout=args.poll_interval_ms / 1000):
-                    raw_line = selected_key.fileobj.readline()
-                    if not raw_line:
-                        output_selector.unregister(selected_key.fileobj)
+            def handle_raw_line(raw_line):
+                stdout_handle.write(raw_line)
+                stdout_handle.flush()
+                event = parse_result_ready_event_line(raw_line)
+                if event is not None:
+                    child_ready_ns = event.get("child_result_ready_monotonic_ns")
+                    main_thread_id = event.get("main_thread_id")
+                    event_valid = set(event) == RESULT_READY_EVENT_KEYS and event.get("schema_version") == 2 and event.get("workload_id") == run_plan["run_id"] and event.get("benchmark_run_id") == f"benchmark-{run_plan['run_id']}" and event.get("result_path") == str(result_path) and not isinstance(child_ready_ns, bool) and isinstance(child_ready_ns, int) and child_ready_ns >= 0 and isinstance(main_thread_id, str) and bool(main_thread_id)
+                    if not event_valid or result_ready_events:
+                        result_ready_event_failures.append("result_ready_event_invalid")
+                    else:
+                        runner_monotonic_ns = time.monotonic_ns()
+                        foreground_census_diagnostics = {}
+                        foreground_snapshot = read_runtime_thread_snapshot(state_db_path, required_thread_id=main_thread_id, diagnostics=foreground_census_diagnostics, quiescence_seconds=0)
+                        result_ready_events.append({"event": event, "runner_monotonic_ns": runner_monotonic_ns, "foreground_snapshot": foreground_snapshot, "foreground_census_diagnostics": foreground_census_diagnostics})
+
+            if os.name == "nt":
+                output_queue = queue.Queue()
+                reader = threading.Thread(target=_read_stream_lines, args=(process.stdout, output_queue), name="benchmark-runner-stdout", daemon=True)
+                reader.start()
+                stream_closed = False
+                while not stream_closed:
+                    remaining_ns = deadline_ns - time.monotonic_ns()
+                    if remaining_ns <= 0:
+                        if process.poll() is None:
+                            outer_timed_out = True
+                            process.kill()
+                        wait_seconds = 0.05
+                    else:
+                        wait_seconds = min(args.poll_interval_ms / 1000, remaining_ns / 1_000_000_000)
+                    try:
+                        raw_line = output_queue.get(timeout=max(wait_seconds, 0.001))
+                    except queue.Empty:
                         continue
-                    stdout_handle.write(raw_line)
-                    stdout_handle.flush()
-                    event = parse_result_ready_event_line(raw_line)
-                    if event is not None:
-                        child_ready_ns = event.get("child_result_ready_monotonic_ns")
-                        main_thread_id = event.get("main_thread_id")
-                        event_valid = set(event) == RESULT_READY_EVENT_KEYS and event.get("schema_version") == 2 and event.get("workload_id") == run_plan["run_id"] and event.get("benchmark_run_id") == f"benchmark-{run_plan['run_id']}" and event.get("result_path") == str(result_path) and not isinstance(child_ready_ns, bool) and isinstance(child_ready_ns, int) and child_ready_ns >= 0 and isinstance(main_thread_id, str) and bool(main_thread_id)
-                        if not event_valid or result_ready_events:
-                            result_ready_event_failures.append("result_ready_event_invalid")
-                        else:
-                            runner_monotonic_ns = time.monotonic_ns()
-                            foreground_census_diagnostics = {}
-                            foreground_snapshot = read_runtime_thread_snapshot(state_db_path, required_thread_id=main_thread_id, diagnostics=foreground_census_diagnostics, quiescence_seconds=0)
-                            result_ready_events.append({"event": event, "runner_monotonic_ns": runner_monotonic_ns, "foreground_snapshot": foreground_snapshot, "foreground_census_diagnostics": foreground_census_diagnostics})
-                if time.monotonic_ns() >= deadline_ns and process.poll() is None:
-                    outer_timed_out = True
-                    process.kill()
+                    if raw_line is None:
+                        stream_closed = True
+                        continue
+                    handle_raw_line(raw_line)
+                if process.poll() is None:
+                    remaining_seconds = max(0.001, (deadline_ns - time.monotonic_ns()) / 1_000_000_000)
+                    try:
+                        process.wait(timeout=remaining_seconds)
+                    except subprocess.TimeoutExpired:
+                        outer_timed_out = True
+                        process.kill()
+                        process.wait()
+                reader.join(timeout=1)
+                process.stdout.close()
+            else:
+                output_selector = selectors.DefaultSelector()
+                output_selector.register(process.stdout, selectors.EVENT_READ)
+                while output_selector.get_map():
+                    for selected_key, _selected_mask in output_selector.select(timeout=args.poll_interval_ms / 1000):
+                        raw_line = selected_key.fileobj.readline()
+                        if not raw_line:
+                            output_selector.unregister(selected_key.fileobj)
+                            continue
+                        handle_raw_line(raw_line)
+                    if time.monotonic_ns() >= deadline_ns and process.poll() is None:
+                        outer_timed_out = True
+                        process.kill()
+                output_selector.close()
             process.wait()
             process_exit_code = process.returncode if process.returncode is not None else 124
-            output_selector.close()
-            process.stdout.close()
+            if os.name != "nt":
+                process.stdout.close()
     except OSError:
         process_exit_code = 127
     producer_finished_ns = time.monotonic_ns()

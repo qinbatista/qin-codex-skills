@@ -3,6 +3,7 @@ import argparse
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import textwrap
 import threading
@@ -18,6 +19,19 @@ SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "model_execution
 MODULE_SPEC = importlib.util.spec_from_file_location("model_execution_receipt", SCRIPT_PATH)
 module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
+
+
+def make_fake_codex(root, script_text):
+    script_path = root / ("fake-codex.py" if os.name == "nt" else "fake-codex")
+    with script_path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(script_text)
+    if os.name == "nt":
+        wrapper_path = root / "fake-codex.cmd"
+        with wrapper_path.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(f'@echo off\n"{sys.executable}" "%~dp0fake-codex.py" %*\n')
+        return wrapper_path
+    script_path.chmod(0o755)
+    return script_path
 
 
 class ModelExecutionReceiptTests(unittest.TestCase):
@@ -438,8 +452,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             result_path = root / "result.json"
-            fake_codex = root / "fake-codex"
-            fake_codex.write_text(textwrap.dedent("""\
+            fake_codex = make_fake_codex(root, textwrap.dedent("""\
                 #!/usr/bin/env python3
                 import json
                 import sys
@@ -463,8 +476,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "{\\n  \\"answer\\": 1\\n}"}})
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "commentary after result"}})
                 emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
-            """), encoding="utf-8")
-            fake_codex.chmod(0o755)
+            """))
             thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
             rollout = {"turn_context": {"turn_id": "benchmark-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
             args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, bootstrap_task=False, benchmark_run_id="benchmark-stream-result", result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="stream-result", allow_fallback=[])
@@ -498,8 +510,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             result_path = root / "result.md"
-            fake_codex = root / "fake-codex"
-            fake_codex.write_text(textwrap.dedent("""\
+            fake_codex = make_fake_codex(root, textwrap.dedent("""\
                 #!/usr/bin/env python3
                 import json
                 import sys
@@ -517,8 +528,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 time.sleep(0.2)
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "RESULT_READY_BEGIN\\nLATER RESULT\\nRESULT_READY_END"}})
                 emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
-            """), encoding="utf-8")
-            fake_codex.chmod(0o755)
+            """))
             thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
             rollout = {"turn_context": {"turn_id": "production-turn", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
             args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=False, benchmark_run_id=None, node_role="result-producer", route_marker="LOCKED_ROUTE_NODE", stream_result_ready=True, result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="production-stream", allow_fallback=[])

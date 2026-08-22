@@ -237,7 +237,7 @@ def _dedupe_pairs(values):
 def _write_locked(path, history):
     history["updated_at"] = datetime.now(timezone.utc).isoformat()
     descriptor, temporary_path = mkstemp(prefix=".model_experience-", suffix=".json", dir=path.parent)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+    with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(history, handle, sort_keys=True, separators=(",", ":"))
         handle.flush()
         os.fsync(handle.fileno())

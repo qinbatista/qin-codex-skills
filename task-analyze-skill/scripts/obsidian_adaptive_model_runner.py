@@ -204,7 +204,7 @@ def _atomic_write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(value, handle, sort_keys=True, separators=(",", ":"))
             handle.write("\n")
             handle.flush()
@@ -219,7 +219,7 @@ def _atomic_write_text(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(value)
             handle.flush()
             os.fsync(handle.fileno())

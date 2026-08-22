@@ -204,7 +204,7 @@ def receipt_authorization_fields(args, status=None, source=None, reason=None):
 
 
 def sha256_text(text):
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(str(text).replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")).hexdigest()
 
 
 def normalize_fallback_pairs(values):
@@ -478,7 +478,7 @@ def atomic_write_private_text(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_path = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())

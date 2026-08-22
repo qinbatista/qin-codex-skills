@@ -297,8 +297,14 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertGreaterEqual(elapsed, 2.8)
         self.assertTrue(snapshot["complete"])
         self.assertEqual(snapshot["threads"]["root-thread"]["tokens_used"], 71100)
-        self.assertGreaterEqual(diagnostics["sqlite_error_count"], 1)
-        self.assertEqual(diagnostics["last_sqlite_error_name"], "SQLITE_BUSY_OR_LOCKED")
+        if os.name == "nt":
+            # Windows SQLite may wait through the exclusive lock without
+            # surfacing SQLITE_BUSY; elapsed time and the complete read prove
+            # that the census still crossed the lock boundary.
+            self.assertGreaterEqual(diagnostics["attempt_count"], 1)
+        else:
+            self.assertGreaterEqual(diagnostics["sqlite_error_count"], 1)
+            self.assertEqual(diagnostics["last_sqlite_error_name"], "SQLITE_BUSY_OR_LOCKED")
 
     def test_post_run_census_fails_closed_when_required_thread_never_appears(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -526,7 +532,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             marketplace_root = Path(external_temporary) / "marketplace"
             marketplace_root.mkdir()
             (marketplace_root / "marketplace.json").write_text('{"name":"external"}\n', encoding="utf-8")
-            marketplace_config = f'\n[marketplaces.external]\nsource_type = "local"\nsource = "{marketplace_root}"\n'
+            marketplace_config = f'\n[marketplaces.external]\nsource_type = "local"\nsource = "{marketplace_root.as_posix()}"\n'
             for home_name in ("direct-home", "global-home"):
                 with (root / home_name / "config.toml").open("a", encoding="utf-8") as config_handle:
                     config_handle.write(marketplace_config)
