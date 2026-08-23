@@ -458,8 +458,8 @@ def _worker_prompt(plan_path, plan, evidence_outputs, assigned_pair, producer_re
     relative_evidence_dir = Path(next(iter(evidence_outputs.values()))).expanduser().resolve().parent.relative_to(project_root).as_posix()
     receipt_line = Path(producer_receipt).expanduser().resolve().relative_to(project_root).as_posix()
     policy = plan["ending_model_policy"]
-    repair_parent_line = f"Repair parent lifecycle id: {repair_of_lifecycle_id or 'none'}"
-    repair_start_instruction = f"This is a repair Ending: pass --repair-of-lifecycle-id {repair_of_lifecycle_id} exactly when starting the ledger; add --late-repair-reason post-ending-verification-mismatch only for a later independent release mismatch." if repair_of_lifecycle_id else "This is an initial Ending: do not pass --repair-of-lifecycle-id."
+    repair_parent_line = f"Repair parent: {repair_of_lifecycle_id or 'none'}"
+    repair_start_instruction = "Start the ledger with this exact --repair-of-lifecycle-id; use --late-repair-reason post-ending-verification-mismatch only for a later independent mismatch." if repair_of_lifecycle_id else "Initial Ending: do not pass --repair-of-lifecycle-id."
     return "\n".join(
         [
             "ENDING_TASK_WORKER",

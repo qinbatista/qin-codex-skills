@@ -135,9 +135,12 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(launch["repair_policy"]["repair_of_lifecycle_id"], repair_parent)
         self.assertEqual(launch["launch_requests"][0]["repair_of_lifecycle_id"], repair_parent)
         for candidate in launch["launch_requests"][0]["launch_candidates"]:
-            self.assertIn(f"Repair parent lifecycle id: {repair_parent}", candidate["arguments"]["prompt"])
-            self.assertIn(f"pass --repair-of-lifecycle-id {repair_parent} exactly", candidate["arguments"]["prompt"])
-            self.assertIn("--late-repair-reason post-ending-verification-mismatch", candidate["arguments"]["prompt"])
+            prompt = candidate["arguments"]["prompt"]
+            self.assertIn(f"Repair parent: {repair_parent}", prompt)
+            self.assertIn("Start the ledger with this exact --repair-of-lifecycle-id", prompt)
+            self.assertIn("--late-repair-reason post-ending-verification-mismatch", prompt)
+            self.assertEqual(prompt.count(repair_parent), 1)
+            self.assertLess(len(prompt), 2300)
 
     def test_create_launches_cli_repair_flag_propagates_when_plan_has_no_parent(self):
         repair_parent = "20260809T201501-a1b2c3d4e5f6"
@@ -152,8 +155,12 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(launch["repair_of_lifecycle_id"], repair_parent)
         self.assertEqual(launch["repair_policy"]["repair_of_lifecycle_id"], repair_parent)
-        self.assertIn(f"pass --repair-of-lifecycle-id {repair_parent} exactly", launch["launch_requests"][0]["arguments"]["prompt"])
-        self.assertIn("--late-repair-reason post-ending-verification-mismatch", launch["launch_requests"][0]["arguments"]["prompt"])
+        prompt = launch["launch_requests"][0]["arguments"]["prompt"]
+        self.assertIn(f"Repair parent: {repair_parent}", prompt)
+        self.assertIn("Start the ledger with this exact --repair-of-lifecycle-id", prompt)
+        self.assertIn("--late-repair-reason post-ending-verification-mismatch", prompt)
+        self.assertEqual(prompt.count(repair_parent), 1)
+        self.assertLess(len(prompt), 2300)
 
     def test_repair_parent_rejects_malformed_invalid_timestamp_and_conflict(self):
         invalid_values = ["../20260809T200317-f2d0890fdeb2", "20260809T200317-F2D0890FDEB2", "20261340T250000-f2d0890fdeb2", "20260809T200317-f2d0890fdeb"]
