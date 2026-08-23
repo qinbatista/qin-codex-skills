@@ -448,6 +448,10 @@ def _final_producer_receipt(project_root, producer_receipt):
     return {"path": receipt_path, "sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest()}
 
 
+def _detached_project_root_line(project_root):
+    return f"Origin project root (absolute): {project_root}. Resolve relative paths below from it; projectless cwd is unrelated."
+
+
 def _worker_prompt(plan_path, plan, evidence_outputs, assigned_pair, producer_receipt, repair_of_lifecycle_id=None):
     project_root = Path(plan["project_root"]).expanduser().resolve()
     relative_plan = Path(plan_path).expanduser().resolve().relative_to(project_root).as_posix()
@@ -459,17 +463,18 @@ def _worker_prompt(plan_path, plan, evidence_outputs, assigned_pair, producer_re
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
-            "Operate the one already-created global projectless Ending. Do not restart the producer, attach this thread to a project, or create another Ending.",
+            "Use this existing global projectless Ending; never restart the producer, attach a project, or create another.",
+            _detached_project_root_line(project_root),
             f"Saved plan: {relative_plan}; evidence directory: {relative_evidence_dir}; final producer receipt: {receipt_line}.",
-            f"Assigned Ending pair: {assigned_pair}. Primary: {policy['primary_pair']}; availability-only fallback: {policy['availability_fallback_pair']}.",
+            f"Assigned pair: {assigned_pair}; primary: {policy['primary_pair']}; availability fallback: {policy['availability_fallback_pair']}.",
             repair_parent_line,
             repair_start_instruction,
-            "Start only after the origin's final aggregate result is released. A finished child, subprocess, or partial receipt is not a trigger; if origin work is still active, leave this task pending and do not start a ledger.",
-            "Read the saved plan before each action. Run only the next incomplete saved check with ending_verification_plan.py run-check. For a delegated check, launch exactly one ENDING_CHECK_WORKER with its saved pair and Skills; it writes evidence only.",
-            "Keep this same End Task active for later bounded checks or closeout. Use a compact continuation for the next saved action; never embed the full plan, check manifest, or lifecycle policy in a prompt.",
-            "When all fresh evidence exists, run ending_task_ledger.py once with the saved plan, ending-check-id=task-ending, assigned pair, final producer receipt, and repair parent when present. Correctness, quality, protocol, timeout, or command failure never changes the Ending pair.",
-            "For durable closeout, compare the active process contract, fresh evidence, and effective project-result memory; classify only as aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence, then write memory_consistency_output only for the plan's durable mode. Run the bounded personal-memory scan without raw prompts, results, paths, secrets, or reasoning.",
-            "PASS requires every saved check to pass. On failure or mismatch, do not edit; use the saved repair_dispatch and repair_prompt to resume the immutable origin. The failed Ending remains visible; do not wait for the origin.",
+            "Start only after the final aggregate result is released; child, subprocess, or partial receipts never trigger. If origin work is active, remain pending without a ledger.",
+            "Before each action read the plan, then run only the next check with ending_verification_plan.py run-check. A delegated check uses one ENDING_CHECK_WORKER with its saved pair and Skills; it writes evidence only.",
+            "Keep this End Task for later checks or closeout; use a compact continuation and never embed the full plan, manifest, or policy.",
+            "After fresh evidence exists, run ending_task_ledger.py once with the plan, ending-check-id=task-ending, assigned pair, producer receipt, and repair parent when present. Correctness, quality, protocol, timeout, or command failure never changes the Ending pair.",
+            "For durable closeout compare process, evidence, and effective project-result memory. Classify only as aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence; write memory_consistency_output only in durable mode. Scan personal memory without raw prompts, results, paths, secrets, or reasoning.",
+            "PASS requires every check. On failure or mismatch do not edit; send saved repair_dispatch and repair_prompt to the immutable origin. Keep the failed Ending visible; do not wait.",
             "After terminal closeout, print structured model_assessment. Never call set_thread_archived or delete this End Task automatically.",
         ]
     )
@@ -485,6 +490,7 @@ def _independent_backend_prompt(plan_path, plan, checks, evidence_outputs, assig
             "INDEPENDENT_ENDING_EVIDENCE_WORKER",
             f"Backend: {backend_id}.",
             "You are an independent verifier. Start without producer conversational context, read only the saved plan and supplied artifacts, and run only the listed checks.",
+            _detached_project_root_line(project_root),
             f"Verification plan relative to project root: {relative_plan}.",
             f"Checks: {', '.join(check['check_id'] for check in checks)}.",
             f"Producer receipt relative to project root: {receipt_line}.",

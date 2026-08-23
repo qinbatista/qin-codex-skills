@@ -68,7 +68,11 @@ class EndingBackendTests(unittest.TestCase):
         self.assertTrue(request["independent_context"])
         self.assertFalse(request["producer_context_reuse"])
         self.assertNotIn("target", request["arguments"])
-        self.assertIn("INDEPENDENT_ENDING_EVIDENCE_WORKER", request["arguments"]["prompt"])
+        prompt = request["arguments"]["prompt"]
+        self.assertIn("INDEPENDENT_ENDING_EVIDENCE_WORKER", prompt)
+        self.assertIn(f"Origin project root (absolute): {root.resolve()}.", prompt)
+        self.assertIn("projectless cwd is unrelated", prompt)
+        self.assertEqual(prompt.count(str(root.resolve())), 1)
         self.assertEqual(audit["status"], "blocked")
 
 
