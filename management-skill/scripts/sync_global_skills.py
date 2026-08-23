@@ -27,7 +27,7 @@ def load_skill_platform_checker(skills_dir):
 
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
 DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PROJECT_ROOT = Path.cwd().resolve()
 DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "tmp-management-skill-sync"
 DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
 GLOBAL_REGRESSION_GATE = Path(__file__).resolve().parent / "global_skill_regression_gate.py"
@@ -206,7 +206,7 @@ SKILL_CONTENTS = {
     ],
     "management-skill": [
         ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
-        ("Retained-capability gate", "Block local deployment and GitHub publication until every numbered retained behavior passes current source, deployed, validator, platform, parity, and real-sample checks."),
+        ("Install-first validation", "Apply a recoverable local installation first, then let Codex run source, deployed, validator, platform, parity, and real-sample checks, repair, and reinstall; only PASS completes installation, while GitHub publication remains pre-gated."),
         ("GitHub Sync", "Run preuse checks, public-safety scan, sync, push, and remote hash verification for both mirrors."),
         ("Privacy-Safe Management", "Auth, tokens, cookies, raw prompts/results, receipts, logs, caches, and private learning stay local."),
     ],
@@ -262,7 +262,7 @@ CHINESE_SKILL_CONTENTS = {
     ],
     "management-skill": [
         ("Codex Switch", "管理本地 Codex auth profile 与确认后的账号切换。"),
-        ("全能力非回归门禁", "每次发布都按编号复测全部保留能力；source、deployed、validator、platform、parity 与真实样例未全过时禁止本地部署和 GitHub 发布。"),
+        ("安装优先与非回归验收", "本地先写可恢复安装，再由 Codex 复测 source、deployed、validator、platform、parity 与真实样例并自动修复重装；全过才算安装完成，GitHub 发布仍在写入前拦截。"),
         ("GitHub Sync", "对两个镜像运行 preuse、公开安全扫描、sync、push 和远端 hash 校验。"),
         ("隐私安全", "auth、token、cookie、原始 prompt/result、receipt、log、cache 与私人学习保持本地。"),
     ],
@@ -916,38 +916,77 @@ def print_lines(title, lines):
 
 
 def mirror_repository_to_local(repository_dir, skills_dir):
-    run_release_gate(repository_dir, skills_dir, "source")
     assert_no_symlinks([repository_dir], "repository tree")
     assert_repository_skill_set(repository_dir)
-    remote_paths = skill_directories(repository_dir)
-    remote_names = {path.name for path in remote_paths}
-    changed_names = []
-    for path in skill_directories(skills_dir):
-        if path.name not in remote_names:
-            assert_no_symlinks([path], "local skill tree")
-            shutil.rmtree(path)
-            changed_names.append(path.name)
-    for path in remote_paths:
-        if path_differs(path, skills_dir / path.name):
-            copy_skill_directory(path, skills_dir / path.name, preserve_local=path.name == "task-analyze-skill")
-            changed_names.append(path.name)
-    if deploy_global_agents(repository_dir, skills_dir):
-        print("Deployed the remote Task Lifecycle contract into the local global AGENTS.md.")
-    run_release_gate(repository_dir, skills_dir, "deployed")
-    return changed_names
+    return deploy(repository_dir, skills_dir, validate_source=False)
 
 
-def deploy(source_dir, skills_dir):
-    source_dir = Path(source_dir).expanduser().resolve()
+def capture_deployment_snapshot(skills_dir, snapshot_dir):
     skills_dir = Path(skills_dir).expanduser().resolve()
-    skill_paths = skill_directories(source_dir)
-    assert_approved_global_skill_set(skill_paths)
-    assert_no_symlinks(skill_paths, "approved source skill trees")
-    load_staged_routing_policy(skill_paths)
-    assert_public_safe(skill_paths)
-    checker_module = load_skill_platform_checker(source_dir)
-    checker_module.assert_skill_platform_safe(source_dir, source_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
-    run_release_gate(source_dir, skills_dir, "source")
+    snapshot_dir = Path(snapshot_dir).resolve()
+    skills_snapshot_dir = snapshot_dir / "skills"
+    agents_snapshot_dir = snapshot_dir / "agents"
+    skill_states = {}
+    agent_states = []
+    for skill_name in PRIMARY_SKILL_ORDER:
+        target = skills_dir / skill_name
+        if target.is_symlink() or (target.exists() and not target.is_dir()):
+            raise RuntimeError(f"Cannot snapshot non-directory managed Skill target: {target}")
+        skill_states[skill_name] = target.is_dir()
+        if target.is_dir():
+            assert_no_symlinks([target], "installed managed skill tree")
+            shutil.copytree(target, skills_snapshot_dir / skill_name)
+    for index, target in enumerate(global_agents_targets(skills_dir)):
+        if target.is_symlink() or (target.exists() and not target.is_file()):
+            raise RuntimeError(f"Cannot snapshot non-file global AGENTS target: {target}")
+        backup = agents_snapshot_dir / f"{index}.md"
+        existed = target.is_file()
+        if existed:
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(target, backup)
+        agent_states.append({"target": target, "backup": backup, "existed": existed})
+    return {"skills_dir_existed": skills_dir.is_dir(), "skills_snapshot_dir": skills_snapshot_dir, "skill_states": skill_states, "agent_states": agent_states}
+
+
+def restore_deployment_snapshot(skills_dir, snapshot):
+    skills_dir = Path(skills_dir).expanduser().resolve()
+    skills_snapshot_dir = snapshot["skills_snapshot_dir"]
+    for skill_name, existed in snapshot["skill_states"].items():
+        target = skills_dir / skill_name
+        if target.is_symlink() or (target.exists() and not target.is_dir()):
+            raise RuntimeError(f"Cannot restore over non-directory managed Skill target: {target}")
+        if target.is_dir():
+            assert_no_symlinks([target], "provisional managed skill tree")
+            shutil.rmtree(target)
+        if existed:
+            shutil.copytree(skills_snapshot_dir / skill_name, target)
+    for state in snapshot["agent_states"]:
+        target = state["target"]
+        if target.is_symlink() or (target.exists() and not target.is_file()):
+            raise RuntimeError(f"Cannot restore over non-file global AGENTS target: {target}")
+        if state["existed"]:
+            _write_global_agents_target(target, state["backup"].read_text(encoding="utf-8"))
+        elif target.exists():
+            target.unlink()
+    if not snapshot["skills_dir_existed"] and skills_dir.is_dir() and not any(skills_dir.iterdir()):
+        skills_dir.rmdir()
+
+
+@contextmanager
+def provisional_installation_transaction(skills_dir):
+    with temporary_workspace("qin-codex-deploy-recovery-") as snapshot_dir:
+        snapshot = capture_deployment_snapshot(skills_dir, snapshot_dir)
+        try:
+            yield
+        except Exception as installation_error:
+            try:
+                restore_deployment_snapshot(skills_dir, snapshot)
+            except Exception as restore_error:
+                raise RuntimeError(f"Provisional installation failed validation and automatic restore also failed: {restore_error}") from installation_error
+            raise RuntimeError(f"Provisional installation was applied, post-install validation failed, and the previous installation was restored. Codex must repair the maintained source and reinstall without asking the user to run a gate. Failure: {installation_error}") from installation_error
+
+
+def install_managed_skills(source_dir, skills_dir, skill_paths):
     skills_dir.mkdir(parents=True, exist_ok=True)
     changed_names = []
     for path in skill_paths:
@@ -956,13 +995,37 @@ def deploy(source_dir, skills_dir):
             copy_skill_directory(path, target, preserve_local=path.name == "task-analyze-skill")
             changed_names.append(path.name)
     agents_changed = deploy_global_agents(source_dir, skills_dir)
-    if changed_names:
-        print_lines("Deployed repository skills into the local global skill directory:", changed_names)
-    if agents_changed:
-        print("Deployed the repository Task Lifecycle contract into the local global AGENTS.md.")
-    if not changed_names and not agents_changed:
-        print("Local global skills already match the repository source.")
+    return changed_names, agents_changed
+
+
+def validate_provisional_installation(source_dir, skills_dir, validate_source=True):
+    checker_module = load_skill_platform_checker(skills_dir)
+    checker_module.assert_skill_platform_safe(skills_dir, skills_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
     run_release_gate(source_dir, skills_dir, "deployed")
+    if validate_source:
+        run_release_gate(source_dir, skills_dir, "source")
+
+
+def deploy(source_dir, skills_dir, validate_source=True):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = Path(skills_dir).expanduser().resolve()
+    skill_paths = skill_directories(source_dir)
+    assert_approved_global_skill_set(skill_paths)
+    assert_no_symlinks(skill_paths, "approved source skill trees")
+    load_staged_routing_policy(skill_paths)
+    assert_public_safe(skill_paths)
+    with provisional_installation_transaction(skills_dir):
+        changed_names, agents_changed = install_managed_skills(source_dir, skills_dir, skill_paths)
+        if changed_names:
+            print_lines("Provisionally installed repository Skills into the local global Skill directory:", changed_names)
+        if agents_changed:
+            print("Provisionally installed the repository Task Lifecycle contract into the local global AGENTS.md.")
+        if not changed_names and not agents_changed:
+            print("Local global skills already match the repository source.")
+        validation_scope = "installed, source, platform, and parity" if validate_source else "installed, platform, and parity"
+        print(f"Provisional installation is active. Codex is running {validation_scope} validation now.")
+        validate_provisional_installation(source_dir, skills_dir, validate_source=validate_source)
+    print(f"Installation complete: local global Skills passed {validation_scope} validation.")
     return changed_names
 
 

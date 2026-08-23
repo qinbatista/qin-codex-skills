@@ -150,6 +150,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             event = events[0]
             notice_event = events[1]
             code_notice_event = events[2]
+            lifecycle_notice_event = events[3]
         expected_notice = module._model_route_notice(args, adaptive)
         self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "task_type": "code", "operation": "edit", "complexity_score": 12, "complexity_band": "small", "fast_path_eligible": False, "routing_reasons": [], "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
         self.assertEqual(notice_event, {"schema_version": 1, "stage": "model-switch-notice", "user_visible": True, **expected_notice})
@@ -158,6 +159,8 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(code_notice_event["execution_domain"], "python")
         self.assertEqual(code_notice_event["reference_paths"][:2], [module.routing_policy.CODE_SKILL_ENTRY_REFERENCE, module.routing_policy.CODE_WRITING_PHILOSOPHY_REFERENCE])
         self.assertEqual([event["stage"] for event in events[:3]], ["route-ready", "model-switch-notice", "code-rule-notice"])
+        self.assertEqual(lifecycle_notice_event["stage"], "execution-lifecycle-notice")
+        self.assertEqual(lifecycle_notice_event["execution_lifecycle"]["mode"], "planned_single")
         self.assertGreaterEqual(stream.flush_count, 1)
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["model_route_notice"], expected_notice)

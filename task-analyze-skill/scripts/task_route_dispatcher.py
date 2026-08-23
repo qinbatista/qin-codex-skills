@@ -47,6 +47,7 @@ try:
         adaptive_pair_texts_for_profile,
         code_rule_bundle,
         ending_fast_route_fields,
+        execution_lifecycle_contract,
         execution_domain_is_active,
         expected_owner_skill,
         is_code_execution_domain,
@@ -70,6 +71,7 @@ except ModuleNotFoundError:
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
     code_rule_bundle = _routing_policy.code_rule_bundle
     ending_fast_route_fields = _routing_policy.ending_fast_route_fields
+    execution_lifecycle_contract = _routing_policy.execution_lifecycle_contract
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
     is_code_execution_domain = _routing_policy.is_code_execution_domain
@@ -275,6 +277,15 @@ def normalize_legacy_dynamic_plan(plan):
             stage["parallelizable"] = True
             stage["deterministic_merge_node"] = common_dependents[0]
     return plan
+
+
+def execution_lifecycle_for_plan(plan):
+    result_node_count = sum(isinstance(node, dict) and node.get("phase") == "result" for node in plan.get("nodes", []))
+    score = plan.get("complexity_score")
+    if isinstance(score, bool) or not isinstance(score, int) or not 0 <= score <= 100:
+        score = 65 if plan.get("complexity") == "complex" else 35
+    graph_admitted = plan.get("routing_mode") == DYNAMIC_ROUTING_MODE or result_node_count > 1
+    return execution_lifecycle_contract(score, bool(plan.get("fast_path_eligible")), graph_admitted, max(1, result_node_count), plan.get("risk", "low"), plan.get("ambiguity", "low"))
 
 
 def _dynamic_spark_eligible(node, stage=None):
@@ -1841,6 +1852,7 @@ def run_plan(
     result_ready_callback=None,
 ):
     normalize_legacy_dynamic_plan(plan)
+    plan["execution_lifecycle"] = execution_lifecycle_for_plan(plan)
     first_result_started = time.monotonic()
     first_result_started_ns = time.monotonic_ns()
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
@@ -1877,6 +1889,7 @@ def run_plan(
             "notification_required": False,
             "reopen_required": False,
             "model_switch_summary": build_model_switch_summary(plan, [], summary_entry),
+            "execution_lifecycle": plan["execution_lifecycle"],
         }
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         manifest["manifest_path"] = str(manifest_path)
@@ -2117,6 +2130,7 @@ def run_plan(
         "reopen_required": receipt_failure_after_result,
         "model_switch_summary": model_switch_summary,
         "operational_model_learning": operational_model_learning,
+        "execution_lifecycle": plan["execution_lifecycle"],
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     manifest["manifest_path"] = str(manifest_path)
@@ -2131,6 +2145,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
 
     plan = handoff.get("plan") if isinstance(handoff.get("plan"), dict) else {}
     normalize_legacy_dynamic_plan(plan)
+    plan["execution_lifecycle"] = execution_lifecycle_for_plan(plan)
     cwd = Path(handoff.get("cwd") or Path.cwd()).expanduser().resolve()
     entry = handoff.get("entry") if isinstance(handoff.get("entry"), dict) else {}
     state_db = Path(handoff["state_db"]).expanduser().resolve() if handoff.get("state_db") else None
@@ -2282,6 +2297,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         "reopen_required": status != "pass",
         "notification_required": status != "pass",
         "routing_learning": routing_learning,
+        "execution_lifecycle": plan["execution_lifecycle"],
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -2290,7 +2306,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
 
 
 def compact_run_plan_manifest(manifest):
-    return {"schema_version": manifest.get("schema_version"), "status": manifest.get("status"), "failures": manifest.get("failures", []), "manifest_path": manifest.get("manifest_path"), "main_result_path": manifest.get("main_result_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "route_run_id": manifest.get("route_run_id"), "first_result_elapsed_ms": manifest.get("first_result_elapsed_ms"), "deadline_exhausted": manifest.get("deadline_exhausted", False), "result_published": manifest.get("result_published", False), "notification_required": manifest.get("notification_required", False), "reopen_required": manifest.get("reopen_required", False)}
+    return {"schema_version": manifest.get("schema_version"), "status": manifest.get("status"), "failures": manifest.get("failures", []), "manifest_path": manifest.get("manifest_path"), "main_result_path": manifest.get("main_result_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "route_run_id": manifest.get("route_run_id"), "first_result_elapsed_ms": manifest.get("first_result_elapsed_ms"), "deadline_exhausted": manifest.get("deadline_exhausted", False), "result_published": manifest.get("result_published", False), "notification_required": manifest.get("notification_required", False), "reopen_required": manifest.get("reopen_required", False), "execution_lifecycle": manifest.get("execution_lifecycle")}
 
 
 def _emit_result_ready_event(result_path, ready_monotonic_ns):

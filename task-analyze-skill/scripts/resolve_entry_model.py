@@ -52,7 +52,11 @@ def resolve_entry_model(thread_id=None, sessions_dir=DEFAULT_SESSIONS_DIR):
         return {"status": "unavailable"}
     resolved = None
     normalized_id = thread_id.lower()
-    for path in _candidate_paths_for_thread(root, normalized_id):
+    candidate_paths = _candidate_paths_for_thread(root, normalized_id)
+    if not candidate_paths:
+        return {"status": "unavailable"}
+    matching_session_found = False
+    for path in candidate_paths:
         current_session = None
         latest_context = None
         seen_matching_session = False
@@ -78,11 +82,10 @@ def resolve_entry_model(thread_id=None, sessions_dir=DEFAULT_SESSIONS_DIR):
                             latest_context = (payload.get("model"), payload.get("effort"))
         except OSError:
             continue
+        matching_session_found = matching_session_found or seen_matching_session
         if seen_matching_session and latest_context:
             resolved = {"status": "verified", "model": latest_context[0], "effort": latest_context[1]}
-        elif seen_matching_session:
-            resolved = None
-    return resolved or {"status": "unverified"}
+    return resolved or {"status": "unavailable" if matching_session_found else "unverified"}
 
 
 def main():

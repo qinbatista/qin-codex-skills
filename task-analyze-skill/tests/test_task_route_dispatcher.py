@@ -2166,7 +2166,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
 
     def test_compact_run_plan_manifest_omits_nodes_and_embedded_plan(self):
         compact = module.compact_run_plan_manifest({"schema_version": 1, "status": "pass", "failures": [], "manifest_path": "/tmp/manifest", "main_result_path": "/tmp/result", "ending_handoff_path": "/tmp/handoff", "route_run_id": "route-1", "first_result_elapsed_ms": 12, "deadline_exhausted": False, "nodes": [{"private": "large"}], "plan": {"private": "large"}})
-        self.assertEqual(set(compact), {"schema_version", "status", "failures", "manifest_path", "main_result_path", "ending_handoff_path", "route_run_id", "first_result_elapsed_ms", "deadline_exhausted", "result_published", "notification_required", "reopen_required"})
+        self.assertEqual(set(compact), {"schema_version", "status", "failures", "manifest_path", "main_result_path", "ending_handoff_path", "route_run_id", "first_result_elapsed_ms", "deadline_exhausted", "result_published", "notification_required", "reopen_required", "execution_lifecycle"})
         self.assertNotIn("nodes", compact)
         self.assertNotIn("plan", compact)
 

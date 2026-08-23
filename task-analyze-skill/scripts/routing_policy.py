@@ -66,6 +66,7 @@ ROUTING_THRESHOLDS = {
     "maximum_route_attempts": 2,
     "maximum_ending_repair_rounds": 3,
 }
+EXECUTION_LIFECYCLE_VERSION = 1
 HIGH_RISK_ROUTING_TERMS = ("security", "authentication", "authorization", "payment", "database migration", "production config", "credential", "deployment", "destructive", "安全", "认证", "授权", "支付", "数据迁移", "生产配置", "凭证", "部署", "删除全部", "破坏性")
 _UNICODE_ROUTING_TRANSLATION = str.maketrans({"。": ".", "！": "!", "？": "?", "：": ":", "，": ",", "；": ";", "、": ",", "（": "(", "）": ")", "“": '"', "”": '"', "‘": "'", "’": "'"})
 _CODE_ACTION_PATTERNS = (
@@ -228,6 +229,19 @@ def analyze_prompt_routing(prompt, risk="low", ambiguity="low"):
     score = max(0, min(100, score))
     fast_path = score <= ROUTING_THRESHOLDS["fast_path_maximum_score"] and normalized_risk in {"", "low"} and not risk_override and str(ambiguity or "low").strip().casefold() in {"", "low"} and task_type in {"code", "question", "writing"}
     return {"normalized_prompt": normalized, "task_type": task_type, "operation": operation, "complexity_score": score, "reasons": reasons, "fast_path_eligible": fast_path, "risk_override": risk_override}
+
+
+def execution_lifecycle_contract(complexity_score, fast_path_eligible=False, graph_admitted=False, result_node_count=1, risk="low", ambiguity="low"):
+    """Return the mandatory direct-or-planned execution and acceptance contract."""
+    if isinstance(complexity_score, bool) or not isinstance(complexity_score, int) or not 0 <= complexity_score <= 100:
+        raise ValueError("complexity_score must be an integer from 0 to 100")
+    if isinstance(result_node_count, bool) or not isinstance(result_node_count, int) or result_node_count < 1:
+        raise ValueError("result_node_count must be a positive integer")
+    low_risk = str(risk or "low").strip().casefold() in {"", "low"}
+    low_ambiguity = str(ambiguity or "low").strip().casefold() in {"", "low"}
+    direct = bool(fast_path_eligible and complexity_score <= ROUTING_THRESHOLDS["fast_path_maximum_score"] and low_risk and low_ambiguity and result_node_count == 1 and not graph_admitted)
+    mode = "direct" if direct else "planned_graph" if graph_admitted or result_node_count > 1 else "planned_single"
+    return {"schema_version": EXECUTION_LIFECYCLE_VERSION, "mode": mode, "plan_required": not direct, "execution_topology": "dependency_graph" if mode == "planned_graph" else "single", "execution_stages": ["execute"] if direct else ["plan", "execute"], "acceptance_policy": "surface_gated_final_aggregate_projectless_ending", "final_aggregate_only": True, "no_surface_action": "intentionally_skipped_simple_task", "model_selection": "lowest_suitable_capability_history_entry_pair", "repeated_quality_failure": "same_topic_diagnose_then_gradual_model_or_effort_strengthening", "reasoning_effort": "estimated_steps_and_information_burden", "operational_failure": "quality_neutral_retry_or_allowed_fallback", "verified_pass": "retain_then_trial_down_after_two", "topic_change": "reset_same_session_state"}
 
 EXECUTION_DOMAIN_REGISTRY_VERSION = 2
 EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"

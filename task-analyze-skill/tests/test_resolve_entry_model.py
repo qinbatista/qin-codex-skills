@@ -39,6 +39,20 @@ class ResolveEntryModelTests(unittest.TestCase):
                 {"status": "unavailable"},
             )
 
+    def test_missing_thread_session_file_is_explicitly_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / "sessions").mkdir()
+            self.assertEqual(module.resolve_entry_model("12345678-1234-1234-1234-1234567890ab", temporary), {"status": "unavailable"})
+
+    def test_matching_session_without_model_context_is_explicitly_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            thread_id = "33333333-3333-3333-3333-333333333333"
+            sessions_dir = Path(temporary) / "sessions" / "2026" / "07" / "09"
+            sessions_dir.mkdir(parents=True)
+            matching = sessions_dir / f"session-{thread_id}.jsonl"
+            matching.write_text(json.dumps({"type": "session_meta", "payload": {"id": thread_id}}), encoding="utf-8")
+            self.assertEqual(module.resolve_entry_model(thread_id, temporary), {"status": "unavailable"})
+
     def test_near_id_match_does_not_leak_result(self):
         with tempfile.TemporaryDirectory() as temporary:
             thread_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"

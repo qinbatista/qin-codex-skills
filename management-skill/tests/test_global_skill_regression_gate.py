@@ -36,7 +36,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         capability_ids = [item["id"] for item in catalog["capabilities"]]
         check_ids = {item["id"] for item in catalog["checks"]}
         referenced = {check_id for item in catalog["capabilities"] for check_id in item["checks"]}
-        self.assertEqual(len(capability_ids), 33)
+        self.assertEqual(len(capability_ids), 35)
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
         fast_ending = next(item for item in catalog["capabilities"] if item["id"] == "GSR-026")
@@ -73,6 +73,18 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertIn("code-rule-notice", code_gate["function"])
         self.assertIn("统一代码哲学", code_gate["function"])
         self.assertIn("其他业务 Skill", code_gate["function"])
+        lifecycle = next(item for item in catalog["capabilities"] if item["id"] == "GSR-034")
+        self.assertEqual(lifecycle["owner_skill"], "task-analyze-skill")
+        self.assertIn("execution-lifecycle-notice", lifecycle["function"])
+        self.assertIn("plan+dependency graph", lifecycle["function"])
+        self.assertIn("operational failure 保持质量中立", lifecycle["function"])
+        self.assertIn("lifecycle-trigger-matrix", lifecycle["checks"])
+        install_first = next(item for item in catalog["capabilities"] if item["id"] == "GSR-035")
+        self.assertEqual(install_first["owner_skill"], "management-skill")
+        self.assertIn("provisional installation", install_first["function"])
+        self.assertIn("Windows/macOS/Linux", install_first["function"])
+        self.assertIn("不把门禁、命令或重试交给用户", install_first["function"])
+        self.assertIn("Installation complete", install_first["function"])
         self.assertIn("禁止编辑、修复、路由或创建生命周期", check_workers["function"])
         retired = {item["id"]: item["replacement"] for item in catalog["retired_architectures"]}
         self.assertEqual(retired["RET-011"], "GSR-026")
@@ -80,7 +92,12 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertEqual(retired["RET-013"], "GSR-012")
         self.assertEqual(retired["RET-014"], "GSR-031")
         self.assertEqual(retired["RET-015"], "GSR-020")
+        self.assertEqual(retired["RET-016"], "GSR-034")
+        self.assertEqual(retired["RET-017"], "GSR-035")
         self.assertTrue(catalog["policy"]["local_deployment_requires_pass"])
+        self.assertFalse(catalog["policy"]["local_install_write_requires_pass"])
+        self.assertTrue(catalog["policy"]["local_installation_completion_requires_pass"])
+        self.assertTrue(catalog["policy"]["agent_owns_install_test_repair"])
         self.assertTrue(catalog["policy"]["github_publication_requires_pass"])
 
     def test_capability_counters_report_runs_and_assertions_separately(self):
