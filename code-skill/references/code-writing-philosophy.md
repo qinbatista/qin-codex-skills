@@ -17,6 +17,10 @@ This is mandatory before/during-writing process authority for every code creatio
 - Choose the smallest coherent change that satisfies the current contract and local style.
 - When simplifying the owning path is smaller and clearer, do that instead of layering adapters, wrappers, fallback nests, or scattered branches around awkward code.
 - Preserve unrelated behavior and remove only complexity made obsolete by the change.
+- Give every produced value and asynchronous operation an explicit owner. Do not assign or unpack into `_` merely to hide an unused result, and never use `_ = SomeTask()` as silent fire-and-forget. Await the operation or retain it in an owned task whose cancellation, completion, and exceptions are observed. A language wildcard such as a pattern-matching `case _` is allowed because it does not bind and discard a runtime result.
+- Call the real owner directly. Do not add a method whose only behavior is forwarding the same arguments and return value to another method, and never write accidental self-recursion such as `SaveData() { SaveData(); }`. A facade or adapter is justified only when it adds an actual public compatibility, validation, translation, transaction, lifecycle, platform, or provider boundary.
+- Keep a complete statement, expression, signature, call, constructor, or literal on one physical line when it remains clear and compatible with the repository tooling. Wrapping is for genuine readability, correctness, or tool limits; it is not a default style. This is a clarity rule, not permission to minify unrelated logic.
+- Prefer explicit names and explicit ownership over placeholders. If a returned member is not needed, call an API that returns the needed value or access the required member directly instead of creating a discard binding.
 
 ## 4. Check lifecycle and continuity
 

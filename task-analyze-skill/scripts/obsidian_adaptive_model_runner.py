@@ -131,6 +131,13 @@ def _emit_model_route_notice(notice):
     print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
+def _emit_code_rule_notice(bundle):
+    if bundle is None:
+        return
+    event = {"schema_version": 1, "stage": "code-rule-notice", "user_visible": True, **bundle}
+    print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+
 def _emit_route_ready(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
     notice = _model_route_notice(args, recommendation)
@@ -140,6 +147,7 @@ def _emit_route_ready(args, recommendation):
         event.update({"session_state": session_summary.get("state"), "session_user_effort": session_summary.get("user_effort"), "session_failure_recorded": session_summary.get("failure_recorded"), "session_escalation": recommendation.get("session_escalation")})
     print(json.dumps(event, separators=(",", ":")), flush=True)
     _emit_model_route_notice(notice)
+    _emit_code_rule_notice(getattr(args, "code_rule_bundle", None))
 
 
 ENDING_REAL_TEST_TERMS = (
@@ -249,6 +257,7 @@ def _receipt_args(args, selected):
         result_ready_callback=_emit_result_ready,
         timeout=args.timeout,
         emit_result=False,
+        code_rule_bundle=getattr(args, "code_rule_bundle", None),
     )
 
 
@@ -598,6 +607,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["switch_direction"] = "no_switch"
     receipt["switch_change"] = "scheduled_graph"
     receipt["model_route_notice"] = graph_notice
+    receipt["code_rule_bundle"] = getattr(args, "code_rule_bundle", None)
     lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
     receipt.update(lifecycle_policy)
     receipt.update(_final_aggregate_fields(receipt, len(result_nodes), "released", release["release_path"], manifest.get("route_run_id")))
@@ -618,6 +628,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
     summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), **lifecycle_policy, "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_summary": execution_summary}
+    summary["code_rule_bundle"] = receipt["code_rule_bundle"]
     summary.update({"aggregate_result_release_path": receipt["aggregate_result_release_path"], "final_aggregate_receipt": receipt["final_aggregate_receipt"], "aggregate_result_state": receipt["aggregate_result_state"], "ending_launch_ready": receipt["ending_launch_ready"]})
     if args.emit_result:
         summary["result"] = args.result_output.read_text(encoding="utf-8").rstrip("\n")
@@ -731,6 +742,8 @@ def run(args, prompt):
         raise ValueError("prompt_required")
     if not hasattr(args, "complexity_score") or args.complexity_score is None:
         args.complexity_score = 65 if args.complexity == "complex" else 35
+    requested_code_domain = args.code_kind if args.code_kind in routing_policy.EXECUTION_DOMAINS else None
+    args.code_rule_bundle = routing_policy.code_rule_bundle(requested_code_domain, prompt, args.code_kind, "", args.operation) if args.task_type == "code" else None
     args.resolved_entry_model, args.resolved_entry_effort, args.resolved_entry_source = _resolved_entry_pair(args)
     recommendation = _exact_contract_recommendation(prompt, _recommend(args, prompt))
     _emit_route_ready(args, recommendation)
@@ -785,6 +798,7 @@ def run(args, prompt):
     receipt["entry_pair"] = f"{args.resolved_entry_model}|{args.resolved_entry_effort}"
     receipt["entry_source"] = args.resolved_entry_source
     receipt["model_route_notice"] = _model_route_notice(args, recommendation)
+    receipt["code_rule_bundle"] = args.code_rule_bundle
     learning_context = _model_learning_context(args)
     receipt["model_learning_context"] = learning_context
     if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
@@ -867,6 +881,7 @@ def run(args, prompt):
         **lifecycle_policy,
         "model_learning_context": learning_context,
         "model_route_notice": receipt["model_route_notice"],
+        "code_rule_bundle": receipt["code_rule_bundle"],
         "execution_summary": execution_summary,
     }
     if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):

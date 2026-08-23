@@ -13,7 +13,7 @@ The normal seam is:
 3. Add one representative routing scenario and generic registry-driven tests for valid, unknown, and migration-only domains.
 4. Update concise user documentation only where the active domain list or extension seam is explained.
 
-The stable `tiny-code`, `code-easy`, and `code-complex` profile presets are domain-parameterized. A new active code-domain registry row becomes usable through those presets automatically; do not duplicate profile rows per language. Python, C#, and Unity C# are current examples of the same extension seam.
+The stable `tiny-code`, `code-easy`, and `code-complex` profile presets are domain-parameterized. A new active code-domain registry row becomes usable through those presets automatically; do not duplicate profile rows per language. Python and the single Unity C# profile are current active examples. The historical `csharp` key remains inactive; new `csharp` and `c#` aliases resolve to `unity_csharp`.
 
 Discover the current non-mutating registry view with:
 
@@ -21,7 +21,7 @@ Discover the current non-mutating registry view with:
 python3 skills/task-analyze-skill/scripts/model_routing_history.py domains
 ```
 
-Keep language rules in executor references, not in registry metadata. A domain may share an executor with another domain while retaining separate evidence and rules. Current code examples are `python`, `csharp`, and `unity_csharp`; `general` is the non-code default.
+Keep language rules in executor references, not in registry metadata. Every code producer receives the universal Code Gate first, then one active language profile and only matched category references. Current active code examples are `python` and `unity_csharp`; `general` is the non-code default.
 
 ## Evidence and migration
 

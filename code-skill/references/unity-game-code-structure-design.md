@@ -1,6 +1,6 @@
 # Unity Game Code Structure Design
 
-Use this global reference for every Unity game C# create, edit, repair, refactor, or test node, including a node owned by another Unity Skill. Read the nearest project `AGENTS.md` first, then this file before choosing files, ownership, data flow, or patterns. A project may refine paths, bootstrap, naming, and stricter constraints, but it cannot silently weaken the Controller/Manager/ScriptableObject core below. Only an explicit current user instruction may authorize a scoped exception. Do not apply this reference to non-game Unity tooling such as Editor windows, importers, build tooling, asset processors, test fixtures, or one-off migration tools; generated or edited gameplay runtime code is still covered.
+Load this Unity C# category when a create, edit, repair, refactor, or test node materially changes gameplay ownership, data flow, Controller/Manager/ScriptableObject boundaries, or pattern selection, including a node owned by another Unity Skill. Read the nearest project `AGENTS.md` first, then this file before choosing files, ownership, data flow, or patterns. The compact Controller/Manager/ScriptableObject core in `unity-csharp-rules.md` still applies to every gameplay edit; this file supplies the detailed structure decision. A project may refine paths, bootstrap, naming, and stricter constraints, but it cannot silently weaken the Controller/Manager/ScriptableObject core below. Only an explicit current user instruction may authorize a scoped exception. Do not apply this category to non-game Unity tooling such as Editor windows, importers, build tooling, asset processors, test fixtures, or one-off migration tools.
 
 ## Ownership and lifecycle
 
@@ -59,6 +59,8 @@ Negative — a `CombatService` MonoBehaviour that both tunes enemy damage and up
 Negative — a Controller with serialized `speed`, `duration`, and damage values duplicates feature tuning. Move authored values to the owning ScriptableObject and pass the resolved configuration through the existing Manager boundary.
 
 Negative — wrapping a single immediate method call in Command, Observer, Factory, and State objects because their names appear in a pattern catalog. Keep the direct call until queueing, multi-consumer notification, variants, or complex transitions are real.
+
+Negative — `void SaveData() { SaveData(); }`, or a `SaveData()` wrapper whose only body is `_saveProvider.SaveData()` with identical arguments and return semantics. The first is accidental recursion; the second is an unowned pass-through. Call the real owner directly unless the public boundary adds validation, translation, transaction, lifecycle, platform, SDK, or provider-selection behavior.
 
 ## Validation checklist
 

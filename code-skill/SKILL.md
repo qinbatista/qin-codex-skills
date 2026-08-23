@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill as the universal before/during-writing process gate for every code creation, repair, feature, refactor, or test-writing task in any programming language, including when another Skill owns implementation. Every Unity game C# writing node must also load the global Unity Game Code Structure Design reference; a project may tighten that Controller/Manager/ScriptableObject contract but cannot silently weaken it. In registered domains, this skill also owns implementation, edit, execution, debug, refactor, authored tests/probes, and domain reasoning beyond supplied scope."
+description: "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction with no requested output artifact, or in the observable entry parent before adaptive dispatch. The selected result producer or positively admitted node loads this skill as the universal before/during-writing process gate for every code creation, repair, feature, refactor, or test-writing task in any programming language, including when another Skill owns implementation. C# has one active Unity C# profile: its common writing rules always load, while structure, lifecycle/serialization, and service-integration categories load only when materially matched. In registered domains, this skill also owns implementation, edit, execution, debug, refactor, authored tests/probes, and domain reasoning beyond supplied scope."
 ---
 
 # Code Skill
@@ -23,6 +23,8 @@ In active registry-owned code domains, also use this skill as the executor for w
 
 For every code creation, repair, feature, refactor, or test-writing node, including a small edit, read and follow `references/code-writing-philosophy.md` before and during writing. It is mandatory process authority; an exact-scoped read-only lookup stays outside this gate.
 
+Before reading or editing task source, emit one visible `Code Gate` notice next to the complexity/model notice. Name the universal philosophy, active language profile, and only the matched optional categories. This startup disclosure is required for every code-writing producer, including code owned by another implementation Skill; missing disclosure or a missing universal reference is a routing failure.
+
 Use this skill's executor and language-specific references only for the registered domain resolved from the inline request or admitted node; other production language domains retain their owning production Skill while still using the universal philosophy gate.
 
 Do not load it for an exact bounded read-only source lookup/audit that supplies its source scope and output contract and requests no output artifact. The bootstrap collects that evidence once and returns. A Cache note or report is an artifact and must be produced through the adaptive runner.
@@ -31,9 +33,9 @@ Do not load it for an exact bounded read-only source lookup/audit that supplies 
 
 | Work | `execution_domain` | Rules |
 |---|---|---|
-| Python | `python` | `references/python-rules.md` |
-| Plain non-Unity C# | `csharp` | `references/csharp-rules.md` |
-| Unity C# | `unity_csharp` | `references/csharp-rules.md`, `references/unity-csharp-rules.md`, then `references/unity-game-code-structure-design.md` for game runtime code |
+| Python | `python` | universal philosophy + `references/python-rules.md` |
+| C# and Unity C# | `unity_csharp` | universal philosophy + `references/unity-csharp-rules.md`; add only matched Unity categories |
+| Historical plain C# | `csharp` | inactive evidence key; new `csharp` and `c#` aliases resolve to `unity_csharp` |
 | Legacy code with no domain | `code_unspecified` | migration/history-only; do not use for new work |
 
 Any new active code domain is registry-owned by `routing_policy.py::EXECUTION_DOMAINS` and follows the [extension guide](../task-analyze-skill/references/router-extension-guide.md). Do not infer a new domain from a similar name.
@@ -47,14 +49,14 @@ Read only what the inline request or admitted node needs:
 - all non-trivial code: `references/coding-approach.md`;
 - any registered-domain change that affects rendered UI, layout, controls, styling, editor chrome, runtime HUD, or user-facing UI information: load `references/coding-approach.md` and apply its Mandatory Basic UI Change Gate and User Experience Philosophy before editing;
 - Python: `references/python-rules.md`;
-- plain C#: `references/csharp-rules.md`;
-- Unity C#: `references/csharp-rules.md` and `references/unity-csharp-rules.md`; every Unity game C# create/edit/repair/refactor/test node also reads `references/unity-game-code-structure-design.md` after the nearest project `AGENTS.md` and before selecting an ownership pattern;
+- C# and Unity C#: always `references/unity-csharp-rules.md`; add `references/unity-game-code-structure-design.md` only for ownership, architecture, or pattern decisions, `references/unity-lifecycle-and-serialization.md` only for lifecycle/serialization work, and `references/unity-service-integration.md` only for service/SDK/provider work;
+- Python and Unity C# direct-code acceptance: `scripts/code_rule_guard.py --diff-from HEAD <changed-files>` detects new discard bindings, silent Task discards, same-argument pass-through wrappers, only-action self-recursion, obvious C# `var = new Type(...)`, and avoidable vertical calls while ignoring unchanged legacy lines. A real semantic facade may use a nearby `code-gate: semantic-boundary=<reason>` marker; the marker must name the actual added boundary.
 - prompt-in-code: always load the global `prompt-skill` first, then use `references/prompt-generation.md` for executable-string and language-specific details; a missing or skipped `prompt-skill` is a prompt-task routing failure, not a fallback condition;
 - code or commands that may execute on a developer or host operating system: load the global `cross-platform-execution` skill before editing, classify the project execution boundary, and apply its platform contract;
 - safe repeated/parallel registered-code work: `references/parallelization.md`;
 - active catalog-derived priority-producer boundary and legacy parsing notes: `references/spark-small-code.md`.
 
-Active registry-owned code domains share this executor while retaining separate evidence keys and references. Current examples are `python`, `csharp`, and `unity_csharp`; `code_unspecified` is migration/history-only. Registry metadata identifies the domain; language rules are documented in this skill's `references` directory (for example, `python-rules.md`, `csharp-rules.md`, and `unity-csharp-rules.md`).
+Active registry-owned code domains share this executor while retaining separate evidence keys and references. Current active examples are `python` and `unity_csharp`; `csharp` and `code_unspecified` are migration/history-only. Registry metadata identifies the domain, while the runtime Code Gate composes the universal philosophy, one active language profile, and only materially matched category references.
 
 For prompt-in-code work, use `Prompt idea -> Prompt goal -> observed problems -> smallest complete solution` as an internal reasoning checklist, inspect the existing prompt and validators, and apply the complete `prompt-skill` contract plus only the conditional controls that materially improve behavior before the language-specific reference. Do not show a planning preamble; apply the Quick Check boundary below before presenting the completed change.
 
@@ -79,18 +81,20 @@ Do not add host branches inside a declared managed runtime merely because its re
 
 ## Workflow
 
-1. Confirm the request or dynamic node names an active registered code domain and `code-skill`; retain its own score, band, pair, dependencies, purpose, and stop condition.
-2. Read `references/code-writing-philosophy.md`, the relevant references, and existing source; make its explicit ownership, lifecycle-performance, and `AGENTS.md` continuity decisions before editing.
+1. Confirm the request or dynamic node names an active registered code domain and `code-skill`; retain its own score, band, pair, dependencies, purpose, and stop condition. New C# aliases resolve only to `unity_csharp`.
+2. Emit the visible Code Gate notice, then read `references/code-writing-philosophy.md`, the one active language profile, only matched categories, and existing source; make explicit ownership, lifecycle-performance, result-ownership, direct-call, and `AGENTS.md` continuity decisions before editing.
 3. Resolve important assumptions internally and choose the smallest viable design; ask only when a missing choice genuinely blocks safe implementation.
 4. Preserve Qin's existing style, naming, structure, and unrelated user changes.
 5. For UI-affecting code or user-facing UI information, enforce the six-rule UI gate and User Experience Philosophy before implementation; preserve any intentional exception as an explicit responsive, accessibility, localization, or product-priority decision.
-6. Keep Python signatures, calls, and literals on one line when the project/global rules require that style; for Unity C#, keep every self-contained Unity C# statement or expression that fits clearly on one physical line on one physical line, including declarations, assignments, returns, conditions, calls, logs, constructors, object creation, initializer entries, and ternary expressions. Do not vertically wrap code that fits or split a ternary assignment only to indent its branches; wrap only when it cannot fit without harming readability, correctness, or tooling, or when explicitly requested.
-7. Implement only the requested behavior; avoid unrequested abstractions, features, fallbacks, or compatibility layers.
+6. Keep every self-contained Unity C# statement or expression that fits clearly on one physical line on one physical line, including declarations, assignments, returns, conditions, calls, logs, constructors, object creation, initializer entries, and ternary expressions; apply the same direct style in every language. Do not vertically wrap code that fits or split a ternary assignment only to indent its branches; wrap only when it cannot fit without harming readability, correctness, or tooling, or when explicitly requested.
+7. Implement only the requested behavior. Never hide a result or `Task` in `_`, add a same-arguments/same-return pass-through method, or write an only-action self-call such as `SaveData() { SaveData(); }`; avoid unrequested abstractions, features, fallbacks, and compatibility layers.
 8. Complete the philosophy's lifecycle performance pass and confirm the `AGENTS.md` continuity decision, then run exactly one producer-side Quick Check. For light/local code, use the smallest safe smoke that exercises the changed function or direct path. For UI-affecting code, confirm only that the changed source expresses the intended alignment/container/responsive contract; rendered proof belongs to Ending. For external-API, large-file, expensive-build, destructive, or side-effect-heavy work, do not execute the heavy path; check syntax plus the changed function, variable, import, and direct-reference names without importing code that may trigger side effects. Do not add a broad suite, full build, full lint, UI/visual pass, log cleanup, repeated source review, or independent acceptance before presentation.
 9. Present `CODE READY` with changed paths, concrete behavior, the complete Result Model Disclosure block, and `Quick Check: PASS` or `Quick Check: SKIPPED (heavy) — <static evidence>`. Quick Check time is included in first-result latency.
 10. Start the lifecycle ledger and bind the producer or aggregate graph receipt when present. A successful durable code change normally exposes `real_test` through its Quick Check and is Ending-required; a no-surface result records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update`. Capture the immutable origin session before launch, then build the smallest real-test plan with `verify-skill/scripts/ending_verification_plan.py` and create exactly one global projectless `End Task-{task}`. Invoke only the generated `create_thread` target `{"type":"projectless"}`; keep the origin project as execution context only. Require `codex_app__list_threads` readback with `projectId=null` or absent before acknowledgement. Project/current-task/same-task-subtask placement is BLOCKED. The Ending controller stays fixed `gpt-5.3-codex-spark|xhigh`; explicit primary availability failure permits only registry-floor `gpt-5.6-luna|low`. It runs deterministic checks directly and may delegate saved semantic runtime, code-quality, prompt, UI, or visual checks to capability-routed Terra/Sol `ENDING_CHECK_WORKER` nodes. Those nodes read every listed Skill, run one saved check, write fresh evidence, and never edit producer files or own routing, lifecycle, repair, or terminal records. Correctness, quality, protocol, execution, timeout, or acceptance failure never changes the Spark controller. All checks must PASS before one terminal closeout. FAIL returns exact evidence through `codex_app__send_message_to_thread` to the immutable origin, which repairs, runs one Quick Check, presents again, and starts a fresh Spark-first global projectless Ending with `--repair-of-lifecycle-id`, for up to three attempts. Never emulate task creation, wait for Ending in the origin, self-repair in verification, or create another End/Fix lifecycle.
 
 The smallest safe syntax, existence, direct-reference, or focused local execution check belongs to producer Quick Check. Full builds, broad lint, integration/API calls, large-file processing, live side effects, and regressions belong to the detached Ending thread unless they are themselves the user's requested task.
+
+For changed Python or Unity C# files, the detached Ending or authorized release gate must run `scripts/code_rule_guard.py --diff-from HEAD` before final PASS. This deterministic guard supplements compilation and behavior tests; it does not replace them or certify a semantic boundary merely because a marker exists.
 
 ## Result Model Disclosure
 

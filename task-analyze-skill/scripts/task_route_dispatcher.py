@@ -45,13 +45,13 @@ try:
         MODEL_ROLE_PAIRS,
         PRIORITY_PRODUCER_CONFIG,
         adaptive_pair_texts_for_profile,
+        code_rule_bundle,
         ending_fast_route_fields,
         execution_domain_is_active,
         expected_owner_skill,
         is_code_execution_domain,
         normal_adaptive_pair_texts,
         resolve_execution_domain,
-        reference_path_for,
         validate_execution_domain_registry,
     )
 except ModuleNotFoundError:
@@ -68,13 +68,13 @@ except ModuleNotFoundError:
     MODEL_ROLE_PAIRS = _routing_policy.MODEL_ROLE_PAIRS
     PRIORITY_PRODUCER_CONFIG = _routing_policy.PRIORITY_PRODUCER_CONFIG
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
+    code_rule_bundle = _routing_policy.code_rule_bundle
     ending_fast_route_fields = _routing_policy.ending_fast_route_fields
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
     is_code_execution_domain = _routing_policy.is_code_execution_domain
     normal_adaptive_pair_texts = _routing_policy.normal_adaptive_pair_texts
     resolve_execution_domain = _routing_policy.resolve_execution_domain
-    reference_path_for = _routing_policy.reference_path_for
     validate_execution_domain_registry = _routing_policy.validate_execution_domain_registry
 
 HISTORY_PATH = Path(__file__).resolve().parent / "model_routing_history.py"
@@ -351,6 +351,16 @@ def _is_code_implementation(node):
     except ValueError:
         return False
     return is_code_execution_domain(execution_domain)
+
+
+def _node_code_rule_bundle(node):
+    execution_domain = _resolve_execution_domain(node)
+    return code_rule_bundle(execution_domain, node.get("prompt", ""), node.get("language"), node.get("purpose", ""), (node.get("routing_condition") or {}).get("task_family", ""))
+
+
+def _emit_code_gate_notice(bundle, node_id):
+    event = {"schema_version": 1, "stage": "code-rule-notice", "user_visible": True, "node_id": node_id, **bundle}
+    print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
 def receipt_node_role(node):
@@ -897,6 +907,15 @@ def validate_plan(
             expected_owner = None
         if expected_owner is not None and skill != expected_owner:
             failures.append(f"{node_id} bypasses code-skill; implementation owner mismatch for {execution_domain}")
+        if _is_code_implementation(node):
+            try:
+                bundle = _node_code_rule_bundle(node)
+            except ValueError as error:
+                failures.append(f"{node_id} Code Gate cannot resolve: {error}")
+            else:
+                for reference_path in bundle["reference_paths"]:
+                    if not (skills_root / reference_path).is_file():
+                        failures.append(f"{node_id} Code Gate reference is missing: {reference_path}")
 
         adaptive_dynamic_result = dynamic_graph and phase == "result" and node.get("selection_basis") == "adaptive_quality"
         if node_id == plan.get("main_result_node") or adaptive_dynamic_result:
@@ -1406,11 +1425,11 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         f"Execute only this bounded locked node. Read and obey {skill_path.as_posix()}.\n\n"
         f"{node['prompt']}"
     )
-    if execution_domain_is_active(_resolve_execution_domain(node)) and is_code_execution_domain(_resolve_execution_domain(node)):
-        execution_domain, _ = _resolve_execution_domain_with_flag(node)
-        reference_path = reference_path_for(execution_domain)
-        if reference_path:
-            prompt += f"\n\nReference rules for this execution domain: {(skills_root / reference_path).as_posix()}"
+    code_bundle = _node_code_rule_bundle(node) if _is_code_implementation(node) else None
+    if code_bundle is not None:
+        resolved_references = [(skills_root / reference_path).as_posix() for reference_path in code_bundle["reference_paths"]]
+        prompt += f"\n\nCode Gate: {code_bundle['message']} Before reading or editing task source, announce this Code Gate in commentary. Read and obey these references in order: {json.dumps(resolved_references, ensure_ascii=False, separators=(',', ':'))}"
+        _emit_code_gate_notice(code_bundle, node_id)
     if dependency_text:
         prompt += f"\n\nCompleted dependency handoff:\n{dependency_text}"
     if node["phase"] == "ending":
@@ -1472,6 +1491,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
             state_db=state_db,
             workload_id=f"task-route-{node_id}",
             allow_fallback=[],
+            code_rule_bundle=code_bundle,
         )
         try:
             if args.node_role == "result-producer":

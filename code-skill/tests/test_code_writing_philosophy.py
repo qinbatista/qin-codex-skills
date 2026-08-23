@@ -9,6 +9,9 @@ CODING_APPROACH_PATH = REPOSITORY_ROOT / "code-skill" / "references" / "coding-a
 AGENT_METADATA_PATH = REPOSITORY_ROOT / "code-skill" / "agents" / "openai.yaml"
 UNITY_RULES_PATH = REPOSITORY_ROOT / "code-skill" / "references" / "unity-csharp-rules.md"
 UNITY_STRUCTURE_PATH = REPOSITORY_ROOT / "code-skill" / "references" / "unity-game-code-structure-design.md"
+UNITY_LIFECYCLE_PATH = REPOSITORY_ROOT / "code-skill" / "references" / "unity-lifecycle-and-serialization.md"
+UNITY_SERVICE_PATH = REPOSITORY_ROOT / "code-skill" / "references" / "unity-service-integration.md"
+CSHARP_HISTORY_PATH = REPOSITORY_ROOT / "code-skill" / "references" / "csharp-rules.md"
 
 
 class CodeWritingPhilosophyTests(unittest.TestCase):
@@ -20,6 +23,9 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         cls.agent_metadata = AGENT_METADATA_PATH.read_text(encoding="utf-8")
         cls.unity_rules = UNITY_RULES_PATH.read_text(encoding="utf-8")
         cls.unity_structure = UNITY_STRUCTURE_PATH.read_text(encoding="utf-8")
+        cls.unity_lifecycle = UNITY_LIFECYCLE_PATH.read_text(encoding="utf-8")
+        cls.unity_service = UNITY_SERVICE_PATH.read_text(encoding="utf-8")
+        cls.csharp_history = CSHARP_HISTORY_PATH.read_text(encoding="utf-8")
 
     def test_triggering_covers_all_code_writing_and_excludes_exact_read_only(self):
         self.assertTrue(self.code_skill.startswith("---\nname: code-skill\ndescription:"))
@@ -78,13 +84,42 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         self.assertIn("user-facing UI information", self.code_skill)
         self.assertIn("User Experience Philosophy", self.code_skill)
 
-    def test_unity_game_nodes_must_load_the_structure_reference_before_pattern_selection(self):
-        self.assertIn("references/unity-game-code-structure-design.md", self.code_skill)
-        self.assertIn("unity-game-code-structure-design.md", self.unity_rules)
-        self.assertIn("references/unity-game-code-structure-design.md", self.agent_metadata)
-        self.assertIn("Every Unity game C# writing node must also load", self.code_skill)
+    def test_code_gate_is_visible_and_universal_before_source_work(self):
+        for required_fragment in ["emit one visible `Code Gate` notice", "Before reading or editing task source", "universal philosophy", "active language profile", "matched optional categories", "missing disclosure or a missing universal reference is a routing failure"]:
+            self.assertIn(required_fragment, self.code_skill)
+        self.assertIn("before source work emit Code Gate", self.agent_metadata)
+
+    def test_direct_result_ownership_and_no_wrapper_rules_are_universal(self):
+        for required_fragment in ["Do not assign or unpack into `_`", "never use `_ = SomeTask()`", "Call the real owner directly", "SaveData() { SaveData(); }", "same arguments and return value", "one physical line"]:
+            self.assertIn(required_fragment, self.philosophy)
+        for required_fragment in ["_ = SaveDataAsync();", "same arguments and return value", "void SaveData() { SaveData(); }", "explicit concrete type instead of `var`", "case _:"]:
+            self.assertIn(required_fragment, self.unity_rules)
+        for required_fragment in ["scripts/code_rule_guard.py --diff-from HEAD", "ignoring unchanged legacy lines", "detached Ending or authorized release gate", "does not replace them"]:
+            self.assertIn(required_fragment, self.code_skill)
+
+    def test_csharp_has_one_active_unity_profile_with_conditional_categories(self):
+        self.assertIn("C# and Unity C# | `unity_csharp`", self.code_skill)
+        self.assertIn("Historical plain C# | `csharp`", self.code_skill)
+        self.assertIn("history-only", self.csharp_history)
+        self.assertIn("must not create a second rule path", self.unity_rules)
+        self.assertIn("may add only their domain facts and APIs", self.unity_rules)
+        self.assertIn("must not duplicate, fork, or compete", self.unity_rules)
+        for reference in ["unity-game-code-structure-design.md", "unity-lifecycle-and-serialization.md", "unity-service-integration.md"]:
+            self.assertIn(reference, self.unity_rules)
+            self.assertIn(reference, self.code_skill)
+
+    def test_unity_structure_category_loads_before_pattern_selection(self):
+        self.assertIn("materially changes gameplay ownership", self.unity_structure)
         self.assertIn("nearest project `AGENTS.md`", self.unity_structure)
         self.assertIn("Patterns solve a demonstrated lifecycle or coordination need", self.unity_rules)
+
+    def test_unity_lifecycle_category_covers_callback_async_and_serialization_pits(self):
+        for required_fragment in ["`OnEnable()` and `OnDisable()` as a symmetric pair", "Do not write `_ = SomeTask()`", "named field", "Unity main thread", "[SerializeField] private ConcreteType _field;", "Do not rely on accidental script execution order", "Do not repeat `GetComponent`"]:
+            self.assertIn(required_fragment, self.unity_lifecycle)
+
+    def test_unity_service_category_keeps_one_real_provider_boundary(self):
+        for required_fragment in ["public facade -> neutral interface -> selected provider -> optional SDK", "same arguments and return value", "uninitialized, initializing, ready, and failed", "Forward each callback or operation once", "thin test UI", "Claim editor, device, cloud"]:
+            self.assertIn(required_fragment, self.unity_service)
 
     def test_unity_constructor_and_collection_entries_stay_flat(self):
         for required_fragment in [
@@ -101,31 +136,20 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         for required_fragment in required_fragments:
             self.assertIn(required_fragment, self.unity_rules)
             self.assertIn(required_fragment, self.code_skill)
-        self.assertIn("every self-contained Unity C# statement/expression that fits clearly on one physical line", self.agent_metadata)
-        self.assertIn("do not vertically wrap code that fits or split a ternary assignment only to indent its branches unless required or requested", self.agent_metadata)
+        self.assertIn("keep complete clear code on one line", self.agent_metadata)
 
-    def test_agent_metadata_preserves_prior_lifecycle_routing_and_unity_requirements(self):
+    def test_agent_metadata_preserves_code_gate_quick_check_and_ending_boundaries(self):
         required = [
-            "$code-skill: artifact-free exact read-only lookup/audit stays skill-free",
+            "$code-skill: exact artifact-free read-only work stays outside",
+            "before source work emit Code Gate",
             "references/code-writing-philosophy.md",
-            "references/unity-game-code-structure-design.md",
-            "relevant language/platform/domain Skills",
-            "Controller/Manager/ScriptableObject core",
-            "exactly one smallest local Quick Check",
+            "New C# always routes to unity_csharp",
+            "Never hide results or Tasks in _",
+            "same-argument pass-through wrappers",
+            "accidental self-recursion",
+            "Run one smallest Quick Check",
             "publish CODE READY",
-            "broad tests/builds/UI/full lint/log cleanup/repeated review move to Ending",
-            "Code normally exposes real_test through Quick Check and emits ending-required",
-            "ending_verification_plan.py",
-            "projectless End Task",
-            "gpt-5.3-codex-spark|xhigh",
-            "gpt-5.6-luna|low",
-            "ENDING_CHECK_WORKER",
-            "never edit/repair/route/lifecycle",
-            "All checks PASS",
-            "codex_app__send_message_to_thread",
-            "immutable origin",
-            "fresh Spark-first Ending",
-            "Never self-verify",
+            "global projectless Ending",
         ]
         for fragment in required:
             self.assertIn(fragment, self.agent_metadata)
@@ -134,8 +158,8 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         frontmatter = CODE_SKILL_PATH.read_text(encoding="utf-8").split("---", 2)[1]
         self.assertIn("name: code-skill", frontmatter)
         self.assertIn("description:", frontmatter)
-        self.assertIn("Do not apply this reference to non-game Unity tooling", self.unity_structure)
-        self.assertLess(self.unity_structure.index("Do not apply this reference to non-game Unity tooling"), self.unity_structure.index("## Ownership and lifecycle"))
+        self.assertIn("Do not apply this category to non-game Unity tooling", self.unity_structure)
+        self.assertLess(self.unity_structure.index("Do not apply this category to non-game Unity tooling"), self.unity_structure.index("## Ownership and lifecycle"))
         self.assertLess(self.unity_structure.index("## Ownership and lifecycle"), self.unity_structure.index("## Pattern decisions, not ceremony"))
 
     def test_unity_structure_contract_covers_ownership_data_exceptions_and_patterns(self):

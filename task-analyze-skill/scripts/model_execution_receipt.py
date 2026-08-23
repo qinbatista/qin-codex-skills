@@ -823,6 +823,29 @@ def build_codex_exec_command(args):
     return command
 
 
+def code_gate_execution_contract(bundle):
+    if bundle is None:
+        return ""
+    if not isinstance(bundle, dict) or bundle.get("schema_version") != 1:
+        raise ValueError("code_rule_bundle_invalid")
+    reference_paths = bundle.get("reference_paths")
+    if not isinstance(reference_paths, list) or not reference_paths or any(not isinstance(path, str) or not path for path in reference_paths):
+        raise ValueError("code_rule_bundle_references_invalid")
+    if bundle.get("universal_reference") not in reference_paths or bundle.get("entry_reference") not in reference_paths:
+        raise ValueError("code_rule_bundle_universal_gate_missing")
+    skills_root = Path(__file__).resolve().parents[2]
+    resolved_references = []
+    for reference_path in reference_paths:
+        relative_path = Path(reference_path)
+        if relative_path.is_absolute() or any(part == ".." for part in relative_path.parts):
+            raise ValueError("code_rule_bundle_reference_not_relative")
+        resolved_reference = skills_root / relative_path
+        if not resolved_reference.is_file():
+            raise ValueError(f"code_rule_bundle_reference_missing:{reference_path}")
+        resolved_references.append(resolved_reference.as_posix())
+    return f"Code Gate is already resolved. Before reading or editing task source, first state in commentary: {bundle['message']} Read and obey these references in order: {json.dumps(resolved_references, ensure_ascii=False, separators=(',', ':'))}\n"
+
+
 def run_receipt(args, prompt_text):
     authorization = authorize_receipt_run(args)
     benchmark_prompt_path = None
@@ -846,7 +869,8 @@ def run_receipt(args, prompt_text):
         marker = getattr(args, "route_marker", "LOCKED_ROUTE_NODE")
         lifecycle_boundary = route_node_lifecycle_boundary(marker)
         canonical_workdir = Path(args.workdir).expanduser().resolve()
-        execution_prompt = f"{marker}\nThis is a bounded node from an already-returned Task Analyze route. Execute the assigned node directly; do not restart Task Analyze or redesign the route. {lifecycle_boundary} Your process is already in the canonical working directory `{canonical_workdir}`. Use that current directory directly; do not reconstruct, shorten, or guess another absolute workdir in tool calls.\n\n{prompt_text}"
+        code_gate_contract = code_gate_execution_contract(getattr(args, "code_rule_bundle", None))
+        execution_prompt = f"{marker}\nThis is a bounded node from an already-returned Task Analyze route. Execute the assigned node directly; do not restart Task Analyze or redesign the route. {lifecycle_boundary} Your process is already in the canonical working directory `{canonical_workdir}`. Use that current directory directly; do not reconstruct, shorten, or guess another absolute workdir in tool calls.\n{code_gate_contract}\n{prompt_text}"
     stream_result_ready = bool(getattr(args, "stream_result_ready", False))
     if stream_result_ready:
         execution_prompt += f"\n\nWhen the requested result is complete, emit exactly one complete agent message in this shape and do not use these markers for progress/commentary:\n{RESULT_READY_BEGIN}\n<complete user-facing result>\n{RESULT_READY_END}"
@@ -955,6 +979,7 @@ def run_receipt(args, prompt_text):
         failure_class = None
         failure_detail = None
     receipt = {"schema_version": 1, "proof_level": "local-operational-not-cryptographic", "workload_id": args.workload_id, "node_type": receipt_node_type(args), **authorization, "workload_prompt_sha256": sha256_text(prompt_text), "prompt_sha256": sha256_text(execution_prompt), "output_sha256": stdout_summary["output_hash"], "thread_id": stdout_summary["thread_id"], "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": resolved_model, "resolved_effort": resolved_effort, "resolved_pair": f"{resolved_model}|{resolved_effort}" if resolved_model and resolved_effort else None, "effective_model": effective_model, "effective_effort": resolved_effort, "effective_pair": f"{effective_model}|{resolved_effort}" if effective_model and resolved_effort else None, "reroutes": reroutes, "allowed_fallback_pairs": allowed_fallback_pairs, "model_match": model_match, "effort_match": effort_match, "pair_match": pair_match, "tokens": usage, "metrics_complete": not timed_out and stdout_summary["turn_completed"] and token_consistent, "tokens_lower_bound": timed_out and usage["total_tokens"] is not None, "pre_execution_failure": False, "availability": rollout.get("availability"), "state_tokens_used": (thread_state or {}).get("tokens_used"), "token_total_consistent": token_consistent, "runtime_metadata_status": (thread_state or {}).get("metadata_status", "missing"), "runtime_metadata_missing_columns": (thread_state or {}).get("metadata_missing_columns", []), "runtime_metadata_error": (thread_state or {}).get("metadata_error"), "runtime_database": (thread_state or {}).get("runtime_database"), "model_turn_duration_ms": task_complete.get("duration_ms"), "time_to_first_token_ms": task_complete.get("time_to_first_token_ms"), "process_elapsed_ms": elapsed_ms, "exit_code": process.returncode if process is not None else None, "turn_completed": False if timed_out else stdout_summary["turn_completed"], "stderr_line_count": len(process_stderr.splitlines()), "cli_version": (thread_state or {}).get("cli_version"), "model_provider": (thread_state or {}).get("model_provider"), "source": (thread_state or {}).get("source"), "status": status, "failure_detail": failure_detail, "recorded_at": datetime.now(timezone.utc).isoformat(), "limitations": "Resolved/effective values come from local Codex runtime metadata and reroute events; this is not a cryptographically signed backend attestation."}
+    receipt["code_rule_bundle"] = getattr(args, "code_rule_bundle", None)
     if getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):
         receipt["benchmark_run_id"] = args.benchmark_run_id
         if benchmark_stream_ready:

@@ -89,7 +89,7 @@ class SkillResolverAndGraduatedRouteTests(unittest.TestCase):
                 skill_path = skills_root / skill_name / "SKILL.md"
                 skill_path.parent.mkdir(parents=True, exist_ok=True)
                 skill_path.write_text(f"{skill_name}\n", encoding="utf-8")
-            for reference in ("task-analyze-skill/references/model-selection.md", "code-skill/references/python-rules.md", "code-skill/references/csharp-rules.md", "code-skill/references/unity-csharp-rules.md", "code-skill/references/spark-small-code.md"):
+            for reference in ("task-analyze-skill/references/model-selection.md", "code-skill/references/code-writing-philosophy.md", "code-skill/references/python-rules.md", "code-skill/references/csharp-rules.md", "code-skill/references/unity-csharp-rules.md", "code-skill/references/unity-game-code-structure-design.md", "code-skill/references/unity-lifecycle-and-serialization.md", "code-skill/references/unity-service-integration.md", "code-skill/references/spark-small-code.md"):
                 reference_path = skills_root / reference
                 reference_path.parent.mkdir(parents=True, exist_ok=True)
                 reference_path.write_text("reference\n", encoding="utf-8")

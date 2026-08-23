@@ -206,7 +206,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         process = SimpleNamespace(stdout=stdout_text, stderr="one warning\n", returncode=0)
         thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-5.3-codex-spark", "effort": "high", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
         rollout = {"turn_context": {"turn_id": "turn-1", "model": "gpt-5.3-codex-spark", "effort": "high"}, "reroutes": [], "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2, "total_tokens": 110}, "task_complete": {"duration_ms": 300, "time_to_first_token_ms": 100}}
-        args = argparse.Namespace(model="gpt-5.3-codex-spark", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="same-work", allow_fallback=[])
+        code_rule_bundle = {"schema_version": 1, "execution_domain": "python", "entry_reference": "code-skill/SKILL.md", "universal_reference": "code-skill/references/code-writing-philosophy.md", "category_ids": [], "reference_paths": ["code-skill/SKILL.md", "code-skill/references/code-writing-philosophy.md", "code-skill/references/python-rules.md"], "labels": ["universal code philosophy", "Python"], "message": "Code Gate loaded: universal code philosophy, Python."}
+        args = argparse.Namespace(model="gpt-5.3-codex-spark", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="same-work", allow_fallback=[], code_rule_bundle=code_rule_bundle)
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
         command = run_mock.call_args.args[0]
@@ -220,12 +221,21 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertIn("publish CODE READY immediately", run_mock.call_args.kwargs["input"])
         self.assertIn("Do not run broad tests", run_mock.call_args.kwargs["input"])
         self.assertIn("entry parent owns the one detached End Task", run_mock.call_args.kwargs["input"])
+        self.assertIn("Code Gate is already resolved", run_mock.call_args.kwargs["input"])
+        self.assertIn("Before reading or editing task source", run_mock.call_args.kwargs["input"])
+        self.assertIn("code-writing-philosophy.md", run_mock.call_args.kwargs["input"])
         self.assertIn(f"canonical working directory `{Path('/tmp').resolve()}`", run_mock.call_args.kwargs["input"])
         self.assertTrue(run_mock.call_args.kwargs["input"].endswith("same prompt"))
         self.assertTrue(run_mock.call_args.kwargs["shell"] is False)
         self.assertEqual(receipt["status"], "pass")
         self.assertTrue(receipt["model_match"])
         self.assertTrue(receipt["effort_match"])
+        self.assertEqual(receipt["code_rule_bundle"], code_rule_bundle)
+
+    def test_code_gate_rejects_missing_universal_reference(self):
+        bundle = {"schema_version": 1, "entry_reference": "code-skill/SKILL.md", "universal_reference": "code-skill/references/code-writing-philosophy.md", "reference_paths": ["code-skill/SKILL.md"], "message": "incomplete"}
+        with self.assertRaisesRegex(ValueError, "universal_gate_missing"):
+            module.code_gate_execution_contract(bundle)
 
     def test_child_command_explicitly_disables_approval_prompts_without_bypassing_sandbox(self):
         args = argparse.Namespace(codex_bin="codex", model="gpt-5.6-luna", effort="max", sandbox="workspace-write", ignore_user_config=True)

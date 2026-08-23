@@ -27,6 +27,7 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 
 - Use descriptive full-word names and correct English spelling.
 - Avoid vague placeholder names such as `out`, `result`, `data`, `item`, `obj`, or `response` when a more specific meaning is known.
+- Do not bind a value to `_`, and do not use `_` in tuple unpacking to suppress an unused return member. Access the required member directly, change the producer contract when it is owned here, or use a meaningful name only when the value is genuinely read. Pattern wildcards such as `case _` remain valid because they do not create a discarded value binding.
 - Inline any value or variable used exactly once when it remains readable.
 - Create variables only when reused or when they clearly improve readability.
 
@@ -37,6 +38,8 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 - Inline one-off logic into the actual method or function unless extraction removes real complexity or is reused.
 - Do not keep awkward source logic in place and add wrappers, retry-only branches, or compatibility layers when the underlying function can be fixed directly.
 - Write logic functions step by step inside the owning function. When the input and return contract are confirmed, express any needed conditions in that function instead of adding wrapper functions, nested functions, or caller-side routing layers.
+- Do not create a same-arguments, same-return pass-through function. Call the owning function once at the real call site unless the boundary adds validation, translation, transaction, lifecycle, platform, provider, or public compatibility semantics.
+- Reject accidental self-recursion: a function must not call itself as its only action. Intentional recursion requires a visible base case and progress toward it.
 
 ## Contracts And Guards
 
@@ -51,6 +54,7 @@ Apply these rules whenever writing or editing Python modules, classes, functions
 ## Quick Check And Detached Ending
 
 - Before presenting a light/local Python edit, run the smallest safe focused smoke that exercises the changed function. For API, large-file, expensive, destructive, or import-side-effect-heavy work, skip the heavy run; use `py_compile` or AST parsing plus direct changed function, variable, import, and reference checks.
+- Before final Ending or release-gate PASS, run `code-skill/scripts/code_rule_guard.py --diff-from HEAD` on changed Python files so new discard bindings, pass-through wrappers, only-action self-recursion, and avoidable vertical calls fail deterministically without rewriting unchanged legacy code.
 - Present `CODE READY` immediately after exactly one Quick Check. A durable Python change normally exposes `real_test` through that Quick Check and emits `ending-required`; any result with no `real_test`, `information_update`, or `memory_update` surface records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update`. When required, create and acknowledge one persistent global projectless Ending, then return without polling it. Use exact `create_thread` target `{"type":"projectless"}` and require `list_threads` readback with `projectId=null` or absent; project/current-task/subtask placement is BLOCKED. Its fixed Spark-xhigh controller runs direct checks and may use capability-routed Terra/Sol `ENDING_CHECK_WORKER` nodes for semantic runtime, code-quality, prompt, UI, or visual evidence. Multiple checks stay inside that one Ending lifecycle and every required check must PASS.
 - Before durable result-memory closeout, compare the active Skill/AGENTS process contract, fresh real execution evidence, and effective project-result memory. Only a memory-only defect permits an append-only correction or projection reconciliation inside Ending. Skill or execution defects write no result memory and return exact evidence to the immutable origin session for repair and a fresh Ending. The next task reads only effective project-result memory and hides superseded records from active guidance.
 - A failing verifier records the exact command/output/error and acceptance gap, then submits the generated repair prompt through `codex_app__send_message_to_thread` to the immutable origin session. That source session repairs only the authorized result, runs Quick Check, presents a new result, and starts a fresh Ending that reruns the original check with `--repair-of-lifecycle-id`; continue for at most three attempts. Missing source-session metadata or failed prompt submission is BLOCKED, and BLOCKED is not verified.

@@ -140,6 +140,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
 
             def fake_run(receipt_args, prompt):
                 self.assertTrue(stream.getvalue().splitlines())
+                self.assertEqual(receipt_args.code_rule_bundle["execution_domain"], "python")
                 receipt_args.result_output.write_text("RESULT", encoding="utf-8")
                 return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
 
@@ -148,9 +149,15 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             events = [json.loads(line) for line in stream.getvalue().splitlines()]
             event = events[0]
             notice_event = events[1]
+            code_notice_event = events[2]
         expected_notice = module._model_route_notice(args, adaptive)
         self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "task_type": "code", "operation": "edit", "complexity_score": 12, "complexity_band": "small", "fast_path_eligible": False, "routing_reasons": [], "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
         self.assertEqual(notice_event, {"schema_version": 1, "stage": "model-switch-notice", "user_visible": True, **expected_notice})
+        self.assertEqual(code_notice_event["stage"], "code-rule-notice")
+        self.assertTrue(code_notice_event["user_visible"])
+        self.assertEqual(code_notice_event["execution_domain"], "python")
+        self.assertEqual(code_notice_event["reference_paths"][:2], [module.routing_policy.CODE_SKILL_ENTRY_REFERENCE, module.routing_policy.CODE_WRITING_PHILOSOPHY_REFERENCE])
+        self.assertEqual([event["stage"] for event in events[:3]], ["route-ready", "model-switch-notice", "code-rule-notice"])
         self.assertGreaterEqual(stream.flush_count, 1)
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["model_route_notice"], expected_notice)
@@ -308,6 +315,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
                 result = module.run(args, "Audit independent a.py, b.py. Read-only, no edits. Must run in parallel for latency.")
         self.assertEqual(result["status"], "pass")
         scheduled.assert_called_once()
+        self.assertEqual(scheduled.call_args.args[0].code_rule_bundle["execution_domain"], "python")
 
     def test_scheduled_graph_releases_every_result_before_emitting_ending_ready(self):
         with tempfile.TemporaryDirectory() as temporary:

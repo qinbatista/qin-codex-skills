@@ -1,8 +1,22 @@
 # Unity C# rules
 
-Use `execution_domain=unity_csharp` in routing evidence for Unity C# work. Unity uses this file plus [`csharp-rules.md`](csharp-rules.md); the general rules apply unless a Unity-specific rule below is tighter. Every Unity game C# create/edit/repair/refactor/test node also reads [`unity-game-code-structure-design.md`](unity-game-code-structure-design.md) after the nearest project `AGENTS.md`. A project may refine paths, bootstrap, naming, and tighter ownership, but it cannot silently weaken the global Controller/Manager/ScriptableObject core. This domain shares `code-skill` with plain C# and Python but is not interchangeable with their evidence keys.
+Use the single active `execution_domain=unity_csharp` profile for all new C# work. The language aliases `csharp` and `c#` resolve here; the former plain `csharp` domain is history-only and must not create a second rule path. Every Unity C# writing node reads this file after the universal [`code-writing-philosophy.md`](code-writing-philosophy.md). A project may refine paths, bootstrap, naming, and tighter ownership, but it cannot silently weaken these common rules.
+
+Project-specific Unity Manager, gameplay, SDK, or business-domain Skills may add only their domain facts and APIs. They always inherit this common profile and must not duplicate, fork, or compete with its base C# writing, direct-call, lifecycle, or serialization rules.
 
 Apply these rules for Unity projects and C# code, including MonoBehaviours, ScriptableObjects, managers, gameplay systems, runtime scripts, reviews, explanations, refactors, and performance work.
+
+## Category router
+
+Always apply this common file. Then load only the categories materially matched by the task; load more than one when the task genuinely crosses categories.
+
+| Task surface | Additional reference |
+| --- | --- |
+| ownership, architecture, Controller/Manager/ScriptableObject boundaries, patterns, factories, pools, state, command, observer | [`unity-game-code-structure-design.md`](unity-game-code-structure-design.md) |
+| MonoBehaviour callbacks, scene/prefab lifetime, components, events, coroutines, async/main thread, physics timing, serialization | [`unity-lifecycle-and-serialization.md`](unity-lifecycle-and-serialization.md) |
+| Unity Gaming Services, cloud/auth/analytics, Addressables service, SDK/provider selection, service initialization | [`unity-service-integration.md`](unity-service-integration.md) |
+
+An ordinary local C# edit with none of those surfaces loads no category file. The Code Gate announces the common rules and matched categories before source inspection or editing.
 
 ## Workflow
 
@@ -18,13 +32,8 @@ Apply these rules for Unity projects and C# code, including MonoBehaviours, Scri
 
 ## Unity Structure
 
-- Apply the game-code structure reference before choosing Factory, Observer, Object Pool, State, Command, Prototype, Singleton, or a related pattern. Patterns solve a demonstrated lifecycle or coordination need; they are never required ceremony.
-- Keep GameObject-bound local behavior in named Controllers and feature-wide lifecycle coordination in single-instance Managers. Every Manager functional/tuning value and Controller configuration comes from the owning ScriptableObject; a project may tighten this boundary but does not replace it with Manager-owned tuning.
-
-- Use `Awake()` for data and component initialization owned by the script, such as `Rigidbody`, `Collider`, `Animator`, and internal fields.
-- Use `Start()` for work that depends on other scripts, ScriptableObjects, services, or external references.
-- Do not allocate new objects every frame in `Update()` if they can be reused.
-- Store reusable objects in fields and initialize them once, usually in `Awake()`.
+- Keep GameObject-bound local behavior in named Controllers, feature-wide lifecycle coordination in single-instance Managers, and authored/tunable feature data in the owning ScriptableObject contract. This compact core applies to every Unity gameplay edit; load the detailed structure category before changing ownership or selecting a pattern.
+- Patterns solve a demonstrated lifecycle or coordination need; they are never required ceremony. A direct call remains the default until queueing, multiple consumers, product variants, bounded reuse, or complex transitions are real.
 
 ## C# Style
 
@@ -41,6 +50,15 @@ Apply these rules for Unity projects and C# code, including MonoBehaviours, Scri
 - Keep constructor calls and object-creation expressions on one physical line, including long argument lists. In collection, property, and array initializers, keep each `new Type(...)` entry flat; never format it as `new Type(` followed by vertically stacked arguments. For example: `new InAppPurchaseProduct(ProductId.Coin500.ToString(), "coins_500_ios", "coins_500_android", 500, 3.99m, "USD", InAppPurchaseProductKind.Consumable),`
 - Keep spaces after commas.
 - Do not fold argument lists across multiple lines unless explicitly requested.
+- Use an explicit concrete type instead of `var` when the type is known at the declaration. Keep `var` only when the concrete type would be genuinely noisy or unavailable and the initializer still makes ownership unambiguous.
+
+## Direct calls and result ownership
+
+- Do not assign a return value or `Task` to `_`. In particular, `_ = SaveDataAsync();` is forbidden because it hides completion and exceptions. Await the task or keep it in a named owned field with cancellation and exception observation.
+- Discards in tuple deconstruction are also forbidden for newly written code. Access the required member directly or change an owned producer contract. Pattern wildcards such as `case _:` are allowed because they do not bind and discard a runtime value.
+- Do not write a method whose only behavior is calling another method with the same arguments and return value. Call the real owner once at the call site.
+- Never write accidental self-recursion such as `void SaveData() { SaveData(); }`. Intentional recursion requires a visible base case and progress toward it.
+- A public facade, adapter, or provider method is allowed only when it adds public compatibility, validation, translation, transaction, lifecycle, platform, SDK, or provider-selection semantics. Its name alone does not justify another call layer.
 
 ## Fields And Names
 
@@ -50,6 +68,13 @@ Apply these rules for Unity projects and C# code, including MonoBehaviours, Scri
 - Do not declare public fields by default.
 - If something must be exposed, prefer a property with `get; set;`.
 - If a field or value is initialized in `Awake()` or `Start()`, use it directly instead of adding repeated guards like `!= null` or `> 0`.
+
+## Quick Check And Detached Ending
+
+- Keep changes surgical. Before presentation, run exactly one smallest safe local smoke when the changed function is light. For API, large-file, expensive-build, Unity-runtime, or side-effect-heavy work, skip the heavy producer run and check syntax plus changed method, variable, namespace, serialized field, and direct-reference names.
+- Before final Ending or release-gate PASS, run `code-skill/scripts/code_rule_guard.py --diff-from HEAD` on changed `.cs` files so new discard assignments, same-argument pass-through wrappers, only-action self-recursion, obvious `var = new Type(...)`, and avoidable vertical calls fail deterministically without rewriting unchanged legacy code.
+- Present `CODE READY` immediately after the Quick Check; do not run broad builds, full lint, rendered UI, logs, or regressions first. A durable Unity C# change normally exposes `real_test` through the smoke or static Quick Check and emits `ending-required`; a no-surface result records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update`.
+- Create one Spark-xhigh-controlled global projectless Ending when required, containing the explicit Unity compilation, EditMode/PlayMode, runtime, device, provider, or integration checks. Use exact `create_thread` target `{"type":"projectless"}` and require `list_threads` readback with `projectId=null` or absent. The controller may use saved Terra/Sol `ENDING_CHECK_WORKER` nodes for semantic runtime, code-quality, UI, or visual evidence. Only Spark availability/capability failure permits Luna-low. All required checks must PASS. A failure or acceptance mismatch returns exact evidence to the immutable origin session, which performs the authorized repair and starts a fresh Spark-first Ending.
 
 ## Guardrails
 

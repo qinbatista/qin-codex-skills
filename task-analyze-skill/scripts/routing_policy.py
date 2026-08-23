@@ -229,9 +229,17 @@ def analyze_prompt_routing(prompt, risk="low", ambiguity="low"):
     fast_path = score <= ROUTING_THRESHOLDS["fast_path_maximum_score"] and normalized_risk in {"", "low"} and not risk_override and str(ambiguity or "low").strip().casefold() in {"", "low"} and task_type in {"code", "question", "writing"}
     return {"normalized_prompt": normalized, "task_type": task_type, "operation": operation, "complexity_score": score, "reasons": reasons, "fast_path_eligible": fast_path, "risk_override": risk_override}
 
-EXECUTION_DOMAIN_REGISTRY_VERSION = 1
+EXECUTION_DOMAIN_REGISTRY_VERSION = 2
 EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"
 EXECUTION_DOMAIN_REGISTRY_LEGACY = "code_unspecified"
+CODE_GATE_VERSION = 1
+CODE_SKILL_ENTRY_REFERENCE = "code-skill/SKILL.md"
+CODE_WRITING_PHILOSOPHY_REFERENCE = "code-skill/references/code-writing-philosophy.md"
+UNITY_CSHARP_CATEGORY_RULES = (
+    {"id": "structure", "label": "Unity structure and ownership", "reference_path": "code-skill/references/unity-game-code-structure-design.md", "patterns": (r"\b(?:architecture|ownership|controller|manager|scriptableobject|factory|object pool|pooling|observer|command|prototype|singleton|design pattern|data flow)\b", r"(?:结构设计|架构|所有权|控制器|管理器|脚本化对象|工厂|对象池|设计模式|数据流)")},
+    {"id": "lifecycle_serialization", "label": "Unity lifecycle and serialization", "reference_path": "code-skill/references/unity-lifecycle-and-serialization.md", "patterns": (r"\b(?:awake|onenable|ondisable|ondestroy|fixedupdate|lateupdate|monobehaviour|scene|prefab|component|event|subscription|coroutine|async|main thread|physics|serialize|serialization|inspector)\b|\b(?:start|update)\s*\(", r"(?:生命周期|场景|预制体|组件|事件|订阅|协程|异步|主线程|物理|序列化|检查器)")},
+    {"id": "service_integration", "label": "Unity service integration", "reference_path": "code-skill/references/unity-service-integration.md", "patterns": (r"\b(?:unity gaming services|game services|cloud save|authentication|analytics|addressables|sdk|provider|service integration|service initialization|initialize services)\b", r"(?:游戏服务|云存档|认证|分析服务|地址资源|服务集成|服务初始化|提供商)")},
+)
 
 EXECUTION_DOMAINS = {
     "general": {
@@ -257,20 +265,20 @@ EXECUTION_DOMAINS = {
         "history_only": False,
     },
     "csharp": {
-        "display_name": "C#",
+        "display_name": "C# (history only)",
         "kind": "code",
-        "language_aliases": ["csharp", "c#"],
+        "language_aliases": [],
         "owner_skill": "code-skill",
-        "owner_enforced": True,
+        "owner_enforced": False,
         "spark_first": True,
         "reference_path": "code-skill/references/csharp-rules.md",
-        "active": True,
-        "history_only": False,
+        "active": False,
+        "history_only": True,
     },
     "unity_csharp": {
         "display_name": "Unity C#",
         "kind": "code",
-        "language_aliases": ["unity_csharp", "unity-csharp", "unitycsharp"],
+        "language_aliases": ["unity_csharp", "unity-csharp", "unitycsharp", "csharp", "c#", "cs", "unity"],
         "owner_skill": "code-skill",
         "owner_enforced": True,
         "spark_first": True,
@@ -352,6 +360,58 @@ def requires_spark_first(execution_domain):
 
 def reference_path_for(execution_domain):
     return execution_domain_metadata(execution_domain).get("reference_path")
+
+
+def _matches_code_category(text, patterns):
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def infer_code_execution_domain(task_text="", language=None):
+    if language is not None:
+        normalized = str(language).strip().lower()
+        for domain in execution_domain_names():
+            metadata = execution_domain_metadata(domain)
+            if metadata.get("active") and metadata.get("kind") == "code" and normalized in metadata.get("language_aliases", []):
+                return domain
+    normalized_text = normalize_routing_input(task_text).casefold()
+    if re.search(r"(?:^|[^\w])[^\s]+\.py(?:$|[^\w])|\bpython(?:3)?\b", normalized_text):
+        return "python"
+    if re.search(r"(?:^|[^\w])[^\s]+\.cs(?:$|[^\w])|\bc#\b|\bcsharp\b|\bunity\b|(?:统一|合并)?\s*c#|unity\s*c#", normalized_text, re.IGNORECASE):
+        return "unity_csharp"
+    return None
+
+
+def code_rule_bundle(execution_domain=None, task_text="", language=None, purpose="", operation=""):
+    resolved_domain = execution_domain
+    if resolved_domain in {None, "", "general", EXECUTION_DOMAIN_REGISTRY_LEGACY}:
+        resolved_domain = infer_code_execution_domain(task_text, language)
+    if resolved_domain == "csharp":
+        resolved_domain = "unity_csharp"
+    if resolved_domain is not None and resolved_domain not in EXECUTION_DOMAINS:
+        raise ValueError(f"unknown execution domain {resolved_domain}")
+    if resolved_domain is not None and (not execution_domain_is_active(resolved_domain) or not is_code_execution_domain(resolved_domain)):
+        resolved_domain = infer_code_execution_domain(task_text, language)
+    reference_paths = [CODE_SKILL_ENTRY_REFERENCE, CODE_WRITING_PHILOSOPHY_REFERENCE]
+    labels = ["universal code philosophy"]
+    categories = []
+    if resolved_domain is not None:
+        language_reference = reference_path_for(resolved_domain)
+        if language_reference not in reference_paths:
+            reference_paths.append(language_reference)
+        labels.append(execution_domain_metadata(resolved_domain)["display_name"])
+        if resolved_domain == "unity_csharp":
+            category_text = " ".join(str(value or "") for value in (task_text, purpose, operation))
+            for category in UNITY_CSHARP_CATEGORY_RULES:
+                if _matches_code_category(category_text, category["patterns"]):
+                    categories.append(category["id"])
+                    reference_paths.append(category["reference_path"])
+                    labels.append(category["label"])
+    message = f"Code Gate loaded: {', '.join(labels)}. Enforcing explicit result ownership, direct calls, and one-line code when clear."
+    return {"schema_version": CODE_GATE_VERSION, "execution_domain": resolved_domain or "unregistered_code", "entry_reference": CODE_SKILL_ENTRY_REFERENCE, "universal_reference": CODE_WRITING_PHILOSOPHY_REFERENCE, "category_ids": categories, "reference_paths": reference_paths, "labels": labels, "message": message}
+
+
+def reference_paths_for(execution_domain=None, task_text="", language=None, purpose="", operation=""):
+    return code_rule_bundle(execution_domain, task_text, language, purpose, operation)["reference_paths"]
 
 
 def execution_domain_is_active(execution_domain):
@@ -478,6 +538,8 @@ def validate_execution_domain_registry(skills_root=None):
             raise ValueError(f"execution domain {domain} history_only must be bool")
         if metadata["active"] and metadata["history_only"]:
             raise ValueError(f"execution domain {domain} cannot be both active and history-only")
+        if metadata["history_only"] and aliases:
+            raise ValueError(f"execution domain {domain} history-only rows cannot claim language aliases")
     return True
 
 

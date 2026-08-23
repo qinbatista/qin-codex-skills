@@ -45,6 +45,9 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
                     reference = synthetic_skills_root / metadata["reference_path"]
                     reference.parent.mkdir(parents=True, exist_ok=True)
                     reference.write_text(f"reference: {metadata['reference_path']}\n", encoding="utf-8")
+                philosophy = synthetic_skills_root / "code-skill/references/code-writing-philosophy.md"
+                philosophy.parent.mkdir(parents=True, exist_ok=True)
+                philosophy.write_text("universal code philosophy\n", encoding="utf-8")
                 for skill_id in {node["skill"] for node in trace if isinstance(node, dict) and isinstance(node.get("skill"), str)}:
                     if ":" in skill_id:
                         continue
@@ -161,7 +164,7 @@ class ValidateWorkflowSkillTests(unittest.TestCase):
         required = module.REQUIRED_ENTRY
         self.assertIn("Score every submission 0-100", required)
         self.assertIn("no match stays <=entry", required)
-        self.assertIn("reuse recovered/lowest-correct", required)
+        self.assertIn("reuse lowest-correct", required)
         self.assertNotIn("cold start stays <=entry", required)
         self.assertNotIn("reuse frozen lowest-correct", required)
         self.assertIn("obsidian_adaptive_model_runner.py", required)

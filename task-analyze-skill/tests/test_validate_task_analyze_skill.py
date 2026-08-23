@@ -52,6 +52,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                     reference = synthetic_skills_root / metadata["reference_path"]
                     reference.parent.mkdir(parents=True, exist_ok=True)
                     reference.write_text(f"reference: {metadata['reference_path']}\n", encoding="utf-8")
+                philosophy = synthetic_skills_root / "code-skill/references/code-writing-philosophy.md"
+                philosophy.parent.mkdir(parents=True, exist_ok=True)
+                philosophy.write_text("universal code philosophy\n", encoding="utf-8")
                 yield synthetic_skills_root
             finally:
                 module.EXECUTION_DOMAINS.clear()
@@ -147,7 +150,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             else:
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "SKILL.md").write_text(f"{skill_name}\n", encoding="utf-8")
-        for relative in ("task-analyze-skill/references/model-selection.md", "code-skill/references/python-rules.md", "code-skill/references/csharp-rules.md", "code-skill/references/unity-csharp-rules.md", "code-skill/references/spark-small-code.md"):
+        for relative in ("task-analyze-skill/references/model-selection.md", "code-skill/references/code-writing-philosophy.md", "code-skill/references/python-rules.md", "code-skill/references/csharp-rules.md", "code-skill/references/unity-csharp-rules.md", "code-skill/references/unity-game-code-structure-design.md", "code-skill/references/unity-lifecycle-and-serialization.md", "code-skill/references/unity-service-integration.md", "code-skill/references/spark-small-code.md"):
             reference = global_skills / relative
             reference.parent.mkdir(parents=True, exist_ok=True)
             source_reference = source.parent / relative
@@ -183,14 +186,16 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertIn("Multiple checks stay inside that one Ending lifecycle", python_text)
         self.assertNotIn("one scored/modelled persistent task per independent", python_text)
         self.assertIn("every required check must PASS", python_text)
-        self.assertIn("Before presentation, run exactly one smallest safe local smoke", csharp_text)
-        self.assertIn("Create one Spark-xhigh-controlled global projectless Ending", csharp_text)
-        self.assertIn("projectId=null", csharp_text)
-        self.assertIn("saved Terra/Sol `ENDING_CHECK_WORKER`", csharp_text)
-        self.assertIn("Only Spark availability/capability failure permits Luna-low", csharp_text)
-        self.assertIn("All required checks must PASS", csharp_text)
+        self.assertIn("history-only", csharp_text)
+        self.assertIn("single active `execution_domain=unity_csharp` profile", csharp_text)
         self.assertNotIn("check before the main result", csharp_text.lower())
-        self.assertIn("uses this file plus", unity_text)
+        self.assertIn("run exactly one smallest safe local smoke", unity_text)
+        self.assertIn("global projectless Ending", unity_text)
+        self.assertIn("projectId=null", unity_text)
+        self.assertIn("Terra/Sol `ENDING_CHECK_WORKER`", unity_text)
+        self.assertIn("Only Spark availability/capability failure permits Luna-low", unity_text)
+        self.assertIn("All required checks must PASS", unity_text)
+        self.assertIn("## Category router", unity_text)
 
     def test_sample_plans_cover_all_supported_entry_pairs(self):
         sample_plans = module.sample_plans()

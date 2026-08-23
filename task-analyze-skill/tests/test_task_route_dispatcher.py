@@ -651,6 +651,13 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("bypasses code-skill" in failure for failure in failures))
 
+    def test_other_owning_skill_implementation_still_receives_universal_code_gate(self):
+        node = {"id": "plugin-code", "phase": "result", "skill": "sites:sites-building", "purpose": "implement", "execution_domain": "general", "prompt": "Implement the requested component.", "routing_condition": {"task_family": "integration"}}
+        bundle = module._node_code_rule_bundle(node)
+        self.assertTrue(module._is_code_implementation(node))
+        self.assertEqual(bundle["execution_domain"], "unregistered_code")
+        self.assertEqual(bundle["reference_paths"], ["code-skill/SKILL.md", "code-skill/references/code-writing-philosophy.md"])
+
     def test_plan_accepts_complex_unity_csharp_with_terra(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -675,6 +682,12 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 skill_path = synthetic_skills_root / skill_name / "SKILL.md"
                 skill_path.parent.mkdir(parents=True, exist_ok=True)
                 skill_path.write_text(f"{skill_name}\n", encoding="utf-8")
+            code_entry = synthetic_skills_root / "code-skill" / "SKILL.md"
+            code_entry.parent.mkdir(parents=True, exist_ok=True)
+            code_entry.write_text("code-skill\n", encoding="utf-8")
+            philosophy = synthetic_skills_root / "code-skill" / "references" / "code-writing-philosophy.md"
+            philosophy.parent.mkdir(parents=True, exist_ok=True)
+            philosophy.write_text("universal code philosophy\n", encoding="utf-8")
             plan = self.plan(root / "work" / "cache" / "route")
             node = plan["nodes"][0]
             node["skill"] = "sites:sites-building"
@@ -1800,6 +1813,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 skill_dir = temporary_skills_root / owner_skill
                 skill_dir.mkdir(parents=True, exist_ok=True)
                 (skill_dir / "SKILL.md").write_text(f"{owner_skill} skill\n", encoding="utf-8")
+            philosophy = temporary_skills_root / module.code_rule_bundle(None)["universal_reference"]
+            philosophy.parent.mkdir(parents=True, exist_ok=True)
+            philosophy.write_text("universal code philosophy\n", encoding="utf-8")
             yield temporary_skills_root
             module.EXECUTION_DOMAINS.clear()
             module.routing_history_module.EXECUTION_DOMAINS.clear()
@@ -1861,6 +1877,18 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             with self._with_rust_domain() as synthetic_skills_root:
                 failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
         self.assertEqual(failures, [])
+
+    def test_plan_rejects_code_node_when_universal_code_gate_reference_is_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["nodes"][0].update({"execution_domain": "rust", "language": "rust", "skill": "code-skill", "model": "gpt-5.6-luna"})
+            plan["nodes"][0]["routing_condition"].update({"execution_domain": "rust", "owning_skill": "code-skill"})
+            self.refresh_recommendation(plan["nodes"][0])
+            with self._with_rust_domain() as synthetic_skills_root:
+                (synthetic_skills_root / "code-skill/references/code-writing-philosophy.md").unlink()
+                failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root, synthetic_skills_root)
+        self.assertTrue(any("Code Gate reference is missing: code-skill/references/code-writing-philosophy.md" in failure for failure in failures))
 
     def test_plan_main_result_rejects_routing_condition_domain_mismatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1997,10 +2025,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         prompt_lines = captured["prompt"].splitlines()
         owner_line = f"Execute only this bounded locked node. Read and obey {(synthetic_skills_root.resolve() / 'code-skill/SKILL.md').as_posix()}."
         self.assertIn(owner_line, prompt_lines)
-        self.assertIn(
-            f"Reference rules for this execution domain: {(synthetic_skills_root.resolve() / 'code-skill/references/rust-small-code.md').as_posix()}",
-            prompt_lines,
-        )
+        self.assertIn("Code Gate: Code Gate loaded: universal code philosophy, Rust.", captured["prompt"])
+        self.assertIn((synthetic_skills_root.resolve() / "code-skill/references/code-writing-philosophy.md").as_posix(), captured["prompt"])
+        self.assertIn((synthetic_skills_root.resolve() / "code-skill/references/rust-small-code.md").as_posix(), captured["prompt"])
 
     def test_run_ending_rejects_unreleased_or_mismatched_handoff(self):
         with tempfile.TemporaryDirectory() as temp_dir:

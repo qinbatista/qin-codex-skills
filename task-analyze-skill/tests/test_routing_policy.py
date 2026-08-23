@@ -32,8 +32,8 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(tiny_text["static_suggestion"], module.MODEL_ROLE_PAIRS["floor"])
         self.assertEqual(tiny_text["hard_floor"], module.MODEL_ROLE_PAIRS["floor"])
 
-    def test_code_presets_support_python_csharp_and_unity_without_duplicate_rows(self):
-        domains = ["python", "csharp", "unity_csharp"]
+    def test_code_presets_support_python_and_single_unity_csharp_profile(self):
+        domains = ["python", "unity_csharp"]
         profiles = [module.resolve_profile_preset("code-complex", project_family="global", execution_domain=domain) for domain in domains]
         self.assertEqual([profile["execution_domain"] for profile in profiles], domains)
         self.assertTrue(all(profile["owning_skill"] == "code-skill" for profile in profiles))
@@ -263,6 +263,8 @@ class RoutingPolicyTests(unittest.TestCase):
             module.resolve_execution_domain(owning_skill="code-skill", language="unity-csharp", task_family="code", purpose="implement"),
             "unity_csharp",
         )
+        self.assertEqual(module.resolve_execution_domain(owning_skill="code-skill", language="csharp", task_family="code", purpose="implement"), "unity_csharp")
+        self.assertEqual(module.resolve_execution_domain(owning_skill="code-skill", language="c#", task_family="code", purpose="implement"), "unity_csharp")
         self.assertEqual(
             module.resolve_execution_domain(owning_skill="code-skill", task_family="code", purpose="implement"),
             "code_unspecified",
@@ -356,6 +358,39 @@ class RoutingPolicyTests(unittest.TestCase):
             self.assertEqual(module.EXECUTION_DOMAINS[domain]["reference_path"], expected_paths[domain])
             path = SCRIPT_PATH.parents[2] / expected_paths[domain]
             self.assertTrue(path.is_file(), f"reference path missing: {path}")
+
+    def test_csharp_domain_is_history_only_and_aliases_route_to_unity(self):
+        self.assertFalse(module.EXECUTION_DOMAINS["csharp"]["active"])
+        self.assertTrue(module.EXECUTION_DOMAINS["csharp"]["history_only"])
+        self.assertEqual(module.EXECUTION_DOMAINS["csharp"]["language_aliases"], [])
+        self.assertTrue({"csharp", "c#"}.issubset(module.EXECUTION_DOMAINS["unity_csharp"]["language_aliases"]))
+
+    def test_code_rule_bundle_always_starts_with_universal_gate(self):
+        bundle = module.code_rule_bundle("python", "Edit parser.py", "python", "implement", "edit")
+        self.assertEqual(bundle["reference_paths"][:2], [module.CODE_SKILL_ENTRY_REFERENCE, module.CODE_WRITING_PHILOSOPHY_REFERENCE])
+        self.assertEqual(bundle["reference_paths"][2], "code-skill/references/python-rules.md")
+        self.assertEqual(bundle["category_ids"], [])
+        self.assertIn("explicit result ownership", bundle["message"])
+
+    def test_unity_code_rule_bundle_loads_only_matched_categories(self):
+        common = module.code_rule_bundle(None, "Edit PlayerHealth.cs arithmetic.", "csharp", "implement", "edit")
+        generic_update = module.code_rule_bundle(None, "Update PlayerHealth.cs arithmetic.", "csharp", "implement", "edit")
+        structure = module.code_rule_bundle(None, "Refactor the Player Controller and Manager ownership.", "c#", "implement", "refactor")
+        lifecycle_service = module.code_rule_bundle(None, "Initialize Unity Gaming Services in Awake and unsubscribe in OnDisable.", "unity", "implement", "edit")
+        self.assertEqual(common["execution_domain"], "unity_csharp")
+        self.assertEqual(common["category_ids"], [])
+        self.assertEqual(generic_update["category_ids"], [])
+        self.assertEqual(structure["category_ids"], ["structure"])
+        self.assertEqual(lifecycle_service["category_ids"], ["lifecycle_serialization", "service_integration"])
+        self.assertNotIn("code-skill/references/unity-game-code-structure-design.md", common["reference_paths"])
+        self.assertIn("code-skill/references/unity-game-code-structure-design.md", structure["reference_paths"])
+        self.assertIn("code-skill/references/unity-lifecycle-and-serialization.md", lifecycle_service["reference_paths"])
+        self.assertIn("code-skill/references/unity-service-integration.md", lifecycle_service["reference_paths"])
+
+    def test_unregistered_code_still_gets_universal_philosophy(self):
+        bundle = module.code_rule_bundle(None, "Edit one Rust function.", "rust", "implement", "edit")
+        self.assertEqual(bundle["execution_domain"], "unregistered_code")
+        self.assertEqual(bundle["reference_paths"], [module.CODE_SKILL_ENTRY_REFERENCE, module.CODE_WRITING_PHILOSOPHY_REFERENCE])
 
     def test_validate_execution_domain_registry_rejects_noncanonical_aliases(self):
         original = deepcopy(module.EXECUTION_DOMAINS)

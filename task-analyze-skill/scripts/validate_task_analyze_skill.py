@@ -26,6 +26,7 @@ try:
         EXECUTION_DOMAINS,
         PROFILE_PRESETS,
         MODEL_EFFORTS,
+        code_rule_bundle,
         expected_owner_skill,
         execution_domain_is_active,
         is_code_execution_domain,
@@ -43,6 +44,7 @@ except ModuleNotFoundError:
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
     PROFILE_PRESETS = _routing_policy.PROFILE_PRESETS
     MODEL_EFFORTS = _routing_policy.MODEL_EFFORTS
+    code_rule_bundle = _routing_policy.code_rule_bundle
     expected_owner_skill = _routing_policy.expected_owner_skill
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     is_code_execution_domain = _routing_policy.is_code_execution_domain
@@ -129,7 +131,11 @@ REQUIRED_SKILL_TEXT = [
     "Ending is required only when the released result exposes",
     "A no-surface result records `intentionally_skipped_simple_task`",
     "their parent must create and acknowledge one global projectless End Task",
-    "A `LOCKED_ROUTE_NODE` produces only its assigned result and Quick Check",
+    "The node produces only its assigned result and Quick Check",
+    "stage=code-rule-notice",
+    "universal philosophy, active language profile, matched categories",
+    "New C# aliases resolve only to the Unity C# common profile",
+    "Missing disclosure or universal reference is a routing failure",
     "entry parent owns post-receipt lifecycle",
     "automatically activates multi-node routing",
     "visible 0-100 complexity score",
@@ -368,6 +374,8 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
     "recursive_entry_task_forbidden",
     "entry_context_adaptive_runner_required",
     "route_node_lifecycle_boundary",
+    "code_gate_execution_contract",
+    "Before reading or editing task source",
     "run exactly one smallest safe local Quick Check",
     "publish CODE READY immediately",
     "the entry parent owns the one detached End Task after this node's passing receipt",
@@ -379,14 +387,14 @@ REQUIRED_RECEIPT_GUARD_IMPLEMENTATION = [
 ]
 REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "# Task Lifecycle", "Score every submission 0-100", "small 0-24", "standard 25-49", "complex 50-74", "advanced 75-100", "notify user early",
-    "show compact score/model/route status", "Resolve entry first", "exact step-capability/band history wins", "Sol/high may downgrade",
-    "Luna-max/lower may upgrade", "no match stays <=entry", "reuse recovered/lowest-correct",
-    "native project→Model Switch→category→shared-category wikilinks", "no JSON sidecar", "2+ material result stages auto-activate one graph",
-    "each result/Ending records score,band,pair,purpose,deps,stop", "Eligible low-risk low-ambiguity text/code/write/execute score<=24",
-    "same-session gate→Spark-low if no stronger route", "Ending quality FAIL suppresses that fingerprint", "Dependency-ready independent nodes run parallel",
-    "shared writes/order/output deps stay linear", "resolve CODEX_HOME", "pipe exact task once via platform Python",
-    "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "LOCKED_ROUTE_NODE loads required Skills,does code/result+one Quick Check,emits CODE READY,stops",
-    "parent launches one End only after the final aggregate `ending-required` receipt and release", "child/subprocess receipts never launch it", "ENDING_TASK_WORKER is the sole lifecycle controller", "same End Task continues one bounded action at a time", "ENDING_CHECK_WORKER reads listed Skills", "dynamic_task_graph",
+    "show score/model/route", "Resolve entry first", "exact step-capability/band history wins", "Sol/high may downgrade",
+    "Luna-max/lower may upgrade", "no match stays <=entry", "reuse lowest-correct",
+    "project→Model Switch→category→shared links", "2+ result stages activate one graph",
+    "each stage records score,band,pair,purpose,deps,stop", "Eligible low-risk low-ambiguity text/code/write/execute score<=24",
+    "same-session gate→Spark-low if no stronger route", "Ending FAIL suppresses fingerprint", "Independent nodes parallel",
+    "shared writes/order/output deps linear", "resolve CODEX_HOME", "pipe exact task once via platform Python",
+    "skills/task-analyze-skill/scripts/obsidian_adaptive_model_runner.py", "never read/edit/answer inline", "LOCKED_ROUTE_NODE emits Code Gate", "universal philosophy+one active language profile+matched categories", "missing Code Gate/reference is routing failure", "C# aliases use only Unity C#", "does code/result+one Quick Check,emits CODE READY,stops",
+    "Parent launches one End only after final aggregate `ending-required` receipt/release", "child/subprocess receipts never launch it", "ENDING_TASK_WORKER sole lifecycle controller", "same End Task continues one bounded action at a time", "ENDING_CHECK_WORKER reads listed Skills", "dynamic_task_graph",
     "task_route_dispatcher.py run-plan", "no benchmark", "Exact one-source/tool/image read-only uses `task_complexity_score.py`", "no reread/full-read/precheck", "output artifact MUST runner",
     "2 Real PASS trial down 1 rung", "quality FAIL up 1", "missing Obsidian queues projection;local history continues",
     "Producer owns files/skills/one Quick Check only", "Only the final aggregate `ending-required` or `ending_required=true` receipt after all result nodes settle=>one independent global projectless Ending", "real_test", "information_update", "memory_update", "create-launches --producer-receipt(final) --project-id(context-only)", "`intentionally_skipped_simple_task`=>no End Task", "ending_skip_reason=no_real_test_or_information_or_memory_update", "missing acknowledgement=>BLOCKED", "call codex_app__create_thread target",
@@ -399,7 +407,7 @@ REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "Auto Luna-max stable child/graph", "MUST child/graph then return child JSON", "gate owns separate Ending", "excludes only controller",
     "compare task vs +Ending", "all exact PASS", "all result/Ending PASS", "Primary=time+tokens", "totals lower",
     "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "Final Ending PASS/BLOCKED",
-    "one independent global projectless Ending", "gpt-5.3-codex-spark|xhigh", "score scopes checks only", "registry-floor Luna-low",
+    "one independent global projectless Ending", "gpt-5.3-codex-spark|xhigh", "score scopes checks only", "Luna-low",
     "Process Skill/AGENTS,real execution,effective project-result memory agree", "Ending appends only memory-only correction", "Skill/execution defects return origin", "Next tasks read effective project-result memory only",
 ]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
@@ -408,8 +416,10 @@ RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS = ["compact Result Model Disclosure", "t
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
 REQUIRED_PYTHON_REFERENCE_TEXT = ["## Quick Check And Detached Ending", "run the smallest safe focused smoke", "Present `CODE READY` immediately after exactly one Quick Check", "A durable Python change normally exposes `real_test`", "no `real_test`, `information_update`, or `memory_update` surface", "persistent global projectless Ending", "list_threads", "projectId=null", "capability-routed Terra/Sol `ENDING_CHECK_WORKER`", "Multiple checks stay inside that one Ending lifecycle", "every required check must PASS", "effective project-result memory", "memory-only defect", "Skill or execution defects", "codex_app__send_message_to_thread", "immutable origin session", "fresh Ending", "--repair-of-lifecycle-id"]
 REQUIRED_WORKFLOW_MEMORY_CONSISTENCY_TEXT = ["Process Skill/AGENTS", "fresh real execution evidence", "effective project-result memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift", "append-only correction", "immutable origin session", "Next tasks read only effective project-result memory"]
-REQUIRED_CSHARP_REFERENCE_TEXT = ["run exactly one smallest safe local smoke", "skip the heavy producer run and check syntax plus changed method, variable, namespace, and direct-reference names", "Present `CODE READY` immediately", "A durable C# change normally exposes `real_test`", "ending_skip_reason=no_real_test_or_information_or_memory_update", "Create one Spark-xhigh-controlled global projectless Ending", "list_threads", "projectId=null", "Terra/Sol `ENDING_CHECK_WORKER`", "Only Spark availability/capability failure permits Luna-low", "All required checks must PASS", "acceptance mismatch", "immutable origin session", "fresh Spark-first Ending"]
-REQUIRED_UNITY_REFERENCE_TEXT = ["uses this file plus", "Return the final updated C# code first", "every self-contained Unity C# statement or expression that fits clearly on one physical line", "declarations, assignments, returns, conditions, calls, logs, constructors, object creation, initializer entries, and ternary expressions", "split a ternary assignment only to indent its branches", "constructor calls and object-creation expressions on one physical line", "each `new Type(...)` entry flat", "vertically stacked arguments", "new InAppPurchaseProduct(ProductId.Coin500.ToString()"]
+REQUIRED_CSHARP_REFERENCE_TEXT = ["history-only", "New `csharp`, `c#`, and Unity C# work resolves", "single active `execution_domain=unity_csharp` profile", "Do not load this page as a second C# rule set"]
+REQUIRED_UNITY_REFERENCE_TEXT = ["single active `execution_domain=unity_csharp` profile", "## Category router", "Return the final updated C# code first", "every self-contained Unity C# statement or expression that fits clearly on one physical line", "declarations, assignments, returns, conditions, calls, logs, constructors, object creation, initializer entries, and ternary expressions", "split a ternary assignment only to indent its branches", "constructor calls and object-creation expressions on one physical line", "each `new Type(...)` entry flat", "vertically stacked arguments", "new InAppPurchaseProduct(ProductId.Coin500.ToString()", "_ = SaveDataAsync();", "void SaveData() { SaveData(); }", "explicit concrete type instead of `var`", "run exactly one smallest safe local smoke", "Present `CODE READY` immediately", "ending_skip_reason=no_real_test_or_information_or_memory_update", "global projectless Ending", "Terra/Sol `ENDING_CHECK_WORKER`", "All required checks must PASS"]
+REQUIRED_UNITY_LIFECYCLE_REFERENCE_TEXT = ["OnEnable()` and `OnDisable()` as a symmetric pair", "Do not write `_ = SomeTask()`", "Unity main thread", "[SerializeField] private ConcreteType _field;", "Do not rely on accidental script execution order", "Do not repeat `GetComponent`"]
+REQUIRED_UNITY_SERVICE_REFERENCE_TEXT = ["public facade -> neutral interface -> selected provider -> optional SDK", "same arguments and return value", "uninitialized, initializing, ready, and failed", "Forward each callback or operation once", "thin test UI", "Claim editor, device, cloud"]
 REQUIRED_PROMPT_SKILL_TEXT = ["Always use for every task", "100% global prompt-task gate across projects", "Ordinary prose does not trigger it", "Prompt-in-code also loads its owning code executor", "Present the completed prompt or instruction artifact immediately", "real_test`, `information_update`, or `memory_update", "ending_skip_reason=no_real_test_or_information_or_memory_update", "ending-required", "global projectless Ending", "Spark-xhigh remains its controller", "Terra/Sol `ENDING_CHECK_WORKER`", "All checks must PASS", "Luna-low controller fallback", "Never auto-archive or delete Ending tasks", "fresh global projectless verifier"]
 REQUIRED_PROMPT_AGENT_TEXT = ["Always use $prompt-skill", "100% global prompt-task gate across projects", "ordinary prose does not trigger it", "present the artifact first", "Prompt results require Ending only with real_test, information_update, or memory_update", "global-only projectless Ending", "list_threads", "projectId=null/absent", "gpt-5.3-codex-spark|xhigh", "ENDING_CHECK_WORKER", "fresh Spark-first Ending"]
 REQUIRED_VERIFY_SKILL_TEXT = ["post-result Ending Real Verify when the released result exposes", "A no-surface result records `intentionally_skipped_simple_task`", "persistent global projectless", "final aggregate producer receipt", "child/subprocess receipt never launches it", "compact, one-check actions", "gpt-5.3-codex-spark|xhigh", "sole lifecycle controller", "Terra/Sol `ENDING_CHECK_WORKER`", "run every direct plan item", "delegated_check_worker", "All required checks must PASS", "{\"type\":\"projectless\"", "codex_app__list_threads", "projectId=null", "--thread-scope global --thread-project-id null", "create-launches", "ack-launch", "end_task_trigger_rate=100%", "remains visible", "Never call `set_thread_archived`", "immutable origin session", "codex_app__send_message_to_thread", "repair_prompt", "structured `model_assessment`", "fresh global projectless Ending", "BLOCKED does not count as verified", "strict no-op for preference memory"]
@@ -696,6 +706,16 @@ def validate_plan(plan, installed, skills_root=Path(__file__).resolve().parents[
         is_code_node = False if execution_domain not in EXECUTION_DOMAINS else is_code_execution_domain(execution_domain)
         if is_code_node and skill != "code-skill" and expected_owner_skill(execution_domain) is not None:
             failures.append(f"{node_id} bypasses code-skill")
+        is_code_work = node.get("phase") == "result" and (is_code_node or node.get("purpose") in {"implement", "author-probe"})
+        if is_code_work:
+            try:
+                bundle = code_rule_bundle(execution_domain, node.get("prompt", ""), node.get("language"), node.get("purpose", ""), node.get("task_family", ""))
+            except ValueError as error:
+                failures.append(f"{node_id} Code Gate cannot resolve: {error}")
+            else:
+                for reference_path in bundle["reference_paths"]:
+                    if not (skills_root / reference_path).is_file():
+                        failures.append(f"{node_id} Code Gate reference is missing: {reference_path}")
     if "mini_verify_node" in plan:
         failures.append("mini_verify_node is not valid in schema 2")
     result_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
@@ -855,7 +875,7 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     prompt_length = folded_prompt_length(agent_text)
     if prompt_length is None or prompt_length > 1024:
         failures.append(f"agent default_prompt invalid length: {prompt_length}")
-    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ result stages=>graph", "Model stages lists every pair/status", "history picks lowest-correct", "entry moves up/down", "obsidian_adaptive_model_runner.py", "LOCKED_ROUTE_NODE loads required Skills", "one smallest Quick Check", "publishes CODE READY", "Ending surfaces=real_test|information_update|memory_update", "ending_skip_reason=no_real_test_or_information_or_memory_update", "global projectless End via", "ending_verification_plan.py", "exact create_thread target", "codex_app__list_threads", "projectId=null/absent", "same-task-subtask placement is BLOCKED", "returns without polling", "gpt-5.3-codex-spark|xhigh", "registry-floor gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "never edit/repair/route/lifecycle", "Bind immutable origin", "trigger=100%", "all checks PASS;visible", "repair_prompt", "codex_app__send_message_to_thread", "fresh Spark-first End<=3", "BLOCKED is not verified"]))
+    failures.extend(missing_terms("agents/openai.yaml", agent_text, ["score 0-100", "resolve entry", "show band/route", "2+ result stages=>graph", "Model stages lists every pair/status", "history picks lowest-correct", "entry moves up/down", "obsidian_adaptive_model_runner.py", "LOCKED_ROUTE_NODE emits code-rule-notice before source work", "Code Gate loads universal philosophy+one active language profile+matched categories", "missing notice/reference fails", "C# aliases use only Unity C#", "one smallest Quick Check", "publishes CODE READY", "Ending surfaces=real_test|information_update|memory_update", "ending_skip_reason=no_real_test_or_information_or_memory_update", "global projectless End via", "ending_verification_plan.py", "exact create_thread target", "codex_app__list_threads", "projectId=null/absent", "same-task-subtask placement is BLOCKED", "returns without polling", "gpt-5.3-codex-spark|xhigh", "registry-floor gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "never edit/repair/route/lifecycle", "Bind immutable origin", "trigger=100%", "all checks PASS;visible", "repair_prompt", "codex_app__send_message_to_thread", "fresh Spark-first End<=3", "BLOCKED is not verified"]))
     failures.extend(missing_terms("SKILL.md", skill_text, REQUIRED_SKILL_TEXT))
     failures.extend(missing_terms("route-contract", route_text, REQUIRED_ROUTE_TEXT))
     failures.extend(missing_terms("Task Analyze result disclosure", skill_text, RESULT_MODEL_DISCLOSURE_TERMS))
@@ -932,8 +952,10 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
         failures.append(f"obsolete Task Analyze lifecycle hook is still installed: {global_hooks_path}")
     code_reference_contracts = {
         "Python code rules": (global_skills_root / "code-skill" / "references" / "python-rules.md", REQUIRED_PYTHON_REFERENCE_TEXT),
-        "C# code rules": (global_skills_root / "code-skill" / "references" / "csharp-rules.md", REQUIRED_CSHARP_REFERENCE_TEXT),
+        "C# history-only rules": (global_skills_root / "code-skill" / "references" / "csharp-rules.md", REQUIRED_CSHARP_REFERENCE_TEXT),
         "Unity C# code rules": (global_skills_root / "code-skill" / "references" / "unity-csharp-rules.md", REQUIRED_UNITY_REFERENCE_TEXT),
+        "Unity lifecycle and serialization rules": (global_skills_root / "code-skill" / "references" / "unity-lifecycle-and-serialization.md", REQUIRED_UNITY_LIFECYCLE_REFERENCE_TEXT),
+        "Unity service integration rules": (global_skills_root / "code-skill" / "references" / "unity-service-integration.md", REQUIRED_UNITY_SERVICE_REFERENCE_TEXT),
     }
     for label, (reference_path, required_terms) in code_reference_contracts.items():
         if not reference_path.exists():
