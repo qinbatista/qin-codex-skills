@@ -549,11 +549,23 @@ class EndingTaskLedgerTests(unittest.TestCase):
     def test_bound_receipt_accepts_current_extended_routing_context(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
+            capability_fingerprint = LEDGER._load_model_memory_module().task_capability_profile(
+                "code",
+                "python",
+                "edit",
+                "text",
+                12,
+                "low",
+                "low",
+                "Edit one function.",
+                "local-test",
+                ["model-routing", "persistent-end-task"],
+            )["capability_fingerprint"]
             project, receipt = self.producer_receipt(
                 root,
                 step_kind="local-test",
                 capability_tags=["model-routing", "persistent-end-task"],
-                capability_fingerprint="a" * 64,
+                capability_fingerprint=capability_fingerprint,
                 entry_model="gpt-5.6-sol",
                 entry_effort="max",
                 entry_pair="gpt-5.6-sol|max",
@@ -834,8 +846,8 @@ class EndingTaskLedgerTests(unittest.TestCase):
             root = Path(temporary_directory)
             project, receipt = self.producer_receipt(root)
             receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
-            receipt_payload.update({"requested_pair": "gpt-5.6-sol|ultra", "resolved_pair": "gpt-5.6-sol|ultra", "executed_pair": "gpt-5.3-codex-spark|medium"})
-            receipt_payload["route_attempts"] = [{"status": "pass", "executed_pair": "gpt-5.3-codex-spark|medium", "model_match": True, "effort_match": True}]
+            receipt_payload.update({"requested_pair": "gpt-5.6-sol|ultra", "resolved_pair": "gpt-5.6-sol|ultra", "executed_pair": "gpt-5.3-codex-spark|high"})
+            receipt_payload["route_attempts"] = [{"status": "pass", "executed_pair": "gpt-5.3-codex-spark|high", "model_match": True, "effort_match": True}]
             receipt.write_text(json.dumps(receipt_payload), encoding="utf-8")
             started = LEDGER.start_lifecycle("code", project, "Result is ready", project, selected_pair="gpt-5.6-sol|ultra", producer_receipt=receipt, store=root / "store")
             state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
@@ -844,8 +856,8 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(disclosure["model_evidence"], "runtime_receipt")
         self.assertEqual(disclosure["requested_pair"], "gpt-5.6-sol|ultra")
         self.assertEqual(disclosure["resolved_pair"], "gpt-5.6-sol|ultra")
-        self.assertEqual(disclosure["effective_pair"], "gpt-5.3-codex-spark|medium")
-        self.assertEqual(disclosure["current_pair"], "gpt-5.3-codex-spark|medium")
+        self.assertEqual(disclosure["effective_pair"], "gpt-5.3-codex-spark|high")
+        self.assertEqual(disclosure["current_pair"], "gpt-5.3-codex-spark|high")
         self.assertEqual(disclosure["previous_pair"], "gpt-5.6-sol|ultra")
         self.assertEqual(disclosure["route_change"], "operational_fallback")
         self.assertEqual(disclosure["reason"], "Runtime receipt conflicts with resolved pair.")
@@ -940,6 +952,30 @@ class EndingTaskLedgerTests(unittest.TestCase):
             project, receipt = self.producer_receipt(root, task_summary="unsafe\nsummary", raw_prompt="secret")
             with self.assertRaisesRegex(ValueError, "exact sanitized"):
                 LEDGER.start_lifecycle("code", project, "Result is ready", project, producer_receipt=receipt, store=root / "store")
+
+    def test_bound_receipt_rejects_context_that_downstream_model_memory_cannot_record(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root, step_kind="global-skill-release")
+            store = root / "store"
+            with self.assertRaisesRegex(ValueError, "step_kind must be one of"):
+                LEDGER.start_lifecycle("code", project, "Result is ready", project, producer_receipt=receipt, store=store)
+            self.assertFalse((store / "lifecycles").exists())
+
+    def test_legacy_invalid_receipt_can_fail_terminally_without_false_model_learning(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project, receipt = self.producer_receipt(root, step_kind="global-skill-release")
+            store = root / "store"
+            with patch.object(LEDGER, "_validate_bound_model_learning_context"):
+                started = LEDGER.start_lifecycle("code", project, "Result is ready", project, producer_receipt=receipt, store=store)
+            failed = LEDGER.record_event(started["lifecycle_id"], "fail", "Producer receipt contract is invalid", ["The receipt cannot reach terminal model-memory recording."], "invalid-producer-receipt-context", store, "receipt")
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        self.assertFalse(failed["final_gate_passed"])
+        self.assertEqual(failed["lifecycle_status"], "failed")
+        self.assertEqual(failed["model_learning"]["status"], "unavailable")
+        self.assertEqual(failed["model_learning"]["reason"], "invalid_bound_producer_receipt_contract")
+        self.assertEqual(state["producer_binding"]["status"], "unavailable")
 
 
 if __name__ == "__main__":

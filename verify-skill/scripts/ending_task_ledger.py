@@ -299,12 +299,65 @@ def _producer_binding(receipt_value, project_root=None):
         raise ValueError("producer model_learning_context.project_root must be an existing directory")
     if project_root and context_root != Path(project_root).expanduser().resolve():
         raise ValueError("producer receipt project_root does not match lifecycle project_root")
+    memory = _load_model_memory_module()
+    _validate_bound_model_learning_context(memory, receipt, sanitized)
     executed_pair = receipt.get("executed_pair") or receipt.get("effective_pair") or receipt.get("requested_pair")
     route_attempts = receipt.get("route_attempts")
     matched_route_attempt = next((attempt for attempt in route_attempts if isinstance(attempt, dict) and attempt.get("status") == "pass" and attempt.get("executed_pair") == executed_pair and attempt.get("model_match") is True and attempt.get("effort_match") is True), None) if isinstance(route_attempts, list) else None
     if receipt.get("status") != "pass" or receipt.get("result_published") is not True or receipt.get("turn_completed") is not True or receipt.get("model_match") is not True or receipt.get("effort_match") is not True or receipt.get("node_type") != "locked-route-node" or receipt.get("node_role") != "result-producer" or not isinstance(executed_pair, str) or not matched_route_attempt:
         raise ValueError("producer receipt must be a matched passing published producer receipt")
     return {"receipt_path": str(receipt_path), "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(), "model_learning_context": sanitized, "executed_pair": executed_pair, "requested_pair": _model_pair(receipt.get("requested_pair"), "producer receipt requested_pair") or executed_pair, "resolved_pair": _model_pair(receipt.get("resolved_pair"), "producer receipt resolved_pair") or _model_pair(receipt.get("requested_pair"), "producer receipt requested_pair") or executed_pair, "effective_pair": executed_pair, "status": "pending"}
+
+
+def _validate_bound_model_learning_context(memory, receipt, context):
+    try:
+        query = memory._query(
+            context["project_root"],
+            context["task_type"],
+            context["module"],
+            context["file"],
+            context["symbol"],
+            context["code_kind"],
+            context["operation"],
+            context["modality"],
+            context["complexity"],
+            context["complexity_score"],
+            context["risk"],
+            context["ambiguity"],
+            context["task_summary"],
+            context.get("step_kind", ""),
+            context.get("capability_tags"),
+        )
+        receipt_pair = memory._receipt_pair(receipt)
+        memory._receipt_entry(receipt)
+        shared, active_pairs = memory.load_shared_ladder()
+    except (OSError, RuntimeError, ValueError) as error:
+        raise ValueError(f"producer model_learning_context is incompatible with model memory: {error}") from error
+    priority = shared.get("priority_producer")
+    priority_pairs = {f"{priority['id']}|{effort}" for effort in priority["adaptive_efforts"]} if isinstance(priority, dict) and priority.get("enabled") is True else set()
+    if receipt_pair not in set(active_pairs) | priority_pairs:
+        raise ValueError("producer receipt pair is outside the shared active producer contract")
+    for field in ("task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity"):
+        if query[field] != context[field]:
+            raise ValueError(f"producer model_learning_context.{field} is not canonical")
+    if "step_kind" in context and query["step_kind"] != context["step_kind"]:
+        raise ValueError("producer model_learning_context.step_kind is not canonical")
+    if "capability_fingerprint" in context and query["capability_fingerprint"] != context["capability_fingerprint"]:
+        raise ValueError("producer model_learning_context.capability_fingerprint does not match its capability profile")
+
+
+def _invalid_bound_receipt_learning(binding):
+    pair = binding.get("effective_pair") or binding.get("executed_pair") or UNKNOWN_MODEL_PAIR
+    return {
+        "status": "unavailable",
+        "written": False,
+        "reason": "invalid_bound_producer_receipt_contract",
+        "pair": pair,
+        "next_pair": pair,
+        "next_pair_direction": "hold",
+        "switch_direction": "none",
+        "switch_reason": "Receipt contract failure is operational and does not change producer quality routing.",
+    }
 
 
 def _load_model_memory_module():
@@ -531,10 +584,18 @@ def _record_personal_memory_candidates(state, event_name, candidate_file):
 
 def _record_bound_model_result(binding, real_status, failure_class, outcome_reason="", verification_count=0, *, ending_attempt_number=1, prior_quality_failure_count=0, prior_operational_failure_count=0):
     receipt_path = Path(binding["receipt_path"])
-    if hashlib.sha256(receipt_path.read_bytes()).hexdigest() != binding["receipt_sha256"]:
+    receipt_bytes = receipt_path.read_bytes()
+    if hashlib.sha256(receipt_bytes).hexdigest() != binding["receipt_sha256"]:
         raise ValueError("bound producer receipt changed after lifecycle start")
+    receipt = json.loads(receipt_bytes.decode("utf-8"))
     context = binding["model_learning_context"]
     memory = _load_model_memory_module()
+    try:
+        _validate_bound_model_learning_context(memory, receipt, context)
+    except ValueError:
+        if real_status == "fail" and failure_class in {"receipt", "protocol"}:
+            return _invalid_bound_receipt_learning(binding)
+        raise
     return memory.record_model_result(context["project_root"], context["task_type"], context["module"], receipt_path, real_status, failure_class, file_value=context["file"], symbol=context["symbol"], code_kind=context["code_kind"], operation=context["operation"], modality=context["modality"], complexity=context["complexity"], complexity_score=context["complexity_score"], risk=context["risk"], ambiguity=context["ambiguity"], task_summary=context["task_summary"], step_kind=context.get("step_kind", ""), capability_tags=context.get("capability_tags"), entry_model=context.get("entry_model", ""), entry_effort=context.get("entry_effort", ""), bound_receipt=binding, outcome_reason=outcome_reason, verification_count=verification_count, ending_attempt_number=ending_attempt_number, prior_quality_failure_count=prior_quality_failure_count, prior_operational_failure_count=prior_operational_failure_count)
 
 
