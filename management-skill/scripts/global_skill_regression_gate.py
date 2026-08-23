@@ -24,6 +24,15 @@ EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "l
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
 CHECKOUT_NEUTRAL_TEXT_SUFFIXES = {".json", ".md", ".py", ".svg", ".yaml", ".yml"}
 REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"), ("muse-ai-plugin", "muse-ai-dev-skill"))
+MEMORY_EXECUTION_SCENARIO_IDS = {
+    "memory-record-correction",
+    "memory-projection-reconcile",
+    "skill-contract-defect",
+    "execution-drift",
+    "next-task-effective-recall",
+    "invalid-result-integrity",
+    "coverage-authority-integrity",
+}
 
 
 def utc_now() -> str:
@@ -164,7 +173,8 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
         raise RuntimeError("global AGENTS asset is missing its merge directive")
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
     temporary_cache_root = tempfile.TemporaryDirectory(prefix="codex-skill-candidates-") if os.name == "nt" and not configured_cache_root else None
-    cache_root = Path(configured_cache_root).expanduser() if configured_cache_root else Path(temporary_cache_root.name) if temporary_cache_root is not None else project_root / "Cache" / "remote-test" / "global-skill-regression"
+    default_cache_root = project_root / "Cache" / "tmp-global-skill-regression"
+    cache_root = Path(configured_cache_root).expanduser() if configured_cache_root else Path(temporary_cache_root.name) if temporary_cache_root is not None else default_cache_root
     cache_root.mkdir(parents=True, exist_ok=True)
     structural_agents_path = project_root / "AGENTS.md"
     structural_agents = structural_agents_path.read_text(encoding="utf-8") if structural_agents_path.is_file() else "# qin-codex-skills\n"
@@ -182,6 +192,11 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
     finally:
         if temporary_cache_root is not None:
             temporary_cache_root.cleanup()
+        elif not configured_cache_root:
+            try:
+                cache_root.rmdir()
+            except OSError:
+                pass
 
 
 def parse_test_count(output: str) -> int:
@@ -319,7 +334,7 @@ def attestation_result(check: dict[str, object], project_root: Path) -> dict[str
             errors.append("attestation evidence is missing")
         elif payload.get("evidence_sha256") != sha256_file(evidence_path):
             errors.append("attestation evidence digest is stale")
-        elif check_id == "memory-execution-consistency-attestation" and validate_memory_execution_consistency(evidence_payload) != (7, 7):
+        elif check_id == "memory-execution-consistency-attestation" and validate_memory_execution_consistency(evidence_payload) != (len(MEMORY_EXECUTION_SCENARIO_IDS), len(MEMORY_EXECUTION_SCENARIO_IDS)):
             errors.append("memory-execution consistency evidence is not a complete real pass")
     expected_files = list(map(str, check.get("watched_files", [])))
     watched = payload.get("watched_files", {}) if payload else {}
@@ -491,7 +506,6 @@ def validate_unity_trials(evidence: dict[str, object]) -> tuple[int, int]:
 
 
 def validate_memory_execution_consistency(evidence: dict[str, object]) -> tuple[int, int]:
-    required_ids = {"memory-record-correction", "memory-projection-reconcile", "skill-contract-defect", "execution-drift", "next-task-effective-recall", "invalid-result-integrity", "coverage-authority-integrity"}
     scenarios = evidence.get("scenarios", {})
     if not isinstance(scenarios, dict):
         return 0, 0
@@ -502,14 +516,17 @@ def validate_memory_execution_consistency(evidence: dict[str, object]) -> tuple[
     next_recall = scenarios.get("next-task-effective-recall", {})
     invalid_result_integrity = scenarios.get("invalid-result-integrity", {})
     coverage_authority_integrity = scenarios.get("coverage-authority-integrity", {})
-    all_scenarios_pass = set(scenarios) == required_ids and all(isinstance(scenario, dict) and scenario.get("status") == "pass" for scenario in scenarios.values())
+    all_scenarios_pass = set(scenarios) == MEMORY_EXECUTION_SCENARIO_IDS and all(isinstance(scenario, dict) and scenario.get("status") == "pass" for scenario in scenarios.values())
     record_correction_pass = record_correction.get("classification") == "memory_record_defect" and record_correction.get("correction_written") is True and record_correction.get("source_unchanged") is True
     projection_reconcile_pass = projection_reconcile.get("classification") == "memory_projection_defect" and projection_reconcile.get("reconciled") is True
     producer_defects_pass = skill_defect.get("classification") == "skill_contract_defect" and skill_defect.get("memory_write") is False and skill_defect.get("return_to_origin") is True and execution_drift.get("classification") == "execution_drift" and execution_drift.get("memory_write") is False and execution_drift.get("return_to_origin") is True
     next_recall_pass = next_recall.get("effective_only") is True and next_recall.get("superseded_hidden") is True
     invalid_result_pass = invalid_result_integrity.get("placeholder_rejected") is True and invalid_result_integrity.get("disposable_store_and_vault") is True and invalid_result_integrity.get("canonical_owner_readback") is True and invalid_result_integrity.get("exact_id_tombstone") is True and invalid_result_integrity.get("reconcile_blocked") is True
     coverage_authority_pass = coverage_authority_integrity.get("vault_parent_store_absent") is True and coverage_authority_integrity.get("canonical_store_used") is True and coverage_authority_integrity.get("two_model_stores_shared_authority") is True and coverage_authority_integrity.get("concurrent_projection_preserved") is True and coverage_authority_integrity.get("rogue_store_merge_verified") is True
-    passed = evidence.get("schema_version") == 1 and evidence.get("check_id") == "memory-execution-consistency-attestation" and evidence.get("status") == "pass" and all_scenarios_pass and record_correction_pass and projection_reconcile_pass and producer_defects_pass and next_recall_pass and invalid_result_pass and coverage_authority_pass
+    execution = evidence.get("execution", {})
+    execution_pass = isinstance(execution, dict) and isinstance(execution.get("current_platform"), str) and bool(execution["current_platform"]) and execution.get("host_boundary") == "portable-python" and execution.get("disposable_runtime_removed") is True
+    expected_count = len(MEMORY_EXECUTION_SCENARIO_IDS)
+    passed = evidence.get("schema_version") == 1 and evidence.get("check_id") == "memory-execution-consistency-attestation" and evidence.get("status") == "pass" and evidence.get("trial_count") == expected_count and evidence.get("passed_trials") == expected_count and execution_pass and all_scenarios_pass and record_correction_pass and projection_reconcile_pass and producer_defects_pass and next_recall_pass and invalid_result_pass and coverage_authority_pass
     return len(scenarios), len(scenarios) if passed else 0
 
 

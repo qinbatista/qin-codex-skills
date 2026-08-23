@@ -33,9 +33,6 @@ REQUIRED_POLICY_TEXT = (
     "`remote-<name>`",
     "`<YYYYMMDD>`",
     "`remote-test/`",
-    "ordinary task artifacts default",
-    "user explicitly asks to retain/save",
-    "project contract explicitly marks it as retained",
     "ordinary test scratch",
     "top-level `tests/`",
     "legacy top-level directory",
@@ -89,6 +86,13 @@ REQUIRED_DETAILED_REGISTRY_TEXT = (
     "replace the registry atomically",
     "CODEX_OBSIDIAN_VAULT",
 )
+REQUIRED_GLOBAL_POLICY_TEXT = (
+    "Cache:project support only in `<project-root>/Cache/`",
+    "one-task scratch/test/intermediate=>`tmp-*`",
+    "short reuse=>`<YYYYMMDD>`+reason/review",
+    "`remote-*`/`remote-test/`=>explicit retain only",
+    "formal reusable tests stay source",
+)
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
@@ -108,18 +112,38 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     def test_installable_entry_rule_has_the_project_cache_contract(self):
         policy_text = GLOBAL_ENTRY_RULE_PATH.read_text(encoding="utf-8")
         self.assertIn("Project Cache artifact policy", policy_text, str(GLOBAL_ENTRY_RULE_PATH))
-        for required_text in REQUIRED_POLICY_TEXT:
+        for required_text in REQUIRED_GLOBAL_POLICY_TEXT:
             self.assertIn(required_text, policy_text, f"{GLOBAL_ENTRY_RULE_PATH}: {required_text}")
 
     @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
     def test_installed_global_agents_has_the_same_contract(self):
         policy_text = GLOBAL_AGENTS_PATH.read_text(encoding="utf-8")
         self.assertIn("Project Cache artifact policy", policy_text, str(GLOBAL_AGENTS_PATH))
-        for required_text in REQUIRED_POLICY_TEXT:
+        for required_text in REQUIRED_GLOBAL_POLICY_TEXT:
             self.assertIn(required_text, policy_text, f"{GLOBAL_AGENTS_PATH}: {required_text}")
 
+    def test_task_resource_lifecycle_is_canonical_and_narrowly_scoped(self):
+        workflow_text = (SKILLS_ROOT / "workflow-skill" / "SKILL.md").read_text(encoding="utf-8")
+        verify_text = (SKILLS_ROOT / "verify-skill" / "SKILL.md").read_text(encoding="utf-8")
+        reference_text = (SKILLS_ROOT / "workflow-skill" / "references" / "task-resource-lifecycle.md").read_text(encoding="utf-8")
+        for required in (
+            "Task Resource Lifecycle (内存优化)",
+            "exclusive `Cache/tmp-<task>` root",
+            "retention reason plus a next review point",
+            "Reusable formal tests stay in source",
+            "No resource cleanup or reclamation operation may message",
+        ):
+            self.assertIn(required, reference_text)
+        self.assertIn("[Task Resource Lifecycle](references/task-resource-lifecycle.md)", workflow_text)
+        self.assertIn("[Task Resource Lifecycle](../workflow-skill/references/task-resource-lifecycle.md)", verify_text)
+        for text in (workflow_text, verify_text):
+            self.assertIn("remote-test/` is retained-only", text)
+            self.assertIn("reusable formal tests remain source tests", text)
+            self.assertNotIn("`remote-test/` is the reserved test bucket for small local tests", text)
+        self.assertNotIn("No lifecycle operation may message, interrupt", reference_text)
+
     def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):
-        task_root = SKILLS_ROOT / "management-skill" / "Cache" / "remote-test" / "cache-artifact-policy-smoke"
+        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-artifact-policy-smoke"
         project_root = task_root / "fixture-project"
         cache_root = project_root / "Cache"
         existing_category = cache_root / "remote-test"
@@ -139,7 +163,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     directory.rmdir()
 
     def test_management_sync_uses_the_configured_project_cache(self):
-        task_root = SKILLS_ROOT / "management-skill" / "Cache" / "remote-test" / "cache-artifact-policy-sync-smoke"
+        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-artifact-policy-sync-smoke"
         try:
             with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_root)}):
                 with SYNC.temporary_workspace("mirror-") as workspace:
@@ -162,7 +186,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_cache_root / "state" / "management-skill-sync.json")
 
     def test_important_cache_content_is_registered_in_project_agents(self):
-        task_root = SKILLS_ROOT / "management-skill" / "Cache" / "remote-test" / "cache-agents-registration-smoke"
+        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-agents-registration-smoke"
         project_root = task_root / "fixture-project"
         important_path = project_root / "Cache" / "remote-test" / "logic-regression" / "run_check.py"
         details_path = important_path.parent / "README.md"
@@ -190,7 +214,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     directory.rmdir()
 
     def test_absolute_path_registry_is_ai_only_and_project_code_does_not_depend_on_it(self):
-        task_root = SKILLS_ROOT / "management-skill" / "Cache" / "remote-test" / "cache-path-registry-smoke"
+        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-path-registry-smoke"
         project_root = task_root / "fixture-project"
         registry_path = project_root / "Cache" / "cache_path.json"
         external_target = task_root / "external" / "vault"

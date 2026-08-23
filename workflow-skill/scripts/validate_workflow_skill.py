@@ -164,6 +164,61 @@ REQUIRED_OBSIDIAN_RUNNER = ["project-memory-skill", "obsidian_model_memory.py", 
 REQUIRED_OBSIDIAN_MEMORY = ["DEFAULT_LADDER", "model-capability-ladder.json", "Model Switch.md", "task_type", "module", "file", "symbol", "code_kind", "modality", "attempt_pair", "active_fallback_pair", "operational_failure_pairs", "recommend_model", "record_model_result", "record_model_observation", "learning_eligible", "observation_id", "receipt_status", "turn_completed", "model_match", "effort_match"]
 REQUIRED_STRATEGY_PERFORMANCE = ["DEFAULT_MINIMUM_PAIRED_SAMPLES = 6", "DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0", "DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0", "MAXIMUM_PAIRED_TIME_REGRESSION_MS", "evaluate_paired_metric", "aggregate_totals_pass", "regression_bounds_pass", "strict_pareto_win", "delegated_adaptive", "inline_entry", "workload_prompt_sha256", "entry_pair", "config_cohort"]
 FORBIDDEN = ["observable entry model and effort belong only to Task Analyze and route coordination", "selected entry model and effort run Task Analyze and route coordination only", "Every route begins with independent `task-analyze-skill`", "Registry-owned code-domain executor selected in the locked task-analyze-skill plan", "Use this as the verification executor named by the locked `task-analyze-skill` plan", "Use this skill only when the locked `task-analyze-skill` plan", "internal Task Analyze", "not a sixth top-level skill", "Task Analyze itself uses `GPT-5.6-Sol`", "Task Analyze still runs on Sol", "correctness-affecting Real Verify stays before", "Real Verify always stays before Main Goal Done", "approved five", "five-folder boundary", "private ledger remains authoritative", "Learning is shared across projects", "generalized task-type conditions", "only ordered Luna, Terra, and Sol", "current 5.6 pair", "new 5.6 repair lifecycle", "auto-refreshed shared contract", "automatically refreshed shared contract", "passively refreshed shared contract", "priority-first producer", "try the optional priority producer first", "complete Global foreground path includes entry/controller plus child costs", "first_attempt_text_code_producer", "every visible, routable Codex model except the optional priority producer", "Obsidian selects from every current visible catalog model", "every visible supported non-priority catalog model from weakest to strongest"]
+REQUIRED_WORKFLOW += [
+    "[Task Resource Lifecycle](references/task-resource-lifecycle.md)",
+    "durable-result, last-consumer, handoff, reverse-order release",
+    "after the result is durably readable and presented",
+    "Ending writes check evidence and its terminal record before release",
+    "Resource cleanup never controls another Codex task, thread, session, or Ending",
+]
+REQUIRED_VERIFY += [
+    "[Task Resource Lifecycle](../workflow-skill/references/task-resource-lifecycle.md)",
+    "writes evidence and its terminal record first",
+    "exact Ending-owned or explicitly handed-off disposable resources",
+    "Resource cleanup never controls another Codex task, thread, session, or Ending",
+]
+REQUIRED_ENTRY += [
+    "Resources:load `workflow-skill/references/task-resource-lifecycle.md`",
+    "exact task-owned path/runtime/UI",
+    "durable+last-consumer readback=>LIFO release",
+    "delete `Cache/tmp-*` only",
+    "retain/defer preexisting/shared/conflicted/Unity/date/remote",
+    "cleanup never controls Codex tasks/threads/sessions/Endings",
+    "short reuse=>`<YYYYMMDD>`+reason/review",
+    "`remote-*`/`remote-test/`=>explicit retain only",
+    "formal reusable tests stay source",
+]
+REQUIRED_RESOURCE_LIFECYCLE = [
+    "Task Resource Lifecycle (内存优化)",
+    "exclusive `Cache/tmp-<task>` root",
+    "retention reason plus a next review point",
+    "explicit consumer map",
+    "reverse acquisition order",
+    "Ending releases only exact resources it created or received by explicit handoff",
+    "`deferred_conflict` is revalidatable",
+    "same owner tool or typed adapter",
+    "No resource cleanup or reclamation operation may message",
+    "never a background janitor",
+]
+REQUIRED_RESOURCE_LEDGER = [
+    "SCHEMA_VERSION = 2",
+    "def new_ledger(",
+    "def acquire_path(",
+    "def seal_path(",
+    "def cleanup_path(",
+    "def acquire_runtime(",
+    "def confirm_runtime_release(",
+    "def record_evidence_persisted(",
+    "def handoff(",
+    "def defer_conflict(",
+    "def resolve_conflict(",
+    "owner_tool_graceful",
+    "os.O_CREAT | os.O_EXCL",
+    "os.replace",
+    "os.rename",
+    "FORBIDDEN_RUNTIME_KINDS",
+]
+FORBIDDEN += ["No lifecycle operation may message, interrupt"]
 NEGATIVE_DESCRIPTION_PREFIXES = {"code": "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction", "verify": "Use only for explicitly requested verification as the task itself, or for post-result Ending Task Real Verify", "optimization": "Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "management": "Do not use for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms"}
 NEGATIVE_AGENT_PREFIXES = {"code_agent": "$code-skill: exact artifact-free read-only work stays outside", "verify_agent": "$verify-skill: Ending only when released result has real_test, information_update, or memory_update", "optimization_agent": "$optimization-skill: do not load from benchmark repetition alone or exact-scoped read-only work", "management_agent": "$management-skill: do not load for ordinary exact-scoped read-only work or benchmark workers"}
 
@@ -386,6 +441,8 @@ def validate(skill_dir):
         "agent": skill_dir / "agents" / "openai.yaml",
         "template": skill_dir / "references" / "start-diagram-template.md",
         "matrix": skill_dir / "references" / "routing-matrix.md",
+        "resource_lifecycle": skill_dir / "references" / "task-resource-lifecycle.md",
+        "resource_ledger": skill_dir / "scripts" / "task_resource_ledger.py",
         "code": global_root / "code-skill" / "SKILL.md",
         "code_agent": global_root / "code-skill" / "agents" / "openai.yaml",
         "verify": global_root / "verify-skill" / "SKILL.md",
@@ -428,8 +485,13 @@ def validate(skill_dir):
         expected_prefix = NEGATIVE_DESCRIPTION_PREFIXES[label]
         if not executor_metadata.get("description", "").lower().startswith(expected_prefix.lower()):
             failures.append(f"{expected_name} description must begin with the exact-scoped read-only negative preselection boundary: {expected_prefix}")
-    failures.extend(missing_terms("workflow agent", texts["agent"], ["matching Obsidian context", "lowest-correct pair", "LOCKED_ROUTE_NODE loads required Skills", "one smallest Quick Check", "publishes CODE READY", "broad tests/builds/UI/full lint/log cleanup/repeated review move to Ending", "Ending only when result has real_test, information_update, or memory_update", "intentionally_skipped_simple_task", "immutable origin", "project only as execution context", "one global-only projectless End", "codex_app__list_threads", "projectId=null/absent", "returns without polling", "gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "without edits/repair/lifecycle", "All PASS", "codex_app__send_message_to_thread", "origin repairs", "fresh Spark-first verification", "max 3"]))
+    failures.extend(missing_terms("workflow agent", texts["agent"], ["matching Obsidian context", "lowest-correct pair", "LOCKED_ROUTE_NODE loads required Skills+task-resource-lifecycle", "Quick Check→CODE READY", "broad tests/builds/UI/full lint/log cleanup/repeated review move to Ending", "Ending only when result has real_test, information_update, or memory_update", "intentionally_skipped_simple_task", "immutable origin", "project only as execution context", "one global-only projectless End", "codex_app__list_threads", "projectId=null/absent", "returns without polling", "gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "without edits/repair/lifecycle", "All PASS", "codex_app__send_message_to_thread", "origin repairs", "fresh Spark-first verification", "max 3"]))
     failures.extend(missing_terms("workflow", texts["workflow"], REQUIRED_WORKFLOW))
+    failures.extend(missing_terms("task resource lifecycle", texts["resource_lifecycle"], REQUIRED_RESOURCE_LIFECYCLE))
+    failures.extend(missing_terms("task resource ledger", texts["resource_ledger"], REQUIRED_RESOURCE_LEDGER))
+    for forbidden in ("subprocess", "os.kill(", "send_message_to_thread", "interrupt_agent", "set_thread_archived", "terminate_task"):
+        if forbidden in texts["resource_ledger"]:
+            failures.append(f"task resource ledger contains forbidden cleanup control primitive: {forbidden}")
     failures.extend(missing_terms("template", texts["template"], REQUIRED_TEMPLATE))
     failures.extend(missing_terms("matrix", texts["matrix"], REQUIRED_MATRIX))
     failures.extend(missing_terms("code-skill", texts["code"], REQUIRED_CODE))
@@ -445,7 +507,7 @@ def validate(skill_dir):
         if not prompt_text.lower().startswith(expected_prefix.lower()):
             failures.append(f"{label} default_prompt must begin with the exact-scoped read-only negative preselection boundary: {expected_prefix}")
     failures.extend(missing_terms("code-skill agent", texts["code_agent"], ["exact artifact-free read-only work stays outside", "references/code-writing-philosophy.md", "relevant language/platform/domain Skills", "Unity game C#", "Controller/Manager/ScriptableObject core", "exactly one smallest local Quick Check", "publish CODE READY", "broad tests/builds/UI/full lint/log cleanup/repeated review move to Ending", "Code normally exposes real_test through Quick Check and emits ending-required", "ending_verification_plan.py", "one visible global-only projectless End Task", "list_threads", "projectId=null/absent", "gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "never edit/repair/route/lifecycle", "All checks PASS", "codex_app__send_message_to_thread", "immutable origin", "fresh Spark-first Ending", "Never self-verify"]));
-    failures.extend(missing_terms("verify-skill agent", texts["verify_agent"], ["Ending only when released result has real_test, information_update, or memory_update", "ending_skip_reason=no_real_test_or_information_or_memory_update", "CODE READY", "one global-only projectless Ending", "ending_verification_plan.py", "codex_app__list_threads", "projectId=null/absent", "without polling", "gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "never edit/repair/route/lifecycle", "Capture immutable origin", "all checks PASS", "codex_app__send_message_to_thread", "origin repairs", "fresh Spark-first Ending", "up to three", "Never self-repair"]));
+    failures.extend(missing_terms("verify-skill agent", texts["verify_agent"], ["Ending only when released result has real_test, information_update, or memory_update", "ending_skip_reason=no_real_test_or_information_or_memory_update", "CODE READY", "one global-only projectless Ending", "ending_verification_plan.py", "codex_app__list_threads", "projectId=null/absent", "without polling", "gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low", "ENDING_CHECK_WORKER", "read listed Skills", "never edit/repair/route/lifecycle", "Capture immutable origin", "all checks PASS", "codex_app__send_message_to_thread", "origin repairs", "fresh Spark-first Ending", "up to three", "Never self-repair", "Load task-resource-lifecycle", "evidence first", "LIFO-release exact owned/handoff resources", "cleanup never controls Codex tasks/threads/sessions/Endings"]));
     failures.extend(missing_terms("optimization-skill agent", texts["optimization_agent"], ["do not load from benchmark repetition alone", "requested optimization", "authorized reusable improvement", "admitted node", "Preserve behavior", "one smallest Quick Check", "present CODE READY", "Code optimization normally exposes real_test through Quick Check", "ending_skip_reason=no_real_test_or_information_or_memory_update", "one visible global-only projectless Ending", "list_threads", "projectId=null/absent", "gpt-5.3-codex-spark|xhigh", "Luna-low", "ENDING_CHECK_WORKER", "never edit or own lifecycle", "A different worker verifies", "Ending time stays separate", "Never self-certify savings"]));
     failures.extend(missing_terms("management-skill agent", texts["management_agent"], ["do not load for ordinary exact-scoped read-only work or benchmark workers", "explicit request/admitted node", "Native Obsidian links plus local receipts", "Producers score 0-100", "small edits pass session gate before Spark", "quality evidence moves producer routes", "Management Ending requires real_test, information_update, or memory_update", "no-surface result records intentionally_skipped_simple_task", "global-only projectless Ending", "list_threads", "projectId=null/absent", "gpt-5.3-codex-spark|xhigh", "Luna-low", "ENDING_CHECK_WORKER", "terminal memory/classification/record closeout", "Retained capabilities remain mandatory", "Local install/update writes a recoverable provisional copy first", "Codex runs installed/source/platform checks,repairs and reinstalls without user gate work", "PASS alone completes", "GitHub push requires pre-mutation PASS", "source/deployed/remote separate", "never publish private state"]));
     failures.extend(missing_terms("task-analyze-entry-rule", texts["task_analyze_entry_rule"], REQUIRED_ENTRY))

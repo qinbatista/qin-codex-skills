@@ -132,6 +132,11 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             if skill_name in {"workflow-skill", "code-skill", "optimization-skill", "management-skill"}:
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "SKILL.md").write_text((source.parent / skill_name / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
+                if skill_name == "workflow-skill":
+                    for relative in ("references/task-resource-lifecycle.md", "scripts/task_resource_ledger.py"):
+                        destination = skill_dir / relative
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        destination.write_text((source.parent / skill_name / relative).read_text(encoding="utf-8"), encoding="utf-8")
             elif skill_name == "prompt-skill":
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "agents").mkdir()

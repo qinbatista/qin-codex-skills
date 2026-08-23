@@ -20,6 +20,13 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             "schema_version": 1,
             "check_id": "memory-execution-consistency-attestation",
             "status": "pass",
+            "trial_count": 7,
+            "passed_trials": 7,
+            "execution": {
+                "current_platform": "test",
+                "host_boundary": "portable-python",
+                "disposable_runtime_removed": True,
+            },
             "scenarios": {
                 "memory-record-correction": {"status": "pass", "classification": "memory_record_defect", "correction_written": True, "source_unchanged": True},
                 "memory-projection-reconcile": {"status": "pass", "classification": "memory_projection_defect", "reconciled": True},
@@ -36,7 +43,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         capability_ids = [item["id"] for item in catalog["capabilities"]]
         check_ids = {item["id"] for item in catalog["checks"]}
         referenced = {check_id for item in catalog["capabilities"] for check_id in item["checks"]}
-        self.assertEqual(len(capability_ids), 35)
+        self.assertEqual(len(capability_ids), 36)
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
         projectless_ending = next(item for item in catalog["capabilities"] if item["id"] == "GSR-014")
@@ -102,6 +109,14 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertIn("Windows/macOS/Linux", install_first["function"])
         self.assertIn("不把门禁、命令或重试交给用户", install_first["function"])
         self.assertIn("Installation complete", install_first["function"])
+        resource_lifecycle = next(item for item in catalog["capabilities"] if item["id"] == "GSR-036")
+        self.assertEqual(resource_lifecycle["owner_skill"], "workflow-skill")
+        self.assertEqual(resource_lifecycle["checks"], ["workflow-units", "workflow-validator", "platform-check", "cache-layout-units"])
+        for required in ("自身创建的精确", "最后 consumer", "反向依赖顺序", "deferred", "Ending 先保存证据", "不得消息、打断、终止、归档、删除或控制其他 task、thread、session 或 Ending"):
+            self.assertIn(required, resource_lifecycle["function"])
+        workflow_units = next(item for item in catalog["checks"] if item["id"] == "workflow-units")
+        self.assertEqual(workflow_units["targets"], ["source", "deployed"])
+        self.assertEqual(workflow_units["command"], ["{python}", "-m", "unittest", "discover", "-s", "workflow-skill/tests", "-p", "test_*.py"])
         self.assertIn("禁止编辑、修复、路由或创建生命周期", check_workers["function"])
         retired = {item["id"]: item["replacement"] for item in catalog["retired_architectures"]}
         self.assertEqual(retired["RET-011"], "GSR-026")
@@ -227,6 +242,15 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         evidence["scenarios"]["invalid-result-integrity"]["reconcile_blocked"] = True
         evidence["scenarios"]["coverage-authority-integrity"]["concurrent_projection_preserved"] = False
         self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 0))
+        evidence = self._memory_consistency_evidence()
+        evidence["trial_count"] = 6
+        self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 0))
+        evidence = self._memory_consistency_evidence()
+        evidence["passed_trials"] = 6
+        self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 0))
+        evidence = self._memory_consistency_evidence()
+        evidence["execution"]["disposable_runtime_removed"] = False
+        self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 0))
 
     def test_bound_attestation_rejects_changed_real_evidence(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -278,6 +302,12 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                     candidate_cache = root.parent / "plugins" / "cache"
                     self.assertTrue(any(candidate_cache.glob("*/*/*/skills/control-chrome/SKILL.md")))
                     self.assertTrue(any(candidate_cache.glob("*/*/*/skills/sites-building/SKILL.md")))
+                    for relative in (
+                        "workflow-skill/references/task-resource-lifecycle.md",
+                        "workflow-skill/scripts/task_resource_ledger.py",
+                        "workflow-skill/tests/test_task_resource_ledger.py",
+                    ):
+                        self.assertTrue((root / relative).is_file(), relative)
 
     def test_candidate_layout_uses_ephemeral_contract_fixtures_without_plugin_cache(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)
