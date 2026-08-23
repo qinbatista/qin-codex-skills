@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -10,6 +11,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -46,6 +48,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     mode.add_argument("--bootstrap-task", action="store_true")
     parser.add_argument("--benchmark-run-id")
     parser.add_argument("--benchmark-prompt-path")
+    parser.add_argument("--benchmark-task-sandbox")
     args = parser.parse_args()
     prompt_text = sys.stdin.read().replace("\\r\\n", "\\n").replace("\\r", "\\n")
     state_db = args.state_db or Path(os.environ["CODEX_SQLITE_HOME"]) / "state_6.sqlite"
@@ -120,20 +123,20 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
     workload_prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
     execution_prompt = prompt_text if args.direct_task else auto_execution_prompt(prompt_text)
     execution_prompt_sha256 = hashlib.sha256(execution_prompt.encode("utf-8")).hexdigest()
-    receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": args.benchmark_run_id, "benchmark_result_source": "controller_final", "workload_id": args.workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": args.model, "requested_effort": args.effort, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": execution_prompt_sha256}
+    receipt = {"schema_version": 1, "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "tokens_lower_bound": False, "model_match": True, "effort_match": True, "pair_match": True, "authorization_status": "authorized", "authorization_source": authorization_source, "entry_context_active": False, "benchmark_run_id": args.benchmark_run_id, "benchmark_result_source": "controller_final", "workload_id": args.workload_id, "node_type": node_type, "thread_id": thread_id, "requested_pair": pair, "effective_pair": pair, "requested_model": args.model, "requested_effort": args.effort, "resolved_model": args.model, "resolved_effort": args.effort, "effective_model": args.model, "node_role": role, "route_attempts": [{"status": "pass", "executed_pair": pair}], "reroutes": [], "tokens": {"total_tokens": total_tokens}, "process_elapsed_ms": 2, "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(), "result_published": True, "result_ready_monotonic_ns": result_ready_monotonic_ns, "duplicate_result_detected": False, "workload_prompt_sha256": workload_prompt_sha256, "prompt_sha256": execution_prompt_sha256}
     if args.bootstrap_task:
         receipt["benchmark_prompt_file_verified"] = True
         receipt["benchmark_auto_launch_verified"] = True
         receipt["benchmark_auto_workspace_count"] = 1
         receipt["benchmark_auto_bridge_result_verified"] = True
         tier = args.workload_id.split("-r", 1)[0]
-        selected_pairs = {"simple": "gpt-5.3-codex-spark|low", "medium": "gpt-5.6-terra|medium", "complex": "gpt-5.6-luna|max"}
+        selected_pairs = {"simple": "gpt-5.3-codex-spark|low", "medium": "gpt-5.6-terra|medium", "complex": "gpt-5.6-luna|max", "advanced": "gpt-5.6-sol|high"}
         selected_pair = selected_pairs[tier]
-        route_signature = {"selected_pair": selected_pair, "effective_pair": selected_pair, "scheduled_graph": False, "assigned_pairs": [selected_pair], "trial": False, "recommendation_state": "frozen", "selection_provenance": "dual_model_history", "capability_assignment": [{"node_id": tier, "effective_pair": selected_pair}]}
+        route_signature = {"selected_pair": selected_pair, "effective_pair": selected_pair, "scheduled_graph": False, "assigned_pairs": [selected_pair], "trial": False, "recommendation_state": "frozen", "selection_provenance": "dual_model_history", "context_mode": "full", "capability_assignment": [{"node_id": tier, "effective_pair": selected_pair}]}
         receipt["benchmark_selected_execution"] = {"schema_version": 2, "receipt_sha256": hashlib.sha256(adaptive_thread_id.encode("utf-8")).hexdigest(), "selected_pair": selected_pair, "effective_pair": selected_pair, "steady_state_logical_tokens": adaptive_tokens, "steady_state_execution_elapsed_ms": 1, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": route_signature}
     args.output.write_text(json.dumps(receipt) + "\\n", encoding="utf-8")
     suite_root = args.output.parents[2]
-    call_record = {"run_id": args.workload_id, "direct": args.direct_task, "entry": False, "bootstrap": args.bootstrap_task, "entry_env_present": "CODEX_TASK_ANALYZE_ENTRY_CONTEXT" in os.environ, "benchmark_run_id": args.benchmark_run_id, "model": args.model, "effort": args.effort, "workdir": args.workdir, "state_db": str(state_db), "codex_home": os.environ.get("CODEX_HOME"), "sandbox": args.sandbox, "prompt_sha256": workload_prompt_sha256, "plan_exists": (suite_root / "suite-plan.json").is_file()}
+    call_record = {"run_id": args.workload_id, "direct": args.direct_task, "entry": False, "bootstrap": args.bootstrap_task, "entry_env_present": "CODEX_TASK_ANALYZE_ENTRY_CONTEXT" in os.environ, "benchmark_run_id": args.benchmark_run_id, "model": args.model, "effort": args.effort, "workdir": args.workdir, "state_db": str(state_db), "codex_home": os.environ.get("CODEX_HOME"), "sandbox": args.sandbox, "benchmark_task_sandbox": args.benchmark_task_sandbox, "prompt_sha256": workload_prompt_sha256, "plan_exists": (suite_root / "suite-plan.json").is_file()}
     with (suite_root / "call-order.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(call_record) + "\\n")
 """).strip() + "\n"
@@ -170,7 +173,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         simple_expected = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.6-terra", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-5.6-terra\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
         medium_expected = {"class": "UniversalPOMHelper", "method": "build_pom", "prompt_keys_read": ["user_text"], "mutates_prompt_json": ["size_structure"], "always_return_keys": ["Measurement", "sample_size"], "optional_return_keys": ["universal_debug"], "calls_user_pom_helper": False, "source": "core/script/module/universal_POM_helper.py"}
         complex_expected = {"entry": "UniversalPOMHelper.build_pom", "early_exit_conditions": ["not measurement_names"], "stages": [], "final_merge_fields": ["id"], "always_return_keys": ["Measurement", "sample_size"], "optional_return_keys": ["universal_debug"], "source_files": ["core/script/module/universal_POM_helper.py"]}
-        expected_documents = {"simple": simple_expected, "medium": medium_expected, "complex": complex_expected}
+        advanced_expected = {**complex_expected, "entry": "UniversalPOMHelper.build_advanced_pom"}
+        expected_documents = {"simple": simple_expected, "medium": medium_expected, "complex": complex_expected, "advanced": advanced_expected}
         for tier in module.TIERS:
             expected_document = expected_documents[tier]
             payload = json.dumps(expected_document, separators=(",", ":")) + "\n"
@@ -370,6 +374,28 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(diagnostics["last_sqlite_error_name"], "SQLITE_BUSY_OR_LOCKED")
         self.assertEqual(diagnostics["status"], "complete")
 
+    def test_pre_run_census_retries_missing_resolver_when_rollouts_prove_database_should_exist(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime_home = Path(temporary) / "codex-home"
+            sqlite_home = runtime_home / "runtime-sqlite"
+            sessions_root = runtime_home / "sessions"
+            sqlite_home.mkdir(parents=True)
+            sessions_root.mkdir()
+            (sessions_root / "rollout-existing.jsonl").write_text('{"type":"session_meta","payload":{"id":"existing-thread"}}\n', encoding="utf-8")
+            state_db_path = sqlite_home / "state_5.sqlite"
+            connection = sqlite3.connect(state_db_path)
+            connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
+            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("existing-thread", str(sessions_root / "rollout-existing.jsonl"), "exec", "gpt-5.6-sol", "ultra", 10))
+            connection.commit()
+            connection.close()
+            diagnostics = {}
+            with mock.patch.object(module, "resolve_codex_sqlite_db", side_effect=[None, state_db_path]), mock.patch.object(module.time, "sleep") as sleep:
+                snapshot = module.read_runtime_thread_snapshot(sqlite_home, timeout_seconds=1, diagnostics=diagnostics)
+        self.assertTrue(snapshot["complete"])
+        self.assertEqual(set(snapshot["threads"]), {"existing-thread"})
+        self.assertTrue(diagnostics["runtime_database_expected"])
+        sleep.assert_called_once_with(module.RUNTIME_CENSUS_RETRY_INTERVAL_SECONDS)
+
     def test_post_run_census_uses_immutable_main_db_when_wal_is_empty_and_normal_reads_all_fail(self):
         with tempfile.TemporaryDirectory() as temporary:
             state_db_path = Path(temporary) / "state_5.sqlite"
@@ -424,6 +450,57 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertGreater(diagnostics["normal_sqlite_error_count"], 0)
         self.assertEqual(diagnostics["immutable_attempt_count"], 0)
 
+    def test_final_census_recovers_from_exact_foreground_and_completed_rollout_set(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rollout_path = Path(temporary) / "rollout-root-thread.jsonl"
+            events = [{"type": "session_meta", "payload": {"id": "root-thread"}}, {"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "ultra"}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": 72075}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
+            rollout_path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+            before = {"complete": True, "threads": {}}
+            foreground = {"complete": True, "threads": {"root-thread": {"thread_id": "root-thread", "rollout_path": str(rollout_path), "source": "exec", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 100}}}
+            before_rollouts = {"available": False, "complete": True, "thread_ids": set()}
+            after_rollouts = {"available": True, "complete": True, "thread_ids": {"root-thread"}}
+            diagnostics = {"status": "incomplete"}
+            recovered = module.recover_final_snapshot_from_foreground(before, foreground, before_rollouts, after_rollouts, diagnostics)
+        self.assertTrue(recovered["complete"])
+        self.assertEqual(recovered["threads"]["root-thread"]["tokens_used"], 72075)
+        self.assertEqual(diagnostics["status"], "complete")
+        self.assertTrue(diagnostics["fallback_used"])
+        self.assertEqual(diagnostics["fallback_provenance"], "foreground_db_plus_complete_rollout")
+
+    def test_final_census_recovery_rejects_extra_rollout_session(self):
+        before = {"complete": True, "threads": {}}
+        foreground = {"complete": True, "threads": {"root-thread": {"thread_id": "root-thread", "rollout_path": "/unused", "source": "exec", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 100}}}
+        before_rollouts = {"available": False, "complete": True, "thread_ids": set()}
+        after_rollouts = {"available": True, "complete": True, "thread_ids": {"root-thread", "hidden-child"}}
+        self.assertIsNone(module.recover_final_snapshot_from_foreground(before, foreground, before_rollouts, after_rollouts))
+
+    def test_pre_run_census_recovers_from_exact_after_database_and_rollout_delta(self):
+        before = {"complete": False, "threads": {}}
+        after = {"complete": True, "threads": {"existing": {"thread_id": "existing"}, "current-root": {"thread_id": "current-root"}, "current-child": {"thread_id": "current-child"}}}
+        before_rollouts = {"available": True, "complete": True, "thread_ids": {"historical-rollout-only", "existing"}}
+        after_rollouts = {"available": True, "complete": True, "thread_ids": {"historical-rollout-only", "existing", "current-root", "current-child"}}
+        diagnostics = {"status": "incomplete"}
+        recovered = module.recover_before_snapshot_from_after_and_rollout_delta(before, after, before_rollouts, after_rollouts, diagnostics)
+        self.assertEqual(set(recovered["threads"]), {"existing"})
+        self.assertEqual(diagnostics["status"], "complete")
+        self.assertTrue(diagnostics["fallback_used"])
+        self.assertEqual(diagnostics["fallback_provenance"], "after_db_plus_complete_rollout_delta")
+
+    def test_pre_run_census_recovery_rejects_database_session_without_rollout(self):
+        before = {"complete": False, "threads": {}}
+        after = {"complete": True, "threads": {"existing": {"thread_id": "existing"}, "current": {"thread_id": "current"}, "hidden-db-session": {"thread_id": "hidden-db-session"}}}
+        before_rollouts = {"available": True, "complete": True, "thread_ids": {"existing"}}
+        after_rollouts = {"available": True, "complete": True, "thread_ids": {"existing", "current"}}
+        self.assertIsNone(module.recover_before_snapshot_from_after_and_rollout_delta(before, after, before_rollouts, after_rollouts))
+
+    def test_hidden_pre_and_post_database_recovers_from_foreground_database_and_rollout_delta(self):
+        before = {"complete": False, "threads": {}}
+        foreground = {"complete": True, "threads": {"existing": {"thread_id": "existing", "rollout_path": "/unused"}, "current": {"thread_id": "current", "rollout_path": "/unused"}}}
+        before_rollouts = {"available": True, "complete": True, "thread_ids": {"existing"}}
+        foreground_rollouts = {"available": True, "complete": True, "thread_ids": {"existing", "current"}}
+        recovered_before = module.recover_before_snapshot_from_after_and_rollout_delta(before, foreground, before_rollouts, foreground_rollouts)
+        self.assertEqual(set(recovered_before["threads"]), {"existing"})
+
     def test_fake_receipt_suite_freezes_plan_alternates_and_passes_strict_gate(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -436,7 +513,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]
             direct_manifest = json.loads((root / "manifests" / "simple-r01-direct.json").read_text(encoding="utf-8"))
             census_diagnostics = json.loads((root / "raw" / "simple-r01-direct" / "census-diagnostics.json").read_text(encoding="utf-8"))
-        self.assertEqual(result["run_count"], 12)
+        self.assertEqual(result["run_count"], 16)
         self.assertEqual(result["overall_status"], "pass")
         self.assertEqual(summary["overall_status"], "pass")
         for tier in module.TIERS:
@@ -446,19 +523,19 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             self.assertTrue(all(isinstance(paired_wins[metric], int) and 0 <= paired_wins[metric] <= 2 for metric in {"first_result_elapsed_ms", "total_wall_elapsed_ms"}))
         performance_calls = [call for call in calls if not call["run_id"].endswith("-sol-entry-probe")]
         probe_calls = [call for call in calls if call["run_id"].endswith("-sol-entry-probe")]
-        self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[:6]], [("simple-r01-direct", True), ("simple-r01-global", False), ("medium-r01-direct", True), ("medium-r01-global", False), ("complex-r01-direct", True), ("complex-r01-global", False)])
-        self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[6:]], [("simple-r02-global", False), ("simple-r02-direct", True), ("medium-r02-global", False), ("medium-r02-direct", True), ("complex-r02-global", False), ("complex-r02-direct", True)])
-        self.assertEqual([call["run_id"] for call in probe_calls], ["simple-r01-global-sol-entry-probe", "medium-r01-global-sol-entry-probe", "complex-r01-global-sol-entry-probe"])
+        self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[:8]], [("simple-r01-direct", True), ("simple-r01-global", False), ("medium-r01-direct", True), ("medium-r01-global", False), ("complex-r01-direct", True), ("complex-r01-global", False), ("advanced-r01-direct", True), ("advanced-r01-global", False)])
+        self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[8:]], [("simple-r02-global", False), ("simple-r02-direct", True), ("medium-r02-global", False), ("medium-r02-direct", True), ("complex-r02-global", False), ("complex-r02-direct", True), ("advanced-r02-global", False), ("advanced-r02-direct", True)])
+        self.assertEqual([call["run_id"] for call in probe_calls], ["simple-r01-global-sol-entry-probe", "medium-r01-global-sol-entry-probe", "complex-r01-global-sol-entry-probe", "advanced-r01-global-sol-entry-probe"])
         self.assertTrue(all(call["plan_exists"] for call in calls))
-        self.assertTrue(all((call["model"], call["effort"]) == (("gpt-5.6-sol", "ultra") if call["direct"] else ("gpt-5.6-luna", "max")) and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in performance_calls))
-        self.assertTrue(all((call["model"], call["effort"]) == ("gpt-5.6-sol", "ultra") and call["sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in probe_calls))
+        self.assertTrue(all((call["model"], call["effort"]) == (("gpt-5.6-sol", "ultra") if call["direct"] else ("gpt-5.6-luna", "max")) and call["sandbox"] == ("read-only" if call["direct"] else "danger-full-access") and call["benchmark_task_sandbox"] == (None if call["direct"] else "read-only") and call["workdir"] == str((root / "snapshot").resolve()) for call in performance_calls))
+        self.assertTrue(all((call["model"], call["effort"]) == ("gpt-5.6-sol", "ultra") and call["sandbox"] == "danger-full-access" and call["benchmark_task_sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in probe_calls))
         self.assertTrue(all(Path(call["state_db"]).is_absolute() and Path(call["state_db"]).parent == Path(call["codex_home"]) / "runtime-sqlite" for call in calls))
         self.assertTrue(all(call["benchmark_run_id"] == f"benchmark-{call['run_id']}" for call in calls))
         self.assertTrue(all(call["direct"] != call["bootstrap"] and call["entry"] is False and call["entry_env_present"] is False for call in calls))
         for tier in module.TIERS:
             tier_calls = [call for call in calls if call["run_id"].startswith(tier)]
             self.assertEqual(len({call["prompt_sha256"] for call in tier_calls}), 1)
-        self.assertEqual(len(plan["runs"]), 12)
+        self.assertEqual(len(plan["runs"]), 16)
         self.assertNotIn("unreceipted-pilot", json.dumps(plan))
         self.assertNotIn("unreceipted-pilot", json.dumps(summary))
         self.assertEqual(plan["runs"][0]["environment"]["config_path"], str((root / "direct-home" / "config.toml").resolve()))
@@ -467,7 +544,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(plan["runs"][1]["receipts"][0]["role"], "result-producer")
         self.assertEqual(plan["runs"][0]["selected_entry_pair"], "gpt-5.6-sol|ultra")
         self.assertEqual(plan["runs"][1]["selected_entry_pair"], "gpt-5.6-luna|max")
-        self.assertEqual(len([run for run in plan["runs"] if "dual_entry_probe" in run]), 3)
+        self.assertEqual(len([run for run in plan["runs"] if "dual_entry_probe" in run]), 4)
         self.assertTrue(all(run_summary.get("sol_entry_probe_status") == "pass" for run_summary in result["runs"] if run_summary["run_id"].endswith("r01-global")))
         self.assertEqual(plan["runs"][0]["environment"]["visible_catalog_sha256"], plan["runs"][1]["environment"]["visible_catalog_sha256"])
         self.assertEqual(plan["runs"][0]["environment"]["skills_catalog_file_count"], 2)
@@ -560,25 +637,26 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.write_suite_inputs(root)
-            args = self.arguments(root, tier_repeats="simple=4,medium=2,complex=2")
+            args = self.arguments(root, tier_repeats="simple=4,medium=2,complex=2,advanced=2")
             result = module.run_suite(args)
             plan = json.loads((root / "suite-plan.json").read_text(encoding="utf-8"))
             summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
             calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]
-        self.assertEqual(result["run_count"], 16)
+        self.assertEqual(result["run_count"], 20)
         self.assertNotIn("repeat_count", plan)
-        self.assertEqual(plan["tier_repeat_counts"], {"simple": 4, "medium": 2, "complex": 2})
+        self.assertEqual(plan["tier_repeat_counts"], {"simple": 4, "medium": 2, "complex": 2, "advanced": 2})
         self.assertEqual(summary["tier_repeat_counts"], plan["tier_repeat_counts"])
         performance_calls = [call for call in calls if not call["run_id"].endswith("-sol-entry-probe")]
         simple_directions = [call["direct"] for call in performance_calls if call["run_id"].startswith("simple")]
         self.assertEqual(simple_directions, [True, False, False, True, True, False, False, True])
         self.assertEqual(len([call for call in performance_calls if call["run_id"].startswith("medium")]), 4)
         self.assertEqual(len([call for call in performance_calls if call["run_id"].startswith("complex")]), 4)
-        self.assertEqual(len(calls) - len(performance_calls), 3)
+        self.assertEqual(len([call for call in performance_calls if call["run_id"].startswith("advanced")]), 4)
+        self.assertEqual(len(calls) - len(performance_calls), 4)
         self.assertEqual(summary["overall_status"], "pass")
 
     def test_invalid_per_tier_repeat_cli_fails_before_plan_or_launch(self):
-        cases = ["simple=3,medium=2,complex=2", "simple=4,medium=2", "simple=4,medium=2,unknown=2"]
+        cases = ["simple=3,medium=2,complex=2,advanced=2", "simple=4,medium=2,complex=2", "simple=4,medium=2,complex=2,advanced=2,unknown=2"]
         for tier_repeats in cases:
             with self.subTest(tier_repeats=tier_repeats), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -599,7 +677,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(module.BenchmarkRunnerError, "suite_outputs_already_exist"):
                 module.run_suite(args)
             self.assertEqual((root / "suite-plan.json").read_bytes(), first_plan)
-            self.assertEqual(len((root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()), 15)
+            self.assertEqual(len((root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()), 20)
 
     def test_quota_response_parser_keeps_only_bounded_scheduling_fields(self):
         response = {
@@ -621,6 +699,43 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(status["secondary"]["used_percent"], 40.0)
         self.assertNotIn("credits", status)
         self.assertNotIn("private-credit-id", json.dumps(status))
+
+    def test_quota_reader_completes_initialize_handshake_before_rate_limit_read(self):
+        self.quota_reader_patcher.stop()
+        initialize = {"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "codex", "version": "test"}}}
+        quota = {"jsonrpc": "2.0", "id": module.QUOTA_RESPONSE_ID, "result": {"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 12, "windowDurationMins": 300, "resetsAt": 2000000000}, "secondary": None, "rateLimitReachedType": None}}}
+
+        class InputSink(io.BytesIO):
+            def close(self):
+                return None
+
+        class FakeProcess:
+            def __init__(self):
+                self.stdin = InputSink()
+                self.stdout = io.BytesIO((json.dumps(initialize) + "\n" + json.dumps(quota) + "\n").encode("utf-8"))
+                self.returncode = None
+
+            def poll(self):
+                return self.returncode
+
+            def terminate(self):
+                self.returncode = -15
+
+            def kill(self):
+                self.returncode = -9
+
+            def wait(self, timeout=None):
+                return self.returncode
+
+        fake_process = FakeProcess()
+        args = SimpleNamespace(codex_bin="codex", suite_root=Path("/suite"), quota_app_server_timeout=2)
+        with mock.patch.object(module.subprocess, "Popen", return_value=fake_process):
+            status = module.read_quota_status(args, Path("/codex-home"))
+        messages = [json.loads(line) for line in fake_process.stdin.getvalue().splitlines()]
+        self.assertEqual([message["method"] for message in messages], ["initialize", "initialized", "account/rateLimits/read"])
+        self.assertNotIn("params", messages[1])
+        self.assertIsNone(messages[2]["params"])
+        self.assertEqual(status["primary"]["used_percent"], 12.0)
 
     def test_quota_response_accepts_explicit_null_secondary_without_fabricating_usage(self):
         response = {"id": module.QUOTA_RESPONSE_ID, "result": {"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 23, "windowDurationMins": 10080, "resetsAt": 2100000000}, "secondary": None, "rateLimitReachedType": None}}}
@@ -681,9 +796,9 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             self.quota_reader.return_value = available
             result = module.run_suite(args)
             all_calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]
-            self.assertEqual(len(all_calls), 15)
-            self.assertEqual(len({call["run_id"] for call in all_calls}), 15)
-            self.assertEqual(result["run_count"], 12)
+            self.assertEqual(len(all_calls), 20)
+            self.assertEqual(len({call["run_id"] for call in all_calls}), 20)
+            self.assertEqual(result["run_count"], 16)
             self.assertEqual(result["overall_status"], "pass")
             self.assertTrue(all(summary.get("resumed_existing") is True for summary in result["runs"][:2]))
 
@@ -773,8 +888,9 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             self.write_suite_inputs(root)
             args = self.arguments(root)
             before_rollouts = {"available": False, "complete": True, "thread_ids": set()}
+            foreground_rollouts = {"available": True, "complete": True, "thread_ids": {"fake-simple-r01-direct"}}
             after_rollouts = {"available": True, "complete": True, "thread_ids": {"fake-simple-r01-direct", "hidden-child"}}
-            with mock.patch.object(module, "read_runtime_rollout_snapshot", side_effect=[before_rollouts, after_rollouts]):
+            with mock.patch.object(module, "read_runtime_rollout_snapshot", side_effect=[before_rollouts, foreground_rollouts, after_rollouts]):
                 with self.assertRaisesRegex(module.BenchmarkRunnerError, "cohort_contaminated_gate_evidence_foreground_unknown_session"):
                     module.run_suite(args)
             calls = [json.loads(line) for line in (root / "call-order.jsonl").read_text(encoding="utf-8").splitlines()]

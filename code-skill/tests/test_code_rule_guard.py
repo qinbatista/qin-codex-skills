@@ -47,6 +47,14 @@ class CodeRuleGuardTests(unittest.TestCase):
         source = "\n".join(["_ = SaveDataAsync();", "var controller = new PlayerController();", "void SaveData() { SaveData(); }", "public bool SaveData(Data value) => _provider.SaveData(value);", "SaveData(", "    value);", "Widget widget = new Widget(", "    first,", "    second);"])
         self.assertTrue({"discard-assignment", "obvious-var", "self-recursion", "pass-through-wrapper", "avoidable-vertical-call"}.issubset(self.codes(source, ".cs")))
 
+    def test_unity_csharp_rejects_multiline_self_recursion_and_pass_through_wrapper(self):
+        source = "\n".join(["void SaveData()", "{", "    SaveData();", "}", "", "public bool PersistData(Data value)", "{", "    return _provider.PersistData(value);", "}"])
+        self.assertTrue({"self-recursion", "pass-through-wrapper"}.issubset(self.codes(source, ".cs")))
+
+    def test_duplicate_discard_bindings_on_one_line_emit_one_actionable_violation(self):
+        violations = module.check_text("first, _, _, second = values\n", ".py")
+        self.assertEqual([(item["code"], item["line"]) for item in violations], [("discard-binding", 1)])
+
     def test_unity_csharp_allows_direct_call_explicit_type_and_marked_facade(self):
         source = "\n".join(["await SaveDataAsync();", "PlayerController controller = new PlayerController();", "// code-gate: semantic-boundary=public validation", "public bool SaveData(Data value) => _provider.SaveData(value);"])
         self.assertEqual(self.codes(source, ".cs"), set())

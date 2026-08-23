@@ -11,12 +11,12 @@ from pathlib import Path, PureWindowsPath
 from tempfile import mkstemp
 
 
-TASK_LABELS = {"simple": "simple constant lookup", "medium": "medium one-method audit", "complex": "complex multi-file workflow graph"}
+TASK_LABELS = {"simple": "small exact source lookup", "medium": "standard one-method audit", "complex": "complex multi-file workflow graph", "advanced": "advanced cross-source workflow synthesis"}
 MINIMUM_PUBLIC_PAIR_COUNT = 2
-PUBLIC_SCHEMA_VERSION = 8
+PUBLIC_SCHEMA_VERSION = 9
 FORBIDDEN_PUBLIC_KEYS = frozenset({"prompt", "raw_prompt", "result", "raw_result", "thread_id", "thread_ids", "session_id", "session_ids", "receipt", "receipt_path", "receipt_paths", "receipt_session_ids", "codex_home", "config_path", "agents_path", "models_cache_path", "memories_root", "workdir", "source_root", "evidence_path", "skills_catalog_root", "plugins_catalog_root", "marketplace_catalog_sources"})
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-SUMMARY_KEYS = frozenset({"schema_version", "suite_id", "plan_sha256", "repeat_count", "tier_repeat_counts", "overall_status", "all_correct", "overall_rule", "time_rule", "token_rule", "cohort_metric_gates", "tiers"})
+SUMMARY_KEYS = frozenset({"schema_version", "suite_id", "plan_sha256", "repeat_count", "tier_repeat_counts", "overall_status", "all_correct", "all_optimized", "overall_rule", "time_rule", "token_rule", "cohort_metric_gates", "tiers"})
 MANIFEST_KEYS = frozenset({"schema_version", "suite_id", "plan_sha256", "run_id", "pair_id", "tier", "repeat_index", "arm", "order_index", "workload_prompt_sha256", "prompt_file_sha256", "expected_sha256", "source_snapshot_sha256", "environment_sha256", "selected_entry_pair", "entry_execution_mode", "result_producer_pair", "executed_pairs", "receipt_session_ids", "unexpected_receipt_session_ids", "unreceipted_descendant_count", "runtime_session_count", "runtime_root_session_count", "runtime_descendant_session_count", "task_session_count", "controller_tokens_excluded", "completion", "retry_count", "fallback_count", "repair_count", "metrics_complete", "logical_total_tokens", "steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "route_selection_elapsed_ms", "calibration_attempt_count", "calibration_failure_elapsed_ms", "calibration_failure_logical_tokens", "first_result_elapsed_ms", "producer_elapsed_ms", "ending_real_elapsed_ms", "total_wall_elapsed_ms", "presented_result_sha256", "presented_result_object_sha256", "ending_real", "acceptance_status", "gate"})
 MANIFEST_GATE_KEYS = frozenset({"generated_by", "version", "evidence_sha256", "status", "failures", "source_files_checked"})
 ENDING_REAL_KEYS = frozenset({"method", "completed", "status"})
@@ -154,9 +154,9 @@ def validate_manifest(manifest, run_plan, suite_id, plan_sha256):
         raise PublicExportError("manifest_task_session_count_invalid")
     if isinstance(controller_tokens_excluded, bool) or not isinstance(controller_tokens_excluded, int) or controller_tokens_excluded < 0:
         raise PublicExportError("manifest_controller_tokens_invalid")
-    if run_plan["arm"] == "direct" and (task_session_count != runtime_session_count or controller_tokens_excluded != 0):
+    if run_plan["arm"] == "direct" and (task_session_count > runtime_session_count or controller_tokens_excluded != 0):
         raise PublicExportError("manifest_controller_accounting_invalid")
-    if run_plan["arm"] == "global" and (task_session_count != runtime_session_count - 1 or controller_tokens_excluded <= 0):
+    if run_plan["arm"] == "global" and (task_session_count > runtime_session_count - 1 or controller_tokens_excluded <= 0):
         raise PublicExportError("manifest_controller_accounting_invalid")
     executed_pairs = manifest.get("executed_pairs")
     if not isinstance(executed_pairs, list) or len(executed_pairs) != runtime_session_count or run_plan["selected_entry_pair"] not in executed_pairs or any(not isinstance(pair, str) or "|" not in pair for pair in executed_pairs):
@@ -175,7 +175,8 @@ def validate_manifest(manifest, run_plan, suite_id, plan_sha256):
     for timing_key in ["steady_state_execution_elapsed_ms", "route_selection_elapsed_ms", "first_result_elapsed_ms", "producer_elapsed_ms", "ending_real_elapsed_ms", "total_wall_elapsed_ms"]:
         if not isinstance(manifest.get(timing_key), int) or manifest[timing_key] < 0:
             raise PublicExportError("manifest_time_metric_invalid")
-    if manifest["first_result_elapsed_ms"] > manifest["producer_elapsed_ms"] or manifest["route_selection_elapsed_ms"] != manifest["first_result_elapsed_ms"] - manifest["steady_state_execution_elapsed_ms"] or manifest["total_wall_elapsed_ms"] != manifest["producer_elapsed_ms"] + manifest["ending_real_elapsed_ms"]:
+    invalid_route_time = manifest["route_selection_elapsed_ms"] != 0 if run_plan["arm"] == "direct" else manifest["route_selection_elapsed_ms"] != manifest["first_result_elapsed_ms"] - manifest["steady_state_execution_elapsed_ms"]
+    if manifest["first_result_elapsed_ms"] > manifest["producer_elapsed_ms"] or invalid_route_time or manifest["total_wall_elapsed_ms"] != manifest["producer_elapsed_ms"] + manifest["ending_real_elapsed_ms"]:
         raise PublicExportError("manifest_time_metric_invalid")
     expected_environment_sha256 = sha256_bytes(benchmark_suite_gate.canonical_json(run_plan["environment"]).encode("utf-8"))
     if manifest.get("environment_sha256") != expected_environment_sha256:
@@ -228,7 +229,7 @@ def validate_configuration_hashes(plan):
 def validate_summary(summary, plan, manifests, plan_sha256, tier_repeat_counts):
     if set(summary) != SUMMARY_KEYS:
         raise PublicExportError("summary_schema_mismatch")
-    if summary.get("schema_version") != benchmark_suite_gate.SCHEMA_VERSION or summary.get("suite_id") != plan["suite_id"] or summary.get("plan_sha256") != plan_sha256 or summary.get("overall_status") not in {"pass", "fail"} or not isinstance(summary.get("all_correct"), bool):
+    if summary.get("schema_version") != benchmark_suite_gate.SCHEMA_VERSION or summary.get("suite_id") != plan["suite_id"] or summary.get("plan_sha256") != plan_sha256 or summary.get("overall_status") not in {"pass", "fail"} or not isinstance(summary.get("all_correct"), bool) or not isinstance(summary.get("all_optimized"), bool):
         raise PublicExportError("summary_identity_or_status_failure")
     uniform_repeat_count = next(iter(set(tier_repeat_counts.values()))) if len(set(tier_repeat_counts.values())) == 1 else None
     if summary.get("repeat_count") != uniform_repeat_count:
@@ -240,6 +241,7 @@ def validate_summary(summary, plan, manifests, plan_sha256, tier_repeat_counts):
         raise PublicExportError("summary_tier_contract")
     recomputed_tiers = {tier: benchmark_suite_gate.aggregate_tier(tier, tier_repeat_counts[tier], manifests) for tier in benchmark_suite_gate.TIERS}
     all_correct = all(recomputed_tiers[tier]["status"] == "pass" for tier in benchmark_suite_gate.TIERS)
+    all_optimized = all(recomputed_tiers[tier]["optimization_status"] == "pass" for tier in benchmark_suite_gate.TIERS)
     direct_manifests = sorted([manifest for manifest in manifests if manifest["arm"] == "direct"], key=lambda item: item["order_index"])
     global_manifests = sorted([manifest for manifest in manifests if manifest["arm"] == "global"], key=lambda item: item["order_index"])
     cohort_metric_gates = {}
@@ -247,8 +249,8 @@ def validate_summary(summary, plan, manifests, plan_sha256, tier_repeat_counts):
         direct_total = sum(manifest[metric] for manifest in direct_manifests)
         global_total = sum(manifest[metric] for manifest in global_manifests)
         cohort_metric_gates[metric] = {"direct_total": direct_total, "global_total": global_total, "aggregate_global_lower": global_total < direct_total, "status": "pass" if global_total < direct_total else "fail"}
-    overall_status = "pass" if all_correct and all(gate["status"] == "pass" for gate in cohort_metric_gates.values()) else "fail"
-    recomputed_summary = {"schema_version": benchmark_suite_gate.SCHEMA_VERSION, "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "repeat_count": uniform_repeat_count, "tier_repeat_counts": tier_repeat_counts, "overall_status": overall_status, "all_correct": all_correct, "overall_rule": OVERALL_RULE, "time_rule": TIME_RULE, "token_rule": TOKEN_RULE, "cohort_metric_gates": cohort_metric_gates, "tiers": recomputed_tiers}
+    overall_status = "pass" if all_correct and all_optimized and all(gate["status"] == "pass" for gate in cohort_metric_gates.values()) else "fail"
+    recomputed_summary = {"schema_version": benchmark_suite_gate.SCHEMA_VERSION, "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "repeat_count": uniform_repeat_count, "tier_repeat_counts": tier_repeat_counts, "overall_status": overall_status, "all_correct": all_correct, "all_optimized": all_optimized, "overall_rule": OVERALL_RULE, "time_rule": TIME_RULE, "token_rule": TOKEN_RULE, "cohort_metric_gates": cohort_metric_gates, "tiers": recomputed_tiers}
     if benchmark_suite_gate.canonical_json(summary) != benchmark_suite_gate.canonical_json(recomputed_summary):
         raise PublicExportError("summary_manifest_recompute_mismatch")
     for tier in benchmark_suite_gate.TIERS:
@@ -324,8 +326,16 @@ def build_public_export(plan_path, summary_path, manifest_dir):
     for tier in benchmark_suite_gate.TIERS:
         tier_summary = tier_summaries[tier]
         task_summaries.append({"tier": tier, "label": TASK_LABELS[tier], "status": tier_summary["status"], "optimization_status": tier_summary["optimization_status"], "failures": tier_summary["failures"], "performance_diagnostics": tier_summary["performance_diagnostics"], "pair_count": tier_summary["pair_count"], "run_count": tier_summary["run_count"], "direct_totals": tier_summary["direct_totals"], "global_totals": tier_summary["global_totals"], "direct_medians": tier_summary["direct_medians"], "global_medians": tier_summary["global_medians"], "paired_savings_percent_medians": tier_summary["paired_savings_percent_medians"], "paired_wins": tier_summary["paired_wins"], "metric_gates": tier_summary["metric_gates"]})
+    ending_diagnostics = {
+        "method": benchmark_suite_gate.ENDING_REAL_METHOD,
+        "status": "pass" if all(manifest["ending_real"] == {"method": benchmark_suite_gate.ENDING_REAL_METHOD, "completed": True, "status": "pass"} for manifest in manifests) else "fail",
+        "excluded_from_primary": True,
+        "direct_total_elapsed_ms": sum(manifest["ending_real_elapsed_ms"] for manifest in manifests if manifest["arm"] == "direct"),
+        "auto_total_elapsed_ms": sum(manifest["ending_real_elapsed_ms"] for manifest in manifests if manifest["arm"] == "global"),
+        "combined_total_elapsed_ms": sum(manifest["ending_real_elapsed_ms"] for manifest in manifests),
+    }
     cohort_result = "passing" if summary["overall_status"] == "pass" else "failed strategy-performance"
-    public_document = {"schema_version": PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Auto empirical cohort", "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "overall_status": summary["overall_status"], "all_correct": summary["all_correct"], "expected_run_count": expected_run_count, "entry_pairs": expected_entry_pairs, "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": TOKEN_RULE, "time": TIME_RULE, "overall": OVERALL_RULE, "minimum_pairs_per_tier": MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": execution_integrity, "cohort_metric_gates": summary["cohort_metric_gates"], "tasks": task_summaries, "caveats": {"tokens": "Primary token savings use the clean steady-state selected execution. Entry matching, calibration failures, retries, fallbacks, repairs, and Ending are separately counted and are not hidden. Logical tokens are a usage proxy, not a billing-token or price claim.", "first_result": "First-result time is the actual end-to-end wait diagnostic. It is never advertised as saved unless its own values are lower; Ending is reported separately.", "generalization": f"This is a {cohort_result} empirical cohort for these frozen workloads and conditions, not a universal guarantee for every task or future runtime."}}
+    public_document = {"schema_version": PUBLIC_SCHEMA_VERSION, "evidence_scope": "sanitized frozen real Direct versus Auto empirical cohort", "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "overall_status": summary["overall_status"], "all_correct": summary["all_correct"], "all_optimized": summary["all_optimized"], "expected_run_count": expected_run_count, "entry_pairs": expected_entry_pairs, "tier_repeat_counts": tier_repeat_counts, "rules": {"tokens": TOKEN_RULE, "time": TIME_RULE, "overall": OVERALL_RULE, "minimum_pairs_per_tier": MINIMUM_PUBLIC_PAIR_COUNT}, "configuration": configuration, "execution_integrity": execution_integrity, "cohort_metric_gates": summary["cohort_metric_gates"], "tasks": task_summaries, "ending_diagnostics": ending_diagnostics, "caveats": {"tokens": "Primary token savings use complete steady-state selected execution. Entry matching, calibration failures, retries, fallbacks, repairs, and Ending are separately counted and are not hidden. Logical tokens are a usage proxy, not a billing-token or price claim.", "first_result": "First-result time is the actual end-to-end wait diagnostic. It is never advertised as saved unless its own values are lower; the post-result Ending evidence gate is shown separately.", "generalization": f"This is a {cohort_result} empirical cohort for these frozen workloads and conditions, not a universal guarantee for every task or future runtime."}}
     validate_public_privacy(public_document, private_strings_from_evidence(plan, manifests))
     return public_document
 

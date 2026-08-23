@@ -122,7 +122,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
                     if arm == "global":
                         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
                         capability_assignment = [{"node_id": "result", "step_kind": "implementation", "capability_tags": ["code-authoring"], "effective_pair": "gpt-5.6-terra|high"}]
-                        signature = {"selected_pair": "gpt-5.6-terra|high", "effective_pair": "gpt-5.6-terra|high", "scheduled_graph": False, "assigned_pairs": ["gpt-5.6-terra|high"], "trial": False, "recommendation_state": "frozen", "selection_provenance": "local_history", "capability_assignment": capability_assignment}
+                        signature = {"selected_pair": "gpt-5.6-terra|high", "effective_pair": "gpt-5.6-terra|high", "scheduled_graph": False, "assigned_pairs": ["gpt-5.6-terra|high"], "trial": False, "recommendation_state": "frozen", "selection_provenance": "local_history", "context_mode": "full", "capability_assignment": capability_assignment}
                         selected_execution = {"schema_version": 2, "receipt_sha256": "b" * 64, "selected_pair": "gpt-5.6-terra|high", "effective_pair": "gpt-5.6-terra|high", "steady_state_logical_tokens": task_tokens, "steady_state_execution_elapsed_ms": 60, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": signature}
                         receipt["benchmark_selected_execution"] = selected_execution
                         self.write_json(receipt_path, receipt)
@@ -177,8 +177,9 @@ class BenchmarkPublicExportTests(unittest.TestCase):
             output_mode = stat.S_IMODE(paths["output"].stat().st_mode)
         self.assertEqual(public_document["overall_status"], "pass")
         self.assertTrue(public_document["all_correct"])
-        self.assertEqual(public_document["expected_run_count"], 12)
-        self.assertEqual(public_document["tier_repeat_counts"], {"simple": 2, "medium": 2, "complex": 2})
+        self.assertTrue(public_document["all_optimized"])
+        self.assertEqual(public_document["expected_run_count"], 16)
+        self.assertEqual(public_document["tier_repeat_counts"], {"simple": 2, "medium": 2, "complex": 2, "advanced": 2})
         self.assertEqual(public_document["rules"], {"tokens": module.TOKEN_RULE, "time": module.TIME_RULE, "overall": module.OVERALL_RULE, "minimum_pairs_per_tier": 2})
         self.assertEqual(public_document["entry_pairs"], module.benchmark_suite_gate.ARM_ENTRY_PAIRS)
         self.assertTrue(public_document["configuration"]["config_hash_equal"])
@@ -191,7 +192,12 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertEqual(public_document["configuration"]["catalog_file_counts"], {"skills": expected_environment["skills_catalog_file_count"], "plugins": expected_environment["plugins_catalog_file_count"], "marketplaces": expected_environment["marketplace_catalog_file_count"], "marketplace_sources": len(expected_environment["marketplace_catalog_sources"])})
         self.assertEqual(set(public_document["configuration"]["catalog_sha256"]), {"skills", "plugins", "marketplaces", "visible"})
         self.assertNotEqual(public_document["configuration"]["agents_sha256"]["direct"], public_document["configuration"]["agents_sha256"]["global"])
-        self.assertEqual(public_document["execution_integrity"], {"complete_runs": 12, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "runtime_session_count": 18, "runtime_root_count": 12, "runtime_descendant_count": 6, "task_session_count": 12, "controller_tokens_excluded": 309, "multi_session_run_count": 6, "sol_entry_probe_count": 3, "sol_entry_probe_pass_count": 3})
+        self.assertEqual(public_document["execution_integrity"], {"complete_runs": 16, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "runtime_session_count": 24, "runtime_root_count": 16, "runtime_descendant_count": 8, "task_session_count": 16, "controller_tokens_excluded": 412, "multi_session_run_count": 8, "sol_entry_probe_count": 4, "sol_entry_probe_pass_count": 4})
+        ending = public_document["ending_diagnostics"]
+        self.assertEqual(ending["method"], module.benchmark_suite_gate.ENDING_REAL_METHOD)
+        self.assertEqual(ending["status"], "pass")
+        self.assertTrue(ending["excluded_from_primary"])
+        self.assertEqual(ending["combined_total_elapsed_ms"], ending["direct_total_elapsed_ms"] + ending["auto_total_elapsed_ms"])
         self.assertEqual([task["label"] for task in public_document["tasks"]], [module.TASK_LABELS[tier] for tier in module.benchmark_suite_gate.TIERS])
         self.assertTrue(all(task["status"] == "pass" and task["failures"] == [] for task in public_document["tasks"]))
         self.assertTrue(all(task["paired_savings_percent_medians"]["steady_state_logical_tokens"] > 0 for task in public_document["tasks"]))
@@ -222,6 +228,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         self.assertEqual(summary["overall_status"], "fail")
         self.assertEqual(public_document["overall_status"], "fail")
         self.assertTrue(public_document["all_correct"])
+        self.assertFalse(public_document["all_optimized"])
         self.assertEqual(medium["status"], "pass")
         self.assertEqual(medium["optimization_status"], "fail")
         self.assertEqual(medium["failures"], [])
@@ -233,7 +240,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             paths = self.build_fixture(Path(temporary), {tier: 2 for tier in module.benchmark_suite_gate.TIERS})
             public_document = module.export_public_json(paths["plan"], paths["summary"], paths["manifests"], paths["output"])
-            self.assertEqual(public_document["expected_run_count"], 12)
+            self.assertEqual(public_document["expected_run_count"], 16)
             self.assertTrue(paths["output"].is_file())
 
     def test_more_than_minimum_pairs_round_trip_from_export_to_both_renderers(self):
@@ -246,11 +253,11 @@ class BenchmarkPublicExportTests(unittest.TestCase):
             renderer.render_svgs(paths["output"], desktop_path, mobile_path)
             desktop_text = desktop_path.read_text(encoding="utf-8")
             mobile_text = mobile_path.read_text(encoding="utf-8")
-        self.assertEqual(public_document["expected_run_count"], 48)
-        self.assertEqual(public_document["tier_repeat_counts"], {"simple": 8, "medium": 8, "complex": 8})
+        self.assertEqual(public_document["expected_run_count"], 64)
+        self.assertEqual(public_document["tier_repeat_counts"], {"simple": 8, "medium": 8, "complex": 8, "advanced": 8})
         self.assertTrue(all(task["pair_count"] == 8 and task["run_count"] == 16 for task in public_document["tasks"]))
-        self.assertEqual(desktop_text.count("CORRECT · 8 pairs · 16 runs"), 3)
-        self.assertEqual(mobile_text.count("CORRECT · 8 pairs · 16 runs"), 3)
+        self.assertEqual(desktop_text.count("CORRECT · 8 pairs · 16 runs"), 4)
+        self.assertEqual(mobile_text.count("CORRECT · 8 pairs · 16 runs"), 4)
 
     def test_public_export_requires_exactly_one_direct_runtime_root(self):
         with tempfile.TemporaryDirectory() as temporary:

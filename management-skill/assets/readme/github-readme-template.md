@@ -55,22 +55,23 @@ Lifecycle:
 
 ## 📊 Real adaptive benchmark: finish first, verify in background
 
-Frozen v47 compares fixed **Without skill** `gpt-5.6-sol | ultra` and **With skill** entry `gpt-5.6-luna | max`. Its steady-state metric counts selected producer/graph execution after route freeze; entry, controller, calibration, retry/fallback/repair, and Ending are separate.
+Frozen v48: **Without skill** `gpt-5.6-sol | ultra`; **With skill** `gpt-5.6-luna | max` entry. Primary is complete selected execution; entry/controller, failures, first-result; Ending separate.
 
-<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Current Direct versus Auto benchmark: all results and Endings pass; aggregate steady-state time and tokens improve, with simple and medium regressions shown"></picture>
+<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Current Direct versus Auto benchmark: all four tiers lower complete steady-state execution time and logical tokens; Ending is shown after and excluded from the primary metrics"></picture>
 
-**6 A/B pairs · 12 runs · 12/12 exact results and 12/12 Endings PASS · 3/3 Sol-entry route probes PASS · 0 retries/fallbacks/repairs**
+**10 A/B pairs · 20 runs · 20/20 expected results and evidence gates PASS · 4/4 Sol-entry route probes PASS · 0 retries/fallbacks/repairs**
 
 | Tier | Direct steady tokens | Auto steady tokens | Saved | Direct steady execution | Auto steady execution | Saved |
 |---|---:|---:|---:|---:|---:|---:|
-| Simple | 32,654 | 93,448 | -186.176% | 22.896s | 17.561s | +23.301% |
-| Medium | 49,451 | 91,398 | -84.825% | 27.676s | 28.057s | -1.377% |
-| Complex | 538,903 | 273,442 | **+49.260%** | 67.047s | 45.481s | **+32.165%** |
-| **All** | **621,008** | **458,288** | **+26.203%** | **117.619s** | **91.099s** | **+22.547%** |
+| Simple | 146,062 | 94,622 | **+35.218%** | 79.212s | 30.568s | **+61.410%** |
+| Standard | 73,474 | 47,806 | **+34.935%** | 25.346s | 16.588s | **+34.554%** |
+| Complex | 644,587 | 87,297 | **+86.457%** | 65.990s | 20.642s | **+68.720%** |
+| Advanced | 788,882 | 88,074 | **+88.836%** | 97.144s | 26.736s | **+72.478%** |
+| **All** | **1,653,005** | **317,799** | **+80.774%** | **267.692s** | **94.534s** | **+64.686%** |
 
-**Measured result: correctness/evidence PASS; frozen-route aggregate performance PASS.** Stable execution saved 26.520s and 162,720 logical tokens. Actual first-result time was slower (`117.619s → 211.145s`) because 120.046s of route/controller work is deliberately excluded from the steady-state claim and shown separately. Simple and medium token regressions remain visible; this is cohort evidence, not a universal or billing-price claim.
+**Result: every tier and the aggregate lower both primary metrics.** Execution saved 173.158s and 1,335,206 logical tokens. First result was slower overall (`265.243s → 294.040s`): simple/standard lost to routing overhead, complex tied, advanced won. Ending stays after the primary benchmark and is excluded (`0.687s` Direct, `0.691s` Auto, `1.378s` combined). Logical tokens are not billing tokens; this cohort is not universal.
 
-[Read the exact v47 report.](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [Open sanitized benchmark evidence.](./task-analyze-skill/assets/model-routing-benchmark-example.json)
+[Read the exact v48 report.](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [Open sanitized benchmark evidence.](./task-analyze-skill/assets/model-routing-benchmark-example.json)
 **Latest routing check (2026-08-19):** **46/46 ×100=4,600; 0.0872 ms median; 417.156 ms total.** Local-only classifier. Release: 31/31, 1,696/1,696; projectless Ending PASS.
 
 ## 🧩 Eight public Skills

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "check_id": "unity-five-attestation",
   "status": "pass",
-  "created_at": "2026-08-23T10:46:42.700099+00:00",
+  "created_at": "2026-08-23T17:47:16.292466+00:00",
   "trial_count": 5,
   "passed_trials": 5,
   "watched_files": {
@@ -13,7 +13,7 @@
     "code-skill/references/unity-game-code-structure-design.md": "a7cd8582e055ee71b5b70fa60de4ed89576dcbde9285a0e34b8fac4b8b8663c9",
     "code-skill/references/unity-lifecycle-and-serialization.md": "c1980a9deb9a843aee5c13770ac7e82b95b3214ae247fea141186711135c7376",
     "code-skill/references/unity-service-integration.md": "487736e0826f792fa65ea80dc5b6acb7e79cd3d02b3a1e6d9fb55bcf43c58c3c",
-    "code-skill/scripts/code_rule_guard.py": "d8e38902d1175c221de199e363e09d6b98c79698e57be68a6a7f649f196c04bb",
+    "code-skill/scripts/code_rule_guard.py": "1f35c7a8b8d0dcf126ac8a54f67e1cc0b8523c7c3c0810bc62d5c96034aba473",
     "code-skill/tests/test_code_writing_philosophy.py": "00484f302b1b6c2dd570b28b185b8c0dd3fca4787ef103b24e18dea6c2375cc4"
   }
 }

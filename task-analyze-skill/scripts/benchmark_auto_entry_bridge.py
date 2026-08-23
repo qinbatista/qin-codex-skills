@@ -22,10 +22,12 @@ CACHE_ROOT_ENV = "CODEX_AUTO_BENCHMARK_CACHE_ROOT"
 PYTHON_ENV = "CODEX_AUTO_BENCHMARK_PYTHON"
 ENTRY_MODEL_ENV = "CODEX_AUTO_BENCHMARK_ENTRY_MODEL"
 ENTRY_EFFORT_ENV = "CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"
+TASK_SANDBOX_ENV = "CODEX_AUTO_BENCHMARK_TASK_SANDBOX"
 LAUNCH_CLAIM_NAME = "adaptive-entry-launch.json"
 AUTO_ENTRY_PAIRS = (("gpt-5.6-luna", "max"), ("gpt-5.6-sol", "ultra"))
 STABLE_RECOMMENDATION_STATES = frozenset({"frozen", "priority_verified", "verified_recovery"})
 STABLE_SELECTION_PROVENANCE = frozenset({"dual_model_history", "local_transfer_history", "local_and_obsidian", "local_history", "obsidian_history"})
+SESSION_SCOPE_ENVIRONMENT_KEYS = ("CODEX_THREAD_ID", "CODEX_SESSION_ID")
 
 
 def sha256_bytes(payload):
@@ -83,6 +85,13 @@ def entry_pair_from_environment():
     if pair not in AUTO_ENTRY_PAIRS:
         raise ValueError("benchmark adaptive entry pair binding is invalid")
     return pair
+
+
+def task_sandbox_from_environment():
+    sandbox = os.environ.get(TASK_SANDBOX_ENV)
+    if sandbox not in {"read-only", "workspace-write", "danger-full-access"}:
+        raise ValueError("benchmark task sandbox binding is invalid")
+    return sandbox
 
 
 def claim_adaptive_launch(cache_root, workload_sha256, entry_pair):
@@ -161,19 +170,63 @@ def receipt_projection(receipt):
     calibration_attempt_count = len(failed_attempts) + int(receipt.get("trial") is True) + len(receipt.get("reroutes") if isinstance(receipt.get("reroutes"), list) else [])
     calibration_failure_elapsed_ms = sum(attempt.get("process_elapsed_ms", 0) for attempt in failed_attempts if isinstance(attempt.get("process_elapsed_ms"), int) and attempt["process_elapsed_ms"] >= 0)
     calibration_failure_logical_tokens = sum((attempt.get("tokens") or {}).get("total_tokens", 0) for attempt in failed_attempts if isinstance((attempt.get("tokens") or {}).get("total_tokens", 0), int) and (attempt.get("tokens") or {}).get("total_tokens", 0) >= 0)
-    route_signature = {"selected_pair": selected_pair, "effective_pair": receipt.get("effective_pair"), "scheduled_graph": receipt.get("scheduled_graph") is True, "assigned_pairs": assigned_pairs, "trial": receipt.get("trial"), "recommendation_state": recommendation_state, "selection_provenance": selection_provenance, "capability_assignment": capability_assignment}
+    context_mode = "lean_bounded_worker" if receipt.get("lean_context_mode") == "active" else "full"
+    route_signature = {"selected_pair": selected_pair, "effective_pair": receipt.get("effective_pair"), "scheduled_graph": receipt.get("scheduled_graph") is True, "assigned_pairs": assigned_pairs, "trial": receipt.get("trial"), "recommendation_state": recommendation_state, "selection_provenance": selection_provenance, "context_mode": context_mode, "capability_assignment": capability_assignment}
     clean = receipt.get("status") == "pass" and receipt.get("metrics_complete") is True and receipt.get("result_published") is True and receipt.get("trial") is False and recommendation_state in STABLE_RECOMMENDATION_STATES and selection_provenance in STABLE_SELECTION_PROVENANCE and isinstance(capability_assignment, list) and capability_assignment and isinstance(total_tokens, int) and total_tokens >= 0 and isinstance(receipt.get("process_elapsed_ms"), int) and receipt["process_elapsed_ms"] >= 0 and isinstance(route_attempts, list) and route_attempts and not failed_attempts and receipt.get("reroutes") == [] and receipt.get("node_role") != "repair"
     if not clean or not isinstance(selected_pair, str) or any(not isinstance(pair, str) for pair in route_signature["assigned_pairs"]):
         raise ValueError("adaptive child receipt is not a clean frozen selected execution")
     return {"schema_version": 2, "receipt_sha256": sha256_bytes(json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")), "selected_pair": selected_pair, "effective_pair": receipt.get("effective_pair"), "steady_state_logical_tokens": total_tokens, "steady_state_execution_elapsed_ms": receipt["process_elapsed_ms"], "calibration_attempt_count": calibration_attempt_count, "calibration_failure_elapsed_ms": calibration_failure_elapsed_ms, "calibration_failure_logical_tokens": calibration_failure_logical_tokens, "route_signature": route_signature}
 
 
-def run_adaptive_entry(adaptive_runner, entry_pair, source_root, workspace, runtime_cache_root, output_root, complexity_score, codex_bin, timeout, prompt_text):
+def adaptive_runner_failure_code(process):
+    summaries = []
+    for raw_line in str(getattr(process, "stdout", "") or "").splitlines():
+        try:
+            summary = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(summary, dict) and summary.get("status") in {"fail", "blocked"}:
+            summaries.append(summary)
+    reason = summaries[-1].get("reason") if summaries and isinstance(summaries[-1].get("reason"), str) else ""
+    combined = f"{reason}\n{getattr(process, 'stderr', '') or ''}".lower()
+    if "operation not permitted" in combined or "permission denied" in combined:
+        configured_targets = (("runner_memory_permission_denied", os.environ.get("CODEX_MODEL_ROUTING_MEMORY")), ("runner_vault_permission_denied", os.environ.get("CODEX_OBSIDIAN_VAULT")), ("runner_cache_permission_denied", os.environ.get(CACHE_ROOT_ENV)), ("runner_codex_launch_permission_denied", os.environ.get(CODEX_BIN_ENV)), ("runner_codex_home_permission_denied", os.environ.get("CODEX_HOME")))
+        for code, configured_path in configured_targets:
+            if configured_path and os.path.normcase(os.path.normpath(str(configured_path))) in os.path.normcase(os.path.normpath(reason)):
+                return code
+        target_match = re.search(r"(?:operation not permitted|permission denied)(?::|[^']*)'([^']+)'", reason, re.IGNORECASE)
+        target = Path(target_match.group(1)).expanduser() if target_match else None
+        classified_roots = (("runner_memory_permission_denied", os.environ.get("CODEX_MODEL_ROUTING_MEMORY"), True), ("runner_vault_permission_denied", os.environ.get("CODEX_OBSIDIAN_VAULT"), False), ("runner_cache_permission_denied", os.environ.get(CACHE_ROOT_ENV), False), ("runner_codex_home_permission_denied", os.environ.get("CODEX_HOME"), False))
+        if target is not None:
+            codex_bin = os.environ.get(CODEX_BIN_ENV)
+            if codex_bin and interpreter_identity(target) == interpreter_identity(codex_bin):
+                return "runner_codex_launch_permission_denied"
+            for code, configured_path, use_parent in classified_roots:
+                if not configured_path:
+                    continue
+                root = Path(configured_path).expanduser().parent if use_parent else Path(configured_path).expanduser()
+                try:
+                    target.resolve().relative_to(root.resolve())
+                except (OSError, ValueError):
+                    continue
+                return code
+        return "runner_permission_denied"
+    if "no such file" in combined or "not found" in combined or "unavailable" in combined:
+        return "runner_dependency_unavailable"
+    if reason and re.fullmatch(r"[a-z0-9_:-]{1,120}", reason):
+        return reason
+    return "runner_process_failed"
+
+
+def run_adaptive_entry(adaptive_runner, entry_pair, task_sandbox, source_root, workspace, runtime_cache_root, output_root, complexity_score, codex_bin, timeout, prompt_text):
     output_root.mkdir(parents=True, exist_ok=True)
-    command = [sys.executable, str(adaptive_runner), "--entry-model", entry_pair[0], "--entry-effort", entry_pair[1], "--sandbox", "read-only", "--project-root", str(source_root), "--task-type", "code", "--module", source_root.name, "--complexity-score", str(complexity_score), "--workload-id", f"benchmark-{sha256_bytes(prompt_text.encode('utf-8'))[:16]}", "--receipt-output", str(output_root / "receipt.json"), "--result-output", str(output_root / "result.json"), "--workdir", str(workspace), "--cache-root", str(runtime_cache_root), "--codex-bin", codex_bin, "--timeout", str(timeout), "--emit-result"]
-    process = subprocess.run(command, input=prompt_text, text=True, capture_output=True, cwd=workspace, env=os.environ.copy(), shell=False, timeout=timeout + 30, check=False)
+    command = [sys.executable, str(adaptive_runner), "--entry-model", entry_pair[0], "--entry-effort", entry_pair[1], "--sandbox", task_sandbox, "--project-root", str(source_root), "--module", source_root.name, "--complexity-score", str(complexity_score), "--workload-id", f"benchmark-{sha256_bytes(prompt_text.encode('utf-8'))[:16]}", "--receipt-output", str(output_root / "receipt.json"), "--result-output", str(output_root / "result.json"), "--workdir", str(workspace), "--cache-root", str(runtime_cache_root), "--codex-bin", codex_bin, "--timeout", str(timeout), "--emit-result"]
+    command_environment = os.environ.copy()
+    for key in SESSION_SCOPE_ENVIRONMENT_KEYS:
+        command_environment.pop(key, None)
+    process = subprocess.run(command, input=prompt_text, text=True, capture_output=True, cwd=workspace, env=command_environment, shell=False, timeout=timeout + 30, check=False)
     if process.returncode != 0:
-        raise RuntimeError("adaptive runner failed")
+        raise RuntimeError(f"adaptive runner failed: {adaptive_runner_failure_code(process)}")
     summaries = []
     for raw_line in process.stdout.splitlines():
         try:
@@ -208,12 +261,13 @@ def run_bridge(args):
     source_root = args.workdir.expanduser().resolve(strict=True)
     cache_root = Path(cache_root)
     entry_pair = entry_pair_from_environment()
+    task_sandbox = task_sandbox_from_environment()
     workload_sha256 = sha256_bytes(prompt_text.encode("utf-8"))
     claim_adaptive_launch(cache_root, workload_sha256, entry_pair)
     workspace = prepare_read_only_workspace(source_root, cache_root)
     runtime_cache_root = workspace / "Cache" / "tmp-task-analyze"
     output_root = runtime_cache_root / "bridge-output"
-    primary_result, primary_execution = run_adaptive_entry(adaptive_runner, entry_pair, source_root, workspace, runtime_cache_root / "primary", output_root, complexity_score, codex_bin, timeout, prompt_text)
+    primary_result, primary_execution = run_adaptive_entry(adaptive_runner, entry_pair, task_sandbox, source_root, workspace, runtime_cache_root / "primary", output_root, complexity_score, codex_bin, timeout, prompt_text)
     if primary_execution["selected_pair"] != primary_execution["route_signature"]["selected_pair"]:
         raise RuntimeError("adaptive bridge selected execution is inconsistent")
     return primary_result

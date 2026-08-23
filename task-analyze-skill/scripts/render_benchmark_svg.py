@@ -19,7 +19,7 @@ TEXT_COLOR = "#f8fafc"
 MUTED_COLOR = "#a7b4c7"
 BORDER_COLOR = "#334155"
 EVIDENCE_SCOPE = "sanitized frozen real Direct versus Auto empirical cohort"
-PUBLIC_KEYS = frozenset({"schema_version", "evidence_scope", "suite_id", "plan_sha256", "overall_status", "all_correct", "expected_run_count", "entry_pairs", "tier_repeat_counts", "rules", "configuration", "execution_integrity", "cohort_metric_gates", "tasks", "caveats"})
+PUBLIC_KEYS = frozenset({"schema_version", "evidence_scope", "suite_id", "plan_sha256", "overall_status", "all_correct", "all_optimized", "expected_run_count", "entry_pairs", "tier_repeat_counts", "rules", "configuration", "execution_integrity", "cohort_metric_gates", "tasks", "ending_diagnostics", "caveats"})
 RULE_KEYS = frozenset({"tokens", "time", "overall", "minimum_pairs_per_tier"})
 CONFIGURATION_KEYS = frozenset({"config_hash_equal", "config_sha256", "agents_sha256", "runtime_context_hash_equal", "models_cache_sha256", "memories_sha256", "catalog_hash_equal", "catalog_schema_version", "catalog_sha256", "catalog_file_counts"})
 CATALOG_SHA_KEYS = frozenset({"skills", "plugins", "marketplaces", "visible"})
@@ -29,8 +29,9 @@ TASK_KEYS = frozenset({"tier", "label", "status", "optimization_status", "failur
 METRIC_KEYS = frozenset({"steady_state_logical_tokens", "steady_state_execution_elapsed_ms", "first_result_elapsed_ms", "total_wall_elapsed_ms"})
 METRIC_GATE_KEYS = frozenset({"aggregate_global_lower", "raw_global_median_lower", "minimum_paired_savings_percent", "paired_savings_median_meets_threshold", "strict_majority_better", "strict_majority_required", "maximum_pair_regression_percent", "regression_bound_required", "worst_pair_regression_within_limit", "worst_pair_savings_percent", "status"})
 TIME_METRIC_GATE_KEYS = METRIC_GATE_KEYS | frozenset({"maximum_pair_regression_ms", "worst_pair_regression_ms", "material_pair_regression_count"})
-STRATEGY_FAILURES = frozenset({"token_aggregate_loss", "token_raw_median_loss", "token_savings_threshold_loss", "steady_state_aggregate_loss", "steady_state_raw_median_loss", "steady_state_savings_threshold_loss", "steady_state_majority_loss", "steady_state_tolerance_loss"})
+STRATEGY_FAILURES = frozenset({"token_aggregate_loss", "token_raw_median_loss", "token_savings_threshold_loss", "steady_state_aggregate_loss", "steady_state_raw_median_loss", "steady_state_savings_threshold_loss", "steady_state_majority_loss"})
 COHORT_METRIC_GATE_KEYS = frozenset({"direct_total", "global_total", "aggregate_global_lower", "status"})
+ENDING_DIAGNOSTIC_KEYS = frozenset({"method", "status", "excluded_from_primary", "direct_total_elapsed_ms", "auto_total_elapsed_ms", "combined_total_elapsed_ms"})
 
 
 class BenchmarkSvgError(ValueError):
@@ -69,7 +70,7 @@ def load_public_json(path):
         raise BenchmarkSvgError("public_json_invalid")
     if not has_exact_keys(document, PUBLIC_KEYS):
         raise BenchmarkSvgError("public_json_schema")
-    if document.get("schema_version") != benchmark_public_export.PUBLIC_SCHEMA_VERSION or document.get("evidence_scope") != EVIDENCE_SCOPE or document.get("overall_status") not in {"pass", "fail"} or not isinstance(document.get("all_correct"), bool):
+    if document.get("schema_version") != benchmark_public_export.PUBLIC_SCHEMA_VERSION or document.get("evidence_scope") != EVIDENCE_SCOPE or document.get("overall_status") not in {"pass", "fail"} or not isinstance(document.get("all_correct"), bool) or not isinstance(document.get("all_optimized"), bool):
         raise BenchmarkSvgError("public_json_status_contract")
     if not isinstance(document.get("suite_id"), str) or benchmark_public_export.benchmark_suite_gate.RUN_ID_PATTERN.fullmatch(document["suite_id"]) is None or benchmark_public_export.SHA256_PATTERN.fullmatch(str(document.get("plan_sha256", ""))) is None or not has_exact_keys(document.get("entry_pairs"), benchmark_public_export.benchmark_suite_gate.ARMS) or document["entry_pairs"] != benchmark_public_export.benchmark_suite_gate.ARM_ENTRY_PAIRS:
         raise BenchmarkSvgError("public_identity_contract")
@@ -133,8 +134,8 @@ def load_public_json(path):
                 raise BenchmarkSvgError("public_metric_gate_contract")
             expected_strict_majority_better = wins[metric] > pair_count / 2
             majority_required = metric_gate.get("strict_majority_required")
-            expected_majority_required = metric == "steady_state_execution_elapsed_ms" and tier == "medium"
-            invalid_majority_policy = metric == "steady_state_logical_tokens" and majority_required is not False or expected_majority_required and majority_required is not True or metric == "steady_state_execution_elapsed_ms" and tier != "medium" and not isinstance(majority_required, bool)
+            expected_majority_required = metric == "steady_state_execution_elapsed_ms"
+            invalid_majority_policy = majority_required is not expected_majority_required
             if invalid_majority_policy or metric_gate.get("strict_majority_better") is not expected_strict_majority_better:
                 raise BenchmarkSvgError("public_metric_gate_contract")
             if metric_gate.get("minimum_paired_savings_percent") != benchmark_public_export.benchmark_suite_gate.MINIMUM_PAIRED_SAVINGS_PERCENT or metric_gate.get("maximum_pair_regression_percent") != benchmark_public_export.benchmark_suite_gate.MAXIMUM_PAIRED_REGRESSION_PERCENT:
@@ -158,16 +159,14 @@ def load_public_json(path):
             expected_threshold = savings[metric] >= metric_gate["minimum_paired_savings_percent"]
             if metric_gate.get("aggregate_global_lower") is not expected_aggregate_lower or metric_gate.get("raw_global_median_lower") is not expected_raw_median_lower or metric_gate.get("paired_savings_median_meets_threshold") is not expected_threshold:
                 raise BenchmarkSvgError("public_metric_gate_contract")
-            if metric == "steady_state_logical_tokens":
-                expected_metric_status = "fail" if any(failure.startswith("token_") for failure in performance_diagnostics) else "pass"
-            elif tier == "simple":
-                expected_metric_status = "fail" if "steady_state_tolerance_loss" in performance_diagnostics else "pass"
-            elif tier == "medium":
-                expected_metric_status = "fail" if any(failure.startswith("steady_state_") for failure in performance_diagnostics) else "pass"
-            else:
-                expected_metric_status = "pass"
+            failure_prefix = "token_" if metric == "steady_state_logical_tokens" else "steady_state_"
+            expected_metric_status = "fail" if any(failure.startswith(failure_prefix) for failure in performance_diagnostics) else "pass"
             if metric_gate.get("status") != expected_metric_status:
                 raise BenchmarkSvgError("public_metric_gate_contract")
+    ending = document.get("ending_diagnostics")
+    ending_elapsed_fields = ("direct_total_elapsed_ms", "auto_total_elapsed_ms", "combined_total_elapsed_ms")
+    if not has_exact_keys(ending, ENDING_DIAGNOSTIC_KEYS) or ending.get("method") != benchmark_public_export.benchmark_suite_gate.ENDING_REAL_METHOD or ending.get("status") != "pass" or ending.get("excluded_from_primary") is not True or any(isinstance(ending.get(field), bool) or not isinstance(ending.get(field), int) or ending[field] < 0 for field in ending_elapsed_fields) or ending["combined_total_elapsed_ms"] != ending["direct_total_elapsed_ms"] + ending["auto_total_elapsed_ms"]:
+        raise BenchmarkSvgError("public_ending_contract")
     cohort_metric_gates = document.get("cohort_metric_gates")
     if not has_exact_keys(cohort_metric_gates, GATED_METRIC_KEYS):
         raise BenchmarkSvgError("public_cohort_metric_gate_contract")
@@ -175,7 +174,10 @@ def load_public_json(path):
         cohort_gate = cohort_metric_gates[metric]
         if not has_exact_keys(cohort_gate, COHORT_METRIC_GATE_KEYS) or any(isinstance(cohort_gate.get(field), bool) or not isinstance(cohort_gate.get(field), int) or cohort_gate[field] < 0 for field in ("direct_total", "global_total")) or not isinstance(cohort_gate.get("aggregate_global_lower"), bool) or cohort_gate.get("aggregate_global_lower") is not (cohort_gate["global_total"] < cohort_gate["direct_total"]) or cohort_gate.get("status") != ("pass" if cohort_gate["aggregate_global_lower"] else "fail"):
             raise BenchmarkSvgError("public_cohort_metric_gate_contract")
-    expected_overall_status = "pass" if document["all_correct"] and all(gate["status"] == "pass" for gate in cohort_metric_gates.values()) else "fail"
+    expected_all_optimized = all(task["optimization_status"] == "pass" for task in tasks)
+    expected_overall_status = "pass" if document["all_correct"] and document["all_optimized"] and all(gate["status"] == "pass" for gate in cohort_metric_gates.values()) else "fail"
+    if document["all_optimized"] is not expected_all_optimized:
+        raise BenchmarkSvgError("public_json_status_contract")
     if document["overall_status"] != expected_overall_status:
         raise BenchmarkSvgError("public_json_status_contract")
     return document
@@ -271,7 +273,9 @@ def svg_header(width, height, document, layout):
 
 def desktop_svg(document):
     width = 1200
-    height = 760
+    ending_y = 104 + len(document["tasks"]) * 184
+    footer_y = ending_y + 92
+    height = footer_y + 100
     lines = svg_header(width, height, document, "desktop")
     overall_status = document["overall_status"].upper()
     overall_color = GLOBAL_COLOR if document["overall_status"] == "pass" else FAIL_COLOR
@@ -291,15 +295,19 @@ def desktop_svg(document):
         if task["optimization_status"] == "fail":
             task_state += " · TIER REGRESSION"
         lines.extend([f'  <g transform="translate(48 {y})">', f'    <rect width="1104" height="166" rx="18" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'    <text x="22" y="31" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700">{escaped(task["label"])}</text>', f'    <text x="1080" y="31" text-anchor="end" fill="{task_color}" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="700">{task_state} · {task["pair_count"]} pairs · {task["run_count"]} runs</text>', f'    <text x="22" y="57" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14">Steady-state saved {token_savings:.3f}% tokens · {time_savings:.3f}% execution time · wins {task["paired_wins"]["steady_state_execution_elapsed_ms"]}/{task["pair_count"]}</text>', f'    <text x="22" y="85" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">STEADY-STATE LOGICAL TOKENS</text>', f'    <text x="574" y="85" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">STEADY-STATE EXECUTION</text>', f'    <text x="22" y="111" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_number(direct_tokens)}</text>', f'    <rect x="164" y="98" width="{bar_width(direct_tokens, token_maximum, 330)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="22" y="140" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Auto {format_number(global_tokens)}</text>', f'    <rect x="164" y="127" width="{bar_width(global_tokens, token_maximum, 330)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="574" y="111" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_seconds(direct_time)}</text>', f'    <rect x="710" y="98" width="{bar_width(direct_time, time_maximum, 330)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="574" y="140" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Auto {format_seconds(global_time)}</text>', f'    <rect x="710" y="127" width="{bar_width(global_time, time_maximum, 330)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', '  </g>'])
+    ending = document["ending_diagnostics"]
+    lines.extend([f'  <rect x="48" y="{ending_y}" width="1104" height="74" rx="16" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'  <text x="70" y="{ending_y + 29}" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="700">ENDING EVIDENCE GATE · {ending["status"].upper()} · EXCLUDED FROM PRIMARY</text>', f'  <text x="70" y="{ending_y + 54}" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_seconds(ending["direct_total_elapsed_ms"])} · Auto {format_seconds(ending["auto_total_elapsed_ms"])} · combined {format_seconds(ending["combined_total_elapsed_ms"])}</text>'])
     footer_title = metric_gate_verdict(document) if document["overall_status"] == "pass" else f"Strategy gate FAIL · {failure_summary(document)}"
     footer_fill = "#0d2b25" if document["overall_status"] == "pass" else "#33210f"
-    lines.extend([f'  <rect x="48" y="662" width="1104" height="76" rx="16" fill="{footer_fill}" stroke="{overall_color}"/>', f'  <text x="600" y="690" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">{escaped(footer_title)}</text>', f'  <text x="600" y="716" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">{escaped(format_entry_pairs(document["entry_pairs"]))} · all runs correctness/evidence PASS · logical tokens are not billing tokens</text>', '</svg>'])
+    lines.extend([f'  <rect x="48" y="{footer_y}" width="1104" height="76" rx="16" fill="{footer_fill}" stroke="{overall_color}"/>', f'  <text x="600" y="{footer_y + 28}" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">{escaped(footer_title)}</text>', f'  <text x="600" y="{footer_y + 54}" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">{escaped(format_entry_pairs(document["entry_pairs"]))} · all runs correctness/evidence PASS · logical tokens are not billing tokens</text>', '</svg>'])
     return "\n".join(lines) + "\n"
 
 
 def mobile_svg(document):
     width = 720
-    height = 1260
+    ending_y = 98 + len(document["tasks"]) * 350
+    footer_y = ending_y + 106
+    height = footer_y + 116
     lines = svg_header(width, height, document, "mobile")
     overall_status = document["overall_status"].upper()
     overall_color = GLOBAL_COLOR if document["overall_status"] == "pass" else FAIL_COLOR
@@ -317,9 +325,11 @@ def mobile_svg(document):
         if task["optimization_status"] == "fail":
             task_state += " · TIER REGRESSION"
         lines.extend([f'  <g transform="translate(34 {y})">', f'    <rect width="652" height="330" rx="18" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'    <text x="20" y="31" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700">{escaped(task["label"])}</text>', f'    <text x="20" y="57" fill="{task_color}" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">{task_state} · {task["pair_count"]} pairs · {task["run_count"]} runs</text>', f'    <text x="20" y="83" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Steady-state saved {aggregate_savings_percent(task, "steady_state_logical_tokens"):.3f}% tokens · {aggregate_savings_percent(task, "steady_state_execution_elapsed_ms"):.3f}% execution</text>', f'    <text x="20" y="114" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">STEADY-STATE TOKENS</text>', f'    <text x="20" y="141" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_number(direct_tokens)}</text>', f'    <rect x="158" y="128" width="{bar_width(direct_tokens, token_maximum, 450)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="20" y="170" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Auto {format_number(global_tokens)}</text>', f'    <rect x="158" y="157" width="{bar_width(global_tokens, token_maximum, 450)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="20" y="207" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">STEADY-STATE EXECUTION</text>', f'    <text x="20" y="234" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Direct {format_seconds(direct_time)}</text>', f'    <rect x="158" y="221" width="{bar_width(direct_time, time_maximum, 450)}" height="15" rx="7.5" fill="{DIRECT_COLOR}"/>', f'    <text x="20" y="263" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13">Auto {format_seconds(global_time)}</text>', f'    <rect x="158" y="250" width="{bar_width(global_time, time_maximum, 450)}" height="15" rx="7.5" fill="{GLOBAL_COLOR}"/>', f'    <text x="20" y="299" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">First-result is end-to-end diagnostic · Ending excluded</text>', '  </g>'])
+    ending = document["ending_diagnostics"]
+    lines.extend([f'  <rect x="34" y="{ending_y}" width="652" height="88" rx="16" fill="{PANEL_COLOR}" stroke="{BORDER_COLOR}"/>', f'  <text x="54" y="{ending_y + 29}" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="700">ENDING GATE · {ending["status"].upper()} · EXCLUDED</text>', f'  <text x="54" y="{ending_y + 56}" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">Direct {format_seconds(ending["direct_total_elapsed_ms"])} · Auto {format_seconds(ending["auto_total_elapsed_ms"])} · total {format_seconds(ending["combined_total_elapsed_ms"])}</text>'])
     footer_title = metric_gate_verdict(document) if document["overall_status"] == "pass" else f"Strategy gate FAIL · {failure_summary(document)}"
     footer_fill = "#0d2b25" if document["overall_status"] == "pass" else "#33210f"
-    lines.extend([f'  <rect x="34" y="1150" width="652" height="82" rx="16" fill="{footer_fill}" stroke="{overall_color}"/>', f'  <text x="360" y="1179" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700">{escaped(footer_title)}</text>', f'  <text x="360" y="1205" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">{escaped(format_entry_pairs(document["entry_pairs"]))} · all runs correct · not billing tokens</text>', '</svg>'])
+    lines.extend([f'  <rect x="34" y="{footer_y}" width="652" height="82" rx="16" fill="{footer_fill}" stroke="{overall_color}"/>', f'  <text x="360" y="{footer_y + 29}" text-anchor="middle" fill="{TEXT_COLOR}" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700">{escaped(footer_title)}</text>', f'  <text x="360" y="{footer_y + 55}" text-anchor="middle" fill="{MUTED_COLOR}" font-family="Inter,Arial,sans-serif" font-size="12">{escaped(format_entry_pairs(document["entry_pairs"]))} · all runs correct · not billing tokens</text>', '</svg>'])
     return "\n".join(lines) + "\n"
 
 

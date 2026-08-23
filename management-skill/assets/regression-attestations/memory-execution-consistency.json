@@ -2,15 +2,15 @@
   "schema_version": 1,
   "check_id": "memory-execution-consistency-attestation",
   "status": "pass",
-  "created_at": "2026-08-23T11:59:24.119018+00:00",
+  "created_at": "2026-08-23T17:47:16.270716+00:00",
   "trial_count": 7,
   "passed_trials": 7,
   "watched_files": {
-    "AGENTS.md": "8fb17aaad718f4471346dd6aa45e91fdb61d2e27957d0626d7956c2ba33818b6",
-    "task-analyze-skill/assets/global-agents-entry-rule.md": "28797c5edf9d58e097e9fcdf7c734a58f6e31623b58bcb5b12c641e849931c6d",
-    "task-analyze-skill/scripts/task_route_dispatcher.py": "c5b75db47a8fce33ea0cffba73a1d100e5ea843e3d49f00a93632ab7f620904a",
-    "task-analyze-skill/scripts/validate_task_analyze_skill.py": "d6f4b0874d08a3c7218053219caafe72b64235582ae7c1ea307eb5b4b27bf10f",
-    "workflow-skill/SKILL.md": "2edd2a37c9c7444dd87bb63c4d90dae85f6c6c1766e262ece0b27d6fcd0925f3",
+    "AGENTS.md": "f3725adaecdc3a692d770925ab4750771543b23ed1c2809702c222bb6e54ed83",
+    "task-analyze-skill/assets/global-agents-entry-rule.md": "79093fde137c34e8e41c36732ed93c33bef0f72e84d17056c53adb80bb146208",
+    "task-analyze-skill/scripts/task_route_dispatcher.py": "86535773428fda039fb51538e12da92e50dc6145f7edc29f6f927cd8259865f7",
+    "task-analyze-skill/scripts/validate_task_analyze_skill.py": "93f9488afba62e6f3070d1f127777fbf109485606def5d80798821eea3656217",
+    "workflow-skill/SKILL.md": "ad8d31900aeb71aa53b3b468ba542569ec992899e43350dbc6ecdbd755e22bd5",
     "code-skill/references/python-rules.md": "3a5c894850893e1a71a8198c4a339e6fa1dea83c19abd5581d05beae54e9a586",
     "project-memory-skill/SKILL.md": "27772be29c1dbec7bcb9fecd7fbeb04368b49b28ccf141e7b4289982c649cd0d",
     "project-memory-skill/scripts/project_change_memory.py": "05a3e78a89187c384b7c6dc56dfce53ad32f2f34d47151088107cdccae856c70",
@@ -22,9 +22,9 @@
     "verify-skill/SKILL.md": "a00f481e18c0fae2f589e9eabff0354859e9a0b9cf80ff9bc310f4480f830e5e",
     "verify-skill/scripts/ending_verification_plan.py": "2c7089ee505b1936a98e8281d6bb314649c61fb7c3fa5d27c618329aa8840303",
     "verify-skill/scripts/ending_task_ledger.py": "168b3a8e5581861ca0d8ced1cf1214db156c56d8bfb4623417bf4d0ebd3e3b40",
-    "management-skill/assets/global-skill-capability-catalog.json": "62904457f0f4b7b027484f4724b8d04b1086c327bab06f82ce089df3eb91bac1",
+    "management-skill/assets/global-skill-capability-catalog.json": "32007d00a92dac6c8c9e4bf6e30d8e9ef9d2661311738b70e8e2060920415573",
     "management-skill/scripts/global_skill_regression_gate.py": "8bc4fc9c5173a4c7238d4db20c6f19c2b9cbf8ed4b38874bd87423ded18d4510",
-    "management-skill/tests/test_global_skill_regression_gate.py": "4cc7414b7b17fcde69bdddd504c19c99123ac6443f5540be5beb2f92ee45dfff"
+    "management-skill/tests/test_global_skill_regression_gate.py": "7d9fd597346ec9e8f9401f87b7c5fdba359c2f196a679e6171f5c68320329dee"
   },
   "evidence_sha256": "6c63e53ced0d4e375417995ada39c5c9a356e1aa380baee0c7b051679a6491f7"
 }

@@ -605,6 +605,29 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertTrue(any("exactly one task-level Ending node" in failure for failure in failures))
 
+    def test_plan_allows_explicit_no_surface_graph_without_ending(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            main = plan["nodes"][0]
+            branch = {
+                "id": "source-branch",
+                "phase": "result",
+                "skill": "workflow-skill",
+                "model": module.MODEL_ROLE_PAIRS["floor"].split("|", 1)[0],
+                "effort": module.MODEL_ROLE_PAIRS["floor"].split("|", 1)[1],
+                "dependencies": [],
+                "prompt": "Read one bounded source.",
+                "source_allowlist": ["source.py"],
+                "sandbox": "read-only",
+            }
+            main["dependencies"] = [branch["id"]]
+            plan["nodes"] = [branch, main]
+            plan["ending_required"] = False
+            plan["ending_skip_reason"] = "no_real_test_or_information_or_memory_update"
+            failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
+        self.assertEqual(failures, [])
+
     def test_plan_rejects_obsolete_targeted_verifier(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -729,6 +752,27 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(manifest["ending_nodes_pending"], ["ending-verify"])
         record_event.assert_not_called()
         self.assertIn("route_run_id", manifest)
+
+    def test_deterministic_source_read_publishes_exact_zero_token_capture_without_model_call(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.py"
+            source.write_text("VALUE = 7\n", encoding="utf-8")
+            cache_dir = root / "work" / "cache" / "route"
+            cache_dir.mkdir(parents=True)
+            ready = []
+            node = {"id": "source-1", "phase": "result", "skill": "task-analyze-skill", "model": None, "effort": None, "execution_kind": module.DETERMINISTIC_SOURCE_READ, "dependencies": [], "prompt": "Capture source.py", "sandbox": "read-only", "source_allowlist": ["source.py"], "_result_ready_callback": lambda path, timestamp: ready.append((Path(path), timestamp))}
+            with patch.object(module.receipt_module, "run_receipt", side_effect=AssertionError("deterministic capture must not call a model")):
+                record = module.run_node(node, cache_dir, {}, root / "state.sqlite", root)
+            receipt = json.loads(Path(record["receipt_path"]).read_text(encoding="utf-8"))
+            result = Path(record["result_path"]).read_text(encoding="utf-8")
+        self.assertEqual(record["status"], "pass")
+        self.assertEqual(record["execution_kind"], module.DETERMINISTIC_SOURCE_READ)
+        self.assertEqual(record["tokens"]["total_tokens"], 0)
+        self.assertEqual(receipt["source_path"], "source.py")
+        self.assertTrue(receipt["deterministic"])
+        self.assertIn("VALUE = 7", result)
+        self.assertEqual(len(ready), 1)
 
     def test_main_result_readiness_precedes_delayed_receipt_telemetry(self):
         with tempfile.TemporaryDirectory() as temp_dir:

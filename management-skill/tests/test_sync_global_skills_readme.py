@@ -255,11 +255,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("nothing auto-archives or deletes itself", readme)
         self.assertIn("## Rules", readme)
         self.assertIn("## 📊 Real adaptive benchmark: finish first, verify in background", readme)
-        self.assertIn("12/12 exact results and 12/12 Endings PASS", readme)
-        self.assertIn("correctness/evidence PASS; frozen-route aggregate performance PASS", readme)
-        self.assertIn("+49.260%", readme)
-        self.assertIn("+26.203%", readme)
-        self.assertIn("120.046s of route/controller work", readme)
+        self.assertIn("20/20 expected results and evidence gates PASS", readme)
+        self.assertIn("every tier and the aggregate lower both primary metrics", readme)
+        self.assertIn("+80.774%", readme)
+        self.assertIn("+64.686%", readme)
+        self.assertIn("265.243s → 294.040s", readme)
+        self.assertIn("1.378s` combined", readme)
         self.assertIn("<!-- EXECUTION_DOMAIN_TABLE -->", template)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
         self.assertIn("every publish runs a safety scan", readme)
@@ -329,11 +330,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIn("不自动归档或删除", readme)
         self.assertIn("## 规则", readme)
         self.assertIn("## 📊 真实自适应 Benchmark：先完成，再后台验证", readme)
-        self.assertIn("12/12 精确结果与 12/12 Ending PASS", readme)
-        self.assertIn("正确率/证据 PASS；冻结路由后的总体性能 PASS", readme)
-        self.assertIn("+49.260%", readme)
-        self.assertIn("+26.203%", readme)
-        self.assertIn("120.046 秒的路由/controller 工作", readme)
+        self.assertIn("20/20 预期结果和证据门 PASS", readme)
+        self.assertIn("每个档位和总体的两个主指标都下降", readme)
+        self.assertIn("+80.774%", readme)
+        self.assertIn("+64.686%", readme)
+        self.assertIn("265.243s → 294.040s", readme)
+        self.assertIn("合计 `1.378s`", readme)
         self.assertIn("## 🧩 八个公开 Skill", readme)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh.svg"), 1)
         self.assertEqual(readme.count("./management-skill/assets/readme/core-flow-zh-mobile.svg"), 1)
@@ -373,144 +375,53 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_public_benchmark_asset_satisfies_current_strict_contract(self):
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
         evidence = benchmark_renderer.load_public_json(evidence_path)
+        expected_repeats = {"simple": 4, "medium": 2, "complex": 2, "advanced": 2}
+        expected_run_count = sum(expected_repeats.values()) * 2
+        expected_probe_count = len(benchmark_renderer.benchmark_public_export.benchmark_suite_gate.TIERS)
         self.assertEqual(evidence["schema_version"], benchmark_renderer.benchmark_public_export.PUBLIC_SCHEMA_VERSION)
         self.assertEqual(evidence["entry_pairs"], {"direct": "gpt-5.6-sol|ultra", "global": "gpt-5.6-luna|max"})
-        self.assertEqual(evidence["expected_run_count"], 12)
-        self.assertEqual(evidence["execution_integrity"]["complete_runs"], 12)
+        self.assertEqual(evidence["tier_repeat_counts"], expected_repeats)
+        self.assertEqual(evidence["expected_run_count"], expected_run_count)
+        self.assertEqual(evidence["execution_integrity"]["complete_runs"], expected_run_count)
         self.assertEqual(evidence["execution_integrity"]["retry_count"], 0)
         self.assertEqual(evidence["execution_integrity"]["fallback_count"], 0)
         self.assertEqual(evidence["execution_integrity"]["repair_count"], 0)
-        self.assertEqual(evidence["execution_integrity"]["sol_entry_probe_count"], 3)
-        self.assertEqual(evidence["execution_integrity"]["sol_entry_probe_pass_count"], 3)
+        self.assertEqual(evidence["execution_integrity"]["sol_entry_probe_count"], expected_probe_count)
+        self.assertEqual(evidence["execution_integrity"]["sol_entry_probe_pass_count"], expected_probe_count)
         self.assertIs(evidence["all_correct"], True)
+        self.assertIs(evidence["all_optimized"], True)
         self.assertEqual(evidence["overall_status"], "pass")
+        self.assertEqual(evidence["ending_diagnostics"]["status"], "pass")
+        self.assertIs(evidence["ending_diagnostics"]["excluded_from_primary"], True)
+        for metric_gate in evidence["cohort_metric_gates"].values():
+            self.assertEqual(metric_gate["status"], "pass")
+            self.assertLess(metric_gate["global_total"], metric_gate["direct_total"])
 
     def test_readme_benchmark_is_sanitized_and_matches_public_evidence(self):
         readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
         evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
         evidence_text = evidence_path.read_text(encoding="utf-8")
         evidence = benchmark_renderer.load_public_json(evidence_path)
-        self.assertNotIn("/Users/", readme)
-        self.assertNotIn('"thread_id"', readme)
-        self.assertNotIn('"receipt_path"', readme)
-        self.assertIn("32,654", readme)
-        self.assertIn("273,442", readme)
-        self.assertIn("26.203%", readme)
-        self.assertIn("22.547%", readme)
-        self.assertIn("frozen-route aggregate performance PASS", readme)
-        self.assertEqual(evidence["overall_status"], "pass")
-        self.assertIs(evidence["all_correct"], True)
-        for forbidden in ("/Users/", "thread_id", "session_id", "workload_prompt_sha256", "producer_run_id", '"prompt"', '"result"', '"receipt"', '"source_path"', '"plan_path"'):
-            self.assertNotIn(forbidden, evidence_text)
-        self.assertNotIn("timeout", evidence_text.lower())
-        return
-        readme = (README_ASSET_DIR / "github-readme-template.md").read_text(encoding="utf-8")
-        evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
-        evidence_text = evidence_path.read_text(encoding="utf-8")
-        evidence = benchmark_renderer.load_public_json(evidence_path)
-        benchmark_exporter = benchmark_renderer.benchmark_public_export
-        benchmark_gate = benchmark_exporter.benchmark_suite_gate
-        self.assertEqual(set(evidence), set(benchmark_renderer.PUBLIC_KEYS))
-        self.assertEqual(evidence["schema_version"], benchmark_exporter.PUBLIC_SCHEMA_VERSION)
-        self.assertIsNotNone(benchmark_gate.RUN_ID_PATTERN.fullmatch(evidence["suite_id"]))
-        self.assertIsNotNone(benchmark_exporter.SHA256_PATTERN.fullmatch(evidence["plan_sha256"]))
-        self.assertEqual(evidence["entry_pair"], "gpt-5.6-sol|ultra")
-        self.assertEqual(evidence["evidence_scope"], benchmark_renderer.EVIDENCE_SCOPE)
-        self.assertEqual(evidence["overall_status"], "fail")
-        self.assertIs(evidence["all_correct"], True)
-        self.assertEqual(evidence["tier_repeat_counts"], {"simple": 2, "medium": 2, "complex": 2})
-        self.assertEqual(evidence["expected_run_count"], 12)
-        self.assertEqual(
-            evidence["rules"],
-            {
-                "tokens": benchmark_exporter.TOKEN_RULE,
-                "time": benchmark_exporter.TIME_RULE,
-                "overall": benchmark_exporter.OVERALL_RULE,
-                "minimum_pairs_per_tier": benchmark_exporter.MINIMUM_PUBLIC_PAIR_COUNT,
-            },
-        )
+        pair_count = sum(task["pair_count"] for task in evidence["tasks"])
         integrity = evidence["execution_integrity"]
-        self.assertEqual(set(integrity), set(benchmark_renderer.INTEGRITY_KEYS))
-        self.assertEqual(integrity["complete_runs"], evidence["expected_run_count"])
-        self.assertGreaterEqual(integrity["runtime_session_count"], evidence["expected_run_count"])
-        self.assertEqual(
-            integrity["runtime_session_count"],
-            integrity["complete_runs"] + integrity["runtime_descendant_count"],
-        )
-        self.assertLessEqual(integrity["multi_session_run_count"], integrity["complete_runs"])
-        self.assertLessEqual(integrity["multi_session_run_count"], integrity["runtime_descendant_count"])
-        self.assertEqual(integrity["retry_count"], 0)
-        self.assertEqual(integrity["fallback_count"], 0)
-        self.assertEqual(integrity["repair_count"], 0)
-        self.assertEqual(set(evidence["configuration"]), set(benchmark_renderer.CONFIGURATION_KEYS))
-        self.assertIs(evidence["configuration"]["config_hash_equal"], True)
-        self.assertIs(evidence["configuration"]["catalog_hash_equal"], True)
-        self.assertIsNotNone(benchmark_exporter.SHA256_PATTERN.fullmatch(evidence["configuration"]["config_sha256"]))
-        self.assertEqual(set(evidence["configuration"]["agents_sha256"]), set(benchmark_gate.ARMS))
-        for agents_sha256 in evidence["configuration"]["agents_sha256"].values():
-            self.assertIsNotNone(benchmark_exporter.SHA256_PATTERN.fullmatch(agents_sha256))
-        self.assertNotEqual(evidence["configuration"]["agents_sha256"]["direct"], evidence["configuration"]["agents_sha256"]["global"])
-        self.assertIs(evidence["configuration"]["runtime_context_hash_equal"], True)
-        self.assertIsNotNone(benchmark_exporter.SHA256_PATTERN.fullmatch(evidence["configuration"]["models_cache_sha256"]))
-        self.assertIsNotNone(benchmark_exporter.SHA256_PATTERN.fullmatch(evidence["configuration"]["memories_sha256"]))
-        self.assertEqual(set(evidence["caveats"]), {"generalization", "tokens", "first_result"})
-        self.assertIn("not a universal guarantee", evidence["caveats"]["generalization"])
-        self.assertIn("not a billing-token or price claim", evidence["caveats"]["tokens"])
-        self.assertIn("Ending Task Real Verify is excluded", evidence["caveats"]["first_result"])
-        self.assertEqual([task["tier"] for task in evidence["tasks"]], ["simple", "medium", "complex"])
-        self.assertEqual(sum(task["pair_count"] for task in evidence["tasks"]), 6)
-        self.assertEqual(sum(task["run_count"] for task in evidence["tasks"]), evidence["expected_run_count"])
-        expected_task_statuses = {"simple": "pass", "medium": "fail", "complex": "pass"}
-        expected_task_failures = {"simple": [], "medium": ["first_result_majority_loss"], "complex": []}
+        token_gate = evidence["cohort_metric_gates"]["steady_state_logical_tokens"]
+        time_gate = evidence["cohort_metric_gates"]["steady_state_execution_elapsed_ms"]
+        token_savings = (token_gate["direct_total"] - token_gate["global_total"]) * 100 / token_gate["direct_total"]
+        time_savings = (time_gate["direct_total"] - time_gate["global_total"]) * 100 / time_gate["direct_total"]
+        self.assertIn("Frozen v48", readme)
+        self.assertIn(f"**{pair_count} A/B pairs · {evidence['expected_run_count']} runs", readme)
+        self.assertIn(f"{integrity['sol_entry_probe_pass_count']}/{integrity['sol_entry_probe_count']} Sol-entry route probes PASS", readme)
+        self.assertIn(f"**+{token_savings:.3f}%**", readme)
+        self.assertIn(f"**+{time_savings:.3f}%**", readme)
+        self.assertIn("every tier and the aggregate lower both primary metrics", readme)
+        self.assertIn("Ending stays after the primary benchmark", readme)
         for task in evidence["tasks"]:
-            self.assertEqual(set(task), set(benchmark_renderer.TASK_KEYS))
-            self.assertEqual(task["label"], benchmark_exporter.TASK_LABELS[task["tier"]])
-            self.assertEqual(task["status"], expected_task_statuses[task["tier"]])
-            self.assertEqual(task["failures"], expected_task_failures[task["tier"]])
-            self.assertEqual(task["pair_count"], 2)
-            self.assertEqual(task["run_count"], 4)
-            for metric_group in ("direct_totals", "global_totals", "direct_medians", "global_medians", "paired_savings_percent_medians"):
-                self.assertEqual(set(task[metric_group]), set(benchmark_renderer.METRIC_KEYS))
-            self.assertEqual(set(task["paired_wins"]), set(benchmark_renderer.METRIC_KEYS))
-            self.assertEqual(set(task["metric_gates"]), set(benchmark_renderer.GATED_METRIC_KEYS))
-            for metric, metric_gate in task["metric_gates"].items():
-                expected_gate_keys = benchmark_renderer.TIME_METRIC_GATE_KEYS if metric == "first_result_elapsed_ms" else benchmark_renderer.METRIC_GATE_KEYS
-                self.assertEqual(set(metric_gate), set(expected_gate_keys))
-                expected_metric_status = "fail" if task["tier"] == "medium" and metric == "first_result_elapsed_ms" else "pass"
-                self.assertEqual(metric_gate["status"], expected_metric_status)
-                if metric == "logical_total_tokens":
-                    self.assertLess(task["global_totals"][metric], task["direct_totals"][metric])
-                    self.assertLess(task["global_medians"][metric], task["direct_medians"][metric])
-                    self.assertGreaterEqual(task["paired_savings_percent_medians"][metric], metric_gate["minimum_paired_savings_percent"])
-                    self.assertIs(metric_gate["regression_bound_required"], False)
-                else:
-                    self.assertIs(metric_gate["regression_bound_required"], False)
-                    self.assertEqual(metric_gate["maximum_pair_regression_ms"], benchmark_gate.MAXIMUM_PAIRED_TIME_REGRESSION_MS)
-                    self.assertGreaterEqual(metric_gate["material_pair_regression_count"], 0)
-                    if task["tier"] == "medium":
-                        self.assertLess(task["global_totals"][metric], task["direct_totals"][metric])
-                        self.assertLess(task["global_medians"][metric], task["direct_medians"][metric])
-                        self.assertGreaterEqual(task["paired_savings_percent_medians"][metric], metric_gate["minimum_paired_savings_percent"])
-                    self.assertGreaterEqual(metric_gate["worst_pair_regression_ms"], 0)
-                if metric_gate["strict_majority_required"]:
-                    if metric_gate["status"] == "pass":
-                        self.assertGreater(task["paired_wins"][metric], task["pair_count"] / 2)
-                    else:
-                        self.assertLessEqual(task["paired_wins"][metric], task["pair_count"] / 2)
-
-        self.assertIn("## 📊 Current benchmark", readme)
-        self.assertIn("**6 A/B pairs · 12 runs · 0 retries · 0 fallbacks · 0 repairs**", readme)
-        self.assertNotIn("| Tier |", readme)
-        direct_token_total = sum(task["direct_totals"]["logical_total_tokens"] for task in evidence["tasks"])
-        global_token_total = sum(task["global_totals"]["logical_total_tokens"] for task in evidence["tasks"])
-        direct_time_total = sum(task["direct_totals"]["first_result_elapsed_ms"] for task in evidence["tasks"])
-        global_time_total = sum(task["global_totals"]["first_result_elapsed_ms"] for task in evidence["tasks"])
-        self.assertIn(f"**{(direct_token_total - global_token_total) * 100 / direct_token_total:.3f}% fewer task tokens**", readme)
-        self.assertIn(f"**{(direct_time_total - global_time_total) * 100 / direct_time_total:.3f}% faster**", readme)
-        self.assertIn("model-benchmark-example.svg", readme)
-        self.assertIn("model-benchmark-example-mobile.svg", readme)
-        self.assertIn("sanitized benchmark evidence", readme.lower())
+            self.assertIn(f"{task['direct_totals']['steady_state_logical_tokens']:,}", readme)
+            self.assertIn(f"{task['global_totals']['steady_state_logical_tokens']:,}", readme)
+            self.assertIn(f"+{benchmark_renderer.aggregate_savings_percent(task, 'steady_state_logical_tokens'):.3f}%", readme)
+            self.assertIn(f"+{benchmark_renderer.aggregate_savings_percent(task, 'steady_state_execution_elapsed_ms'):.3f}%", readme)
         for forbidden in ("/Users/", "thread_id", "session_id", "workload_prompt_sha256", "producer_run_id", '"prompt"', '"result"', '"receipt"', '"source_path"', '"plan_path"'):
+            self.assertNotIn(forbidden, readme)
             self.assertNotIn(forbidden, evidence_text)
         self.assertNotIn("timeout", evidence_text.lower())
         for filename in ("model-benchmark-example.svg", "model-benchmark-example-mobile.svg"):
@@ -527,73 +438,46 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertIn(benchmark_renderer.integrity_summary(evidence), visible_text)
             for task in evidence["tasks"]:
                 self.assertIn(task["label"], visible_text)
-                self.assertIn(f"{task['status'].upper()} · {task['pair_count']} pairs · {task['run_count']} runs", visible_text)
-                self.assertIn(f"{benchmark_renderer.aggregate_savings_percent(task, 'logical_total_tokens'):.3f}%", visible_text)
-                self.assertIn(f"{benchmark_renderer.aggregate_savings_percent(task, 'first_result_elapsed_ms'):.3f}%", visible_text)
+                self.assertIn(f"CORRECT · {task['pair_count']} pairs · {task['run_count']} runs", visible_text)
+                self.assertIn(f"{benchmark_renderer.aggregate_savings_percent(task, 'steady_state_logical_tokens'):.3f}%", visible_text)
+                self.assertIn(f"{benchmark_renderer.aggregate_savings_percent(task, 'steady_state_execution_elapsed_ms'):.3f}%", visible_text)
             self.assertNotIn("timeout", svg_text.lower())
+            self.assertEqual(svg_bounds_issues(svg_path), [])
             for forbidden in ("/Users/", "thread_id", "session_id", '"prompt"', '"result"', '"receipt"'):
                 self.assertNotIn(forbidden, svg_text)
 
     def test_desktop_benchmark_keeps_right_values_and_verdict_inside_viewbox(self):
         svg_path = README_ASSET_DIR / "model-benchmark-example.svg"
         root = ElementTree.parse(svg_path).getroot()
-        self.assertEqual(root.attrib.get("viewBox"), "0 0 1200 760")
         namespace = {"svg": "http://www.w3.org/2000/svg"}
         metadata = root.find("svg:metadata", namespace)
         evidence = benchmark_renderer.load_public_json(SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json")
+        expected_height = 104 + len(evidence["tasks"]) * 184 + 92 + 100
+        self.assertEqual(root.attrib.get("viewBox"), f"0 0 1200 {expected_height}")
+        self.assertEqual(root.attrib.get("width"), "1200")
+        self.assertEqual(root.attrib.get("height"), str(expected_height))
         self.assertIsNotNone(metadata)
         self.assertEqual(json.loads(metadata.text), evidence)
         text = " ".join("".join(element.itertext()) for element in root.iter() if element.tag.rsplit("}", 1)[-1] in {"title", "desc", "text"})
         self.assertIn("Real A/B benchmark · PASS", text)
         self.assertIn("all runs correctness/evidence PASS", text)
-        self.assertIn("simple constant lookup", text)
-        self.assertIn("medium one-method audit", text)
-        self.assertIn("complex multi-file workflow graph", text)
-        self.assertEqual(svg_bounds_issues(svg_path), [])
-        return
-        svg_path = README_ASSET_DIR / "model-benchmark-example.svg"
-        root = ElementTree.parse(svg_path).getroot()
-        namespace = {"svg": "http://www.w3.org/2000/svg"}
-        viewbox = [float(value) for value in root.attrib["viewBox"].split()]
-        self.assertEqual(viewbox, [0.0, 0.0, 1200.0, 760.0])
-        self.assertEqual(root.attrib.get("width"), "1200")
-        self.assertEqual(root.attrib.get("height"), "760")
+        for task in evidence["tasks"]:
+            self.assertIn(task["label"], text)
+
         card_groups = []
         for group in root.findall(".//svg:g", namespace):
             card = group.find("svg:rect", namespace)
             if card is not None and card.attrib.get("width") == "1104" and card.attrib.get("height") == "166":
                 card_groups.append(group)
-        self.assertEqual(len(card_groups), 3)
-        self.assertEqual([group.attrib.get("transform") for group in card_groups], ["translate(48 104)", "translate(48 288)", "translate(48 472)"])
+        self.assertEqual(len(card_groups), len(evidence["tasks"]))
+        self.assertEqual([group.attrib.get("transform") for group in card_groups], [f"translate(48 {104 + index * 184})" for index in range(len(evidence["tasks"]))])
         for group in card_groups:
-            translate = re.fullmatch(r"translate\(([-\d.]+)\s+([-\d.]+)\)", group.attrib["transform"])
-            self.assertIsNotNone(translate)
-            translate_x = float(translate.group(1))
-            translate_y = float(translate.group(2))
-            card = group.find("svg:rect", namespace)
-            self.assertGreaterEqual(translate_x, viewbox[0])
-            self.assertGreaterEqual(translate_y, viewbox[1])
-            self.assertLessEqual(translate_x + float(card.attrib["width"]), viewbox[2])
-            self.assertLessEqual(translate_y + float(card.attrib["height"]), viewbox[3])
-            status_labels = [text for text in group.findall("svg:text", namespace) if any(label in "".join(text.itertext()) for label in ("PASS ·", "FAIL ·"))]
+            status_labels = [element for element in group.findall("svg:text", namespace) if "pairs" in "".join(element.itertext()) and "runs" in "".join(element.itertext())]
             self.assertEqual(len(status_labels), 1)
             self.assertEqual(status_labels[0].attrib.get("text-anchor"), "end")
-            self.assertLessEqual(translate_x + float(status_labels[0].attrib["x"]), viewbox[2] - 48)
+            self.assertLessEqual(float(status_labels[0].attrib["x"]), 1104 - 22)
 
-        verdict_rects = [rect for rect in root.findall("svg:rect", namespace) if rect.attrib.get("x") == "48" and rect.attrib.get("y") == "662" and rect.attrib.get("width") == "1104" and rect.attrib.get("height") == "76"]
-        self.assertEqual(len(verdict_rects), 1)
-        self.assertLessEqual(float(verdict_rects[0].attrib["x"]) + float(verdict_rects[0].attrib["width"]), viewbox[2])
-        self.assertLessEqual(float(verdict_rects[0].attrib["y"]) + float(verdict_rects[0].attrib["height"]), viewbox[3])
-        summary_lines = [text for text in root.findall("svg:text", namespace) if text.attrib.get("x") == "600" and text.attrib.get("text-anchor") == "middle"]
-        self.assertEqual(len(summary_lines), 2)
-        self.assertTrue(all(text.attrib.get("text-anchor") == "middle" for text in summary_lines))
-        summary_text = " ".join("".join(text.itertext()) for text in summary_lines)
-        evidence_path = SKILLS_DIR / "task-analyze-skill" / "assets" / "model-routing-benchmark-example.json"
-        evidence = benchmark_renderer.load_public_json(evidence_path)
-        self.assertIn(f"Strategy gate FAIL · {benchmark_renderer.failure_summary(evidence)}", summary_text)
-        self.assertIn("gpt-5.6-sol | ultra", summary_text)
-        self.assertIn("all runs correctness/evidence PASS", summary_text)
-        self.assertIn("not billing tokens", summary_text)
+        self.assertEqual(svg_bounds_issues(svg_path), [])
 
     def test_learning_visuals_do_not_present_fixed_code_model_pairs(self):
         visual_names = ("qin-codex-skills-hero", "task-lifecycle", "model-router", "model-experience", "verification-topologies")

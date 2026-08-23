@@ -55,22 +55,23 @@
 
 ## 📊 真实自适应 Benchmark：先完成，再后台验证
 
-当前冻结 v47 比较：**无 Skill** 固定使用 `gpt-5.6-sol | ultra`；**有 Skill** 从 `gpt-5.6-luna | max` 进入，再按冻结历史逐步骤选模。主指标从正确路由已经冻结后开始：计入选中的 producer/graph 执行；入口匹配、controller、校准失败、retry/fallback/repair 和 Ending 全部单列。
+当前冻结 v48 比较：**无 Skill** 固定使用 `gpt-5.6-sol | ultra`；**有 Skill** 从 `gpt-5.6-luna | max` 进入，再按冻结历史逐步骤选模。主指标计入路由冻结后的完整 producer/graph 执行；入口/controller、校准、retry/fallback/repair、首结果诊断和 Ending 全部单列。
 
-<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="当前 Direct 与 Auto 基准：所有结果和 Ending 通过；总体稳定执行时间和 token 降低，同时保留简单和中等档退化"></picture>
+<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="当前 Direct 与 Auto 基准：四个档位的完整稳定执行时间和 logical token 都下降；Ending 放在主指标之后并排除在外"></picture>
 
-**6 组 A/B · 12 次运行 · 12/12 精确结果与 12/12 Ending PASS · 3/3 Sol 入口路由探针 PASS · 0 retry/fallback/repair**
+**10 组 A/B · 20 次运行 · 20/20 预期结果和证据门 PASS · 4/4 Sol 入口路由探针 PASS · 0 retry/fallback/repair**
 
 | 档位 | Direct 稳定 token | Auto 稳定 token | 节省 | Direct 稳定执行 | Auto 稳定执行 | 节省 |
 |---|---:|---:|---:|---:|---:|---:|
-| 简单 | 32,654 | 93,448 | -186.176% | 22.896s | 17.561s | +23.301% |
-| 中等 | 49,451 | 91,398 | -84.825% | 27.676s | 28.057s | -1.377% |
-| 复杂 | 538,903 | 273,442 | **+49.260%** | 67.047s | 45.481s | **+32.165%** |
-| **总体** | **621,008** | **458,288** | **+26.203%** | **117.619s** | **91.099s** | **+22.547%** |
+| 简单 | 146,062 | 94,622 | **+35.218%** | 79.212s | 30.568s | **+61.410%** |
+| 标准 | 73,474 | 47,806 | **+34.935%** | 25.346s | 16.588s | **+34.554%** |
+| 复杂 | 644,587 | 87,297 | **+86.457%** | 65.990s | 20.642s | **+68.720%** |
+| 高级 | 788,882 | 88,074 | **+88.836%** | 97.144s | 26.736s | **+72.478%** |
+| **总体** | **1,653,005** | **317,799** | **+80.774%** | **267.692s** | **94.534s** | **+64.686%** |
 
-**实测结论：正确率/证据 PASS；冻结路由后的总体性能 PASS。** 稳定执行节省 26.520 秒和 162,720 logical token。实际首结果时间更慢（`117.619s → 211.145s`），因为 120.046 秒的路由/controller 工作按定义不计入稳定态节省，并且单独公开。简单和中等档的 token 退化仍然保留；这只是本组冻结任务的证据，不是普遍结论或计费价格结论。
+**实测结论：每个档位和总体的两个主指标都下降。** 完整选中执行节省 173.158 秒和 1,335,206 logical token。实际端到端首结果诊断总体更慢（`265.243s → 294.040s`）：简单和标准档的路由开销超过了选中执行节省，复杂档大致持平，高级档更快。Ending 放在主 Benchmark 之后且不计入主指标（Direct `0.687s`、Auto `0.691s`、合计 `1.378s`）。Logical token 只是用量代理，不是计费 token；这组冻结任务是实证，不是普遍保证。
 
-[查看精确 v47 报告。](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [打开脱敏 benchmark 证据。](./task-analyze-skill/assets/model-routing-benchmark-example.json)
+[查看精确 v48 报告。](./task-analyze-skill/TEST_AND_BENCHMARK.md) · [打开脱敏 benchmark 证据。](./task-analyze-skill/assets/model-routing-benchmark-example.json)
 **最新确定性路由验证（2026-08-19）：** 46 个公开用例 × 100 = 4,600 次分类：**46/46 通过；中位耗时 0.0872 ms；总耗时 417.156 ms。** 这只验证本地确定性路由，不代表实时模型调用、价格或端到端延迟。源端 + 安装副本的发布门禁：31/31 个保留能力、1,696/1,696 项测试；经过核验的全局 projectless Ending 已通过。
 
 ## 🧩 八个公开 Skill

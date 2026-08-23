@@ -201,6 +201,30 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(connect.call_count, 20)
         self.assertEqual(sleep.call_count, 19)
 
+    def test_read_thread_state_uses_exact_rollout_fallback_when_sqlite_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            codex_home = Path(temp_dir) / "codex-home"
+            sessions_root = codex_home / "sessions" / "2026" / "08" / "23"
+            sessions_root.mkdir(parents=True)
+            rollout_path = sessions_root / "rollout-thread-fallback.jsonl"
+            events = [
+                {"type": "session_meta", "payload": {"id": "thread-fallback", "cli_version": "test-cli", "model_provider": "openai", "source": "exec", "private_prompt": "must-not-leak"}},
+                {"type": "turn_context", "payload": {"turn_id": "turn-fallback", "model": "gpt-5.6-luna", "effort": "low", "base_instructions": "must-not-leak"}},
+                {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 35, "cached_input_tokens": 5, "output_tokens": 7, "reasoning_output_tokens": 1, "total_tokens": 42}}}},
+                {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 9}},
+            ]
+            rollout_path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+            with patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False), patch.object(module, "resolve_codex_sqlite_db", return_value=None):
+                observed = module.read_thread_state(None, "thread-fallback")
+        self.assertEqual(observed["rollout_path"], rollout_path)
+        self.assertEqual(observed["model"], "gpt-5.6-luna")
+        self.assertEqual(observed["effort"], "low")
+        self.assertEqual(observed["tokens_used"], 42)
+        self.assertEqual(observed["metadata_status"], "degraded")
+        self.assertEqual(observed["metadata_error"], "sqlite_unavailable_rollout_fallback")
+        self.assertIsNone(observed["runtime_database"])
+        self.assertNotIn("must-not-leak", json.dumps(observed, default=str))
+
     def test_run_receipt_requests_exact_model_and_effort_over_stdin(self):
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-1"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2}})])
         process = SimpleNamespace(stdout=stdout_text, stderr="one warning\n", returncode=0)
@@ -232,6 +256,24 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertTrue(receipt["effort_match"])
         self.assertEqual(receipt["code_rule_bundle"], code_rule_bundle)
 
+    def test_run_receipt_uses_lean_home_only_for_an_explicit_bounded_worker(self):
+        stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-lean"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 20, "cached_input_tokens": 5, "output_tokens": 2, "reasoning_output_tokens": 1}})])
+        process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
+        thread_state = {"rollout_path": Path("/tmp/rollout-lean"), "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 22, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "turn-lean", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 20, "cached_input_tokens": 5, "output_tokens": 2, "reasoning_output_tokens": 1, "total_tokens": 22}, "task_complete": {"duration_ms": 8, "time_to_first_token_ms": 3}}
+        args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="lean-work", allow_fallback=[], code_rule_bundle=None, lean_context_mode=True, minimal_context_mode=True)
+        with tempfile.TemporaryDirectory() as temporary:
+            parent_home = Path(temporary) / "full"
+            lean_home = Path(temporary) / "lean"
+            parent_home.mkdir()
+            lean_home.mkdir()
+            with patch.dict(os.environ, {"CODEX_HOME": str(parent_home)}, clear=False), patch.object(module, "prepare_lean_context_home", return_value=lean_home), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state) as state_read, patch.object(module, "parse_rollout_allowlist", return_value=rollout):
+                receipt = module.run_receipt(args, "same prompt")
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_HOME"], str(lean_home))
+        state_read.assert_called_once_with(args.state_db, "thread-lean", lean_home)
+        self.assertEqual(receipt["lean_context_mode"], "active")
+        self.assertTrue(receipt["minimal_context_mode"])
+
     def test_code_gate_rejects_missing_universal_reference(self):
         bundle = {"schema_version": 1, "entry_reference": "code-skill/SKILL.md", "universal_reference": "code-skill/references/code-writing-philosophy.md", "reference_paths": ["code-skill/SKILL.md"], "message": "incomplete"}
         with self.assertRaisesRegex(ValueError, "universal_gate_missing"):
@@ -244,15 +286,85 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertIn("--sandbox", command)
         self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", command)
 
+    def test_lean_child_disables_only_bounded_nonessential_features(self):
+        args = argparse.Namespace(codex_bin="codex", model="gpt-5.6-luna", effort="low", sandbox="read-only", ignore_user_config=False)
+        command = module.build_codex_exec_command(args, lean_context_active=True)
+        disabled = [command[index + 1] for index, value in enumerate(command[:-1]) if value == "--disable"]
+        self.assertEqual(disabled, list(module.LEAN_CONTEXT_DISABLED_FEATURES))
+        self.assertNotIn("unified_exec", disabled)
+        self.assertNotIn("shell_tool", disabled)
+
+    @unittest.skipIf(os.name == "nt", "Windows intentionally uses the full-context fallback when directory links are unavailable")
+    def test_prepare_lean_context_home_links_runtime_authorities_without_copying_catalogs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            codex_home = Path(temporary) / "codex-home"
+            codex_home.mkdir()
+            (codex_home / "auth.json").write_text("credential-placeholder", encoding="utf-8")
+            (codex_home / "sessions").mkdir()
+            (codex_home / "shell_snapshots").mkdir()
+            (codex_home / "AGENTS.md").write_text("full global lifecycle", encoding="utf-8")
+            (codex_home / "skills").mkdir()
+            lean_home = module.prepare_lean_context_home(codex_home)
+            self.assertIsNotNone(lean_home)
+            self.assertTrue((lean_home / "auth.json").is_symlink())
+            self.assertTrue((lean_home / "sessions").is_symlink())
+            self.assertTrue((lean_home / "shell_snapshots").is_symlink())
+            self.assertFalse((lean_home / "AGENTS.md").exists())
+            self.assertFalse((lean_home / "skills").exists())
+            self.assertFalse((lean_home / "plugins").exists())
+
+    def test_prepare_lean_context_home_falls_back_without_overwriting_conflicts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            codex_home = Path(temporary) / "codex-home"
+            codex_home.mkdir()
+            (codex_home / "auth.json").write_text("credential-placeholder", encoding="utf-8")
+            (codex_home / "sessions").mkdir()
+            conflict = codex_home / "runtime" / module.LEAN_CONTEXT_HOME_NAME / "auth.json"
+            conflict.parent.mkdir(parents=True)
+            conflict.write_text("do-not-overwrite", encoding="utf-8")
+            self.assertIsNone(module.prepare_lean_context_home(codex_home))
+            self.assertEqual(conflict.read_text(encoding="utf-8"), "do-not-overwrite")
+
+    def test_prepare_lean_context_home_uses_full_context_fallback_on_windows(self):
+        with patch.object(module.os, "name", "nt"):
+            self.assertIsNone(module.prepare_lean_context_home("C:/codex-home"))
+
+    def test_workspace_write_child_adds_only_result_parent_as_writable_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result_path = Path(temporary) / "one-run" / "result.json"
+            args = argparse.Namespace(codex_bin="codex", model="gpt-5.6-luna", effort="max", sandbox="workspace-write", ignore_user_config=True, result_output=result_path)
+            command = module.build_codex_exec_command(args)
+        self.assertEqual(command.count("--add-dir"), 1)
+        self.assertEqual(command[command.index("--add-dir") + 1], str(result_path.resolve().parent))
+        self.assertNotIn(str(result_path.resolve()), command)
+
+    def test_relative_benchmark_result_uses_absolute_external_cache_root(self):
+        args = argparse.Namespace(result_output=Path("Cache") / "one-run" / "result.json", workdir=Path("snapshot"), workload_id="relative-run")
+        expected = args.result_output.resolve().parent / "auto-route-cache"
+        self.assertEqual(module.benchmark_cache_root_for(args), expected)
+        self.assertTrue(module.benchmark_cache_root_for(args).is_absolute())
+
     def test_route_markers_define_non_recursive_lifecycle_ownership(self):
-        result_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
+        result_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE", {"schema_version": 1})
+        non_code_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
         ending_boundary = module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
         check_boundary = module.route_node_lifecycle_boundary("ENDING_CHECK_WORKER")
         self.assertIn("entry parent owns the one detached End Task", result_boundary)
+        self.assertIn("Non-code result only", non_code_boundary)
+        self.assertIn("Batch named immutable inputs into one tool call", non_code_boundary)
+        self.assertIn("no precheck, reread", non_code_boundary)
+        self.assertNotIn("coding-philosophy", non_code_boundary)
         self.assertIn("delegate only saved capability-routed checks", ending_boundary)
         self.assertIn("never edit producer files", check_boundary)
         with self.assertRaisesRegex(ValueError, "unsupported route marker"):
             module.route_node_lifecycle_boundary("UNKNOWN")
+
+    def test_non_code_locked_prompt_is_compact_and_does_not_embed_machine_path(self):
+        prompt = module.route_node_execution_prompt("LOCKED_ROUTE_NODE", "Return one JSON object.", Path("/private/machine/path"))
+        self.assertIn("Batch named immutable inputs into one tool call", prompt)
+        self.assertIn("Use the current directory directly", prompt)
+        self.assertNotIn("/private/machine/path", prompt)
+        self.assertLess(len(prompt), 360)
 
     def test_run_receipt_includes_sanitized_route_attempt_metadata(self):
         stdout_text = "\n".join([
@@ -590,7 +702,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PYTHON"], str(Path(module.sys.executable).resolve()))
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"], "gpt-5.6-sol")
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"], "ultra")
-        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_CACHE_ROOT"], str(args.workdir / "Cache" / "tmp-task-analyze" / args.workload_id))
+        self.assertEqual(run_mock.call_args.kwargs["env"][module.BENCHMARK_TASK_SANDBOX_ENV], "read-only")
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_CACHE_ROOT"], str(args.workdir.resolve() / "Cache" / "tmp-task-analyze" / args.workload_id))
         self.assertEqual(receipt["node_type"], "bootstrap-task")
         self.assertEqual(receipt["node_role"], "result-producer")
         self.assertFalse(receipt["entry_context_active"])

@@ -12,13 +12,20 @@ CSHARP_DISCARD_ASSIGNMENT = re.compile(r"^\s*_\s*=", re.MULTILINE)
 CSHARP_TUPLE_DISCARD = re.compile(r"\([^\n)]*\b_\b[^\n)]*\)\s*=", re.MULTILINE)
 CSHARP_OBVIOUS_VAR = re.compile(r"^\s*var\s+[A-Za-z_]\w*\s*=\s*new\s+[A-Za-z_]", re.MULTILINE)
 CSHARP_VERTICAL_CALL_START = re.compile(r"^(?:(?:return|await)\s+)?(?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*(?:<[^<>]+>)?\s*\($")
-CSHARP_EXPRESSION_METHOD = re.compile(r"^\s*(?:(?:public|private|protected|internal|static|virtual|override|sealed|async|new|partial)\s+)*(?:[A-Za-z_]\w*(?:[.<>,?\[\]]+)?)\s+(?P<name>[A-Za-z_]\w*)\s*\((?P<parameters>[^)]*)\)\s*=>\s*(?P<callee>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\((?P<arguments>[^)]*)\)\s*;\s*$")
-CSHARP_BLOCK_METHOD = re.compile(r"^\s*(?:(?:public|private|protected|internal|static|virtual|override|sealed|async|new|partial)\s+)*(?:[A-Za-z_]\w*(?:[.<>,?\[\]]+)?)\s+(?P<name>[A-Za-z_]\w*)\s*\((?P<parameters>[^)]*)\)\s*\{\s*(?:return\s+)?(?P<callee>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\((?P<arguments>[^)]*)\)\s*;\s*\}\s*$")
+CSHARP_EXPRESSION_METHOD = re.compile(r"^[ \t]*(?:(?:public|private|protected|internal|static|virtual|override|sealed|async|new|partial)\s+)*(?:[A-Za-z_]\w*(?:[.<>,?\[\]]+)?)\s+(?P<name>[A-Za-z_]\w*)\s*\((?P<parameters>[^)]*)\)\s*=>\s*(?P<callee>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\((?P<arguments>[^)]*)\)\s*;[ \t]*$", re.MULTILINE)
+CSHARP_BLOCK_METHOD = re.compile(r"^[ \t]*(?:(?:public|private|protected|internal|static|virtual|override|sealed|async|new|partial)\s+)*(?:[A-Za-z_]\w*(?:[.<>,?\[\]]+)?)\s+(?P<name>[A-Za-z_]\w*)\s*\((?P<parameters>[^)]*)\)\s*\{\s*(?:return\s+)?(?P<callee>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\((?P<arguments>[^)]*)\)\s*;\s*\}[ \t]*$", re.MULTILINE)
 GIT_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
 
 
 def violation(code, line, message, end_line=None):
     return {"code": code, "line": line, "end_line": end_line or line, "message": message}
+
+
+def deduplicate_violations(violations):
+    unique = {}
+    for item in violations:
+        unique.setdefault((item["code"], item["line"], item["end_line"]), item)
+    return list(unique.values())
 
 
 def python_call_from_only_statement(function_node):
@@ -93,15 +100,14 @@ def csharp_violations(text):
     for pattern, code, message in ((CSHARP_DISCARD_ASSIGNMENT, "discard-assignment", "Do not hide a produced value or Task in _."), (CSHARP_TUPLE_DISCARD, "discard-binding", "Do not suppress a tuple member with _."), (CSHARP_OBVIOUS_VAR, "obvious-var", "Use the explicit concrete type when object creation already names it.")):
         for match in pattern.finditer(text):
             violations.append(violation(code, text.count("\n", 0, match.start()) + 1, message))
-    for line_number, line in enumerate(lines, start=1):
-        match = CSHARP_EXPRESSION_METHOD.fullmatch(line) or CSHARP_BLOCK_METHOD.fullmatch(line)
-        if match is None:
-            continue
-        callee_name = match.group("callee").split(".")[-1]
-        if callee_name == match.group("name") and ("." not in match.group("callee") or match.group("callee").startswith("this.")):
-            violations.append(violation("self-recursion", line_number, "A method whose only action calls itself has no visible base case or progress."))
-        elif comma_names(match.group("arguments")) == comma_names(match.group("parameters")) and not has_semantic_boundary(lines, line_number):
-            violations.append(violation("pass-through-wrapper", line_number, "Call the real owner directly or mark the actual semantic boundary."))
+    for pattern in (CSHARP_EXPRESSION_METHOD, CSHARP_BLOCK_METHOD):
+        for match in pattern.finditer(text):
+            line_number = text.count("\n", 0, match.start()) + 1
+            callee_name = match.group("callee").split(".")[-1]
+            if callee_name == match.group("name") and ("." not in match.group("callee") or match.group("callee").startswith("this.")):
+                violations.append(violation("self-recursion", line_number, "A method whose only action calls itself has no visible base case or progress."))
+            elif comma_names(match.group("arguments")) == comma_names(match.group("parameters")) and not has_semantic_boundary(lines, line_number):
+                violations.append(violation("pass-through-wrapper", line_number, "Call the real owner directly or mark the actual semantic boundary."))
     for line_number, line in enumerate(lines, start=1):
         stripped = line.strip()
         if stripped.startswith("//") or not stripped.endswith("(") or not (any(marker in line for marker in ("=", "return ", "new ", ".")) or CSHARP_VERTICAL_CALL_START.fullmatch(stripped)):
@@ -118,11 +124,11 @@ def csharp_violations(text):
 def check_text(text, suffix):
     normalized_suffix = suffix.lower()
     if normalized_suffix == ".py":
-        return python_violations(text)
+        return deduplicate_violations(python_violations(text))
     if normalized_suffix == ".cs":
-        return csharp_violations(text)
+        return deduplicate_violations(csharp_violations(text))
     discard_matches = list(re.finditer(r"^\s*_\s*=", text, re.MULTILINE))
-    return [violation("discard-assignment", text.count("\n", 0, match.start()) + 1, "Do not hide a produced value in _.") for match in discard_matches]
+    return deduplicate_violations([violation("discard-assignment", text.count("\n", 0, match.start()) + 1, "Do not hide a produced value in _.") for match in discard_matches])
 
 
 def filter_violations(violations, included_lines):

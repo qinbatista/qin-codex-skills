@@ -15,6 +15,51 @@ MODULE_SPEC.loader.exec_module(module)
 
 
 class RoutingPolicyTests(unittest.TestCase):
+    def test_read_only_file_lookup_is_not_misclassified_as_code_authoring(self):
+        self.assertEqual(module.infer_prompt_task_type("Read catalog-a.json and return one exact value."), "question")
+        self.assertEqual(module.infer_prompt_task_type("Analyze processor.py against processor-contract.md."), "analysis")
+        self.assertEqual(module.infer_prompt_task_type("Edit processor.py to fix the parser."), "code")
+
+    def test_analysis_subjects_do_not_become_mutation_stages(self):
+        audit = module.analyze_prompt_routing("审计整个项目的安全架构、数据库迁移、并发、部署和回滚")
+        strategy = module.analyze_prompt_routing("分析 ECS system 的 serialization migration strategy")
+        self.assertEqual(audit["task_type"], "analysis")
+        self.assertEqual(audit["material_result_stages"], ["inspect"])
+        self.assertFalse(audit["graph_required"])
+        self.assertEqual(strategy["task_type"], "analysis")
+        self.assertEqual(strategy["material_result_stages"], ["inspect"])
+        self.assertFalse(strategy["graph_required"])
+
+    def test_coupled_bug_diagnosis_and_fix_stays_one_producer(self):
+        route = module.analyze_prompt_routing("调查 PlayerController.cs 的 null reference bug 并修复")
+        self.assertEqual(route["task_type"], "code")
+        self.assertEqual(route["material_result_stages"], ["inspect", "change"])
+        self.assertFalse(route["graph_required"])
+        self.assertLessEqual(route["complexity_score"], 24)
+
+    def test_bilingual_mutation_request_overrides_embedded_question_word_without_breaking_real_questions(self):
+        self.assertEqual(module.infer_prompt_task_type("看是否还有错误，如果有问题就给我更改并测试。"), "code")
+        self.assertEqual(module.infer_prompt_task_type("Can you fix this parser and run its test?"), "code")
+        self.assertEqual(module.infer_prompt_task_type("这个修复方式是否正确？"), "question")
+        self.assertEqual(module.infer_prompt_task_type("How do I fix this parser?"), "question")
+
+    def test_material_result_stage_replay_routes_code_audit_repair_test_deploy_and_publish_to_graph(self):
+        prompt = "查看近期代码任务并模拟重放；如果 Skill 没触发就更改规则，测试后部署并提交。"
+        route = module.analyze_prompt_routing(prompt)
+        self.assertEqual(route["task_type"], "code")
+        self.assertEqual(route["operation"], "edit")
+        self.assertEqual(route["material_result_stages"], ["inspect", "simulate", "change", "test", "deploy", "publish"])
+        self.assertTrue(route["graph_required"])
+        self.assertGreaterEqual(route["complexity_score"], 75)
+
+    def test_sanitized_task_classes_preserve_code_visual_memory_file_and_question_boundaries(self):
+        cases = [("检查 SVG 源图重叠，修复错位并运行回归与渲染验收。", "code", True), ("开始优化 memory 的代码风格召回，然后测试并部署。", "code", True), ("核对 UnityProjects 文件迁移并验证哈希，不修改代码。", "analysis", True), ("请解释 SQLite WAL 是什么？", "question", False), ("检查 processor.py 是否有 bug，不要修改。", "question", False)]
+        for prompt, task_type, graph_required in cases:
+            with self.subTest(prompt=prompt):
+                route = module.analyze_prompt_routing(prompt)
+                self.assertEqual(route["task_type"], task_type)
+                self.assertEqual(route["graph_required"], graph_required)
+
     def test_grounded_repository_presets_derive_full_ladder_internally(self):
         easy = module.resolve_profile_preset("grounded-repository-answer-easy", project_family="global", owning_skill="workflow-skill")
         complex_profile = module.resolve_profile_preset("grounded-repository-answer-complex", project_family="museai", owning_skill="muse-ai-plugin:muse-ai-dev-skill")

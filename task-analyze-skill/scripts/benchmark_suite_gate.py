@@ -24,8 +24,8 @@ except ModuleNotFoundError:
     auto_benchmark_execution_prompt = _benchmark_prompt_contract.auto_benchmark_execution_prompt
 
 
-SCHEMA_VERSION = 6
-MANIFEST_SCHEMA_VERSION = 7
+SCHEMA_VERSION = 7
+MANIFEST_SCHEMA_VERSION = 8
 CATALOG_SCHEMA_VERSION = 1
 MINIMUM_PAIRED_SAVINGS_PERCENT = 0.0
 MINIMUM_PAIRED_TIME_SAVINGS_PERCENT = MINIMUM_PAIRED_SAVINGS_PERCENT
@@ -34,15 +34,15 @@ MAXIMUM_PAIRED_TIME_REGRESSION_MS = 2_000
 CATALOG_REFRESH_GRACE_SECONDS = 20.0
 CATALOG_REFRESH_RECENCY_SECONDS = 60.0
 CATALOG_STABILITY_RETRY_SECONDS = 0.25
-TIERS = ("simple", "medium", "complex")
+TIERS = ("simple", "medium", "complex", "advanced")
 ARMS = ("direct", "global")
 DIRECT_BASELINE_PAIR = "gpt-5.6-sol|ultra"
 AUTO_ENTRY_PAIR = "gpt-5.6-luna|max"
 ARM_ENTRY_PAIRS = {"direct": DIRECT_BASELINE_PAIR, "global": AUTO_ENTRY_PAIR}
 GATED_METRICS = ("steady_state_logical_tokens", "steady_state_execution_elapsed_ms")
-OVERALL_RULE = "all task and Ending correctness PASS AND aggregate steady-state execution lower AND aggregate steady-state logical tokens lower"
-TOKEN_RULE = "Primary token savings use steady_state_logical_tokens only: Direct uses its fixed Sol Ultra producer receipt; Auto uses the verified frozen adaptive bridge selected child/graph receipt. Entry-controller, matching, calibration failures, retries, fallbacks, repairs, and Ending are excluded from the primary metric and remain separately reported. Overall PASS requires the aggregate Auto cohort total to be lower than Direct; per-tier medians, paired savings, and regressions remain visible diagnostics"
-TIME_RULE = "Primary time savings use steady_state_execution_elapsed_ms only: Direct uses fixed Sol Ultra producer execution; Auto uses verified frozen adaptive bridge selected execution or graph critical path. Overall PASS requires the aggregate Auto cohort total to be lower than Direct. first_result_elapsed_ms remains an end-to-end diagnostic and is never advertised as saved unless separately lower; route selection, calibration, and Ending remain separate diagnostics"
+OVERALL_RULE = "all task and Ending correctness PASS AND every tier lowers steady-state execution and logical tokens AND aggregate steady-state execution and logical tokens are lower"
+TOKEN_RULE = "Primary token savings use complete steady_state_logical_tokens only: Direct uses the full fixed Sol Ultra task census; Auto uses the verified frozen adaptive bridge selected child/graph receipt. Entry-controller, matching, calibration failures, retries, fallbacks, repairs, and Ending are excluded from the primary metric and remain separately reported. Every tier and the aggregate Auto cohort must be lower than Direct"
+TIME_RULE = "Primary time savings use complete steady_state_execution_elapsed_ms only: Direct uses fixed Sol Ultra producer execution; Auto uses verified frozen adaptive bridge selected execution or graph critical path. Every tier and the aggregate Auto cohort must be lower than Direct. first_result_elapsed_ms remains an end-to-end diagnostic and is never advertised as saved unless separately lower; route selection, calibration, and Ending remain separate diagnostics"
 ENTRY_EXECUTION_MODES = frozenset({"executed", "deterministic-pre-model"})
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -769,12 +769,16 @@ def summarize_runtime_sessions(evidence, main_thread_id, selected_pair, receipt_
                     failures.append("runtime_session_tree")
     if evidence["foreground_main_thread_id"] != main_thread_id:
         failures.append("foreground_main_thread_mismatch")
-    task_foreground_sessions = [foreground_session for foreground_session in evidence["foreground_sessions"] if arm == "direct" or foreground_session["thread_id"] != main_thread_id]
-    if arm == "global" and not task_foreground_sessions:
+    # The foreground census is frozen at result-ready, so it is the authoritative
+    # boundary between task execution and any detached Ending work launched after
+    # the result.  Use final token totals for those task sessions, but never charge
+    # post-result sessions to the primary benchmark metric.
+    task_runtime_sessions = [runtime_session for runtime_session in runtime_sessions if runtime_session["thread_id"] in foreground_thread_ids and (arm == "direct" or runtime_session["thread_id"] != main_thread_id)]
+    if arm == "global" and not task_runtime_sessions:
         failures.append("global_adaptive_child_missing")
-    valid_token_values = [foreground_session["tokens_used"] for foreground_session in task_foreground_sessions]
-    controller_tokens_excluded = next((foreground_session["tokens_used"] for foreground_session in evidence["foreground_sessions"] if arm == "global" and foreground_session["thread_id"] == main_thread_id), 0)
-    return {"thread_ids": list(runtime_by_id), "sessions_by_id": runtime_by_id, "session_count": len(runtime_sessions), "root_session_count": len(root_sessions), "descendant_session_count": len(runtime_sessions) - len(root_sessions), "task_session_count": len(task_foreground_sessions), "controller_tokens_excluded": controller_tokens_excluded, "logical_total_tokens": sum(valid_token_values), "failures": failures}
+    valid_token_values = [runtime_session["tokens_used"] for runtime_session in task_runtime_sessions]
+    controller_tokens_excluded = next((runtime_session["tokens_used"] for runtime_session in runtime_sessions if arm == "global" and runtime_session["thread_id"] == main_thread_id), 0)
+    return {"thread_ids": list(runtime_by_id), "sessions_by_id": runtime_by_id, "session_count": len(runtime_sessions), "root_session_count": len(root_sessions), "descendant_session_count": len(runtime_sessions) - len(root_sessions), "task_session_count": len(task_runtime_sessions), "controller_tokens_excluded": controller_tokens_excluded, "logical_total_tokens": sum(valid_token_values), "failures": failures}
 
 
 def validate_environment_snapshot(environment):
@@ -906,7 +910,7 @@ def validate_receipt(receipt, receipt_spec, result_message, run_plan, expected_e
 def selected_execution_metrics(receipt, arm, runtime_summary, first_result_elapsed_ms):
     if arm == "direct":
         total_tokens = runtime_summary.get("logical_total_tokens")
-        elapsed_ms = first_result_elapsed_ms
+        elapsed_ms = receipt.get("process_elapsed_ms")
         route_attempts = receipt.get("route_attempts") if isinstance(receipt.get("route_attempts"), list) else []
         failed_attempts = [attempt for attempt in route_attempts if isinstance(attempt, dict) and attempt.get("status") != "pass"]
         calibration_attempt_count = len(failed_attempts) + int(receipt.get("trial") is True) + len(receipt.get("reroutes") if isinstance(receipt.get("reroutes"), list) else [])
@@ -920,6 +924,7 @@ def selected_execution_metrics(receipt, arm, runtime_summary, first_result_elaps
             "trial": False,
             "recommendation_state": "direct_fixed",
             "selection_provenance": "direct_fixed",
+            "context_mode": "full",
             "capability_assignment": [{"node_id": "direct", "effective_pair": receipt.get("effective_pair")}],
         }
         clean = receipt.get("status") == "pass" and receipt.get("metrics_complete") is True and isinstance(route_attempts, list) and route_attempts and not failed_attempts and receipt.get("trial") in {None, False} and receipt.get("reroutes") == [] and receipt.get("node_role") != "repair"
@@ -933,7 +938,7 @@ def selected_execution_metrics(receipt, arm, runtime_summary, first_result_elaps
         calibration_attempt_count = execution.get("calibration_attempt_count")
         calibration_failure_elapsed_ms = execution.get("calibration_failure_elapsed_ms")
         calibration_failure_logical_tokens = execution.get("calibration_failure_logical_tokens")
-        clean = execution.get("schema_version") == 2 and isinstance(execution.get("receipt_sha256"), str) and SHA256_PATTERN.fullmatch(execution["receipt_sha256"]) is not None and isinstance(signature, dict) and signature.get("trial") is False and signature.get("recommendation_state") in {"frozen", "priority_verified", "verified_recovery"} and signature.get("selection_provenance") in {"dual_model_history", "local_transfer_history", "local_and_obsidian", "local_history", "obsidian_history"} and isinstance(signature.get("capability_assignment"), list) and signature["capability_assignment"] and execution.get("selected_pair") == signature.get("selected_pair")
+        clean = execution.get("schema_version") == 2 and isinstance(execution.get("receipt_sha256"), str) and SHA256_PATTERN.fullmatch(execution["receipt_sha256"]) is not None and isinstance(signature, dict) and signature.get("trial") is False and signature.get("recommendation_state") in {"frozen", "priority_verified", "verified_recovery"} and signature.get("selection_provenance") in {"dual_model_history", "local_transfer_history", "local_and_obsidian", "local_history", "obsidian_history"} and signature.get("context_mode") in {"full", "lean_bounded_worker"} and isinstance(signature.get("capability_assignment"), list) and signature["capability_assignment"] and execution.get("selected_pair") == signature.get("selected_pair")
     failures = []
     if not isinstance(total_tokens, int) or total_tokens < 0:
         failures.append("steady_state_tokens_invalid")
@@ -1233,17 +1238,6 @@ def aggregate_tier(tier, repeat_count, manifests):
         )
         for metric in metric_names
     } if not arm_failures and len(direct_manifests) == repeat_count and len(global_manifests) == repeat_count else {}
-    if "steady_state_execution_elapsed_ms" in metric_gates:
-        time_gate = metric_gates["steady_state_execution_elapsed_ms"]
-        if tier == "simple":
-            direct_time_values = [manifest["steady_state_execution_elapsed_ms"] for manifest in sorted(direct_manifests, key=lambda item: item["repeat_index"])]
-            direct_time_median = statistics.median(direct_time_values)
-            direct_time_mad = statistics.median(abs(value - direct_time_median) for value in direct_time_values)
-            time_gate["strict_majority_required"] = False
-            time_gate["status"] = "pass" if time_gate["global_total"] <= time_gate["direct_total"] + direct_time_mad * len(direct_time_values) and time_gate["global_median"] <= time_gate["direct_median"] + direct_time_mad else "fail"
-        elif tier == "complex":
-            time_gate["strict_majority_required"] = False
-            time_gate["status"] = "pass"
     failure_prefixes = {"steady_state_logical_tokens": "token", "steady_state_execution_elapsed_ms": "steady_state"}
     gate_failure_fields = {
         "aggregate_global_lower": "aggregate_loss",
@@ -1257,14 +1251,6 @@ def aggregate_tier(tier, repeat_count, manifests):
             continue
         gate = metric_gates[metric]
         prefix = failure_prefixes[metric]
-        if metric == "steady_state_execution_elapsed_ms" and tier == "simple":
-            if gate["status"] != "pass":
-                performance_diagnostics.append("steady_state_tolerance_loss")
-            continue
-        if metric == "steady_state_execution_elapsed_ms" and tier == "complex":
-            if not gate["aggregate_global_lower"]:
-                performance_diagnostics.append("steady_state_aggregate_loss")
-            continue
         for field, suffix in gate_failure_fields.items():
             if field == "strict_majority_better" and not gate["strict_majority_required"]:
                 continue
@@ -1294,6 +1280,7 @@ def evaluate_suite(plan_path, manifest_dir, summary_path):
     tier_repeat_counts = repeat_counts_from_plan(plan)
     tier_summaries = {tier: aggregate_tier(tier, tier_repeat_counts[tier], manifests) for tier in TIERS}
     all_correct = all(tier_summaries[tier]["status"] == "pass" for tier in TIERS)
+    all_optimized = all(tier_summaries[tier]["optimization_status"] == "pass" for tier in TIERS)
     direct_manifests = sorted([manifest for manifest in manifests if manifest["arm"] == "direct"], key=lambda item: item["order_index"])
     global_manifests = sorted([manifest for manifest in manifests if manifest["arm"] == "global"], key=lambda item: item["order_index"])
     cohort_metric_gates = {}
@@ -1301,9 +1288,9 @@ def evaluate_suite(plan_path, manifest_dir, summary_path):
         direct_total = sum(manifest[metric] for manifest in direct_manifests) if all(isinstance(manifest.get(metric), int) and manifest[metric] >= 0 for manifest in direct_manifests) else None
         global_total = sum(manifest[metric] for manifest in global_manifests) if all(isinstance(manifest.get(metric), int) and manifest[metric] >= 0 for manifest in global_manifests) else None
         cohort_metric_gates[metric] = {"direct_total": direct_total, "global_total": global_total, "aggregate_global_lower": isinstance(direct_total, int) and isinstance(global_total, int) and global_total < direct_total, "status": "pass" if isinstance(direct_total, int) and isinstance(global_total, int) and global_total < direct_total else "fail"}
-    overall_status = "pass" if all_correct and all(gate["status"] == "pass" for gate in cohort_metric_gates.values()) else "fail"
+    overall_status = "pass" if all_correct and all_optimized and all(gate["status"] == "pass" for gate in cohort_metric_gates.values()) else "fail"
     uniform_repeat_count = next(iter(set(tier_repeat_counts.values()))) if len(set(tier_repeat_counts.values())) == 1 else None
-    summary = {"schema_version": SCHEMA_VERSION, "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "repeat_count": uniform_repeat_count, "tier_repeat_counts": tier_repeat_counts, "overall_status": overall_status, "all_correct": all_correct, "overall_rule": OVERALL_RULE, "time_rule": TIME_RULE, "token_rule": TOKEN_RULE, "cohort_metric_gates": cohort_metric_gates, "tiers": tier_summaries}
+    summary = {"schema_version": SCHEMA_VERSION, "suite_id": plan["suite_id"], "plan_sha256": plan_sha256, "repeat_count": uniform_repeat_count, "tier_repeat_counts": tier_repeat_counts, "overall_status": overall_status, "all_correct": all_correct, "all_optimized": all_optimized, "overall_rule": OVERALL_RULE, "time_rule": TIME_RULE, "token_rule": TOKEN_RULE, "cohort_metric_gates": cohort_metric_gates, "tiers": tier_summaries}
     for manifest in manifests:
         atomic_write_json(manifest_dir / f"{manifest['run_id']}.json", manifest)
     atomic_write_json(summary_path, summary)

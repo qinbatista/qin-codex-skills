@@ -35,6 +35,7 @@ obsidian_model_memory = _load_file(
 )
 
 SINGLE_PRODUCER_SOURCE_BYTE_LIMIT = 180_000
+DETERMINISTIC_CAPTURE_SOURCE_BYTE_LIMIT = 10_000
 ESTIMATED_SESSION_CONTEXT_TOKENS = 36_000
 ESTIMATED_CHARS_PER_TOKEN = 4
 SMALL_EDIT_MAXIMUM_COMPLEXITY_SCORE = routing_policy.ROUTING_THRESHOLDS["fast_path_maximum_score"]
@@ -114,13 +115,18 @@ def _graph_model_route_notice(args, plan, recommendation, merge_recommendation):
     entry_pair = f"{args.resolved_entry_model}|{args.resolved_entry_effort}"
     session_summary = recommendation.get("session_effort") if isinstance(recommendation.get("session_effort"), dict) else {}
     parts = []
+    model_part_count = 0
+    deterministic_part_count = 0
     for node in plan.get("nodes", []):
         if node.get("phase") not in {"result", "ending"}:
             continue
-        pair = f"{node.get('model')}|{node.get('effort')}"
-        parts.append({"task_part": _route_part_label(args, {"session_effort": session_summary}, node), "node_id": node.get("id"), "phase": node.get("phase"), "pair": pair, "dependencies": list(node.get("dependencies") or []), "user_visible": True})
+        deterministic = node.get("execution_kind") == task_route_dispatcher.DETERMINISTIC_SOURCE_READ
+        pair = None if deterministic else f"{node.get('model')}|{node.get('effort')}"
+        model_part_count += 0 if deterministic else 1
+        deterministic_part_count += 1 if deterministic else 0
+        parts.append({"task_part": _route_part_label(args, {"session_effort": session_summary}, node), "node_id": node.get("id"), "phase": node.get("phase"), "pair": pair, "execution_kind": node.get("execution_kind", "model"), "dependencies": list(node.get("dependencies") or []), "user_visible": True})
     escalation = recommendation.get("session_escalation") if isinstance(recommendation.get("session_escalation"), dict) else {}
-    message = f"Model route ready: each of {len(parts)} task parts has its own model and effort; entry model is {entry_pair}."
+    message = f"Model route ready: {model_part_count} task parts have routed model/effort assignments and {deterministic_part_count} source captures run locally without model tokens; entry model is {entry_pair}."
     if escalation.get("applied"):
         message = f"Model update: repeated same-session failure changed the affected solving route to {escalation.get('to_pair') or merge_recommendation.get('selected_pair')}; every other task part remains independently assigned. Entry model remains {entry_pair}."
     return {"kind": "graph_model_route", "message": message, "entry_pair": entry_pair, "parts": parts, "repeated_failure": bool(session_summary.get("failure_recorded")), "session_escalation": escalation}
@@ -243,7 +249,8 @@ def _atomic_write_text(path, value):
             os.unlink(temporary)
 
 
-def _receipt_args(args, selected):
+def _receipt_args(args, selected, *, lean_context_mode=False):
+    minimal_context_mode = args.task_type != "code" and args.complexity_score <= 49 and getattr(args, "code_rule_bundle", None) is None
     return SimpleNamespace(
         model=selected[0],
         effort=selected[1],
@@ -255,7 +262,9 @@ def _receipt_args(args, selected):
         codex_bin=args.codex_bin,
         sandbox=args.sandbox,
         allow_fallback=[],
-        ignore_user_config=args.ignore_user_config,
+        ignore_user_config=bool(args.ignore_user_config or minimal_context_mode),
+        minimal_context_mode=minimal_context_mode,
+        lean_context_mode=bool(lean_context_mode),
         entry_task=False,
         node_role="result-producer",
         route_marker="LOCKED_ROUTE_NODE",
@@ -348,6 +357,11 @@ def infer_operation(prompt):
     return routing_policy.infer_prompt_operation(prompt)
 
 
+def _graph_route_required_summary(args):
+    execution_lifecycle = routing_policy.execution_lifecycle_contract(args.complexity_score, False, True, len(args.material_result_stages), args.risk, args.ambiguity)
+    return {"schema_version": 1, "stage": "graph-route-required", "user_visible": True, "status": "route-required", "reason": "multiple_material_result_stages_require_dynamic_task_graph", "routing_mode": task_route_dispatcher.DYNAMIC_ROUTING_MODE, "parent_action": "build_dynamic_task_graph_and_call_task_route_dispatcher_once", "required_skill": "task-analyze-skill", "task_type": args.task_type, "operation": args.operation, "complexity_score": args.complexity_score, "complexity_band": args.complexity_band, "material_result_stages": list(args.material_result_stages), "code_gate_required": args.task_type == "code", "runner_executed": False, "result_published": False, "final_aggregate_receipt": False, "execution_lifecycle": execution_lifecycle}
+
+
 def scheduled_source_paths(prompt, workdir):
     """Return a safe independent-source graph without reading task sources."""
     text = str(prompt or "")
@@ -376,6 +390,46 @@ def scheduled_source_paths(prompt, workdir):
         if source not in sources:
             sources.append(source)
     return sources if 2 <= len(sources) <= 3 else []
+
+
+def _bounded_exact_source_paths(prompt, workdir):
+    """Resolve tiny named inputs for one generic read-only exact-output worker."""
+    root = Path(workdir).expanduser().resolve()
+    sources = []
+    candidates = re.findall(r"(?<![\w./-])([\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml))(?![\w/-])", str(prompt or ""))
+    for candidate_text in candidates:
+        relative = Path(candidate_text)
+        if relative.is_absolute() or ".." in relative.parts:
+            return []
+        candidate = (root / relative).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return []
+        if not candidate.is_file():
+            return []
+        source = relative.as_posix()
+        if source not in sources:
+            sources.append(source)
+    return sources if 1 <= len(sources) <= 3 else []
+
+
+def _lean_context_eligible(args, prompt, admitted_schedule=False):
+    """Drop redundant global catalogs only for tiny generic immutable-source work."""
+    normalized = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    exact_json = "single-line minified json" in normalized or "one-line minified json" in normalized
+    immutable = bool(re.search(r"\b(?:read only|read-only|immutable|do not edit files|no edits?)\b", normalized))
+    if admitted_schedule or args.task_type not in {"analysis", "question", "summary"} or args.complexity_score > 49 or args.risk != "low" or args.ambiguity != "low" or args.modality != "text" or getattr(args, "code_rule_bundle", None) is not None or not exact_json or not immutable:
+        return False
+    sources = _bounded_exact_source_paths(prompt, args.workdir)
+    if not sources:
+        return False
+    root = Path(args.workdir).expanduser().resolve()
+    try:
+        sizes = [(root / source).stat().st_size for source in sources]
+    except OSError:
+        return False
+    return all(size <= DETERMINISTIC_CAPTURE_SOURCE_BYTE_LIMIT for size in sizes) and sum(sizes) <= DETERMINISTIC_CAPTURE_SOURCE_BYTE_LIMIT * 2
 
 
 def schedule_admission(prompt, workdir, sources):
@@ -481,6 +535,21 @@ def _owned_source_sections(prompt, sources):
     return ownership if set(ownership) == source_set else {}
 
 
+def _deterministic_capture_eligible(prompt, workdir, sources, owned_sections=None):
+    """Use local parallel reads only for bounded exact owned-source synthesis."""
+    normalized = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    ownership = owned_sections if isinstance(owned_sections, dict) else _owned_source_sections(prompt, sources)
+    exact_json = "single-line minified json" in normalized or "one-line minified json" in normalized
+    if len(sources) < 2 or not exact_json or set(ownership) != set(sources):
+        return False
+    root = Path(workdir).expanduser().resolve()
+    try:
+        sizes = [(root / source).stat().st_size for source in sources]
+    except OSError:
+        return False
+    return all(size <= DETERMINISTIC_CAPTURE_SOURCE_BYTE_LIMIT for size in sizes)
+
+
 def _scheduled_fused_final_prompt(prompt, source):
     source_contract = _owned_source_contract(prompt, source)
     return f"""Complete the final owned source audit supported by `{source}`, then assemble the final artifact from that audit and the completed dependency results below.
@@ -518,16 +587,30 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     floor_model, floor_effort = floor_pair.split("|", 1)
     schedule_producer = task_route_dispatcher.PRIORITY_PRODUCER_CONFIG
     schedule_pair = f"{schedule_producer['id']}|{schedule_producer['effort_by_complexity']['easy']}" if schedule_producer.get("enabled") else floor_pair
-    branch_model, branch_effort = _scheduled_branch_pair(prompt, schedule_pair)
     owned_sections = _owned_source_sections(prompt, sources)
-    fused_source = sources[-1] if owned_sections and len(sources) >= 3 else None
+    deterministic_capture = _deterministic_capture_eligible(prompt, args.workdir, sources, owned_sections)
+    # Explicit source ownership is an exact extraction contract, so its bounded
+    # branches use the verified quality floor. Generic independent work keeps
+    # the priority producer, while expression-sensitive work can still raise
+    # the floor through _scheduled_branch_pair.
+    branch_seed_pair = floor_pair if owned_sections else schedule_pair
+    branch_model, branch_effort = _scheduled_branch_pair(prompt, branch_seed_pair)
+    branch_pair = f"{branch_model}|{branch_effort}"
+    priority_branch = branch_pair == schedule_pair
+    fused_source = sources[-1] if owned_sections and len(sources) >= 3 and not deterministic_capture else None
     independent_sources = sources[:-1] if fused_source else sources
     branch_ids = []
     nodes = []
     for index, source in enumerate(independent_sources, start=1):
         node_id = f"source-{index}"
         branch_ids.append(node_id)
-        nodes.append({"id": node_id, "phase": "result", "skill": "workflow-skill", "model": branch_model, "effort": branch_effort, "priority_producer": True, "dependencies": [], "prompt": _scheduled_branch_prompt(prompt, source), "sandbox": "read-only", "source_allowlist": [source], "execution_domain": "general", "timeout": min(args.timeout, 300)})
+        if deterministic_capture:
+            branch_node = {"id": node_id, "phase": "result", "skill": "task-analyze-skill", "model": None, "effort": None, "execution_kind": task_route_dispatcher.DETERMINISTIC_SOURCE_READ, "dependencies": [], "prompt": f"Capture the exact UTF-8 source bytes for {source} without interpretation.", "sandbox": "read-only", "source_allowlist": [source], "execution_domain": "general", "timeout": min(args.timeout, 300)}
+        else:
+            branch_node = {"id": node_id, "phase": "result", "skill": "workflow-skill", "model": branch_model, "effort": branch_effort, "dependencies": [], "prompt": _scheduled_branch_prompt(prompt, source), "sandbox": "read-only", "source_allowlist": [source], "execution_domain": "general", "timeout": min(args.timeout, 300)}
+            if priority_branch:
+                branch_node["priority_producer"] = True
+        nodes.append(branch_node)
     condition = {"task_family": "grounded", "artifact": "answer", "scope": "multi", "ambiguity": args.ambiguity, "modality": "text", "risk": args.risk, "complexity": "complex", "owning_skill": "workflow-skill", "project_family": "global", "verification_shape": "real", "execution_domain": "general"}
     candidate_ladder = task_route_dispatcher.adaptive_pair_texts_for_profile("grounded", "text", args.risk, "complex", args.ambiguity)
     main_node = {"id": "merge-result", "phase": "result", "skill": "workflow-skill", "model": floor_model, "effort": floor_effort, "dependencies": branch_ids, "prompt": _scheduled_fused_final_prompt(prompt, fused_source) if fused_source else _scheduled_merge_prompt(prompt), "sandbox": "read-only", "execution_domain": "general", "routing_condition": condition, "task_summary": "Audit the final owned source and merge independent source results." if fused_source else "Merge independent source audits into one exact JSON manifest.", "candidate_ladder": candidate_ladder, "static_suggestion": floor_pair, "hard_floor": floor_pair, "trial": False, "timeout": min(args.timeout, 300), "model_memory_scope": {"task_type": "question", "module": args.module, "code_kind": "general", "operation": "work", "step_kind": "integration", "capability_tags": ["dependency-merge", "grounded-source-audit"]}}
@@ -536,7 +619,8 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
         main_node["fuses_owned_source_with_dependencies"] = True
     else:
         main_node["reads_dependency_results_only"] = True
-    recommendation, proof = task_route_dispatcher._obsidian_recommendation_and_proof(main_node, args.workdir, entry_model, entry_effort)
+    main_node["routing_project_root"] = str(Path(args.project_root).expanduser().resolve())
+    recommendation, proof = task_route_dispatcher._obsidian_recommendation_and_proof(main_node, main_node["routing_project_root"], entry_model, entry_effort)
     selected_pair = recommendation.get("selected_pair")
     if not selected_pair:
         raise ValueError("scheduled merge recommendation is exhausted")
@@ -544,10 +628,12 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     main_node["trial"] = recommendation.get("trial") is True
     main_node["routing_recommendation"] = proof
     nodes.append(main_node)
-    if result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))["ending_required"]:
+    lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
+    if lifecycle_policy["ending_required"]:
         nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", **task_route_dispatcher.ending_fast_route_fields(), "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
     args.execution_lifecycle = getattr(args, "execution_lifecycle", None) or routing_policy.execution_lifecycle_contract(args.complexity_score, False, True, sum(node.get("phase") == "result" for node in nodes), args.risk, args.ambiguity)
-    return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": "parallel_sources_fused_final" if fused_source else "parallel_independent_sources", "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900), "execution_lifecycle": args.execution_lifecycle}, recommendation
+    schedule_mode = "parallel_source_capture_single_synthesis" if deterministic_capture else "parallel_sources_fused_final" if fused_source else "parallel_independent_sources"
+    return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": schedule_mode, "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "deterministic_source_capture": deterministic_capture, "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900), "ending_required": lifecycle_policy["ending_required"], "ending_skip_reason": lifecycle_policy["ending_skip_reason"], "execution_lifecycle": args.execution_lifecycle}, recommendation
 
 
 def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admission=None):
@@ -591,8 +677,12 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["scheduled_graph"] = True
     receipt["schedule_mode"] = plan.get("schedule_mode", "parallel_independent_sources")
     receipt["scheduled_sources"] = sources
-    receipt["scheduled_nodes"] = [{"id": node.get("id"), "requested_pair": f"{node.get('requested_model')}|{node.get('requested_effort')}", "effective_pair": f"{node.get('model')}|{node.get('effort')}", "tokens": (node.get("tokens") or {}).get("total_tokens"), "process_elapsed_ms": node.get("process_elapsed_ms"), "step_kind": (node.get("model_memory_scope") or {}).get("step_kind", "grounded-source-audit"), "capability_tags": (node.get("model_memory_scope") or {}).get("capability_tags", ["grounded-source-audit"])} for node in result_nodes]
+    model_result_nodes = [node for node in result_nodes if node.get("execution_kind") != task_route_dispatcher.DETERMINISTIC_SOURCE_READ]
+    deterministic_result_nodes = [node for node in result_nodes if node.get("execution_kind") == task_route_dispatcher.DETERMINISTIC_SOURCE_READ]
+    receipt["scheduled_nodes"] = [{"id": node.get("id"), "requested_pair": f"{node.get('requested_model')}|{node.get('requested_effort')}", "effective_pair": f"{node.get('model')}|{node.get('effort')}", "tokens": (node.get("tokens") or {}).get("total_tokens"), "process_elapsed_ms": node.get("process_elapsed_ms"), "step_kind": (node.get("model_memory_scope") or {}).get("step_kind", "grounded-source-audit"), "capability_tags": (node.get("model_memory_scope") or {}).get("capability_tags", ["grounded-source-audit"])} for node in model_result_nodes]
+    receipt["scheduled_context_nodes"] = [{"id": node.get("id"), "execution_kind": node.get("execution_kind"), "tokens": (node.get("tokens") or {}).get("total_tokens"), "process_elapsed_ms": node.get("process_elapsed_ms")} for node in deterministic_result_nodes]
     receipt["scheduled_result_node_count"] = len(result_nodes)
+    receipt["scheduled_model_node_count"] = len(model_result_nodes)
     receipt["parallel_branch_count"] = plan.get("parallel_branch_count", len(sources))
     receipt["fused_source"] = plan.get("fused_source")
     receipt["schedule_admission"] = admission
@@ -758,6 +848,7 @@ def run(args, prompt):
     _emit_route_ready(args, recommendation)
     sources = scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None
+    lean_context_mode = _lean_context_eligible(args, prompt, bool(admission and admission["admitted"]))
     args.execution_lifecycle = routing_policy.execution_lifecycle_contract(args.complexity_score, getattr(args, "fast_path_eligible", False), bool(admission and admission["admitted"]), len(sources) + 1 if admission and admission["admitted"] else 1, args.risk, args.ambiguity)
     _emit_execution_lifecycle_notice(args.execution_lifecycle)
     if admission and admission["admitted"]:
@@ -775,7 +866,7 @@ def run(args, prompt):
         if args.result_output.exists() and args.result_output.stat().st_size == 0:
             args.result_output.unlink()
         selected = tuple(planned_pair.split("|", 1))
-        receipt_args = _receipt_args(args, selected)
+        receipt_args = _receipt_args(args, selected, lean_context_mode=lean_context_mode)
         try:
             with model_execution_receipt.adaptive_producer_authorization():
                 attempt_receipt = model_execution_receipt.run_receipt(receipt_args, prompt)
@@ -935,6 +1026,8 @@ def resolve_fast_path_args(args, prompt):
     args.task_type = task_type
     args.module = module_name
     args.routing_reasons = list(routing["reasons"])
+    args.material_result_stages = list(routing["material_result_stages"])
+    args.graph_required = bool(fast_path and routing["graph_required"])
     args.fast_path_eligible = bool(fast_path and args.complexity_score <= routing_policy.ROUTING_THRESHOLDS["fast_path_maximum_score"] and not routing["risk_override"] and args.risk == "low" and args.ambiguity == "low" and task_type in {"code", "question", "writing"})
     args.task_name = args.task_name or os.environ.get("CODEX_TASK_NAME", "")
     args.task_group = args.task_group or os.environ.get("CODEX_TASK_GROUP", "")
@@ -999,13 +1092,13 @@ def main(argv=None):
     prompt = sys.stdin.read()
     try:
         args = resolve_fast_path_args(args, prompt)
-        summary = run(args, prompt)
+        summary = _graph_route_required_summary(args) if getattr(args, "graph_required", False) else run(args, prompt)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         summary = {"status": "fail", "reason": str(error)[:120] or "runner_validation_failed"}
     if summary.get("status") == "pass" and summary.get("ending_required") is True and summary.get("ending_launch_ready") is True:
         _emit_ending_required(summary)
     print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))
-    return 0 if summary["status"] == "pass" else 1
+    return 0 if summary["status"] == "pass" else 2 if summary["status"] == "route-required" else 1
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -96,6 +97,7 @@ DISPATCH_SCHEMA_VERSION = 2
 DYNAMIC_ROUTING_MODE = "dynamic_task_graph"
 ALLOWED_PHASES = {"result", "ending"}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
+DETERMINISTIC_SOURCE_READ = "deterministic-source-read"
 DECOMPOSITION_POLICY = "max_safe"
 ALLOWED_OPERATIONS = {"text", "code", "write", "execute", "other"}
 ALLOWED_DECOMPOSITION_COUPLINGS = {"linear", "independent"}
@@ -795,11 +797,30 @@ def validate_plan(
 
         model = node.get("model")
         effort = node.get("effort")
+        deterministic_source_read = node.get("execution_kind") == DETERMINISTIC_SOURCE_READ
         stage = _get_node_decomposition(node, plan.get("decomposition")) if dynamic_graph else None
         priority_branch = _priority_result_node(node, stage)
         ending_fast_node = node.get("phase") == "ending" and f"{model}|{effort}" == ENDING_FAST_PRIMARY_PAIR
-        if not priority_branch and not ending_fast_node and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
+        if not deterministic_source_read and not priority_branch and not ending_fast_node and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
             failures.append(f"{node_id} must use a model/effort from the catalog quality ladder")
+        if deterministic_source_read:
+            if model is not None or effort is not None:
+                failures.append(f"{node_id} deterministic source reads must not declare a model or effort")
+            if node.get("phase") != "result":
+                failures.append(f"{node_id} deterministic source reads must be result-phase nodes")
+            if node.get("skill") != "task-analyze-skill":
+                failures.append(f"{node_id} deterministic source reads must be owned by task-analyze-skill")
+            if node.get("dependencies"):
+                failures.append(f"{node_id} deterministic source reads cannot depend on another node")
+            source_allowlist = node.get("source_allowlist")
+            if not isinstance(source_allowlist, list) or len(source_allowlist) != 1 or not isinstance(source_allowlist[0], str) or not source_allowlist[0]:
+                failures.append(f"{node_id} deterministic source reads require exactly one source_allowlist path")
+            elif Path(source_allowlist[0]).is_absolute() or ".." in Path(source_allowlist[0]).parts:
+                failures.append(f"{node_id} deterministic source reads require one project-relative source")
+            elif not path_is_within((cwd / source_allowlist[0]).resolve(), cwd.resolve()) or not (cwd / source_allowlist[0]).is_file():
+                failures.append(f"{node_id} deterministic source read path must resolve to an existing file inside cwd")
+            if node_id == plan.get("main_result_node"):
+                failures.append(f"{node_id} deterministic source reads cannot be the main result node")
         if "priority_producer" in node and not priority_branch:
             failures.append(f"{node_id} priority_producer is valid only for an eligible bounded task segment or single-source read-only branch")
         skill = node.get("skill")
@@ -818,6 +839,9 @@ def validate_plan(
             failures.append(f"{node_id} requests an unsafe automatic sandbox")
         if "load_user_config" in node and not isinstance(node["load_user_config"], bool):
             failures.append(f"{node_id} load_user_config must be a boolean")
+        routing_project_root = node.get("routing_project_root")
+        if routing_project_root is not None and (not isinstance(routing_project_root, str) or not Path(routing_project_root).expanduser().resolve().is_dir()):
+            failures.append(f"{node_id} routing_project_root must resolve to an existing canonical project directory")
         if dynamic_graph:
             try:
                 node_score_band = complexity_band(node.get("complexity_score"))
@@ -1019,7 +1043,7 @@ def validate_plan(
                         failures.append(f"{node_id} routing_recommendation profile fingerprint is invalid")
                     if enforce_current_recommendation and not missing_proof_keys:
                         try:
-                            current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, cwd, entry_model, entry_effort)
+                            current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, node.get("routing_project_root") or cwd, entry_model, entry_effort)
                         except (OSError, TypeError, ValueError) as error:
                             failures.append(f"{node_id} current dual-history recommendation could not be verified: {type(error).__name__}")
                         else:
@@ -1091,7 +1115,15 @@ def validate_plan(
                 failures.append("grounded read-only answers allow multiple result nodes only for disjoint source branches plus either a dependency-only merge or one disjoint owned source fused into the main merge")
 
     ending_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
-    if len(ending_ids) != 1:
+    declared_ending_required = plan.get("ending_required")
+    if "ending_required" in plan and not isinstance(declared_ending_required, bool):
+        failures.append("ending_required must be a boolean when declared")
+    if declared_ending_required is False:
+        if plan.get("ending_skip_reason") != "no_real_test_or_information_or_memory_update":
+            failures.append("a no-surface plan must declare ending_skip_reason=no_real_test_or_information_or_memory_update")
+        if ending_ids:
+            failures.append("a no-surface plan must not contain a task-level Ending node")
+    elif len(ending_ids) != 1:
         failures.append("the locked plan must include exactly one task-level Ending node; put every acceptance check inside that node")
     else:
         ending_id = next(iter(ending_ids))
@@ -1428,6 +1460,8 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     skill_path = resolve_node_skill_path(node["skill"], skills_root)
     if skill_path is None:
         raise ValueError(f"node skill cannot be resolved: {node['skill']}")
+    if node.get("execution_kind") == DETERMINISTIC_SOURCE_READ:
+        return _run_deterministic_source_read(node, receipt_path, result_path, workdir)
     dependency_text = dependency_context(node, completed)
     prompt = (
         f"Owning skill: {node['skill']}\n"
@@ -1725,6 +1759,110 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     }
 
 
+def _run_deterministic_source_read(node, receipt_path, result_path, workdir):
+    started_ns = time.monotonic_ns()
+    source = node["source_allowlist"][0]
+    source_path = (Path(workdir).resolve() / source).resolve()
+    status = "pass"
+    failure_class = None
+    failure_detail = None
+    output_sha256 = None
+    result_ready_monotonic_ns = None
+    try:
+        source_bytes = source_path.read_bytes()
+        source_text = source_bytes.decode("utf-8")
+        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        output = f"SOURCE: {source}\nSHA256: {source_sha256}\nCONTENT-BEGIN\n{source_text}\nCONTENT-END\n"
+        result_path.write_text(output, encoding="utf-8")
+        output_sha256 = hashlib.sha256(output.rstrip("\n").encode("utf-8")).hexdigest()
+        result_ready_monotonic_ns = time.monotonic_ns()
+    except (OSError, UnicodeDecodeError) as error:
+        status = "fail"
+        failure_class = "execution"
+        failure_detail = type(error).__name__
+        source_sha256 = None
+    elapsed_ms = round((time.monotonic_ns() - started_ns) / 1_000_000)
+    tokens = {"input_tokens": 0, "cached_input_tokens": 0, "uncached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0, "total_tokens": 0}
+    receipt = {
+        "schema_version": 2,
+        "node_type": DETERMINISTIC_SOURCE_READ,
+        "node_role": "context-provider",
+        "workload_id": f"task-route-{node['id']}",
+        "status": status,
+        "turn_completed": status == "pass",
+        "result_published": status == "pass",
+        "result_ready_monotonic_ns": result_ready_monotonic_ns,
+        "requested_model": None,
+        "requested_effort": None,
+        "requested_pair": None,
+        "resolved_model": None,
+        "resolved_effort": None,
+        "resolved_pair": None,
+        "effective_model": None,
+        "effective_effort": None,
+        "effective_pair": None,
+        "model_match": True,
+        "effort_match": True,
+        "pair_match": True,
+        "metrics_complete": True,
+        "tokens": tokens,
+        "strategy_tokens": tokens,
+        "process_elapsed_ms": elapsed_ms,
+        "model_turn_duration_ms": None,
+        "time_to_first_token_ms": None,
+        "failure_class": failure_class,
+        "failure_detail": failure_detail,
+        "pre_execution_failure": status != "pass",
+        "route_attempts": [],
+        "reroutes": [],
+        "source_path": source,
+        "source_sha256": source_sha256,
+        "output_sha256": output_sha256,
+        "deterministic": True,
+    }
+    receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    callback = node.get("_result_ready_callback")
+    if status == "pass" and callable(callback):
+        callback(result_path, result_ready_monotonic_ns)
+    return {
+        "id": node["id"],
+        "phase": node["phase"],
+        "skill": node["skill"],
+        "execution_kind": DETERMINISTIC_SOURCE_READ,
+        "requested_model": None,
+        "requested_effort": None,
+        "requested_pair": None,
+        "resolved_model": None,
+        "resolved_effort": None,
+        "resolved_pair": None,
+        "effective_model": None,
+        "effective_effort": None,
+        "effective_pair": None,
+        "model_evidence_source": "deterministic_local_runtime",
+        "evidence_level": "runtime_receipt",
+        "failure_class": failure_class,
+        "operational_fallback": False,
+        "model": None,
+        "effort": None,
+        "workload_id": f"task-route-{node['id']}",
+        "status": status,
+        "receipt_path": str(receipt_path),
+        "result_path": str(result_path) if result_path.exists() else None,
+        "result_published": status == "pass",
+        "result_ready_monotonic_ns": result_ready_monotonic_ns,
+        "receipt_failure_after_result": False,
+        "worker_identity": None,
+        "tokens": tokens,
+        "process_elapsed_ms": elapsed_ms,
+        "model_turn_duration_ms": None,
+        "time_to_first_token_ms": None,
+        "complexity_score": node.get("complexity_score"),
+        "complexity_band": node.get("complexity_band"),
+        "selection_basis": "deterministic_local_runtime",
+        "dependencies": [],
+    }
+
+
 def _route_run_id():
     return f"route-{uuid.uuid4().hex}"
 
@@ -1954,7 +2092,7 @@ def run_plan(
                 ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
                 ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
                 ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
-                ready_node["_project_root"] = str(cwd.resolve())
+                ready_node["_project_root"] = str(Path(ready_node.get("routing_project_root") or cwd).expanduser().resolve())
                 ready_node["_entry_model"] = entry_model
                 ready_node["_entry_effort"] = entry_effort
                 ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)

@@ -9,7 +9,7 @@
 
 ## Stable entry points and constraints
 
-- Route admitted work with `task-analyze-skill/scripts/obsidian_adaptive_model_runner.py`.
+- Classify material result stages before any producer. Exactly one stage uses `task-analyze-skill/scripts/obsidian_adaptive_model_runner.py`; two or more stages use one `dynamic_task_graph` and one `task_route_dispatcher.py run-plan`. A zero-argument `graph-route-required`/`route-required` result means no model ran and must never be retried as one producer.
 - Require exactly one disclosed execution lifecycle for every routed result: eligible ultra-simple work executes directly; other single-result work plans then executes once; multi-result work plans and executes a dependency graph. Only same-topic quality/correctness failure strengthens its solver; operational failure is quality-neutral, and acceptance remains final-aggregate and surface-gated.
 - Publish only through `management-skill/scripts/sync_global_skills.py` when authorized.
 - Treat `management-skill/assets/global-skill-capability-catalog.json` as the retained global behavior authority. An explicit local install/update writes a recoverable provisional installation first; Codex then runs installed, source, platform, and parity checks, repairs the maintained source and reinstalls without assigning gate work to the user, and reports completion only after PASS. A failed or externally blocked attempt restores the previous installation. GitHub commit/push still requires the full gate before mutation.

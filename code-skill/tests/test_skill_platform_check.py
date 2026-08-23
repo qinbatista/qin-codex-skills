@@ -159,7 +159,7 @@ class SkillPlatformCheckTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_name:
             root = Path(temporary_name)
             staged_skills = root / "skills"
-            shutil.copytree(SKILLS_DIR, staged_skills, ignore=shutil.ignore_patterns("cache", "work", "__pycache__"))
+            shutil.copytree(SKILLS_DIR, staged_skills, ignore=shutil.ignore_patterns("Cache", "cache", "work", "__pycache__"))
             introduced_path = staged_skills / "code-skill" / "scripts" / "introduced.py"
             introduced_path.write_text("import subprocess\nsubprocess.run(['cmd.exe', '/c', 'echo'])\n", encoding="utf-8")
             repository_dir = root / "repository"

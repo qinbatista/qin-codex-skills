@@ -28,7 +28,7 @@ except ModuleNotFoundError:
     thread_column_capabilities = _sqlite_resolver.thread_column_capabilities
 
 
-TIERS = ("simple", "medium", "complex")
+TIERS = ("simple", "medium", "complex", "advanced")
 SANDBOXES = ("read-only", "workspace-write", "danger-full-access")
 ENTRY_CONTEXT_ENV = "CODEX_TASK_ANALYZE_ENTRY_CONTEXT"
 RUNNER_CONFIG_NAME = "runner-config.json"
@@ -37,6 +37,8 @@ QUOTA_RESPONSE_ID = 2
 DEFAULT_QUOTA_PAUSE_AT_PERCENT = 80.0
 DEFAULT_QUOTA_APP_SERVER_TIMEOUT = 10
 RUNTIME_CENSUS_TIMEOUT_SECONDS = 120.0
+BEFORE_RUNTIME_CENSUS_TIMEOUT_SECONDS = 5.0
+FINAL_RUNTIME_CENSUS_TIMEOUT_SECONDS = 5.0
 RUNTIME_CENSUS_BUSY_TIMEOUT_MS = 2000
 RUNTIME_CENSUS_RETRY_INTERVAL_SECONDS = 0.1
 RUNTIME_CENSUS_QUIESCENCE_SECONDS = 0.2
@@ -144,7 +146,7 @@ def read_quota_status(args, codex_home):
     command_environment = os.environ.copy()
     command_environment["CODEX_HOME"] = str(codex_home)
     process = None
-    selector = None
+    reader = None
     try:
         process = subprocess.Popen(
             [args.codex_bin, "app-server", "--listen", "stdio://"],
@@ -157,29 +159,16 @@ def read_quota_status(args, codex_home):
             shell=False,
             bufsize=0,
         )
-        requests = [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"clientInfo": {"name": "benchmark-preflight", "version": "1.0.0"}, "capabilities": {}}},
-            {"jsonrpc": "2.0", "id": QUOTA_RESPONSE_ID, "method": "account/rateLimits/read", "params": {}},
-        ]
-        for request in requests:
-            process.stdin.write((json.dumps(request, separators=(",", ":")) + "\n").encode("utf-8"))
-        process.stdin.flush()
+        response_queue = queue.Queue()
+        reader = threading.Thread(target=_read_stream_lines, args=(process.stdout, response_queue), name="benchmark-quota-stdout", daemon=True)
+        reader.start()
         deadline = time.monotonic() + args.quota_app_server_timeout
-        def parse_response_line(raw_line):
-            try:
-                response = json.loads(raw_line)
-            except (UnicodeError, json.JSONDecodeError):
-                return None
-            if isinstance(response, dict) and response.get("id") == QUOTA_RESPONSE_ID:
-                if response.get("error") is not None:
-                    raise QuotaStatusError("quota_app_server_error")
-                return parse_quota_response(response)
-            return None
 
-        if os.name == "nt":
-            response_queue = queue.Queue()
-            reader = threading.Thread(target=_read_stream_lines, args=(process.stdout, response_queue), name="benchmark-quota-stdout", daemon=True)
-            reader.start()
+        def send(message):
+            process.stdin.write((json.dumps(message, separators=(",", ":")) + "\n").encode("utf-8"))
+            process.stdin.flush()
+
+        def receive(response_id):
             while time.monotonic() < deadline:
                 try:
                     raw_line = response_queue.get(timeout=max(0.001, deadline - time.monotonic()))
@@ -187,33 +176,27 @@ def read_quota_status(args, codex_home):
                     break
                 if raw_line is None:
                     break
-                parsed = parse_response_line(raw_line)
-                if parsed is not None:
-                    return parsed
-            reader.join(timeout=1)
-        else:
-            selector = selectors.DefaultSelector()
-            selector.register(process.stdout, selectors.EVENT_READ)
-            response_buffer = b""
-            while time.monotonic() < deadline:
-                ready = selector.select(timeout=max(0, deadline - time.monotonic()))
-                if not ready:
-                    break
-                response_chunk = os.read(process.stdout.fileno(), 65536)
-                if not response_chunk:
-                    break
-                response_buffer += response_chunk
-                while b"\n" in response_buffer:
-                    raw_line, response_buffer = response_buffer.split(b"\n", 1)
-                    parsed = parse_response_line(raw_line)
-                    if parsed is not None:
-                        return parsed
-        raise QuotaStatusError("quota_app_server_timeout")
+                try:
+                    response = json.loads(raw_line)
+                except (UnicodeError, json.JSONDecodeError):
+                    continue
+                if not isinstance(response, dict) or response.get("id") != response_id:
+                    continue
+                if response.get("error") is not None:
+                    raise QuotaStatusError("quota_app_server_error")
+                return response
+            raise QuotaStatusError("quota_app_server_timeout")
+
+        send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"clientInfo": {"name": "benchmark-preflight", "version": "1.0.0"}, "capabilities": {}}})
+        initialize_response = receive(1)
+        if not isinstance(initialize_response.get("result"), dict):
+            raise QuotaStatusError("quota_initialize_invalid")
+        send({"jsonrpc": "2.0", "method": "initialized"})
+        send({"jsonrpc": "2.0", "id": QUOTA_RESPONSE_ID, "method": "account/rateLimits/read", "params": None})
+        return parse_quota_response(receive(QUOTA_RESPONSE_ID))
     except OSError as error:
         raise QuotaStatusError("quota_app_server_unavailable") from error
     finally:
-        if selector is not None:
-            selector.close()
         if process is not None:
             if process.stdin is not None:
                 try:
@@ -227,6 +210,8 @@ def read_quota_status(args, codex_home):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
+        if reader is not None:
+            reader.join(timeout=1)
 
 
 def quota_pause(status, pause_at_percent, next_pair_id):
@@ -308,12 +293,31 @@ def read_runtime_rollout_snapshot(codex_home):
     return {"available": True, "complete": True, "thread_ids": thread_ids}
 
 
+def runtime_rollouts_exist_for_sqlite_path(state_db_path):
+    try:
+        configured_path = Path(state_db_path).expanduser().resolve() if state_db_path else None
+    except OSError:
+        return False
+    if configured_path is None:
+        runtime_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+    elif configured_path.is_dir():
+        runtime_home = configured_path.parent if configured_path.name == "runtime-sqlite" else configured_path
+    else:
+        runtime_home = configured_path.parent.parent if configured_path.parent.name == "runtime-sqlite" else configured_path.parent
+    sessions_root = runtime_home / "sessions"
+    try:
+        return sessions_root.is_dir() and next(sessions_root.rglob("*.jsonl"), None) is not None
+    except OSError:
+        return False
+
+
 def read_runtime_thread_snapshot(state_db_path=None, required_thread_id=None, timeout_seconds=RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=None, quiescence_seconds=RUNTIME_CENSUS_QUIESCENCE_SECONDS):
     deadline = time.monotonic() + timeout_seconds
     stable_signature = None
     started = time.monotonic()
+    runtime_database_expected = required_thread_id is not None or runtime_rollouts_exist_for_sqlite_path(state_db_path)
     if diagnostics is not None:
-        diagnostics.update({"attempt_count": 0, "successful_read_count": 0, "sqlite_error_count": 0, "normal_sqlite_error_count": 0, "immutable_attempt_count": 0, "immutable_success_count": 0, "immutable_error_count": 0, "last_sqlite_error_code": None, "last_sqlite_error_name": None, "last_sqlite_error_category": None, "status": "running", "elapsed_ms": None})
+        diagnostics.update({"attempt_count": 0, "successful_read_count": 0, "sqlite_error_count": 0, "normal_sqlite_error_count": 0, "immutable_attempt_count": 0, "immutable_success_count": 0, "immutable_error_count": 0, "last_sqlite_error_code": None, "last_sqlite_error_name": None, "last_sqlite_error_category": None, "runtime_database_expected": runtime_database_expected, "status": "running", "elapsed_ms": None})
     while True:
         retry_interval_seconds = RUNTIME_CENSUS_RETRY_INTERVAL_SECONDS
         try:
@@ -324,7 +328,7 @@ def read_runtime_thread_snapshot(state_db_path=None, required_thread_id=None, ti
         if diagnostics is not None:
             diagnostics["attempt_count"] += 1
         if runtime_database is None or not runtime_database.exists():
-            if required_thread_id is None:
+            if not runtime_database_expected:
                 if diagnostics is not None:
                     diagnostics.update({"status": "complete", "elapsed_ms": round((time.monotonic() - started) * 1000)})
                 return {"complete": True, "threads": {}}
@@ -471,6 +475,60 @@ def rollout_observation(rollout_path):
     observation["rollout_sha256"] = sha256_bytes(rollout_bytes)
     observation["turn_completed"] = valid_jsonl and last_task_complete_index >= 0 and last_task_complete_index > last_task_started_index
     return observation
+
+
+def rollout_session_id(rollout_path):
+    try:
+        with Path(rollout_path).open(encoding="utf-8") as rollout_handle:
+            first_event = json.loads(rollout_handle.readline())
+    except (OSError, UnicodeError, TypeError, json.JSONDecodeError):
+        return None
+    payload = first_event.get("payload") if isinstance(first_event, dict) and first_event.get("type") == "session_meta" and isinstance(first_event.get("payload"), dict) else None
+    thread_id = payload.get("id") if payload is not None else None
+    return thread_id if isinstance(thread_id, str) and thread_id else None
+
+
+def recover_final_snapshot_from_foreground(before_snapshot, foreground_snapshot, before_rollout_snapshot, after_rollout_snapshot, diagnostics=None):
+    if before_snapshot.get("complete") is not True or foreground_snapshot.get("complete") is not True or before_rollout_snapshot.get("complete") is not True or after_rollout_snapshot.get("complete") is not True or after_rollout_snapshot.get("available") is not True:
+        return None
+    foreground_new_ids = set(foreground_snapshot.get("threads", {})) - set(before_snapshot.get("threads", {}))
+    rollout_new_ids = set(after_rollout_snapshot.get("thread_ids", set())) - set(before_rollout_snapshot.get("thread_ids", set()))
+    if not foreground_new_ids or foreground_new_ids != rollout_new_ids:
+        return None
+    recovered_threads = {thread_id: dict(thread) for thread_id, thread in foreground_snapshot["threads"].items()}
+    for thread_id in sorted(foreground_new_ids):
+        thread = recovered_threads[thread_id]
+        observation = rollout_observation(thread.get("rollout_path"))
+        total_tokens = observation.get("rollout_total_tokens")
+        if rollout_session_id(thread.get("rollout_path")) != thread_id or observation.get("turn_completed") is not True or not isinstance(total_tokens, int) or isinstance(total_tokens, bool) or total_tokens < 0:
+            return None
+        if observation.get("rollout_model") != thread.get("model") or observation.get("rollout_effort") != thread.get("effort"):
+            return None
+        thread["tokens_used"] = total_tokens
+    if diagnostics is not None:
+        diagnostics.update({"status": "complete", "fallback_used": True, "fallback_provenance": "foreground_db_plus_complete_rollout"})
+    return {"complete": True, "threads": recovered_threads}
+
+
+def recover_before_snapshot_from_after_and_rollout_delta(before_snapshot, after_snapshot, before_rollout_snapshot, after_rollout_snapshot, diagnostics=None):
+    """Recover only the pre-run DB baseline from two complete post-run views."""
+    if before_snapshot.get("complete") is True or after_snapshot.get("complete") is not True:
+        return before_snapshot if before_snapshot.get("complete") is True else None
+    if before_rollout_snapshot.get("available") is not True or before_rollout_snapshot.get("complete") is not True or after_rollout_snapshot.get("available") is not True or after_rollout_snapshot.get("complete") is not True:
+        return None
+    before_rollout_ids = set(before_rollout_snapshot.get("thread_ids", set()))
+    after_rollout_ids = set(after_rollout_snapshot.get("thread_ids", set()))
+    after_database_ids = set(after_snapshot.get("threads", {}))
+    rollout_new_ids = after_rollout_ids - before_rollout_ids
+    if not rollout_new_ids or not rollout_new_ids.issubset(after_database_ids) or not after_database_ids.issubset(after_rollout_ids):
+        return None
+    baseline_database_ids = after_database_ids - rollout_new_ids
+    if not baseline_database_ids.issubset(before_rollout_ids):
+        return None
+    recovered_threads = {thread_id: dict(after_snapshot["threads"][thread_id]) for thread_id in baseline_database_ids}
+    if diagnostics is not None:
+        diagnostics.update({"status": "complete", "fallback_used": True, "fallback_provenance": "after_db_plus_complete_rollout_delta"})
+    return {"complete": True, "threads": recovered_threads}
 
 
 def runtime_session_records(before_snapshot, after_snapshot):
@@ -669,6 +727,8 @@ def runner_config(args, plan):
         "codex_bin_sha256": sha256_bytes(codex_bin_path.read_bytes()),
         "direct_pair": f"{args.direct_model}|{args.direct_effort}",
         "auto_entry_pair": f"{args.auto_entry_model}|{args.auto_entry_effort}",
+        "task_sandbox": args.sandbox,
+        "auto_controller_sandbox": args.auto_controller_sandbox,
         "timeout": args.timeout,
         "outer_timeout_grace": args.outer_timeout_grace,
         "poll_interval_ms": args.poll_interval_ms,
@@ -798,11 +858,12 @@ def execute_run(args, run_plan, prompt_text):
     sqlite_home.mkdir(parents=True, exist_ok=True)
     state_db_path = sqlite_home
     run_model, run_effort = run_plan["selected_entry_pair"].split("|", 1)
-    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", run_model, "--effort", run_effort, "--workload-id", run_plan["run_id"], "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout)]
+    launch_sandbox = args.auto_controller_sandbox if run_plan["arm"] == "global" else args.sandbox
+    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", run_model, "--effort", run_effort, "--workload-id", run_plan["run_id"], "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", launch_sandbox, "--timeout", str(args.timeout)]
     if run_plan["arm"] == "direct":
         command.extend(["--direct-task", "--benchmark-run-id", f"benchmark-{run_plan['run_id']}"])
     else:
-        command.extend(["--bootstrap-task", "--benchmark-run-id", f"benchmark-{run_plan['run_id']}", "--benchmark-prompt-path", run_plan["prompt_path"]])
+        command.extend(["--bootstrap-task", "--benchmark-run-id", f"benchmark-{run_plan['run_id']}", "--benchmark-prompt-path", run_plan["prompt_path"], "--benchmark-task-sandbox", args.sandbox])
     command_environment = os.environ.copy()
     command_environment.pop(ENTRY_CONTEXT_ENV, None)
     command_environment["CODEX_HOME"] = str(codex_home)
@@ -813,7 +874,7 @@ def execute_run(args, run_plan, prompt_text):
     stderr_path = receipt_path.parent / "runner.stderr.log"
     before_census_diagnostics = {}
     before_rollout_snapshot = read_runtime_rollout_snapshot(codex_home)
-    before_snapshot = read_runtime_thread_snapshot(state_db_path, diagnostics=before_census_diagnostics)
+    before_snapshot = read_runtime_thread_snapshot(state_db_path, timeout_seconds=BEFORE_RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=before_census_diagnostics)
     started_ns = time.monotonic_ns()
     result_ready_events = []
     result_ready_event_failures = []
@@ -840,7 +901,10 @@ def execute_run(args, run_plan, prompt_text):
                         runner_monotonic_ns = time.monotonic_ns()
                         foreground_census_diagnostics = {}
                         foreground_snapshot = read_runtime_thread_snapshot(state_db_path, required_thread_id=main_thread_id, diagnostics=foreground_census_diagnostics, quiescence_seconds=0)
-                        result_ready_events.append({"event": event, "runner_monotonic_ns": runner_monotonic_ns, "foreground_snapshot": foreground_snapshot, "foreground_census_diagnostics": foreground_census_diagnostics})
+                        foreground_rollout_snapshot = read_runtime_rollout_snapshot(codex_home)
+                        foreground_rollout_new_ids = foreground_rollout_snapshot["thread_ids"] - before_rollout_snapshot["thread_ids"] if before_rollout_snapshot["complete"] and foreground_rollout_snapshot["complete"] else set()
+                        foreground_census_diagnostics.update({"rollout_file_census_available": foreground_rollout_snapshot["available"], "rollout_file_census_complete": before_rollout_snapshot["complete"] and foreground_rollout_snapshot["complete"], "rollout_new_session_count": len(foreground_rollout_new_ids)})
+                        result_ready_events.append({"event": event, "runner_monotonic_ns": runner_monotonic_ns, "foreground_snapshot": foreground_snapshot, "foreground_rollout_snapshot": foreground_rollout_snapshot, "foreground_census_diagnostics": foreground_census_diagnostics})
 
             if os.name == "nt":
                 output_queue = queue.Queue()
@@ -901,6 +965,7 @@ def execute_run(args, run_plan, prompt_text):
     result_ready_event = result_ready_events[0]["event"]
     first_result_ns = result_ready_events[0]["runner_monotonic_ns"]
     foreground_snapshot = result_ready_events[0]["foreground_snapshot"]
+    foreground_rollout_snapshot = result_ready_events[0]["foreground_rollout_snapshot"]
     foreground_census_diagnostics = result_ready_events[0]["foreground_census_diagnostics"]
     if not isinstance(receipt, dict):
         raise BenchmarkRunnerError("receipt_result_ready_event_invalid")
@@ -920,8 +985,18 @@ def execute_run(args, run_plan, prompt_text):
     route_attempts = receipt.get("route_attempts") if receipt and isinstance(receipt.get("route_attempts"), list) else []
     reroutes = receipt.get("reroutes") if receipt and isinstance(receipt.get("reroutes"), list) else []
     after_census_diagnostics = {}
-    after_snapshot = read_runtime_thread_snapshot(state_db_path, required_thread_id=thread_id, diagnostics=after_census_diagnostics)
+    after_snapshot = read_runtime_thread_snapshot(state_db_path, required_thread_id=thread_id, timeout_seconds=FINAL_RUNTIME_CENSUS_TIMEOUT_SECONDS, diagnostics=after_census_diagnostics)
     after_rollout_snapshot = read_runtime_rollout_snapshot(codex_home)
+    if before_snapshot["complete"] is not True:
+        recovery_database_snapshot = after_snapshot if after_snapshot["complete"] is True else foreground_snapshot
+        recovery_rollout_snapshot = after_rollout_snapshot if after_snapshot["complete"] is True else foreground_rollout_snapshot
+        recovered_before_snapshot = recover_before_snapshot_from_after_and_rollout_delta(before_snapshot, recovery_database_snapshot, before_rollout_snapshot, recovery_rollout_snapshot, diagnostics=before_census_diagnostics)
+        if recovered_before_snapshot is not None:
+            before_snapshot = recovered_before_snapshot
+    if after_snapshot["complete"] is not True:
+        recovered_snapshot = recover_final_snapshot_from_foreground(before_snapshot, foreground_snapshot, before_rollout_snapshot, after_rollout_snapshot, diagnostics=after_census_diagnostics)
+        if recovered_snapshot is not None:
+            after_snapshot = recovered_snapshot
     rollout_new_thread_ids = after_rollout_snapshot["thread_ids"] - before_rollout_snapshot["thread_ids"] if before_rollout_snapshot["complete"] and after_rollout_snapshot["complete"] else set()
     database_new_thread_ids = set(after_snapshot["threads"]) - set(before_snapshot["threads"]) if before_snapshot["complete"] and after_snapshot["complete"] else set()
     rollout_cross_check_passed = thread_id is None or (after_rollout_snapshot["available"] and before_rollout_snapshot["complete"] and after_rollout_snapshot["complete"] and before_snapshot["complete"] and after_snapshot["complete"] and rollout_new_thread_ids == database_new_thread_ids)
@@ -954,7 +1029,7 @@ def execute_dual_entry_probe(args, run_plan, prompt_text):
     sqlite_home = codex_home / "runtime-sqlite"
     sqlite_home.mkdir(parents=True, exist_ok=True)
     probe_run_id = f"{run_plan['run_id']}-sol-entry-probe"
-    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", probe_run_id, "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", args.sandbox, "--timeout", str(args.timeout), "--bootstrap-task", "--benchmark-run-id", f"benchmark-{probe_run_id}", "--benchmark-prompt-path", run_plan["prompt_path"]]
+    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", probe_run_id, "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", args.auto_controller_sandbox, "--timeout", str(args.timeout), "--bootstrap-task", "--benchmark-run-id", f"benchmark-{probe_run_id}", "--benchmark-prompt-path", run_plan["prompt_path"], "--benchmark-task-sandbox", args.sandbox]
     command_environment = os.environ.copy()
     command_environment.pop(ENTRY_CONTEXT_ENV, None)
     command_environment["CODEX_HOME"] = str(codex_home)
@@ -1050,7 +1125,7 @@ def parse_args(argv=None):
     parser.add_argument("--suite-root", type=Path, required=True)
     repeat_group = parser.add_mutually_exclusive_group()
     repeat_group.add_argument("--repeat-count", type=int, default=6)
-    repeat_group.add_argument("--tier-repeats", help="Even per-tier counts, for example simple=4,medium=2,complex=2.")
+    repeat_group.add_argument("--tier-repeats", help="Even per-tier counts, for example simple=4,medium=2,complex=2,advanced=2.")
     parser.add_argument("--direct-model", default="gpt-5.6-sol")
     parser.add_argument("--direct-effort", default="ultra")
     parser.add_argument("--auto-entry-model", default="gpt-5.6-luna")
@@ -1060,6 +1135,7 @@ def parse_args(argv=None):
     parser.add_argument("--receipt-runner", type=Path, default=Path(__file__).with_name("model_execution_receipt.py"))
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--sandbox", choices=SANDBOXES, default="danger-full-access")
+    parser.add_argument("--auto-controller-sandbox", choices=SANDBOXES, default="danger-full-access", help="Sandbox used only by the excluded Auto entry controller; the receipt-proven task child still uses --sandbox.")
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--outer-timeout-grace", type=int, default=60)
     parser.add_argument("--poll-interval-ms", type=int, default=10)

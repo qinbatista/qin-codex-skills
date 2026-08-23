@@ -188,7 +188,8 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             notice = module._graph_model_route_notice(args, plan, recommendation(), recommendation(pair="gpt-5.6-terra|medium"))
         self.assertEqual(notice["kind"], "graph_model_route")
         self.assertEqual([part["node_id"] for part in notice["parts"]], ["source-1", "merge-result", "ending-verify"])
-        self.assertIn("each of 3 task parts", notice["message"])
+        self.assertIn("3 task parts have routed model/effort assignments", notice["message"])
+        self.assertIn("0 source captures run locally", notice["message"])
 
     def test_explicit_route_arguments_keep_read_only_and_emit_defaults(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -472,11 +473,69 @@ source_files must list all sources in order."""
         self.assertEqual(plan["fused_source"], "c.py")
         self.assertEqual(len(result_nodes), 3)
         self.assertEqual([node["source_allowlist"] for node in result_nodes], [["a.py"], ["b.py"], ["c.py"]])
+        self.assertEqual([(node["model"], node["effort"]) for node in result_nodes[:-1]], [("gpt-5.6-luna", "low"), ("gpt-5.6-luna", "low")])
+        self.assertTrue(all("priority_producer" not in node for node in result_nodes[:-1]))
         self.assertEqual(result_nodes[-1]["dependencies"], ["source-1", "source-2"])
         self.assertTrue(result_nodes[-1]["fuses_owned_source_with_dependencies"])
         self.assertNotIn("reads_dependency_results_only", result_nodes[-1])
         self.assertIn("Dependency results own every other section", result_nodes[-1]["prompt"])
         self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
+
+    def test_small_exact_owned_sources_use_parallel_local_capture_and_one_model_synthesis(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.complexity = "complex"
+            sources = ["a.py", "b.py", "c.json"]
+            for source in sources:
+                (args.workdir / source).write_text(f"VALUE = {source!r}\n", encoding="utf-8")
+            prompt = """Complete three independent read-only source audits. Do not edit files.
+a.py
+b.py
+c.json
+Return exactly one single-line minified JSON object.
+
+alpha is owned only by a.py
+- alpha
+
+beta is owned only by b.py
+- beta
+
+gamma is owned only by c.json
+- gamma
+
+source_files must list all sources in order."""
+            proof = {"selected_pair": "gpt-5.6-luna|low", "attempt_pair": "gpt-5.6-luna|low", "active_fallback_pair": None, "trial": False, "reason": "local_history", "profile_fingerprint": "fingerprint", "calibration_state": "frozen", "best_pair": "gpt-5.6-luna|low", "selection_basis": "local_history"}
+            adaptive = {"selected_pair": "gpt-5.6-luna|low", "trial": False}
+            with patch.object(module.task_route_dispatcher, "_obsidian_recommendation_and_proof", return_value=(adaptive, proof)):
+                plan = module._scheduled_plan(args, prompt, sources, "gpt-5.6-sol", "ultra", recommendation())[0]
+        result_nodes = [node for node in plan["nodes"] if node["phase"] == "result"]
+        captures = result_nodes[:-1]
+        merge = result_nodes[-1]
+        self.assertEqual(plan["schedule_mode"], "parallel_source_capture_single_synthesis")
+        self.assertTrue(plan["deterministic_source_capture"])
+        self.assertEqual(plan["parallel_branch_count"], 3)
+        self.assertEqual([node["execution_kind"] for node in captures], [module.task_route_dispatcher.DETERMINISTIC_SOURCE_READ] * 3)
+        self.assertEqual([node["source_allowlist"] for node in captures], [["a.py"], ["b.py"], ["c.json"]])
+        self.assertTrue(all(node["model"] is None and node["effort"] is None for node in captures))
+        self.assertEqual(merge["dependencies"], ["source-1", "source-2", "source-3"])
+        self.assertTrue(merge["reads_dependency_results_only"])
+        self.assertEqual(merge["routing_project_root"], str(Path(args.project_root).resolve()))
+        self.assertEqual((merge["model"], merge["effort"]), ("gpt-5.6-luna", "low"))
+
+    def test_large_exact_owned_sources_keep_model_source_audit_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = ["a.py", "b.py"]
+            for source in sources:
+                (root / source).write_text("X" * (module.DETERMINISTIC_CAPTURE_SOURCE_BYTE_LIMIT + 1), encoding="utf-8")
+            prompt = """Return exactly one single-line minified JSON object.
+alpha is owned only by a.py
+- alpha
+beta is owned only by b.py
+- beta
+source_files must list all sources in order."""
+            eligible = module._deterministic_capture_eligible(prompt, root, sources)
+        self.assertFalse(eligible)
 
     def test_exact_expression_schedule_raises_branch_quality(self):
         exact = "Return exactly one JSON object. Copy the exact expression, preserve key order, and preserve the exact literal."
@@ -563,6 +622,31 @@ source_files must list both sources."""
         self.assertEqual(args.sandbox, "workspace-write")
         self.assertTrue(args.emit_result)
 
+    def test_zero_argument_multi_stage_task_requires_dynamic_graph_before_any_model_execution(self):
+        prompt = "查看近期代码任务并模拟重放；如果 Skill 没触发就更改规则，测试后部署并提交。"
+        with tempfile.TemporaryDirectory() as temporary:
+            workdir = Path(temporary)
+            stream = io.StringIO()
+            with patch.object(module.Path, "cwd", return_value=workdir), patch.object(module.sys, "stdin", io.StringIO(prompt)), patch.object(module.sys, "stdout", stream), patch.object(module, "run") as execute:
+                status = module.main([])
+        summary = json.loads(stream.getvalue())
+        self.assertEqual(status, 2)
+        self.assertEqual(summary["status"], "route-required")
+        self.assertEqual(summary["routing_mode"], module.task_route_dispatcher.DYNAMIC_ROUTING_MODE)
+        self.assertEqual(summary["parent_action"], "build_dynamic_task_graph_and_call_task_route_dispatcher_once")
+        self.assertEqual(summary["execution_lifecycle"]["mode"], "planned_graph")
+        self.assertTrue(summary["code_gate_required"])
+        self.assertFalse(summary["runner_executed"])
+        execute.assert_not_called()
+
+    def test_explicit_already_decomposed_node_does_not_reenter_graph_admission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            arguments = ["--project-root", str(root), "--task-type", "code", "--module", "task-analyze-skill", "--workload-id", "repair-node", "--receipt-output", str(root / "receipt.json"), "--result-output", str(root / "result.txt"), "--workdir", str(root)]
+            args = module.resolve_fast_path_args(module.parse_args(arguments), "Fix the classifier, test it, deploy it, and commit it.")
+        self.assertFalse(args.graph_required)
+        self.assertEqual(args.material_result_stages, ["change", "test", "deploy", "publish"])
+
     def test_main_emits_ending_required_event_before_the_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
@@ -622,6 +706,64 @@ source_files must list both sources."""
             receipt_args = module._receipt_args(args, ("gpt-5.3-codex-spark", "low"))
         self.assertEqual(receipt_args.route_marker, "LOCKED_ROUTE_NODE")
         self.assertIn(receipt_args.route_marker, module.model_execution_receipt.ROUTE_MARKERS)
+
+    def test_small_and_standard_non_code_leaf_use_minimal_context_without_changing_code_or_complex_routes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.ignore_user_config = False
+            args.task_type = "analysis"
+            args.code_rule_bundle = None
+            small = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+            args.complexity_score = 42
+            standard = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+            args.complexity_score = 68
+            complex_route = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+            args.complexity_score = 18
+            args.task_type = "code"
+            args.code_rule_bundle = {"schema_version": 1}
+            code = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+        self.assertTrue(small.minimal_context_mode)
+        self.assertTrue(small.ignore_user_config)
+        self.assertTrue(standard.minimal_context_mode)
+        self.assertTrue(standard.ignore_user_config)
+        self.assertFalse(complex_route.minimal_context_mode)
+        self.assertFalse(complex_route.ignore_user_config)
+        self.assertFalse(code.minimal_context_mode)
+        self.assertFalse(code.ignore_user_config)
+
+    def test_lean_context_requires_tiny_generic_immutable_exact_sources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.task_type = "analysis"
+            args.code_kind = "general"
+            args.operation = "analyze"
+            args.modality = "text"
+            args.complexity_score = 18
+            args.risk = "low"
+            args.ambiguity = "low"
+            args.code_rule_bundle = None
+            (args.workdir / "a.json").write_text('{"value":1}', encoding="utf-8")
+            (args.workdir / "b.json").write_text('{"value":2}', encoding="utf-8")
+            prompt = "Analyze only `a.json` and `b.json`; the files are immutable. Return exactly one single-line minified JSON object."
+            self.assertTrue(module._lean_context_eligible(args, prompt))
+            self.assertFalse(module._lean_context_eligible(args, prompt, admitted_schedule=True))
+            args.task_type = "code"
+            self.assertFalse(module._lean_context_eligible(args, prompt))
+
+    def test_lean_context_rejects_large_or_non_exact_source_work(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.task_type = "analysis"
+            args.modality = "text"
+            args.complexity_score = 18
+            args.risk = "low"
+            args.ambiguity = "low"
+            args.code_rule_bundle = None
+            (args.workdir / "large.json").write_text("x" * (module.DETERMINISTIC_CAPTURE_SOURCE_BYTE_LIMIT + 1), encoding="utf-8")
+            exact = "Read only `large.json`; do not edit files. Return exactly one single-line minified JSON object."
+            prose = "Read only `large.json`; do not edit files. Return a prose summary."
+            self.assertFalse(module._lean_context_eligible(args, exact))
+            self.assertFalse(module._lean_context_eligible(args, prose))
 
     def test_blocked_boundary_does_not_launch_model(self):
         with tempfile.TemporaryDirectory() as temporary:

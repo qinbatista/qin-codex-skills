@@ -76,12 +76,17 @@ _CODE_ACTION_PATTERNS = (
     ("fix", r"\bfix\b|\brepair\b|修复|修正"),
     ("migrate", r"\bmigrat(?:e|ion)\b|迁移(?:系统|数据|数据库|存档|格式)"),
     ("refactor", r"\brefactor\b|重构|拆分|拆成"),
-    ("test", r"\btest(?:ing)?\b|测试|验证"),
     ("write", r"\b(?:write|implement|add|create)\b|实现|新增|编写"),
     ("edit", r"\b(?:edit|change|modify|update)\b|修改|改成|更改|调整|优化"),
+    ("test", r"\btest(?:ing)?\b|测试|验证"),
 )
 _QUESTION_PATTERNS = (r"^(?:what|who|when|where|which|why|how|calculate|convert|is|are|can|does|do)\b", r"(?:什么|为什么|为何|怎么|如何|是否|哪[个里]|几[个]|干什么|有什么作用|有什么问题|请解释|解释一下|帮我分析|分析一下|是什么意思|天气怎么样)")
 _CONCEPT_EXPLANATION_PATTERNS = (r"(?:请解释|解释(?:一下)?|是什么意思|什么是|分别是什么意思|介绍一下|定义是)" , r"\b(?:what is|explain|define|meaning of)\b")
+_READ_ONLY_REQUEST_PATTERNS = (r"\b(?:read[- ]only|no edits?|do not (?:edit|modify|change)|without (?:editing|modifying|changing))\b", r"(?:只读|不修改|不要修改|无需修改|禁止修改)")
+_CHINESE_MUTATION_ACTION = r"(?:修复|修正|重命名|改名|替换|删除|迁移|重构|编写|实现|新增|创建|修改|改成|更改|调整|优化|强化|更新|部署|安装|提交|推送|发布)"
+_CHINESE_STRONG_MUTATION_ACTION = r"(?:修复|修正|重命名|改名|替换|删除|重构|编写|实现|新增|创建|修改|改成|更改|调整|优化|强化|更新|提交|推送|发布)"
+_MUTATION_REQUEST_PATTERNS = (r"(?:^|[.!?;,:]\s*|\b(?:then|and then)\s+)(?:please\s+)?(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen|deploy|install|commit|push|publish)\b|\b(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen|deploy|install|commit|push|publish)\b", rf"(?:^|然后|随后|接着|继续|并且|并|再)(?:请|给我|帮我|请帮我)?(?:直接|开始)?{_CHINESE_MUTATION_ACTION}|[,.!?;:](?:(?:请|给我|帮我|请帮我|直接|开始){_CHINESE_MUTATION_ACTION}|{_CHINESE_STRONG_MUTATION_ACTION})|(?:给我|帮我|请帮我)(?:继续)?{_CHINESE_MUTATION_ACTION}")
+_MATERIAL_RESULT_STAGE_PATTERNS = (("inspect", (r"\b(?:audit|inspect|review|analyze|investigate)\b", r"(?:分析|查看|检查|审计|调查|排查|核对|查(?:一下)?(?:skill|代码|任务))")), ("simulate", (r"\b(?:simulate|replay|benchmark)\b", r"(?:模拟|重放|回放|基准测试|benchmark)")), ("change", (r"\b(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen)\b", r"(?:修复|修正|重命名|改名|替换|删除|迁移|重构|编写|实现|新增|创建|修改|改成|更改|调整|优化|强化|更新)")), ("test", (r"\b(?:test|testing|verify|validate|regression|render|visual verification)\b", r"(?:测试|验证|回归|验收|渲染验收|视觉验收)")), ("deploy", (r"\b(?:deploy|deployment|install|installation)\b", r"(?:部署|安装)")), ("publish", (r"\b(?:commit|push|publish|submit)\b", r"(?:提交|推送|发布)")))
 _FILE_PATTERN = re.compile(r"(?<![\w./-])[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)(?![\w/-])", re.IGNORECASE)
 
 
@@ -98,6 +103,12 @@ def _matches_any(text, patterns):
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
 
 
+def infer_prompt_material_stages(prompt):
+    """Return bounded output-bearing stages without reading task files."""
+    text = _routing_text(prompt)
+    return [stage for stage, patterns in _MATERIAL_RESULT_STAGE_PATTERNS if _matches_any(text, patterns)]
+
+
 def infer_prompt_task_type(prompt):
     """Classify task intent without conflating a question with its complexity."""
     text = _routing_text(prompt)
@@ -105,21 +116,24 @@ def infer_prompt_task_type(prompt):
         return "unknown"
     matched_operations = [operation for operation, pattern in _CODE_ACTION_PATTERNS if re.search(pattern, text, re.IGNORECASE)]
     action_found = any(operation != "test" for operation in matched_operations)
-    explicit_mutation = any(operation in {"rename", "replace", "delete", "fix", "refactor", "write", "edit"} for operation in matched_operations)
+    mutation_requested = _matches_any(text, _MUTATION_REQUEST_PATTERNS)
+    read_only_requested = _matches_any(text, _READ_ONLY_REQUEST_PATTERNS)
     question_found = text.endswith(("?", "!")) or _matches_any(text, _QUESTION_PATTERNS)
+    if mutation_requested:
+        return "code"
     if question_found:
         return "question"
-    if not explicit_mutation and _matches_any(text, (r"^(?:analyze|audit|investigate)\b", r"^(?:请)?(?:分析|审计|调查|排查)")):
+    if _matches_any(text, (r"^(?:analyze|audit|investigate|inspect|review)\b", r"^(?:请)?(?:分析|审计|调查|排查|检查|查看|核对)")):
         return "analysis"
-    if action_found:
+    if action_found and not read_only_requested:
         return "code"
     if _FILE_PATTERN.search(text):
-        return "code"
+        return "question"
     if _matches_any(text, (r"\b(?:research|investigate)\b", r"调研|研究")):
         return "research"
     if _matches_any(text, (r"\b(?:write|draft|translate)\b", r"写一[篇份]|起草|翻译")):
         return "writing"
-    if _matches_any(text, (r"\b(?:analyze|audit|investigate)\b", r"分析|审计|调查|排查")):
+    if _matches_any(text, (r"\b(?:analyze|audit|investigate|inspect|review)\b", r"分析|审计|调查|排查|检查|查看|核对")):
         return "analysis"
     return "unknown"
 
@@ -153,6 +167,11 @@ def analyze_prompt_routing(prompt, risk="low", ambiguity="low"):
     explicit = re.search(r"(?:complexity|复杂度)(?:\s*score)?\s*[:=]\s*(100|[1-9]?\d)\b", text, re.IGNORECASE)
     task_type = infer_prompt_task_type(normalized)
     operation = infer_prompt_operation(normalized, task_type)
+    material_result_stages = infer_prompt_material_stages(normalized)
+    if task_type == "analysis" and not _matches_any(normalized, _MUTATION_REQUEST_PATTERNS):
+        material_result_stages = [stage for stage in material_result_stages if stage in {"inspect", "simulate", "test"}]
+    coupled_diagnosis_and_change = set(material_result_stages) == {"inspect", "change"}
+    graph_required = task_type != "question" and len(material_result_stages) >= 2 and not coupled_diagnosis_and_change
     if explicit:
         score = int(explicit.group(1))
         reasons = ["explicit complexity score"]
@@ -191,6 +210,8 @@ def analyze_prompt_routing(prompt, risk="low", ambiguity="low"):
         action_count = sum(bool(re.search(pattern, text, re.IGNORECASE)) for _, pattern in _CODE_ACTION_PATTERNS)
         if action_count > 1:
             additions.append(("multiple requested actions", min(12, (action_count - 1) * 4)))
+        if graph_required:
+            additions.append((f"{len(material_result_stages)} material result stages", min(40, (len(material_result_stages) - 1) * 10)))
         for concern, patterns, weight in concern_patterns:
             if _matches_any(text, patterns):
                 additions.append((concern, weight))
@@ -228,7 +249,7 @@ def analyze_prompt_routing(prompt, risk="low", ambiguity="low"):
         reasons.append("risk override exits fast path")
     score = max(0, min(100, score))
     fast_path = score <= ROUTING_THRESHOLDS["fast_path_maximum_score"] and normalized_risk in {"", "low"} and not risk_override and str(ambiguity or "low").strip().casefold() in {"", "low"} and task_type in {"code", "question", "writing"}
-    return {"normalized_prompt": normalized, "task_type": task_type, "operation": operation, "complexity_score": score, "reasons": reasons, "fast_path_eligible": fast_path, "risk_override": risk_override}
+    return {"normalized_prompt": normalized, "task_type": task_type, "operation": operation, "complexity_score": score, "reasons": reasons, "fast_path_eligible": fast_path, "risk_override": risk_override, "material_result_stages": material_result_stages, "graph_required": graph_required}
 
 
 def execution_lifecycle_contract(complexity_score, fast_path_eligible=False, graph_admitted=False, result_node_count=1, risk="low", ambiguity="low"):

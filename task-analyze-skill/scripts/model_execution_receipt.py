@@ -60,9 +60,14 @@ FAILURE_DETAILS = {"process_launch_failure", "timeout", "non_zero_exit", "invali
 TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "uncached_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens")
 BENCHMARK_RUN_ID_PATTERN = re.compile(r"^benchmark-[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 ENTRY_CONTEXT_ENV = "CODEX_TASK_ANALYZE_ENTRY_CONTEXT"
+BENCHMARK_TASK_SANDBOX_ENV = "CODEX_AUTO_BENCHMARK_TASK_SANDBOX"
 NODE_ROLES = {"entry", "result-producer", "verification", "repair", "ending", "benchmark-baseline"}
 DISPATCHER_FIXED_ROLES = {"verification", "repair", "ending"}
 _NODE_AUTHORIZATION = contextvars.ContextVar("task_analyze_receipt_node_authorization", default=None)
+LEAN_CONTEXT_HOME_NAME = "task-analyze-lean-runtime"
+LEAN_CONTEXT_DISABLED_FEATURES = ("apps", "browser_use", "computer_use", "image_generation", "in_app_browser", "plugins", "skill_search")
+LEAN_CONTEXT_LINK_NAMES = ("auth.json", "sessions")
+LEAN_CONTEXT_OPTIONAL_LINK_NAMES = ("shell_snapshots",)
 
 
 def interpreter_binding_path(path):
@@ -75,8 +80,44 @@ def interpreter_binding_path(path):
     return os.path.normpath(candidate)
 
 
-def route_node_lifecycle_boundary(marker):
+def prepare_lean_context_home(codex_home):
+    """Build a credential-preserving lean view, or safely retain the full home."""
+    if os.name == "nt":
+        return None
+    parent = Path(codex_home).expanduser().resolve()
+    if not parent.is_dir() or any(not (parent / name).exists() for name in LEAN_CONTEXT_LINK_NAMES):
+        return None
+    runtime_root = parent / "runtime"
+    lean_home = runtime_root / LEAN_CONTEXT_HOME_NAME
+    try:
+        runtime_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        lean_home.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(lean_home, 0o700)
+        for name in (*LEAN_CONTEXT_LINK_NAMES, *LEAN_CONTEXT_OPTIONAL_LINK_NAMES):
+            target = parent / name
+            if not target.exists():
+                continue
+            link = lean_home / name
+            if link.is_symlink():
+                if link.resolve() != target.resolve():
+                    return None
+                continue
+            if link.exists():
+                return None
+            try:
+                link.symlink_to(target, target_is_directory=target.is_dir())
+            except FileExistsError:
+                if not link.is_symlink() or link.resolve() != target.resolve():
+                    return None
+        return lean_home
+    except OSError:
+        return None
+
+
+def route_node_lifecycle_boundary(marker, code_rule_bundle=None):
     if marker == "LOCKED_ROUTE_NODE":
+        if code_rule_bundle is None:
+            return "Non-code result only. Load a Skill only if this assignment requires its domain. Batch named immutable inputs into one tool call when possible; no precheck, reread, edit, test, or Ending. Return exactly as requested and stop."
         return (
             "This is the result node only. Load every owning, coding-philosophy, language, platform, and domain Skill required by the assigned change before editing. "
             "Finish the requested code first, run exactly one smallest safe local Quick Check, publish CODE READY immediately, and stop. "
@@ -648,7 +689,41 @@ def run_streaming_result_process(command, execution_prompt, args, command_enviro
     return {"process": process, "stdout": "".join(stdout_lines), "stderr": "".join(stderr_lines), "timed_out": timed_out, "matching_result": final_result_message, "result_ready_monotonic_ns": result_ready_monotonic_ns[0] if result_ready_monotonic_ns else None, "duplicate_result_detected": bool(duplicate_result_detected)}
 
 
-def read_thread_state(state_db_path, thread_id):
+def rollout_thread_state(thread_id, codex_home=None):
+    if not thread_id:
+        return None
+    runtime_home = Path(codex_home).expanduser() if codex_home else Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+    sessions_root = runtime_home / "sessions"
+    if not sessions_root.is_dir():
+        return None
+    matches = []
+    try:
+        rollout_paths = sorted(sessions_root.glob("**/*.jsonl"))
+        for rollout_path in rollout_paths:
+            with rollout_path.open(encoding="utf-8", errors="ignore") as handle:
+                first_event = json.loads(handle.readline())
+            payload = first_event.get("payload") if isinstance(first_event, dict) and first_event.get("type") == "session_meta" and isinstance(first_event.get("payload"), dict) else None
+            if payload is not None and payload.get("id") == thread_id:
+                matches.append((rollout_path, payload))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if len(matches) != 1:
+        return None
+    rollout_path, session_meta = matches[0]
+    rollout = parse_rollout_allowlist(rollout_path)
+    turn_context = rollout.get("turn_context") if isinstance(rollout.get("turn_context"), dict) else {}
+    usage = normalize_usage(rollout.get("usage"))
+    source = session_meta.get("source")
+    if isinstance(source, (dict, list)):
+        source = json.dumps(source, sort_keys=True, separators=(",", ":"))
+    elif not isinstance(source, str):
+        source = None
+    values = {"rollout_path": rollout_path, "model": turn_context.get("model"), "effort": turn_context.get("effort"), "tokens_used": usage.get("total_tokens"), "cli_version": session_meta.get("cli_version"), "model_provider": session_meta.get("model_provider"), "source": source}
+    missing_columns = [name for name, value in values.items() if value is None]
+    return {**values, "metadata_status": "degraded", "metadata_missing_columns": missing_columns, "metadata_error": "sqlite_unavailable_rollout_fallback", "runtime_database": None}
+
+
+def read_thread_state(state_db_path, thread_id, codex_home=None):
     if not thread_id:
         return None
     try:
@@ -664,9 +739,9 @@ def read_thread_state(state_db_path, thread_id):
         else:
             resolved_database = resolve_codex_sqlite_db()
     except CodexSQLiteResolutionError as error:
-        return {"metadata_status": "unavailable", "metadata_error": str(error)[:160]}
+        return rollout_thread_state(thread_id, codex_home) or {"metadata_status": "unavailable", "metadata_error": str(error)[:160]}
     if resolved_database is None:
-        return None
+        return rollout_thread_state(thread_id, codex_home)
 
     def read_row(connection):
         available_columns = {row[1] for row in connection.execute("PRAGMA table_info(threads)").fetchall()}
@@ -713,7 +788,7 @@ def read_thread_state(state_db_path, thread_id):
             missing_columns = [column for column in optional_columns if column not in selected_columns]
             return {"rollout_path": Path(rollout_path) if isinstance(rollout_path, str) and rollout_path else None, "model": values.get("model"), "effort": values.get("reasoning_effort"), "tokens_used": values.get("tokens_used"), "cli_version": values.get("cli_version"), "model_provider": values.get("model_provider"), "source": values.get("source"), "metadata_status": "degraded" if missing_columns else "complete", "metadata_missing_columns": missing_columns, "runtime_database": str(resolved_database)}
         time.sleep(0.1)
-    return None
+    return rollout_thread_state(thread_id, codex_home)
 
 
 def parse_rollout_allowlist(rollout_path):
@@ -800,7 +875,7 @@ def benchmark_auto_launch_evidence(cache_root, workload_sha256, expected_entry_p
     return {"verified": verified, "workspace_count": len(workspaces), "bridge_result_verified": bridge_result_verified, "bridge_result_text": result_text, "selected_execution": selected_execution if bridge_result_verified else None}
 
 
-def build_codex_exec_command(args):
+def build_codex_exec_command(args, lean_context_active=False):
     """Build a non-interactive child command without dropping approval policy."""
     command = [
         args.codex_bin,
@@ -818,9 +893,29 @@ def build_codex_exec_command(args):
         "--skip-git-repo-check",
         "--json",
     ]
+    if args.sandbox == "workspace-write" and getattr(args, "result_output", None) is not None:
+        command.extend(["--add-dir", str(Path(args.result_output).expanduser().resolve().parent)])
+    if lean_context_active:
+        for feature in LEAN_CONTEXT_DISABLED_FEATURES:
+            command.extend(["--disable", feature])
     command.extend(["--ignore-user-config"] if args.ignore_user_config else [])
     command.append("-")
     return command
+
+
+def route_node_execution_prompt(marker, prompt_text, workdir, code_rule_bundle=None):
+    lifecycle_boundary = route_node_lifecycle_boundary(marker, code_rule_bundle)
+    if marker == "LOCKED_ROUTE_NODE" and code_rule_bundle is None:
+        return f"{marker}\n{lifecycle_boundary} Use the current directory directly.\n{prompt_text}"
+    canonical_workdir = Path(workdir).expanduser().resolve()
+    code_gate_contract = code_gate_execution_contract(code_rule_bundle)
+    return f"{marker}\nThis is a bounded node from an already-returned Task Analyze route. Execute the assigned node directly; do not restart Task Analyze or redesign the route. {lifecycle_boundary} Your process is already in the canonical working directory `{canonical_workdir}`. Use that current directory directly; do not reconstruct, shorten, or guess another absolute workdir in tool calls.\n{code_gate_contract}\n{prompt_text}"
+
+
+def benchmark_cache_root_for(args):
+    if getattr(args, "result_output", None) is not None:
+        return Path(args.result_output).expanduser().resolve().parent / "auto-route-cache"
+    return Path(args.workdir).expanduser().resolve() / "Cache" / "tmp-task-analyze" / args.workload_id
 
 
 def code_gate_execution_contract(bundle):
@@ -860,17 +955,13 @@ def run_receipt(args, prompt_text):
     allowed_fallback_pairs = normalize_fallback_pairs(getattr(args, "allow_fallback", []))
     requested_pair = requested_pair_tuple
     allowed_pairs = [requested_pair] + [parse_model_effort_pair(value) for value in allowed_fallback_pairs]
-    command = build_codex_exec_command(args)
     if getattr(args, "bootstrap_task", False):
         execution_prompt = auto_benchmark_execution_prompt(prompt_text, pair_text(args.model, args.effort))
     elif args.entry_task or getattr(args, "direct_task", False):
         execution_prompt = prompt_text
     else:
         marker = getattr(args, "route_marker", "LOCKED_ROUTE_NODE")
-        lifecycle_boundary = route_node_lifecycle_boundary(marker)
-        canonical_workdir = Path(args.workdir).expanduser().resolve()
-        code_gate_contract = code_gate_execution_contract(getattr(args, "code_rule_bundle", None))
-        execution_prompt = f"{marker}\nThis is a bounded node from an already-returned Task Analyze route. Execute the assigned node directly; do not restart Task Analyze or redesign the route. {lifecycle_boundary} Your process is already in the canonical working directory `{canonical_workdir}`. Use that current directory directly; do not reconstruct, shorten, or guess another absolute workdir in tool calls.\n{code_gate_contract}\n{prompt_text}"
+        execution_prompt = route_node_execution_prompt(marker, prompt_text, args.workdir, getattr(args, "code_rule_bundle", None))
     stream_result_ready = bool(getattr(args, "stream_result_ready", False))
     if stream_result_ready:
         execution_prompt += f"\n\nWhen the requested result is complete, emit exactly one complete agent message in this shape and do not use these markers for progress/commentary:\n{RESULT_READY_BEGIN}\n<complete user-facing result>\n{RESULT_READY_END}"
@@ -886,6 +977,8 @@ def run_receipt(args, prompt_text):
     if (benchmark_stream_ready or stream_result_ready) and args.result_output.exists():
         args.result_output.unlink()
     command_environment = None
+    runtime_codex_home = None
+    lean_context_status = "not_requested"
     benchmark_cache_root = None
     if args.entry_task:
         command_environment = os.environ.copy()
@@ -901,8 +994,21 @@ def run_receipt(args, prompt_text):
             command_environment["CODEX_AUTO_BENCHMARK_PYTHON"] = interpreter_binding_path(sys.executable)
             command_environment["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"] = args.model
             command_environment["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"] = args.effort
-            benchmark_cache_root = Path(args.result_output).parent / "auto-route-cache" if args.result_output is not None else Path(args.workdir) / "Cache" / "tmp-task-analyze" / args.workload_id
+            command_environment[BENCHMARK_TASK_SANDBOX_ENV] = getattr(args, "benchmark_task_sandbox", None) or "read-only"
+            benchmark_cache_root = benchmark_cache_root_for(args)
             command_environment["CODEX_AUTO_BENCHMARK_CACHE_ROOT"] = str(benchmark_cache_root)
+    if getattr(args, "lean_context_mode", False):
+        command_environment = command_environment or os.environ.copy()
+        parent_codex_home = Path(command_environment.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+        lean_home = prepare_lean_context_home(parent_codex_home)
+        if lean_home is not None:
+            command_environment["CODEX_HOME"] = str(lean_home)
+            runtime_codex_home = lean_home
+            lean_context_status = "active"
+        else:
+            runtime_codex_home = parent_codex_home
+            lean_context_status = "unavailable_fallback"
+    command = build_codex_exec_command(args, lean_context_active=lean_context_status == "active")
     try:
         if benchmark_stream_ready or stream_result_ready:
             stream_mode = "benchmark" if benchmark_stream_ready else "production"
@@ -946,7 +1052,7 @@ def run_receipt(args, prompt_text):
     elapsed_ms = round((time.perf_counter_ns() - started) / 1_000_000)
     if benchmark_stream_ready or stream_result_ready:
         stdout_summary["output_hash"] = sha256_text(streamed_matching_result) if streamed_matching_result is not None else None
-    thread_state = read_thread_state(args.state_db, stdout_summary["thread_id"])
+    thread_state = read_thread_state(args.state_db, stdout_summary["thread_id"], runtime_codex_home)
     rollout = parse_rollout_allowlist((thread_state or {}).get("rollout_path"))
     turn_context = rollout["turn_context"] if rollout.get("turn_context") else {}
     reroutes = rollout["reroutes"]
@@ -979,6 +1085,9 @@ def run_receipt(args, prompt_text):
         failure_class = None
         failure_detail = None
     receipt = {"schema_version": 1, "proof_level": "local-operational-not-cryptographic", "workload_id": args.workload_id, "node_type": receipt_node_type(args), **authorization, "workload_prompt_sha256": sha256_text(prompt_text), "prompt_sha256": sha256_text(execution_prompt), "output_sha256": stdout_summary["output_hash"], "thread_id": stdout_summary["thread_id"], "requested_model": args.model, "requested_effort": args.effort, "requested_pair": f"{args.model}|{args.effort}", "resolved_model": resolved_model, "resolved_effort": resolved_effort, "resolved_pair": f"{resolved_model}|{resolved_effort}" if resolved_model and resolved_effort else None, "effective_model": effective_model, "effective_effort": resolved_effort, "effective_pair": f"{effective_model}|{resolved_effort}" if effective_model and resolved_effort else None, "reroutes": reroutes, "allowed_fallback_pairs": allowed_fallback_pairs, "model_match": model_match, "effort_match": effort_match, "pair_match": pair_match, "tokens": usage, "metrics_complete": not timed_out and stdout_summary["turn_completed"] and token_consistent, "tokens_lower_bound": timed_out and usage["total_tokens"] is not None, "pre_execution_failure": False, "availability": rollout.get("availability"), "state_tokens_used": (thread_state or {}).get("tokens_used"), "token_total_consistent": token_consistent, "runtime_metadata_status": (thread_state or {}).get("metadata_status", "missing"), "runtime_metadata_missing_columns": (thread_state or {}).get("metadata_missing_columns", []), "runtime_metadata_error": (thread_state or {}).get("metadata_error"), "runtime_database": (thread_state or {}).get("runtime_database"), "model_turn_duration_ms": task_complete.get("duration_ms"), "time_to_first_token_ms": task_complete.get("time_to_first_token_ms"), "process_elapsed_ms": elapsed_ms, "exit_code": process.returncode if process is not None else None, "turn_completed": False if timed_out else stdout_summary["turn_completed"], "stderr_line_count": len(process_stderr.splitlines()), "cli_version": (thread_state or {}).get("cli_version"), "model_provider": (thread_state or {}).get("model_provider"), "source": (thread_state or {}).get("source"), "status": status, "failure_detail": failure_detail, "recorded_at": datetime.now(timezone.utc).isoformat(), "limitations": "Resolved/effective values come from local Codex runtime metadata and reroute events; this is not a cryptographically signed backend attestation."}
+    receipt["minimal_context_mode"] = bool(getattr(args, "minimal_context_mode", False))
+    receipt["lean_context_mode"] = lean_context_status
+    receipt["lean_context_disabled_features"] = list(LEAN_CONTEXT_DISABLED_FEATURES) if lean_context_status == "active" else []
     receipt["code_rule_bundle"] = getattr(args, "code_rule_bundle", None)
     if getattr(args, "direct_task", False) or getattr(args, "bootstrap_task", False):
         receipt["benchmark_run_id"] = args.benchmark_run_id
@@ -1120,6 +1229,7 @@ def parse_args(argv=None):
     task_mode.add_argument("--bootstrap-task", action="store_true", help="Benchmark-only Global inline-bootstrap arm. Runs outside Task Analyze entry context and requires --benchmark-run-id.")
     run_parser.add_argument("--benchmark-run-id", help="Required sanitized benchmark-* identifier for --direct-task or --bootstrap-task; rejected for every other mode.")
     run_parser.add_argument("--benchmark-prompt-path", type=Path, help="Frozen raw workload file required by --bootstrap-task; its UTF-8 content must exactly match stdin.")
+    run_parser.add_argument("--benchmark-task-sandbox", choices=["read-only", "workspace-write", "danger-full-access"], help="Benchmark-only sandbox for the receipt-proven task child when the bootstrap controller needs a broader orchestration sandbox.")
     run_parser.add_argument("--route-marker", choices=sorted(ROUTE_MARKERS), default="LOCKED_ROUTE_NODE")
     run_parser.add_argument("--timeout", type=int, default=900)
     compare_parser = subparsers.add_parser("compare")

@@ -80,6 +80,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             "trial": False,
             "recommendation_state": "frozen",
             "selection_provenance": "local_history",
+            "context_mode": "full",
             "capability_assignment": [{"node_id": "result", "step_kind": "implementation", "capability_tags": ["benchmark"], "effective_pair": pair}],
         }
         return {
@@ -245,6 +246,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             summary = module.evaluate_suite(plan_path, manifest_dir, summary_path)
             simple_direct_manifest = json.loads((manifest_dir / "simple-1-direct.json").read_text(encoding="utf-8"))
         self.assertEqual(summary["overall_status"], "pass")
+        self.assertTrue(summary["all_optimized"])
         self.assertEqual(summary["overall_rule"], module.OVERALL_RULE)
         self.assertEqual(summary["token_rule"], module.TOKEN_RULE)
         self.assertEqual(summary["time_rule"], module.TIME_RULE)
@@ -255,7 +257,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertEqual(summary["tiers"]["simple"]["global_medians"]["steady_state_logical_tokens"], 401.5)
         self.assertEqual(simple_direct_manifest["acceptance_status"], "pass")
         self.assertEqual(simple_direct_manifest["steady_state_logical_tokens"], 1001)
-        self.assertEqual(simple_direct_manifest["steady_state_execution_elapsed_ms"], 201)
+        self.assertEqual(simple_direct_manifest["steady_state_execution_elapsed_ms"], 100)
         self.assertEqual(simple_direct_manifest["route_selection_elapsed_ms"], 0)
         self.assertEqual(simple_direct_manifest["first_result_elapsed_ms"], 201)
         self.assertEqual(simple_direct_manifest["producer_elapsed_ms"], 301)
@@ -385,6 +387,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertGreater(summary["tiers"]["simple"]["global_totals"]["first_result_elapsed_ms"], summary["tiers"]["simple"]["direct_totals"]["first_result_elapsed_ms"])
         self.assertEqual(summary["tiers"]["medium"]["status"], "pass")
         self.assertEqual(summary["tiers"]["complex"]["status"], "pass")
+        self.assertEqual(summary["tiers"]["advanced"]["status"], "pass")
         self.assertEqual(summary["tiers"]["simple"]["metric_gates"]["steady_state_execution_elapsed_ms"]["status"], "pass")
 
     def test_one_slower_first_result_pair_is_a_separate_diagnostic(self):
@@ -486,7 +489,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertEqual(tier_summary["paired_savings_percent_medians"]["steady_state_execution_elapsed_ms"], 5.0)
         self.assertTrue(tier_summary["metric_gates"]["steady_state_execution_elapsed_ms"]["paired_savings_median_meets_threshold"])
 
-    def test_medium_non_majority_time_wins_fail_even_when_raw_and_savings_medians_pass(self):
+    def test_any_tier_non_majority_time_wins_fail_even_when_raw_and_savings_medians_pass(self):
         manifests = []
         for repeat_index, global_time in enumerate([80, 80, 101, 101], start=1):
             direct_manifest = {"run_id": f"direct-{repeat_index}", "tier": "medium", "repeat_index": repeat_index, "arm": "direct", "acceptance_status": "pass", "completion": "complete", "metrics_complete": True, "retry_count": 0, "fallback_count": 0, "repair_count": 0, "logical_total_tokens": 100, "first_result_elapsed_ms": 100, "total_wall_elapsed_ms": 100}
@@ -541,13 +544,13 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertGreater(tier_summary["global_totals"]["first_result_elapsed_ms"], tier_summary["direct_totals"]["first_result_elapsed_ms"])
 
     def test_per_tier_repeat_counts_freeze_run_count_and_alternating_order(self):
-        tier_repeat_counts = {"simple": 4, "medium": 2, "complex": 2}
+        tier_repeat_counts = {"simple": 4, "medium": 2, "complex": 2, "advanced": 2}
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path, plan, _ = self.build_suite(root, tier_repeat_counts=tier_repeat_counts)
             module.validate_plan(plan)
             summary = module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
-        self.assertEqual(len(plan["runs"]), 16)
+        self.assertEqual(len(plan["runs"]), 20)
         self.assertEqual(summary["repeat_count"], None)
         self.assertEqual(summary["tier_repeat_counts"], tier_repeat_counts)
         self.assertEqual(summary["tiers"]["simple"]["pair_count"], 4)
