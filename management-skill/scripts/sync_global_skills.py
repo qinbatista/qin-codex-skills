@@ -1000,7 +1000,7 @@ def install_managed_skills(source_dir, skills_dir, skill_paths):
 
 def validate_provisional_installation(source_dir, skills_dir, validate_source=True):
     checker_module = load_skill_platform_checker(skills_dir)
-    checker_module.assert_skill_platform_safe(skills_dir, skills_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
+    checker_module.assert_skill_platform_safe(skills_dir, skills_dir / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=APPROVED_GLOBAL_SKILL_NAMES)
     run_release_gate(source_dir, skills_dir, "deployed")
     if validate_source:
         run_release_gate(source_dir, skills_dir, "source")

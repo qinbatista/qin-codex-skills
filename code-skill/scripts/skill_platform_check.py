@@ -42,11 +42,14 @@ def _is_reparse_point(path):
         return True
 
 
-def _candidate_files(skills_root, selected_files=None):
+def _candidate_files(skills_root, selected_files=None, selected_skill_names=None):
     skills_root = Path(skills_root).resolve()
-    requested_paths = [(Path(path) if Path(path).is_absolute() else skills_root / path).resolve() for path in selected_files] if selected_files else None
+    requested_paths = [(Path(path) if Path(path).is_absolute() else skills_root / path).resolve() for path in selected_files] if selected_files is not None else None
+    requested_skill_names = set(selected_skill_names) if selected_skill_names is not None else None
     candidates = []
     for skill_path in sorted(skills_root.iterdir(), key=lambda path: path.name) if skills_root.is_dir() else []:
+        if requested_skill_names is not None and skill_path.name not in requested_skill_names:
+            continue
         if _is_reparse_point(skill_path) or not skill_path.is_dir() or skill_path.name.startswith(".") or not (skill_path / "SKILL.md").is_file():
             continue
         for runtime_name in RUNTIME_DIRECTORIES:
@@ -59,7 +62,7 @@ def _candidate_files(skills_root, selected_files=None):
                 relative_parts = candidate.relative_to(skill_path).parts
                 if any(part in {"tests", "fixtures", "examples", "references", "assets", "cache", "work", "__pycache__"} or part.startswith(".") for part in relative_parts):
                     continue
-                if requested_paths and candidate.resolve() not in requested_paths:
+                if requested_paths is not None and candidate.resolve() not in requested_paths:
                     continue
                 candidates.append(candidate)
     return candidates
@@ -208,10 +211,10 @@ def _line_findings(path, relative_path, language):
     return findings
 
 
-def collect_findings(skills_root, selected_files=None):
+def collect_findings(skills_root, selected_files=None, selected_skill_names=None):
     root = Path(skills_root)
     findings = []
-    for path in _candidate_files(root, selected_files):
+    for path in _candidate_files(root, selected_files, selected_skill_names):
         relative_path = _relative_path(root, path)
         language = SUFFIX_LANGUAGES[path.suffix.lower()]
         findings.extend(_python_findings(path, relative_path) if language == "python" else _line_findings(path, relative_path, language))
@@ -247,9 +250,9 @@ def format_diagnostic(finding):
     return f"{finding['relative_path']}:{finding['line']}:{finding['column']}: {finding['rule']}: {finding['message']}; remediation: {remediation}"
 
 
-def assert_skill_platform_safe(skills_root, baseline_path, selected_files=None):
+def assert_skill_platform_safe(skills_root, baseline_path, selected_files=None, selected_skill_names=None):
     baseline = load_baseline(baseline_path, skills_root)
-    findings = new_findings(collect_findings(skills_root, selected_files), baseline)
+    findings = new_findings(collect_findings(skills_root, selected_files, selected_skill_names), baseline)
     if findings:
         raise RuntimeError("Skill platform gate failed:\n" + "\n".join(format_diagnostic(finding) for finding in findings))
     return findings

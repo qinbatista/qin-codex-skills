@@ -134,6 +134,27 @@ class SkillPlatformCheckTest(unittest.TestCase):
             findings = skill_platform_check.collect_findings(root, [Path("sample-skill/scripts/helper.py")])
         self.assertEqual([finding["rule"] for finding in findings], ["SPG006"])
 
+    def test_empty_selected_files_scans_no_runtime_helpers(self):
+        temporary_directory, root = self.fixture_root("import subprocess\nsubprocess.run(['python3', 'child.py'])\n")
+        with temporary_directory:
+            self.assertEqual(skill_platform_check.collect_findings(root, []), [])
+
+    def test_selected_skill_names_skip_unrelated_skill_before_traversal(self):
+        temporary_directory, root = self.fixture_root("from pathlib import Path\n")
+        unrelated_script = root / "external-windows-tool" / "scripts" / "apply.ps1"
+        unrelated_script.parent.mkdir(parents=True)
+        (unrelated_script.parents[1] / "SKILL.md").write_text("---\nname: external-windows-tool\ndescription: local only\n---\n", encoding="utf-8")
+        unrelated_script.write_text("param([switch]$SkipStartupEntry)\n", encoding="utf-8")
+
+        def reject_unrelated_traversal(path):
+            if path.name in {"external-windows-tool", "apply.ps1"}:
+                raise AssertionError("unrelated skill was traversed")
+            return False
+
+        with temporary_directory, patch.object(skill_platform_check, "_is_reparse_point", side_effect=reject_unrelated_traversal):
+            findings = skill_platform_check.collect_findings(root, selected_skill_names={"sample-skill"})
+        self.assertEqual(findings, [])
+
     def test_reparse_point_skill_is_skipped_before_windows_traversal(self):
         temporary_directory, root = self.fixture_root("from pathlib import Path\n")
         reparse_skill = root / "vfx-assets-management"

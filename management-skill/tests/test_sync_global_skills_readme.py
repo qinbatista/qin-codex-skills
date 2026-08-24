@@ -733,7 +733,41 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
             with mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=load_installed_checker):
                 sync_global_skills.deploy(SKILLS_DIR, target_dir)
-            checker.assert_skill_platform_safe.assert_called_once_with(target_dir.resolve(), target_dir.resolve() / "code-skill" / "assets" / "skill-platform-baseline.json")
+            checker.assert_skill_platform_safe.assert_called_once_with(target_dir.resolve(), target_dir.resolve() / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES)
+
+    def test_deploy_platform_validation_ignores_unrelated_runtime_skill(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            unrelated_script = target_dir / "external-windows-tool" / "scripts" / "apply.ps1"
+            unrelated_script.parent.mkdir(parents=True)
+            (unrelated_script.parents[1] / "SKILL.md").write_text("---\nname: external-windows-tool\ndescription: local only\n---\n", encoding="utf-8")
+            unrelated_script.write_text("param([switch]$SkipStartupEntry)\n", encoding="utf-8")
+            unrelated_before = unrelated_script.read_bytes()
+
+            sync_global_skills.deploy(SKILLS_DIR, target_dir)
+
+            self.assertEqual(unrelated_script.read_bytes(), unrelated_before)
+            checker = sync_global_skills.load_skill_platform_checker(target_dir)
+            baseline = checker.load_baseline(target_dir / "code-skill" / "assets" / "skill-platform-baseline.json", target_dir)
+            all_findings = checker.new_findings(checker.collect_findings(target_dir), baseline)
+            self.assertTrue(any(finding["relative_path"] == "external-windows-tool/scripts/apply.ps1" and finding["rule"] == "SPG003" for finding in all_findings))
+
+    def test_deploy_platform_validation_still_rejects_managed_runtime_failure(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            source_dir = self.staged_skill_copy(sandbox)
+            introduced_script = source_dir / "management-skill" / "scripts" / "introduced.py"
+            introduced_script.write_text("import subprocess\nsubprocess.run(['cmd.exe', '/c', 'echo'])\n", encoding="utf-8")
+            target_dir = sandbox / "global-skills"
+            previous_skill = target_dir / "management-skill" / "SKILL.md"
+            previous_skill.parent.mkdir(parents=True)
+            previous_skill.write_text("previous-installation\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeError, "SPG002"):
+                sync_global_skills.deploy(source_dir, target_dir)
+
+            self.assertEqual(previous_skill.read_text(encoding="utf-8"), "previous-installation\n")
+            self.release_gate.assert_not_called()
 
     def test_installed_platform_failure_restores_previous_installation_before_repair(self):
         with tempfile.TemporaryDirectory() as temp_dir:
