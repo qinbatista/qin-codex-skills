@@ -92,9 +92,9 @@
 
 ## 安装或更新
 
-发布版本在进入 GitHub 前已经由维护者通过完整发布门禁。普通用户安装或更新时只下载最新发布代码，并安全替换八个受管 Skill 与两份全局 `AGENTS.md`；不会在每台机器上重复运行 unit、platform、regression、parity、attestation 或 Ending 验证。
+GitHub 发布版已经过维护者门禁；消费者安装或更新只 fresh download 并安全替换八个 Skill 与两份全局 `AGENTS.md`，不重复 unit、platform、regression、parity、attestation 或 Ending 验证。
 
-- **首次安装：** macOS/Linux — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills && python3 qin-codex-skills/management-skill/scripts/sync_global_skills.py deploy --source-dir qin-codex-skills`；Windows PowerShell — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills; py -3 .\qin-codex-skills\management-skill\scripts\sync_global_skills.py deploy --source-dir .\qin-codex-skills`。
-- **更新到最新版：** macOS/Linux — `python3 ~/.codex/skills/management-skill/scripts/sync_global_skills.py pull`；Windows PowerShell — `py -3 "$env:USERPROFILE\.codex\skills\management-skill\scripts\sync_global_skills.py" pull`。安装器会保留无关本地 Skill 和私有 `task-analyze-skill/local/` 状态。
+- **macOS/Linux 首次安装或更新：** `stage="$(mktemp -d)" && git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git "$stage/qin-codex-skills" && python3 "$stage/qin-codex-skills/management-skill/scripts/sync_global_skills.py" deploy --source-dir "$stage/qin-codex-skills" && rm -rf "$stage"`。
+- **Windows PowerShell 首次安装或更新：** `$ErrorActionPreference='Stop'; $stage=Join-Path $env:TEMP ("qin-codex-skills-"+[guid]::NewGuid()); try { git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git $stage; if ($LASTEXITCODE) { throw 'clone failed' }; py -3 "$stage\management-skill\scripts\sync_global_skills.py" deploy --source-dir $stage; if ($LASTEXITCODE) { throw 'deploy failed' } } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }`。保留无关本地 Skill 和私有 `task-analyze-skill/local/` 状态。
 
 **隐私：** 公共镜像严格包含上面的八个 Skill，排除 auth、secret、私有 ledger、路由历史、cache、原始 Prompt/结果、receipt 和临时文件；发布前运行安全扫描。**镜像：** `qin-codex-skills` · `auto-best-model`

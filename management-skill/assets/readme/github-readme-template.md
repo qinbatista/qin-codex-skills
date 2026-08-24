@@ -92,9 +92,9 @@ Frozen v48 compares Direct `gpt-5.6-sol|ultra` with Auto Best Model entering on 
 
 ## Install or update
 
-Published releases pass the maintainer release gate before they reach GitHub. Consumer install/update downloads the latest published code and safely replaces the eight managed Skills plus both global `AGENTS.md` targets; it does **not** rerun unit, platform, regression, parity, attestation, or Ending validation on each machine.
+Maintainer-gated releases install/update by fresh replacement without unit, platform, regression, parity, attestation, or Ending validation.
 
-- **First install:** macOS/Linux — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills && python3 qin-codex-skills/management-skill/scripts/sync_global_skills.py deploy --source-dir qin-codex-skills`; Windows PowerShell — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills; py -3 .\qin-codex-skills\management-skill\scripts\sync_global_skills.py deploy --source-dir .\qin-codex-skills`.
-- **Update to latest:** macOS/Linux — `python3 ~/.codex/skills/management-skill/scripts/sync_global_skills.py pull`; Windows PowerShell — `py -3 "$env:USERPROFILE\.codex\skills\management-skill\scripts\sync_global_skills.py" pull`. The installer preserves unrelated local Skills and private `task-analyze-skill/local/` state.
+- **macOS/Linux, first install or update:** `stage="$(mktemp -d)" && git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git "$stage/qin-codex-skills" && python3 "$stage/qin-codex-skills/management-skill/scripts/sync_global_skills.py" deploy --source-dir "$stage/qin-codex-skills" && rm -rf "$stage"`.
+- **Windows PowerShell, first install or update:** `$ErrorActionPreference='Stop'; $stage=Join-Path $env:TEMP ("qin-codex-skills-"+[guid]::NewGuid()); try { git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git $stage; if ($LASTEXITCODE) { throw 'clone failed' }; py -3 "$stage\management-skill\scripts\sync_global_skills.py" deploy --source-dir $stage; if ($LASTEXITCODE) { throw 'deploy failed' } } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }`. Preserves unrelated Skills and private `task-analyze-skill/local/` state.
 
 **Privacy:** The public mirror contains exactly the eight Skills above and excludes auth, secrets, private ledgers, routing history, caches, raw prompts/results, receipts, and work artifacts; every publish runs a safety scan. **Mirrors:** `qin-codex-skills` · `auto-best-model`
