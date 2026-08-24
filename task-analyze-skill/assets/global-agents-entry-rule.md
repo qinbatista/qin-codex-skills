@@ -2,7 +2,7 @@ Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.
 
 # Task Lifecycle
 
-Route by task;notify user early.
+notify user early.
 
 `real_test`|`information_update`|`memory_update`=>detached projectless Ending;code Quick Check=>`real_test`;none=>`ending_skip_reason=no_real_test_or_information_or_memory_update`;`intentionally_skipped_simple_task`=>no End Task.Skills→code→Quick Check→`CODE READY`;broad verification→Ending.No raw prompts/results/reasoning,paths,secrets,emails,IDs.
 
@@ -26,7 +26,7 @@ Unity:relative;ProjectVersion.txt>Editors>`unity editors path <version>`>binary;
 
 No Obsidian UI.Vault:`Cache/cache_path.json`>`CODEX_OBSIDIAN_VAULT`>`obsidian.json`>bounded search;cache.Read MyAILLM `AGENTS.md`+project `Knowledge.md`;unresolved=>stop/report;cold start no waiver.
 
-Global Skill install/update:install first;Codex tests deployed/source/platform,repairs+reinstalls;no user gate work;PASS=>complete;external block=>restore.GitHub commit/push need gate;only user retires.Website=>`sites:sites-building`;publish=>`sites:sites-hosting`;no substitute.
+Global Skill consumer install/update:lock+fsync recovery;materialize+backup only→replace all managed targets;no routing/validator/platform/regression/parity/attestation/Ending/whole-tree hash;write failure=>restore.GitHub push runs full gate once before README/index/commit/remote mutation;user-only retirement;Sites build+host only.
 
 ## Project Cache artifact policy
 

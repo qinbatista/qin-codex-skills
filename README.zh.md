@@ -94,10 +94,11 @@
 - `unity_csharp` · code · `code-skill` · active · Spark schedule: source-eligible · [rules](./code-skill/references/unity-csharp-rules.md)
 - `code_unspecified` · code · `code-skill` · history-only · Spark schedule: source-eligible · [rules](./code-skill/references/spark-small-code.md)
 
-## 安装
+## 安装或更新
 
-1. 将八个 Skill 文件夹放进 `~/.codex/skills/`。
-2. 将 [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) 部署到 `~/.codex/AGENTS.md` 和宿主可发现的用户级 `~/AGENTS.md`。
-3. 正常启动 Codex；不安装 lifecycle hook。
+发布版本在进入 GitHub 前已经由维护者通过完整发布门禁。普通用户安装或更新时只下载最新发布代码，并安全替换八个受管 Skill 与两份全局 `AGENTS.md`；不会在每台机器上重复运行 unit、platform、regression、parity、attestation 或 Ending 验证。
+
+- **首次安装：** macOS/Linux — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills && python3 qin-codex-skills/management-skill/scripts/sync_global_skills.py deploy --source-dir qin-codex-skills`；Windows PowerShell — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills; py -3 .\qin-codex-skills\management-skill\scripts\sync_global_skills.py deploy --source-dir .\qin-codex-skills`。
+- **更新到最新版：** macOS/Linux — `python3 ~/.codex/skills/management-skill/scripts/sync_global_skills.py pull`；Windows PowerShell — `py -3 "$env:USERPROFILE\.codex\skills\management-skill\scripts\sync_global_skills.py" pull`。安装器会保留无关本地 Skill 和私有 `task-analyze-skill/local/` 状态。
 
 **隐私：** 公共镜像严格包含上面的八个 Skill，排除 auth、secret、私有 ledger、路由历史、cache、原始 Prompt/结果、receipt 和临时文件；发布前运行安全扫描。**镜像：** `qin-codex-skills` · `auto-best-model`

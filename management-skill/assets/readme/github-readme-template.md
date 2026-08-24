@@ -90,10 +90,11 @@ Frozen v48 compares Direct `gpt-5.6-sol|ultra` with Auto Best Model entering on 
 
 <!-- EXECUTION_DOMAIN_TABLE -->
 
-## Install
+## Install or update
 
-1. Put the eight Skill folders under `~/.codex/skills/`.
-2. Deploy [`global-agents-entry-rule.md`](./task-analyze-skill/assets/global-agents-entry-rule.md) to `~/.codex/AGENTS.md` and the host-discoverable user-level `~/AGENTS.md`.
-3. Start Codex normally; no lifecycle hook is installed.
+Published releases pass the maintainer release gate before they reach GitHub. Consumer install/update downloads the latest published code and safely replaces the eight managed Skills plus both global `AGENTS.md` targets; it does **not** rerun unit, platform, regression, parity, attestation, or Ending validation on each machine.
+
+- **First install:** macOS/Linux — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills && python3 qin-codex-skills/management-skill/scripts/sync_global_skills.py deploy --source-dir qin-codex-skills`; Windows PowerShell — `git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git qin-codex-skills; py -3 .\qin-codex-skills\management-skill\scripts\sync_global_skills.py deploy --source-dir .\qin-codex-skills`.
+- **Update to latest:** macOS/Linux — `python3 ~/.codex/skills/management-skill/scripts/sync_global_skills.py pull`; Windows PowerShell — `py -3 "$env:USERPROFILE\.codex\skills\management-skill\scripts\sync_global_skills.py" pull`. The installer preserves unrelated local Skills and private `task-analyze-skill/local/` state.
 
 **Privacy:** The public mirror contains exactly the eight Skills above and excludes auth, secrets, private ledgers, routing history, caches, raw prompts/results, receipts, and work artifacts; every publish runs a safety scan. **Mirrors:** `qin-codex-skills` · `auto-best-model`

@@ -3,10 +3,15 @@
   "catalog_id": "qin-global-skill-retained-capabilities",
   "policy": {
     "all_retained_capabilities_are_non_regression_requirements": true,
-    "local_deployment_requires_pass": true,
+    "local_deployment_completion_requires_pass": false,
     "local_install_write_requires_pass": false,
-    "local_installation_completion_requires_pass": true,
-    "agent_owns_install_test_repair": true,
+    "local_install_semantic_precheck_allowed": false,
+    "local_install_always_replaces_managed_targets": true,
+    "local_install_backup_and_safe_write_prerequisites_only": true,
+    "local_installation_completion_requires_pass": false,
+    "consumer_install_runs_semantic_validation": false,
+    "agent_owns_install_test_repair": false,
+    "maintainer_publication_owns_release_validation": true,
     "github_publication_requires_pass": true,
     "retirement_requires_explicit_user_decision": true,
     "process_contract_is_not_result_memory": true
@@ -70,7 +75,7 @@
     {"id": "GSR-022", "owner_skill": "management-skill", "name": "Cache 三类目录与结构化 AGENTS", "function": "支持产物只进项目 Cache；一次性任务与普通测试 scratch 使用 tmp-*；YYYYMMDD 仅用于有 reason/review 的短期复用；remote-* 与 remote-test 仅用于用户或项目契约明确保留的材料；可复用正式测试留在 source；机器路径只进 AI-only registry；项目 AGENTS 只保留稳定结构、owner、入口和硬约束。", "checks": ["management-units", "cache-layout-units", "code-units", "platform-check"]},
     {"id": "GSR-023", "owner_skill": "management-skill", "name": "公开 README、SVG 与 benchmark 证据", "function": "中英文模板和桌面/移动 SVG 可解析且无裁切；benchmark 只声明来源明确的稳定结果，small、standard、complex、advanced 四档必须分别在完整执行时间和 token 上胜出；确定性零 token source capture 与精简 bounded-worker context 必须由 receipt/route signature 公开，并在主指标后单列 controller、retry 与 Ending；session census 必须拒绝隐藏会话，运行前 SQLite 不可见时只允许由完整的 result-ready/运行后 DB 与匹配 rollout 差集恢复基线。", "checks": ["management-units", "task-analyze-units"]},
     {"id": "GSR-024", "owner_skill": "optimization-skill", "name": "Optimization 有界触发", "function": "只在明确优化或稳定重复工作时触发，把已验证流程固化为 portable 资产且保持行为。", "checks": ["optimization-units", "optimization-audit", "platform-check"]},
-    {"id": "GSR-025", "owner_skill": "management-skill", "name": "全能力非回归发布与完成门禁", "function": "任何全局 Skill 新增或修改都重跑保留能力目录；本地安装先写入可恢复 provisional copy，但只有 post-install source/deployed/platform/parity 全 PASS 才能报告完成；GitHub commit/push 在全门禁 PASS 前仍全部阻断。", "checks": ["management-units", "public-skill-set", "deployment-parity", "global-agents-parity", "git-diff-check"]},
+    {"id": "GSR-025", "owner_skill": "management-skill", "name": "全能力非回归发布门禁", "function": "任何全局 Skill 新增或修改都保留完整发布门禁；消费者安装或更新只替换已发布源，不重复任何质量门禁；GitHub commit/push 在全门禁 PASS 前仍全部阻断。", "checks": ["management-units", "public-skill-set", "deployment-parity", "global-agents-parity", "git-diff-check"]},
     {"id": "GSR-026", "owner_skill": "verify-skill", "name": "Spark-xhigh 快速 Ending 主控", "function": "所有 Ending 的唯一生命周期主控固定首选 gpt-5.3-codex-spark|xhigh；分数只控制检查范围和检查 worker。只有主控模型、effort、调度或必需模态明确不可用时才回退 registry-floor Luna-low；质量、协议、执行、超时或验收失败只修 producer，不更换 Ending 主控。", "checks": ["task-analyze-units", "verify-units", "project-memory-units", "workflow-validator", "management-units"]},
     {"id": "GSR-027", "owner_skill": "project-memory-skill", "name": "过程、执行与有效结果记忆一致", "function": "当前过程 Skill/AGENTS、真实执行证据和 effective 项目结果记忆必须三方一致。Ending 只可为纯记忆缺陷追加纠正或重投影；Skill/执行缺陷不得写结果记忆，必须返回 immutable origin 修复；下一任务只读取 effective 结果并隐藏已 supersede 的记录。", "checks": ["memory-execution-consistency-attestation", "task-analyze-units", "task-analyze-validator", "workflow-validator", "project-memory-units", "verify-units"]},
     {"id": "GSR-028", "owner_skill": "project-memory-skill", "name": "项目结果记忆完整性防线", "function": "生产 recorder 在写入前拒绝占位语义；测试显式使用 disposable store/vault；Global Codex Skills 与 qin-codex-skills 统一 owner 回读；已证实的非法记录只可用 exact-ID tombstone 重建本地索引并阻断 reconcile 回灌。", "checks": ["project-memory-units", "memory-execution-consistency-attestation", "platform-check"]},
@@ -80,7 +85,7 @@
     {"id": "GSR-032", "owner_skill": "task-analyze-skill", "name": "同会话未解决问题渐进升级", "function": "同一 Codex session 先排除当前 turn，再以 route event 与终态 runtime receipt 确认同主题是否已解决；只有质量/正确性失败或明确纠正反馈才逐步增强模型，已验证 PASS 与新主题均不继承升级状态，operational failure 只触发重试/回退；Spark fast path 也不得绕过该状态判断。", "checks": ["task-analyze-units", "project-memory-units", "task-analyze-validator"]},
     {"id": "GSR-033", "owner_skill": "task-analyze-skill", "name": "代码 Code Gate 百分百启动披露", "function": "显式中英文修改、部署、提交意图优先于“看一下、是否”等问句外壳；每个代码生产者在读写源码前先公开 code-rule-notice，强制加载统一代码哲学、一个活跃语言配置和仅命中的分类规则；缺少披露或统一哲学引用即路由失败；其他业务 Skill 拥有实现时也不得绕过。", "checks": ["task-analyze-units", "task-analyze-validator", "workflow-validator", "code-units"]},
     {"id": "GSR-034", "owner_skill": "task-analyze-skill", "name": "计划执行验收生命周期百分百触发", "function": "每个 routed result 在源码工作前公开 execution-lifecycle-notice 并把同一契约写入 receipt/summary/plan/manifest：合格的 0-24 超简单单结果 direct，其他单结果 plan+single execution，多结果在模型启动前硬切 plan+dependency graph；零参 runner 对多阶段只返回 route-required，禁止误跑单生产者；精确 owned 小文本可零 token 并行 capture 后只调用一次 adaptive synthesis，合格的通用只读 exact-JSON 小/标准任务可用保留项目规则与证据的精简 runtime view，其他任务保持 full context，Windows/链接不可用安全回退；模型按难度、信息负担、步骤和历史选最低合适路线，只有同主题质量/正确性失败逐步增强，operational failure 保持质量中立；验收只由有 surface 的最终 aggregate receipt 启动一个 projectless Ending。", "checks": ["lifecycle-trigger-matrix", "task-analyze-units", "task-analyze-validator", "workflow-validator"]},
-    {"id": "GSR-035", "owner_skill": "management-skill", "name": "安装优先与 Codex 自修复", "function": "用户明确安装或更新时，先快照并写入 recoverable provisional installation，再由 Codex 自己运行安装态、源码、Windows/macOS/Linux 平台与 parity 检查；失败自动恢复上一版、修权威源码并重装，不把门禁、命令或重试交给用户；最终 PASS 后才报告 Installation complete。", "checks": ["management-units", "platform-check", "deployment-parity", "global-agents-parity"]},
+    {"id": "GSR-035", "owner_skill": "management-skill", "name": "消费者无条件替换安装", "function": "用户明确安装或更新时，以 cross-process target lock 串行 staging、replacement、rollback 与 cleanup，并用 fsynced transaction manifest 恢复 crash/kill 中断；只允许源字节物化、八个 managed source 可用性、recoverable opaque backup 与 safe exact-target write。每次都无条件替换八个 managed Skill 与 global AGENTS，即使内容相同或旧 target 是 file、symlink、junction；无关 Skill 与 task-analyze-skill/local 不透明保留。消费者 deploy/pull/legacy sync 绝不运行 routing、public-safety、platform、regression、parity、attestation、content-diff、Ending 或 whole-tree hash；发布者在 push 前单独运行一次完整门禁。", "checks": ["management-units"]},
     {"id": "GSR-036", "owner_skill": "workflow-skill", "name": "内存优化与任务资源生命周期", "function": "任务只登记和释放自身创建的精确 path/runtime/UI 资源；持久结果读回与最后 consumer 均完成后按分支反向依赖顺序释放；共享资源使用显式 consumer map；日期、remote、preexisting、共享、Unity 和冲突资源保留或 deferred；Ending 先保存证据且只释放自身或明确 handoff 的资源；任何资源清理都不得消息、打断、终止、归档、删除或控制其他 task、thread、session 或 Ending。", "checks": ["workflow-units", "workflow-validator", "platform-check", "cache-layout-units"]}
   ],
   "retired_architectures": [
@@ -100,6 +105,7 @@
     {"id": "RET-014", "name": "Spark 主控亲自完成所有语义和视觉判断", "replacement": "GSR-031"},
     {"id": "RET-015", "name": "普通 C# 与 Unity C# 使用两套活跃基础规则", "replacement": "GSR-020"},
     {"id": "RET-016", "name": "所有任务强制同一复杂计划或把 operational failure 当质量失败", "replacement": "GSR-034"},
-    {"id": "RET-017", "name": "全门禁 PASS 之前禁止首次本地安装写入并让用户执行门禁", "replacement": "GSR-035"}
+    {"id": "RET-017", "name": "全门禁 PASS 之前禁止首次本地安装写入并让用户执行门禁", "replacement": "GSR-035"},
+    {"id": "RET-018", "name": "本地安装前运行 routing、public-safety、platform、regression、parity、attestation 或 content-difference 门禁", "replacement": "GSR-035"}
   ]
 }

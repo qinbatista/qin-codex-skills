@@ -416,7 +416,7 @@ REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "Final Ending PASS/BLOCKED",
     "one independent global projectless Ending", "gpt-5.3-codex-spark|xhigh", "score scopes checks only", "Luna-low",
     "Process Skill/AGENTS,real execution,effective project-result memory agree", "Ending appends only memory-only correction", "Skill/execution defects return origin", "Next tasks read effective project-result memory only",
-    "Global Skill install/update:install first", "Codex tests deployed/source/platform,repairs+reinstalls", "no user gate work", "PASS=>complete", "external block=>restore", "GitHub commit/push need gate",
+    "Global Skill consumer install/update:lock+fsync recovery", "materialize+backup only→replace all managed targets", "no routing/validator/platform/regression/parity/attestation/Ending/whole-tree hash", "write failure=>restore", "GitHub push runs full gate once before README/index/commit/remote mutation", "user-only retirement", "Sites build+host only",
 ]
 REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "· Model:", "· Route:", "Evidence:", "runtime receipt", "verified entry (no runtime receipt)", "task assignment (no runtime receipt)", "configured selection (no runtime receipt)", "Model path:", "Model stages", "changed route", "unknown|unknown", "full routing data"]

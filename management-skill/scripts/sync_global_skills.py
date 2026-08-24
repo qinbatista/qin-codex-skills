@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -30,7 +31,6 @@ DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_PROJECT_ROOT = Path.cwd().resolve()
 DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "tmp-management-skill-sync"
 DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
-GLOBAL_REGRESSION_GATE = Path(__file__).resolve().parent / "global_skill_regression_gate.py"
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
 *.pyc
@@ -113,6 +113,9 @@ APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
 GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
+INSTALL_TRANSACTION_PREFIX = ".qin-codex-install-"
+INSTALL_MANIFEST_NAME = "install-transaction.json"
+INSTALL_LOCK_NAME = ".qin-codex-install.lock"
 ENGLISH_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.md"
 CHINESE_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.zh.md"
 CATEGORY_LABEL_WIDTH = 28
@@ -206,7 +209,7 @@ SKILL_CONTENTS = {
     ],
     "management-skill": [
         ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
-        ("Install-first validation", "Apply a recoverable local installation first, then let Codex run source, deployed, validator, platform, parity, and real-sample checks, repair, and reinstall; only PASS completes installation, while GitHub publication remains pre-gated."),
+        ("Consumer replacement", "Consumer install/update shallow-clones the published source and replaces the eight managed Skills plus both global AGENTS targets with mechanical safety only; maintainer push runs the release gate once before publication."),
         ("GitHub Sync", "Run preuse checks, public-safety scan, sync, push, and remote hash verification for both mirrors."),
         ("Privacy-Safe Management", "Auth, tokens, cookies, raw prompts/results, receipts, logs, caches, and private learning stay local."),
     ],
@@ -262,7 +265,7 @@ CHINESE_SKILL_CONTENTS = {
     ],
     "management-skill": [
         ("Codex Switch", "管理本地 Codex auth profile 与确认后的账号切换。"),
-        ("安装优先与非回归验收", "本地先写可恢复安装，再由 Codex 复测 source、deployed、validator、platform、parity 与真实样例并自动修复重装；全过才算安装完成，GitHub 发布仍在写入前拦截。"),
+        ("消费者替换安装", "消费者安装或更新浅克隆已发布源，只做机械安全替换八个受管 Skill 和两个 global AGENTS；维护者 push 在发布前只运行一次完整门禁。"),
         ("GitHub Sync", "对两个镜像运行 preuse、公开安全扫描、sync、push 和远端 hash 校验。"),
         ("隐私安全", "auth、token、cookie、原始 prompt/result、receipt、log、cache 与私人学习保持本地。"),
     ],
@@ -273,14 +276,20 @@ def run_command(command, cwd=None):
     return subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True)
 
 
+def lexical_absolute_path(path):
+    expanded_path = Path(path).expanduser()
+    return Path(os.path.abspath(expanded_path))
+
+
 def run_release_gate(source_dir, skills_dir, mode):
     source_dir = Path(source_dir).expanduser().resolve()
     skills_dir = Path(skills_dir).expanduser().resolve()
-    if not GLOBAL_REGRESSION_GATE.is_file():
-        raise RuntimeError(f"Refusing release because the retained-capability gate is unavailable: {GLOBAL_REGRESSION_GATE}")
+    gate_path = skills_dir / "management-skill" / "scripts" / "global_skill_regression_gate.py" if mode == "deployed" else source_dir / "management-skill" / "scripts" / "global_skill_regression_gate.py"
+    if not gate_path.is_file():
+        raise RuntimeError(f"Retained-capability validation is unavailable after installation: {gate_path}")
     command = [
         sys.executable,
-        str(GLOBAL_REGRESSION_GATE),
+        str(gate_path),
         "check",
         "--project-root",
         str(source_dir),
@@ -306,22 +315,23 @@ def temporary_workspace(prefix):
         yield Path(workspace)
 
 
-def repository_git_url(repository):
+def repository_git_url(repository, read_only=False):
     if repository.startswith(("git@", "ssh://", "https://")):
         return repository
     if shutil.which("gh"):
+        url_field = "url" if read_only else "sshUrl"
         try:
-            resolved_url = run_command(["gh", "repo", "view", repository, "--json", "sshUrl", "--jq", ".sshUrl"]).stdout.strip()
+            resolved_url = run_command(["gh", "repo", "view", repository, "--json", url_field, "--jq", f".{url_field}"]).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             resolved_url = ""
         if resolved_url:
             return resolved_url
-    return f"git@github.com:{repository}.git"
+    return f"https://github.com/{repository}.git" if read_only else f"git@github.com:{repository}.git"
 
 
-def clone_repository(repository, sandbox):
+def clone_repository(repository, sandbox, read_only=False):
     repository_dir = sandbox / "repo"
-    run_command(["git", "clone", "--depth", "1", repository_git_url(repository), str(repository_dir)])
+    run_command(["git", "clone", "--depth", "1", repository_git_url(repository, read_only=read_only), str(repository_dir)])
     return repository_dir
 
 
@@ -859,9 +869,17 @@ def canonical_global_agents_text(source_dir):
     return rendered
 
 
+def materialized_global_agents_text(source_dir):
+    asset_path = Path(source_dir).expanduser().resolve() / GLOBAL_AGENTS_ASSET
+    if not asset_path.is_file():
+        raise RuntimeError(f"global AGENTS entry bytes are unavailable: {asset_path}")
+    text = asset_path.read_text(encoding="utf-8")
+    return text[len(GLOBAL_AGENTS_DIRECTIVE):] if text.startswith(GLOBAL_AGENTS_DIRECTIVE) else text
+
+
 def global_agents_targets(skills_dir):
     """Return the installed Codex contract and the host-discoverable user contract."""
-    skills_root = Path(skills_dir).expanduser().resolve()
+    skills_root = lexical_absolute_path(skills_dir)
     codex_root = skills_root.parent
     targets = [codex_root / "AGENTS.md"]
     if codex_root.name == ".codex":
@@ -920,123 +938,416 @@ def print_lines(title, lines):
         print(f"- {line}")
 
 
-def mirror_repository_to_local(repository_dir, skills_dir):
-    assert_no_symlinks([repository_dir], "repository tree")
-    assert_repository_skill_set(repository_dir)
-    return deploy(repository_dir, skills_dir, validate_source=False)
+def real_directory_entry(path):
+    if not os.path.lexists(path):
+        return False
+    path_status = Path(path).lstat()
+    reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    file_attributes = getattr(path_status, "st_file_attributes", 0)
+    return stat.S_ISDIR(path_status.st_mode) and not file_attributes & reparse_point
 
 
-def capture_deployment_snapshot(skills_dir, snapshot_dir):
-    skills_dir = Path(skills_dir).expanduser().resolve()
-    snapshot_dir = Path(snapshot_dir).resolve()
-    skills_snapshot_dir = snapshot_dir / "skills"
-    agents_snapshot_dir = snapshot_dir / "agents"
-    skill_states = {}
-    agent_states = []
-    for skill_name in PRIMARY_SKILL_ORDER:
-        target = skills_dir / skill_name
-        if target.is_symlink() or (target.exists() and not target.is_dir()):
-            raise RuntimeError(f"Cannot snapshot non-directory managed Skill target: {target}")
-        skill_states[skill_name] = target.is_dir()
-        if target.is_dir():
-            assert_no_symlinks([target], "installed managed skill tree")
-            shutil.copytree(target, skills_snapshot_dir / skill_name)
-    for index, target in enumerate(global_agents_targets(skills_dir)):
-        if target.is_symlink() or (target.exists() and not target.is_file()):
-            raise RuntimeError(f"Cannot snapshot non-file global AGENTS target: {target}")
-        backup = agents_snapshot_dir / f"{index}.md"
-        existed = target.is_file()
-        if existed:
-            backup.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(target, backup)
-        agent_states.append({"target": target, "backup": backup, "existed": existed})
-    return {"skills_dir_existed": skills_dir.is_dir(), "skills_snapshot_dir": skills_snapshot_dir, "skill_states": skill_states, "agent_states": agent_states}
+def replace_path_entry(source, target):
+    source = Path(source)
+    target = Path(target)
+    transient_windows_errors = {5, 32, 33}
+    for attempt in range(5):
+        try:
+            os.replace(source, target)
+            return
+        except OSError as error:
+            retryable = os.name == "nt" and getattr(error, "winerror", None) in transient_windows_errors and attempt < 4
+            if not retryable:
+                raise
+            time.sleep(0.05 * (2 ** attempt))
 
 
-def restore_deployment_snapshot(skills_dir, snapshot):
-    skills_dir = Path(skills_dir).expanduser().resolve()
-    skills_snapshot_dir = snapshot["skills_snapshot_dir"]
-    for skill_name, existed in snapshot["skill_states"].items():
-        target = skills_dir / skill_name
-        if target.is_symlink() or (target.exists() and not target.is_dir()):
-            raise RuntimeError(f"Cannot restore over non-directory managed Skill target: {target}")
-        if target.is_dir():
-            assert_no_symlinks([target], "provisional managed skill tree")
-            shutil.rmtree(target)
-        if existed:
-            shutil.copytree(skills_snapshot_dir / skill_name, target)
-    for state in snapshot["agent_states"]:
-        target = state["target"]
-        if target.is_symlink() or (target.exists() and not target.is_file()):
-            raise RuntimeError(f"Cannot restore over non-file global AGENTS target: {target}")
-        if state["existed"]:
-            _write_global_agents_target(target, state["backup"].read_text(encoding="utf-8"))
-        elif target.exists():
-            target.unlink()
-    if not snapshot["skills_dir_existed"] and skills_dir.is_dir() and not any(skills_dir.iterdir()):
-        skills_dir.rmdir()
+def write_atomic_json(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    finally:
+        if os.path.exists(temporary_name):
+            os.unlink(temporary_name)
+
+
+def read_json_if_available(path):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def process_is_running(process_id):
+    if not isinstance(process_id, int) or process_id <= 0:
+        return False
+    if process_id == os.getpid():
+        return True
+    if os.name == "nt":
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        process_handle = kernel.OpenProcess(0x1000, False, process_id)
+        if process_handle:
+            kernel.CloseHandle(process_handle)
+            return True
+        return ctypes.get_last_error() == 5
+    try:
+        os.kill(process_id, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def try_create_installation_lock(lock_dir, token):
+    try:
+        lock_dir.mkdir()
+    except FileExistsError:
+        return False
+    write_atomic_json(lock_dir / "owner.json", {"pid": os.getpid(), "token": token, "created_at": time.time()})
+    return True
+
+
+def clear_stale_installation_lock(lock_dir):
+    if not os.path.lexists(lock_dir):
+        return True
+    if not real_directory_entry(lock_dir):
+        raise RuntimeError("The global Skill installation lock is not a safe real directory.")
+    owner = read_json_if_available(lock_dir / "owner.json")
+    if owner and process_is_running(owner.get("pid")):
+        return False
+    if owner is None and time.time() - lock_dir.stat().st_mtime < 1.0:
+        return False
+    shutil.rmtree(lock_dir)
+    return True
+
+
+def release_installation_lock(lock_dir, token):
+    owner = read_json_if_available(lock_dir / "owner.json")
+    if owner and owner.get("token") == token and real_directory_entry(lock_dir):
+        shutil.rmtree(lock_dir)
 
 
 @contextmanager
-def provisional_installation_transaction(skills_dir):
-    with temporary_workspace("qin-codex-deploy-recovery-") as snapshot_dir:
-        snapshot = capture_deployment_snapshot(skills_dir, snapshot_dir)
-        try:
-            yield
-        except Exception as installation_error:
-            try:
-                restore_deployment_snapshot(skills_dir, snapshot)
-            except Exception as restore_error:
-                raise RuntimeError(f"Provisional installation failed validation and automatic restore also failed: {restore_error}") from installation_error
-            raise RuntimeError(f"Provisional installation was applied, post-install validation failed, and the previous installation was restored. Codex must repair the maintained source and reinstall without asking the user to run a gate. Failure: {installation_error}") from installation_error
+def installation_lock(skills_dir, timeout_seconds=30.0):
+    lock_dir = lexical_absolute_path(skills_dir).parent / INSTALL_LOCK_NAME
+    lock_dir.parent.mkdir(parents=True, exist_ok=True)
+    token = f"{os.getpid()}-{time.time_ns()}"
+    deadline = time.monotonic() + timeout_seconds
+    while not try_create_installation_lock(lock_dir, token):
+        if clear_stale_installation_lock(lock_dir):
+            continue
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Another global Skill installation is still active; the safe target lock did not become available.")
+        time.sleep(0.1)
+    try:
+        yield
+    finally:
+        release_installation_lock(lock_dir, token)
 
 
-def install_managed_skills(source_dir, skills_dir, skill_paths):
-    skills_dir.mkdir(parents=True, exist_ok=True)
-    changed_names = []
-    for path in skill_paths:
-        target = skills_dir / path.name
-        if path_differs(path, target):
-            copy_skill_directory(path, target, preserve_local=path.name == "task-analyze-skill")
-            changed_names.append(path.name)
-    agents_changed = deploy_global_agents(source_dir, skills_dir)
-    return changed_names, agents_changed
+def cleanup_installation_workspace(transaction_root):
+    try:
+        shutil.rmtree(transaction_root)
+    except OSError as error:
+        print(f"Disposable installation workspace cleanup will be retried later ({error.__class__.__name__}).")
 
 
-def validate_provisional_installation(source_dir, skills_dir, validate_source=True):
-    checker_module = load_skill_platform_checker(skills_dir)
-    checker_module.assert_skill_platform_safe(skills_dir, skills_dir / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=APPROVED_GLOBAL_SKILL_NAMES)
-    run_release_gate(source_dir, skills_dir, "deployed")
-    if validate_source:
-        run_release_gate(source_dir, skills_dir, "source")
+def create_installation_workspace(skills_dir):
+    skills_parent = Path(skills_dir).parent
+    skills_parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=INSTALL_TRANSACTION_PREFIX, dir=skills_parent))
 
 
-def deploy(source_dir, skills_dir, validate_source=True):
-    source_dir = Path(source_dir).expanduser().resolve()
-    skills_dir = Path(skills_dir).expanduser().resolve()
+def install_source_symlink_issues(source_dir):
+    source_dir = Path(source_dir)
+    if not real_directory_entry(source_dir):
+        return [source_dir]
+    issues = []
+    pending = [source_dir]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.name in ignored_names(directory, {entry.name}):
+                    continue
+                path = directory / entry.name
+                entry_status = entry.stat(follow_symlinks=False)
+                reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+                file_attributes = getattr(entry_status, "st_file_attributes", 0)
+                if entry.is_symlink() or file_attributes & reparse_point:
+                    issues.append(path)
+                elif entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+    return sorted(issues, key=lambda path: path.as_posix())
+
+
+def stage_skill_directory(source_dir, target_dir):
+    issues = install_source_symlink_issues(source_dir)
+    if issues:
+        details = "\n".join(f"- {path}" for path in issues)
+        raise RuntimeError(f"Managed source bytes cannot be materialized without following a symlink or junction:\n{details}")
+    shutil.copytree(source_dir, target_dir, ignore=ignored_names)
+
+
+def stage_installation_bundle(source_dir, skills_dir, transaction_root):
     skill_paths = skill_directories(source_dir)
     assert_approved_global_skill_set(skill_paths)
-    assert_no_symlinks(skill_paths, "approved source skill trees")
-    load_staged_routing_policy(skill_paths)
-    assert_public_safe(skill_paths)
-    with provisional_installation_transaction(skills_dir):
-        changed_names, agents_changed = install_managed_skills(source_dir, skills_dir, skill_paths)
-        if changed_names:
-            print_lines("Provisionally installed repository Skills into the local global Skill directory:", changed_names)
-        if agents_changed:
-            print("Provisionally installed the repository Task Lifecycle contract into the local global AGENTS.md.")
-        if not changed_names and not agents_changed:
-            print("Local global skills already match the repository source.")
-        validation_scope = "installed, source, platform, and parity" if validate_source else "installed, platform, and parity"
-        print(f"Provisional installation is active. Codex is running {validation_scope} validation now.")
-        validate_provisional_installation(source_dir, skills_dir, validate_source=validate_source)
-    print(f"Installation complete: local global Skills passed {validation_scope} validation.")
-    return changed_names
+    staged_skill_dir = transaction_root / "staged-skills"
+    staged_skill_paths = []
+    for source_path in skill_paths:
+        staged_path = staged_skill_dir / source_path.name
+        stage_skill_directory(source_path, staged_path)
+        staged_skill_paths.append(staged_path)
+    rendered_agents = materialized_global_agents_text(source_dir)
+    staged_agent_paths = []
+    for index, target in enumerate(global_agents_targets(skills_dir)):
+        staged_path = transaction_root / "staged-agents" / f"{index}.md"
+        _write_global_agents_target(staged_path, rendered_agents)
+        staged_agent_paths.append(staged_path)
+    return {"skill_paths": staged_skill_paths, "agent_paths": staged_agent_paths}
+
+
+def new_deployment_snapshot(skills_dir, transaction_root, bundle):
+    skills_dir = Path(skills_dir)
+    skills_dir_existed = os.path.lexists(skills_dir)
+    if skills_dir_existed and not real_directory_entry(skills_dir):
+        raise RuntimeError("The global Skill root cannot be replaced safely because it is not a real directory.")
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    targets = [("skill", skills_dir / path.name, path) for path in bundle["skill_paths"]]
+    targets.extend(("agents", target, staged_path) for target, staged_path in zip(global_agents_targets(skills_dir), bundle["agent_paths"]))
+    for index, (kind, target, staged_path) in enumerate(targets):
+        records.append({"kind": kind, "target": target, "staged": staged_path, "backup": transaction_root / "previous" / f"{index:02d}", "existed": os.path.lexists(target), "captured": False, "installed": False})
+    task_record = next(record for record in records if record["kind"] == "skill" and record["target"].name == "task-analyze-skill")
+    private_local_existed = real_directory_entry(task_record["target"]) and os.path.lexists(task_record["target"] / "local")
+    private_local = {"backup": task_record["backup"] / "local", "installed": task_record["target"] / "local", "existed": private_local_existed, "moved": False, "task_staged": task_record["staged"]}
+    return {"skills_dir": skills_dir, "skills_dir_existed": skills_dir_existed, "records": records, "transaction_root": transaction_root, "private_local": private_local}
+
+
+def installation_manifest_payload(snapshot, state):
+    return {
+        "schema_version": 1,
+        "state": state,
+        "pid": os.getpid(),
+        "skills_dir": str(snapshot["skills_dir"]),
+        "skills_dir_existed": snapshot["skills_dir_existed"],
+        "records": [{"kind": record["kind"], "target": str(record["target"]), "staged": str(record["staged"]), "backup": str(record["backup"]), "existed": record["existed"]} for record in snapshot["records"]],
+        "private_local": {"backup": str(snapshot["private_local"]["backup"]), "installed": str(snapshot["private_local"]["installed"]), "task_staged": str(snapshot["private_local"]["task_staged"]), "existed": snapshot["private_local"]["existed"]},
+        "updated_at": time.time(),
+    }
+
+
+def write_installation_manifest(snapshot, state):
+    write_atomic_json(snapshot["transaction_root"] / INSTALL_MANIFEST_NAME, installation_manifest_payload(snapshot, state))
+
+
+def validate_manifest_record(payload_record, expected_kind, expected_target, expected_staged, expected_backup):
+    expected = {"kind": expected_kind, "target": str(expected_target), "staged": str(expected_staged), "backup": str(expected_backup)}
+    if not isinstance(payload_record, dict) or any(payload_record.get(key) != value for key, value in expected.items()) or not isinstance(payload_record.get("existed"), bool):
+        raise RuntimeError("An interrupted global Skill installation manifest contains unsafe target data.")
+
+
+def snapshot_from_installation_manifest(transaction_root, payload, skills_dir):
+    if payload.get("schema_version") != 1 or payload.get("skills_dir") != str(skills_dir):
+        raise RuntimeError("An interrupted global Skill installation manifest does not match the requested target.")
+    payload_records = payload.get("records")
+    expected_targets = [("skill", skills_dir / name, transaction_root / "staged-skills" / name) for name in PRIMARY_SKILL_ORDER]
+    expected_targets.extend(("agents", target, transaction_root / "staged-agents" / f"{index}.md") for index, target in enumerate(global_agents_targets(skills_dir)))
+    if not isinstance(payload_records, list) or len(payload_records) != len(expected_targets):
+        raise RuntimeError("An interrupted global Skill installation manifest has an incomplete managed target set.")
+    records = []
+    for index, ((kind, target, staged), payload_record) in enumerate(zip(expected_targets, payload_records)):
+        backup = transaction_root / "previous" / f"{index:02d}"
+        validate_manifest_record(payload_record, kind, target, staged, backup)
+        reverse_index = len(expected_targets) - 1 - index
+        restore_marker = transaction_root / "restore-markers" / f"{reverse_index:02d}.json"
+        restored = payload_record["existed"] and not os.path.lexists(backup) and os.path.lexists(restore_marker) and os.path.lexists(target)
+        record = {"kind": kind, "target": target, "staged": staged, "backup": backup, "existed": payload_record["existed"], "captured": os.path.lexists(backup), "installed": not os.path.lexists(staged) and not restored}
+        if record["existed"] and not os.path.lexists(staged) and not record["captured"] and not restored:
+            raise RuntimeError("An interrupted global Skill installation is missing a required recovery backup.")
+        records.append(record)
+    task_record = next(record for record in records if record["kind"] == "skill" and record["target"].name == "task-analyze-skill")
+    private_payload = payload.get("private_local", {})
+    expected_private = {"backup": str(task_record["backup"] / "local"), "installed": str(task_record["target"] / "local"), "task_staged": str(task_record["staged"])}
+    if any(private_payload.get(key) != value for key, value in expected_private.items()) or not isinstance(private_payload.get("existed"), bool):
+        raise RuntimeError("An interrupted global Skill installation manifest has unsafe private-local data.")
+    private_moved = private_payload["existed"] and not os.path.lexists(task_record["staged"]) and not os.path.lexists(task_record["backup"] / "local") and os.path.lexists(task_record["target"] / "local")
+    private_local = {"backup": task_record["backup"] / "local", "installed": task_record["target"] / "local", "task_staged": task_record["staged"], "existed": private_payload["existed"], "moved": private_moved}
+    return {"skills_dir": skills_dir, "skills_dir_existed": payload.get("skills_dir_existed") is True, "records": records, "transaction_root": transaction_root, "private_local": private_local}
+
+
+def capture_deployment_snapshot(snapshot):
+    for record in snapshot["records"]:
+        if not os.path.lexists(record["target"]):
+            continue
+        record["backup"].parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["target"], record["backup"])
+        record["captured"] = True
+
+
+def preserve_private_task_analyze_local(snapshot):
+    task_record = next(record for record in snapshot["records"] if record["kind"] == "skill" and record["target"].name == "task-analyze-skill")
+    private_local = snapshot["private_local"]
+    if not private_local["existed"] or not task_record["captured"] or not real_directory_entry(task_record["backup"]):
+        return
+    backup_local = private_local["backup"]
+    installed_local = private_local["installed"]
+    if not os.path.lexists(backup_local):
+        return
+    if os.path.lexists(installed_local):
+        raise RuntimeError("The provisional task-analyze-skill unexpectedly contains local state.")
+    replace_path_entry(backup_local, installed_local)
+    private_local["moved"] = True
+
+
+def install_managed_skills(snapshot):
+    installed_names = []
+    installed_agents = 0
+    for record in snapshot["records"]:
+        record["target"].parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["staged"], record["target"])
+        record["installed"] = True
+        if record["kind"] == "skill":
+            installed_names.append(record["target"].name)
+        else:
+            installed_agents += 1
+    preserve_private_task_analyze_local(snapshot)
+    write_installation_manifest(snapshot, "active")
+    return installed_names, installed_agents
+
+
+def restore_captured_record(record, discard_path, restore_marker):
+    write_atomic_json(restore_marker, {"target": str(record["target"]), "started_at": time.time()})
+    provisional_moved = False
+    if record["installed"] and os.path.lexists(record["target"]):
+        discard_path.parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["target"], discard_path)
+        provisional_moved = True
+    try:
+        record["target"].parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["backup"], record["target"])
+    except Exception:
+        if provisional_moved and os.path.lexists(discard_path) and not os.path.lexists(record["target"]):
+            replace_path_entry(discard_path, record["target"])
+        raise
+    record["captured"] = False
+    record["installed"] = False
+
+
+def discard_new_record(record, discard_path):
+    if record["installed"] and os.path.lexists(record["target"]):
+        discard_path.parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["target"], discard_path)
+    record["installed"] = False
+
+
+def restore_deployment_snapshot(snapshot):
+    private_local = snapshot["private_local"]
+    if private_local["moved"]:
+        if not os.path.lexists(private_local["installed"]):
+            raise RuntimeError("Preserved task-analyze-skill local state is unavailable during restore.")
+        replace_path_entry(private_local["installed"], private_local["backup"])
+        private_local["moved"] = False
+    discard_dir = snapshot["transaction_root"] / "discard"
+    for index, record in enumerate(reversed(snapshot["records"])):
+        if record["captured"]:
+            restore_captured_record(record, discard_dir / f"captured-{index:02d}", snapshot["transaction_root"] / "restore-markers" / f"{index:02d}.json")
+    for index, record in enumerate(reversed(snapshot["records"])):
+        if not record["captured"] and not record["existed"]:
+            discard_new_record(record, discard_dir / f"new-{index:02d}")
+    skills_dir = snapshot["skills_dir"]
+    if not snapshot["skills_dir_existed"] and real_directory_entry(skills_dir) and not any(skills_dir.iterdir()):
+        skills_dir.rmdir()
+
+
+def restore_installation_or_raise(snapshot, installation_error):
+    try:
+        restore_deployment_snapshot(snapshot)
+        write_installation_manifest(snapshot, "restored")
+    except Exception as restore_error:
+        raise RuntimeError(f"Provisional installation failed and automatic restore also failed; the recovery snapshot was retained. Failure: {restore_error}") from installation_error
+
+
+def recover_interrupted_installations(skills_dir):
+    skills_dir = lexical_absolute_path(skills_dir)
+    skills_parent = skills_dir.parent
+    if not skills_parent.is_dir():
+        return
+    for transaction_root in sorted(skills_parent.glob(f"{INSTALL_TRANSACTION_PREFIX}*")):
+        if not real_directory_entry(transaction_root):
+            raise RuntimeError("An installer-owned recovery entry is not a safe real directory.")
+        payload = read_json_if_available(transaction_root / INSTALL_MANIFEST_NAME)
+        if payload is None or payload.get("skills_dir") != str(skills_dir):
+            continue
+        state = payload.get("state")
+        if state in {"materializing", "committed", "restored"}:
+            cleanup_installation_workspace(transaction_root)
+            continue
+        if state not in {"prepared", "active"}:
+            raise RuntimeError("An interrupted global Skill installation has an unknown recovery state.")
+        snapshot = snapshot_from_installation_manifest(transaction_root, payload, skills_dir)
+        restore_deployment_snapshot(snapshot)
+        write_installation_manifest(snapshot, "restored")
+        cleanup_installation_workspace(transaction_root)
+
+
+@contextmanager
+def provisional_installation_transaction(source_dir, skills_dir):
+    with installation_lock(skills_dir):
+        recover_interrupted_installations(skills_dir)
+        transaction_root = create_installation_workspace(skills_dir)
+        snapshot = None
+        bundle_prepared = False
+        try:
+            write_atomic_json(transaction_root / INSTALL_MANIFEST_NAME, {"schema_version": 1, "state": "materializing", "pid": os.getpid(), "skills_dir": str(skills_dir), "updated_at": time.time()})
+            bundle = stage_installation_bundle(source_dir, skills_dir, transaction_root)
+            bundle_prepared = True
+            snapshot = new_deployment_snapshot(skills_dir, transaction_root, bundle)
+            write_installation_manifest(snapshot, "prepared")
+            capture_deployment_snapshot(snapshot)
+            yield snapshot
+            write_installation_manifest(snapshot, "committed")
+        except Exception as installation_error:
+            captured_count = sum(record["captured"] for record in snapshot["records"]) if snapshot is not None else 0
+            installed_count = sum(record["installed"] for record in snapshot["records"]) if snapshot is not None else 0
+            if snapshot is not None:
+                restore_installation_or_raise(snapshot, installation_error)
+            cleanup_installation_workspace(transaction_root)
+            if not bundle_prepared:
+                raise RuntimeError(f"Installation source bytes could not be materialized safely before replacement. Codex must repair the source and retry automatically. Failure: {installation_error}") from installation_error
+            if snapshot is None:
+                raise RuntimeError(f"A recoverable backup or safe exact-target write could not be prepared; no managed target was replaced. Codex must resolve the mechanical blocker and retry automatically. Failure: {installation_error}") from installation_error
+            raise RuntimeError(f"The provisional transaction failed after capturing {captured_count} target(s) and replacing {installed_count} target(s); the previous installation was restored. Codex must repair the maintained source and reinstall without asking the user to run a gate. Failure: {installation_error}") from installation_error
+        cleanup_installation_workspace(transaction_root)
+
+
+def mirror_repository_to_local(repository_dir, skills_dir):
+    return deploy(repository_dir, skills_dir)
+
+
+def deploy(source_dir, skills_dir):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = lexical_absolute_path(skills_dir)
+    with provisional_installation_transaction(source_dir, skills_dir) as snapshot:
+        installed_names, installed_agents = install_managed_skills(snapshot)
+        print_lines("Replaced managed repository Skills in the local global Skill directory:", installed_names)
+        print(f"Replaced {installed_agents} global AGENTS.md target(s) with the repository Task Lifecycle contract.")
+    print("Installation complete: consumer install/update replaced the published managed source without rerunning validation gates.")
+    return installed_names
 
 
 def remote_changes(repository, skills_dir):
     with temporary_workspace("qin-codex-skills-") as sandbox:
-        repository_dir = clone_repository(repository, sandbox)
+        repository_dir = clone_repository(repository, sandbox, read_only=True)
         remote_by_name = {path.name: path for path in skill_directories(repository_dir)}
         return [name for name in PRIMARY_SKILL_ORDER if name not in remote_by_name or path_differs(remote_by_name[name], skills_dir / name)]
 
@@ -1050,15 +1361,22 @@ def preuse(repository, skills_dir):
         print("Remote global skills are already reflected locally.")
 
 
+def record_pull_state(repository, repository_dir, skills_dir):
+    try:
+        write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), "", "")
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(f"Installation complete; sync state could not be recorded ({error.__class__.__name__}).")
+        return False
+    return True
+
+
 def pull(repository, skills_dir):
     with temporary_workspace("qin-codex-skills-") as sandbox:
-        repository_dir = clone_repository(repository, sandbox)
+        repository_dir = clone_repository(repository, sandbox, read_only=True)
         changed_names = mirror_repository_to_local(repository_dir, skills_dir)
-        write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(repository_dir)))
-        if changed_names:
-            print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
-        else:
-            print("No remote skill changes to copy.")
+        record_pull_state(repository, repository_dir, skills_dir)
+        print_lines("Replaced managed remote skills in ~/.codex/skills:", changed_names)
+        return changed_names
 
 
 def prepare_repository_snapshot(repository_dir, skills_dir):
@@ -1069,7 +1387,7 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
     load_staged_routing_policy(skill_paths)
     assert_public_safe(skill_paths)
     checker_module = load_skill_platform_checker(skills_dir)
-    checker_module.assert_skill_platform_safe(skills_dir, Path(skills_dir) / "code-skill" / "assets" / "skill-platform-baseline.json")
+    checker_module.assert_skill_platform_safe(skills_dir, Path(skills_dir) / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=APPROVED_GLOBAL_SKILL_NAMES)
     for path in repository_dir.iterdir():
         if path.name == ".git":
             continue
@@ -1091,7 +1409,7 @@ def push_global_snapshot(repository, skills_dir, message, dry_run):
     if not dry_run:
         raise RuntimeError("Installed global Skills are not a publication source. Publish the maintained repository with the push command.")
     with temporary_workspace("qin-codex-skills-") as sandbox:
-        repository_dir = clone_repository(repository, sandbox)
+        repository_dir = clone_repository(repository, sandbox, read_only=True)
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
         status_text = run_command(["git", "status", "--short"], cwd=repository_dir).stdout.strip()
         if dry_run:
@@ -1193,20 +1511,9 @@ def remote_branch_head(source_dir, branch_name):
 
 def push(repository, source_dir, message, dry_run, skills_dir=None):
     source_dir = source_repository_root(source_dir)
-    skill_paths = skill_directories(source_dir)
-    assert_approved_global_skill_set(skill_paths)
-    assert_repository_skill_set(source_dir)
-    assert_no_symlinks(skill_paths, "maintained source skill trees")
-    load_staged_routing_policy(skill_paths)
-    assert_public_safe(skill_paths)
-    checker_module = load_skill_platform_checker(source_dir)
-    checker_module.assert_skill_platform_safe(source_dir, source_dir / "code-skill" / "assets" / "skill-platform-baseline.json")
-    agents_path = source_dir / "AGENTS.md"
-    if not agents_path.is_file() or secret_value_issue(agents_path):
-        raise RuntimeError("Refusing publication because the root AGENTS.md is missing or contains secret-like content")
-    assert_publishable_worktree_paths(source_dir)
     if not dry_run:
         run_release_gate(source_dir, skills_dir or Path.home() / ".codex" / "skills", "release")
+    skill_paths = skill_directories(source_dir)
     readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=dry_run)
     branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
     if not branch_name:
@@ -1247,36 +1554,8 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
 
 
 def sync(repository, skills_dir, message):
-    with temporary_workspace("qin-codex-skills-") as sandbox:
-        repository_dir = clone_repository(repository, sandbox)
-        local_paths = skill_directories(skills_dir)
-        remote_paths = skill_directories(repository_dir)
-        local_hash = snapshot_hash(local_paths)
-        remote_hash = snapshot_hash(remote_paths)
-        remote_head = repository_head(repository_dir)
-        if local_hash == remote_hash:
-            write_sync_state(DEFAULT_STATE_FILE, repository, remote_head, local_hash, remote_hash)
-            print("Local and remote global skills are already synced.")
-            return
-        state = read_sync_state(DEFAULT_STATE_FILE)
-        local_changed = local_hash != state.get("local_hash")
-        remote_changed = remote_head != state.get("remote_head") or remote_hash != state.get("remote_hash")
-        if local_changed and not remote_changed:
-            print("Local global skills are newer than the last synced state. Pushing to GitHub.")
-            raise RuntimeError("Installed global Skills changed. Deploy the maintained repository source, then publish it with push.")
-        elif remote_changed and not local_changed:
-            print("Remote global skills are newer than the last synced state. Pulling into ~/.codex/skills.")
-            changed_names = mirror_repository_to_local(repository_dir, skills_dir)
-            write_sync_state(DEFAULT_STATE_FILE, repository, remote_head, snapshot_hash(skill_directories(skills_dir)), remote_hash)
-            print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
-        elif latest_local_timestamp(local_paths) >= repository_timestamp(repository_dir):
-            print("Both sides differ; local files are newest. Pushing to GitHub.")
-            raise RuntimeError("Installed global Skills are not a publication source. Reconcile the maintained source explicitly.")
-        else:
-            print("Both sides differ; remote commit is newest. Pulling into ~/.codex/skills.")
-            changed_names = mirror_repository_to_local(repository_dir, skills_dir)
-            write_sync_state(DEFAULT_STATE_FILE, repository, remote_head, snapshot_hash(skill_directories(skills_dir)), remote_hash)
-            print_lines("Copied remote skills into ~/.codex/skills:", changed_names)
+    print("Legacy sync now performs an install-only remote replacement; GitHub publication remains an explicit push action.")
+    return pull(repository, skills_dir)
 
 
 def main():
@@ -1287,7 +1566,9 @@ def main():
     sync_parser = subparsers.add_parser("sync")
     sync_parser.add_argument("--message", default="Sync global Codex skills")
     subparsers.add_parser("preuse")
-    subparsers.add_parser("pull")
+    pull_parser = subparsers.add_parser("pull")
+    pull_parser.add_argument("--repo", dest="pull_repository", default=argparse.SUPPRESS)
+    pull_parser.add_argument("--skills-dir", type=Path, dest="pull_skills_dir", default=argparse.SUPPRESS)
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
     status_parser.add_argument("--skills-dir", type=Path, dest="status_skills_dir", default=argparse.SUPPRESS)
@@ -1305,7 +1586,7 @@ def main():
     elif args.command == "preuse":
         preuse(args.repo, args.skills_dir)
     elif args.command == "pull":
-        pull(args.repo, args.skills_dir)
+        pull(getattr(args, "pull_repository", args.repo), getattr(args, "pull_skills_dir", args.skills_dir))
     elif args.command == "status":
         status_skills_dir = getattr(args, "status_skills_dir", args.skills_dir)
         source_dir = args.source_dir.expanduser().resolve()

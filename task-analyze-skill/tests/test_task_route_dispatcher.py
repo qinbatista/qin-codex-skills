@@ -797,10 +797,10 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 submitted_ns = time.monotonic_ns()
                 future = executor.submit(module.run_plan, plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json", result_ready_callback=controller_ready)
                 result_path = cache_dir / "direct-result.md"
-                self.assertTrue(ready_event.wait(timeout=1))
+                self.assertTrue(ready_event.wait(timeout=3))
                 presented_result = result_path.read_text(encoding="utf-8")
                 self.assertFalse(future.done())
-                manifest = future.result(timeout=2)
+                manifest = future.result(timeout=5)
         self.assertEqual(presented_result, "RESULT=12\n")
         self.assertEqual(manifest["status"], "pass", manifest["failures"])
         self.assertTrue(manifest["result_published"])

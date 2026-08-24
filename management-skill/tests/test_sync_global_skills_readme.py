@@ -3,6 +3,8 @@ import json
 import re
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import unicodedata
 import xml.etree.ElementTree as ElementTree
@@ -14,6 +16,7 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "sync_global_ski
 MODULE_SPEC = importlib.util.spec_from_file_location("sync_global_skills", MODULE_PATH)
 sync_global_skills = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(sync_global_skills)
+REAL_RUN_RELEASE_GATE = sync_global_skills.run_release_gate
 SKILLS_DIR = Path(__file__).resolve().parents[2]
 README_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "readme"
 BENCHMARK_RENDERER_PATH = SKILLS_DIR / "task-analyze-skill" / "scripts" / "render_benchmark_svg.py"
@@ -113,6 +116,20 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             resolved_url = sync_global_skills.repository_git_url("owner/repository")
 
         self.assertEqual(resolved_url, "git@github.com:owner/repository.git")
+
+    def test_read_only_repository_git_url_falls_back_to_https_without_gh(self):
+        with mock.patch.object(sync_global_skills.shutil, "which", return_value=None):
+            resolved_url = sync_global_skills.repository_git_url("owner/repository", read_only=True)
+
+        self.assertEqual(resolved_url, "https://github.com/owner/repository.git")
+
+    def test_read_only_repository_git_url_asks_gh_for_https_url(self):
+        completed = mock.Mock(stdout="https://github.com/owner/repository\n")
+        with mock.patch.object(sync_global_skills.shutil, "which", return_value="gh"), mock.patch.object(sync_global_skills, "run_command", return_value=completed) as runner:
+            resolved_url = sync_global_skills.repository_git_url("owner/repository", read_only=True)
+
+        self.assertEqual(resolved_url, "https://github.com/owner/repository")
+        runner.assert_called_once_with(["gh", "repo", "view", "owner/repository", "--json", "url", "--jq", ".url"])
 
     def test_approved_public_mirror_is_exactly_eight_including_project_memory(self):
         expected_order = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "project-memory-skill", "verify-skill", "optimization-skill", "management-skill"]
@@ -654,6 +671,17 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertTrue(unrelated.exists())
             self.assertFalse((repository_dir / "chronicle").exists())
 
+    def test_publication_snapshot_platform_check_is_limited_to_managed_skills(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            staged_skills = self.staged_skill_copy(sandbox)
+            repository_dir = sandbox / "repository"
+            repository_dir.mkdir()
+            checker = mock.Mock(unsafe=True)
+            with mock.patch.object(sync_global_skills, "load_skill_platform_checker", return_value=checker):
+                sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
+            checker.assert_skill_platform_safe.assert_called_once_with(staged_skills, staged_skills / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES)
+
     def test_pull_preserves_unrelated_local_skill(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             sandbox = Path(temp_dir)
@@ -664,12 +692,259 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             for skill_path in self.primary_skill_paths():
                 sync_global_skills.copy_skill_directory(skill_path, repository_dir / skill_path.name)
                 sync_global_skills.copy_skill_directory(skill_path, local_dir / skill_path.name)
+            remote_unrelated = repository_dir / "remote-extra" / "SKILL.md"
+            remote_unrelated.parent.mkdir()
+            remote_unrelated.write_text("---\nname: remote-extra\ndescription: remote only\n---\n", encoding="utf-8")
             unrelated = local_dir / "chronicle"
             unrelated.mkdir()
             (unrelated / "SKILL.md").write_text("---\nname: chronicle\ndescription: local only\n---\n")
             sync_global_skills.mirror_repository_to_local(repository_dir, local_dir)
             self.assertTrue(unrelated.exists())
-            self.assertEqual([call.args[2] for call in self.release_gate.call_args_list], ["deployed"])
+            self.release_gate.assert_not_called()
+
+    def test_consumer_deploy_replaces_all_targets_without_semantic_checks_or_snapshot_hashes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            with mock.patch.object(sync_global_skills, "load_staged_routing_policy", side_effect=AssertionError("consumer install must not load routing")) as routing, mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=AssertionError("consumer install must not run platform checks")) as platform, mock.patch.object(sync_global_skills, "run_release_gate", side_effect=AssertionError("consumer install must not run release gates")) as gate, mock.patch.object(sync_global_skills, "global_agents_parity", side_effect=AssertionError("consumer install must not run parity checks")) as parity, mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("consumer install must not hash skill trees")) as hasher:
+                changed_names = sync_global_skills.deploy(SKILLS_DIR, target_dir)
+
+            self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
+            self.assertEqual([path.name for path in sync_global_skills.skill_directories(target_dir)], sync_global_skills.PRIMARY_SKILL_ORDER)
+            routing.assert_not_called()
+            platform.assert_not_called()
+            gate.assert_not_called()
+            parity.assert_not_called()
+            hasher.assert_not_called()
+
+    def test_pull_updates_to_latest_published_bytes_without_consumer_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            repository_dir = self.staged_skill_copy(sandbox)
+            published_skill = repository_dir / "management-skill" / "SKILL.md"
+            published_skill.write_text(published_skill.read_text(encoding="utf-8") + "\npublished-latest\n", encoding="utf-8")
+            target_dir = sandbox / "global-skills"
+            old_skill = target_dir / "management-skill" / "SKILL.md"
+            old_skill.parent.mkdir(parents=True)
+            old_skill.write_text("old-installation\n", encoding="utf-8")
+            private_state = target_dir / "task-analyze-skill" / "local" / "events.jsonl"
+            private_state.parent.mkdir(parents=True)
+            private_state.write_text("private\n", encoding="utf-8")
+            unrelated = target_dir / "chronicle" / "SKILL.md"
+            unrelated.parent.mkdir(parents=True)
+            unrelated.write_text("unrelated\n", encoding="utf-8")
+
+            with mock.patch.object(sync_global_skills, "clone_repository", return_value=repository_dir), mock.patch.object(sync_global_skills, "repository_head", return_value="published-head"), mock.patch.object(sync_global_skills, "write_sync_state") as state_writer, mock.patch.object(sync_global_skills, "load_staged_routing_policy", side_effect=AssertionError("consumer pull must not load routing")) as routing, mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=AssertionError("consumer pull must not run platform checks")) as platform, mock.patch.object(sync_global_skills, "assert_public_safe", side_effect=AssertionError("consumer pull must not run public safety")) as public_safety, mock.patch.object(sync_global_skills, "global_agents_parity", side_effect=AssertionError("consumer pull must not check parity")) as parity, mock.patch.object(sync_global_skills, "path_differs", side_effect=AssertionError("consumer pull must not pre-diff")) as differ, mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("consumer pull must not hash trees")) as hasher:
+                changed_names = sync_global_skills.pull("owner/repository", target_dir)
+
+            self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
+            self.assertIn("published-latest", old_skill.read_text(encoding="utf-8"))
+            self.assertEqual(private_state.read_text(encoding="utf-8"), "private\n")
+            self.assertEqual(unrelated.read_text(encoding="utf-8"), "unrelated\n")
+            self.assertEqual((target_dir.parent / "AGENTS.md").read_text(encoding="utf-8"), sync_global_skills.materialized_global_agents_text(repository_dir))
+            state_writer.assert_called_once_with(sync_global_skills.DEFAULT_STATE_FILE, "owner/repository", "published-head", "", "")
+            for forbidden in (routing, platform, public_safety, parity, differ, hasher, self.release_gate):
+                forbidden.assert_not_called()
+
+    def test_consumer_deploy_ignores_routing_validator_and_replaces_previous_opaque_target(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            target_dir = sandbox / "global-skills"
+            outside = sandbox / "outside"
+            outside.mkdir()
+            outside_sentinel = outside / "sentinel.txt"
+            outside_sentinel.write_text("outside\n", encoding="utf-8")
+            previous_target = target_dir / "management-skill"
+            previous_target.parent.mkdir(parents=True)
+            previous_target.symlink_to(outside, target_is_directory=True)
+
+            with mock.patch.object(sync_global_skills, "load_staged_routing_policy", side_effect=AssertionError("consumer install must not load routing")) as routing:
+                sync_global_skills.deploy(SKILLS_DIR, target_dir)
+
+            self.assertFalse(previous_target.is_symlink())
+            self.assertTrue((previous_target / "SKILL.md").is_file())
+            self.assertEqual(outside_sentinel.read_text(encoding="utf-8"), "outside\n")
+            routing.assert_not_called()
+            self.release_gate.assert_not_called()
+
+    def test_deploy_replaces_file_symlink_and_directory_agents_targets_without_traversal(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            target_dir = sandbox / "global-skills"
+            target_dir.mkdir()
+            outside = sandbox / "outside"
+            outside.mkdir()
+            outside_sentinel = outside / "sentinel.txt"
+            outside_sentinel.write_text("outside\n", encoding="utf-8")
+            (target_dir / "management-skill").symlink_to(outside, target_is_directory=True)
+            (target_dir / "verify-skill").write_text("malformed old target\n", encoding="utf-8")
+            agents_target = target_dir.parent / "AGENTS.md"
+            agents_target.mkdir()
+            (agents_target / "old.txt").write_text("old agents directory\n", encoding="utf-8")
+
+            changed_names = sync_global_skills.deploy(SKILLS_DIR, target_dir)
+
+            self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
+            self.assertTrue((target_dir / "management-skill" / "SKILL.md").is_file())
+            self.assertTrue((target_dir / "verify-skill" / "SKILL.md").is_file())
+            self.assertTrue(agents_target.is_file())
+            self.assertEqual(outside_sentinel.read_text(encoding="utf-8"), "outside\n")
+
+    def test_missing_managed_source_stops_only_materialization_and_preserves_installation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            source_dir = self.staged_skill_copy(sandbox)
+            (source_dir / "verify-skill" / "SKILL.md").unlink()
+            target_dir = sandbox / "global-skills"
+            previous_skill = target_dir / "management-skill" / "SKILL.md"
+            previous_skill.parent.mkdir(parents=True)
+            previous_skill.write_text("previous-installation\n", encoding="utf-8")
+
+            with mock.patch.object(sync_global_skills, "replace_path_entry", wraps=sync_global_skills.replace_path_entry) as replacer, self.assertRaisesRegex(RuntimeError, "source bytes could not be materialized"):
+                sync_global_skills.deploy(source_dir, target_dir)
+
+            self.assertEqual(previous_skill.read_text(encoding="utf-8"), "previous-installation\n")
+            replacer.assert_not_called()
+            self.release_gate.assert_not_called()
+
+    def test_excluded_source_local_symlink_does_not_block_or_enter_installation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            source_dir = self.staged_skill_copy(sandbox)
+            outside = sandbox / "private-local"
+            outside.mkdir()
+            outside_sentinel = outside / "sentinel.txt"
+            outside_sentinel.write_text("private\n", encoding="utf-8")
+            source_local = source_dir / "management-skill" / "local"
+            source_local.symlink_to(outside, target_is_directory=True)
+            target_dir = sandbox / "global-skills"
+
+            sync_global_skills.deploy(source_dir, target_dir)
+
+            self.assertFalse((target_dir / "management-skill" / "local").exists())
+            self.assertEqual(outside_sentinel.read_text(encoding="utf-8"), "private\n")
+
+    def test_consumer_deploy_replaces_global_agents_bytes_without_semantic_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            source_dir = self.staged_skill_copy(sandbox)
+            source_asset = source_dir / sync_global_skills.GLOBAL_AGENTS_ASSET
+            source_asset.write_text("# malformed lifecycle\n", encoding="utf-8")
+            target_dir = sandbox / "global-skills"
+            previous_agents = target_dir.parent / "AGENTS.md"
+            previous_agents.write_text("# previous lifecycle\n", encoding="utf-8")
+            replacement_observed = []
+            real_replace = sync_global_skills.replace_path_entry
+
+            def observe_replace(source, target):
+                if Path(target) == previous_agents and "staged-agents" in Path(source).parts:
+                    replacement_observed.append(Path(source).read_text(encoding="utf-8"))
+                return real_replace(source, target)
+
+            with mock.patch.object(sync_global_skills, "replace_path_entry", side_effect=observe_replace), mock.patch.object(sync_global_skills, "global_agents_parity", side_effect=AssertionError("consumer install must not validate AGENTS parity")) as parity:
+                sync_global_skills.deploy(source_dir, target_dir)
+
+            self.assertEqual(replacement_observed, ["# malformed lifecycle\n"])
+            self.assertEqual(previous_agents.read_text(encoding="utf-8"), "# malformed lifecycle\n")
+            parity.assert_not_called()
+            self.release_gate.assert_not_called()
+
+    def test_root_symlink_is_a_safe_write_blocker_and_external_target_is_untouched(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            codex_root = sandbox / ".codex"
+            codex_root.mkdir()
+            outside = sandbox / "outside"
+            outside.mkdir()
+            sentinel = outside / "sentinel.txt"
+            sentinel.write_text("outside\n", encoding="utf-8")
+            logical_skills = codex_root / "skills"
+            logical_skills.symlink_to(outside, target_is_directory=True)
+
+            with self.assertRaisesRegex(RuntimeError, "global Skill root"):
+                sync_global_skills.deploy(SKILLS_DIR, logical_skills)
+
+            self.assertTrue(logical_skills.is_symlink())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "outside\n")
+            self.assertFalse((outside / "management-skill").exists())
+            self.assertFalse((codex_root / "AGENTS.md").exists())
+
+    def test_interrupted_partial_installation_is_restored_from_persistent_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            target_dir = sandbox / "global-skills"
+            previous_skill = target_dir / "task-analyze-skill" / "SKILL.md"
+            previous_skill.parent.mkdir(parents=True)
+            previous_skill.write_text("previous task analyze\n", encoding="utf-8")
+            private_state = previous_skill.parent / "local" / "events.jsonl"
+            private_state.parent.mkdir()
+            private_state.write_text("private\n", encoding="utf-8")
+            transaction_root = sync_global_skills.create_installation_workspace(target_dir)
+            bundle = sync_global_skills.stage_installation_bundle(SKILLS_DIR, target_dir, transaction_root)
+            snapshot = sync_global_skills.new_deployment_snapshot(target_dir, transaction_root, bundle)
+            sync_global_skills.write_installation_manifest(snapshot, "prepared")
+            sync_global_skills.capture_deployment_snapshot(snapshot)
+            for record in snapshot["records"][:3]:
+                sync_global_skills.replace_path_entry(record["staged"], record["target"])
+
+            sync_global_skills.recover_interrupted_installations(target_dir)
+
+            self.assertEqual(previous_skill.read_text(encoding="utf-8"), "previous task analyze\n")
+            self.assertEqual(private_state.read_text(encoding="utf-8"), "private\n")
+            self.assertFalse((target_dir / "workflow-skill").exists())
+            self.assertFalse(transaction_root.exists())
+
+    def test_failed_backup_restore_is_recovered_on_next_run(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            target_dir = sandbox / "global-skills"
+            previous_skill = target_dir / "management-skill" / "SKILL.md"
+            previous_skill.parent.mkdir(parents=True)
+            previous_skill.write_text("previous installation\n", encoding="utf-8")
+            real_replace = sync_global_skills.replace_path_entry
+            injected_install_failure = []
+            injected_restore_failure = []
+
+            def fail_one_backup_restore(source, target):
+                source_path = Path(source)
+                target_path = Path(target)
+                if not injected_install_failure and "staged-skills" in source_path.parts and target_path.name == "verify-skill":
+                    injected_install_failure.append(True)
+                    raise PermissionError("injected target write failure")
+                if injected_install_failure and not injected_restore_failure and "previous" in source_path.parts and target_path == previous_skill.parent:
+                    injected_restore_failure.append(True)
+                    raise PermissionError("injected backup restore failure")
+                return real_replace(source, target)
+
+            with mock.patch.object(sync_global_skills, "replace_path_entry", side_effect=fail_one_backup_restore), self.assertRaisesRegex(RuntimeError, "automatic restore also failed"):
+                sync_global_skills.deploy(SKILLS_DIR, target_dir)
+
+            self.assertFalse(previous_skill.is_file())
+            self.assertTrue(list(target_dir.parent.glob(f"{sync_global_skills.INSTALL_TRANSACTION_PREFIX}*")))
+            sync_global_skills.recover_interrupted_installations(target_dir)
+            self.assertEqual(previous_skill.read_text(encoding="utf-8"), "previous installation\n")
+            self.assertFalse(list(target_dir.parent.glob(f"{sync_global_skills.INSTALL_TRANSACTION_PREFIX}*")))
+
+    def test_installation_lock_waits_for_the_active_writer_then_acquires(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            acquired = []
+            failures = []
+
+            def wait_for_lock():
+                try:
+                    with sync_global_skills.installation_lock(target_dir, timeout_seconds=2.0):
+                        acquired.append(True)
+                except Exception as error:
+                    failures.append(error)
+
+            with sync_global_skills.installation_lock(target_dir):
+                waiter = threading.Thread(target=wait_for_lock)
+                waiter.start()
+                time.sleep(0.2)
+                self.assertEqual(acquired, [])
+            waiter.join(timeout=2.0)
+            self.assertEqual(failures, [])
+            self.assertEqual(acquired, [True])
 
     def test_deploy_copies_repository_skills_and_preserves_local_private_state(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -690,66 +965,26 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertTrue(unrelated.is_file())
             self.assertEqual(global_agents.read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
-            self.assertEqual([call.args[2] for call in self.release_gate.call_args_list], ["deployed", "source"])
+            self.release_gate.assert_not_called()
 
-    def test_deploy_installs_before_validation_and_restores_previous_installation_on_failure(self):
+    def test_deployed_release_gate_bootstraps_from_provisional_installed_copy(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            target_dir = Path(temp_dir) / "global-skills"
-            previous_skill = target_dir / "management-skill" / "SKILL.md"
-            previous_skill.parent.mkdir(parents=True)
-            previous_skill.write_text("previous-installation\n", encoding="utf-8")
-            private_state = target_dir / "task-analyze-skill" / "local" / "events.jsonl"
-            private_state.parent.mkdir(parents=True)
-            private_state.write_text("private-state\n", encoding="utf-8")
-            unrelated_skill = target_dir / "chronicle" / "SKILL.md"
-            unrelated_skill.parent.mkdir(parents=True)
-            unrelated_skill.write_text("local-only\n", encoding="utf-8")
-            previous_agents = target_dir.parent / "AGENTS.md"
-            previous_agents.write_text("# previous lifecycle\n", encoding="utf-8")
+            sandbox = Path(temp_dir)
+            source_dir = sandbox / "source"
+            skills_dir = sandbox / "global-skills"
+            source_dir.mkdir()
+            installed_gate = skills_dir / "management-skill" / "scripts" / "global_skill_regression_gate.py"
+            installed_gate.parent.mkdir(parents=True)
+            installed_gate.write_text("# installed gate\n", encoding="utf-8")
+            completed = mock.Mock(stdout="", stderr="", returncode=0)
 
-            def reject_provisional_install(source_dir, installed_dir, mode):
-                self.assertEqual(mode, "deployed")
-                self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([installed_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
-                self.assertEqual((installed_dir.parent / "AGENTS.md").read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
-                raise RuntimeError("regression failed")
+            with mock.patch.object(sync_global_skills.subprocess, "run", return_value=completed) as runner:
+                REAL_RUN_RELEASE_GATE(source_dir, skills_dir, "deployed")
 
-            self.release_gate.side_effect = reject_provisional_install
-            with self.assertRaisesRegex(RuntimeError, "Codex must repair the maintained source and reinstall"):
-                sync_global_skills.deploy(SKILLS_DIR, target_dir)
-            self.assertEqual(previous_skill.read_text(encoding="utf-8"), "previous-installation\n")
-            self.assertEqual(private_state.read_text(encoding="utf-8"), "private-state\n")
-            self.assertEqual(unrelated_skill.read_text(encoding="utf-8"), "local-only\n")
-            self.assertEqual(previous_agents.read_text(encoding="utf-8"), "# previous lifecycle\n")
-            self.assertEqual(sorted(path.name for path in target_dir.iterdir()), ["chronicle", "management-skill", "task-analyze-skill"])
-            self.assertEqual([call.args[2] for call in self.release_gate.call_args_list], ["deployed"])
+            command = runner.call_args.args[0]
+            self.assertEqual(Path(command[1]), installed_gate.resolve())
 
-    def test_deploy_source_validation_failure_also_restores_after_installed_gate_passes(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            target_dir = Path(temp_dir) / "global-skills"
-            previous_agents = target_dir.parent / "AGENTS.md"
-            previous_agents.write_text("# previous lifecycle\n", encoding="utf-8")
-            self.release_gate.side_effect = [None, RuntimeError("source regression failed")]
-            with self.assertRaisesRegex(RuntimeError, "previous installation was restored"):
-                sync_global_skills.deploy(SKILLS_DIR, target_dir)
-            self.assertFalse(target_dir.exists())
-            self.assertEqual(previous_agents.read_text(encoding="utf-8"), "# previous lifecycle\n")
-            self.assertEqual([call.args[2] for call in self.release_gate.call_args_list], ["deployed", "source"])
-
-    def test_deploy_runs_platform_checker_from_provisional_installed_copy(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            target_dir = Path(temp_dir) / "global-skills"
-            checker = mock.Mock(unsafe=True)
-
-            def load_installed_checker(skills_dir):
-                self.assertEqual(skills_dir, target_dir.resolve())
-                self.assertTrue((skills_dir / "management-skill" / "SKILL.md").is_file())
-                return checker
-
-            with mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=load_installed_checker):
-                sync_global_skills.deploy(SKILLS_DIR, target_dir)
-            checker.assert_skill_platform_safe.assert_called_once_with(target_dir.resolve(), target_dir.resolve() / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES)
-
-    def test_deploy_platform_validation_ignores_unrelated_runtime_skill(self):
+    def test_deploy_preserves_unrelated_runtime_skill_without_running_platform_checker(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "global-skills"
             unrelated_script = target_dir / "external-windows-tool" / "scripts" / "apply.ps1"
@@ -758,43 +993,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             unrelated_script.write_text("param([switch]$SkipStartupEntry)\n", encoding="utf-8")
             unrelated_before = unrelated_script.read_bytes()
 
-            sync_global_skills.deploy(SKILLS_DIR, target_dir)
+            with mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=AssertionError("consumer install must not run platform checks")) as platform:
+                sync_global_skills.deploy(SKILLS_DIR, target_dir)
 
             self.assertEqual(unrelated_script.read_bytes(), unrelated_before)
-            checker = sync_global_skills.load_skill_platform_checker(target_dir)
-            baseline = checker.load_baseline(target_dir / "code-skill" / "assets" / "skill-platform-baseline.json", target_dir)
-            all_findings = checker.new_findings(checker.collect_findings(target_dir), baseline)
-            self.assertTrue(any(finding["relative_path"] == "external-windows-tool/scripts/apply.ps1" and finding["rule"] == "SPG003" for finding in all_findings))
+            platform.assert_not_called()
 
-    def test_deploy_platform_validation_still_rejects_managed_runtime_failure(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            sandbox = Path(temp_dir)
-            source_dir = self.staged_skill_copy(sandbox)
-            introduced_script = source_dir / "management-skill" / "scripts" / "introduced.py"
-            introduced_script.write_text("import subprocess\nsubprocess.run(['cmd.exe', '/c', 'echo'])\n", encoding="utf-8")
-            target_dir = sandbox / "global-skills"
-            previous_skill = target_dir / "management-skill" / "SKILL.md"
-            previous_skill.parent.mkdir(parents=True)
-            previous_skill.write_text("previous-installation\n", encoding="utf-8")
-
-            with self.assertRaisesRegex(RuntimeError, "SPG002"):
-                sync_global_skills.deploy(source_dir, target_dir)
-
-            self.assertEqual(previous_skill.read_text(encoding="utf-8"), "previous-installation\n")
-            self.release_gate.assert_not_called()
-
-    def test_installed_platform_failure_restores_previous_installation_before_repair(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            target_dir = Path(temp_dir) / "global-skills"
-            previous_skill = target_dir / "management-skill" / "SKILL.md"
-            previous_skill.parent.mkdir(parents=True)
-            previous_skill.write_text("previous-installation\n", encoding="utf-8")
-            checker = mock.Mock(unsafe=True)
-            checker.assert_skill_platform_safe.side_effect = RuntimeError("windows branch is not portable")
-            with mock.patch.object(sync_global_skills, "load_skill_platform_checker", return_value=checker), self.assertRaisesRegex(RuntimeError, "windows branch is not portable"):
-                sync_global_skills.deploy(SKILLS_DIR, target_dir)
-            self.assertEqual(previous_skill.read_text(encoding="utf-8"), "previous-installation\n")
-            self.release_gate.assert_not_called()
 
     def test_deploy_cli_accepts_skills_dir_after_subcommand(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -812,6 +1016,36 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
             self.assertEqual((target_dir.parent / "AGENTS.md").read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
 
+    def test_pull_cli_accepts_repository_and_skills_dir_after_subcommand(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            argv = ["sync_global_skills.py", "pull", "--repo", "owner/repository", "--skills-dir", str(target_dir)]
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "pull") as pull_command:
+                sync_global_skills.main()
+            pull_command.assert_called_once_with("owner/repository", target_dir)
+
+    def test_legacy_sync_is_an_unconditional_install_only_pull_without_prediff(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "global-skills"
+            with mock.patch.object(sync_global_skills, "pull", return_value=sync_global_skills.PRIMARY_SKILL_ORDER) as installer, mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("sync must not pre-diff")) as hasher:
+                changed_names = sync_global_skills.sync("owner/repository", target_dir, "unused publication message")
+            self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
+            installer.assert_called_once_with("owner/repository", target_dir)
+            hasher.assert_not_called()
+
+    def test_post_install_sync_state_failure_is_only_a_warning(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            repository_dir = sandbox / "repository"
+            skills_dir = sandbox / "global-skills"
+            repository_dir.mkdir()
+            skills_dir.mkdir()
+            with mock.patch.object(sync_global_skills, "repository_head", return_value="abc123"), mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("pull bookkeeping must not hash trees")) as hasher, mock.patch.object(sync_global_skills, "write_sync_state", side_effect=PermissionError("state locked")), mock.patch("builtins.print") as printer:
+                recorded = sync_global_skills.record_pull_state("owner/repository", repository_dir, skills_dir)
+            self.assertFalse(recorded)
+            hasher.assert_not_called()
+            printer.assert_called_once_with("Installation complete; sync state could not be recorded (PermissionError).")
+
     def test_render_readme_cli_uses_chinese_template_for_zh_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "README.zh.md"
@@ -827,7 +1061,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             sync_global_skills.deploy(SKILLS_DIR, target_dir)
             expected = sync_global_skills.canonical_global_agents_text(SKILLS_DIR)
             targets = sync_global_skills.global_agents_targets(target_dir)
-            self.assertEqual(targets, [(home_dir / ".codex" / "AGENTS.md").resolve(), (home_dir / "AGENTS.md").resolve()])
+            self.assertEqual(targets, [(home_dir / ".codex" / "AGENTS.md").absolute(), (home_dir / "AGENTS.md").absolute()])
             self.assertEqual([target.read_text(encoding="utf-8") for target in targets], [expected, expected])
             parity = sync_global_skills.global_agents_parity(SKILLS_DIR, target_dir)
             self.assertEqual(parity["status"], "pass")
@@ -913,15 +1147,17 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not a publication source"):
                 sync_global_skills.push_global_snapshot("fixture/repository", Path(temp_dir), "forbidden", False)
 
-    def test_deploy_reports_no_change_only_when_skills_and_global_agents_match(self):
+    def test_deploy_always_replaces_matching_skills_without_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "global-skills"
             sync_global_skills.deploy(SKILLS_DIR, target_dir)
-            with mock.patch("builtins.print") as printer:
+            with mock.patch.object(sync_global_skills, "stage_skill_directory", wraps=sync_global_skills.stage_skill_directory) as stager, mock.patch.object(sync_global_skills, "path_differs", side_effect=AssertionError("install must not pre-diff")) as differ, mock.patch("builtins.print") as printer:
                 changed_names = sync_global_skills.deploy(SKILLS_DIR, target_dir)
-        self.assertEqual(changed_names, [])
-        printer.assert_any_call("Local global skills already match the repository source.")
-        printer.assert_any_call("Installation complete: local global Skills passed installed, source, platform, and parity validation.")
+        self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
+        self.assertEqual(stager.call_count, len(sync_global_skills.PRIMARY_SKILL_ORDER))
+        differ.assert_not_called()
+        printer.assert_any_call("Replaced managed repository Skills in the local global Skill directory:")
+        printer.assert_any_call("Installation complete: consumer install/update replaced the published managed source without rerunning validation gates.")
 
     def test_global_agents_parity_detects_stale_always_loaded_contract(self):
         with tempfile.TemporaryDirectory() as temp_dir:
