@@ -310,7 +310,12 @@ def repository_git_url(repository):
     if repository.startswith(("git@", "ssh://", "https://")):
         return repository
     if shutil.which("gh"):
-        return run_command(["gh", "repo", "view", repository, "--json", "sshUrl", "--jq", ".sshUrl"]).stdout.strip()
+        try:
+            resolved_url = run_command(["gh", "repo", "view", repository, "--json", "sshUrl", "--jq", ".sshUrl"]).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            resolved_url = ""
+        if resolved_url:
+            return resolved_url
     return f"git@github.com:{repository}.git"
 
 

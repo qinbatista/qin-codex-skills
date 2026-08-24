@@ -100,6 +100,20 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         )
         self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT.parent.parent, sync_global_skills.DEFAULT_PROJECT_ROOT)
 
+    def test_repository_git_url_falls_back_when_gh_lookup_fails(self):
+        failure = sync_global_skills.subprocess.CalledProcessError(1, ["gh", "repo", "view"])
+        with mock.patch.object(sync_global_skills.shutil, "which", return_value="gh"), mock.patch.object(sync_global_skills, "run_command", side_effect=failure):
+            resolved_url = sync_global_skills.repository_git_url("owner/repository")
+
+        self.assertEqual(resolved_url, "git@github.com:owner/repository.git")
+
+    def test_repository_git_url_falls_back_when_gh_returns_no_url(self):
+        completed = mock.Mock(stdout="\n")
+        with mock.patch.object(sync_global_skills.shutil, "which", return_value="gh"), mock.patch.object(sync_global_skills, "run_command", return_value=completed):
+            resolved_url = sync_global_skills.repository_git_url("owner/repository")
+
+        self.assertEqual(resolved_url, "git@github.com:owner/repository.git")
+
     def test_approved_public_mirror_is_exactly_eight_including_project_memory(self):
         expected_order = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "project-memory-skill", "verify-skill", "optimization-skill", "management-skill"]
 
