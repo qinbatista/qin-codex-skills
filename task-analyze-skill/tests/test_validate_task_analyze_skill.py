@@ -563,7 +563,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
-    def test_validator_requires_host_discoverable_user_agents_when_codex_agents_is_used(self):
+    def test_validator_uses_only_documented_codex_global_agents_target(self):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             codex_home = temp_dir / ".codex"
@@ -573,9 +573,8 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             valid = module.validate(temp_dir, models_cache, codex_agents, global_skills, temp_dir / "hooks.json")
             self.assertTrue(valid["valid"], valid["failures"])
             global_agents.unlink()
-            missing_host = module.validate(temp_dir, models_cache, codex_agents, global_skills, temp_dir / "hooks.json")
-            self.assertFalse(missing_host["valid"])
-            self.assertTrue(any("always-loaded global AGENTS.md is missing" in failure and str(global_agents) in failure for failure in missing_host["failures"]))
+            still_valid = module.validate(temp_dir, models_cache, codex_agents, global_skills, temp_dir / "hooks.json")
+            self.assertTrue(still_valid["valid"], still_valid["failures"])
         finally:
             shutil.rmtree(temp_dir)
 

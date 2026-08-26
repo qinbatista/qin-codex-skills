@@ -96,7 +96,7 @@ Frozen v48 compares Direct `gpt-5.6-sol|ultra` with Auto Best Model entering on 
 
 ## Install or update
 
-Maintainer-gated releases install/update by fresh replacement without unit, platform, regression, parity, attestation, or Ending validation.
+Releases replace eight managed Skills. User `AGENTS.md` files stay untouched. `install-global-agents` creates a backup; `bridge-user-skills` requires `--apply`.
 
 - **macOS/Linux, first install or update:** `stage="$(mktemp -d)" && git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git "$stage/qin-codex-skills" && python3 "$stage/qin-codex-skills/management-skill/scripts/sync_global_skills.py" deploy --source-dir "$stage/qin-codex-skills" && rm -rf "$stage"`.
 - **Windows PowerShell, first install or update:** `$ErrorActionPreference='Stop'; $stage=Join-Path $env:TEMP ("qin-codex-skills-"+[guid]::NewGuid()); try { git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git $stage; if ($LASTEXITCODE) { throw 'clone failed' }; py -3 "$stage\management-skill\scripts\sync_global_skills.py" deploy --source-dir $stage; if ($LASTEXITCODE) { throw 'deploy failed' } } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }`. Preserves unrelated Skills and private `task-analyze-skill/local/` state.

@@ -416,9 +416,9 @@ REQUIRED_GLOBAL_BOOTSTRAP_TEXT = [
     "route/calibration/Ending separate", "first-result diagnostic", "Sol probe exact result+route", "Final Ending PASS/BLOCKED",
     "one independent global projectless Ending", "gpt-5.3-codex-spark|xhigh", "score scopes checks only", "Luna-low",
     "Process Skill/AGENTS,real execution,effective project-result memory agree", "Ending appends only memory-only correction", "Skill/execution defects return origin", "Next tasks read effective project-result memory only",
-    "Global Skill consumer install/update:lock+fsync recovery", "materialize+backup only→replace all managed targets", "no routing/validator/platform/regression/parity/attestation/Ending/whole-tree hash", "write failure=>restore", "GitHub push runs full gate once before README/index/commit/remote mutation", "user-only retirement", "Sites build+host only",
+    "Install:lock+fsync recovery", "materialize+backup only→replace all managed Skills", "preserve user AGENTS", "install-global-agents=>backup/restore", "no routing/validator/platform/regression/parity/attestation/Ending/hash", "write failure=>restore", "GitHub push→gate before README/index/commit/remote", "user-only retirement", "Sites build+host only",
 ]
-REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
+REQUIRED_GLOBAL_ENTRY_ASSET_TEXT = ["This template is written only by the explicit `install-global-agents` command"] + REQUIRED_GLOBAL_BOOTSTRAP_TEXT
 RESULT_MODEL_DISCLOSURE_TERMS = ["Complexity:", "· Model:", "· Route:", "Evidence:", "runtime receipt", "verified entry (no runtime receipt)", "task assignment (no runtime receipt)", "configured selection (no runtime receipt)", "Model path:", "Model stages", "changed route", "unknown|unknown", "full routing data"]
 RESULT_MODEL_DISCLOSURE_REFERENCE_TERMS = ["compact Result Model Disclosure", "task-analyze-skill/references/route-contract.md", "Do not expand"]
 RESULT_MODEL_DISCLOSURE_SKILLS = ("workflow-skill", "prompt-skill", "code-skill", "verify-skill", "optimization-skill", "management-skill")
@@ -475,7 +475,7 @@ REQUIRED_WORKFLOW_RESOURCE_LEDGER_TEXT = [
 REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["ENDING_PRIMARY_PAIR", "gpt-5.3-codex-spark|xhigh", "ENDING_FALLBACK_ROLE", "AVAILABILITY_FALLBACK_REASONS", "scheduler_unavailable", "required_modality_unavailable", "ending_fast_primary", "availability_only", "one_persistent_ending_runs_all_checks", "ENDING_CHECK_WORKER_MARKER", "DIRECT_CHECK_SURFACES", "DELEGATED_CHECK_SURFACES", "worker_pair_for_check", "verification_surface", "execution_mode", "delegated_check_worker", "required_skills", "ending_check_capability_route", "THREAD_TARGET", "THREAD_SCOPE", "THREAD_READBACK_TOOL", "THREAD_PLACEMENT_POLICY", "_validate_projectless_launch_request", "_normalize_thread_project_id", "thread_project_id", "placement_readback_tool", "projectId=null", "ORIGIN_SESSION_RESUME_CAPABILITY", "projectless", "TERMINAL_THREAD_POLICY", "keep_visible", "project_binding", "subprocess.run", "send_repair_prompt_to_origin_session_then_fresh_ending", "max_repair_attempts", "codex_app__send_message_to_thread", "repair_dispatch", "repair_prompt", "create-launches", "_final_producer_receipt", "producer_receipt is required before launching an Ending", "final passing published aggregate result", "final_aggregate_receipt", "all_result_nodes_settled", "subprocesses_settled", "ending_launch_ready", "_detached_project_root_line", "Origin project root (absolute)", "projectless cwd is unrelated", "compact continuation", "ack-launch", "audit-launches", "end_task_trigger_rate", "structured model_assessment", "Never call set_thread_archived", "memory_consistency_output", "effective project-result memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift"]
 FORBIDDEN_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "ending_score_role", "separate_persistent_tasks"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json", "No lifecycle operation may message, interrupt"]
-GLOBAL_ENTRY_ASSET_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
+GLOBAL_ENTRY_ASSET_DIRECTIVE = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
 MAX_GLOBAL_BOOTSTRAP_BYTES = 7000
 FORBIDDEN_TEXT = [
     "Use this skill first for every user task",
@@ -976,11 +976,8 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     for forbidden in FORBIDDEN_TEXT:
         if normalize(forbidden) in normalize(live_text):
             failures.append(f"live contract contains obsolete text: {forbidden}")
-    global_agents_targets = [global_agents_path]
-    if global_agents_path.parent.name == ".codex":
-        global_agents_targets.append(global_agents_path.parent.parent / "AGENTS.md")
-    for target in global_agents_targets:
-        label = "global AGENTS" if target == global_agents_path else f"global AGENTS ({target})"
+    for target in [global_agents_path]:
+        label = "global AGENTS"
         if not target.exists():
             failures.append(f"always-loaded global AGENTS.md is missing: {target}")
             continue

@@ -92,7 +92,7 @@
 
 ## 安装或更新
 
-GitHub 发布版已经过维护者门禁；消费者安装或更新只 fresh download 并安全替换八个 Skill 与两份全局 `AGENTS.md`，不重复 unit、platform、regression、parity、attestation 或 Ending 验证。
+GitHub 发布版已经过维护者门禁；消费者安装或更新只 fresh download 并安全替换八个 Skill，保留用户全局 `AGENTS.md`，不重复 unit、platform、regression、parity、attestation 或 Ending 验证。替换已记录的 Codex 全局模板是独立的 `install-global-agents` 显式操作，带持久恢复点；`bridge-user-skills` 只预览官方用户 Skill 路径链接，必须加 `--apply` 才会创建。
 
 - **macOS/Linux 首次安装或更新：** `stage="$(mktemp -d)" && git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git "$stage/qin-codex-skills" && python3 "$stage/qin-codex-skills/management-skill/scripts/sync_global_skills.py" deploy --source-dir "$stage/qin-codex-skills" && rm -rf "$stage"`。
 - **Windows PowerShell 首次安装或更新：** `$ErrorActionPreference='Stop'; $stage=Join-Path $env:TEMP ("qin-codex-skills-"+[guid]::NewGuid()); try { git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git $stage; if ($LASTEXITCODE) { throw 'clone failed' }; py -3 "$stage\management-skill\scripts\sync_global_skills.py" deploy --source-dir $stage; if ($LASTEXITCODE) { throw 'deploy failed' } } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }`。保留无关本地 Skill 和私有 `task-analyze-skill/local/` 状态。

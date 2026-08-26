@@ -167,10 +167,10 @@ def copy_required_plugin_contracts(plugin_cache: Path, candidate_cache: Path) ->
 @contextmanager
 def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str]):
     asset = project_root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
-    directive = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
+    directive = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
     text = asset.read_text(encoding="utf-8")
     if not text.startswith(directive):
-        raise RuntimeError("global AGENTS asset is missing its merge directive")
+        raise RuntimeError("global AGENTS asset is missing its explicit-install directive")
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
     temporary_cache_root = tempfile.TemporaryDirectory(prefix="codex-skill-candidates-") if os.name == "nt" and not configured_cache_root else None
     default_cache_root = project_root / "Cache" / "tmp-global-skill-regression"
@@ -291,23 +291,26 @@ def deployment_parity_result(check_id: str, project_root: Path, deployed_root: P
 
 
 def global_agents_parity_result(check_id: str, project_root: Path, deployed_root: Path) -> dict[str, object]:
-    asset = project_root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
-    directive = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
-    text = asset.read_text(encoding="utf-8") if asset.is_file() else ""
-    expected = text[len(directive):] if text.startswith(directive) else ""
-    codex_root = deployed_root.resolve().parent
-    targets = [codex_root / "AGENTS.md"]
-    if codex_root.name == ".codex":
-        targets.append(codex_root.parent / "AGENTS.md")
-    failures = [str(path) for path in targets if not path.is_file() or path.read_text(encoding="utf-8") != expected]
-    passed = bool(expected) and not failures
+    source_asset = project_root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
+    deployed_asset = deployed_root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
+    directive = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
+    source_text = source_asset.read_text(encoding="utf-8") if source_asset.is_file() else ""
+    deployed_text = deployed_asset.read_text(encoding="utf-8") if deployed_asset.is_file() else ""
+    source_template = source_text[len(directive):] if source_text.startswith(directive) else ""
+    deployed_template = deployed_text[len(directive):] if deployed_text.startswith(directive) else ""
+    failures = []
+    if not source_template:
+        failures.append(str(source_asset))
+    if source_template != deployed_template:
+        failures.append(str(deployed_asset))
+    passed = not failures
     return {
         "check_id": check_id,
         "target": "cross",
         "kind": "builtin",
         "status": "pass" if passed else "fail",
-        "test_count": len(targets),
-        "passed_count": len(targets) - len(failures),
+        "test_count": 1,
+        "passed_count": 1 if passed else 0,
         "failed_targets": failures,
     }
 

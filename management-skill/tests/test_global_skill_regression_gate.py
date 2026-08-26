@@ -109,7 +109,8 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertIn("fsynced transaction manifest", consumer_install["function"])
         self.assertIn("源字节物化", consumer_install["function"])
         self.assertIn("recoverable opaque backup", consumer_install["function"])
-        self.assertIn("每次都无条件替换八个 managed Skill 与 global AGENTS", consumer_install["function"])
+        self.assertIn("每次都无条件替换八个 managed Skill", consumer_install["function"])
+        self.assertIn("用户 AGENTS 不属于普通替换集合", consumer_install["function"])
         self.assertIn("file、symlink、junction", consumer_install["function"])
         self.assertIn("task-analyze-skill/local 不透明保留", consumer_install["function"])
         self.assertIn("deploy/pull/legacy sync 绝不运行", consumer_install["function"])
@@ -137,7 +138,8 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertNotIn("local_deployment_requires_pass", catalog["policy"])
         self.assertFalse(catalog["policy"]["local_install_write_requires_pass"])
         self.assertFalse(catalog["policy"]["local_install_semantic_precheck_allowed"])
-        self.assertTrue(catalog["policy"]["local_install_always_replaces_managed_targets"])
+        self.assertTrue(catalog["policy"]["local_install_always_replaces_managed_skills"])
+        self.assertTrue(catalog["policy"]["local_install_preserves_user_global_agents"])
         self.assertTrue(catalog["policy"]["local_install_backup_and_safe_write_prerequisites_only"])
         self.assertFalse(catalog["policy"]["local_installation_completion_requires_pass"])
         self.assertFalse(catalog["policy"]["consumer_install_runs_semantic_validation"])
@@ -240,6 +242,27 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             result = GATE.deployment_parity_result("deployment-parity", root, deployed, ["code-skill"])
             self.assertEqual(result["status"], "fail")
             self.assertEqual(result["differences"], ["code-skill"])
+
+    def test_global_agents_parity_compares_templates_without_reading_user_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "source"
+            deployed = Path(temp_dir) / "deployed"
+            source_asset = root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
+            deployed_asset = deployed / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
+            directive = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
+            source_asset.parent.mkdir(parents=True)
+            deployed_asset.parent.mkdir(parents=True)
+            source_asset.write_text(directive + "# lifecycle\n", encoding="utf-8")
+            deployed_asset.write_text(directive + "# lifecycle\n", encoding="utf-8")
+            (deployed.parent / "AGENTS.md").write_text("# personal instructions\n", encoding="utf-8")
+
+            matching = GATE.global_agents_parity_result("global-agents-parity", root, deployed)
+
+            self.assertEqual(matching["status"], "pass")
+            deployed_asset.write_text(directive + "# changed lifecycle\n", encoding="utf-8")
+            drifted = GATE.global_agents_parity_result("global-agents-parity", root, deployed)
+            self.assertEqual(drifted["status"], "fail")
+            self.assertEqual(drifted["failed_targets"], [str(deployed_asset)])
 
     def test_memory_execution_consistency_evidence_requires_all_positive_and_negative_scenarios(self):
         evidence = self._memory_consistency_evidence()

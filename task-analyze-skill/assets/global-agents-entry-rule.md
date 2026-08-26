@@ -1,4 +1,4 @@
-Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.
+This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.
 
 # Task Lifecycle
 
@@ -26,7 +26,7 @@ Unity:relative;ProjectVersion.txt>Editors>`unity editors path <version>`>binary;
 
 No Obsidian UI.Vault:`Cache/cache_path.json`>`CODEX_OBSIDIAN_VAULT`>`obsidian.json`>bounded search;cache.Read MyAILLM `AGENTS.md`+project `Knowledge.md`;unresolved=>stop/report;cold start no waiver.
 
-Global Skill consumer install/update:lock+fsync recovery;materialize+backup only→replace all managed targets;no routing/validator/platform/regression/parity/attestation/Ending/whole-tree hash;write failure=>restore.GitHub push runs full gate once before README/index/commit/remote mutation;user-only retirement;Sites build+host only.
+Install:lock+fsync recovery;materialize+backup only→replace all managed Skills;preserve user AGENTS;install-global-agents=>backup/restore;no routing/validator/platform/regression/parity/attestation/Ending/hash;write failure=>restore.GitHub push→gate before README/index/commit/remote;user-only retirement;Sites build+host only.
 
 ## Project Cache artifact policy
 

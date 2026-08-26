@@ -112,7 +112,11 @@ PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "
 APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
-GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
+GLOBAL_AGENTS_DIRECTIVE = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
+LEGACY_GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
+GLOBAL_AGENTS_BACKUP_DIRECTORY = "global-agents-backups"
+GLOBAL_AGENTS_BACKUP_MANIFEST = "manifest.json"
+OFFICIAL_USER_SKILLS_DIRECTORY = Path.home() / ".agents" / "skills"
 INSTALL_TRANSACTION_PREFIX = ".qin-codex-install-"
 INSTALL_MANIFEST_NAME = "install-transaction.json"
 INSTALL_LOCK_NAME = ".qin-codex-install.lock"
@@ -209,7 +213,7 @@ SKILL_CONTENTS = {
     ],
     "management-skill": [
         ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
-        ("Consumer replacement", "Consumer install/update shallow-clones the published source and replaces the eight managed Skills plus both global AGENTS targets with mechanical safety only; maintainer push runs the release gate once before publication."),
+        ("Consumer replacement", "Consumer install/update shallow-clones the published source and replaces only the eight managed Skills with mechanical safety. Global AGENTS installation is explicit, backed up, and recoverable; maintainer push runs the release gate once before publication."),
         ("GitHub Sync", "Run preuse checks, public-safety scan, sync, push, and remote hash verification for both mirrors."),
         ("Privacy-Safe Management", "Auth, tokens, cookies, raw prompts/results, receipts, logs, caches, and private learning stay local."),
     ],
@@ -878,13 +882,52 @@ def materialized_global_agents_text(source_dir):
 
 
 def global_agents_targets(skills_dir):
-    """Return the installed Codex contract and the host-discoverable user contract."""
+    """Return the documented Codex global-instructions target for this Skill root."""
+    skills_root = lexical_absolute_path(skills_dir)
+    return [skills_root.parent / "AGENTS.md"]
+
+
+def legacy_global_agents_targets(skills_dir):
+    """Return targets written by installer manifests created before schema version 2."""
     skills_root = lexical_absolute_path(skills_dir)
     codex_root = skills_root.parent
     targets = [codex_root / "AGENTS.md"]
     if codex_root.name == ".codex":
         targets.append(codex_root.parent / "AGENTS.md")
     return targets
+
+
+def global_agents_backup_root(skills_dir):
+    return lexical_absolute_path(skills_dir).parent / GLOBAL_AGENTS_BACKUP_DIRECTORY
+
+
+def global_agents_target_matches(target, expected_text):
+    if not os.path.lexists(target) or target.is_symlink() or not stat.S_ISREG(target.lstat().st_mode):
+        return False
+    return target.read_text(encoding="utf-8") == expected_text
+
+
+def create_global_agents_backup(skills_dir, target):
+    backup_root = global_agents_backup_root(skills_dir)
+    backup_root.mkdir(parents=True, exist_ok=True)
+    backup_dir = Path(tempfile.mkdtemp(prefix="agents-", dir=backup_root))
+    target_existed = os.path.lexists(target)
+    manifest = {"schema_version": 1, "target": str(target), "target_existed": target_existed, "state": "prepared", "created_at": time.time(), "previous_entry": "previous"}
+    write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+    return backup_dir, manifest
+
+
+def load_global_agents_backup(skills_dir, backup_id):
+    if not re.fullmatch(r"agents-[A-Za-z0-9._-]+", backup_id):
+        raise RuntimeError("The global AGENTS backup ID is invalid.")
+    backup_dir = global_agents_backup_root(skills_dir) / backup_id
+    if not real_directory_entry(backup_dir):
+        raise RuntimeError("The requested global AGENTS backup is unavailable or unsafe.")
+    manifest = read_json_if_available(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST)
+    target = global_agents_targets(skills_dir)[0]
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or manifest.get("target") != str(target) or not isinstance(manifest.get("target_existed"), bool) or manifest.get("previous_entry") != "previous":
+        raise RuntimeError("The requested global AGENTS backup manifest does not match this Skill root.")
+    return backup_dir, manifest, target
 
 
 def _write_global_agents_target(target, rendered):
@@ -901,15 +944,109 @@ def _write_global_agents_target(target, rendered):
             os.unlink(temporary_name)
 
 
-def deploy_global_agents(source_dir, skills_dir):
-    rendered = canonical_global_agents_text(source_dir)
-    changed = False
-    for target in global_agents_targets(skills_dir):
-        if target.is_file() and target.read_text(encoding="utf-8") == rendered:
+def install_global_agents(source_dir, skills_dir):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = lexical_absolute_path(skills_dir)
+    expected_text = canonical_global_agents_text(source_dir)
+    target = global_agents_targets(skills_dir)[0]
+    with installation_lock(skills_dir):
+        if global_agents_target_matches(target, expected_text):
+            return {"changed": False, "backup_id": None, "target": target}
+        backup_dir, manifest = create_global_agents_backup(skills_dir, target)
+        previous_entry = backup_dir / manifest["previous_entry"]
+        try:
+            if manifest["target_existed"]:
+                replace_path_entry(target, previous_entry)
+            _write_global_agents_target(target, expected_text)
+            manifest["state"] = "installed"
+            manifest["installed_at"] = time.time()
+            write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+        except Exception as install_error:
+            try:
+                failed_entry = backup_dir / "failed-install"
+                if os.path.lexists(target):
+                    replace_path_entry(target, failed_entry)
+                if manifest["target_existed"] and os.path.lexists(previous_entry):
+                    replace_path_entry(previous_entry, target)
+                manifest["state"] = "restored"
+                manifest["restored_at"] = time.time()
+                write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+            except Exception as restore_error:
+                raise RuntimeError(f"Global AGENTS installation failed and its persistent backup could not be restored: {restore_error}") from install_error
+            raise RuntimeError("Global AGENTS installation failed; the previous target was restored from its persistent backup.") from install_error
+    return {"changed": True, "backup_id": backup_dir.name, "target": target}
+
+
+def restore_global_agents_backup(skills_dir, backup_id):
+    skills_dir = lexical_absolute_path(skills_dir)
+    with installation_lock(skills_dir):
+        backup_dir, manifest, target = load_global_agents_backup(skills_dir, backup_id)
+        if manifest.get("state") == "restored":
+            return {"changed": False, "backup_id": backup_id, "target": target}
+        if manifest.get("state") != "installed":
+            raise RuntimeError("The requested global AGENTS backup is not in a restorable installed state.")
+        previous_entry = backup_dir / manifest["previous_entry"]
+        if manifest["target_existed"] and not os.path.lexists(previous_entry):
+            raise RuntimeError("The requested global AGENTS backup is missing its preserved original target.")
+        replaced_entry = backup_dir / "replaced-on-restore"
+        if os.path.lexists(replaced_entry):
+            raise RuntimeError("The requested global AGENTS backup already contains a replacement from a prior restore attempt.")
+        try:
+            if os.path.lexists(target):
+                replace_path_entry(target, replaced_entry)
+            if manifest["target_existed"]:
+                replace_path_entry(previous_entry, target)
+            manifest["state"] = "restored"
+            manifest["restored_at"] = time.time()
+            write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+        except Exception as restore_error:
+            raise RuntimeError(f"Global AGENTS restore failed; the persistent backup remains available: {restore_error}") from restore_error
+    return {"changed": True, "backup_id": backup_id, "target": target}
+
+
+def list_global_agents_backups(skills_dir):
+    backup_root = global_agents_backup_root(skills_dir)
+    if not backup_root.is_dir():
+        return []
+    backups = []
+    for backup_dir in sorted(backup_root.iterdir(), key=lambda path: path.name):
+        if not real_directory_entry(backup_dir):
             continue
-        _write_global_agents_target(target, rendered)
-        changed = True
-    return changed
+        manifest = read_json_if_available(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST)
+        if isinstance(manifest, dict):
+            backups.append({"id": backup_dir.name, "state": manifest.get("state", "invalid"), "target_existed": manifest.get("target_existed")})
+    return backups
+
+
+def bridge_user_skills(skills_dir, user_skills_dir=OFFICIAL_USER_SKILLS_DIRECTORY, apply=False):
+    skills_dir = lexical_absolute_path(skills_dir)
+    user_skills_dir = lexical_absolute_path(user_skills_dir)
+    missing = [name for name in PRIMARY_SKILL_ORDER if not real_directory_entry(skills_dir / name)]
+    if missing:
+        raise RuntimeError(f"The legacy Skill root is missing managed Skills: {', '.join(missing)}")
+    planned = []
+    existing = []
+    conflicts = []
+    for name in PRIMARY_SKILL_ORDER:
+        source = skills_dir / name
+        target = user_skills_dir / name
+        if not os.path.lexists(target):
+            planned.append(name)
+        elif target.is_symlink() and target.resolve() == source.resolve():
+            existing.append(name)
+        else:
+            conflicts.append(name)
+    if conflicts:
+        raise RuntimeError(f"Refusing to replace existing official user Skills: {', '.join(conflicts)}")
+    if apply:
+        user_skills_dir.mkdir(parents=True, exist_ok=True)
+        for name in planned:
+            os.symlink(skills_dir / name, user_skills_dir / name, target_is_directory=True)
+    return {"applied": apply, "legacy_root": skills_dir, "user_root": user_skills_dir, "planned": planned, "existing": existing}
+
+
+def deploy_global_agents(source_dir, skills_dir):
+    return install_global_agents(source_dir, skills_dir)["changed"]
 
 
 def global_agents_parity(source_dir, skills_dir):
@@ -1017,17 +1154,20 @@ def try_create_installation_lock(lock_dir, token):
 
 
 def clear_stale_installation_lock(lock_dir):
-    if not os.path.lexists(lock_dir):
+    try:
+        if not os.path.lexists(lock_dir):
+            return True
+        if not real_directory_entry(lock_dir):
+            raise RuntimeError("The global Skill installation lock is not a safe real directory.")
+        owner = read_json_if_available(lock_dir / "owner.json")
+        if owner and process_is_running(owner.get("pid")):
+            return False
+        if owner is None and time.time() - lock_dir.stat().st_mtime < 1.0:
+            return False
+        shutil.rmtree(lock_dir)
         return True
-    if not real_directory_entry(lock_dir):
-        raise RuntimeError("The global Skill installation lock is not a safe real directory.")
-    owner = read_json_if_available(lock_dir / "owner.json")
-    if owner and process_is_running(owner.get("pid")):
-        return False
-    if owner is None and time.time() - lock_dir.stat().st_mtime < 1.0:
-        return False
-    shutil.rmtree(lock_dir)
-    return True
+    except FileNotFoundError:
+        return True
 
 
 def release_installation_lock(lock_dir, token):
@@ -1107,13 +1247,7 @@ def stage_installation_bundle(source_dir, skills_dir, transaction_root):
         staged_path = staged_skill_dir / source_path.name
         stage_skill_directory(source_path, staged_path)
         staged_skill_paths.append(staged_path)
-    rendered_agents = materialized_global_agents_text(source_dir)
-    staged_agent_paths = []
-    for index, target in enumerate(global_agents_targets(skills_dir)):
-        staged_path = transaction_root / "staged-agents" / f"{index}.md"
-        _write_global_agents_target(staged_path, rendered_agents)
-        staged_agent_paths.append(staged_path)
-    return {"skill_paths": staged_skill_paths, "agent_paths": staged_agent_paths}
+    return {"skill_paths": staged_skill_paths, "agent_paths": []}
 
 
 def new_deployment_snapshot(skills_dir, transaction_root, bundle):
@@ -1130,16 +1264,17 @@ def new_deployment_snapshot(skills_dir, transaction_root, bundle):
     task_record = next(record for record in records if record["kind"] == "skill" and record["target"].name == "task-analyze-skill")
     private_local_existed = real_directory_entry(task_record["target"]) and os.path.lexists(task_record["target"] / "local")
     private_local = {"backup": task_record["backup"] / "local", "installed": task_record["target"] / "local", "existed": private_local_existed, "moved": False, "task_staged": task_record["staged"]}
-    return {"skills_dir": skills_dir, "skills_dir_existed": skills_dir_existed, "records": records, "transaction_root": transaction_root, "private_local": private_local}
+    return {"skills_dir": skills_dir, "skills_dir_existed": skills_dir_existed, "records": records, "transaction_root": transaction_root, "private_local": private_local, "global_agents_included": bool(bundle["agent_paths"])}
 
 
 def installation_manifest_payload(snapshot, state):
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "state": state,
         "pid": os.getpid(),
         "skills_dir": str(snapshot["skills_dir"]),
         "skills_dir_existed": snapshot["skills_dir_existed"],
+        "global_agents_included": snapshot["global_agents_included"],
         "records": [{"kind": record["kind"], "target": str(record["target"]), "staged": str(record["staged"]), "backup": str(record["backup"]), "existed": record["existed"]} for record in snapshot["records"]],
         "private_local": {"backup": str(snapshot["private_local"]["backup"]), "installed": str(snapshot["private_local"]["installed"]), "task_staged": str(snapshot["private_local"]["task_staged"]), "existed": snapshot["private_local"]["existed"]},
         "updated_at": time.time(),
@@ -1157,11 +1292,18 @@ def validate_manifest_record(payload_record, expected_kind, expected_target, exp
 
 
 def snapshot_from_installation_manifest(transaction_root, payload, skills_dir):
-    if payload.get("schema_version") != 1 or payload.get("skills_dir") != str(skills_dir):
+    schema_version = payload.get("schema_version")
+    if schema_version not in {1, 2} or payload.get("skills_dir") != str(skills_dir):
         raise RuntimeError("An interrupted global Skill installation manifest does not match the requested target.")
     payload_records = payload.get("records")
     expected_targets = [("skill", skills_dir / name, transaction_root / "staged-skills" / name) for name in PRIMARY_SKILL_ORDER]
-    expected_targets.extend(("agents", target, transaction_root / "staged-agents" / f"{index}.md") for index, target in enumerate(global_agents_targets(skills_dir)))
+    if schema_version == 1:
+        agent_targets = legacy_global_agents_targets(skills_dir)
+    elif payload.get("global_agents_included") is True:
+        agent_targets = global_agents_targets(skills_dir)
+    else:
+        agent_targets = []
+    expected_targets.extend(("agents", target, transaction_root / "staged-agents" / f"{index}.md") for index, target in enumerate(agent_targets))
     if not isinstance(payload_records, list) or len(payload_records) != len(expected_targets):
         raise RuntimeError("An interrupted global Skill installation manifest has an incomplete managed target set.")
     records = []
@@ -1182,7 +1324,7 @@ def snapshot_from_installation_manifest(transaction_root, payload, skills_dir):
         raise RuntimeError("An interrupted global Skill installation manifest has unsafe private-local data.")
     private_moved = private_payload["existed"] and not os.path.lexists(task_record["staged"]) and not os.path.lexists(task_record["backup"] / "local") and os.path.lexists(task_record["target"] / "local")
     private_local = {"backup": task_record["backup"] / "local", "installed": task_record["target"] / "local", "task_staged": task_record["staged"], "existed": private_payload["existed"], "moved": private_moved}
-    return {"skills_dir": skills_dir, "skills_dir_existed": payload.get("skills_dir_existed") is True, "records": records, "transaction_root": transaction_root, "private_local": private_local}
+    return {"skills_dir": skills_dir, "skills_dir_existed": payload.get("skills_dir_existed") is True, "records": records, "transaction_root": transaction_root, "private_local": private_local, "global_agents_included": bool(agent_targets)}
 
 
 def capture_deployment_snapshot(snapshot):
@@ -1308,7 +1450,7 @@ def provisional_installation_transaction(source_dir, skills_dir):
         snapshot = None
         bundle_prepared = False
         try:
-            write_atomic_json(transaction_root / INSTALL_MANIFEST_NAME, {"schema_version": 1, "state": "materializing", "pid": os.getpid(), "skills_dir": str(skills_dir), "updated_at": time.time()})
+            write_atomic_json(transaction_root / INSTALL_MANIFEST_NAME, {"schema_version": 2, "state": "materializing", "pid": os.getpid(), "skills_dir": str(skills_dir), "global_agents_included": False, "updated_at": time.time()})
             bundle = stage_installation_bundle(source_dir, skills_dir, transaction_root)
             bundle_prepared = True
             snapshot = new_deployment_snapshot(skills_dir, transaction_root, bundle)
@@ -1340,7 +1482,9 @@ def deploy(source_dir, skills_dir):
     with provisional_installation_transaction(source_dir, skills_dir) as snapshot:
         installed_names, installed_agents = install_managed_skills(snapshot)
         print_lines("Replaced managed repository Skills in the local global Skill directory:", installed_names)
-        print(f"Replaced {installed_agents} global AGENTS.md target(s) with the repository Task Lifecycle contract.")
+        if installed_agents:
+            print(f"Replaced {installed_agents} explicit global AGENTS.md target(s) with the repository Task Lifecycle contract.")
+    print("Preserved user global AGENTS.md files; use install-global-agents for an explicit, recoverable template installation.")
     print("Installation complete: consumer install/update replaced the published managed source without rerunning validation gates.")
     return installed_names
 
@@ -1575,6 +1719,18 @@ def main():
     deploy_parser = subparsers.add_parser("deploy")
     deploy_parser.add_argument("--source-dir", type=Path, required=True)
     deploy_parser.add_argument("--skills-dir", type=Path, dest="deploy_skills_dir", default=argparse.SUPPRESS)
+    install_agents_parser = subparsers.add_parser("install-global-agents")
+    install_agents_parser.add_argument("--source-dir", type=Path, required=True)
+    install_agents_parser.add_argument("--skills-dir", type=Path, dest="install_agents_skills_dir", default=argparse.SUPPRESS)
+    restore_agents_parser = subparsers.add_parser("restore-global-agents")
+    restore_agents_parser.add_argument("--backup-id", required=True)
+    restore_agents_parser.add_argument("--skills-dir", type=Path, dest="restore_agents_skills_dir", default=argparse.SUPPRESS)
+    list_agents_parser = subparsers.add_parser("list-global-agents-backups")
+    list_agents_parser.add_argument("--skills-dir", type=Path, dest="list_agents_skills_dir", default=argparse.SUPPRESS)
+    bridge_parser = subparsers.add_parser("bridge-user-skills")
+    bridge_parser.add_argument("--skills-dir", type=Path, dest="bridge_skills_dir", default=argparse.SUPPRESS)
+    bridge_parser.add_argument("--user-skills-dir", type=Path, default=OFFICIAL_USER_SKILLS_DIRECTORY)
+    bridge_parser.add_argument("--apply", action="store_true")
     render_parser = subparsers.add_parser("render-readme")
     render_parser.add_argument("--output", type=Path, required=True)
     push_parser = subparsers.add_parser("push")
@@ -1594,17 +1750,39 @@ def main():
             name for name in PRIMARY_SKILL_ORDER
             if path_differs(source_dir / name, status_skills_dir.expanduser().resolve() / name)
         ]
-        parity = global_agents_parity(source_dir, status_skills_dir)
         if deployment_differences:
             print_lines("Repository source differs from deployed global skills:", deployment_differences)
         else:
             print("Repository source skills match the deployed global skills.")
-        print("Local global AGENTS.md matches the installed Task Lifecycle asset." if parity["status"] == "pass" else f"Local deployment mismatch: {parity['reason']} ({parity['target']})")
+        print("User global AGENTS.md files are intentionally outside ordinary deployment parity.")
         push(args.repo, source_dir, "Update global Codex skills", True, status_skills_dir)
-        if parity["status"] != "pass" or deployment_differences:
+        if deployment_differences:
             raise SystemExit(1)
     elif args.command == "deploy":
         deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
+    elif args.command == "install-global-agents":
+        installation = install_global_agents(args.source_dir, getattr(args, "install_agents_skills_dir", args.skills_dir))
+        if installation["changed"]:
+            print(f"Installed the global AGENTS template at {installation['target']} with persistent backup {installation['backup_id']}.")
+        else:
+            print(f"Global AGENTS template already matches at {installation['target']}; no backup was created.")
+    elif args.command == "restore-global-agents":
+        restoration = restore_global_agents_backup(getattr(args, "restore_agents_skills_dir", args.skills_dir), args.backup_id)
+        if restoration["changed"]:
+            print(f"Restored global AGENTS from persistent backup {restoration['backup_id']} at {restoration['target']}.")
+        else:
+            print(f"Global AGENTS backup {restoration['backup_id']} was already restored.")
+    elif args.command == "list-global-agents-backups":
+        backups = list_global_agents_backups(getattr(args, "list_agents_skills_dir", args.skills_dir))
+        print_lines("Persistent global AGENTS backups:", [f"{backup['id']} ({backup['state']})" for backup in backups] or ["none"])
+    elif args.command == "bridge-user-skills":
+        bridge = bridge_user_skills(getattr(args, "bridge_skills_dir", args.skills_dir), args.user_skills_dir, args.apply)
+        action = "Created" if bridge["applied"] else "Planned"
+        print_lines(f"{action} official user Skill links:", bridge["planned"] or ["none"])
+        if bridge["existing"]:
+            print_lines("Existing matching official user Skill links:", bridge["existing"])
+        if not bridge["applied"]:
+            print("No user Skill path was changed; rerun with --apply only after confirming the active Codex runtime needs the official user Skill path.")
     elif args.command == "render-readme":
         skill_paths = skill_directories(args.skills_dir)
         assert_approved_global_skill_set(skill_paths)
