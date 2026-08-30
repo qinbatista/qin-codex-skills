@@ -149,7 +149,7 @@ SKILL_SUMMARIES = {
     "code-skill": "Adaptive or admitted-route executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. The saved task-strategy pair executes ordinary work; eligible small work reaches Spark only after the same-session outcome gate.",
     "project-memory-skill": "Recalls and records project changes with mandatory project/module/method coverage plus concrete file evidence, using a private local authority and optional native Obsidian projection.",
     "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
-    "verify-skill": "One post-result Ending uses fixed Spark-xhigh for the smallest real checks and terminal memory/classification; only explicit availability/capability failure permits Luna-low.",
+    "verify-skill": "One post-result Ending uses Spark-xhigh first for real checks and terminal memory/classification; persisted provider cooldown skips that model for the next stronger controller, and failure creates an isolated Repair Task.",
     "management-skill": "Handles Codex profile operations and source-first global Skill deployment/publication behind a numbered retained-capability regression gate.",
 }
 CHINESE_SKILL_SUMMARIES = {
@@ -159,7 +159,7 @@ CHINESE_SKILL_SUMMARIES = {
     "code-skill": "活动注册代码域的自适应或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务使用任务策略质量档；合格小任务先过同会话结果门再试 Spark。",
     "project-memory-skill": "强制按项目、功能模块和方法建立覆盖，再用具体文件证据回溯与记录修改；本地私有记录为权威来源，Obsidian 为可选原生投影。",
     "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
-    "verify-skill": "主结果先展示；一个 Ending 固定使用 Spark-xhigh 做最小真实检查与记忆/分类收尾，仅明确不可用时回退 Luna-low。",
+    "verify-skill": "主结果先展示；一个 Ending 优先使用 Spark-xhigh 做真实检查与记忆/分类收尾；持久化 provider 冷却会跳过受限模型并使用下一档更强主控，失败则新建隔离 Repair Task。",
     "management-skill": "处理 Codex profile 操作，以及由编号化全能力非回归门禁保护的全局 Skill 本地部署和 GitHub 发布。",
 }
 SKILL_CONTENTS = {

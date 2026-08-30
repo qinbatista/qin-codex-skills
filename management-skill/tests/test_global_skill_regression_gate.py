@@ -30,8 +30,8 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             "scenarios": {
                 "memory-record-correction": {"status": "pass", "classification": "memory_record_defect", "correction_written": True, "source_unchanged": True},
                 "memory-projection-reconcile": {"status": "pass", "classification": "memory_projection_defect", "reconciled": True},
-                "skill-contract-defect": {"status": "pass", "classification": "skill_contract_defect", "memory_write": False, "return_to_origin": True},
-                "execution-drift": {"status": "pass", "classification": "execution_drift", "memory_write": False, "return_to_origin": True},
+                "skill-contract-defect": {"status": "pass", "classification": "skill_contract_defect", "memory_write": False, "isolated_repair": True, "existing_session_mutation": False, "repair_launch_tool": "codex_app__create_thread", "active_task_conflict_action": "wait_without_interruption"},
+                "execution-drift": {"status": "pass", "classification": "execution_drift", "memory_write": False, "isolated_repair": True, "existing_session_mutation": False, "repair_launch_tool": "codex_app__create_thread", "active_task_conflict_action": "wait_without_interruption"},
                 "next-task-effective-recall": {"status": "pass", "effective_only": True, "superseded_hidden": True},
                 "invalid-result-integrity": {"status": "pass", "placeholder_rejected": True, "disposable_store_and_vault": True, "canonical_owner_readback": True, "exact_id_tombstone": True, "reconcile_blocked": True},
                 "coverage-authority-integrity": {"status": "pass", "vault_parent_store_absent": True, "canonical_store_used": True, "two_model_stores_shared_authority": True, "concurrent_projection_preserved": True, "rogue_store_merge_verified": True},
@@ -52,7 +52,8 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertIn("plan、evidence、receipt", projectless_ending["function"])
         fast_ending = next(item for item in catalog["capabilities"] if item["id"] == "GSR-026")
         self.assertIn("gpt-5.3-codex-spark|xhigh", fast_ending["function"])
-        self.assertIn("Luna-low", fast_ending["function"])
+        self.assertIn("restricted_at/retry_at/cooldown_until", fast_ending["function"])
+        self.assertIn("下一更强支持主控", fast_ending["function"])
         consistency = next(item for item in catalog["capabilities"] if item["id"] == "GSR-027")
         self.assertIn("effective", consistency["function"])
         self.assertIn("memory-execution-consistency-attestation", consistency["checks"])
@@ -270,6 +271,9 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         evidence["scenarios"]["skill-contract-defect"]["memory_write"] = True
         self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 0))
         evidence["scenarios"]["skill-contract-defect"]["memory_write"] = False
+        evidence["scenarios"]["skill-contract-defect"]["existing_session_mutation"] = True
+        self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 0))
+        evidence["scenarios"]["skill-contract-defect"]["existing_session_mutation"] = False
         evidence["scenarios"]["next-task-effective-recall"]["superseded_hidden"] = False
         self.assertEqual(GATE.validate_memory_execution_consistency(evidence), (7, 0))
         evidence["scenarios"]["next-task-effective-recall"]["superseded_hidden"] = True

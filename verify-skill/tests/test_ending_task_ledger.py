@@ -60,6 +60,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
                             "primary_pair_not_in_registry",
                             "required_modality_unavailable",
                             "scheduler_unavailable",
+                            "controller_cooling",
                         ],
                         "approved_pairs": ["gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low"],
                         "score_controls": "check_scope_and_classification_only",
@@ -104,8 +105,8 @@ class EndingTaskLedgerTests(unittest.TestCase):
             "no_prior_memory": {"action": "record", "process_status": "pass", "execution_status": "pass", "memory_status": "absent"},
             "memory_record_defect": {"action": "correction", "process_status": "pass", "execution_status": "pass", "memory_status": "mismatch", "supersedes": "old-record"},
             "memory_projection_defect": {"action": "reconcile", "process_status": "pass", "execution_status": "pass", "memory_status": "projection_missing", "record_id": "record-1"},
-            "skill_contract_defect": {"action": "origin_repair", "process_status": "fail", "execution_status": "pass", "memory_status": "match"},
-            "execution_drift": {"action": "origin_repair", "process_status": "pass", "execution_status": "fail", "memory_status": "match"},
+            "skill_contract_defect": {"action": "isolated_repair", "process_status": "fail", "execution_status": "pass", "memory_status": "match"},
+            "execution_drift": {"action": "isolated_repair", "process_status": "pass", "execution_status": "fail", "memory_status": "match"},
             "insufficient_evidence": {"action": "blocked", "process_status": "unavailable", "execution_status": "unavailable", "memory_status": "unavailable"},
         }
         payload = {"schema_version": 1, "classification": classification, **rules[classification], "evidence": ["Fresh process, execution, and memory evidence were compared."]}
@@ -370,8 +371,12 @@ class EndingTaskLedgerTests(unittest.TestCase):
                 with patch.object(LEDGER, "_load_project_memory_module") as load_memory:
                     failed = LEDGER.record_event(started["lifecycle_id"], "fail", f"{classification} found", ["Fresh command evidence conflicts."], classification, store, "correctness", memory_consistency_file=consistency)
                 self.assertFalse(failed["final_gate_passed"])
-                self.assertEqual(failed["project_memory"]["status"], "origin-repair-required")
-                self.assertEqual(failed["repair_handoff"]["origin_session"]["thread_id"], "origin-thread")
+                self.assertEqual(failed["project_memory"]["status"], "isolated-repair-required")
+                self.assertEqual(failed["repair_handoff"]["origin_context"]["thread_id"], "origin-thread")
+                self.assertEqual(failed["repair_handoff"]["repair_launch"]["tool"], "codex_app__create_thread")
+                self.assertEqual(failed["repair_handoff"]["repair_launch"]["arguments"]["target"], {"type": "projectless"})
+                self.assertNotIn("threadId", failed["repair_handoff"]["repair_launch"]["arguments"])
+                self.assertNotIn("hostId", failed["repair_handoff"]["repair_launch"]["arguments"])
                 self.assertIn(classification.split("_")[0], failed["repair_handoff"]["repair_prompt"].lower())
                 self.assertIn(f"Consistency diagnosis: {classification}.", failed["repair_handoff"]["repair_prompt"])
                 self.assertEqual(failed["repair_handoff"]["verification"], ["Fresh command evidence conflicts.", f"Consistency diagnosis: {classification}."])
@@ -470,7 +475,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
             self.assertEqual([repair_state["attempt_index"], sibling_state["attempt_index"], third_state["attempt_index"]], [1, 2, 3])
             self.assertEqual(repair_state["status"], "blocked")
             self.assertEqual(sibling_state["status"], "blocked")
-            self.assertEqual(third_state["status"], "failed")
+            self.assertEqual(third_state["status"], "blocked")
             self.assertEqual(root_state["status"], "blocked")
             self.assertEqual(root_state["events"][-1]["error_fingerprint"], "repair-attempt-limit-exceeded")
             self.assertEqual(before_states, sorted((store / "lifecycles").glob("*.json")))
@@ -534,7 +539,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
                 passed = LEDGER.record_event(repair["lifecycle_id"], "pass", "Second check passed", ["regression pass"], store=store)
             audit = LEDGER.audit_lifecycle(original["lifecycle_id"], store)
         self.assertEqual(failed["model_assessment"]["model_suitability"], "producer_result_failed_quality_check")
-        self.assertEqual(failed["model_assessment"]["ending_routing_action"], "retain_fixed_fast_ending_pair")
+        self.assertEqual(failed["model_assessment"]["ending_routing_action"], "retain_spark_first_controller")
         self.assertEqual(failed_record.call_args.kwargs["ending_attempt_number"], 1)
         self.assertEqual(passed_record.call_args.kwargs["ending_attempt_number"], 2)
         self.assertEqual(passed_record.call_args.kwargs["prior_quality_failure_count"], 1)
@@ -673,14 +678,15 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(result["status"], "written")
         self.assertEqual(result["lifecycle_status"], "failed")
         self.assertTrue(result["repair_required"])
-        self.assertEqual(result["repair_handoff"]["action"], "blocked_origin_session_unavailable")
-        self.assertTrue(result["repair_handoff"]["requires_origin_session"])
+        self.assertEqual(result["repair_handoff"]["action"], "create_isolated_projectless_repair_then_fresh_ending")
+        self.assertFalse(result["repair_handoff"]["requires_origin_session"])
+        self.assertEqual(result["repair_handoff"]["repair_launch"]["tool"], "codex_app__create_thread")
         self.assertFalse(result["final_gate_passed"])
         self.assertEqual(state["status"], "failed")
         self.assertEqual(state["producer_binding"]["status"], "unavailable")
         self.assertEqual(state["model_learning"], unavailable)
 
-    def test_failure_dispatches_contextual_prompt_to_original_source_session(self):
+    def test_failure_creates_an_isolated_projectless_repair_session(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project = root / "project"
@@ -694,10 +700,12 @@ class EndingTaskLedgerTests(unittest.TestCase):
             repair = LEDGER.start_lifecycle("verification", project, "Fresh Ending after source-session repair", project, repair_of_lifecycle_id=started["lifecycle_id"], store=store, verification_required=True, verification_plan=plan, ending_check_id="artifact")
             repair_state = json.loads((store / "lifecycles" / f"{repair['lifecycle_id']}.json").read_text(encoding="utf-8"))
         handoff = failed["repair_handoff"]
-        self.assertEqual(handoff["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
-        self.assertEqual(handoff["repair_dispatch"]["tool"], "codex_app__send_message_to_thread")
-        self.assertEqual(handoff["repair_dispatch"]["arguments"]["threadId"], "source-session-001")
-        self.assertEqual(handoff["repair_dispatch"]["arguments"]["hostId"], "host-local")
+        self.assertEqual(handoff["action"], "create_isolated_projectless_repair_then_fresh_ending")
+        self.assertEqual(handoff["repair_launch"]["tool"], "codex_app__create_thread")
+        self.assertEqual(handoff["repair_launch"]["arguments"]["target"], {"type": "projectless"})
+        self.assertNotIn("threadId", handoff["repair_launch"]["arguments"])
+        self.assertNotIn("hostId", handoff["repair_launch"]["arguments"])
+        self.assertEqual(handoff["session_isolation"]["active_task_conflict_action"], "wait_without_interruption")
         self.assertIn("missing", handoff["repair_prompt"])
         self.assertIn("Start a fresh global projectless Ending", handoff["repair_prompt"])
         self.assertEqual(state["origin_session"], {"thread_id": "source-session-001", "host_id": "host-local"})
@@ -770,7 +778,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             plan = self.ending_plan(root)
-            with self.assertRaisesRegex(ValueError, "sanitized availability reason"):
+            with self.assertRaisesRegex(ValueError, "requires controller_cooling"):
                 LEDGER.start_lifecycle(
                     "verification",
                     root,
@@ -782,7 +790,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
                     selected_pair="gpt-5.6-luna|low",
                     store=root / "invalid-store",
                 )
-            with self.assertRaisesRegex(ValueError, "sanitized availability reason"):
+            with self.assertRaisesRegex(ValueError, "requires controller_cooling"):
                 LEDGER.start_lifecycle(
                     "verification",
                     root,
@@ -804,14 +812,14 @@ class EndingTaskLedgerTests(unittest.TestCase):
                 verification_plan=plan,
                 ending_check_id="task-ending",
                 selected_pair="gpt-5.6-luna|low",
-                availability_fallback_reason="primary_model_unavailable",
+                availability_fallback_reason="controller_cooling",
                 store=root / "store",
             )
             passed = LEDGER.record_event(started["lifecycle_id"], "pass", "Fast closeout passed", store=root / "store")
             state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
-        self.assertEqual(state["availability_fallback_reason"], "primary_model_unavailable")
+        self.assertEqual(state["availability_fallback_reason"], "controller_cooling")
         self.assertEqual(state["model_disclosure"]["route_change"], "operational_fallback")
-        self.assertEqual(passed["model_assessment"]["ending_routing_action"], "availability_fallback_only")
+        self.assertEqual(passed["model_assessment"]["ending_routing_action"], "retain_restriction_aware_controller")
         self.assertEqual(passed["model_assessment"]["producer_next_pair"], "unknown|unknown")
 
     def test_correctness_failure_moves_only_the_producer_learning_pair(self):
@@ -836,7 +844,7 @@ class EndingTaskLedgerTests(unittest.TestCase):
                 failed = LEDGER.record_event(started["lifecycle_id"], "fail", "Acceptance mismatch", ["wrong result"], store=root / "store", failure_class="correctness")
         assessment = failed["model_assessment"]
         self.assertEqual(assessment["ending_pair"], "gpt-5.3-codex-spark|xhigh")
-        self.assertEqual(assessment["ending_routing_action"], "retain_fixed_fast_ending_pair")
+        self.assertEqual(assessment["ending_routing_action"], "retain_spark_first_controller")
         self.assertEqual(assessment["producer_next_pair"], "gpt-5.6-luna|medium")
         self.assertEqual(assessment["producer_routing_action"], "repair_producer_with_recorded_next_pair")
         self.assertNotIn("upgrade", assessment["ending_routing_action"])

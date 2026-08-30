@@ -40,6 +40,8 @@ ESTIMATED_SESSION_CONTEXT_TOKENS = 36_000
 ESTIMATED_CHARS_PER_TOKEN = 4
 SMALL_EDIT_MAXIMUM_COMPLEXITY_SCORE = routing_policy.ROUTING_THRESHOLDS["fast_path_maximum_score"]
 MAX_PRODUCER_ROUTE_ATTEMPTS = routing_policy.ROUTING_THRESHOLDS["maximum_route_attempts"]
+MATERIAL_UPDATE_KINDS = {"auto", "none", "trivial_value_only", "structural", "code", "conceptual", "process"}
+MATERIAL_ENDING_KINDS = {"structural", "code", "conceptual", "process"}
 
 
 def _emit_result_ready(result_path, ready_monotonic_ns):
@@ -47,7 +49,7 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
 
 
 def _emit_ending_required(summary):
-    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "launch_state": "required_unacknowledged", "host_tool": "codex_app__create_thread", "thread_target": {"type": "projectless"}, "placement_readback_tool": "codex_app__list_threads", "ack_required": True, "final_aggregate_receipt": True, "aggregate_result_state": summary.get("aggregate_result_state"), "ending_real_status": summary.get("ending_real_status"), "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
+    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "launch_state": "required_unacknowledged", "host_tool": "codex_app__create_thread", "thread_target": {"type": "projectless"}, "placement_readback_tool": "codex_app__list_threads", "ack_required": True, "final_aggregate_receipt": True, "aggregate_result_state": summary.get("aggregate_result_state"), "ending_real_status": summary.get("ending_real_status"), "ending_triggers": summary.get("ending_triggers", []), "material_update_classification": summary.get("material_update_classification"), "project_memory_closeout_required": summary.get("project_memory_closeout_required") is True, "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
     print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
@@ -181,22 +183,46 @@ def _contains_any_surface_term(prompt, patterns):
     return bool(normalized and any(re.search(pattern, normalized, re.IGNORECASE) for pattern in patterns))
 
 
-def ending_surface_requirements(task_type, operation="", prompt="", real_test=False, information_update=False, memory_update=False):
+def material_update_classification(task_type, operation="", prompt="", declared_kind="auto"):
+    declared = str(declared_kind or "auto").strip().lower()
+    if declared not in MATERIAL_UPDATE_KINDS:
+        raise ValueError("material_update_kind is invalid")
+    if declared != "auto":
+        return declared
+    text = re.sub(r"\s+", " ", str(prompt or "")).strip().lower()
+    if re.search(r"\btrivial\s+value[- ]only\b|\bvalue[- ]only\s+(?:edit|change)\b|仅(?:修改|改)(?:一个)?值|只(?:修改|改)(?:一个)?值", text):
+        return "trivial_value_only"
+    if re.search(r"\b(refactor|migrate|structural|architecture)\b|重构|结构|架构", text):
+        return "structural"
+    if str(task_type or "").strip().lower() == "code" or str(operation or "").strip().lower() in {"code", "edit", "fix", "implement", "modify", "refactor", "repair", "replace", "update"}:
+        return "code"
+    if re.search(r"\b(conceptual|design|idea|approach)\b|概念|设计|思路", text):
+        return "conceptual"
+    if re.search(r"\b(workflow|process|lifecycle)\b|流程|生命周期", text):
+        return "process"
+    return "none"
+
+
+def ending_surface_requirements(task_type, operation="", prompt="", real_test=False, information_update=False, memory_update=False, material_update_kind="auto"):
     """Identify observable work that gives a detached Ending a real purpose."""
     task_type = str(task_type or "").strip().lower()
     operation = str(operation or "").strip().lower()
+    material_kind = material_update_classification(task_type, operation, prompt, material_update_kind)
     return {
-        "real_test": bool(real_test or task_type == "code" or operation in {"test", "verify", "audit", "review", "validate"} or _contains_any_surface_term(prompt, ENDING_REAL_TEST_TERMS)),
+        "real_test": bool(real_test or (task_type == "code" and material_kind != "trivial_value_only") or operation in {"test", "verify", "audit", "review", "validate"} or _contains_any_surface_term(prompt, ENDING_REAL_TEST_TERMS)),
         "information_update": bool(information_update or task_type in {"writing", "documentation"} or operation in {"document", "write", "update"} or _contains_any_surface_term(prompt, ENDING_INFORMATION_UPDATE_TERMS)),
         "memory_update": bool(memory_update or operation in {"memory", "record"} or _contains_any_surface_term(prompt, ENDING_MEMORY_UPDATE_TERMS)),
     }
 
 
-def result_lifecycle_policy(successful_result, task_type, complexity_score, risk, multi_stage=False, prompt="", operation="", real_test=False, information_update=False, memory_update=False):
+def result_lifecycle_policy(successful_result, task_type, complexity_score, risk, multi_stage=False, prompt="", operation="", real_test=False, information_update=False, memory_update=False, material_update_kind="auto"):
     band = obsidian_model_memory.complexity_band(complexity_score)
     code_change = task_type == "code"
-    ending_surface = ending_surface_requirements(task_type, operation, prompt, real_test, information_update, memory_update)
+    material_update = material_update_classification(task_type, operation, prompt, material_update_kind)
+    ending_surface = ending_surface_requirements(task_type, operation, prompt, real_test, information_update, memory_update, material_update)
     ending_triggers = [name for name, enabled in ending_surface.items() if enabled]
+    if material_update in MATERIAL_ENDING_KINDS:
+        ending_triggers.append("material_update")
     ending_required = bool(successful_result and ending_triggers)
     if not successful_result:
         ending_real_status = "not_started"
@@ -213,7 +239,9 @@ def result_lifecycle_policy(successful_result, task_type, complexity_score, risk
         "ending_real_status": ending_real_status,
         "ending_surface": ending_surface,
         "ending_triggers": ending_triggers,
-        "ending_skip_reason": None if ending_required or not successful_result else "no_real_test_or_information_or_memory_update",
+        "material_update_classification": material_update,
+        "project_memory_closeout_required": bool(successful_result and material_update in MATERIAL_ENDING_KINDS),
+        "ending_skip_reason": None if ending_required or not successful_result else "no_real_test_or_information_or_memory_or_material_update",
         "producer_check_scope": "one_smallest_local_quick_check" if code_change else "completion_check_only",
         "first_result_release": "immediate_after_quick_check",
         "deferred_verification_owner": "projectless_ending" if ending_required else "none",
@@ -628,7 +656,7 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     main_node["trial"] = recommendation.get("trial") is True
     main_node["routing_recommendation"] = proof
     nodes.append(main_node)
-    lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
+    lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
     if lifecycle_policy["ending_required"]:
         nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", **task_route_dispatcher.ending_fast_route_fields(), "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
     args.execution_lifecycle = getattr(args, "execution_lifecycle", None) or routing_policy.execution_lifecycle_contract(args.complexity_score, False, True, sum(node.get("phase") == "result" for node in nodes), args.risk, args.ambiguity)
@@ -707,7 +735,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["model_route_notice"] = graph_notice
     receipt["code_rule_bundle"] = getattr(args, "code_rule_bundle", None)
     receipt["execution_lifecycle"] = args.execution_lifecycle
-    lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
+    lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
     receipt.update(lifecycle_policy)
     receipt.update(_final_aggregate_fields(receipt, len(result_nodes), "released", release["release_path"], manifest.get("route_run_id")))
     execution_summary = _light_execution_summary(
@@ -924,7 +952,7 @@ def run(args, prompt):
         else:
             _atomic_write_text(args.result_output, normalized_result.rstrip("\n") + "\n")
     successful_result = receipt.get("status") == "pass" and result_published
-    lifecycle_policy = result_lifecycle_policy(successful_result, args.task_type, args.complexity_score, args.risk, admission is not None, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
+    lifecycle_policy = result_lifecycle_policy(successful_result, args.task_type, args.complexity_score, args.risk, admission is not None, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
     receipt.update(lifecycle_policy)
     receipt.update(_final_aggregate_fields(receipt, 1, "single_result_released"))
     execution_summary = _light_execution_summary(
@@ -1033,7 +1061,7 @@ def resolve_fast_path_args(args, prompt):
     args.task_group = args.task_group or os.environ.get("CODEX_TASK_GROUP", "")
     args.session_id = obsidian_model_memory.session_effort.resolve_session_id(prompt, args.session_id)
     args.task_summary = args.task_summary or prompt_text[:280]
-    args.ending_surface = ending_surface_requirements(args.task_type, args.operation, prompt, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False))
+    args.ending_surface = ending_surface_requirements(args.task_type, args.operation, prompt, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
     args.workload_id = args.workload_id or f"fast-{digest}"
     args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
     args.result_output = Path(args.result_output) if args.result_output is not None else default_output_root / "result.txt"
@@ -1084,6 +1112,7 @@ def parse_args(argv=None):
     parser.add_argument("--real-test", action="store_true", help="Declare a real test or runtime verification surface for the detached Ending.")
     parser.add_argument("--information-update", action="store_true", help="Declare an information/documentation update surface for the detached Ending.")
     parser.add_argument("--memory-update", action="store_true", help="Declare a durable memory/history update surface for the detached Ending.")
+    parser.add_argument("--material-update-kind", choices=sorted(MATERIAL_UPDATE_KINDS), default="auto", help="Classify a durable update; structural, code, conceptual, and process updates require Ending plus project-memory closeout. Use trivial_value_only only for a proven value-only edit.")
     return parser.parse_args(argv)
 
 

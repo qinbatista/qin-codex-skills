@@ -4,6 +4,7 @@ import io
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -56,7 +57,37 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual(route["complexity_band"], "advanced")
         self.assertEqual(route["selected_pair"], registry["role_pairs"]["floor"])
         self.assertEqual(route["primary_selection_reason"], "primary_pair_not_in_registry")
-        self.assertEqual(route["approved_pairs"], [registry["role_pairs"]["floor"]])
+        self.assertEqual(route["approved_pairs"][0], registry["role_pairs"]["floor"])
+        self.assertIn(registry["role_pairs"]["frontier_complex"], route["approved_pairs"])
+
+    def test_restriction_records_default_five_hour_cooldown_and_launch_skips_cooling_spark(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            store = root / "controller-restrictions.json"
+            recorded_at = datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
+            restriction = PLAN.record_controller_restriction("gpt-5.3-codex-spark|xhigh", "model_quota_limit", store, now=recorded_at)
+            plan_path = root / "plan.json"
+            plan_path.write_text(json.dumps(build_plan(root, "cooldown", 35, [{"name": "unit", "command": ["python3", "-c", "print('ok')"]}])), encoding="utf-8")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending", "project-123", final_producer_receipt(root), restriction_store=store, now=recorded_at + timedelta(minutes=1))
+            restored = PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending", "project-123", final_producer_receipt(root), restriction_store=store, now=recorded_at + timedelta(hours=6))
+        self.assertEqual(restriction["restriction"]["cooldown_until"], (recorded_at + timedelta(hours=5)).isoformat())
+        self.assertEqual(restriction["restriction"]["retry_at"], (recorded_at + timedelta(hours=5)).isoformat())
+        self.assertEqual(restriction["restriction"]["model"], "gpt-5.3-codex-spark")
+        self.assertNotEqual(launch["launch_requests"][0]["selected_pair"], "gpt-5.3-codex-spark|xhigh")
+        self.assertEqual(restored["launch_requests"][0]["selected_pair"], "gpt-5.3-codex-spark|xhigh")
+
+    def test_material_update_receipt_requires_durable_project_memory_closeout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            receipt = final_producer_receipt(root, project_memory_closeout_required=True, material_update_classification="structural")
+            plan_path.write_text(json.dumps(build_plan(root, "material", 35, [{"name": "unit", "command": ["python3", "-c", "print('ok')"]}])), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "durable project_memory_closeout"):
+                PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending", "project-123", receipt)
+            closeout = {"mode": "durable", "module": "ending.lifecycle", "summary": "Ending lifecycle changed.", "reason": "The structural update requires durable lifecycle memory.", "result": "The lifecycle now enforces durable closeout.", "files": ["runtime.py"], "symbols": ["runtime"], "change_kind": "edit", "scope": "code"}
+            plan_path.write_text(json.dumps(build_plan(root, "material", 35, [{"name": "unit", "command": ["python3", "-c", "print('ok')"]}], project_memory_closeout=closeout)), encoding="utf-8")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending", "project-123", receipt)
+        self.assertEqual(launch["project_memory_closeout"]["mode"], "durable")
 
     def test_plan_keeps_bounded_checks_for_one_task_ending(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -66,7 +97,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"], "complexity_score": 65},
             ])
         self.assertEqual(plan["execution"], "one_persistent_ending_runs_all_checks")
-        self.assertEqual(plan["schema_version"], 11)
+        self.assertEqual(plan["schema_version"], 12)
         self.assertEqual(plan["project_memory_closeout"], {"mode": "none"})
         self.assertNotIn("title", plan)
         self.assertNotIn("thread_target", plan)
@@ -79,7 +110,7 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertEqual({task["selected_pair"] for task in plan["ending_tasks"]}, {"gpt-5.3-codex-spark|xhigh"})
         self.assertEqual(plan["ending_model_policy"]["availability_fallback_pair"], "gpt-5.6-luna|low")
         self.assertEqual(plan["origin_session"]["thread_id"], "source-session-001")
-        self.assertEqual(plan["repair_policy"]["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
+        self.assertEqual(plan["repair_policy"]["action"], "create_isolated_projectless_repair_then_fresh_ending")
         self.assertEqual(plan["repair_policy"]["max_repair_attempts"], PLAN.MAX_ENDING_REPAIR_ROUNDS)
         self.assertTrue(all(task["on_failure"]["max_repair_attempts"] == PLAN.MAX_ENDING_REPAIR_ROUNDS for task in plan["ending_tasks"]))
 
@@ -245,14 +276,13 @@ class EndingVerificationPlanTests(unittest.TestCase):
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
             evidence = PLAN.run_check(plan_path, "unit", evidence_path)
         self.assertEqual(evidence["status"], "fail")
-        self.assertEqual(evidence["repair_handoff"]["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
-        self.assertEqual(evidence["repair_handoff"]["origin_session"]["thread_id"], "source-session-001")
-        self.assertEqual(evidence["repair_handoff"]["repair_dispatch"]["tool"], "codex_app__send_message_to_thread")
-        self.assertEqual(evidence["repair_handoff"]["repair_dispatch"]["arguments"]["threadId"], "source-session-001")
-        self.assertEqual(evidence["repair_handoff"]["repair_dispatch"]["arguments"]["hostId"], "host-local")
+        self.assertEqual(evidence["repair_handoff"]["action"], "create_isolated_projectless_repair_then_fresh_ending")
+        self.assertEqual(evidence["repair_handoff"]["origin_context"]["thread_id"], "source-session-001")
+        self.assertEqual(evidence["repair_handoff"]["repair_launch"]["tool"], "codex_app__create_thread")
+        self.assertEqual(evidence["repair_handoff"]["repair_launch"]["arguments"]["target"], {"type": "projectless"})
+        self.assertNotIn("threadId", evidence["repair_handoff"]["repair_launch"]["arguments"])
         self.assertIn("Original acceptance contract: The repair check exits successfully.", evidence["repair_handoff"]["repair_prompt"])
-        self.assertIn("parent will launch a fresh global projectless Ending", evidence["repair_handoff"]["repair_prompt"])
-        self.assertEqual(evidence["repair_handoff"]["terminal_thread_policy"]["fail"], "keep_visible")
+        self.assertIn("waiting_for_active_task_release", evidence["repair_handoff"]["repair_prompt"])
         self.assertEqual(evidence["repair_handoff"]["error"]["exit_code"], 7)
         self.assertIn("broken", evidence["repair_handoff"]["error"]["stderr"])
 
@@ -311,13 +341,15 @@ class EndingVerificationPlanTests(unittest.TestCase):
         self.assertTrue(all("structured model_assessment" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("final aggregate result is released" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertTrue(all("compact continuation" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
-        self.assertTrue(all("repair_dispatch and repair_prompt" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
+        self.assertTrue(all("create the saved independent projectless repair task" in item["arguments"]["prompt"] for item in launch["launch_requests"]))
         self.assertEqual(
             [f"{item['arguments']['model']}|{item['arguments']['thinking']}" for item in launch["launch_requests"]],
             [item["selected_pair"] for item in launch["launch_requests"]],
         )
         request = launch["launch_requests"][0]
-        self.assertEqual([candidate["pair"] for candidate in request["launch_candidates"]], ["gpt-5.3-codex-spark|xhigh", "gpt-5.6-luna|low"])
+        self.assertEqual(request["launch_candidates"][0]["pair"], "gpt-5.3-codex-spark|xhigh")
+        self.assertEqual(request["launch_candidates"][1]["pair"], "gpt-5.6-luna|low")
+        self.assertGreater(len(request["launch_candidates"]), 2)
         self.assertIn("scheduler_unavailable", request["availability_fallback_reasons"])
         self.assertIn("required_modality_unavailable", request["availability_fallback_reasons"])
         self.assertIn("Correctness, quality, protocol, timeout, or command failure never changes the Ending pair.", request["arguments"]["prompt"])
@@ -391,19 +423,21 @@ class EndingVerificationPlanTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "target must be exactly"):
                 PLAN.acknowledge_launch(launch_path, "task-ending", "project-thread", "host", "project-123", state_path, "global", None, "codex_app__list_threads")
 
-    def test_availability_fallback_requires_an_approved_reason(self):
+    def test_cooling_controller_acknowledges_the_planned_escalation(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path = root / "plan.json"
             launch_path = root / "launch.json"
             state_path = root / "launch-state.json"
+            restriction_store = root / "controller-restrictions.json"
+            PLAN.record_controller_restriction("gpt-5.3-codex-spark|xhigh", "five_hour_limit", restriction_store)
             plan_path.write_text(json.dumps(build_plan(root, "routing", 60, [
                 {"name": "unit", "command": ["python3", "-c", "print('unit')"]},
                 {"name": "integration", "command": ["python3", "-c", "print('integration')"]},
             ])), encoding="utf-8")
-            launch_path.write_text(json.dumps(build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "sanitized availability reason"):
-                PLAN.acknowledge_launch(launch_path, "task-ending", "fallback-thread", "host", "project-123", state_path, "global", None, "codex_app__list_threads", "gpt-5.6-luna|low")
+            launch = PLAN.build_launch_spec(plan_path, root / "Cache" / "remote-test" / "ending-evidence", "project-123", final_producer_receipt(root), restriction_store=restriction_store)
+            launch_path.write_text(json.dumps(launch), encoding="utf-8")
+            selected_pair = launch["launch_requests"][0]["selected_pair"]
             acknowledged = PLAN.acknowledge_launch(
                 launch_path,
                 "task-ending",
@@ -414,12 +448,11 @@ class EndingVerificationPlanTests(unittest.TestCase):
                 "global",
                 None,
                 "codex_app__list_threads",
-                "gpt-5.6-luna|low",
-                "primary_model_unavailable",
+                selected_pair,
             )
             passed = PLAN.audit_launches(launch_path, state_path)
-        self.assertEqual(acknowledged["selected_pair"], "gpt-5.6-luna|low")
-        self.assertEqual(acknowledged["availability_fallback_reason"], "primary_model_unavailable")
+        self.assertEqual(acknowledged["selected_pair"], selected_pair)
+        self.assertEqual(acknowledged["availability_fallback_reason"], "controller_cooling")
         self.assertEqual(passed["status"], "pass")
 
     def test_requirement_mismatch_turns_a_passing_command_into_source_session_repair(self):
@@ -433,16 +466,21 @@ class EndingVerificationPlanTests(unittest.TestCase):
             evidence = PLAN.record_requirement_mismatch(evidence_path, "The command passed, but the final artifact omits the approved construction line.")
         self.assertEqual(evidence["status"], "fail")
         self.assertEqual(evidence["failure_class"], "correctness")
-        self.assertEqual(evidence["repair_handoff"]["action"], "send_repair_prompt_to_origin_session_then_fresh_ending")
+        self.assertEqual(evidence["repair_handoff"]["action"], "create_isolated_projectless_repair_then_fresh_ending")
         self.assertIn("omits the approved construction line", evidence["repair_handoff"]["repair_prompt"])
 
-    def test_launch_requires_the_original_source_session(self):
+    def test_launch_and_repair_do_not_require_or_resume_the_original_source_session(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             plan_path = root / "plan.json"
-            plan_path.write_text(json.dumps(PLAN.build_plan(root, "unbound", 20, [{"name": "unit", "command": ["python3", "-c", "print('unit')"]}])), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "origin_session is required"):
-                build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")
+            evidence_path = root / "evidence.json"
+            plan_path.write_text(json.dumps(PLAN.build_plan(root, "unbound", 20, [{"name": "unit", "command": ["python3", "-c", "raise SystemExit(7)"]}])), encoding="utf-8")
+            launch = build_launch_spec(root, plan_path, root / "Cache" / "remote-test" / "ending-evidence")
+            evidence = PLAN.run_check(plan_path, "unit", evidence_path)
+        self.assertIsNone(launch["origin_session"])
+        self.assertEqual(evidence["repair_handoff"]["repair_launch"]["tool"], "codex_app__create_thread")
+        self.assertNotIn("threadId", evidence["repair_handoff"]["repair_launch"]["arguments"])
+        self.assertTrue(evidence["repair_handoff"]["session_isolation"]["new_projectless_session"])
 
 
 if __name__ == "__main__":

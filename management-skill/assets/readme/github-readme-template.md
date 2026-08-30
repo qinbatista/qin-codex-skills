@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**Codex-only · score every task · finish first · Ending only for real evidence**
+**Codex-only · score every task · finish first · Ending for real evidence or material updates**
 
 **Why use it:** fast small tasks, the lowest-correct model for harder work, result-first delivery, private learning, and independent evidence. Saved highest-family quality ladder · refreshed only when you request a local model update · Small 0–24 low-risk edits try Spark-low after same-session outcome gate · larger work uses the saved quality ladder
 
@@ -23,15 +23,15 @@
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow.svg" alt="Score and finish the result first; create one independent projectless Ending only for real evidence">
+  <img src="./management-skill/assets/readme/core-flow.svg" alt="Score and finish the result first; real evidence or material updates create an independent projectless Ending">
 </picture>
 
-## ✅ Finish first. End only when there is real evidence.
+## ✅ Finish first. End for evidence or material updates.
 
 1. Score every task 0–100, load relevant Skills, and finish the requested result. Code runs one smallest Quick Check, then returns `CODE READY`.
-2. Only `real_test`, `information_update`, or `memory_update` emits `ending-required`; otherwise record `intentionally_skipped_simple_task` and `ending_skip_reason=no_real_test_or_information_or_memory_update`. A low-risk, single-result small task also skips Ending when it has no surface.
-3. Create exactly one global-only projectless `End Task-<task name>` on `gpt-5.3-codex-spark|xhigh` with `create_thread.target={"type":"projectless"}`. `list_threads` readback must show `projectId=null` or absent. Project/current-task/same-task-subtask placement or missing readback is BLOCKED; the 0–100 score only scopes checks. Controller unavailability permits the registry-floor `gpt-5.6-luna|low` fallback.
-4. The one Ending runs the smallest real/completion checks and one terminal closeout; all required checks must PASS. Terra/Sol workers write semantic evidence but never edit or repair. Failure returns exact evidence to the immutable origin. Reuse a current immutable release report by checking its digest and final state. PASS/FAIL/BLOCKED stays visible; closeout writes routing classification/model history, and nothing auto-archives or deletes itself.
+2. Observable surfaces and material structural, non-trivial code, conceptual, or process updates emit `ending-required`. Material updates also require durable project-memory closeout. Only explicit trivial value-only work with no other surface may skip.
+3. Create exactly one global-only projectless End Task with null-project readback. Spark-xhigh is first. A recorded model quota, five-hour, provider-rate, or retry-after restriction makes the next launch skip the cooling model and select the next stronger supported controller; Spark returns after cooldown.
+4. All checks must PASS. Failure creates a fresh independent projectless Repair Task. It never contacts, steers, interrupts, terminates, hands off, moves, or mutates any existing task/session; when an active task owns a required write surface it waits without messaging. Endings and Repairs stay visible.
 
 ## ⚡ Models & private learning
 

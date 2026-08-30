@@ -624,7 +624,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             main["dependencies"] = [branch["id"]]
             plan["nodes"] = [branch, main]
             plan["ending_required"] = False
-            plan["ending_skip_reason"] = "no_real_test_or_information_or_memory_update"
+            plan["ending_skip_reason"] = "no_real_test_or_information_or_memory_or_material_update"
             failures = module.validate_plan(plan, "gpt-5.6-terra", "low", root)
         self.assertEqual(failures, [])
 
@@ -651,18 +651,18 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         aligned = module.project_result_consistency_action("aligned")
         record_defect = module.project_result_consistency_action("memory_record_defect")
         projection_defect = module.project_result_consistency_action("memory_projection_defect")
-        self.assertEqual(aligned, {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "return_to_origin": False})
-        self.assertEqual(record_defect, {"ending_status": "pass", "action": "append_correction", "memory_write": True, "return_to_origin": False})
-        self.assertEqual(projection_defect, {"ending_status": "pass", "action": "reconcile_projection", "memory_write": False, "return_to_origin": False})
+        self.assertEqual(aligned, {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "existing_session_mutation": False})
+        self.assertEqual(record_defect, {"ending_status": "pass", "action": "append_correction", "memory_write": True, "existing_session_mutation": False})
+        self.assertEqual(projection_defect, {"ending_status": "pass", "action": "reconcile_projection", "memory_write": False, "existing_session_mutation": False})
         self.assertEqual(module.ENDING_TERMINAL_CLOSEOUT["project_result_consistency"]["next_task_memory"], "effective_only")
 
-    def test_project_result_consistency_returns_skill_and_execution_defects_to_origin_without_memory_write(self):
+    def test_project_result_consistency_routes_skill_and_execution_defects_to_isolated_repair(self):
         for classification in ("skill_contract_defect", "execution_drift"):
             action = module.project_result_consistency_action(classification)
             self.assertEqual(action["ending_status"], "fail")
-            self.assertEqual(action["action"], "return_to_origin")
+            self.assertEqual(action["action"], "launch_isolated_projectless_repair")
             self.assertFalse(action["memory_write"])
-            self.assertTrue(action["return_to_origin"])
+            self.assertFalse(action["existing_session_mutation"])
         with self.assertRaises(ValueError):
             module.project_result_consistency_action("unknown")
 

@@ -894,7 +894,7 @@ source_files must list both sources."""
         self.assertFalse(policy["ending_required"])
         self.assertEqual(policy["ending_requirement"], "no_real_ending_surface")
         self.assertEqual(policy["ending_real_status"], "intentionally_skipped_simple_task")
-        self.assertEqual(policy["ending_skip_reason"], "no_real_test_or_information_or_memory_update")
+        self.assertEqual(policy["ending_skip_reason"], "no_real_test_or_information_or_memory_or_material_update")
         self.assertEqual(policy["ending_surface"], {"real_test": False, "information_update": False, "memory_update": False})
 
     def test_ending_requires_explicit_information_or_memory_surface(self):
@@ -909,6 +909,23 @@ source_files must list both sources."""
         policy = module.result_lifecycle_policy(True, "question", 10, "low", False, "Answer briefly.", real_test=True)
         self.assertTrue(policy["ending_required"])
         self.assertEqual(policy["ending_triggers"], ["real_test"])
+
+    def test_material_updates_require_ending_and_memory_closeout_but_explicit_trivial_value_only_may_skip(self):
+        for prompt, expected in (("Refactor the structural lifecycle owner.", "structural"), ("Implement the requested code change.", "code"), ("Update the conceptual design.", "conceptual"), ("Update the workflow process.", "process")):
+            with self.subTest(prompt=prompt):
+                policy = module.result_lifecycle_policy(True, "code" if "code" in prompt or "Refactor" in prompt else "question", 12, "low", False, prompt)
+                self.assertTrue(policy["ending_required"])
+                self.assertIn("material_update", policy["ending_triggers"])
+                self.assertEqual(policy["material_update_classification"], expected)
+                self.assertTrue(policy["project_memory_closeout_required"])
+        trivial = module.result_lifecycle_policy(True, "question", 12, "low", False, "Make a trivial value-only edit.")
+        self.assertFalse(trivial["ending_required"])
+        self.assertEqual(trivial["material_update_classification"], "trivial_value_only")
+        self.assertFalse(trivial["project_memory_closeout_required"])
+        explicit = module.result_lifecycle_policy(True, "question", 12, "low", False, "Small text.", material_update_kind="structural")
+        self.assertTrue(explicit["ending_required"])
+        self.assertTrue(explicit["project_memory_closeout_required"])
+        self.assertEqual(explicit["material_update_classification"], "structural")
 
     def test_fast_path_default_producer_timeout_is_five_minutes(self):
         self.assertEqual(module.parse_args([]).timeout, 300)

@@ -8,8 +8,14 @@ import json
 import os
 import re
 import subprocess
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 _ENDING_BACKEND_PATH = Path(__file__).with_name("ending_backend.py")
 _ENDING_BACKEND_SPEC = importlib.util.spec_from_file_location("ending_verification_backend", _ENDING_BACKEND_PATH)
@@ -22,7 +28,7 @@ _ROUTING_POLICY = importlib.util.module_from_spec(_ROUTING_POLICY_SPEC)
 _ROUTING_POLICY_SPEC.loader.exec_module(_ROUTING_POLICY)
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 ENDING_PRIMARY_PAIR = "gpt-5.3-codex-spark|xhigh"
 ENDING_CHECK_WORKER_MARKER = "ENDING_CHECK_WORKER"
 DIRECT_CHECK_SURFACES = {"command", "syntax", "unit", "api_state", "file_state"}
@@ -32,6 +38,7 @@ DEFAULT_WORKER_SKILLS = {"runtime_semantics": ["verify-skill"], "integration_sem
 ENDING_FALLBACK_ROLE = "floor"
 ENDING_LAUNCH_ID = "task-ending"
 AVAILABILITY_FALLBACK_REASONS = {
+    "controller_cooling",
     "primary_model_unavailable",
     "primary_effort_unsupported",
     "primary_pair_not_in_registry",
@@ -45,7 +52,11 @@ THREAD_READBACK_TOOL = "codex_app__list_threads"
 THREAD_SCOPE = "global"
 CREATE_THREAD_ARGUMENT_KEYS = {"target", "title", "model", "thinking", "prompt"}
 THREAD_PLACEMENT_POLICY = {"scope": THREAD_SCOPE, "target": THREAD_TARGET, "expected_project_id": None, "creation_tool": CREATE_THREAD_TOOL, "readback_tool": THREAD_READBACK_TOOL}
-ORIGIN_SESSION_RESUME_CAPABILITY = "codex_app__send_message_to_thread"
+REPAIR_LAUNCH_CAPABILITY = "codex_app__create_thread"
+REPAIR_RESTRICTION_DEFAULT_SECONDS = 5 * 60 * 60
+DEFAULT_CONTROLLER_RESTRICTION_STORE = Path.home() / ".codex" / "ending-runtime" / "controller-restrictions.json"
+CONTROLLER_RESTRICTION_REASONS = {"five_hour_limit", "model_quota_limit", "provider_rate_limit", "provider_retry_after"}
+CONTROLLER_RESTRICTION_HISTORY_LIMIT = 64
 LAUNCH_STATE_SCHEMA_VERSION = 2
 LIFECYCLE_ID_PATTERN = re.compile(r"\A\d{8}T\d{6}-[0-9a-f]{12}\Z")
 PROJECT_MEMORY_MODES = {"none", "durable"}
@@ -87,10 +98,95 @@ def _normalize_origin_session(raw, project_root):
     source_root = Path(raw.get("project_root") or project_root).expanduser().resolve()
     if source_root != project_root:
         raise ValueError("origin_session.project_root must match project_root")
-    resume_capability = _clean(raw.get("resume_capability") or ORIGIN_SESSION_RESUME_CAPABILITY, "origin_session.resume_capability", 160)
-    if resume_capability != ORIGIN_SESSION_RESUME_CAPABILITY:
-        raise ValueError(f"origin_session.resume_capability must be {ORIGIN_SESSION_RESUME_CAPABILITY}")
-    return {"thread_id": thread_id, "host_id": host_id, "project_id": project_id, "project_root": str(project_root), "resume_capability": resume_capability, "immutable": True}
+    return {"thread_id": thread_id, "host_id": host_id, "project_id": project_id, "project_root": str(project_root), "immutable": True}
+
+
+def _restriction_timestamp(value, field):
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, ValueError) as error:
+        raise ValueError(f"{field} must be an ISO-8601 timestamp") from error
+
+
+def _read_restrictions(store):
+    path = Path(store).expanduser().resolve()
+    if not path.is_file():
+        return path, {"schema_version": 1, "restrictions": []}
+    payload = _read_json(path, "controller restriction store")[1]
+    if payload.get("schema_version") != 1 or not isinstance(payload.get("restrictions"), list):
+        raise ValueError("controller restriction store is invalid")
+    return path, payload
+
+
+@contextmanager
+def _restriction_lock(store):
+    path = Path(store).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(f".{path.name}.lock")
+    with lock_path.open("a+b") as handle:
+        if os.name == "nt":
+            if handle.seek(0, os.SEEK_END) == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def record_controller_restriction(pair, reason, store=DEFAULT_CONTROLLER_RESTRICTION_STORE, retry_at="", source="launch_failure", now=None):
+    pair_value = _clean(pair, "pair", 160)
+    if pair_value.count("|") != 1:
+        raise ValueError("pair must use model|effort")
+    model, effort = pair_value.split("|", 1)
+    reason_value = _clean(reason, "reason", 80)
+    if reason_value not in CONTROLLER_RESTRICTION_REASONS:
+        raise ValueError("reason is not an Ending controller restriction reason")
+    recorded_at = now or datetime.now(timezone.utc)
+    if recorded_at.tzinfo is None:
+        raise ValueError("restriction timestamp must include a timezone")
+    retry_time = _restriction_timestamp(retry_at, "retry_at") if retry_at else recorded_at + timedelta(seconds=REPAIR_RESTRICTION_DEFAULT_SECONDS)
+    if retry_time.tzinfo is None or retry_time <= recorded_at:
+        raise ValueError("retry_at must be after the restriction timestamp")
+    entry = {"model": model, "pair": f"{model}|{effort}", "reason": reason_value, "restricted_at": recorded_at.isoformat(), "retry_at": retry_time.isoformat(), "cooldown_until": retry_time.isoformat(), "scope": "model", "source": _clean(source, "source", 160)}
+    with _restriction_lock(store):
+        path, payload = _read_restrictions(store)
+        history = [item for item in payload["restrictions"] if not (isinstance(item, dict) and item.get("model") == model)] + [entry]
+        payload["restrictions"] = history[-CONTROLLER_RESTRICTION_HISTORY_LIMIT:]
+        _atomic_write(path, payload)
+    return {"status": "recorded", "restriction": entry, "store": str(path)}
+
+
+def _controller_ladder(registry):
+    policy = _ending_model_policy(registry)
+    quality_pairs = [f"{model['id']}|{effort}" for model in registry.get("models", []) if isinstance(model, dict) and isinstance(model.get("id"), str) for effort in model.get("codex_efforts", []) if isinstance(effort, str)]
+    pairs = [policy["primary_pair"], *quality_pairs, policy.get("availability_fallback_pair")]
+    return [pair for pair in dict.fromkeys(pairs) if isinstance(pair, str) and "|" in pair]
+
+
+def _select_available_controller(registry, restriction_store, now=None):
+    current_time = now or datetime.now(timezone.utc)
+    restriction_path = Path(restriction_store).expanduser().resolve()
+    if restriction_path.is_file():
+        with _restriction_lock(restriction_path):
+            _, restriction_state = _read_restrictions(restriction_path)
+    else:
+        restriction_state = {"schema_version": 1, "restrictions": []}
+    active = {item.get("pair"): item for item in restriction_state["restrictions"] if isinstance(item, dict) and isinstance(item.get("pair"), str) and isinstance(item.get("cooldown_until"), str) and _restriction_timestamp(item["cooldown_until"], "cooldown_until") > current_time}
+    cooling_models = {item.get("model") or pair.split("|", 1)[0] for pair, item in active.items()}
+    ladder = _controller_ladder(registry)
+    selected = next((pair for pair in ladder if pair not in active and pair.split("|", 1)[0] not in cooling_models), None)
+    if selected is None:
+        raise ValueError("all supported Ending controller pairs are cooling")
+    return selected, ladder, active
 
 
 def _normalize_repair_of_lifecycle_id(value):
@@ -129,7 +225,8 @@ def _ending_model_policy(registry=None):
         raise ValueError("model registry ending_fast must use the registry floor when Spark-xhigh is unavailable")
     if registry_policy.get("selection_basis") != "ending_fast_primary" or registry_policy.get("fallback_policy") != "availability_only" or registry_policy.get("score_scope") != "check_only":
         raise ValueError("model registry ending_fast policy is inconsistent")
-    approved_pairs = list(dict.fromkeys(pair for pair in (primary_pair, fallback_pair) if pair))
+    quality_pairs = [f"{model['id']}|{effort}" for model in payload.get("models", []) if isinstance(model, dict) and isinstance(model.get("id"), str) for effort in model.get("codex_efforts", []) if isinstance(effort, str)]
+    approved_pairs = list(dict.fromkeys(pair for pair in (primary_pair, *quality_pairs, fallback_pair) if pair))
     primary_supported = primary_pair == ENDING_PRIMARY_PAIR
     return {
         "selection_basis": registry_policy["selection_basis"],
@@ -139,6 +236,7 @@ def _ending_model_policy(registry=None):
         "availability_fallback_pair": fallback_pair,
         "availability_fallback_reasons": sorted(AVAILABILITY_FALLBACK_REASONS),
         "approved_pairs": approved_pairs,
+        "cooldown_escalation_pairs": [pair for pair in approved_pairs if pair != primary_pair],
         "selected_pair": primary_pair,
         "primary_selection_reason": None if primary_supported else "primary_pair_not_in_registry",
         "default_availability_reason": None,
@@ -314,11 +412,11 @@ def normalize_check(raw, project_root, task_name, task_score, origin_session, re
         "required_skills": required_skills,
         **route,
         "on_failure": {
-            "action": "send_repair_prompt_to_origin_session_then_fresh_ending",
-            "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY,
+            "action": "create_isolated_projectless_repair_then_fresh_ending",
+            "dispatch_tool": REPAIR_LAUNCH_CAPABILITY,
             "error_fields": ["exit_code", "stdout", "stderr", "timed_out"],
             "max_repair_attempts": MAX_ENDING_REPAIR_ROUNDS,
-            "origin_session_required": True,
+            "origin_session_required": False,
             "origin_session": origin_session,
         },
     }
@@ -351,7 +449,7 @@ def build_plan(project_root, task_name, task_score, checks, origin_session=None,
         "origin_session": normalized_origin_session,
         "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id,
         "ending_model_policy": _ending_model_policy(registry),
-        "repair_policy": {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session_required": True, "prompt_submission": "automatic", "dispatch_tool": ORIGIN_SESSION_RESUME_CAPABILITY, "max_repair_attempts": MAX_ENDING_REPAIR_ROUNDS, "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id, "blocked_when": ["origin_session_unavailable", "prompt_submission_failed", "external_state_unavailable", "repair_attempt_limit_exhausted"]},
+        "repair_policy": {"action": "create_isolated_projectless_repair_then_fresh_ending", "origin_session_required": False, "immutable_origin_context_only": True, "dispatch_tool": REPAIR_LAUNCH_CAPABILITY, "max_repair_attempts": MAX_ENDING_REPAIR_ROUNDS, "repair_of_lifecycle_id": normalized_repair_of_lifecycle_id, "wait_when": ["active_task_owns_required_write_surface"], "blocked_when": ["external_state_unavailable", "repair_attempt_limit_exhausted"]},
         "project_memory_closeout": normalized_closeout,
         "ending_tasks": tasks,
     }
@@ -421,13 +519,11 @@ def _normalize_thread_project_id(value):
 
 def _repair_handoff(check, origin_session, observed, mismatch_summary=""):
     mismatch = _clean(mismatch_summary, "requirement_mismatch", 1200) if mismatch_summary else ""
-    if not origin_session:
-        return {"action": "blocked_origin_session_unavailable", "origin_session": None, "origin_session_required": True, "reason": "The exact producer session was not captured before Ending launched."}
     evidence_reason = mismatch or ("The real acceptance command did not produce the expected exit result." if observed.get("timed_out") or observed.get("exit_code") != check["expected_exit_code"] else "The observed final result did not satisfy the original acceptance contract.")
-    prompt_lines = ["Continue the original producer task in this exact origin session.", "Do not restart Task Analyze, do not let the Ending verifier edit the result, and do not ask the user to copy this prompt.", f"Original acceptance contract: {check['acceptance']}", f"Observed Ending issue: {evidence_reason}", f"Observed exit code: {observed.get('exit_code')}", f"Observed stdout: {observed.get('stdout') or '<empty>'}", f"Observed stderr: {observed.get('stderr') or '<empty>'}", f"Repair scope: {check['repair_scope']}", "Repair the result so it satisfies the original user objective and acceptance contract, run the bounded Quick Check, and return the corrected result plus a new producer receipt to the parent lifecycle. The parent will launch a fresh global projectless Ending for the same check; do not create or wait for that Ending here."]
+    prompt_lines = ["ENDING_REPAIR_TASK", "This is a fresh independent projectless repair task. Never send to, steer, interrupt, terminate, hand off, move, or mutate an existing task or session.", "Immutable origin context is evidence only; do not resume it.", f"Original acceptance contract: {check['acceptance']}", f"Observed Ending issue: {evidence_reason}", f"Observed exit code: {observed.get('exit_code')}", f"Repair scope: {check['repair_scope']}", "Before any write, inspect task ownership read-only. If an active task owns a required file or state, record waiting_for_active_task_release and wait without messaging or interrupting that task. After release, repair only the authorized scope, run a bounded Quick Check, and create a fresh independent global projectless Ending after the repaired result is released."]
     repair_prompt = "\n".join(prompt_lines)
-    repair_dispatch = {"tool": ORIGIN_SESSION_RESUME_CAPABILITY, "arguments": {"threadId": origin_session["thread_id"], "hostId": origin_session["host_id"], "prompt": repair_prompt}, "required": True}
-    return {"action": "send_repair_prompt_to_origin_session_then_fresh_ending", "origin_session": origin_session, "origin_session_required": True, "prompt_submission": "automatic", "repair_dispatch": repair_dispatch, "repair_prompt": repair_prompt, "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
+    repair_launch = {"tool": REPAIR_LAUNCH_CAPABILITY, "arguments": {"target": dict(THREAD_TARGET), "title": f"Repair Task-{check['check_id']}", "prompt": repair_prompt}, "required": True}
+    return {"action": "create_isolated_projectless_repair_then_fresh_ending", "origin_context": origin_session, "origin_context_immutable": True, "origin_context_optional": True, "repair_launch": repair_launch, "repair_prompt": repair_prompt, "session_isolation": {"new_projectless_session": True, "prohibited_existing_session_actions": ["send", "steer", "interrupt", "terminate", "handoff", "move", "mutate"], "active_task_conflict_action": "wait_without_interruption"}, "conflict_policy": "waiting_for_active_task_release_without_interruption", "observed_issue": evidence_reason, "original_acceptance": check["acceptance"], "repair_scope": check["repair_scope"], "fresh_ending": "required_after_new_result_and_receipt", "max_repair_attempts": check["on_failure"]["max_repair_attempts"]}
 
 
 def _final_producer_receipt(project_root, producer_receipt):
@@ -445,7 +541,7 @@ def _final_producer_receipt(project_root, producer_receipt):
     final_aggregate = receipt.get("final_aggregate_receipt") is True and receipt.get("all_result_nodes_settled") is True and receipt.get("subprocesses_settled") is True and receipt.get("ending_launch_ready") is True and receipt.get("aggregate_result_state") in {"released", "single_result_released"} and isinstance(receipt.get("aggregate_result_node_count"), int) and receipt["aggregate_result_node_count"] >= 1
     if receipt.get("status") != "pass" or receipt.get("result_published") is not True or receipt.get("turn_completed") is not True or receipt.get("node_type") != "locked-route-node" or receipt.get("node_role") != "result-producer" or not final_aggregate:
         raise ValueError("producer_receipt must prove a final passing published aggregate result")
-    return {"path": receipt_path, "sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest()}
+    return {"path": receipt_path, "sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(), "payload": receipt}
 
 
 def _detached_project_root_line(project_root):
@@ -463,19 +559,20 @@ def _worker_prompt(plan_path, plan, evidence_outputs, assigned_pair, producer_re
     return "\n".join(
         [
             "ENDING_TASK_WORKER",
-            "Use this existing global projectless Ending; never restart the producer, attach a project, or create another.",
+            "Use only this global projectless Ending; never attach to/restart a producer.",
             _detached_project_root_line(project_root),
             f"Saved plan: {relative_plan}; evidence directory: {relative_evidence_dir}; final producer receipt: {receipt_line}.",
-            f"Assigned pair: {assigned_pair}; primary: {policy['primary_pair']}; availability fallback: {policy['availability_fallback_pair']}.",
+            f"Assigned pair: {assigned_pair}; primary: {policy['primary_pair']}; fallback: {policy['availability_fallback_pair']}.",
             repair_parent_line,
             repair_start_instruction,
-            "Start only after the final aggregate result is released; child, subprocess, or partial receipts never trigger. If origin work is active, remain pending without a ledger.",
-            "Before each action read the plan, then run only the next check with ending_verification_plan.py run-check. A delegated check uses one ENDING_CHECK_WORKER with its saved pair and Skills; it writes evidence only.",
-            "Keep this End Task for later checks or closeout; use a compact continuation and never embed the full plan, manifest, or policy.",
-            "After fresh evidence exists, run ending_task_ledger.py once with the plan, ending-check-id=task-ending, assigned pair, producer receipt, and repair parent when present. Correctness, quality, protocol, timeout, or command failure never changes the Ending pair.",
-            "For durable closeout compare process, evidence, and effective project-result memory. Classify only as aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence; write memory_consistency_output only in durable mode. Scan personal memory without raw prompts, results, paths, secrets, or reasoning.",
-            "PASS requires every check. On failure or mismatch do not edit; send saved repair_dispatch and repair_prompt to the immutable origin. Keep the failed Ending visible; do not wait.",
-            "After terminal closeout, print structured model_assessment. Never call set_thread_archived or delete this End Task automatically.",
+            "Begin only after the final aggregate result is released; partial receipts never trigger. If origin active, wait without a ledger.",
+            "Read the plan first. Run only the next check via ending_verification_plan.py run-check; an ENDING_CHECK_WORKER writes evidence only.",
+            "Keep this task visible. Use compact continuation; omit full plan, manifest, and policy.",
+            "With fresh evidence, run ending_task_ledger.py once using the plan, ending-check-id=task-ending, pair, receipt, and repair parent. Correctness, quality, protocol, timeout, or command failure never changes the Ending pair.",
+            "On a real quota, five-hour limit, provider rate limit, or trusted retry-after, record-controller-restriction once, regenerate create-launches, and use its stronger controller. Never retry a cooling model; quality failures create no cooldown.",
+            "For durable closeout compare process, evidence, and effective project-result memory. Classify only as aligned, no_prior_memory, memory_record_defect, memory_projection_defect, skill_contract_defect, execution_drift, or insufficient_evidence; write memory_consistency_output only in durable mode. Exclude raw prompts, results, paths, secrets, and reasoning from personal memory.",
+            "PASS requires every check. On failure do not edit; create the saved independent projectless repair task. Never message, steer, interrupt, terminate, hand off, move, or mutate an existing session. If an active task owns a write surface, the repair waits without interruption. Keep the failed Ending visible.",
+            "After closeout print structured model_assessment. Never call set_thread_archived or auto-delete this End Task.",
         ]
     )
 
@@ -502,7 +599,7 @@ def _independent_backend_prompt(plan_path, plan, checks, evidence_outputs, assig
     )
 
 
-def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, repair_of_lifecycle_id="", backend_capabilities=None):
+def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, repair_of_lifecycle_id="", backend_capabilities=None, restriction_store=DEFAULT_CONTROLLER_RESTRICTION_STORE, now=None):
     plan_file, plan = _read_json(plan_path, "plan")
     project_root = Path(plan.get("project_root", "")).expanduser().resolve()
     if not project_root.is_dir():
@@ -510,9 +607,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, rep
     project_value = _clean(project_id, "project_id", 200)
     _inside(project_root, plan_file, "plan")
     origin_session = _normalize_origin_session(plan.get("origin_session"), project_root)
-    if not origin_session:
-        raise ValueError("origin_session is required for a repair-capable Ending launch")
-    if origin_session["project_id"] != project_value:
+    if origin_session and origin_session["project_id"] != project_value:
         raise ValueError("origin_session.project_id must match project_id")
     plan_repair_of_lifecycle_id = _normalize_repair_of_lifecycle_id(plan.get("repair_of_lifecycle_id"))
     launch_repair_of_lifecycle_id = _normalize_repair_of_lifecycle_id(repair_of_lifecycle_id)
@@ -526,6 +621,8 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, rep
     evidence_root = _inside(project_root, evidence_dir, "evidence_dir")
     final_receipt = _final_producer_receipt(project_root, producer_receipt)
     receipt_path = final_receipt["path"]
+    if final_receipt["payload"].get("project_memory_closeout_required") is True and plan.get("project_memory_closeout", {}).get("mode") != "durable":
+        raise ValueError("material update requires durable project_memory_closeout before Ending launch")
     tasks = plan.get("ending_tasks")
     if not isinstance(tasks, list) or not tasks:
         raise ValueError("plan must contain ending_tasks")
@@ -544,6 +641,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, rep
     selected_pair = policy.get("selected_pair")
     if any(not isinstance(pair, str) or "|" not in pair for pair in (primary_pair, selected_pair)) or (fallback_pair is not None and (not isinstance(fallback_pair, str) or "|" not in fallback_pair)):
         raise ValueError("ending_model_policy requires concrete primary and selected pairs plus an optional concrete fallback")
+    selected_pair, controller_ladder, active_restrictions = _select_available_controller(_registry(), restriction_store, now)
     title = f"End Task-{plan['task_name']}"
     memory_candidates_output = evidence_root / "task-ending.memory.json"
     memory_consistency_output = evidence_root / "task-ending.project-memory-consistency.json"
@@ -586,9 +684,7 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, rep
             "launch_gate": "blocked_until_a_projectless_host_can_create_and_read_back_the_global_end_task",
         }
     candidates = []
-    candidate_pairs = [(primary_pair, "primary")]
-    if fallback_pair:
-        candidate_pairs.append((fallback_pair, "availability_fallback"))
+    candidate_pairs = [(pair, "primary" if pair == primary_pair else "cooldown_escalation") for pair in controller_ladder]
     for pair, role in candidate_pairs:
         model, thinking = pair.split("|", 1)
         prompt = _worker_prompt(plan_file, plan, evidence_outputs, pair, receipt_path, resolved_repair_of_lifecycle_id)
@@ -614,7 +710,11 @@ def build_launch_spec(plan_path, evidence_dir, project_id, producer_receipt, rep
         "availability_fallback_pair": fallback_pair,
         "availability_fallback_reasons": policy["availability_fallback_reasons"],
         "default_availability_reason": policy.get("default_availability_reason"),
-        "approved_pairs": list(policy["approved_pairs"]),
+        "approved_pairs": controller_ladder,
+        "controller_restriction_store": str(Path(restriction_store).expanduser().resolve()),
+        "controller_restrictions": list(active_restrictions.values()),
+        "controller_selection_reason": "primary" if selected_pair == primary_pair else "controller_cooling",
+        "controller_selection": "spark_first_then_next_supported_pair_when_cooling",
         "complexity_score": plan["task_complexity"]["complexity_score"],
         "complexity_band": plan["task_complexity"]["complexity_band"],
         "tool": CREATE_THREAD_TOOL,
@@ -683,14 +783,15 @@ def acknowledge_launch(launch_spec_path, check_id, thread_id, host_id, project_i
     primary_pair = request.get("primary_pair")
     fallback_pair = request.get("availability_fallback_pair")
     availability_reason_value = _clean(availability_reason, "availability_reason", 80) if availability_reason else None
-    if actual_pair == fallback_pair:
-        if availability_reason_value not in request.get("availability_fallback_reasons", []):
-            raise ValueError("availability fallback requires a sanitized availability reason")
-    elif actual_pair == primary_pair:
+    if actual_pair != request.get("selected_pair"):
+        raise ValueError("selected_pair must match the restriction-aware launch request; record the restriction and regenerate before escalating")
+    if actual_pair == primary_pair:
         if availability_reason_value:
             raise ValueError("primary Ending launch must not claim an availability fallback reason")
     else:
-        raise ValueError("selected_pair is not the primary or availability fallback pair")
+        availability_reason_value = availability_reason_value or "controller_cooling"
+        if availability_reason_value != "controller_cooling":
+            raise ValueError("restriction-aware controller escalation requires controller_cooling")
     state_path = Path(state_output).expanduser().resolve()
     state = {
         "schema_version": LAUNCH_STATE_SCHEMA_VERSION,
@@ -804,14 +905,13 @@ def audit_launches(launch_spec_path, state_path):
         candidate = candidates.get(selected_pair)
         if selected_pair not in request.get("approved_pairs", []) or not isinstance(candidate, dict):
             failures.append(f"End Task {check_id} used an unapproved Ending pair")
-        if selected_pair == request.get("availability_fallback_pair"):
-            if launch.get("availability_fallback_reason") not in request.get("availability_fallback_reasons", []):
-                failures.append(f"End Task {check_id} fallback lacks an approved availability reason")
+        if selected_pair != request.get("selected_pair"):
+            failures.append(f"End Task {check_id} pair does not match the restriction-aware launch request")
         elif selected_pair == request.get("primary_pair"):
             if launch.get("availability_fallback_reason"):
                 failures.append(f"End Task {check_id} primary launch has an invalid fallback reason")
-        else:
-            failures.append(f"End Task {check_id} pair is neither primary nor availability fallback")
+        elif launch.get("availability_fallback_reason") != "controller_cooling":
+            failures.append(f"End Task {check_id} cooldown escalation lacks controller_cooling evidence")
         if launch.get("title") != request.get("title") or launch.get("request_sha256") != (candidate or {}).get("request_sha256"):
             failures.append(f"End Task {check_id} acknowledgement does not match its launch request")
         if check_id not in invalid_request_ids and placement_policy_valid and state_schema_valid and len(failures) == prior_failure_count:
@@ -922,7 +1022,14 @@ def parse_args(argv=None):
     launch.add_argument("--project-id", required=True)
     launch.add_argument("--producer-receipt", type=Path, required=True)
     launch.add_argument("--repair-of-lifecycle-id", default="")
+    launch.add_argument("--restriction-store", type=Path, default=DEFAULT_CONTROLLER_RESTRICTION_STORE)
     launch.add_argument("--output", type=Path, required=True)
+    restrict = subparsers.add_parser("record-controller-restriction")
+    restrict.add_argument("--pair", required=True)
+    restrict.add_argument("--reason", required=True)
+    restrict.add_argument("--store", type=Path, default=DEFAULT_CONTROLLER_RESTRICTION_STORE)
+    restrict.add_argument("--retry-at", default="")
+    restrict.add_argument("--source", default="launch_failure")
     acknowledge = subparsers.add_parser("ack-launch")
     acknowledge.add_argument("--launch-spec", type=Path, required=True)
     acknowledge.add_argument("--check-id", required=True)
@@ -955,9 +1062,12 @@ def main(argv=None):
         output = record_requirement_mismatch(args.evidence, args.summary)
         code = 0 if output["status"] == "pass" else 1
     elif args.command == "create-launches":
-        output = build_launch_spec(args.plan, args.evidence_dir, args.project_id, args.producer_receipt, args.repair_of_lifecycle_id)
+        output = build_launch_spec(args.plan, args.evidence_dir, args.project_id, args.producer_receipt, args.repair_of_lifecycle_id, restriction_store=args.restriction_store)
         _atomic_write(args.output, output)
         output = {"status": "written", "output": str(args.output.expanduser().resolve()), "required_launch_count": output["required_launch_count"], "selected_pairs": [item["selected_pair"] for item in output["launch_requests"]], "repair_of_lifecycle_id": output["repair_of_lifecycle_id"]}
+        code = 0
+    elif args.command == "record-controller-restriction":
+        output = record_controller_restriction(args.pair, args.reason, args.store, args.retry_at, args.source)
         code = 0
     elif args.command == "ack-launch":
         output = acknowledge_launch(args.launch_spec, args.check_id, args.thread_id, args.host_id, args.project_id, args.state_output, args.thread_scope, args.thread_project_id, args.placement_readback_tool, args.selected_pair, args.availability_reason)

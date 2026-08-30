@@ -183,11 +183,11 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         unity_text = (skills_root / "code-skill" / "references" / "unity-csharp-rules.md").read_text(encoding="utf-8")
         self.assertIn("Before presenting a light/local Python edit", python_text)
         self.assertIn("A durable Python change normally exposes `real_test`", python_text)
-        self.assertIn("no `real_test`, `information_update`, or `memory_update` surface", python_text)
+        self.assertIn("Only explicit `trivial_value_only` work with no other surface may skip", python_text)
         self.assertIn("Present `CODE READY` immediately after exactly one Quick Check", python_text)
         self.assertIn("one persistent global projectless Ending", python_text)
         self.assertIn("projectId=null", python_text)
-        self.assertIn("capability-routed Terra/Sol `ENDING_CHECK_WORKER`", python_text)
+        self.assertIn("Capability-routed Terra/Sol `ENDING_CHECK_WORKER`", python_text)
         self.assertIn("Multiple checks stay inside that one Ending lifecycle", python_text)
         self.assertNotIn("one scored/modelled persistent task per independent", python_text)
         self.assertIn("every required check must PASS", python_text)
@@ -198,7 +198,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertIn("global projectless Ending", unity_text)
         self.assertIn("projectId=null", unity_text)
         self.assertIn("Terra/Sol `ENDING_CHECK_WORKER`", unity_text)
-        self.assertIn("Only Spark availability/capability failure permits Luna-low", unity_text)
+        self.assertIn("durable quota/five-hour/provider cooldown selects the next stronger supported controller", unity_text)
         self.assertIn("All required checks must PASS", unity_text)
         self.assertIn("## Category router", unity_text)
 
@@ -224,11 +224,12 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         self.assertIn("capability_fingerprint", module.REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION)
         self.assertEqual(tuple(module.ACTIVE_MODEL_EFFORTS), module.ACTIVE_MODEL_ORDER)
 
-    def test_validator_enforces_fixed_fast_ending_and_rejects_score_routing(self):
-        self.assertIn("ending_fast_primary", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
-        self.assertIn("availability_only", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
-        self.assertIn("scheduler_unavailable", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
-        self.assertIn("required_modality_unavailable", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+    def test_validator_enforces_spark_first_restriction_aware_ending_and_rejects_score_routing(self):
+        self.assertIn("ENDING_PRIMARY_PAIR", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("DEFAULT_CONTROLLER_RESTRICTION_STORE", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("record_controller_restriction", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("_select_available_controller", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
+        self.assertIn("controller_cooling", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
         self.assertIn("ending_fast_route_fields", module.REQUIRED_OBSIDIAN_RUNNER_IMPLEMENTATION)
         self.assertIn("ENDING_FAST_FALLBACK_PAIR", module.REQUIRED_ROUTING_POLICY_ENDING_FAST_IMPLEMENTATION)
         self.assertIn("apply_ending_fast_route", module.REQUIRED_DISPATCHER_ENDING_FAST_IMPLEMENTATION)
@@ -238,9 +239,10 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
     def test_validator_enforces_process_execution_and_effective_memory_consistency(self):
         self.assertIn("effective_only", module.REQUIRED_DISPATCHER_MEMORY_CONSISTENCY_IMPLEMENTATION)
         self.assertIn("memory_record_defect", module.REQUIRED_ENDING_PLAN_IMPLEMENTATION)
-        self.assertIn("Skill/execution defects return origin", module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT)
+        self.assertIn("Skill/execution defects launch isolated Repair Task", module.REQUIRED_GLOBAL_BOOTSTRAP_TEXT)
         self.assertIn("Next tasks read only effective project-result memory", module.REQUIRED_WORKFLOW_MEMORY_CONSISTENCY_TEXT)
         self.assertEqual(module.ENDING_TERMINAL_CLOSEOUT["project_result_consistency"]["correction_owner"], "ending_memory_only")
+        self.assertEqual(module.ENDING_TERMINAL_CLOSEOUT["project_result_consistency"]["producer_defect_owner"], "isolated_projectless_repair")
 
     def test_shared_registry_contains_only_the_highest_numeric_gpt_family_and_source_digest(self):
         payload = json.loads((Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json").read_text(encoding="utf-8"))
@@ -530,7 +532,9 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
             self.assertIn("never auto-archive/delete", bootstrap_text)
             self.assertIn("attempts,first/retry pass", bootstrap_text)
             self.assertIn("FAIL/mismatch", bootstrap_text)
-            self.assertIn("never emulate another Ending,repair in verifier,or wait for origin", bootstrap_text)
+            self.assertIn("never repair in verifier", bootstrap_text)
+            self.assertIn("active task owns required write surface=>waits without messaging/interruption", bootstrap_text)
+            self.assertIn("never send/steer/interrupt/terminate/handoff/move/mutate any existing task/session", bootstrap_text)
             self.assertIn("all checks PASS", bootstrap_text)
             self.assertIn("BLOCKED only unavailable/external/limit", bootstrap_text)
             self.assertIn("Direct Sol-ultra no Skill", bootstrap_text)
@@ -620,7 +624,7 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
         temp_dir, models_cache, global_agents, global_skills = self.make_validation_inputs()
         try:
             agent_path = temp_dir / "agents" / "openai.yaml"
-            required_term = "ending_verification_plan.py"
+            required_term = "next stronger controller"
             agent_path.write_text(agent_path.read_text(encoding="utf-8").replace(required_term, "removed priority attempt"), encoding="utf-8")
             result = module.validate(temp_dir, models_cache, global_agents, global_skills, temp_dir / "hooks.json")
             self.assertFalse(result["valid"])

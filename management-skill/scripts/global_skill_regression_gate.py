@@ -522,7 +522,14 @@ def validate_memory_execution_consistency(evidence: dict[str, object]) -> tuple[
     all_scenarios_pass = set(scenarios) == MEMORY_EXECUTION_SCENARIO_IDS and all(isinstance(scenario, dict) and scenario.get("status") == "pass" for scenario in scenarios.values())
     record_correction_pass = record_correction.get("classification") == "memory_record_defect" and record_correction.get("correction_written") is True and record_correction.get("source_unchanged") is True
     projection_reconcile_pass = projection_reconcile.get("classification") == "memory_projection_defect" and projection_reconcile.get("reconciled") is True
-    producer_defects_pass = skill_defect.get("classification") == "skill_contract_defect" and skill_defect.get("memory_write") is False and skill_defect.get("return_to_origin") is True and execution_drift.get("classification") == "execution_drift" and execution_drift.get("memory_write") is False and execution_drift.get("return_to_origin") is True
+    producer_defects_pass = all(
+        scenario.get("memory_write") is False
+        and scenario.get("isolated_repair") is True
+        and scenario.get("existing_session_mutation") is False
+        and scenario.get("repair_launch_tool") == "codex_app__create_thread"
+        and scenario.get("active_task_conflict_action") == "wait_without_interruption"
+        for scenario in (skill_defect, execution_drift)
+    ) and skill_defect.get("classification") == "skill_contract_defect" and execution_drift.get("classification") == "execution_drift"
     next_recall_pass = next_recall.get("effective_only") is True and next_recall.get("superseded_hidden") is True
     invalid_result_pass = invalid_result_integrity.get("placeholder_rejected") is True and invalid_result_integrity.get("disposable_store_and_vault") is True and invalid_result_integrity.get("canonical_owner_readback") is True and invalid_result_integrity.get("exact_id_tombstone") is True and invalid_result_integrity.get("reconcile_blocked") is True
     coverage_authority_pass = coverage_authority_integrity.get("vault_parent_store_absent") is True and coverage_authority_integrity.get("canonical_store_used") is True and coverage_authority_integrity.get("two_model_stores_shared_authority") is True and coverage_authority_integrity.get("concurrent_projection_preserved") is True and coverage_authority_integrity.get("rogue_store_merge_verified") is True

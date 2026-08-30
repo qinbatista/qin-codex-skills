@@ -18,7 +18,7 @@ Select only what the inline request or admitted locked plan requires:
 
 ## Personal Routing Performance
 
-Task Analyze owns selection and storage. Every eligible text/code producer runs the catalog-derived adaptive route. A released result emits `ending-required` only when it exposes `real_test`, `information_update`, or `memory_update`; a no-surface result records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update`, regardless of score, risk, or stage count. The fixed Spark Ending controller owns the terminal record and may use saved Terra/Sol check workers only for semantic evidence; workers never write lifecycle or memory.
+Task Analyze owns selection and storage. A released result emits `ending-required` for observable surfaces or material structural/non-trivial-code/conceptual/process updates; material work requires durable project-memory closeout. Only explicit trivial value-only work with no other surface may skip. Spark-xhigh is first controller, with durable restriction-aware stronger escalation during real quota/five-hour/provider cooldowns. Check workers never write lifecycle or memory.
 
 - Store active private model experience in the receipt-backed local event ledger first, then project the same stable event ID to the matching native Obsidian category page and refresh its compact Model Switch/shared-category links. Recommendations merge and deduplicate both stores; neither is mirrored. Old local `task-analyze-skill/local/adaptive-routing/model_experience.json` remains legacy read-only history.
 - Record controlled task-profile enums, a generalized privacy-filtered task summary, requested/resolved/effective producer model and effort, execution/Real status, explicit success/failed model ranges, failure class, prompt-free workload hash, tokens, and timing only.
@@ -60,7 +60,7 @@ The local global skill directory may contain unrelated skills such as `chronicle
 
 ## README Generation
 
-The durable README sources are `assets/readme/github-readme-template.md` and `assets/readme/github-readme-template.zh.md`. Keep both compact and source-backed. They must explain 0–100 routing, exact history, Spark-low production priority, result-first Ending only for `real_test`, `information_update`, or `memory_update` surfaces, the explicit no-surface `intentionally_skipped_simple_task` exception, one fixed Spark-xhigh global projectless Ending controller with `list_threads` null-project readback, and capability-routed Terra/Sol semantic check workers that never own repair or lifecycle. Emphasize **finish code, run one Quick Check, return CODE READY, then let Ending verify**. Keep model, memory, benchmark, privacy, eight-Skill, and publication evidence contracts unchanged.
+The durable README templates must explain 0–100 routing, Spark-low producer priority, observable-or-material Ending triggers, mandatory memory closeout for material updates, the explicit trivial value-only skip, Spark-first restriction-aware controller escalation with recorded cooldown, null-project readback, isolated repair sessions that never interrupt active tasks, and evidence-only check workers. Emphasize **finish code, run one Quick Check, return CODE READY, then let Ending verify**.
 
 For README changes:
 
@@ -74,7 +74,7 @@ For README changes:
 
 The terminal ledger event records an Ending result automatically.
 
-For management work, present the completed requested result immediately; do not insert a foreground Mini or Fast Verify. Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines. Management is only the publication/deployment stage of a composite task: never replace implementation, focused-test, publication, deployment, Obsidian-record, and Ending identities with one management pair. When the route has two or more model-executed nodes, append the generated `Model stages (N):` block from the final `model_switch_summary`. First-result time ends at that presentation. A released result launches one visible global projectless Ending Task only when it exposes `real_test`, `information_update`, or `memory_update`; a no-surface result records `intentionally_skipped_simple_task` with `ending_skip_reason=no_real_test_or_information_or_memory_update` and no Ending. When required, that Ending remains in the global task list for Real Verify and terminal memory/classification/record closeout. The exact `create_thread` target is `{"type":"projectless"}`; the originating project root/ID remains execution context only and must not enter the target. `codex_app__list_threads` must read back `projectId=null` or absent before acknowledgement; project/current-task/same-task-subtask placement is BLOCKED. Deeper local/remote comparison, hash/no-diff proof, reports, logs, docs, or memory use real checks. It must have a real acknowledgement and `audit-launches` must report `end_task_trigger_rate=100%`; a missing or non-global acknowledgement is BLOCKED, not deployment verification. It remains visible after PASS/FAIL/BLOCKED and prints the structured model-attempt/suitability/next-route/Obsidian record summary; no End/Fix task auto-archives or deletes itself.
+For management work, present the completed result immediately and preserve every implementation/test/publication/deployment/memory/Ending identity. Observable or material results launch one visible global projectless Ending; material work requires durable memory closeout, while explicit trivial value-only work with no other surface may skip. Require exact projectless target, null-project readback, real acknowledgement, and `end_task_trigger_rate=100%`. Spark is first and controller cooldown escalation is restriction-backed; plan-saved Terra/Sol check workers remain evidence-only. FAIL records terminal memory/classification/record closeout, then creates a fresh independent projectless Repair Task that never contacts or interrupts existing sessions. Ending and Repair remain visible.
 
 ## Commands
 
@@ -94,6 +94,10 @@ Consumer `deploy`, `pull`, and legacy `sync` stop after safe replacement. A `pul
 `sync_global_skills.py status --source-dir <repository-root> --skills-dir <global-skills-directory>` compares repository source with both the remote branch and the deployed managed Skill folders, and exits nonzero on managed-Skill deployment drift. User global `AGENTS.md` is intentionally outside this parity check. Use `install-global-agents` only when replacing the documented Codex global template is deliberate; it creates a persistent backup, `list-global-agents-backups` shows recovery IDs, and `restore-global-agents --backup-id <id>` restores one exact prior entry. `bridge-user-skills` previews the documented user-Skill-path links by default and changes nothing without `--apply`.
 
 Use snapshot/dry-run/status modes for testing. Do not call `sync` or `push` in a task that was authorized only to edit/test local skills.
+
+## Result Model Disclosure
+
+Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into repeated model, evidence, previous-model, switch-summary, or reason lines. For a composite result, append the generated `Model stages (N):` block so each result, publication, deployment, and Ending stage retains its own score, pair, purpose, dependencies, and status.
 
 ## Skill runtime platform gate
 

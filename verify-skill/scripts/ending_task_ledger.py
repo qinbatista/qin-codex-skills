@@ -32,18 +32,19 @@ ROUTE_CHANGES = {"upgrade", "downgrade", "freeze", "no_switch", "operational_fal
 UNKNOWN_MODEL_PAIR = "unknown|unknown"
 ENDING_LAUNCH_ID = "task-ending"
 AVAILABILITY_FALLBACK_REASONS = {
+    "controller_cooling",
     "primary_model_unavailable",
     "primary_effort_unsupported",
     "primary_pair_not_in_registry",
     "scheduler_unavailable",
     "required_modality_unavailable",
 }
-REPAIR_DISPATCH_TOOL = "codex_app__send_message_to_thread"
+REPAIR_DISPATCH_TOOL = "codex_app__create_thread"
 REQUIRED_MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
 OPTIONAL_MODEL_CONTEXT_FIELDS = ("step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source")
 MODEL_CONTEXT_FIELDS = REQUIRED_MODEL_CONTEXT_FIELDS + OPTIONAL_MODEL_CONTEXT_FIELDS
 PROJECT_MEMORY_CLASSIFICATIONS = {"aligned", "no_prior_memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift", "insufficient_evidence"}
-PROJECT_MEMORY_ACTIONS = {"record", "correction", "reconcile", "origin_repair", "blocked"}
+PROJECT_MEMORY_ACTIONS = {"record", "correction", "reconcile", "isolated_repair", "blocked"}
 PROJECT_MEMORY_STATUS_VALUES = {"match", "absent", "mismatch", "projection_missing", "projection_mismatch", "unavailable"}
 CONSISTENCY_STATUS_VALUES = {"pass", "fail", "unavailable"}
 PROJECT_MEMORY_INTENT_FIELDS = {"mode", "module", "scope", "change_kind", "summary", "reason", "result", "files", "symbols", "decisions", "risks", "supersedes"}
@@ -63,8 +64,8 @@ PROJECT_MEMORY_CLASSIFICATION_RULES = {
     "no_prior_memory": {"event": "pass", "action": "record", "process_status": "pass", "execution_status": "pass", "memory_status": "absent"},
     "memory_record_defect": {"event": "pass", "action": "correction", "process_status": "pass", "execution_status": "pass", "memory_status": "mismatch"},
     "memory_projection_defect": {"event": "pass", "action": "reconcile", "process_status": "pass", "execution_status": "pass", "memory_status": {"projection_missing", "projection_mismatch"}},
-    "skill_contract_defect": {"event": "fail", "action": "origin_repair", "process_status": "fail"},
-    "execution_drift": {"event": "fail", "action": "origin_repair", "process_status": "pass", "execution_status": "fail"},
+    "skill_contract_defect": {"event": "fail", "action": "isolated_repair", "process_status": "fail"},
+    "execution_drift": {"event": "fail", "action": "isolated_repair", "process_status": "pass", "execution_status": "fail"},
     "insufficient_evidence": {"event": "blocked", "action": "blocked"},
 }
 
@@ -195,14 +196,12 @@ def _ending_plan_assignment(plan_path, ending_check_id, selected_pair, availabil
         raise ValueError("actual Ending selected_pair is not approved by the verification plan")
     reason_value = _single_line(availability_reason, "availability_fallback_reason", required=False, max_length=80) or None
     allowed_reasons = policy.get("availability_fallback_reasons")
-    if fallback_pair and selected_pair == fallback_pair:
-        if reason_value not in AVAILABILITY_FALLBACK_REASONS or reason_value not in (allowed_reasons or []):
-            raise ValueError("availability fallback requires a sanitized availability reason")
-    elif selected_pair == primary_pair:
+    if selected_pair == primary_pair:
         if reason_value:
             raise ValueError("primary Ending pair must not claim an availability fallback reason")
     else:
-        raise ValueError("actual Ending selected_pair is neither the primary nor availability fallback pair")
+        if reason_value != "controller_cooling" or reason_value not in (allowed_reasons or []):
+            raise ValueError("restriction-aware Ending escalation requires controller_cooling")
     return {
         "primary_pair": primary_pair,
         "availability_fallback_pair": fallback_pair,
@@ -540,7 +539,7 @@ def _record_project_memory_closeout(state, event_name, consistency_file):
     if consistency["mode"] == "none":
         return consistency
     if event_name != "pass":
-        return {**consistency, "status": "origin-repair-required" if event_name == "fail" else "blocked", "written": False}
+        return {**consistency, "status": "isolated-repair-required" if event_name == "fail" else "blocked", "written": False}
     intent = _project_memory_intent(state)
     memory = _load_project_memory_module()
     if consistency["action"] == "reconcile":
@@ -778,13 +777,13 @@ def _model_assessment(state, event_name, failure_class, model_learning, attempt_
         next_pair = UNKNOWN_MODEL_PAIR
     ending_assignment = state.get("ending_model_assignment") if isinstance(state.get("ending_model_assignment"), dict) else {}
     availability_reason = state.get("availability_fallback_reason")
-    ending_is_fallback = bool(availability_reason and ending_pair == ending_assignment.get("availability_fallback_pair"))
+    ending_is_fallback = bool(availability_reason and ending_pair != ending_assignment.get("primary_pair"))
     if ending_pair == UNKNOWN_MODEL_PAIR:
         ending_suitability = "ending_pair_unassigned"
         ending_routing_action = "no_ending_route_assignment"
     else:
-        ending_suitability = "availability_fallback_closeout" if ending_is_fallback else "fixed_fast_closeout"
-        ending_routing_action = "availability_fallback_only" if ending_is_fallback else "retain_fixed_fast_ending_pair"
+        ending_suitability = "controller_cooldown_escalation_closeout" if ending_is_fallback else "spark_first_closeout"
+        ending_routing_action = "retain_restriction_aware_controller" if ending_is_fallback else "retain_spark_first_controller"
     current_attempt = {
         "attempt": attempt_number,
         "lifecycle_id": state.get("lifecycle_id"),
@@ -866,8 +865,7 @@ def _repair_prompt(state, event):
     files_text = ", ".join(state.get("files") or ["the files authorized by the original result task"])
     next_attempt = int(state.get("attempt_index", 0)) + 1
     max_attempts = int(state.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS))
-    origin = state.get("origin_session") or {}
-    return "\n".join(["ENDING_REPAIR_REQUEST", "Continue in this original source session; do not create a separate repair session or let the Ending verifier edit the target.", f"Original task: {state['summary']}", "Read the original user request and the current delivered result in this session before choosing the repair.", f"Acceptance check: {state.get('ending_check_id') or 'the same saved Ending check'}", f"Verification plan relative to project root: {plan_text}", f"Project binding id: {state.get('project_id') or 'resolve the exact saved project before launching the next Ending'}", f"Origin session thread id: {origin.get('thread_id') or 'current source session'}", f"Origin session host id: {origin.get('host_id') or 'current source session host'}", f"Repair attempt to run: {next_attempt} of {max_attempts}", f"Failure class: {failure_class}", f"Error fingerprint: {error_fingerprint}", f"Failure meaning: {failure_instruction}", "Observed evidence:", evidence_text, f"Authorized result files: {files_text}", "Required actions:", "1. Compare the current result with the original user request and the acceptance contract; if the result still differs, fix the smallest authorized producer path.", "2. Run the producer Quick Check and present the repaired result in this same source session.", f"3. Start a fresh global projectless Ending for the same acceptance check as a child of lifecycle {state['lifecycle_id']} using --repair-of-lifecycle-id; never reuse the failed verdict.", "4. Carry the same project binding only as execution context, create the Ending with exact projectless target, require list_threads projectId=null/absent readback, acknowledge it, and return without waiting for its verdict.", "5. If the repair limit is exhausted or the source session cannot complete the repair, record BLOCKED with the exact evidence; do not claim PASS."])
+    return "\n".join(["ENDING_REPAIR_TASK", "This is a fresh independent global projectless repair session. Never send to, steer, interrupt, terminate, hand off, move, or mutate an existing task or session.", f"Original task summary: {state['summary']}", "Treat any captured origin session as immutable evidence only; never resume or message it.", f"Acceptance check: {state.get('ending_check_id') or 'the same saved Ending check'}", f"Verification plan relative to project root: {plan_text}", f"Project binding id: {state.get('project_id') or 'resolve the exact saved project before launching the next Ending'}", f"Repair attempt to run: {next_attempt} of {max_attempts}", f"Failure class: {failure_class}", f"Error fingerprint: {error_fingerprint}", f"Failure meaning: {failure_instruction}", "Observed evidence:", evidence_text, f"Authorized result files: {files_text}", "Required actions:", "1. Inspect task ownership read-only before writing. If an active task owns a required file or state, record waiting_for_active_task_release and wait without messaging or interrupting it.", "2. After the write surface is free, compare the delivered result with the acceptance contract and repair only the smallest authorized producer path.", "3. Run the producer Quick Check and present the repaired result in this independent repair session.", f"4. Start a fresh global projectless Ending for the same acceptance check as a child of lifecycle {state['lifecycle_id']} using --repair-of-lifecycle-id; never reuse the failed verdict.", "5. Carry the project binding only as execution context, require list_threads projectId=null/absent readback, acknowledge the new Ending, and return without waiting.", "6. If the repair limit is exhausted or external state prevents repair, record BLOCKED with exact evidence; active-task ownership is WAITING, not permission to interrupt."])
 
 
 def _repair_handoff(state, event):
@@ -875,13 +873,11 @@ def _repair_handoff(state, event):
     origin = state.get("origin_session")
     next_attempt = int(state.get("attempt_index", 0)) + 1
     max_attempts = int(state.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS))
-    if not origin:
-        return {**common, "action": "blocked_origin_session_unavailable", "blocked_reason": "Ending automatic repair requires the exact source session thread_id and host_id captured at launch.", "requires_origin_session": True}
     if next_attempt > max_attempts:
-        return {**common, "action": "repair_limit_exhausted", "blocked_reason": f"No automatic repair prompt is allowed after {max_attempts} repair attempts.", "requires_origin_session": True, "origin_session": origin}
+        return {**common, "action": "repair_limit_exhausted", "blocked_reason": f"No automatic repair task is allowed after {max_attempts} repair attempts.", "requires_origin_session": False, "origin_context": origin}
     prompt = _repair_prompt(state, event)
-    dispatch = {"tool": REPAIR_DISPATCH_TOOL, "arguments": {"threadId": origin["thread_id"], "hostId": origin["host_id"], "prompt": prompt}, "required": True}
-    return {**common, "action": "send_repair_prompt_to_origin_session_then_fresh_ending", "requires_origin_session": True, "origin_session": origin, "repair_dispatch": dispatch, "repair_prompt": prompt, "next_step": "origin_session_repairs_then_starts_fresh_ending"}
+    launch = {"tool": REPAIR_DISPATCH_TOOL, "arguments": {"target": {"type": "projectless"}, "title": f"Repair Task-{state.get('ending_check_id') or state['lifecycle_id']}", "prompt": prompt}, "required": True}
+    return {**common, "action": "create_isolated_projectless_repair_then_fresh_ending", "requires_origin_session": False, "origin_context": origin, "origin_context_immutable": True, "origin_context_optional": True, "repair_launch": launch, "repair_prompt": prompt, "session_isolation": {"new_projectless_session": True, "prohibited_existing_session_actions": ["send", "steer", "interrupt", "terminate", "handoff", "move", "mutate"], "active_task_conflict_action": "wait_without_interruption"}, "conflict_policy": "waiting_for_active_task_release_without_interruption", "next_step": "independent_repair_waits_for_active_task_release_or_repairs_then_starts_fresh_ending"}
 
 
 def start_lifecycle(task_kind, cwd, summary, project_root=None, module="", files=None, repair_of_lifecycle_id="", store=DEFAULT_STORE, max_repair_attempts=DEFAULT_MAX_REPAIR_ATTEMPTS, producer_receipt=None, complexity_score=None, complexity_band="", verification_required=False, verification_plan=None, ending_check_id="", selected_pair="", requested_pair="", resolved_pair="", effective_pair="", previous_pair="", model_evidence="", route_change="", switch_summary="", reason="", project_id="", origin_thread_id="", origin_host_id="", symbol="", availability_fallback_reason="", late_repair_reason=""):

@@ -110,8 +110,8 @@ ALLOWED_SPARK_EXCEPTION_CATEGORIES = {
     "quality_failure",
 }
 ENDING_SKILL = "verify-skill"
-PROJECT_RESULT_CONSISTENCY_ACTIONS = {"aligned": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "return_to_origin": False}, "no_prior_memory": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "return_to_origin": False}, "memory_record_defect": {"ending_status": "pass", "action": "append_correction", "memory_write": True, "return_to_origin": False}, "memory_projection_defect": {"ending_status": "pass", "action": "reconcile_projection", "memory_write": False, "return_to_origin": False}, "skill_contract_defect": {"ending_status": "fail", "action": "return_to_origin", "memory_write": False, "return_to_origin": True}, "execution_drift": {"ending_status": "fail", "action": "return_to_origin", "memory_write": False, "return_to_origin": True}, "insufficient_evidence": {"ending_status": "blocked", "action": "block", "memory_write": False, "return_to_origin": False}}
-PROJECT_RESULT_CONSISTENCY_POLICY = {"layers": ["process_skill_and_agents", "real_execution", "effective_result_memory"], "correction_owner": "ending_memory_only", "producer_defect_owner": "immutable_origin", "next_task_memory": "effective_only", "actions": PROJECT_RESULT_CONSISTENCY_ACTIONS}
+PROJECT_RESULT_CONSISTENCY_ACTIONS = {"aligned": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "existing_session_mutation": False}, "no_prior_memory": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "existing_session_mutation": False}, "memory_record_defect": {"ending_status": "pass", "action": "append_correction", "memory_write": True, "existing_session_mutation": False}, "memory_projection_defect": {"ending_status": "pass", "action": "reconcile_projection", "memory_write": False, "existing_session_mutation": False}, "skill_contract_defect": {"ending_status": "fail", "action": "launch_isolated_projectless_repair", "memory_write": False, "existing_session_mutation": False}, "execution_drift": {"ending_status": "fail", "action": "launch_isolated_projectless_repair", "memory_write": False, "existing_session_mutation": False}, "insufficient_evidence": {"ending_status": "blocked", "action": "block", "memory_write": False, "existing_session_mutation": False}}
+PROJECT_RESULT_CONSISTENCY_POLICY = {"layers": ["process_skill_and_agents", "real_execution", "effective_result_memory"], "correction_owner": "ending_memory_only", "producer_defect_owner": "isolated_projectless_repair", "origin_policy": "immutable_evidence_only", "active_task_conflict": "wait_without_interruption", "next_task_memory": "effective_only", "actions": PROJECT_RESULT_CONSISTENCY_ACTIONS}
 ENDING_TERMINAL_CLOSEOUT = {"project_result_memory": "after_all_checks_pass", "project_result_consistency": PROJECT_RESULT_CONSISTENCY_POLICY, "routing_classification": "terminal", "model_record": "terminal", "single_closeout": True}
 
 CONTROLLED_FIELDS = [
@@ -1119,8 +1119,8 @@ def validate_plan(
     if "ending_required" in plan and not isinstance(declared_ending_required, bool):
         failures.append("ending_required must be a boolean when declared")
     if declared_ending_required is False:
-        if plan.get("ending_skip_reason") != "no_real_test_or_information_or_memory_update":
-            failures.append("a no-surface plan must declare ending_skip_reason=no_real_test_or_information_or_memory_update")
+        if plan.get("ending_skip_reason") != "no_real_test_or_information_or_memory_or_material_update":
+            failures.append("a no-surface plan must declare ending_skip_reason=no_real_test_or_information_or_memory_or_material_update")
         if ending_ids:
             failures.append("a no-surface plan must not contain a task-level Ending node")
     elif len(ending_ids) != 1:

@@ -2,7 +2,7 @@
 
 # 🚀 Auto Best Model
 
-**专用于 Codex · 每个任务评分 · 先完成主任务 · 只有真实证据才做 Ending**
+**专用于 Codex · 每个任务评分 · 先完成主任务 · 真实证据或重要更新必须做 Ending**
 
 **优势：** 简单任务快跑，复杂任务选择最低正确模型，主结果先交付，私有学习留在本地，最后独立验收。已保存的最高版本家族质量梯级 · 只有你主动要求本地模型更新时才刷新 · 0–24 分小型低风险编辑先经同会话结果门再试 Spark-low · 更大任务使用已保存的质量梯级
 
@@ -23,15 +23,15 @@
 
 <picture>
   <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-zh-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="先评分并完成主结果，只有真实证据才创建独立 projectless Ending">
+  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="先评分并完成主结果，真实证据或重要更新会创建独立 projectless Ending">
 </picture>
 
-## ✅ 先完成主任务，有真实证据才做 Ending
+## ✅ 先完成主任务；真实证据或重要更新必须做 Ending
 
 1. 每个任务按 0–100 评分，读取相关 Skill 并完成要求。代码只运行一次最小 Quick Check，然后返回 `CODE READY`。
-2. 只有 `real_test`、`information_update` 或 `memory_update` 才发出 `ending-required`；否则记录明确 skip。没有 surface 时，低风险、单结果 small 任务也不创建 Ending。
-3. 唯一全局 projectless `gpt-5.3-codex-spark|xhigh` 主控运行最小真实/完成检查。用 `create_thread.target={"type":"projectless"}` 创建，并由 `list_threads` 读回 `projectId=null` 或字段不存在；缺少 thread 回执就是 BLOCKED。
-4. Terra/Sol worker 只写语义证据，不编辑或修复。失败时通过 `codex_app__send_message_to_thread` 把精确证据送回不可变 origin。PASS/FAIL/BLOCKED 永久可见；终态写入历史且不自动归档或删除。
+2. 有真实 surface，或属于结构、非纯数值代码、思路、流程的重要更新时，必须发出 `ending-required`；重要更新还必须完成持久项目记忆。只有明确的纯数值小改动且没有其他 surface 才可 skip。
+3. 唯一全局 projectless Ending 必须读回空项目上下文。Spark-xhigh 优先；真实额度、五小时或 provider 限制会记录限制时间与重试时间，冷却期间直接使用下一档更强主控，冷却结束后恢复 Spark 优先。
+4. 失败时新建独立 projectless Repair Task，绝不发送、steer、中止、终止、handoff、移动或修改任何现有任务/session；若写入面由活动任务占用，Repair 只等待且不发消息打断。Ending 与 Repair 都保持可见。
 
 ## ⚡ 模型与私有学习
 

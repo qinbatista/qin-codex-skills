@@ -40,9 +40,9 @@
 
     <rect x="70" y="875" width="1460" height="210" rx="24" fill="#24173c" stroke="#c084fc" stroke-width="2"/>
     <text x="105" y="922" fill="#e9d5ff" font-size="20" font-weight="800">🌙 AFTER THE RESULT · ENDING TASK</text>
-    <rect x="105" y="960" width="390" height="84" rx="16" fill="#102b3d" stroke="#38bdf8"/><text x="300" y="994" text-anchor="middle" fill="#f8fafc" font-size="19" font-weight="700">🔬 Smallest real checks</text><text x="300" y="1022" text-anchor="middle" fill="#bae6fd" font-size="16">[fixed Spark-xhigh]</text>
+    <rect x="105" y="960" width="390" height="84" rx="16" fill="#102b3d" stroke="#38bdf8"/><text x="300" y="994" text-anchor="middle" fill="#f8fafc" font-size="19" font-weight="700">🔬 Smallest real checks</text><text x="300" y="1022" text-anchor="middle" fill="#bae6fd" font-size="16">[Spark-first controller]</text>
     <rect x="605" y="960" width="390" height="84" rx="16" fill="#2b1c42" stroke="#c084fc"/><text x="800" y="994" text-anchor="middle" fill="#f8fafc" font-size="19" font-weight="700">⚡ One fast Ending</text><text x="800" y="1022" text-anchor="middle" fill="#e9d5ff" font-size="16">[all explicit checks]</text>
-    <rect x="1110" y="960" width="380" height="84" rx="16" fill="#123227" stroke="#34d399"/><text x="1300" y="994" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">📝 Terminal memory · classification</text><text x="1300" y="1022" text-anchor="middle" fill="#a7f3d0" font-size="16">[unavailable → Luna-low]</text>
-    <text x="800" y="1122" text-anchor="middle" fill="#fca5a5" font-size="20" font-weight="700">Background failure → 🚨 notify the user + reopen the task</text>
+    <rect x="1110" y="960" width="380" height="84" rx="16" fill="#123227" stroke="#34d399"/><text x="1300" y="994" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="700">📝 Terminal memory · classification</text><text x="1300" y="1022" text-anchor="middle" fill="#a7f3d0" font-size="16">[cooling → next stronger]</text>
+    <text x="800" y="1122" text-anchor="middle" fill="#fca5a5" font-size="20" font-weight="700">Verified failure → launch isolated Repair Task · current task stays untouched</text>
   </g>
 </svg>

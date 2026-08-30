@@ -44,13 +44,14 @@ class PromptContractTests(unittest.TestCase):
 
     def test_result_first_and_target_validation_are_separate(self):
         self.assertIn("Present the completed prompt or instruction artifact immediately", self.prompt_skill)
-        self.assertIn("A low-risk single-result small task", self.prompt_skill)
-        self.assertIn("intentionally_skipped_simple_task", self.prompt_skill)
+        self.assertIn("conceptual/process material", self.prompt_skill)
+        self.assertIn("trivial value-only", self.prompt_skill)
         self.assertIn("ending-required", self.prompt_skill)
-        self.assertIn("Keep representative cases as distinct checks in one `ending_verification_plan.py` plan", self.prompt_skill)
-        self.assertIn("gpt-5.3-codex-spark|xhigh", self.prompt_skill)
-        self.assertIn("registry-floor Luna-low", self.prompt_skill)
-        self.assertIn("all must PASS", self.prompt_skill)
+        self.assertIn("durable project-memory closeout", self.prompt_skill)
+        self.assertIn("global projectless Ending", self.prompt_skill)
+        self.assertIn("Spark-xhigh is first", self.prompt_skill)
+        self.assertIn("next stronger supported controller", self.prompt_skill)
+        self.assertIn("all checks PASS", self.prompt_skill)
         self.assertIn("Do not put an external trial run, validator, report, or closeout step before that first presentation", self.prompt_skill)
 
     def test_conflict_resolutions_are_explicit(self):
