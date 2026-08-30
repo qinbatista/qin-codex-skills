@@ -48,6 +48,27 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertFalse(module.immediate_operational_fallback(completed))
         self.assertFalse(module.immediate_operational_fallback(unauthorized))
 
+    def test_confirmed_rate_limit_with_runtime_identity_and_null_telemetry_can_fallback(self):
+        limited = module.annotate_operational_fallback({
+            "status": "fail",
+            "failure_class": "availability",
+            "failure_detail": "rate_limited",
+            "turn_completed": False,
+            "result_published": False,
+            "resolved_model": "gpt-5.3-codex-spark",
+            "resolved_pair": "gpt-5.3-codex-spark|low",
+            "effective_model": "gpt-5.3-codex-spark",
+            "effective_pair": "gpt-5.3-codex-spark|low",
+            "availability": {"has_credits": False},
+            "tokens": {"input_tokens": None, "output_tokens": None, "total_tokens": None},
+            "route_attempts": [{}],
+        })
+        self.assertTrue(module.immediate_operational_fallback(limited))
+        self.assertTrue(limited["fallback_eligible"])
+        self.assertFalse(limited.get("pre_execution_failure", False))
+        self.assertEqual(limited["failure_stage"], "runtime")
+        self.assertEqual(limited["tokens"]["total_tokens"], 0)
+
     def test_parse_stdout_uses_only_safe_summary_fields(self):
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-1"}), json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "secret response text"}}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2}})])
         summary = module.parse_stdout_events(stdout_text)

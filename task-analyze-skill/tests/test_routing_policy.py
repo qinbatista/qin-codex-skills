@@ -52,6 +52,15 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertTrue(route["graph_required"])
         self.assertGreaterEqual(route["complexity_score"], 75)
 
+    def test_question_lead_in_does_not_hide_delayed_chinese_mutation_and_multi_stage_graph(self):
+        prompt = "你测试了吗？测试后给我两边 mac 和 mywin 都更新一下，有问题继续排查，再对比 C# 规则去重分类，最后测试并模拟近期任务。"
+        route = module.analyze_prompt_routing(prompt)
+        self.assertEqual(route["task_type"], "code")
+        self.assertEqual(route["material_result_stages"], ["inspect", "simulate", "change", "test"])
+        self.assertTrue(route["graph_required"])
+        self.assertGreaterEqual(route["complexity_score"], 50)
+        self.assertEqual(module.infer_prompt_task_type("请解释如何更新两台电脑？"), "question")
+
     def test_sanitized_task_classes_preserve_code_visual_memory_file_and_question_boundaries(self):
         cases = [("检查 SVG 源图重叠，修复错位并运行回归与渲染验收。", "code", True), ("开始优化 memory 的代码风格召回，然后测试并部署。", "code", True), ("核对 UnityProjects 文件迁移并验证哈希，不修改代码。", "analysis", True), ("请解释 SQLite WAL 是什么？", "question", False), ("检查 processor.py 是否有 bug，不要修改。", "question", False)]
         for prompt, task_type, graph_required in cases:

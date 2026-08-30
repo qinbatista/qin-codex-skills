@@ -172,6 +172,15 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         self.assertIn("result memory never replaces this process gate", self.unity_structure)
         self.assertIn("may refine paths, bootstrap, naming, and stricter constraints", self.unity_structure)
 
+    def test_global_unity_profile_routes_consumer_contracts_without_owning_them(self):
+        self.assertIn("## Shared and consumer boundary", self.unity_rules)
+        self.assertIn("must not repeat the Controller/Manager/ScriptableObject core", self.unity_rules)
+        self.assertIn("fixed-membership or pool topology", self.unity_rules)
+        self.assertIn("centralized Job/native-container boundary", self.unity_rules)
+        global_references = "\n".join((self.unity_rules, self.unity_structure, self.unity_service))
+        for consumer_only_term in ("SpriteTamerSystem", "SpriteMovementState", "JobRuntimeData", "FollowingPlayer"):
+            self.assertNotIn(consumer_only_term, global_references)
+
     def test_project_agents_companion_is_compact_by_design(self):
         self.assertIn("## Conflict precedence and explicit exceptions", self.unity_structure)
         self.assertIn("project `AGENTS.md` may carry a compact reiteration", self.unity_structure)

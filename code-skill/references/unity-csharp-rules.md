@@ -18,6 +18,12 @@ Always apply this common file. Then load only the categories materially matched 
 
 An ordinary local C# edit with none of those surfaces loads no category file. The Code Gate announces the common rules and matched categories before source inspection or editing.
 
+## Shared and consumer boundary
+
+This reference owns concise, reusable Unity C# writing rules and category routing. A consuming game Skill loads this common profile and its matched categories first; it must not repeat the Controller/Manager/ScriptableObject core, generic lifecycle guidance, C# style, direct-call rules, or provider boundary.
+
+A consuming game Skill adds only concrete game contracts that this reusable profile cannot decide: its named system owners, fixed-membership or pool topology, Addressables instance lifetime, centralized Job/native-container boundary, feature-state handoff, and explicitly recorded exceptions. Keep each stricter consumer invariant once in that consumer Skill, with its current-system record as the concrete authority.
+
 ## Workflow
 
 1. Read repo-level `AGENTS.md`, local style notes, or direct user instructions, and let tighter local rules override this shared style.

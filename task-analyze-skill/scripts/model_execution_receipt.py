@@ -269,13 +269,26 @@ def normalize_fallback_pairs(values):
     return [pair_text(model, effort) for model, effort in pairs]
 
 
+def _positive_token_observed(tokens):
+    return any(isinstance(tokens.get(field), int) and tokens.get(field) > 0 for field in TOKEN_FIELDS)
+
+
+def _confirmed_unconsumed_availability_failure(receipt, tokens):
+    if receipt.get("failure_class") != "availability" or _positive_token_observed(tokens):
+        return False
+    availability = receipt.get("availability") if isinstance(receipt.get("availability"), dict) else {}
+    return receipt.get("failure_detail") in {"rate_limited", "model_unavailable"} or availability.get("has_credits") is False or bool(availability.get("rate_limit_reached_type"))
+
+
 def immediate_operational_fallback(receipt):
     if not isinstance(receipt, dict) or receipt.get("status") == "pass" or receipt.get("result_published") is True or receipt.get("turn_completed") is True:
         return False
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
-    if tokens.get("total_tokens") != 0 or receipt.get("failure_class") not in RUNTIME_FAILURES:
+    if receipt.get("failure_class") not in RUNTIME_FAILURES or tokens.get("total_tokens") not in {0, None} or _positive_token_observed(tokens):
         return False
     if receipt.get("pre_execution_failure") is True:
+        return True
+    if _confirmed_unconsumed_availability_failure(receipt, tokens):
         return True
     return not any(receipt.get(field) for field in ("resolved_model", "resolved_pair", "effective_model", "effective_pair"))
 
@@ -285,13 +298,14 @@ def annotate_operational_fallback(receipt):
         return receipt
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     no_runtime_identity = not any(receipt.get(field) for field in ("resolved_model", "resolved_pair", "effective_model", "effective_pair"))
+    confirmed_unconsumed_availability = _confirmed_unconsumed_availability_failure(receipt, tokens)
     if (
         receipt.get("status") != "pass"
         and receipt.get("turn_completed") is not True
-        and no_runtime_identity
+        and (no_runtime_identity or confirmed_unconsumed_availability)
         and receipt.get("failure_class") in RUNTIME_FAILURES
         and tokens.get("total_tokens") is None
-        and not any(isinstance(tokens.get(field), int) and tokens.get(field) > 0 for field in TOKEN_FIELDS)
+        and not _positive_token_observed(tokens)
     ):
         tokens = {field: 0 for field in TOKEN_FIELDS}
         receipt["tokens"] = tokens

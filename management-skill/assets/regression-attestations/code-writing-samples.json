@@ -2,7 +2,7 @@
   "schema_version": 1,
   "check_id": "code-sample-attestation",
   "status": "pass",
-  "created_at": "2026-08-30T21:23:14.059429+00:00",
+  "created_at": "2026-08-30T22:16:55.692347+00:00",
   "trial_count": 3,
   "passed_trials": 3,
   "watched_files": {
@@ -11,6 +11,6 @@
     "code-skill/references/code-writing-philosophy.md": "1962687fecbd28f6b12c2c4c53b054e82ad078615f5dac24cc7043f0f2ead1d5",
     "code-skill/references/coding-approach.md": "24d02e70e772189c7f3570b5f2724031abaa42e2261f87a3178de9ae87e07762",
     "code-skill/references/python-rules.md": "004bd60e449094e0b0400a33d0f39724a430b42b25f92393d818569e53225b56",
-    "code-skill/tests/test_code_writing_philosophy.py": "00484f302b1b6c2dd570b28b185b8c0dd3fca4787ef103b24e18dea6c2375cc4"
+    "code-skill/tests/test_code_writing_philosophy.py": "12ab1df3e74880fc8e70b5d3e4369f3d5585c6ec852f151a6ce8cb2482349708"
   }
 }

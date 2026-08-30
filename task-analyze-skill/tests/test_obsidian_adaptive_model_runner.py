@@ -848,6 +848,54 @@ source_files must list both sources."""
         self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.6-terra|medium"])
         self.assertEqual(len(receipt["route_attempts"]), 2)
 
+    def test_selected_pair_confirmed_rate_limit_with_null_telemetry_falls_back_once(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            calls = []
+
+            def fake_run(receipt_args, prompt):
+                pair = f"{receipt_args.model}|{receipt_args.effort}"
+                calls.append(pair)
+                if len(calls) == 1:
+                    return {
+                        "status": "fail",
+                        "failure_class": "availability",
+                        "failure_detail": "rate_limited",
+                        "requested_pair": pair,
+                        "resolved_model": receipt_args.model,
+                        "resolved_pair": pair,
+                        "effective_model": receipt_args.model,
+                        "effective_pair": pair,
+                        "availability": {"has_credits": False},
+                        "turn_completed": False,
+                        "result_published": False,
+                        "tokens": {"input_tokens": None, "output_tokens": None, "total_tokens": None},
+                        "process_elapsed_ms": 2,
+                        "route_attempts": [{"requested_pair": pair, "resolved_pair": pair, "effective_pair": pair, "tokens": {"total_tokens": None}}],
+                    }
+                receipt_args.result_output.write_text("LIMIT FALLBACK RESULT", encoding="utf-8")
+                return {
+                    "status": "pass",
+                    "requested_pair": pair,
+                    "effective_pair": pair,
+                    "turn_completed": True,
+                    "model_match": True,
+                    "effort_match": True,
+                    "result_published": True,
+                    "result_ready_monotonic_ns": time.monotonic_ns(),
+                    "process_elapsed_ms": 7,
+                    "tokens": {"total_tokens": 20},
+                    "route_attempts": [{"requested_pair": pair, "effective_pair": pair, "tokens": {"total_tokens": 20}}],
+                }
+
+            with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+                result = module.run(args, "Do the work")
+            receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
+        self.assertEqual(calls, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high"])
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.6-terra|medium"])
+        self.assertEqual(len(receipt["route_attempts"]), 2)
+
     def test_small_code_result_returns_after_quick_check_and_requires_detached_ending(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))

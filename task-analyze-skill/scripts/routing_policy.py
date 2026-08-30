@@ -85,7 +85,8 @@ _CONCEPT_EXPLANATION_PATTERNS = (r"(?:请解释|解释(?:一下)?|是什么意�
 _READ_ONLY_REQUEST_PATTERNS = (r"\b(?:read[- ]only|no edits?|do not (?:edit|modify|change)|without (?:editing|modifying|changing))\b", r"(?:只读|不修改|不要修改|无需修改|禁止修改)")
 _CHINESE_MUTATION_ACTION = r"(?:修复|修正|重命名|改名|替换|删除|迁移|重构|编写|实现|新增|创建|修改|改成|更改|调整|优化|强化|更新|部署|安装|提交|推送|发布)"
 _CHINESE_STRONG_MUTATION_ACTION = r"(?:修复|修正|重命名|改名|替换|删除|重构|编写|实现|新增|创建|修改|改成|更改|调整|优化|强化|更新|提交|推送|发布)"
-_MUTATION_REQUEST_PATTERNS = (r"(?:^|[.!?;,:]\s*|\b(?:then|and then)\s+)(?:please\s+)?(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen|deploy|install|commit|push|publish)\b|\b(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen|deploy|install|commit|push|publish)\b", rf"(?:^|然后|随后|接着|继续|并且|并|再)(?:请|给我|帮我|请帮我)?(?:直接|开始)?{_CHINESE_MUTATION_ACTION}|[,.!?;:](?:(?:请|给我|帮我|请帮我|直接|开始){_CHINESE_MUTATION_ACTION}|{_CHINESE_STRONG_MUTATION_ACTION})|(?:给我|帮我|请帮我)(?:继续)?{_CHINESE_MUTATION_ACTION}")
+_CHINESE_REQUEST_OBJECT = r"(?:(?!如何|怎么|是否|为什么|是什么)[^,.!?;:]){0,32}?"
+_MUTATION_REQUEST_PATTERNS = (r"(?:^|[.!?;,:]\s*|\b(?:then|and then)\s+)(?:please\s+)?(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen|deploy|install|commit|push|publish)\b|\b(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen|deploy|install|commit|push|publish)\b", rf"(?:^|然后|随后|接着|继续|并且|并|再)(?:请|给我|帮我|请帮我)?(?:直接|开始)?{_CHINESE_MUTATION_ACTION}|[,.!?;:](?:(?:请|给我|帮我|请帮我|直接|开始){_CHINESE_MUTATION_ACTION}|{_CHINESE_STRONG_MUTATION_ACTION})|(?:给我|帮我|请帮我)(?:继续)?{_CHINESE_MUTATION_ACTION}|(?:给我|帮我|请帮我){_CHINESE_REQUEST_OBJECT}{_CHINESE_MUTATION_ACTION}")
 _MATERIAL_RESULT_STAGE_PATTERNS = (("inspect", (r"\b(?:audit|inspect|review|analyze|investigate)\b", r"(?:分析|查看|检查|审计|调查|排查|核对|查(?:一下)?(?:skill|代码|任务))")), ("simulate", (r"\b(?:simulate|replay|benchmark)\b", r"(?:模拟|重放|回放|基准测试|benchmark)")), ("change", (r"\b(?:fix|repair|rename|replace|delete|migrate|refactor|write|implement|add|create|edit|change|modify|update|optimize|strengthen)\b", r"(?:修复|修正|重命名|改名|替换|删除|迁移|重构|编写|实现|新增|创建|修改|改成|更改|调整|优化|强化|更新)")), ("test", (r"\b(?:test|testing|verify|validate|regression|render|visual verification)\b", r"(?:测试|验证|回归|验收|渲染验收|视觉验收)")), ("deploy", (r"\b(?:deploy|deployment|install|installation)\b", r"(?:部署|安装)")), ("publish", (r"\b(?:commit|push|publish|submit)\b", r"(?:提交|推送|发布)")))
 _FILE_PATTERN = re.compile(r"(?<![\w./-])[\w./-]+\.(?:py|cs|js|ts|tsx|json|md|yaml|yml)(?![\w/-])", re.IGNORECASE)
 
@@ -171,7 +172,8 @@ def analyze_prompt_routing(prompt, risk="low", ambiguity="low"):
     if task_type == "analysis" and not _matches_any(normalized, _MUTATION_REQUEST_PATTERNS):
         material_result_stages = [stage for stage in material_result_stages if stage in {"inspect", "simulate", "test"}]
     coupled_diagnosis_and_change = set(material_result_stages) == {"inspect", "change"}
-    graph_required = task_type != "question" and len(material_result_stages) >= 2 and not coupled_diagnosis_and_change
+    result_bearing_request = task_type != "question" or _matches_any(normalized, _MUTATION_REQUEST_PATTERNS)
+    graph_required = result_bearing_request and len(material_result_stages) >= 2 and not coupled_diagnosis_and_change
     if explicit:
         score = int(explicit.group(1))
         reasons = ["explicit complexity score"]
