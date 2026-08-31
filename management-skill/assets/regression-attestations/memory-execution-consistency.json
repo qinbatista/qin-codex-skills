@@ -2,7 +2,7 @@
   "schema_version": 1,
   "check_id": "memory-execution-consistency-attestation",
   "status": "pass",
-  "created_at": "2026-08-31T00:49:05.163078+00:00",
+  "created_at": "2026-08-31T01:34:45.976848+00:00",
   "trial_count": 7,
   "passed_trials": 7,
   "watched_files": {
@@ -21,7 +21,7 @@
     "project-memory-skill/tests/test_obsidian_model_memory.py": "7767de1fffc3ecb6e7721dbbba87f080487a9bb3319d4930452b9942241d0a23",
     "verify-skill/SKILL.md": "52dc5e72bb3f6771d2378891b2eca24d7341f6f076f38c15155b8800c0b85420",
     "verify-skill/scripts/ending_verification_plan.py": "7da42a60b43ff8caf30e3bfb34ea765634b3ab01a4f1119116fa40e19edb1a00",
-    "verify-skill/scripts/ending_task_ledger.py": "3536f6eee743d3196a0e3a7559cf1d7e37961f2af6f9371089a8ecd9ed60998c",
+    "verify-skill/scripts/ending_task_ledger.py": "0850d04a358bd798d4dedeb6b8f36bb88559e4c14e9168477869de379646a4e7",
     "management-skill/assets/global-skill-capability-catalog.json": "f8b8125c4c080a3cf3d4c4c98210b1a8f2cb50753d2a9fdc234a32c0caf0ea55",
     "management-skill/scripts/global_skill_regression_gate.py": "53291dd5cc2c12b5ebc63edd25eec9465f2a4bbcd97f826d96995f304ae6359a",
     "management-skill/tests/test_global_skill_regression_gate.py": "e8c3b0f21f82efba62e7f9c807c005f3b86754302f07a651230bc33aaf537dbe"

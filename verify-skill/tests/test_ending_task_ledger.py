@@ -583,6 +583,40 @@ class EndingTaskLedgerTests(unittest.TestCase):
         self.assertEqual(context["capability_tags"], ["model-routing", "persistent-end-task"])
         self.assertEqual(context["entry_pair"], "gpt-5.6-sol|max")
 
+    def test_bound_receipt_accepts_current_runner_session_relation_context(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "project").mkdir()
+            project_key = LEDGER._load_model_memory_module().project_change_memory._project_identity(root / "project")["key"]
+            task_name = "repair-contract"
+            task_group = "ending-ledger"
+            session_effort = LEDGER._load_model_memory_module().session_effort
+            project, receipt = self.producer_receipt(root, task_name=task_name, task_group=task_group, task_scope_key=session_effort.task_scope_key(project_key, "code", "runtime", task_name), task_group_key=session_effort.task_group_key(project_key, task_group, task_name), codex_session_key=session_effort.session_key("session-123"))
+            started = LEDGER.start_lifecycle("code", project, "Result is ready", project, "runtime", ["script.py"], store=root / "store", producer_receipt=receipt)
+            state = json.loads(Path(started["local"]["state"]).read_text(encoding="utf-8"))
+        context = state["producer_binding"]["model_learning_context"]
+        self.assertEqual(context["task_name"], task_name)
+        self.assertEqual(context["task_group"], task_group)
+        self.assertEqual(context["codex_session_key"], session_effort.session_key("session-123"))
+
+    def test_bound_receipt_rejects_tampered_session_relation_context(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "project").mkdir()
+            project_key = LEDGER._load_model_memory_module().project_change_memory._project_identity(root / "project")["key"]
+            session_effort = LEDGER._load_model_memory_module().session_effort
+            context_updates = {"task_name": "repair-contract", "task_group": "ending-ledger", "task_scope_key": session_effort.task_scope_key(project_key, "code", "runtime", "repair-contract"), "task_group_key": session_effort.task_group_key(project_key, "ending-ledger", "repair-contract"), "codex_session_key": session_effort.session_key("session-123")}
+            project, receipt = self.producer_receipt(root, **context_updates)
+            for field, value in (("task_name", "different-task"), ("task_group", "different-group"), ("task_scope_key", "0" * 24), ("task_group_key", "0" * 24), ("codex_session_key", "not-a-valid-session-key")):
+                with self.subTest(field=field):
+                    receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
+                    receipt_payload["model_learning_context"][field] = value
+                    receipt.write_text(json.dumps(receipt_payload), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "canonical|codex_session_key"):
+                        LEDGER.start_lifecycle("code", project, "Result is ready", project, producer_receipt=receipt, store=root / "store")
+                    receipt_payload["model_learning_context"][field] = context_updates[field]
+                    receipt.write_text(json.dumps(receipt_payload), encoding="utf-8")
+
     def test_ending_keeps_its_own_score_and_pair_while_learning_from_producer(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

@@ -42,7 +42,8 @@ AVAILABILITY_FALLBACK_REASONS = {
 REPAIR_DISPATCH_TOOL = "codex_app__create_thread"
 REQUIRED_MODEL_CONTEXT_FIELDS = ("project_root", "task_type", "module", "file", "symbol", "code_kind", "operation", "modality", "complexity", "complexity_score", "complexity_band", "risk", "ambiguity", "task_summary")
 OPTIONAL_MODEL_CONTEXT_FIELDS = ("step_kind", "capability_tags", "capability_fingerprint", "entry_model", "entry_effort", "entry_pair", "entry_source")
-MODEL_CONTEXT_FIELDS = REQUIRED_MODEL_CONTEXT_FIELDS + OPTIONAL_MODEL_CONTEXT_FIELDS
+SESSION_RELATION_CONTEXT_FIELDS = ("task_name", "task_group", "task_scope_key", "task_group_key", "codex_session_key")
+MODEL_CONTEXT_FIELDS = REQUIRED_MODEL_CONTEXT_FIELDS + OPTIONAL_MODEL_CONTEXT_FIELDS + SESSION_RELATION_CONTEXT_FIELDS
 PROJECT_MEMORY_CLASSIFICATIONS = {"aligned", "no_prior_memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift", "insufficient_evidence"}
 PROJECT_MEMORY_ACTIONS = {"record", "correction", "reconcile", "isolated_repair", "blocked"}
 PROJECT_MEMORY_STATUS_VALUES = {"match", "absent", "mismatch", "projection_missing", "projection_mismatch", "unavailable"}
@@ -259,7 +260,8 @@ def _producer_binding(receipt_value, project_root=None):
     receipt = json.loads(receipt_bytes.decode("utf-8"))
     context = receipt.get("model_learning_context") if isinstance(receipt, dict) else None
     context_fields = set(context) if isinstance(context, dict) else set()
-    if not isinstance(context, dict) or not set(REQUIRED_MODEL_CONTEXT_FIELDS).issubset(context_fields) or context_fields - set(MODEL_CONTEXT_FIELDS):
+    session_relation_fields = set(SESSION_RELATION_CONTEXT_FIELDS)
+    if not isinstance(context, dict) or not set(REQUIRED_MODEL_CONTEXT_FIELDS).issubset(context_fields) or context_fields - set(MODEL_CONTEXT_FIELDS) or context_fields & session_relation_fields not in (set(), session_relation_fields):
         raise ValueError("producer receipt requires the exact sanitized model_learning_context fields")
     sanitized = {}
     for field in (field for field in MODEL_CONTEXT_FIELDS if field in context):
@@ -277,7 +279,7 @@ def _producer_binding(receipt_value, project_root=None):
                 raise ValueError("producer model_learning_context.capability_tags is not sanitized")
             sanitized[field] = cleaned_tags
             continue
-        maximum = 1200 if field == "project_root" else 600 if field in {"file", "symbol", "task_summary"} else 160
+        maximum = 1200 if field == "project_root" else 600 if field in {"file", "symbol", "task_summary"} else 96 if field in {"task_name", "task_group"} else 160
         if not isinstance(value, str):
             raise ValueError(f"producer model_learning_context.{field} must be text")
         cleaned = _single_line(value, f"model_learning_context.{field}", required=field in {"project_root", "task_type", "module"}, max_length=maximum)
@@ -290,6 +292,8 @@ def _producer_binding(receipt_value, project_root=None):
         expected_entry_pair = f"{sanitized.get('entry_model', '')}|{sanitized.get('entry_effort', '')}"
         if not sanitized.get("entry_model") or not sanitized.get("entry_effort") or sanitized["entry_pair"] != expected_entry_pair:
             raise ValueError("producer model_learning_context.entry_pair does not match entry_model and entry_effort")
+    if session_relation_fields.issubset(context_fields) and not re.fullmatch(r"|[0-9a-f]{24}", sanitized["codex_session_key"]):
+        raise ValueError("producer model_learning_context.codex_session_key must be empty or lowercase SHA-256 prefix")
     expected_band = "small" if sanitized["complexity_score"] <= 24 else "standard" if sanitized["complexity_score"] <= 49 else "complex" if sanitized["complexity_score"] <= 74 else "advanced"
     if sanitized["complexity_band"] != expected_band:
         raise ValueError("producer model_learning_context.complexity_band does not match complexity_score")
@@ -326,6 +330,8 @@ def _validate_bound_model_learning_context(memory, receipt, context):
             context["task_summary"],
             context.get("step_kind", ""),
             context.get("capability_tags"),
+            context.get("task_name", ""),
+            context.get("task_group", ""),
         )
         receipt_pair = memory._receipt_pair(receipt)
         memory._receipt_entry(receipt)
@@ -343,6 +349,9 @@ def _validate_bound_model_learning_context(memory, receipt, context):
         raise ValueError("producer model_learning_context.step_kind is not canonical")
     if "capability_fingerprint" in context and query["capability_fingerprint"] != context["capability_fingerprint"]:
         raise ValueError("producer model_learning_context.capability_fingerprint does not match its capability profile")
+    for field in ("task_name", "task_group", "task_scope_key", "task_group_key"):
+        if field in context and query[field] != context[field]:
+            raise ValueError(f"producer model_learning_context.{field} is not canonical")
 
 
 def _invalid_bound_receipt_learning(binding):
