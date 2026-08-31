@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from contextlib import contextmanager
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "validate_task_analyze_skill.py"
@@ -23,6 +24,24 @@ PRIORITY_EFFORT = module.PRIORITY_PRODUCER["effort_by_complexity"]["easy"] if mo
 
 
 class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
+    def test_installed_skills_skips_unreadable_unrelated_entry(self):
+        with tempfile.TemporaryDirectory(prefix="installed-skills-") as temporary_directory:
+            skills_root = Path(temporary_directory)
+            managed_skill = skills_root / "workflow-skill"
+            blocked_skill = skills_root / "untrusted-mount"
+            managed_skill.mkdir()
+            blocked_skill.mkdir()
+            (managed_skill / "SKILL.md").write_text("workflow-skill\n", encoding="utf-8")
+            original_is_dir = Path.is_dir
+
+            def guarded_is_dir(path):
+                if path == blocked_skill:
+                    raise OSError("untrusted mount point")
+                return original_is_dir(path)
+
+            with mock.patch.object(Path, "is_dir", guarded_is_dir):
+                self.assertEqual(module.installed_skills(skills_root), {"workflow-skill"})
+
     def test_new_profile_presets_use_post_result_real_verification(self):
         self.assertTrue(module.PROFILE_PRESETS)
         self.assertEqual({preset["verification_shape"] for preset in module.PROFILE_PRESETS.values()}, {"real"})

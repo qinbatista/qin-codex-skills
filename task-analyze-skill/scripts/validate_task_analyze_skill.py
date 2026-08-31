@@ -661,7 +661,14 @@ def validate_graduated_fixture(path, skills_root, require_installed):
 
 
 def installed_skills(skills_root):
-    return {path.name for path in skills_root.iterdir() if path.is_dir() and (path / "SKILL.md").exists()}
+    installed = set()
+    for path in skills_root.iterdir():
+        try:
+            if path.is_dir() and (path / "SKILL.md").exists():
+                installed.add(path.name)
+        except OSError:
+            continue
+    return installed
 
 
 
