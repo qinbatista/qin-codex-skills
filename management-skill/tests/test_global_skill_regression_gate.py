@@ -43,7 +43,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         capability_ids = [item["id"] for item in catalog["capabilities"]]
         check_ids = {item["id"] for item in catalog["checks"]}
         referenced = {check_id for item in catalog["capabilities"] for check_id in item["checks"]}
-        self.assertEqual(len(capability_ids), 36)
+        self.assertEqual(len(capability_ids), 37)
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
         projectless_ending = next(item for item in catalog["capabilities"] if item["id"] == "GSR-014")

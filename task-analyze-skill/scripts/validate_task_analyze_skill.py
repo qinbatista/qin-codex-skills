@@ -480,6 +480,10 @@ REQUIRED_WORKFLOW_RESOURCE_LEDGER_TEXT = [
     "os.O_CREAT | os.O_EXCL",
     "os.replace",
 ]
+REQUIRED_WORKFLOW_PARALLEL_SESSION_SKILL_TEXT = ["[Parallel Child-Session Orchestration](references/parallel-session-orchestration.md)", "admitted `planned_graph`", "project child sessions as an execution surface", "whole admitted graph selects collaboration children or the existing dispatcher, never both", "main/root session alone owns child-session topology", "monitoring, steering, targeted cancellation, final aggregation", "child READY state is evidence for the root", "Child sessions are not global projectless Endings", "only the root's final aggregate after every child settles", "existing single producer or dispatcher execution"]
+REQUIRED_WORKFLOW_PARALLEL_SESSION_TEXT = ["Parallel Child-Session Orchestration", "whole admitted `planned_graph` uses exactly one execution surface", "collaboration child sessions or the existing dispatcher, never a mixture", "Every large or complex task must evaluate parallel child sessions", "at least two", "at most eight child sessions", "dependency-ready", "disjoint", "project-relative workdir", "logical inputs and outputs", "read allowlist", "write allowlist", "dependencies", "required flag", "cache class", "stop condition", "`spawn_agent`", "`list_agents`", "`wait_agent`", "`send_message`", "`followup_task`", "`interrupt_agent`", "children cannot control siblings", "start Ending", "declare the main task done", "isolated copy or worktree for each platform", "Parallel module work", "common project-root workdir", "disjoint write allowlists", "`Cache/tmp-*`", "`Cache/remote-*`", "main/root session is the only completion authority", "final aggregate receipt", "declared dependency to be `passed`", "main_complete=true", "ending_start_owner=root", "single producer/dispatcher behavior", "unsafe", "collaboration control plane is unavailable"]
+REQUIRED_WORKFLOW_PARALLEL_SESSION_AGENT_TEXT = ["Safe child-session topology", "main monitors/steers/stops", "child READY != main done", "root-only completion/final aggregate Ending", "children never launch Ending"]
+REQUIRED_PARALLEL_SESSION_CAPABILITY = ["GSR-037", "主控子 Session 并行编排", "安全自动 child-session", "dependency-ready", "spawn/list/wait/send/followup/interrupt", "child READY 不等于 main done", "final aggregate", "single producer/dispatcher", "workflow-units", "workflow-validator", "task-analyze-validator"]
 REQUIRED_ENDING_PLAN_IMPLEMENTATION = ["ENDING_PRIMARY_PAIR", "gpt-5.3-codex-spark|xhigh", "DEFAULT_CONTROLLER_RESTRICTION_STORE", "REPAIR_RESTRICTION_DEFAULT_SECONDS", "CONTROLLER_RESTRICTION_REASONS", "record_controller_restriction", "restricted_at", "retry_at", "cooldown_until", "_controller_ladder", "_select_available_controller", "controller_cooling", "one_persistent_ending_runs_all_checks", "ENDING_CHECK_WORKER_MARKER", "DIRECT_CHECK_SURFACES", "DELEGATED_CHECK_SURFACES", "worker_pair_for_check", "verification_surface", "execution_mode", "delegated_check_worker", "required_skills", "ending_check_capability_route", "THREAD_TARGET", "THREAD_SCOPE", "THREAD_READBACK_TOOL", "THREAD_PLACEMENT_POLICY", "_validate_projectless_launch_request", "_normalize_thread_project_id", "thread_project_id", "placement_readback_tool", "projectId=null", "projectless", "TERMINAL_THREAD_POLICY", "keep_visible", "project_binding", "subprocess.run", "codex_app__create_thread", "create_isolated_projectless_repair_then_fresh_ending", "wait_without_interruption", "max_repair_attempts", "repair_launch", "repair_prompt", "create-launches", "record-controller-restriction", "_final_producer_receipt", "producer_receipt is required before launching an Ending", "final passing published aggregate result", "final_aggregate_receipt", "all_result_nodes_settled", "subprocesses_settled", "ending_launch_ready", "project_memory_closeout_required", "_detached_project_root_line", "Origin project root (absolute)", "projectless cwd is unrelated", "compact continuation", "ack-launch", "audit-launches", "end_task_trigger_rate", "structured model_assessment", "Never call set_thread_archived", "memory_consistency_output", "effective project-result memory", "memory_record_defect", "memory_projection_defect", "skill_contract_defect", "execution_drift"]
 FORBIDDEN_ENDING_PLAN_IMPLEMENTATION = ["BAND_ROLES", "ending_score_role", "separate_persistent_tasks"]
 FORBIDDEN_GLOBAL_BOOTSTRAP_TEXT = ["TASK_ANALYZE_PLAN_JSON", "TASK_ANALYZE_PLAN_JSON_BEGIN", "task_entry_hook.py", "trusted `Stop` hook", "user-level Codex hook", "local/adaptive-routing/model_experience.json", "No lifecycle operation may message, interrupt"]
@@ -895,12 +899,18 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     obsidian_memory_path = global_skills_root / "project-memory-skill" / "scripts" / "obsidian_model_memory.py"
     workflow_resource_path = global_skills_root / "workflow-skill" / "references" / "task-resource-lifecycle.md"
     workflow_resource_ledger_path = global_skills_root / "workflow-skill" / "scripts" / "task_resource_ledger.py"
+    workflow_parallel_session_path = global_skills_root / "workflow-skill" / "references" / "parallel-session-orchestration.md"
+    workflow_agent_path = global_skills_root / "workflow-skill" / "agents" / "openai.yaml"
+    capability_catalog_path = global_skills_root / "management-skill" / "assets" / "global-skill-capability-catalog.json"
     missing_files = []
     for relative, path in paths.items():
         if not path.exists():
             missing_files.append(f"missing required file: {relative}")
     if not obsidian_memory_path.exists():
         missing_files.append("missing required file: project-memory-skill/scripts/obsidian_model_memory.py")
+    for label, path in (("workflow-skill/references/parallel-session-orchestration.md", workflow_parallel_session_path), ("workflow-skill/agents/openai.yaml", workflow_agent_path), ("management-skill/assets/global-skill-capability-catalog.json", capability_catalog_path)):
+        if not path.exists():
+            missing_files.append(f"missing required file: {label}")
     failures.extend(missing_files)
     if missing_files:
         return {"valid": False, "failures": failures, "plans": [], "graduated": []}
@@ -1026,7 +1036,12 @@ def validate(skill_dir, models_cache_path, global_agents_path=Path.home() / ".co
     if not workflow_skill_path.exists():
         failures.append(f"Workflow skill missing: {workflow_skill_path}")
     else:
-        failures.extend(missing_terms("Workflow project-result consistency", read_text(workflow_skill_path), REQUIRED_WORKFLOW_MEMORY_CONSISTENCY_TEXT))
+        workflow_skill_text = read_text(workflow_skill_path)
+        failures.extend(missing_terms("Workflow project-result consistency", workflow_skill_text, REQUIRED_WORKFLOW_MEMORY_CONSISTENCY_TEXT))
+        failures.extend(missing_terms("Workflow parallel child-session contract", workflow_skill_text, REQUIRED_WORKFLOW_PARALLEL_SESSION_SKILL_TEXT))
+        failures.extend(missing_terms("Workflow parallel child-session reference", read_text(workflow_parallel_session_path), REQUIRED_WORKFLOW_PARALLEL_SESSION_TEXT))
+        failures.extend(missing_terms("Workflow parallel child-session agent", read_text(workflow_agent_path), REQUIRED_WORKFLOW_PARALLEL_SESSION_AGENT_TEXT))
+        failures.extend(missing_terms("parallel child-session retained capability", read_text(capability_catalog_path), REQUIRED_PARALLEL_SESSION_CAPABILITY))
         if not workflow_resource_path.exists():
             failures.append(f"Workflow task resource lifecycle missing: {workflow_resource_path}")
         else:

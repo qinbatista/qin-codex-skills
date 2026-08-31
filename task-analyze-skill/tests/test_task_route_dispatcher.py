@@ -240,6 +240,20 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertIn("schema_version must be 2", manifest["failures"])
         run_node.assert_not_called()
 
+    def test_invalid_schema_has_explicit_pre_execution_validation_surface(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            plan["schema_version"] = 1
+            with patch.object(module, "run_node") as run_node:
+                preflight = module.preflight_plan(plan, "gpt-5.6-terra", "low", root)
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, preflight=preflight)
+        self.assertEqual(preflight["stage"], "pre-execution-validation")
+        self.assertEqual(preflight["status"], "fail")
+        self.assertIn("schema_version must be 2", preflight["failures"])
+        self.assertEqual(manifest["stage"], "validation")
+        run_node.assert_not_called()
+
     def test_plan_rejects_routing_recommendation_proof_mismatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -950,6 +964,49 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertTrue(manifest["reopen_required"])
         self.assertIsNone(manifest["ending_handoff_path"])
 
+    def test_pre_result_operational_failure_reopens_with_projectless_repair_without_ending(self):
+        for failure_class in ("timeout", "availability", "execution"):
+            with self.subTest(failure_class=failure_class), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                cache_dir = root / "work" / "cache" / "route"
+                plan = self.plan(cache_dir)
+                recommendation = deepcopy(plan["nodes"][0]["routing_recommendation"])
+
+                def failed_node(node, cache_dir, *_args, **_kwargs):
+                    receipt_path = cache_dir / f"{node['id']}-receipt.json"
+                    receipt_path.write_text(json.dumps({"status": "fail", "failure_class": failure_class}), encoding="utf-8")
+                    return {"id": node["id"], "phase": node["phase"], "skill": node["skill"], "model": node["model"], "effort": node["effort"], "status": "fail", "failure_class": failure_class, "receipt_path": str(receipt_path), "result_path": None, "result_published": False, "tokens": {"total_tokens": 0}, "process_elapsed_ms": 1}
+
+                with patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": f"{plan['nodes'][0]['model']}|{plan['nodes'][0]['effort']}"}, recommendation)), patch.object(module, "run_node", side_effect=failed_node):
+                    manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
+                handoff = json.loads(Path(manifest["repair_handoff_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(manifest["status"], "fail")
+            self.assertTrue(manifest["notification_required"])
+            self.assertTrue(manifest["reopen_required"])
+            self.assertIsNone(manifest["ending_handoff_path"])
+            self.assertEqual(handoff["target"], {"type": "projectless"})
+            self.assertEqual(handoff["final_aggregate_receipt"], None)
+            self.assertEqual(handoff["ending_handoff"], None)
+            self.assertEqual(handoff["ending_status"], None)
+            self.assertEqual(handoff["controller_restriction"], None)
+            self.assertIn("wait_without_messaging_or_interruption", handoff["active_write_surface"])
+            self.assertEqual(handoff["required_completion"], "fresh_final_aggregate_then_fresh_ending")
+            self.assertTrue({"send", "steer", "interrupt", "terminate", "handoff", "move", "mutate"}.issubset(handoff["prohibited_actions"]))
+
+    def test_pre_result_quality_failure_does_not_create_operational_repair_or_cooldown(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plan = self.plan(root / "work" / "cache" / "route")
+            recommendation = deepcopy(plan["nodes"][0]["routing_recommendation"])
+
+            def failed_quality_node(node, *_args, **_kwargs):
+                return {"id": node["id"], "phase": node["phase"], "skill": node["skill"], "model": node["model"], "effort": node["effort"], "status": "fail", "failure_class": "quality", "receipt_path": None, "result_path": None, "result_published": False, "tokens": {"total_tokens": 1}, "process_elapsed_ms": 1}
+
+            with patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": f"{plan['nodes'][0]['model']}|{plan['nodes'][0]['effort']}"}, recommendation)), patch.object(module, "run_node", side_effect=failed_quality_node):
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
+        self.assertIsNone(manifest["repair_handoff_path"])
+        self.assertEqual(manifest["operational_model_learning"], [])
+
     def test_run_node_retries_only_zero_token_pre_execution_failure_and_aggregates_attempts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1332,6 +1389,41 @@ class TaskRouteDispatcherTests(unittest.TestCase):
         self.assertEqual(records["branch-b"]["dependency_wave"], 0)
         self.assertEqual(records["merge"]["dependency_wave"], 1)
         self.assertTrue(all(isinstance(record["launched_monotonic_ns"], int) and isinstance(record["settled_monotonic_ns"], int) for record in records.values()))
+
+    def test_same_wave_code_generation_launches_while_unrelated_review_is_slow(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_dir = root / "work" / "cache" / "route"
+            plan = self.dependent_plan(cache_dir)
+            plan["topology"] = "parallel"
+            review = plan["nodes"][0]
+            review["id"] = "a-slow-review"
+            main = plan["nodes"][1]
+            main["dependencies"] = ["a-slow-review", "z-code-generation"]
+            plan["nodes"].insert(1, {"id": "z-code-generation", "phase": "result", "skill": "workflow-skill", "model": review["model"], "effort": review["effort"], "dependencies": [], "prompt": "Generate independent code.", "sandbox": "read-only"})
+            plan["main_result_node"] = main["id"]
+            plan["nodes"][-1]["dependencies"] = [main["id"]]
+            code_started = threading.Event()
+            recommendation = deepcopy(main["routing_recommendation"])
+
+            def scheduled_node(node, cache_dir, *_args, **_kwargs):
+                if node["id"] == "a-slow-review" and not code_started.wait(timeout=1):
+                    raise AssertionError("independent code generation waited for the unrelated review")
+                if node["id"] == "z-code-generation":
+                    code_started.set()
+                result_path = cache_dir / f"{node['id']}-result.md"
+                receipt_path = cache_dir / f"{node['id']}-receipt.json"
+                result_path.write_text(f"{node['id']}\n", encoding="utf-8")
+                receipt_path.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
+                return {"id": node["id"], "phase": node["phase"], "skill": node["skill"], "model": node["model"], "effort": node["effort"], "status": "pass", "receipt_path": str(receipt_path), "result_path": str(result_path), "tokens": {}, "process_elapsed_ms": 1}
+
+            with patch.object(module, "_obsidian_recommendation_and_proof", return_value=({"selected_pair": f"{main['model']}|{main['effort']}"}, recommendation)), patch.object(module, "run_node", side_effect=scheduled_node), patch.object(module, "_run_record", return_value={"status": "recorded"}):
+                manifest = module.run_plan(plan, "gpt-5.6-terra", "low", root, history_path=root / "history.json")
+        self.assertTrue(code_started.is_set())
+        self.assertEqual(manifest["status"], "pass")
+        records = {record["id"]: record for record in manifest["nodes"]}
+        self.assertEqual(records["a-slow-review"]["dependency_wave"], 0)
+        self.assertEqual(records["z-code-generation"]["dependency_wave"], 0)
 
     def test_foreground_manifest_includes_full_model_switch_summary(self):
         with tempfile.TemporaryDirectory() as temp_dir:

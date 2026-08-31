@@ -10,6 +10,7 @@ from pathlib import Path
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
 GLOBAL_AGENTS_PATH = Path.home() / ".codex" / "AGENTS.md"
 GLOBAL_ENTRY_RULE_PATH = SKILLS_ROOT / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
+PROJECT_CACHE_POLICY_PATH = SKILLS_ROOT / "workflow-skill" / "references" / "project-cache-artifact-policy.md"
 SYNC_SCRIPT_PATH = SKILLS_ROOT / "management-skill" / "scripts" / "sync_global_skills.py"
 SYNC_SPEC = importlib.util.spec_from_file_location("sync_global_skills", SYNC_SCRIPT_PATH)
 SYNC = importlib.util.module_from_spec(SYNC_SPEC)
@@ -27,35 +28,31 @@ PRIMARY_SKILLS = (
 REQUIRED_POLICY_TEXT = (
     "<project-root>/Cache/",
     "project-support write",
-    "test scripts",
-    "intermediate code",
-    "`tmp-<folder-name>`",
-    "`remote-<name>`",
-    "`<YYYYMMDD>`",
-    "`remote-test/`",
     "ordinary test scratch",
-    "top-level `tests/`",
+    "intermediate code",
+    "`Cache/tmp-<name>/`",
+    "`Cache/remote-<name>/`",
+    "`Cache/<YYYYMMDD>/`",
+    "`Cache/remote-test/`",
+    "top-level `tmp/`, `tests/`, or `work/`",
     "legacy top-level directory",
     "`~/.codex/cache`",
     "`~/.codex/tmp`",
-    "`tmp/`",
-    "`tests/`",
-    "`work/`",
-    "project-root `AGENTS.md`",
+    "Project-root `AGENTS.md`",
     "owner/source",
-    "important Cache",
+    "Important retained Cache",
     "explicit authorization",
     "local-machine path",
     "not only Cache paths",
     "project-root-relative",
     "runtime",
-    "native path APIs",
+    "native APIs",
     "compact structural contract",
     "not a project notebook",
     "ownership boundaries",
     "critical entry points",
     "hard constraints",
-    "Do not write implementation details",
+    "Do not put implementation details",
     "task history",
     "test results",
     "generated data",
@@ -72,7 +69,7 @@ REQUIRED_DETAILED_PATH_TEXT = (
 )
 REQUIRED_DETAILED_AGENTS_TEXT = (
     "retention/version-control status",
-    "one concise registry entry",
+    "one concise `AGENTS.md` registry entry",
     "owning source, project documentation, or a README",
     "Update `AGENTS.md` only when",
 )
@@ -80,7 +77,7 @@ REQUIRED_DETAILED_REGISTRY_TEXT = (
     "schema_version",
     "scope",
     "ai_only",
-    "file|directory|application",
+    "`file|directory|application`",
     "package scripts",
     "credentials",
     "replace the registry atomically",
@@ -96,18 +93,18 @@ REQUIRED_GLOBAL_POLICY_TEXT = (
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
-    def test_every_primary_skill_has_the_same_project_cache_contract(self):
+    def test_canonical_project_cache_contract_retains_every_required_rule(self):
+        policy_text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
+        for required_text in (*REQUIRED_POLICY_TEXT, *REQUIRED_DETAILED_PATH_TEXT, *REQUIRED_DETAILED_AGENTS_TEXT, *REQUIRED_DETAILED_REGISTRY_TEXT):
+            self.assertIn(required_text, policy_text, f"{PROJECT_CACHE_POLICY_PATH}: {required_text}")
+
+    def test_every_primary_skill_routes_support_writes_to_the_canonical_contract(self):
         for skill_name in PRIMARY_SKILLS:
             skill_text = (SKILLS_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("Project Cache Artifact Policy", skill_text, skill_name)
-            for required_text in REQUIRED_POLICY_TEXT:
-                self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
-            for required_text in REQUIRED_DETAILED_PATH_TEXT:
-                self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
-            for required_text in REQUIRED_DETAILED_AGENTS_TEXT:
-                self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
-            for required_text in REQUIRED_DETAILED_REGISTRY_TEXT:
-                self.assertIn(required_text, skill_text, f"{skill_name}: {required_text}")
+            expected_link = "references/project-cache-artifact-policy.md" if skill_name == "workflow-skill" else "../workflow-skill/references/project-cache-artifact-policy.md"
+            self.assertIn(expected_link, skill_text, skill_name)
+            self.assertIn("Load it only when this task will create a support artifact", skill_text, skill_name)
 
     def test_installable_entry_rule_has_the_project_cache_contract(self):
         policy_text = GLOBAL_ENTRY_RULE_PATH.read_text(encoding="utf-8")
@@ -126,6 +123,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         workflow_text = (SKILLS_ROOT / "workflow-skill" / "SKILL.md").read_text(encoding="utf-8")
         verify_text = (SKILLS_ROOT / "verify-skill" / "SKILL.md").read_text(encoding="utf-8")
         reference_text = (SKILLS_ROOT / "workflow-skill" / "references" / "task-resource-lifecycle.md").read_text(encoding="utf-8")
+        cache_policy_text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
         for required in (
             "Task Resource Lifecycle (内存优化)",
             "exclusive `Cache/tmp-<task>` root",
@@ -136,10 +134,9 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             self.assertIn(required, reference_text)
         self.assertIn("[Task Resource Lifecycle](references/task-resource-lifecycle.md)", workflow_text)
         self.assertIn("[Task Resource Lifecycle](../workflow-skill/references/task-resource-lifecycle.md)", verify_text)
-        for text in (workflow_text, verify_text):
-            self.assertIn("remote-test/` is retained-only", text)
-            self.assertIn("reusable formal tests remain source tests", text)
-            self.assertNotIn("`remote-test/` is the reserved test bucket for small local tests", text)
+        self.assertIn("`Cache/remote-<name>/` or `Cache/remote-test/` for explicitly retained material", cache_policy_text)
+        self.assertIn("Reusable formal tests remain source tests", cache_policy_text)
+        self.assertNotIn("`remote-test/` is the reserved test bucket for small local tests", cache_policy_text)
         self.assertNotIn("No lifecycle operation may message, interrupt", reference_text)
 
     def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):
@@ -257,14 +254,17 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     directory.rmdir()
 
     def test_project_handoffs_do_not_require_absolute_project_paths(self):
-        instruction_paths = (
+        routed_skill_paths = (
             SKILLS_ROOT / "task-analyze-skill" / "SKILL.md",
             SKILLS_ROOT / "workflow-skill" / "SKILL.md",
             SKILLS_ROOT / "code-skill" / "SKILL.md",
             SKILLS_ROOT / "verify-skill" / "SKILL.md",
-            SKILLS_ROOT / "task-analyze-skill" / "references" / "route-contract.md",
         )
-        for instruction_path in instruction_paths:
+        for instruction_path in routed_skill_paths:
+            instruction_text = instruction_path.read_text(encoding="utf-8")
+            self.assertIn("project-cache-artifact-policy.md", instruction_text, str(instruction_path))
+            self.assertNotIn("absolute project paths", instruction_text, str(instruction_path))
+        for instruction_path in (PROJECT_CACHE_POLICY_PATH, SKILLS_ROOT / "task-analyze-skill" / "references" / "route-contract.md"):
             instruction_text = instruction_path.read_text(encoding="utf-8")
             self.assertIn("project-root-relative paths", instruction_text, str(instruction_path))
             self.assertNotIn("absolute project paths", instruction_text, str(instruction_path))

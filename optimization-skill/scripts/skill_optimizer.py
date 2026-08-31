@@ -37,8 +37,12 @@ SCRIPT_CANDIDATES = [
 
 SECTION_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-COMMAND_PATH_PATTERN = re.compile(r"(?<!\w)(?:\./|\.\./|/|plugins/|scripts/)[^\s\"'`]+?\.(?:py|sh|applescript)\b")
+COMMAND_PATH_PATTERN = re.compile(r"(?<![\w./~<-])(?:<codex-home>/skills/|~/.codex/skills/|/|\.\.?/)?(?:[\w.-]+/)+[\w.-]+\.(?:py|sh|applescript)\b")
 LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
+SCOPE_HEADINGS = {"Activation Boundary", "Inline Boundary", "Internal Route Selection", "Objective", "Persistent End Task Thread", "Required Scope", "Scope", "Trigger"}
+WORKFLOW_HEADINGS = {"Admitted Execution", "Before Editing: Bounded Recall", "Commands", "Result-First Boundary", "Workflow", "Required Workflow"}
+GUARDRAIL_HEADINGS = {"Activation Boundary", "Authority", "Failure Conditions", "Graph And Claim Gates", "Guardrails", "Locked Plan Gate", "Mandatory Ending Task", "Privacy And Authorization", "Runtime Proof And A/B Policy"}
+VERIFICATION_HEADINGS = {"Acceptance Checklist", "Definition of Done", "Main Result And Ending Task", "Quick Check, First Result, Then Detached Ending", "Verification"}
 
 
 @dataclass
@@ -89,9 +93,11 @@ def parse_args() -> argparse.Namespace:
     _subparsers = _parser.add_subparsers(dest="command", required=True)
     _scan_parser = _subparsers.add_parser("scan")
     _scan_parser.add_argument("skills_root", help="Path to a skills root folder that contains skill directories.")
+    _scan_parser.add_argument("--verbose", action="store_true", help="Include descriptions and heading inventories.")
     for _name in ("audit", "verify"):
         _command_parser = _subparsers.add_parser(_name)
         _command_parser.add_argument("skill_path", help="Path to a skill directory or its SKILL.md file.")
+        _command_parser.add_argument("--verbose", action="store_true", help="Include descriptions, headings, peer names, and deterministic counts.")
     return _parser.parse_args()
 
 
@@ -108,16 +114,20 @@ def resolve_skills_root(skills_root: str) -> Path:
 
 def find_repo_root(start_path: Path) -> Path:
     for _path in [start_path, *start_path.parents]:
-        if (_path / ".git").exists() or (_path / ".agents").exists():
+        if (_path / ".git").exists() or (_path / "AGENTS.md").exists():
             return _path
     return Path.cwd()
 
 
+def collect_skill_files(skills_root: Path) -> list[Path]:
+    if not skills_root.is_dir():
+        return []
+    return sorted(_child / "SKILL.md" for _child in skills_root.iterdir() if _child.is_dir() and _child.name.casefold() != "cache" and not _child.name.startswith(".") and (_child / "SKILL.md").is_file())
+
+
 def collect_skills(skills_root: Path) -> list[SkillSummary]:
     _skills = []
-    if not skills_root.exists():
-        return _skills
-    for _skill_file in sorted(skills_root.rglob("SKILL.md")):
+    for _skill_file in collect_skill_files(skills_root):
         _text = _skill_file.read_text(encoding="utf-8")
         _frontmatter, _body = split_frontmatter(_text)
         _skills.append(
@@ -170,9 +180,16 @@ def extract_section_lengths(lines: list[str], headings: list[tuple[int, str]]) -
 
 
 def resolve_reference(raw_path: str, skill_dir: Path, repo_root: Path) -> Path | None:
-    _clean_path = raw_path.split("#", 1)[0].strip()
+    _clean_path = raw_path.split("#", 1)[0].strip().replace("\\", "/")
     if not _clean_path or re.match(r"^[a-z]+://", _clean_path):
         return None
+    for _prefix in ("<codex-home>/skills/", "~/.codex/skills/", "skills/"):
+        if _clean_path.startswith(_prefix):
+            _suffix = Path(_clean_path.removeprefix(_prefix))
+            for _candidate in (repo_root / _suffix, repo_root / "skills" / _suffix):
+                if _candidate.exists():
+                    return _candidate.resolve()
+            return (repo_root / _suffix).resolve()
     _path = Path(_clean_path).expanduser()
     if _path.is_absolute():
         return _path
@@ -199,7 +216,12 @@ def extract_command_paths(text: str, skill_dir: Path, repo_root: Path) -> tuple[
     _paths = []
     _errors = []
     for _match in COMMAND_PATH_PATTERN.finditer(text):
-        _resolved_path = resolve_reference(_match.group(0), skill_dir, repo_root)
+        _raw_path = _match.group(0)
+        _path_parts = [part.casefold() for part in _raw_path.replace("\\", "/").split("/")]
+        _has_explicit_command_prefix = _raw_path.startswith(("/", "./", "../", "<codex-home>/skills/", "~/.codex/skills/", "skills/"))
+        if not _has_explicit_command_prefix and not any(_part in {"bin", "plugins", "scripts", "tools"} for _part in _path_parts):
+            continue
+        _resolved_path = resolve_reference(_raw_path, skill_dir, repo_root)
         if not _resolved_path:
             continue
         _paths.append(_resolved_path)
@@ -268,14 +290,12 @@ def build_warnings(skill_text: str, headings: list[str], section_lengths: list[t
     _line_count = len(skill_text.splitlines())
     if _line_count > 220:
         _warnings.append(f"SKILL.md is {_line_count} lines. Move details into scripts or references if it keeps growing.")
-    if not any(_heading in headings for _heading in ("Trigger", "Scope")):
+    if not any(_heading in SCOPE_HEADINGS for _heading in headings):
         _warnings.append("Add a short Trigger or Scope section so users can tell when the skill should be used.")
-    if not any(_heading in headings for _heading in ("Workflow", "Required Workflow")):
+    if not any(_heading in WORKFLOW_HEADINGS or "Workflow" in _heading or "Execution" in _heading for _heading in headings):
         _warnings.append("Add a Workflow section so the skill has a predictable execution order.")
-    if "Guardrails" not in headings:
+    if not any(_heading in GUARDRAIL_HEADINGS or "Failure" in _heading for _heading in headings):
         _warnings.append("Add a Guardrails section so optimization does not change the skill's behavior by accident.")
-    if not any(_heading in headings for _heading in ("Examples", "Natural-Language Examples")):
-        _warnings.append("Add examples so users can tell what the skill can do without reading the whole file.")
     for _heading, _length in section_lengths:
         if _length > 45:
             _warnings.append(f"Section `{_heading}` is {_length} lines. Consider moving repeated detail into scripts or references.")
@@ -283,7 +303,7 @@ def build_warnings(skill_text: str, headings: list[str], section_lengths: list[t
         _warnings.append(f"{len(duplicate_instructions)} duplicate or overlapping instruction lines were found. Merge repeated requirements into one clearer rule.")
     if script_candidates and not command_paths:
         _warnings.append("The skill contains static step candidates but no script paths were referenced.")
-    if command_paths and "Verification" not in headings:
+    if command_paths and not any(_heading in VERIFICATION_HEADINGS or _heading in WORKFLOW_HEADINGS or _heading in GUARDRAIL_HEADINGS or "Verification" in _heading or "Acceptance" in _heading or "Workflow" in _heading for _heading in headings):
         _warnings.append("The skill references helper commands but does not have a Verification section.")
     return _warnings
 
@@ -328,7 +348,7 @@ def audit_skill(skill_dir: Path) -> AuditResult:
     _script_candidates = find_script_candidates(_skill_text)
     _duplicate_instructions = find_duplicate_instructions(_skill_text)
     _warnings = build_warnings(_skill_text, _headings, _section_lengths, _script_candidates, _duplicate_instructions, _command_paths)
-    _peer_skills = [str(_skill.skill_dir.name) for _skill in collect_skills(_skills_root) if _skill.skill_dir != skill_dir]
+    _peer_skills = [str(_skill_file.parent.name) for _skill_file in collect_skill_files(_skills_root) if _skill_file.parent != skill_dir]
     return AuditResult(
         skill_dir=skill_dir,
         skill_file=_skill_file,
@@ -385,18 +405,18 @@ def verify_skill(audit_result: AuditResult) -> list[str]:
     _errors = list(audit_result.errors)
     _errors.extend(audit_result.local_link_errors)
     _errors.extend(audit_result.command_path_errors)
+    _script_paths = set()
     for _script_dir in (audit_result.skill_dir / "scripts",):
         if not _script_dir.exists():
             continue
         for _script_path in sorted(_script_dir.rglob("*")):
-            if _script_path.is_dir():
-                continue
-            if _script_path.suffix not in {".py", ".sh", ".applescript"}:
-                continue
-            _errors.extend(validate_script(_script_path))
+            if _script_path.is_file() and _script_path.suffix in {".py", ".sh", ".applescript"}:
+                _script_paths.add(_script_path.resolve())
     for _command_path in audit_result.command_paths:
-        if _command_path.exists():
-            _errors.extend(validate_script(_command_path))
+        if _command_path.is_file() and _command_path.suffix in {".py", ".sh", ".applescript"}:
+            _script_paths.add(_command_path.resolve())
+    for _script_path in sorted(_script_paths):
+        _errors.extend(validate_script(_script_path))
     return dedupe_strings(_errors)
 
 
@@ -418,7 +438,7 @@ def format_relative(path: Path, root: Path) -> str:
         return str(path)
 
 
-def print_report(audit_result: AuditResult) -> None:
+def print_report(audit_result: AuditResult, verbose: bool = False) -> None:
     _optimization_reasons = [*audit_result.warnings]
     if audit_result.script_candidates:
         _optimization_reasons.append(f"{len(audit_result.script_candidates)} repeated deterministic step candidates were found.")
@@ -427,11 +447,12 @@ def print_report(audit_result: AuditResult) -> None:
     print("Skill")
     print(f"- file: {audit_result.skill_file}")
     print(f"- name: {audit_result.name or '[missing]'}")
-    print(f"- description: {audit_result.description or '[missing]'}")
-    print(f"- headings: {', '.join(audit_result.headings) if audit_result.headings else '[none]'}")
     print(f"- local references: {len(audit_result.local_links)}")
     print(f"- command paths: {len(audit_result.command_paths)}")
-    print(f"- peer skills: {', '.join(audit_result.peer_skills) if audit_result.peer_skills else '[none]'}")
+    if verbose:
+        print(f"- description: {audit_result.description or '[missing]'}")
+        print(f"- headings: {', '.join(audit_result.headings) if audit_result.headings else '[none]'}")
+        print(f"- peer skills: {', '.join(audit_result.peer_skills) if audit_result.peer_skills else '[none]'}")
     print("")
     print("Optimization Check")
     print(f"- recommended: {'yes' if _optimization_reasons else 'no'}")
@@ -440,26 +461,12 @@ def print_report(audit_result: AuditResult) -> None:
             print(f"- reason: {_reason}")
     else:
         print("- reason: no meaningful optimization issue was detected")
-    print("")
-    print("Suggested Summary")
-    print(f"- Use for: {audit_result.description or 'Add a frontmatter description so the skill purpose is obvious.'}")
-    if audit_result.command_paths:
-        print(f"- Deterministic helpers: {', '.join(_path.name for _path in audit_result.command_paths)}")
-    else:
-        print("- Deterministic helpers: none referenced yet")
-    if audit_result.script_candidates:
-        print(f"- Static step candidates: {len(audit_result.script_candidates)}")
-    else:
-        print("- Static step candidates: none detected")
-    if audit_result.duplicate_instructions:
-        print(f"- Duplicate instruction groups: {len(audit_result.duplicate_instructions)}")
-    else:
-        print("- Duplicate instruction groups: none detected")
-    if audit_result.warnings:
+    if verbose:
         print("")
-        print("Warnings")
-        for _warning in audit_result.warnings:
-            print(f"- {_warning}")
+        print("Deterministic Summary")
+        print(f"- helpers: {', '.join(_path.name for _path in audit_result.command_paths) if audit_result.command_paths else 'none referenced'}")
+        print(f"- static step candidates: {len(audit_result.script_candidates)}")
+        print(f"- duplicate instruction groups: {len(audit_result.duplicate_instructions)}")
     if audit_result.script_candidates:
         print("")
         print("Script Candidates")
@@ -478,7 +485,7 @@ def print_report(audit_result: AuditResult) -> None:
             print(f"- {_error}")
 
 
-def print_skill_scan(skills: list[SkillSummary], skills_root: Path) -> int:
+def print_skill_scan(skills: list[SkillSummary], skills_root: Path, verbose: bool = False) -> int:
     print("Skills")
     print(f"- root: {skills_root}")
     print(f"- count: {len(skills)}")
@@ -489,10 +496,10 @@ def print_skill_scan(skills: list[SkillSummary], skills_root: Path) -> int:
         return 1
     print("")
     for _skill in skills:
-        print(f"- {_skill.name}: {format_relative(_skill.skill_dir, skills_root)}")
-        print(f"  description: {_skill.description or '[missing]'}")
-        print(f"  headings: {', '.join(_skill.headings) if _skill.headings else '[none]'}")
-        print(f"  lines: {_skill.line_count}")
+        print(f"- {_skill.name}: {format_relative(_skill.skill_dir, skills_root)} ({_skill.line_count} lines)")
+        if verbose:
+            print(f"  description: {_skill.description or '[missing]'}")
+            print(f"  headings: {', '.join(_skill.headings) if _skill.headings else '[none]'}")
     return 0
 
 
@@ -500,10 +507,10 @@ def main() -> int:
     _args = parse_args()
     if _args.command == "scan":
         _skills_root = resolve_skills_root(_args.skills_root)
-        return print_skill_scan(collect_skills(_skills_root), _skills_root)
+        return print_skill_scan(collect_skills(_skills_root), _skills_root, _args.verbose)
     _skill_dir = resolve_skill_dir(_args.skill_path)
     _audit_result = audit_skill(_skill_dir)
-    print_report(_audit_result)
+    print_report(_audit_result, _args.verbose)
     if _args.command == "audit":
         return 1 if _audit_result.errors or _audit_result.local_link_errors or _audit_result.command_path_errors else 0
     _verification_errors = verify_skill(_audit_result)

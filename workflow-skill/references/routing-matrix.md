@@ -17,7 +17,7 @@ Eligible single-node text/code production enters the compact adaptive runner exa
 | explicit-routing-no-graph | User asks for routing but no multi-node graph passes admission. | Task Analyze -> one contextual producer -> result | Quality selection still applies; no open-ended graph. | Present result immediately. | Real verdict and learning after presentation. |
 | task-analyze-maintenance | Maintain routing contracts, runners, or benchmark assets. | Task Analyze -> dynamically scored design/code/docs nodes -> result | Keep shared source edits ordered; use Spark for bounded small code or command nodes. | Present completed change and focused Quick Check evidence. | One persistent Spark-first Ending; active provider cooldown selects the next stronger controller. |
 | explicit-benchmark | User authorizes Direct versus Auto calibration. | Task Analyze -> fixed Direct and receipt-proven Auto arms -> report | Both entries use the declared pair; Direct has no verifier; Auto task and Ending are separated. | First-result timestamp stops at exact result availability. | Ending cost is later and explicit; controller is a disclosed diagnostic. |
-| admitted-complex | Current evidence admits a real dependency graph. | Task Analyze -> Workflow -> dependency-ready locked nodes -> result | Exact locked pairs; one execution surface per branch. | Release merged completed result. | Real Verify after release; no foreground gate. |
+| admitted-complex | Current evidence admits a real dependency graph. | Task Analyze -> Workflow -> dependency-ready locked nodes -> result | Exact locked pairs; one whole-graph execution surface. | Release merged completed result. | Real Verify after release; no foreground gate. |
 
 ## Goal Rules
 

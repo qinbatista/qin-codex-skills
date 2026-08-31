@@ -2,11 +2,11 @@
   "schema_version": 1,
   "check_id": "unity-five-attestation",
   "status": "pass",
-  "created_at": "2026-08-30T22:16:55.744054+00:00",
+  "created_at": "2026-08-31T00:41:18.096796+00:00",
   "trial_count": 5,
   "passed_trials": 5,
   "watched_files": {
-    "code-skill/SKILL.md": "5946cd74ca9860095034e121a0446de621bee0439fd1db6a8987d97f08f9e3f6",
+    "code-skill/SKILL.md": "441f0e1d97c6005aaafd14310ea510dc15b21a440f561602c863c0be3c77af22",
     "code-skill/agents/openai.yaml": "6addfdfa5709159d8bdbc11c89e83b8d780b0b7cb628c8acd47a68d3b98c9974",
     "code-skill/references/csharp-rules.md": "fd20e28793ed2228382c8da0d6dc5a20f83ccca860dc3265ac40fa12bc854821",
     "code-skill/references/unity-csharp-rules.md": "e521f928594ab01d19410fe1ffa7d02afd9e5628ba262aa2e0939e0fe977dac5",

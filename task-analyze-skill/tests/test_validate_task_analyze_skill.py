@@ -133,10 +133,15 @@ class ValidateTaskAnalyzeSkillTests(unittest.TestCase):
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "SKILL.md").write_text((source.parent / skill_name / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
                 if skill_name == "workflow-skill":
-                    for relative in ("references/task-resource-lifecycle.md", "scripts/task_resource_ledger.py"):
+                    for relative in ("agents/openai.yaml", "references/parallel-session-orchestration.md", "references/task-resource-lifecycle.md", "scripts/task_resource_ledger.py"):
                         destination = skill_dir / relative
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         destination.write_text((source.parent / skill_name / relative).read_text(encoding="utf-8"), encoding="utf-8")
+                if skill_name == "management-skill":
+                    relative = "assets/global-skill-capability-catalog.json"
+                    destination = skill_dir / relative
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_text((source.parent / skill_name / relative).read_text(encoding="utf-8"), encoding="utf-8")
             elif skill_name == "prompt-skill":
                 skill_dir.mkdir(parents=True)
                 (skill_dir / "agents").mkdir()

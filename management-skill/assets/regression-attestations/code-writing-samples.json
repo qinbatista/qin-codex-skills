@@ -2,11 +2,11 @@
   "schema_version": 1,
   "check_id": "code-sample-attestation",
   "status": "pass",
-  "created_at": "2026-08-30T22:16:55.692347+00:00",
+  "created_at": "2026-08-31T00:41:18.079891+00:00",
   "trial_count": 3,
   "passed_trials": 3,
   "watched_files": {
-    "code-skill/SKILL.md": "5946cd74ca9860095034e121a0446de621bee0439fd1db6a8987d97f08f9e3f6",
+    "code-skill/SKILL.md": "441f0e1d97c6005aaafd14310ea510dc15b21a440f561602c863c0be3c77af22",
     "code-skill/agents/openai.yaml": "6addfdfa5709159d8bdbc11c89e83b8d780b0b7cb628c8acd47a68d3b98c9974",
     "code-skill/references/code-writing-philosophy.md": "1962687fecbd28f6b12c2c4c53b054e82ad078615f5dac24cc7043f0f2ead1d5",
     "code-skill/references/coding-approach.md": "24d02e70e772189c7f3570b5f2724031abaa42e2261f87a3178de9ae87e07762",

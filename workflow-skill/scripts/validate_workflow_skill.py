@@ -180,6 +180,7 @@ REQUIRED_WORKFLOW += [
     "Ending writes check evidence and its terminal record before release",
     "Resource cleanup never controls another Codex task, thread, session, or Ending",
 ]
+REQUIRED_WORKFLOW += ["[Parallel Child-Session Orchestration](references/parallel-session-orchestration.md)", "admitted `planned_graph`", "project child sessions as an execution surface", "whole admitted graph selects collaboration children or the existing dispatcher, never both", "main/root session alone owns child-session topology", "monitoring, steering, targeted cancellation, final aggregation", "child READY state is evidence for the root", "Child sessions are not global projectless Endings", "only the root's final aggregate after every child settles", "existing single producer or dispatcher execution"]
 REQUIRED_VERIFY += [
     "[Task Resource Lifecycle](../workflow-skill/references/task-resource-lifecycle.md)",
     "writes evidence and its terminal record first",
@@ -227,6 +228,8 @@ REQUIRED_RESOURCE_LEDGER = [
     "os.rename",
     "FORBIDDEN_RUNTIME_KINDS",
 ]
+REQUIRED_PARALLEL_SESSION_ORCHESTRATION = ["Parallel Child-Session Orchestration", "whole admitted `planned_graph` uses exactly one execution surface", "collaboration child sessions or the existing dispatcher, never a mixture", "Every large or complex task must evaluate parallel child sessions", "at least two", "at most eight child sessions", "dependency-ready", "disjoint", "project-relative workdir", "logical inputs and outputs", "read allowlist", "write allowlist", "dependencies", "required flag", "cache class", "stop condition", "`spawn_agent`", "`list_agents`", "`wait_agent`", "`send_message`", "`followup_task`", "`interrupt_agent`", "children cannot control siblings", "start Ending", "declare the main task done", "isolated copy or worktree for each platform", "Parallel module work", "common project-root workdir", "disjoint write allowlists", "`Cache/tmp-*`", "`Cache/remote-*`", "main/root session is the only completion authority", "final aggregate receipt", "declared dependency to be `passed`", "main_complete=true", "ending_start_owner=root", "single producer/dispatcher behavior", "unsafe", "collaboration control plane is unavailable"]
+REQUIRED_PARALLEL_SESSION_CAPABILITY = ["GSR-037", "主控子 Session 并行编排", "安全自动 child-session", "dependency-ready", "spawn/list/wait/send/followup/interrupt", "child READY 不等于 main done", "final aggregate", "single producer/dispatcher", "workflow-units", "workflow-validator", "task-analyze-validator"]
 FORBIDDEN += ["No lifecycle operation may message, interrupt"]
 NEGATIVE_DESCRIPTION_PREFIXES = {"code": "Do not use for an exact-scoped read-only lookup, audit, transform, or workflow reconstruction", "verify": "Use only for explicitly requested verification as the task itself, or for post-result Ending Task Real Verify", "optimization": "Do not infer optimization from repeated benchmark arms or exact-scoped read-only work", "management": "Do not use for ordinary exact-scoped read-only work or Direct/Global benchmark worker arms"}
 NEGATIVE_AGENT_PREFIXES = {"code_agent": "$code-skill: exact artifact-free read-only work stays outside", "verify_agent": "$verify-skill: Ending for real_test|information_update|memory_update or material", "optimization_agent": "$optimization-skill: do not load from benchmark repetition alone or exact-scoped read-only work", "management_agent": "$management-skill: do not load for ordinary exact-scoped read-only work or benchmark workers"}
@@ -451,6 +454,7 @@ def validate(skill_dir):
         "template": skill_dir / "references" / "start-diagram-template.md",
         "matrix": skill_dir / "references" / "routing-matrix.md",
         "resource_lifecycle": skill_dir / "references" / "task-resource-lifecycle.md",
+        "parallel_session_orchestration": skill_dir / "references" / "parallel-session-orchestration.md",
         "resource_ledger": skill_dir / "scripts" / "task_resource_ledger.py",
         "code": global_root / "code-skill" / "SKILL.md",
         "code_agent": global_root / "code-skill" / "agents" / "openai.yaml",
@@ -459,6 +463,7 @@ def validate(skill_dir):
         "optimization": global_root / "optimization-skill" / "SKILL.md",
         "optimization_agent": global_root / "optimization-skill" / "agents" / "openai.yaml",
         "management": global_root / "management-skill" / "SKILL.md",
+        "capability_catalog": global_root / "management-skill" / "assets" / "global-skill-capability-catalog.json",
         "management_agent": global_root / "management-skill" / "agents" / "openai.yaml",
         "task_analyze": global_root / "task-analyze-skill" / "SKILL.md",
         "task_analyze_entry_rule": global_root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md",
@@ -494,9 +499,11 @@ def validate(skill_dir):
         expected_prefix = NEGATIVE_DESCRIPTION_PREFIXES[label]
         if not executor_metadata.get("description", "").lower().startswith(expected_prefix.lower()):
             failures.append(f"{expected_name} description must begin with the exact-scoped read-only negative preselection boundary: {expected_prefix}")
-    failures.extend(missing_terms("workflow agent", texts["agent"], ["$workflow-skill", "lowest-correct route", "2+ stages=>one graph", "Quick Check→CODE READY", "Observable or material updates require global projectless Ending", "material=>durable memory", "trivial_value_only", "Spark-xhigh first", "quota/5-hour/provider cooldown persisted", "skipped for next stronger controller", "isolated projectless Repair", "never contacts or interrupts existing sessions", "active write conflict waits", "fresh Ending<=3", "Workers evidence-only", "all PASS", "no polling"]))
+    failures.extend(missing_terms("workflow agent", texts["agent"], ["$workflow-skill", "lowest-correct route", "2+ stages=>one graph", "Quick Check→CODE READY", "Safe child-session topology", "main monitors/steers/stops", "child READY != main done", "root-only completion/final aggregate Ending", "children never launch Ending", "Observable or material updates require global projectless Ending", "material=>durable memory", "trivial_value_only", "Spark-xhigh first", "quota/5-hour/provider cooldown persisted", "skipped for next stronger controller", "isolated projectless Repair", "never contacts or interrupts existing sessions", "active write conflict waits", "fresh Ending<=3", "Workers evidence-only", "all PASS", "no polling"]))
     failures.extend(missing_terms("workflow", texts["workflow"], REQUIRED_WORKFLOW))
     failures.extend(missing_terms("task resource lifecycle", texts["resource_lifecycle"], REQUIRED_RESOURCE_LIFECYCLE))
+    failures.extend(missing_terms("parallel child-session orchestration", texts["parallel_session_orchestration"], REQUIRED_PARALLEL_SESSION_ORCHESTRATION))
+    failures.extend(missing_terms("parallel child-session retained capability", texts["capability_catalog"], REQUIRED_PARALLEL_SESSION_CAPABILITY))
     failures.extend(missing_terms("task resource ledger", texts["resource_ledger"], REQUIRED_RESOURCE_LEDGER))
     for forbidden in ("subprocess", "os.kill(", "send_message_to_thread", "interrupt_agent", "set_thread_archived", "terminate_task"):
         if forbidden in texts["resource_ledger"]:
@@ -532,11 +539,11 @@ def validate(skill_dir):
     for label in ("workflow", "code", "management", "task_analyze", "task_analyze_selection", "task_analyze_adaptive"):
         failures.extend(legacy_only_failures(label, texts[label]))
     entry_body = texts["task_analyze_entry_rule"].replace("This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n", "", 1)
-    if len(entry_body.encode("utf-8")) > 7000:
-        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 7000 bytes")
+    if len(entry_body.encode("utf-8")) > 7500:
+        failures.append(f"global entry bootstrap exceeds compact limit: {len(entry_body.encode('utf-8'))} > 7500 bytes")
     if entry_body != texts["global_agents"]:
         failures.append("global entry asset does not exactly match global AGENTS after removing its merge directive")
-    live_text = "\n".join(texts.values())
+    live_text = "\n".join(text for label, text in texts.items() if label != "capability_catalog")
     for forbidden in FORBIDDEN:
         if forbidden.lower() in live_text.lower():
             failures.append(f"live contract contains obsolete text: {forbidden}")

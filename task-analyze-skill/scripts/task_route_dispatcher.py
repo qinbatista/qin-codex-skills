@@ -1867,6 +1867,46 @@ def _route_run_id():
     return f"route-{uuid.uuid4().hex}"
 
 
+def preflight_plan(plan, entry_model, entry_effort, cwd, skills_root=None, *, history_path=None):
+    normalize_legacy_dynamic_plan(plan)
+    plan["execution_lifecycle"] = execution_lifecycle_for_plan(plan)
+    failures = validate_plan(plan, entry_model, entry_effort, cwd, skills_root=skills_root, enforce_current_recommendation=plan.get("routing_mode") != DYNAMIC_ROUTING_MODE, history_path=history_path)
+    return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "pre-execution-validation", "status": "pass" if not failures else "fail", "failures": failures, "execution_lifecycle": plan["execution_lifecycle"]}
+
+
+def _write_pre_result_repair_handoff(cache_dir, route_run_id, failures, completed_records, deadline_exhausted):
+    operational_records = [record for record in completed_records if record.get("phase") == "result" and record.get("status") != "pass" and record.get("result_published") is not True and record.get("failure_class") in obsidian_model_memory.OPERATIONAL_FAILURES]
+    if not operational_records and not deadline_exhausted:
+        return None
+    handoff_path = Path(cache_dir) / "pre-result-repair-handoff.json"
+    handoff = {
+        "schema_version": DISPATCH_SCHEMA_VERSION,
+        "stage": "pre-result-operational-repair",
+        "status": "reopen",
+        "route_run_id": route_run_id,
+        "target": {"type": "projectless"},
+        "origin_policy": "immutable_evidence_only",
+        "existing_session_mutation": False,
+        "prohibited_actions": ["send", "steer", "interrupt", "terminate", "handoff", "move", "mutate"],
+        "active_write_surface": "wait_without_messaging_or_interruption",
+        "required_completion": "fresh_final_aggregate_then_fresh_ending",
+        "failure_classes": sorted({record.get("failure_class") for record in operational_records if record.get("failure_class")}),
+        "deadline_exhausted": deadline_exhausted,
+        "failures": list(failures),
+        "result_published": False,
+        "final_aggregate_receipt": None,
+        "ending_handoff": None,
+        "ending_status": None,
+        "controller_restriction": None,
+    }
+    handoff_path.write_text(json.dumps(handoff, indent=2) + "\n", encoding="utf-8")
+    try:
+        handoff_path.chmod(0o600)
+    except OSError:
+        pass
+    return handoff_path
+
+
 def _record_pre_result_operational_failures(plan, completed_records, project_root):
     node_by_id = {node["id"]: node for node in plan.get("nodes", []) if isinstance(node, dict) and isinstance(node.get("id"), str)}
     learning = []
@@ -1988,21 +2028,13 @@ def run_plan(
     skills_root=None,
     history_path=None,
     result_ready_callback=None,
+    preflight=None,
 ):
-    normalize_legacy_dynamic_plan(plan)
-    plan["execution_lifecycle"] = execution_lifecycle_for_plan(plan)
     first_result_started = time.monotonic()
     first_result_started_ns = time.monotonic_ns()
+    preflight = preflight or preflight_plan(plan, entry_model, entry_effort, cwd, skills_root, history_path=history_path)
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
-    failures = validate_plan(
-        plan,
-        entry_model,
-        entry_effort,
-        cwd,
-        skills_root=skills_root,
-        enforce_current_recommendation=plan.get("routing_mode") != DYNAMIC_ROUTING_MODE,
-        history_path=history_path,
-    )
+    failures = list(preflight["failures"])
     cache_dir = Path(plan["cache_dir"]).expanduser().resolve() if not failures else cwd.resolve() / "work" / "cache" / "invalid-task-route"
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / "dispatch-manifest.json"
@@ -2026,6 +2058,7 @@ def run_plan(
             "result_published": False,
             "notification_required": False,
             "reopen_required": False,
+            "repair_handoff_path": None,
             "model_switch_summary": build_model_switch_summary(plan, [], summary_entry),
             "execution_lifecycle": plan["execution_lifecycle"],
         }
@@ -2238,6 +2271,8 @@ def run_plan(
         ending_quality_failure_nodes=(),
     )
     operational_model_learning = _record_pre_result_operational_failures(plan, ordered, cwd)
+    repair_handoff_path = _write_pre_result_repair_handoff(cache_dir, route_run_id, failures, ordered, deadline_exhausted) if not result_published else None
+    pre_result_recovery_required = repair_handoff_path is not None
 
     manifest = {
         "schema_version": DISPATCH_SCHEMA_VERSION,
@@ -2264,8 +2299,9 @@ def run_plan(
         "deadline_exhausted": deadline_exhausted,
         "repair_budget_remaining": 0,
         "result_published": result_published,
-        "notification_required": receipt_failure_after_result,
-        "reopen_required": receipt_failure_after_result,
+        "notification_required": receipt_failure_after_result or pre_result_recovery_required,
+        "reopen_required": receipt_failure_after_result or pre_result_recovery_required,
+        "repair_handoff_path": str(repair_handoff_path) if repair_handoff_path else None,
         "model_switch_summary": model_switch_summary,
         "operational_model_learning": operational_model_learning,
         "execution_lifecycle": plan["execution_lifecycle"],
@@ -2461,6 +2497,10 @@ def main():
     plan_parser.add_argument("--state-db", type=Path, help="Optional explicit Codex runtime SQLite database; runtime discovery is used when omitted.")
     plan_parser.add_argument("--codex-bin", default="codex")
     plan_parser.add_argument("--skills-root", type=Path)
+    preflight_parser = subparsers.add_parser("validate-plan")
+    preflight_parser.add_argument("plan", type=Path)
+    preflight_parser.add_argument("--cwd", type=Path, default=Path.cwd())
+    preflight_parser.add_argument("--skills-root", type=Path)
     ending_parser = subparsers.add_parser("run-ending")
     ending_parser.add_argument("handoff", type=Path)
     ending_parser.add_argument("--codex-bin", default="codex")
@@ -2470,19 +2510,14 @@ def main():
 
 
     args = parser.parse_args()
-    if args.command == "run-plan":
+    if args.command in {"run-plan", "validate-plan"}:
         plan = json.loads(args.plan.expanduser().resolve().read_text(encoding="utf-8"))
         entry = plan.get("entry") if isinstance(plan.get("entry"), dict) else {}
-        manifest = run_plan(
-            plan,
-            entry.get("model"),
-            entry.get("effort"),
-            args.cwd.expanduser().resolve(),
-            args.state_db.expanduser().resolve() if args.state_db else None,
-            args.codex_bin,
-            args.skills_root,
-            result_ready_callback=_emit_result_ready_event,
-        )
+        preflight = preflight_plan(plan, entry.get("model"), entry.get("effort"), args.cwd.expanduser().resolve(), args.skills_root)
+        if args.command == "validate-plan":
+            manifest = preflight
+        else:
+            manifest = run_plan(plan, entry.get("model"), entry.get("effort"), args.cwd.expanduser().resolve(), args.state_db.expanduser().resolve() if args.state_db else None, args.codex_bin, args.skills_root, result_ready_callback=_emit_result_ready_event, preflight=preflight)
     elif args.command == "release-main-result":
         handoff = json.loads(args.handoff.expanduser().resolve().read_text(encoding="utf-8"))
         manifest = _release_main_result(handoff)
