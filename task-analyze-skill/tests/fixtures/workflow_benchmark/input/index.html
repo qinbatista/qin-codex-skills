@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review desk</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px; background: #f3f5f8; color: #162337; font: 12px/1.4 system-ui, sans-serif; }
+button, select { font: inherit; }
+button { padding: 6px 12px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+h1 { font-size: 44px; margin: 0; }
+.actions { display: flex; gap: 20px; }
+.layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+.panel { background: white; border: 1px solid #bdc6d5; border-radius: 10px; padding: 24px; min-width: 360px; }
+.summary { margin-top: 30px; }
+h2 { margin: 0 0 18px; font-size: 26px; }
+.toolbar { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+.row { display: flex; flex-direction: column; gap: 12px; border: 1px solid #d6dce5; padding: 22px; margin: 12px 0; }
+.title { font-weight: 600; white-space: nowrap; }
+.details { display: flex; gap: 12px; }
+.badge { border: 1px solid #7f8b9f; border-radius: 4px; padding: 2px 6px; }
+.metric { border: 1px solid #d6dce5; padding: 18px; margin: 16px 0; }
+#feedback { min-height: 20px; }
+@media (max-width: 600px) {
+  .topbar { flex-direction: column; align-items: start; gap: 16px; }
+  .layout { display: block; }
+  .actions { width: 100%; justify-content: space-between; }
+  .toolbar { flex-direction: column; }
+}
+</style>
+<header class="topbar" id="header">
+  <h1 id="brand">Review desk</h1>
+  <div class="actions"><button id="add">Add</button><button id="export">Export</button></div>
+</header>
+<main class="layout">
+  <section class="panel" id="work-panel">
+    <div class="toolbar"><h2>Work</h2><label for="filter">Status <select id="filter"><option value="all">All</option><option value="review">Review</option><option value="ready">Ready</option></select></label></div>
+    <div id="rows">
+      <article class="row" data-state="review" data-record="r1"><span class="title">Sleeve measurements</span><div class="details"><span class="owner">Maya</span><span class="amount">$120.10</span><span class="badge">Review</span></div></article>
+      <article class="row" data-state="ready" data-record="r2"><span class="title">Pocket placement</span><div class="details"><span class="owner">Lee</span><span class="amount">$45.00</span><span class="badge">Ready</span></div></article>
+      <article class="row" data-state="review" data-record="r3"><span class="title">Construction review with extended reference notes</span><div class="details"><span class="owner">Ari</span><span class="amount">$80.25</span><span class="badge">Review</span></div></article>
+      <article class="row" data-state="ready" data-record="r4"><span class="title">Trim approval</span><div class="details"><span class="owner">Noah</span><span class="amount">$18.50</span><span class="badge">Ready</span></div></article>
+    </div>
+    <p id="feedback" role="status" aria-live="polite"></p>
+  </section>
+  <section class="panel summary" id="summary-panel"><h2>Overview</h2><div class="metric">4 items</div><div class="metric">2 in review</div><div class="metric">$263.85 total</div></section>
+</main>
+<script>
+const filter = document.querySelector('#filter');
+filter.addEventListener('change', () => {
+  for (const row of document.querySelectorAll('.row')) row.hidden = row.dataset.state !== filter.value;
+});
+document.querySelector('#add').addEventListener('click', () => {
+  document.querySelector('#rows').insertAdjacentHTML('afterbegin', '<article class="row" data-state="draft" data-record="draft"><span class="title">New draft</span><div class="details"><span class="owner">You</span><span class="amount">$0.00</span><span class="badge">Draft</span></div></article>');
+});
+document.querySelector('#export').addEventListener('click', () => window.open('about:blank'));
+</script>
+</html>

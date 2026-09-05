@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import copy
 import fnmatch
 import hashlib
 import importlib.util
@@ -14,6 +15,29 @@ import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
+
+
+# Kept self-contained because this installer also runs before skills are downloaded.
+def hidden_process_options(*, creationflags=0, startupinfo=None):
+    """Keep Windows console children hidden; leave other platforms unchanged.
+
+    Pass the result to subprocess.run or subprocess.Popen. Streams, timeouts,
+    process ownership, and cancellation stay with the caller. GUI programs
+    still require their own headless/background mode.
+    """
+    if sys.platform == "win32":
+        incompatible = subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS
+        if creationflags & incompatible:
+            raise ValueError("Hidden processes cannot request a new or detached console")
+        hidden_startup = copy.copy(startupinfo) if startupinfo is not None else subprocess.STARTUPINFO()
+        hidden_startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        hidden_startup.wShowWindow = subprocess.SW_HIDE
+        return {
+            "creationflags": creationflags | subprocess.CREATE_NO_WINDOW,
+            "startupinfo": hidden_startup,
+        }
+    return {}
+
 
 
 def load_skill_platform_checker(skills_dir):
@@ -142,142 +166,14 @@ CHINESE_CATEGORY_LABELS = {
     "Management": "管理类 / Management",
     "General": "通用类 / General",
 }
-SKILL_SUMMARIES = {
-    "task-analyze-skill": "Explicit routing, benchmark, and maintenance strategy. The compact bootstrap sends eligible ordinary production to the saved contextual quality pair; full Task Analyze owns strategy and cost-admitted graphs.",
-    "workflow-skill": "Executes only positively admitted locked routes. Producers retain exact pairs and receipts, return the result, then hand bounded checks to one fast Ending.",
-    "prompt-skill": "The 100% global gate for reusable prompt and durable-instruction creation, review, edit, repair, standardization, testing, summarization, and optimization. The selected producer loads it; ordinary prose is excluded.",
-    "code-skill": "Adaptive or admitted-route executor for active registry-owned code domains; Python, plain C#, and Unity C# are built-in examples. The saved task-strategy pair executes ordinary work; eligible small work reaches Spark only after the same-session outcome gate.",
-    "project-memory-skill": "Recalls and records project changes with mandatory project/module/method coverage plus concrete file evidence, using a private local authority and optional native Obsidian projection.",
-    "optimization-skill": "Turns explicit, repeated, or clearly reusable workflows into scripts, references, prompts, assets, or templates while preserving behavior.",
-    "verify-skill": "One post-result Ending uses Spark-xhigh first for real checks and terminal memory/classification; persisted provider cooldown skips that model for the next stronger controller, and failure creates an isolated Repair Task.",
-    "management-skill": "Handles Codex profile operations and source-first global Skill deployment/publication behind a numbered retained-capability regression gate.",
-}
-CHINESE_SKILL_SUMMARIES = {
-    "task-analyze-skill": "显式路由、benchmark 和维护策略：紧凑 bootstrap 把合格普通生产任务交给已保存的上下文质量档；完整 skill 负责策略和成本准入图谱。",
-    "workflow-skill": "只执行已通过准入的锁定路线。Producer 保留准确 pair 和 receipt，先返回结果，再把有界检查交给一个快速 Ending。",
-    "prompt-skill": "可复用 prompt 与持久 AI 指令创建、审查、编辑、修复、标准化、测试、总结和优化的全局 100% 入口。选中的 producer 加载它；普通文案不会误触发。",
-    "code-skill": "活动注册代码域的自适应或已准入路线执行者；Python、普通 C#、Unity C# 是内置示例。普通任务使用任务策略质量档；合格小任务先过同会话结果门再试 Spark。",
-    "project-memory-skill": "强制按项目、功能模块和方法建立覆盖，再用具体文件证据回溯与记录修改；本地私有记录为权威来源，Obsidian 为可选原生投影。",
-    "optimization-skill": "把明确要求、重复多次或明显可复用的流程变成本地脚本、引用资料、prompt、资产或模板，同时保持行为不变。",
-    "verify-skill": "主结果先展示；一个 Ending 优先使用 Spark-xhigh 做真实检查与记忆/分类收尾；持久化 provider 冷却会跳过受限模型并使用下一档更强主控，失败则新建隔离 Repair Task。",
-    "management-skill": "处理 Codex profile 操作，以及由编号化全能力非回归门禁保护的全局 Skill 本地部署和 GitHub 发布。",
-}
-SKILL_CONTENTS = {
-    "task-analyze-skill": [
-        ("Adaptive bootstrap", "Eligible ordinary production executes the saved contextual quality pair without loading the full routing skill."),
-        ("Receipt-backed movement", "One Real PASS retains, two matched PASS outcomes try one weaker rung, and quality failure upgrades one rung."),
-        ("Session-effort solving routes", "The router excludes the current turn, links prior session routes to verified terminal outcomes, resets after a pass, and gradually strengthens only an unresolved same-topic correction."),
-        ("Source-cost admission", "Two or three independent sources choose one producer or a fused graph from byte and session-context estimates before content reads."),
-        ("Performance admission", "Open-ended graphs and savings claims require current comparable correctness, token, and time evidence."),
-        ("Two-world benchmark", "Direct task has no verifier; Auto returns the task result before a separate Ending check; dispatcher cost remains a disclosed diagnostic."),
-    ],
-    "workflow-skill": [
-        ("Locked route execution", "Execute only a positively admitted plan with exact pairs, dependencies, allowlists, and receipts."),
-        ("Single-producer default", "Dependency-coupled work and small independent sources stay with one contextual producer."),
-        ("Result-first handoff", "The producer completes one Quick Check, presents the result, then creates a global-only projectless End Task and confirms list_threads reports projectId=null/absent."),
-        ("Ending visibility", "PASS, FAIL, and BLOCKED remain visible; Ending tasks and repair handoffs never auto-archive or delete themselves."),
-        ("Runtime proof", "Every model-generated node exposes its effective pair and token/time receipt."),
-    ],
-    "prompt-skill": [
-        ("100% global prompt gate", "Always load Prompt for reusable prompt or durable-instruction creation, review, edit, repair, standardization, testing, summarization, or optimization."),
-        ("Ordinary-prose exclusion", "Do not trigger merely because an ordinary request is text; the requested artifact must itself be a reusable prompt or durable AI instruction."),
-        ("Conditional prompt controls", "Use role, workflow/tools, autonomy, reasoning, verbosity, delimiters, and examples only when they materially improve behavior."),
-        ("Conflict-free contracts", "Require explicit objective, inputs, requirements, output, success/failure, and verification without visible chain-of-thought."),
-        ("Result-first prompt testing", "Present the completed prompt first; representative trials and evidence checks run afterward in Ending."),
-    ],
-    "code-skill": [
-        ("Prompt-in-code integration", "Load Prompt first, then apply Python, C#, or Unity C# executable-string, formatting, and ownership rules."),
-        ("Karpathy Coding Guidelines", "Use explicit assumptions, simple design, clear naming, shallow branching, and surgical edits."),
-        ("Proportional Quick Check", "Light local work gets a minimal smoke; heavy/API/large/side-effect work checks syntax, names, imports, and references."),
-        ("Adaptive execution", "The task-strategy quality pair executes ordinary code work; Spark is reserved for cost-admitted independent source branches."),
-        ("Result ownership", "One producer owns the edit, Quick Check, receipt, and completed result."),
-    ],
-    "project-memory-skill": [
-        ("Working-line recall", "Recall project, module, file, symbol, branch, and version-scoped change history before editing."),
-        ("Verified record", "Record only the final verified change after the result is complete."),
-        ("Private authority", "Local JSONL is authoritative with optional Obsidian projection; public mirrors exclude private records."),
-    ],
-    "optimization-skill": [
-        ("Skill Optimization", "Optimize explicit, repeated, or clearly reusable workflows into local scripts, references, assets, prompts, or templates."),
-        ("Behavior preservation", "Remove deterministic waste without weakening correctness or changing user-visible contracts."),
-        ("Evidence separation", "The optimizer presents the finished result and a different Ending session checks immutable evidence."),
-        ("Reference extraction", "Move long stable instructions into references so they load only when needed."),
-        ("Assets and templates", "Store reusable fixtures, templates, or media when they are part of the optimized skill."),
-    ],
-    "verify-skill": [
-        ("Proportional completion evidence", "The producer owns the bounded Quick Check before presentation."),
-        ("Persistent End Task", "Create global-only projectless End Task-<related task>, confirm list_threads reports projectId=null/absent, and keep every terminal status visible."),
-        ("Fixed fast executor", "Use Spark-xhigh for every Ending; score scopes checks, and only explicit availability/capability failure permits registry-floor Luna-low."),
-        ("Real-check boundary", "Run the smallest supplied real checks once; a failing verifier records evidence and returns repair to the immutable origin."),
-        ("Terminal verdict", "One visible verdict closes routing classification, project-result memory when applicable, and the bounded preference scan."),
-    ],
-    "management-skill": [
-        ("Codex Switch", "Manage local Codex auth profiles and confirmed account switching."),
-        ("Consumer replacement", "Consumer install/update shallow-clones the published source and replaces only the eight managed Skills with mechanical safety. Global AGENTS installation is explicit, backed up, and recoverable; maintainer push runs the release gate once before publication."),
-        ("GitHub Sync", "Run preuse checks, public-safety scan, sync, push, and remote hash verification for both mirrors."),
-        ("Privacy-Safe Management", "Auth, tokens, cookies, raw prompts/results, receipts, logs, caches, and private learning stay local."),
-    ],
-}
-CHINESE_SKILL_CONTENTS = {
-    "task-analyze-skill": [
-        ("自适应 bootstrap", "合格普通生产任务直接执行已保存的上下文质量档，不加载完整路由 skill。"),
-        ("Receipt 证据移动", "一次 Real PASS 保留，两次匹配 PASS 降一级，质量失败升一级。"),
-        ("Session effort 解题路线", "路由先排除当前 turn，再把历史 route 关联到已验证终态；PASS 重置，只有同主题未解决修正才逐步增强模型；跳题开启独立状态。"),
-        ("Source 成本准入", "两个或三个独立 source 在读取前根据 byte 与会话上下文估算选择单 producer 或融合 graph。"),
-        ("性能准入", "开放式 graph 与节省声明必须有当前可比的正确性、token 和时间证据。"),
-        ("双世界 benchmark", "Direct 主任务无 verifier；Auto 先返回结果再独立 Ending；dispatcher 只作公开诊断。"),
-    ],
-    "workflow-skill": [
-        ("锁定路线执行", "只执行 pair、依赖、allowlist 与 receipt 都准确的已准入计划。"),
-        ("单 Producer 默认", "依赖耦合工作和小型独立 source 都使用一个上下文 producer。"),
-        ("结果优先交接", "Producer 完成一次 Quick Check、展示结果，再创建全局 projectless End Task，并确认 list_threads 返回 projectId=null/无字段。"),
-        ("Ending 可见性", "PASS、FAIL、BLOCKED 都保持可见；Ending task 与修复交接永不自动归档或删除。"),
-        ("运行证明", "每个模型节点都公开实际 effective pair 和 token/time receipt。"),
-    ],
-    "prompt-skill": [
-        ("全局 100% Prompt 入口", "所有可复用 prompt 或持久 AI 指令的创建、审查、修改、修复、标准化、测试、总结与优化都加载 Prompt。"),
-        ("普通文案排除", "请求只是文字不触发；目标本身必须是可复用 prompt 或持久 AI 指令。"),
-        ("条件化控制", "角色、工具、自主性、reasoning、verbosity、分隔符和示例只在确实改善行为时使用。"),
-        ("无冲突契约", "明确目标、输入、要求、输出、成功/失败与验证，不要求展示思维链。"),
-        ("结果优先测试", "先展示完成 prompt；代表性 trial 与证据检查之后在 Ending 运行。"),
-    ],
-    "code-skill": [
-        ("Prompt-in-code 集成", "先加载 Prompt，再应用 Python、C# 或 Unity C# 的可执行字符串、格式和 ownership 规则。"),
-        ("Karpathy Coding Guidelines", "使用明确假设、简单设计、清晰命名、浅分支和精确修改。"),
-        ("成比例 Quick Check", "轻量本地工作跑最小 smoke；重型/API/大文件/副作用工作检查语法、名称、import 和引用。"),
-        ("自适应执行", "普通代码工作使用任务策略质量档；Spark 只用于成本准入的独立 source 分支。"),
-        ("结果所有权", "一个 producer 负责修改、Quick Check、receipt 与完成结果。"),
-    ],
-    "project-memory-skill": [
-        ("工作线回溯", "修改前按项目、模块、文件、symbol、branch 和 version 回溯历史。"),
-        ("验证后记录", "只在结果完成并验证后记录最终修改。"),
-        ("私有权威", "本地 JSONL 为权威，可选投影到 Obsidian；公共镜像不包含私人记录。"),
-    ],
-    "optimization-skill": [
-        ("Skill Optimization", "把明确、重复或明显可复用流程优化为本地脚本、reference、asset、prompt 或 template。"),
-        ("保持行为", "删除确定性浪费，不弱化正确性，也不改变用户可见契约。"),
-        ("证据分离", "Optimizer 先展示完成结果，再由不同 Ending session 检查不可变证据。"),
-        ("Reference 抽取", "把长且稳定的说明移到 references，仅在需要时加载。"),
-        ("Assets 与模板", "属于优化 skill 的可复用 fixture、template 或媒体放入 assets。"),
-    ],
-    "verify-skill": [
-        ("成比例完成证据", "Producer 在展示前负责边界明确的 Quick Check。"),
-        ("持久 End Task", "创建并准确命名全局 projectless End Task-<相关任务>，确认 list_threads 返回 projectId=null/无字段；所有终态都保持可见。"),
-        ("固定快速执行器", "所有 Ending 首选 Spark-xhigh；分数只控制检查，只有明确不可用时才回退 registry-floor Luna-low。"),
-        ("真实检查边界", "最小真实检查只执行一次；失败 verifier 记录证据并把修复退回不可变 origin。"),
-        ("终局判定", "一次可见终局完成路由分类、适用的项目结果记忆与有界偏好扫描。"),
-    ],
-    "management-skill": [
-        ("Codex Switch", "管理本地 Codex auth profile 与确认后的账号切换。"),
-        ("消费者替换安装", "消费者安装或更新浅克隆已发布源，只做机械安全替换八个受管 Skill 和两个 global AGENTS；维护者 push 在发布前只运行一次完整门禁。"),
-        ("GitHub Sync", "对两个镜像运行 preuse、公开安全扫描、sync、push 和远端 hash 校验。"),
-        ("隐私安全", "auth、token、cookie、原始 prompt/result、receipt、log、cache 与私人学习保持本地。"),
-    ],
-}
+SKILL_SUMMARIES = {'task-analyze-skill': 'Preserve the selected model for skill-governed work; adapt independent tasks.', 'workflow-skill': 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.', 'prompt-skill': 'Write concise reusable instructions with clear goals, constraints, and output expectations.', 'code-skill': 'Use direct readable code, explicit ownership, language conventions, and coherent UI.', 'project-memory-skill': 'Read relevant project memory and summarize durable facts with the selected model; skip missing memory.', 'optimization-skill': 'Simplify requested or recurring work with measured evidence.', 'verify-skill': 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.', 'management-skill': 'Maintain source, install recoverably, and publish only when authorized.'}
+CHINESE_SKILL_SUMMARIES = {'task-analyze-skill': '受 Skill 约束的工作保留用户模型；独立任务自适应选模。', 'workflow-skill': '明确目标和依赖，安全并行，在当前任务整合并验证。', 'prompt-skill': '编写简洁的可复用指令，明确目标、约束和输出。', 'code-skill': '直接清晰的代码、明确职责、语言规范和一致 UI。', 'project-memory-skill': '读取相关项目记忆，用用户模型总结持久信息；缺失直接跳过。', 'optimization-skill': '按需简化重复工作，以实测支持结果。', 'verify-skill': '在当前任务内验证受影响行为；Ending 只更新记忆。', 'management-skill': '维护源码、可恢复安装、仅按授权发布。'}
+SKILL_CONTENTS = {'task-analyze-skill': [('Purpose', 'Preserve the selected model for skill-governed work; adapt independent tasks.')], 'workflow-skill': [('Purpose', 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.')], 'prompt-skill': [('Purpose', 'Write concise reusable instructions with clear goals, constraints, and output expectations.')], 'code-skill': [('Purpose', 'Use direct readable code, explicit ownership, language conventions, and coherent UI.')], 'project-memory-skill': [('Purpose', 'Read relevant project memory and summarize durable facts with the selected model; skip missing memory.')], 'optimization-skill': [('Purpose', 'Simplify requested or recurring work with measured evidence.')], 'verify-skill': [('Purpose', 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.')], 'management-skill': [('Purpose', 'Maintain source, install recoverably, and publish only when authorized.')]}
+CHINESE_SKILL_CONTENTS = {'task-analyze-skill': [('职责', '受 Skill 约束的工作保留用户模型；独立任务自适应选模。')], 'workflow-skill': [('职责', '明确目标和依赖，安全并行，在当前任务整合并验证。')], 'prompt-skill': [('职责', '编写简洁的可复用指令，明确目标、约束和输出。')], 'code-skill': [('职责', '直接清晰的代码、明确职责、语言规范和一致 UI。')], 'project-memory-skill': [('职责', '读取相关项目记忆，用用户模型总结持久信息；缺失直接跳过。')], 'optimization-skill': [('职责', '按需简化重复工作，以实测支持结果。')], 'verify-skill': [('职责', '在当前任务内验证受影响行为；Ending 只更新记忆。')], 'management-skill': [('职责', '维护源码、可恢复安装、仅按授权发布。')]}
 
 
 def run_command(command, cwd=None):
-    return subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True)
+    return subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True, **hidden_process_options())
 
 
 def lexical_absolute_path(path):
@@ -302,7 +198,7 @@ def run_release_gate(source_dir, skills_dir, mode):
         "--mode",
         mode,
     ]
-    completed = subprocess.run(command, cwd=source_dir, text=True, capture_output=True, check=False, timeout=3600)
+    completed = subprocess.run(command, cwd=source_dir, text=True, capture_output=True, check=False, timeout=3600, **hidden_process_options())
     if completed.stdout.strip():
         print(completed.stdout.strip())
     if completed.returncode != 0:
@@ -574,7 +470,7 @@ def execution_domain_table(rows):
     for row in rows:
         state = "active" if row["active"] else "history-only"
         spark = "source-eligible" if row["spark_first"] else "no"
-        lines.append(f"- `{row['id']}` · {row['kind']} · `{row['owner_skill']}` · {state} · Spark schedule: {spark} · [rules](./{row['reference_path']})")
+        lines.append(f"- `{row['id']}` · {row['kind']} · `{row['owner_skill']}` · {state} · [rules](./{row['reference_path']})")
     return "\n".join(lines)
 
 
@@ -765,49 +661,7 @@ def build_support_skill_details(rows, language="en"):
 
 
 def workflow_lane_section(language="en"):
-    if language == "zh":
-        return [
-            "## Main Goal 和 Ending Task",
-            "",
-            "合格普通生产任务由紧凑 bootstrap 选择上下文质量档并执行；小型多 source 使用单 producer，只有成本或显式 latency 准入才运行 graph。",
-            "",
-            "```mermaid",
-            "flowchart TD",
-            '  A["用户请求"] --> B["任务策略质量档"]',
-            '  B --> C["自适应 Producer 或成本准入 Graph"]',
-            '  C --> Q["成比例 Quick Check"]',
-            '  Q --> R["立即展示完成结果"]',
-            '  R --> E["新建 End Task"]',
-            '  E --> V["只读 Ending 证据审计"]',
-            "```",
-            "",
-            "- **主任务：** 一个 producer 负责结果与 Quick Check；dependency-coupled 多文件绝不强制 fan-out。",
-            "- **主结果：** 完成后立即展示；first-result 时间到此停止。",
-            "- **Ending：** 新的持久任务只读检查不可变证据；origin 不等待、不轮询、不修复。",
-            "- **Workflow：** 只执行已通过成本/性能准入的锁定 graph。",
-            "",
-        ]
-    return [
-        "## Main Goal And Ending Task",
-        "",
-        "Eligible ordinary production uses the compact bootstrap to select and execute a contextual quality pair. Small multi-source work stays with one producer; only cost or explicit latency admission opens a graph.",
-        "",
-        "```mermaid",
-        "flowchart TD",
-        '  A["User request"] --> B["Task-strategy quality pair"]',
-        '  B --> C["Adaptive producer or cost-admitted graph"]',
-        '  C --> Q["Proportional Quick Check"]',
-        '  Q --> R["Present completed result immediately"]',
-        '  R --> E["Create new End Task"]',
-        '  E --> V["Read-only Ending evidence audit"]',
-        "```",
-        "",
-        "- **Main task:** one producer owns result work and Quick Check; dependency-coupled files never force fan-out.",
-        "- **Main result:** present it immediately when complete; first-result time stops there.",
-        "- **Ending:** a new persistent task audits immutable evidence; the origin never waits, polls, or repairs.",
-        "- **Workflow:** executes only a cost/performance-admitted locked graph.",
-        "",
-    ]
+    return ["## Workflow", "", "Selected model + relevant skills/memory → goals → execution → focused in-task verification → result → useful memory only.", ""]
 
 
 
@@ -857,7 +711,7 @@ def path_differs(source_dir, target_dir):
     with temporary_workspace("qin-codex-skills-diff-") as sandbox:
         copy_skill_directory(source_dir, sandbox / "source")
         copy_skill_directory(target_dir, sandbox / "target")
-        return subprocess.run(["git", "diff", "--no-index", "--quiet", str(sandbox / "source"), str(sandbox / "target")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+        return subprocess.run(["git", "diff", "--no-index", "--quiet", str(sandbox / "source"), str(sandbox / "target")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **hidden_process_options()).returncode != 0
 
 
 def canonical_global_agents_text(source_dir):
@@ -1617,16 +1471,21 @@ def assert_publishable_staged_paths(source_dir):
     return staged_paths
 
 
-def assert_publishable_worktree_paths(source_dir):
-    output = run_command(["git", "status", "--porcelain", "--untracked-files=all"], cwd=source_dir).stdout
+def source_worktree_paths(source_dir):
+    output = run_command(["git", "status", "--porcelain", "-z", "--untracked-files=all"], cwd=source_dir).stdout
     paths = []
-    for line in output.splitlines():
-        if not line.strip():
+    records = iter(output.split("\0"))
+    for record in records:
+        if not record:
             continue
-        value = line[3:]
-        if " -> " in value:
-            value = value.split(" -> ", 1)[1]
-        paths.append(Path(value.strip('"')))
+        paths.append(Path(record[3:]))
+        if "R" in record[:2] or "C" in record[:2]:
+            paths.append(Path(next(records)))
+    return list(dict.fromkeys(paths))
+
+
+def assert_publishable_worktree_paths(source_dir):
+    paths = source_worktree_paths(source_dir)
     refused = [path for path in paths if not publishable_source_path(path)]
     if refused:
         details = "\n".join(f"- {path.as_posix()}" for path in refused)
@@ -1658,6 +1517,8 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
     if not dry_run:
         run_release_gate(source_dir, skills_dir or Path.home() / ".codex" / "skills", "release")
     skill_paths = skill_directories(source_dir)
+    if not dry_run:
+        assert_public_safe(skill_paths)
     readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=dry_run)
     branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
     if not branch_name:
@@ -1691,9 +1552,13 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
             f"Remote verification failed after push: local {local_head}, remote {observed_remote_head or 'missing'}"
         )
     write_sync_state(DEFAULT_STATE_FILE, repository, local_head, snapshot_hash(skill_paths), snapshot_hash(skill_paths))
-    remaining = run_command(["git", "status", "--porcelain", "--untracked-files=all"], cwd=source_dir).stdout.strip()
+    remaining = source_worktree_paths(source_dir)
+    unpublished = [path for path in remaining if publishable_source_path(path)]
+    if unpublished:
+        details = "\n".join(f"- {path.as_posix()}" for path in unpublished)
+        raise RuntimeError(f"Publication reached the remote but publishable source changes remain:\n{details}")
     if remaining:
-        raise RuntimeError(f"Publication reached the remote but the maintained source worktree is not clean:\n{remaining}")
+        print_lines("Preserved excluded local changes:", [path.as_posix() for path in remaining])
     print(f"Pushed maintained source {local_head} to {repository}:{branch_name} and verified the remote hash.")
 
 

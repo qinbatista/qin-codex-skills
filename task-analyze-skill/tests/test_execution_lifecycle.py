@@ -38,7 +38,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
         contract = routing_policy.execution_lifecycle_contract(24, True)
         self.assertEqual(contract["mode"], "direct")
         self.assertFalse(contract["plan_required"])
-        self.assertEqual(contract["model_selection"], "lowest_suitable_capability_history_entry_pair")
+        self.assertEqual(contract["model_selection"], "user_selected_for_governing_skills_else_adaptive")
 
     def test_risk_or_ambiguity_forces_a_plan(self):
         for risk, ambiguity in (("high", "low"), ("low", "high")):
@@ -96,7 +96,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
         self.assertTrue(aggregate["ending_launch_ready"])
         self.assertTrue(aggregate["final_aggregate_receipt"])
         self.assertFalse(skipped["ending_required"])
-        self.assertEqual(skipped["ending_real_status"], "intentionally_skipped_simple_task")
+        self.assertEqual(skipped["ending_real_status"], "skipped")
 
     def test_missing_desktop_session_file_is_unavailable_not_invalid(self):
         with tempfile.TemporaryDirectory() as temporary:

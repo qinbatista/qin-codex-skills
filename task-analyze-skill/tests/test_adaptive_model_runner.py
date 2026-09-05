@@ -164,7 +164,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
         self.assertEqual(args.artifact, "answer")
         self.assertEqual(args.scope, "multi")
         self.assertEqual(args.execution_domain, "general")
-        self.assertEqual(args.static_suggestion, "gpt-5.6-terra|high")
+        self.assertEqual(args.static_suggestion, module.model_routing_history.resolve_profile_preset("grounded-repository-answer-complex", project_family="museai", owning_skill="muse-ai-plugin:muse-ai-dev-skill")["static_suggestion"])
         self.assertEqual(args.hard_floor, args.candidate_ladder[0])
         self.assertEqual(args.candidate_ladder, module.model_routing_history.normal_adaptive_pair_texts())
 
@@ -268,7 +268,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             published_result = args.result_output.read_text(encoding="utf-8")
             receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
         self.assertEqual(summary["status"], "pass")
-        self.assertEqual(summary["real_verify_status"], "pending")
+        self.assertEqual(summary["real_verify_status"], "reported_by_active_task")
         self.assertEqual(published_result, '{"answer":"ok"}\n')
         self.assertNotIn("mini_status", receipt)
         execute.assert_called_once()

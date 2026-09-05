@@ -1,5 +1,4 @@
 interface:
-  display_name: "Management Skill"
-  short_description: "Routing records, profiles, and eight-skill mirror"
-  default_prompt: >-
-    $management-skill: do not load for ordinary exact-scoped read-only work or benchmark workers;explicit request/admitted node only. Native Obsidian+local receipts;score 0-100;quality evidence moves producer routes. Observable/material management updates=>global projectless Ending;material=>durable memory;explicit trivial_value_only may skip. Spark-xhigh first;quota/5-hour/provider cooldown;skip cooling model for next stronger controller. FAIL=>fresh independent projectless Repair;never contact/steer/interrupt/terminate/handoff/move/mutate existing sessions;active write conflict waits;fresh parent-linked Ending. Consumer install/update=lock+fsynced recovery+opaque backup+exact-target replace only;maintainer push runs one full gate before mutation;source/deployed/remote separate;never publish private state.
+  display_name: "management-skill"
+  short_description: "Maintain, install, and publish managed skills"
+  default_prompt: "Maintain concise source contracts, preserve user work, test relevant changes in-task, install recoverably, and publish only when authorized."

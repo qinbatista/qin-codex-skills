@@ -17,6 +17,9 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 
 DEFAULT_STORE = Path.home() / ".codex" / "project-change-memory"
 DEFAULT_VAULT = None
@@ -173,6 +176,7 @@ def _run_git(*command, cwd):
             text=True,
             check=True,
             timeout=3,
+            **hidden_process_options(),
         )
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         return ""
@@ -257,8 +261,7 @@ def _working_lines_conflict(left, right):
 def _should_exclude_from_auto_match(record, current_line, include_ambiguous=False):
     record_line = record.get("project", {}).get("working_line") or record.get("working_line") or {}
     if not include_ambiguous:
-        if not _has_sufficient_working_line(current_line) or not _has_sufficient_working_line(record_line):
-            return True
+        # Exact project identity already matched; non-Git documents still have memory.
         if _working_lines_conflict(record_line, current_line):
             return True
     return False
@@ -514,8 +517,15 @@ def _registered_owner_alias(record_root):
 
 
 def _registered_owner(record_root):
+    if str(record_root or "").strip() in {"", "."}:
+        return None
     root = _registered_owner_alias(record_root)
+    home_roots = {_normalized_registered_root(Path.home() / relative) for relative, owner in HOME_PROJECT_OWNER_ROOTS}
     for registered_root, owner in _registered_project_owners():
+        # Codex hosts unrelated worktrees and tasks as well as global Skills.
+        # Only its root and Skill source directory share the global Skill owner.
+        if registered_root in home_roots and root != registered_root and not (root == registered_root + "/skills" or root.startswith(registered_root + "/skills/")):
+            continue
         if root == registered_root + "/cache" or root.startswith(registered_root + "/cache/"):
             continue
         if root == registered_root or root.startswith(registered_root + "/"):
@@ -552,8 +562,6 @@ def _record_matches_project(record, project):
     if _canonical_project_owner(record.get("project_owner")) == owner:
         return True
     if _canonical_project_owner(record_project.get("owner")) == owner:
-        return True
-    if _canonical_project_owner(record_project.get("name")) == owner:
         return True
     record_root = record_project.get("root")
     if record_root and _registered_owner(record_root) == owner:
@@ -665,28 +673,85 @@ def _write_journal_pointer(history_target, vault_path, record):
         index.write_text(updated_index, encoding="utf-8")
 
 
-def _write_root_first_memory(record, vault_path):
+def _project_canonical_event(runtime, record):
+    """Bridge current canonical writers while preserving the local event identity."""
+    required = ("record_event", "_read_events", "_validate_event_semantics", "_fingerprint", "_semantic_event_payload", "_with_store_lock", "_write_events")
+    if any(not callable(getattr(runtime, name, None)) for name in required):
+        raise RuntimeError("Canonical memory runtime lacks the validated, locked same-ID writer capabilities")
+    if not getattr(runtime, "EVENTS_PATH", None):
+        raise RuntimeError("Canonical memory runtime must declare its event store")
+    if not RECORD_ID_PATTERN.fullmatch(str(record.get("id") or "")):
+        raise ValueError("same-ID projection requires one valid local record identity")
+    with tempfile.TemporaryDirectory(prefix="codex-project-memory-") as directory:
+        staging = Path(directory) / "events.jsonl"
+        runtime.record_event(
+            project=record["project"]["owner"], module=record["module"], event_type="general",
+            summary=record["summary"], reason=record["reason"], result=record["result"],
+            verification_status=record["verification_status"], files=record["files"],
+            verification=record["verification"], decisions=record["decisions"], risks=record["risks"],
+            recorded_at=record["recorded_at"], events_path=staging,
+            session_key=record.get("codex_session_key", ""), task_name=record.get("task_name", ""),
+            task_scope_key=record.get("task_scope_key", ""), task_group=record.get("task_group", ""),
+            task_group_key=record.get("task_group_key", ""))
+        staged = runtime._read_events(staging)
+    if len(staged) != 1:
+        raise RuntimeError("Canonical writer did not produce exactly one validated event")
+    event = staged[0]
+    event.update({"event_id": record["id"], "supersedes": record.get("supersedes", ""), "source": "codex-project-result"})
+    runtime._validate_event_semantics(event)
+    event["fingerprint"] = runtime._fingerprint(event)
+
+    def semantic(value):
+        return runtime._semantic_event_payload({**value, "project": _canonical_project_owner(value.get("project"))})
+
+    def operation(events):
+        predecessor = next((existing for existing in events if existing.get("event_id") == event["supersedes"]), None)
+        if event["supersedes"] == event["event_id"] or predecessor and _canonical_project_owner(predecessor.get("project")) != event["project"]:
+            raise ValueError("memory supersession must stay in the same project")
+        same_id = [existing for existing in events if existing.get("event_id") == event["event_id"]]
+        if same_id:
+            if len(same_id) != 1 or semantic(same_id[0]) != semantic(event):
+                raise ValueError("same-ID canonical event conflicts with the project or completed outcome")
+            return {"status": "duplicate", "event_id": event["event_id"]}
+        if any(semantic(existing) == semantic(event) for existing in events):
+            raise ValueError("canonical outcome already exists with a different event ID")
+        events.append(event)
+        events.sort(key=lambda item: item.get("last_seen") or item.get("recorded_at") or "")
+        runtime._write_events(events, runtime.EVENTS_PATH)
+        return {"status": "written", "event_id": event["event_id"]}
+
+    output = runtime._with_store_lock(runtime.EVENTS_PATH, operation)
+    classify = getattr(runtime, "_run_auto_classification", None)
+    if callable(classify) and output["status"] == "written":
+        output["auto_classification"] = classify(runtime.EVENTS_PATH)
+    return output
+
+
+def _write_root_first_memory(record, vault_path, project_root=None):
+    project_identity = record.get("project", {})
+    projection_owner = _canonical_project_owner(project_identity.get("owner"))
+    identity_root = project_root if project_root is not None else project_identity.get("root")
+    if not projection_owner and str(identity_root or "").strip() not in {"", "."}:
+        projection_owner = _canonical_history_target(record, vault_path, identity_root)[1]
+    if not projection_owner:
+        return {"status": "no-op", "written": False, "reason": "unregistered_project_root"}
     runtime_path = vault_path / "AI Memory" / "ai_memory.py"
     specification = importlib.util.spec_from_file_location("myaillm_ai_memory_runtime", runtime_path)
     if specification is None or specification.loader is None:
         raise RuntimeError(f"Cannot load root-first AI memory runtime: {runtime_path}")
     runtime = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(runtime)
-    if not callable(getattr(runtime, "import_legacy", None)):
-        raise RuntimeError("Root-first AI memory runtime must provide import_legacy for same-ID projection")
     projection_record = dict(record)
-    projection_record["project"] = dict(record.get("project", {}))
-    projection_owner = _canonical_project_owner(
-        projection_record["project"].get("owner") or projection_record["project"].get("name")
-    )
-    if projection_owner:
-        projection_record["project"]["owner"] = projection_owner
+    projection_record["project"] = {"name": project_identity.get("name"), "owner": projection_owner}
     if record.get("supersedes"):
         projection_record["decisions"] = [*record["decisions"], f"Memory correction supersedes project result record {record['supersedes']}."]
-    with tempfile.TemporaryDirectory(prefix="codex-project-memory-") as temporary_directory:
-        source = Path(temporary_directory) / "record.jsonl"
-        source.write_text(json.dumps(projection_record, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
-        output = runtime.import_legacy(source)
+    if callable(getattr(runtime, "import_legacy", None)):
+        with tempfile.TemporaryDirectory(prefix="codex-project-memory-") as temporary_directory:
+            source = Path(temporary_directory) / "record.jsonl"
+            source.write_text(json.dumps(projection_record, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+            output = runtime.import_legacy(source)
+    else:
+        output = _project_canonical_event(runtime, projection_record)
     runtime.render_views()
     event_id = record["id"]
     project = projection_owner or "Unknown"
@@ -708,7 +773,7 @@ def _write_obsidian(record, vault, project_root=None, vault_is_resolved=False):
         return {"status": "unavailable", "written": False}
     vault_path = Path(vault_path).expanduser().resolve()
     if (vault_path / "AI Memory" / "ai_memory.py").is_file():
-        return _write_root_first_memory(record, vault_path)
+        return _write_root_first_memory(record, vault_path, project_root)
     entry = _markdown_entry(record)
     target, title = _canonical_history_target(record, vault_path, project_root)
     if target is None:
@@ -747,12 +812,12 @@ def _fingerprint(record):
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id="", task_group="", symbols=None):
+def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id="", task_group="", symbols=None, inspect_working_line=True):
     resolved_project_root = Path(project_root).expanduser().resolve()
     resolved_vault = _resolve_vault(vault, resolved_project_root)
     project = _project_identity(project_root)
     timestamp = recorded_at or datetime.now(timezone.utc)
-    working_line = _derive_working_line(project_root)
+    working_line = _derive_working_line(project_root) if inspect_working_line else {}
     normalized_module = _semantic_line(module, "module", max_length=160)
     normalized_files = _normalize_files(resolved_project_root, files)
     normalized_symbols = [_single_line(value, "symbol", required=False, max_length=240) for value in (symbols or []) if str(value or "").strip()]
@@ -767,20 +832,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
         raise ValueError(f"verification_status must be one of {', '.join(VERIFICATION_STATUS_VALUES)}")
     if verification_status != "not-run" and not record["verification"]:
         raise ValueError("at least one --verification is required unless verification-status is not-run")
-    coverage_store = None
-    if Path(store).expanduser().resolve() != Path(DEFAULT_STORE).expanduser().resolve():
-        coverage_store = Path(store).expanduser().resolve().parent / "memory-coverage-events.jsonl"
-    coverage = _coverage_runtime().ensure_coverage(
-        resolved_project_root,
-        normalized_module,
-        symbol=normalized_symbols[0] if normalized_symbols else "",
-        files=normalized_files,
-        source="project-change",
-        require_method=scope == "code",
-        vault=resolved_vault,
-        store=coverage_store,
-        recorded_at=timestamp,
-    )
+    coverage = {"status": "not-required", "reason": "memory_summary_has_project_and_module_scope"}
     record["fingerprint"] = _fingerprint(record)
     record["id"] = f"{timestamp.strftime('%Y%m%dT%H%M%SZ')}-{record['fingerprint'][:12]}"
     store_path = Path(store).expanduser().resolve()
@@ -938,11 +990,13 @@ def remove_invalid_record(project_root, record_id, reason, store=DEFAULT_STORE):
     }
 
 
-def search_records(project_root=None, module="", files=None, query="", max_results=8, store=DEFAULT_STORE, include_ambiguous=False, task_name="", session_id="", task_group="", include_superseded=False, symbols=None):
+def search_records(project_root=None, module="", files=None, query="", max_results=5, store=DEFAULT_STORE, include_ambiguous=False, task_name="", session_id="", task_group="", include_superseded=False, symbols=None, all_projects=False, inspect_working_line=True, record_id=""):
+    if project_root is None and not all_projects:
+        raise ValueError("project-root is required; all_projects is for explicit audits only")
     project = _project_identity(project_root) if project_root else None
     normalized_files = _normalize_files(project_root, files) if project_root and files else list(files or [])
     normalized_symbols = [_single_line(value, "symbol", required=False, max_length=240) for value in (symbols or []) if str(value or "").strip()]
-    current_line = _derive_working_line(project_root) if project_root else {}
+    current_line = _derive_working_line(project_root) if project_root and inspect_working_line else {}
     scope = _memory_scope(project["key"], module or "project-wide", task_name, task_group, session_id) if project else {"codex_session_key": "", "task_scope_key": "", "task_group_key": ""}
     terms = [term for term in re.findall(r"[\w.+-]+", query.lower()) if len(term) >= 2][:12]
     store_path = Path(store).expanduser().resolve()
@@ -954,6 +1008,8 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
             superseded_by.setdefault(candidate["supersedes"], []).append(candidate["id"])
     matches = []
     for record in reversed(records):
+        if record_id and record.get("id") != record_id:
+            continue
         if project and not _record_matches_project(record, project):
             continue
         if project and _should_exclude_from_auto_match(record, current_line, include_ambiguous=include_ambiguous):
@@ -1018,11 +1074,12 @@ def main():
     subparsers = parser.add_subparsers(dest="command", required=True)
     search_parser = subparsers.add_parser("search")
     search_parser.add_argument("--project-root", type=Path)
+    search_parser.add_argument("--all-projects", action="store_true", help="Explicit cross-project audit only")
     search_parser.add_argument("--module", default="")
     search_parser.add_argument("--file", action="append", default=[])
     search_parser.add_argument("--symbol", action="append", default=[])
     search_parser.add_argument("--query", default="")
-    search_parser.add_argument("--max-results", type=int, default=8)
+    search_parser.add_argument("--max-results", type=int, default=5)
     search_parser.add_argument("--include-ambiguous", action="store_true")
     search_parser.add_argument("--include-superseded", action="store_true")
     search_parser.add_argument("--task-name", default=os.environ.get("CODEX_TASK_NAME", ""))
@@ -1056,7 +1113,7 @@ def main():
     subparsers.add_parser("status")
     args = parser.parse_args()
     if args.command == "search":
-        output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store, args.include_ambiguous, args.task_name, args.session_id, args.task_group, args.include_superseded, args.symbol)
+        output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store, args.include_ambiguous, args.task_name, args.session_id, args.task_group, args.include_superseded, args.symbol, args.all_projects)
     elif args.command == "record":
         output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault, None, args.task_name, args.session_id, args.task_group, symbols=args.symbol)
     elif args.command == "reconcile":

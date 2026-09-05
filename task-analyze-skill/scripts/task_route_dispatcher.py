@@ -46,6 +46,7 @@ try:
         MODEL_ROLE_PAIRS,
         PRIORITY_PRODUCER_CONFIG,
         adaptive_pair_texts_for_profile,
+        analyze_prompt_routing,
         code_rule_bundle,
         ending_fast_route_fields,
         execution_lifecycle_contract,
@@ -70,6 +71,7 @@ except ModuleNotFoundError:
     MODEL_ROLE_PAIRS = _routing_policy.MODEL_ROLE_PAIRS
     PRIORITY_PRODUCER_CONFIG = _routing_policy.PRIORITY_PRODUCER_CONFIG
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
+    analyze_prompt_routing = _routing_policy.analyze_prompt_routing
     code_rule_bundle = _routing_policy.code_rule_bundle
     ending_fast_route_fields = _routing_policy.ending_fast_route_fields
     execution_lifecycle_contract = _routing_policy.execution_lifecycle_contract
@@ -92,6 +94,10 @@ OBSIDIAN_MEMORY_SPEC = importlib.util.spec_from_file_location("task_route_obsidi
 obsidian_model_memory = importlib.util.module_from_spec(OBSIDIAN_MEMORY_SPEC)
 OBSIDIAN_MEMORY_SPEC.loader.exec_module(obsidian_model_memory)
 
+_selected_policy_spec = importlib.util.spec_from_file_location("dispatcher_selected_model_policy", Path(__file__).with_name("selected_model_policy.py"))
+selected_model_policy = importlib.util.module_from_spec(_selected_policy_spec)
+_selected_policy_spec.loader.exec_module(selected_model_policy)
+
 NODE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 DISPATCH_SCHEMA_VERSION = 2
 DYNAMIC_ROUTING_MODE = "dynamic_task_graph"
@@ -109,10 +115,14 @@ ALLOWED_SPARK_EXCEPTION_CATEGORIES = {
     "external_dependency",
     "quality_failure",
 }
-ENDING_SKILL = "verify-skill"
-PROJECT_RESULT_CONSISTENCY_ACTIONS = {"aligned": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "existing_session_mutation": False}, "no_prior_memory": {"ending_status": "pass", "action": "append_verified_result", "memory_write": True, "existing_session_mutation": False}, "memory_record_defect": {"ending_status": "pass", "action": "append_correction", "memory_write": True, "existing_session_mutation": False}, "memory_projection_defect": {"ending_status": "pass", "action": "reconcile_projection", "memory_write": False, "existing_session_mutation": False}, "skill_contract_defect": {"ending_status": "fail", "action": "launch_isolated_projectless_repair", "memory_write": False, "existing_session_mutation": False}, "execution_drift": {"ending_status": "fail", "action": "launch_isolated_projectless_repair", "memory_write": False, "existing_session_mutation": False}, "insufficient_evidence": {"ending_status": "blocked", "action": "block", "memory_write": False, "existing_session_mutation": False}}
-PROJECT_RESULT_CONSISTENCY_POLICY = {"layers": ["process_skill_and_agents", "real_execution", "effective_result_memory"], "correction_owner": "ending_memory_only", "producer_defect_owner": "isolated_projectless_repair", "origin_policy": "immutable_evidence_only", "active_task_conflict": "wait_without_interruption", "next_task_memory": "effective_only", "actions": PROJECT_RESULT_CONSISTENCY_ACTIONS}
-ENDING_TERMINAL_CLOSEOUT = {"project_result_memory": "after_all_checks_pass", "project_result_consistency": PROJECT_RESULT_CONSISTENCY_POLICY, "routing_classification": "terminal", "model_record": "terminal", "single_closeout": True}
+ENDING_SKILL = "project-memory-skill"
+PROJECT_RESULT_CONSISTENCY_ACTIONS = {
+    name: {"ending_status": "pass", "action": action, "memory_write": True, "existing_session_mutation": False}
+    for name, action in {"aligned": "merge_current_memory", "no_prior_memory": "skip_missing_memory", "memory_record_defect": "correct_memory", "memory_projection_defect": "reconcile_projection"}.items()
+}
+PROJECT_RESULT_CONSISTENCY_POLICY = {"correction_owner": "ending_memory_only", "producer_defect_owner": "active_task", "next_task_memory": "project_scoped_current_only", "actions": PROJECT_RESULT_CONSISTENCY_ACTIONS}
+ENDING_TERMINAL_CLOSEOUT = {"purpose": "memory_only", "model_policy": "user_selected", "verification_owner": "active_task"}
+
 
 CONTROLLED_FIELDS = [
     "task_family",
@@ -151,62 +161,28 @@ def score_role_pair(score):
 
 
 def apply_ending_fast_route(plan):
-    nodes = plan.get("nodes") if isinstance(plan, dict) else None
-    if not isinstance(nodes, list):
-        return plan
-    route_fields = ending_fast_route_fields()
-    for node in nodes:
+    """Compatibility name: Ending now preserves the selected pair and writes memory."""
+    entry = plan.get("entry", {})
+    for node in plan.get("nodes", []):
         if isinstance(node, dict) and node.get("phase") == "ending":
-            node.update(route_fields)
-            if "acceptance_checks" not in node:
-                prompt = node.get("prompt")
-                node["acceptance_checks"] = [
-                    {
-                        "check_id": "task-acceptance",
-                        "acceptance": prompt.strip() if isinstance(prompt, str) else "",
-                    }
-                ]
+            model = entry.get("model") or node.get("_entry_model") or node.get("model")
+            effort = entry.get("effort") or node.get("_entry_effort") or node.get("effort")
+            selected_model_policy.bind_node(node, model, effort)
+            node["skill"] = ENDING_SKILL
             node["terminal_closeout"] = dict(ENDING_TERMINAL_CLOSEOUT)
     return plan
 
 
 def ending_checklist_failures(node):
-    node_id = node.get("id", "<missing>")
-    checks = node.get("acceptance_checks")
-    if not isinstance(checks, list) or not checks:
-        return [f"{node_id} task-level Ending requires a non-empty acceptance_checks list"]
-    if len(checks) > 12:
-        return [f"{node_id} task-level Ending supports at most 12 bounded acceptance checks"]
-    failures = []
-    check_ids = []
-    for check in checks:
-        if not isinstance(check, dict):
-            failures.append(f"{node_id} acceptance_checks entries must be objects")
-            continue
-        check_id = check.get("check_id")
-        acceptance = check.get("acceptance")
-        if not isinstance(check_id, str) or not NODE_ID_PATTERN.fullmatch(check_id):
-            failures.append(f"{node_id} acceptance check ids must be lowercase kebab-case")
-        else:
-            check_ids.append(check_id)
-        if not isinstance(acceptance, str) or not acceptance.strip() or len(acceptance) > 1200:
-            failures.append(f"{node_id} acceptance checks require 1 to 1200 acceptance characters")
-        command = check.get("command")
-        if command is not None and (not isinstance(command, list) or not command or any(not isinstance(item, str) or not item for item in command)):
-            failures.append(f"{node_id} acceptance check command must be a non-empty string array when present")
-    if len(check_ids) != len(set(check_ids)):
-        failures.append(f"{node_id} acceptance check ids must be unique")
-    return failures
+    forbidden = {"acceptance_checks", "verifies_node", "repair_launch", "check_workers"}.intersection(node)
+    return [f"{node.get('id', 'ending')} Ending is memory-only; move {field} into active-task verification" for field in sorted(forbidden)]
 
 
 def ending_worker_prompt(node):
-    checklist = json.dumps(node.get("acceptance_checks", []), ensure_ascii=False, separators=(",", ":"))
-    closeout = json.dumps(node.get("terminal_closeout", {}), ensure_ascii=False, separators=(",", ":"))
-    return (
-        f"{node['prompt'].rstrip()}\n"
-        f"Task-level acceptance checks (run all inside this one Ending worker): {checklist}\n"
-        f"After all checks PASS, perform this terminal closeout exactly once: {closeout}"
-    )
+    return ("Summarize completed changes and durable user preferences into current project memory. "
+            "Use the user's selected model and effort. Read only this project's relevant existing memory; skip absent memory. "
+            "Do not run tests, verify results, repair code or create tasks. "
+            + node.get("prompt", ""))
 
 
 def project_result_consistency_action(classification):
@@ -291,6 +267,8 @@ def execution_lifecycle_for_plan(plan):
 
 
 def _dynamic_spark_eligible(node, stage=None):
+    if selected_model_policy.uses_selected_model(node):
+        return False
     if node.get("phase") != "result":
         return False
     try:
@@ -409,6 +387,8 @@ def _model_memory_arguments(node, project_root, entry_model=None, entry_effort=N
     scope = node.get("model_memory_scope") if isinstance(node.get("model_memory_scope"), dict) else {}
     return {
         "project_root": Path(project_root).expanduser().resolve(),
+        "governing_skills": selected_model_policy.governing_skills(node),
+        "skill_governed": selected_model_policy.uses_selected_model(node),
         "task_type": scope.get("task_type") or _model_memory_task_type(node),
         "module": scope.get("module") or node.get("skill") or "project-wide",
         "file_value": scope.get("file") or "",
@@ -432,6 +412,13 @@ def _model_memory_arguments(node, project_root, entry_model=None, entry_effort=N
 
 
 def _obsidian_recommendation_and_proof(node, project_root, entry_model=None, entry_effort=None):
+    if selected_model_policy.uses_selected_model(node):
+        model = entry_model or node.get("_entry_model") or node.get("model")
+        effort = entry_effort or node.get("_entry_effort") or node.get("effort")
+        recommendation = selected_model_policy.recommendation(model, effort)
+        proof = {key: recommendation.get(key) for key in RECOMMENDATION_PROOF_FIELDS}
+        proof["profile_fingerprint"] = hashlib.sha256(b"user-selected-skill-model").hexdigest()
+        return recommendation, proof
     recommendation = obsidian_model_memory.recommend_model(**_model_memory_arguments(node, project_root, entry_model, entry_effort))
     condition = routing_history_module.validate_condition(node.get("routing_condition"))
     candidate_pairs = routing_history_module.canonical_pairs(node.get("candidate_ladder"))
@@ -729,426 +716,154 @@ def phase_verdict(path, pass_marker, fail_marker):
     return "unknown"
 
 
-def validate_plan(
-    plan,
-    entry_model,
-    entry_effort,
-    cwd,
-    skills_root=None,
-    *,
-    enforce_current_recommendation=False,
-    history_path=None,
-):
-    apply_ending_fast_route(plan)
-    skills_root = resolve_skills_root(skills_root)
+def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None, *, enforce_current_recommendation=False, history_path=None):
+    """Validate execution safety and dependency boundaries, not a prescribed workflow."""
     failures = []
+    cwd = Path(cwd).resolve()
+    skills_root = resolve_skills_root(skills_root)
+    entry = plan.get("entry") or {}
+    if entry != {"model": entry_model, "effort": entry_effort}:
+        failures.append("plan entry pair must match the user's selected model and effort")
     try:
-        validate_execution_domain_registry(skills_root)
+        selected_model_policy.selected_pair(entry_model, entry_effort)
     except ValueError as error:
-        failures.append(f"execution_domain registry is invalid: {error}")
+        failures.append(str(error))
     if plan.get("schema_version") != DISPATCH_SCHEMA_VERSION:
         failures.append(f"schema_version must be {DISPATCH_SCHEMA_VERSION}")
-    dynamic_graph = plan.get("routing_mode") == DYNAMIC_ROUTING_MODE
-    if "routing_mode" in plan and not dynamic_graph:
-        failures.append(f"routing_mode must be {DYNAMIC_ROUTING_MODE}")
-    if dynamic_graph:
-        try:
-            plan_score_band = complexity_band(plan.get("complexity_score"))
-        except ValueError as error:
-            failures.append(f"dynamic task graph {error}")
-        else:
-            if plan.get("complexity_band") != plan_score_band:
-                failures.append("dynamic task graph complexity_band does not match complexity_score")
     if plan.get("complexity") not in {"easy", "complex"}:
         failures.append("complexity must be easy or complex")
-    first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
-    if not isinstance(first_result_timeout_seconds, int) or not 1 <= first_result_timeout_seconds <= 900:
-        failures.append("first_result_timeout_seconds must be 1 to 900 seconds")
-    else:
-        plan["first_result_timeout_seconds"] = first_result_timeout_seconds
     if plan.get("topology") not in {"sequential", "parallel", "mixed"}:
         failures.append("topology must be sequential, parallel, or mixed")
-    entry = plan.get("entry") if isinstance(plan.get("entry"), dict) else {}
-    if entry.get("model") != entry_model or entry.get("effort") != entry_effort:
-        failures.append("plan entry pair does not match the declared entrance pair")
-    cache_dir_value = plan.get("cache_dir")
-    cache_dir_input = Path(cache_dir_value).expanduser() if isinstance(cache_dir_value, str) and cache_dir_value else None
-    cache_dir = ((cwd / cache_dir_input).resolve() if not cache_dir_input.is_absolute() else cache_dir_input.resolve()) if cache_dir_input else None
-    if cache_dir is None or not path_is_within(cache_dir, cwd.resolve()):
-        failures.append("cache_dir must resolve inside the active cwd")
-
-    nodes = plan.get("nodes") if isinstance(plan.get("nodes"), list) else []
-    if not 2 <= len(nodes) <= 12:
-        failures.append("nodes must contain 2 to 12 bounded nodes")
-
+    timeout = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= 900:
+        failures.append("first_result_timeout_seconds must be 1 to 900")
+    else:
+        plan["first_result_timeout_seconds"] = timeout
+    cache_value = plan.get("cache_dir")
+    cache = (cwd / cache_value).resolve() if isinstance(cache_value, str) and cache_value else None
+    if cache is None or not path_is_within(cache, cwd):
+        failures.append("cache_dir must resolve inside the active project")
+    elif cache.relative_to(cwd).parts[:1] != ("Cache",):
+        failures.append("cache_dir must be inside project Cache")
+    elif len(cache.relative_to(cwd).parts) < 2 or not cache.relative_to(cwd).parts[1].startswith("tmp-"):
+        failures.append("task route scratch must use Cache/tmp-*")
+    if plan.get("complexity_score") is not None:
+        try:
+            plan["complexity_band"] = complexity_band(plan["complexity_score"])
+        except ValueError as error:
+            failures.append(str(error))
+    nodes = plan.get("nodes")
+    if not isinstance(nodes, list) or not 1 <= len(nodes) <= 32:
+        return failures + ["nodes must contain 1 to 32 bounded tasks"]
     node_by_id = {}
-    main_candidate_pairs = []
     for node in nodes:
         if not isinstance(node, dict):
             failures.append("every node must be an object")
             continue
         node_id = node.get("id")
         if not isinstance(node_id, str) or not NODE_ID_PATTERN.fullmatch(node_id):
-            failures.append("every node id must be lowercase kebab-case")
+            failures.append("node ids must be lowercase kebab-case")
             continue
         if node_id in node_by_id:
             failures.append(f"duplicate node id: {node_id}")
         node_by_id[node_id] = node
-
-        model = node.get("model")
-        effort = node.get("effort")
-        deterministic_source_read = node.get("execution_kind") == DETERMINISTIC_SOURCE_READ
-        stage = _get_node_decomposition(node, plan.get("decomposition")) if dynamic_graph else None
-        priority_branch = _priority_result_node(node, stage)
-        ending_fast_node = node.get("phase") == "ending" and f"{model}|{effort}" == ENDING_FAST_PRIMARY_PAIR
-        if not deterministic_source_read and not priority_branch and not ending_fast_node and (model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS.get(model, set())):
-            failures.append(f"{node_id} must use a model/effort from the catalog quality ladder")
-        if deterministic_source_read:
-            if model is not None or effort is not None:
-                failures.append(f"{node_id} deterministic source reads must not declare a model or effort")
-            if node.get("phase") != "result":
-                failures.append(f"{node_id} deterministic source reads must be result-phase nodes")
-            if node.get("skill") != "task-analyze-skill":
-                failures.append(f"{node_id} deterministic source reads must be owned by task-analyze-skill")
-            if node.get("dependencies"):
-                failures.append(f"{node_id} deterministic source reads cannot depend on another node")
-            source_allowlist = node.get("source_allowlist")
-            if not isinstance(source_allowlist, list) or len(source_allowlist) != 1 or not isinstance(source_allowlist[0], str) or not source_allowlist[0]:
-                failures.append(f"{node_id} deterministic source reads require exactly one source_allowlist path")
-            elif Path(source_allowlist[0]).is_absolute() or ".." in Path(source_allowlist[0]).parts:
-                failures.append(f"{node_id} deterministic source reads require one project-relative source")
-            elif not path_is_within((cwd / source_allowlist[0]).resolve(), cwd.resolve()) or not (cwd / source_allowlist[0]).is_file():
-                failures.append(f"{node_id} deterministic source read path must resolve to an existing file inside cwd")
-            if node_id == plan.get("main_result_node"):
-                failures.append(f"{node_id} deterministic source reads cannot be the main result node")
-        if "priority_producer" in node and not priority_branch:
-            failures.append(f"{node_id} priority_producer is valid only for an eligible bounded task segment or single-source read-only branch")
-        skill = node.get("skill")
-        if not isinstance(skill, str) or resolve_node_skill_path(skill, skills_root) is None:
-            failures.append(f"{node_id} names unavailable skill {skill}")
-        phase = node.get("phase")
-        if phase not in ALLOWED_PHASES:
-            failures.append(f"{node_id} has invalid phase")
-        requested_verification_result = node.get("user_requested_verification_result")
-        if phase == "result" and skill == "verify-skill":
-            if requested_verification_result is not True:
-                failures.append(f"{node_id} verify-skill result nodes require user_requested_verification_result=true")
-        elif "user_requested_verification_result" in node:
-            failures.append(f"{node_id} user_requested_verification_result is valid only on a result-phase verify-skill node")
-        if node.get("sandbox", "read-only") not in ALLOWED_SANDBOXES:
-            failures.append(f"{node_id} requests an unsafe automatic sandbox")
-        if "load_user_config" in node and not isinstance(node["load_user_config"], bool):
-            failures.append(f"{node_id} load_user_config must be a boolean")
-        routing_project_root = node.get("routing_project_root")
-        if routing_project_root is not None and (not isinstance(routing_project_root, str) or not Path(routing_project_root).expanduser().resolve().is_dir()):
-            failures.append(f"{node_id} routing_project_root must resolve to an existing canonical project directory")
-        if dynamic_graph:
+        if node.get("phase") not in ALLOWED_PHASES:
+            failures.append(f"{node_id} invalid phase")
+        try:
+            selected_model_policy.bind_node(node, entry_model, entry_effort)
+        except ValueError as error:
+            failures.append(f"{node_id} {error}")
+        if node.get("execution_kind") != DETERMINISTIC_SOURCE_READ:
             try:
-                node_score_band = complexity_band(node.get("complexity_score"))
+                selected_model_policy.selected_pair(node.get("model"), node.get("effort"))
             except ValueError as error:
                 failures.append(f"{node_id} {error}")
-                node_score_band = None
-            else:
-                if node.get("complexity_band") != node_score_band:
-                    failures.append(f"{node_id} complexity_band does not match complexity_score")
-            selection_basis = node.get("selection_basis")
-            if selection_basis not in {"spark_priority", "score_role", "adaptive_quality", "ending_fast_primary"}:
-                failures.append(f"{node_id} has invalid selection_basis")
-            if phase == "ending":
-                if selection_basis != ENDING_FAST_CONFIG["selection_basis"]:
-                    failures.append(f"{node_id} Ending Task must use {ENDING_FAST_CONFIG['selection_basis']}")
-            elif priority_branch:
-                if not _dynamic_spark_eligible(node, stage):
-                    failures.append(f"{node_id} Spark task segment must have eligible stage operation and no external side effects")
-                if selection_basis != "spark_priority":
-                    failures.append(f"{node_id} priority producer must use spark_priority")
-                if not node.get("allow_fallback"):
-                    failures.append(f"{node_id} Spark task segment requires a quality fallback pair")
-            else:
-                if selection_basis not in {"score_role", "adaptive_quality"}:
-                    failures.append(f"{node_id} result node must use score_role or adaptive_quality")
-                if node_score_band is not None and node.get("complexity_score", 0) >= 25 and selection_basis != "adaptive_quality":
-                    failures.append(f"{node_id} standard/complex/advanced result stages must use adaptive_quality history routing")
-                if selection_basis == "score_role" and node_score_band is not None and f"{model}|{effort}" != score_role_pair(node["complexity_score"]):
-                    failures.append(f"{node_id} score_role pair must match its node score")
-                if _dynamic_spark_eligible(node, stage):
-                    if selection_basis == "spark_priority":
-                        if node.get("spark_exception_reason") or node.get("spark_exception_category"):
-                            failures.append(f"{node_id} should not use spark exception fields when Spark is selected")
-                    else:
-                        valid_exception_reason = isinstance(node.get("spark_exception_reason"), str) and bool(node["spark_exception_reason"].strip())
-                        valid_exception_category = isinstance(node.get("spark_exception_category"), str) and node.get("spark_exception_category") in ALLOWED_SPARK_EXCEPTION_CATEGORIES
-                        if not valid_exception_reason or not valid_exception_category:
-                            failures.append(f"{node_id} eligible small task segment must use Spark or declare a valid Spark exception")
-                        if not valid_exception_reason:
-                            failures.append(f"{node_id} eligible small task segment must use Spark or declare spark_exception_reason")
-                        if not isinstance(node.get("spark_exception_category"), str) or not node["spark_exception_category"].strip():
-                            failures.append(f"{node_id} spark exception category must be declared when Spark is not used")
-                        elif node.get("spark_exception_category") not in ALLOWED_SPARK_EXCEPTION_CATEGORIES:
-                            failures.append(f"{node_id} spark exception category must be one of {', '.join(sorted(ALLOWED_SPARK_EXCEPTION_CATEGORIES))}")
-        timeout = node.get("timeout", 180)
-        if not isinstance(timeout, int) or not 1 <= timeout <= 300:
-            failures.append(f"{node_id} timeout must be 1 to 300 seconds")
-
-        prompt = node.get("prompt")
-        if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 12000:
-            failures.append(f"{node_id} prompt must contain 1 to 12000 characters")
-
-        dependencies = node.get("dependencies", [])
-        if not isinstance(dependencies, list) or any(not isinstance(item, str) for item in dependencies):
-            failures.append(f"{node_id} dependencies must be a list of node ids")
-        if "fuses_owned_source_with_dependencies" in node and not isinstance(node["fuses_owned_source_with_dependencies"], bool):
-            failures.append(f"{node_id} fuses_owned_source_with_dependencies must be a boolean")
-
-        allow_fallbacks = node.get("allow_fallback", [])
-        if not isinstance(allow_fallbacks, list):
-            failures.append(f"{node_id} allow_fallback must be a list")
+            if not selected_model_policy.uses_selected_model(node) and (node.get("model") not in ACTIVE_MODEL_EFFORTS or node.get("effort") not in ACTIVE_MODEL_EFFORTS.get(node.get("model"), set())) and not _priority_result_node(node):
+                failures.append(f"{node_id} independent task pair is unavailable in the local catalog")
         else:
+            sources = node.get("source_allowlist", [])
+            if len(sources) != 1 or node.get("dependencies") or node.get("phase") != "result":
+                failures.append(f"{node_id} deterministic capture needs one source and no dependencies")
+        if node.get("sandbox", "read-only") not in ALLOWED_SANDBOXES:
+            failures.append(f"{node_id} unsafe sandbox")
+        for skill in selected_model_policy.governing_skills(node):
+            if resolve_node_skill_path(skill, skills_root) is None:
+                failures.append(f"{node_id} unavailable governing skill: {skill}")
+        if node.get("skill") and resolve_node_skill_path(node["skill"], skills_root) is None:
+            failures.append(f"{node_id} unavailable skill: {node['skill']}")
+        if not isinstance(node.get("prompt"), str) or not node["prompt"].strip():
+            failures.append(f"{node_id} requires a bounded task goal")
+        if not isinstance(node.get("dependencies", []), list):
+            failures.append(f"{node_id} dependencies must be a list")
+        score = node.get("complexity_score")
+        if score is None:
+            score = analyze_prompt_routing(node.get("prompt") or "")["complexity_score"]
+            node["complexity_score"] = score
+            node["score_source"] = "prompt_analysis"
+        else:
+            node.setdefault("score_source", "planner_assignment")
+        if score is not None:
             try:
-                node["allow_fallback"] = receipt_module.normalize_fallback_pairs(allow_fallbacks)
-                parsed_fallbacks = [receipt_module.parse_model_effort_pair(pair) for pair in node["allow_fallback"]]
-                if any(model not in ACTIVE_MODEL_EFFORTS or effort not in ACTIVE_MODEL_EFFORTS[model] for model, effort in parsed_fallbacks):
-                    failures.append(f"{node_id} allow_fallback must stay inside the catalog quality ladder")
-            except (TypeError, ValueError):
-                failures.append(f"{node_id} allow_fallback contains unsupported model|effort pairs")
-        if phase == "ending":
-            expected_fallbacks = [ENDING_FAST_CONFIG["availability_fallback_pair"]] if ENDING_FAST_CONFIG.get("availability_fallback_pair") else []
-            if node.get("allow_fallback") != expected_fallbacks:
-                failures.append(f"{node_id} Ending Task must allow exactly the configured floor fallback")
-            if node.get("fallback_policy") != ENDING_FAST_CONFIG["fallback_policy"]:
-                failures.append(f"{node_id} Ending Task must use availability_only fallback policy")
-
-        spark_exception = node.get("spark_exception_reason", "")
-        if not isinstance(spark_exception, str) or len(spark_exception) > 240:
-            failures.append(f"{node_id} spark_exception_reason must be a string of at most 240 characters")
-        if dynamic_graph and "spark_exception_category" in node and node.get("spark_exception_category") not in ALLOWED_SPARK_EXCEPTION_CATEGORIES:
-            failures.append(f"{node_id} spark exception category must be one of {', '.join(sorted(ALLOWED_SPARK_EXCEPTION_CATEGORIES))}")
-
-        try:
-            execution_domain, explicitly_explicit = _resolve_execution_domain_with_flag(node)
-        except ValueError:
-            execution_domain = str(node.get("execution_domain") or "")
-            failures.append(f"{node_id} execution_domain is unknown")
-            explicitly_explicit = bool(node.get("execution_domain"))
-        else:
-            node["execution_domain"] = execution_domain
-
-        expected_owner = None
-        if execution_domain in EXECUTION_DOMAINS:
-            if not execution_domain_is_active(execution_domain):
-                failures.append(f"{node_id} execution_domain is non-active: {execution_domain}")
-            expected_owner = expected_owner_skill(execution_domain) if is_code_execution_domain(execution_domain) else None
-        else:
-            expected_owner = None
-        if expected_owner is not None and skill != expected_owner:
-            failures.append(f"{node_id} bypasses code-skill; implementation owner mismatch for {execution_domain}")
-        if _is_code_implementation(node):
-            try:
-                bundle = _node_code_rule_bundle(node)
+                node["complexity_band"] = complexity_band(score)
             except ValueError as error:
-                failures.append(f"{node_id} Code Gate cannot resolve: {error}")
-            else:
-                for reference_path in bundle["reference_paths"]:
-                    if not (skills_root / reference_path).is_file():
-                        failures.append(f"{node_id} Code Gate reference is missing: {reference_path}")
-
-        adaptive_dynamic_result = dynamic_graph and phase == "result" and node.get("selection_basis") == "adaptive_quality"
-        if node_id == plan.get("main_result_node") or adaptive_dynamic_result:
-            routing_condition = node.get("routing_condition")
-            if not isinstance(routing_condition, dict):
-                failures.append(f"{node_id} requires routing_condition")
-                routing_condition = {}
-            elif "execution_domain" not in routing_condition:
-                failures.append(f"{node_id} requires routing_condition.execution_domain")
-            candidate_ladder = node.get("candidate_ladder")
-            static_suggestion = node.get("static_suggestion")
-            hard_floor = node.get("hard_floor")
-            static_pair = None
-            hard_pair = None
-            if isinstance(routing_condition, dict):
-                condition_domain = routing_condition.get("execution_domain")
-                if condition_domain != execution_domain:
-                    failures.append(
-                        f"{node_id} execution_domain must match routing_condition.execution_domain"
-                    )
-                try:
-                    routing_condition = routing_history_module.validate_condition(routing_condition)
-                except ValueError as error:
-                    failures.append(f"{node_id} routing_condition is invalid: {error}")
-                node["routing_condition"] = routing_condition
-                if routing_condition.get("owning_skill") != node.get("skill"):
-                    failures.append(
-                        f"{node_id} routing_condition.owning_skill must match the executing node skill"
-                    )
-            try:
-                node["task_summary"] = routing_history_module.validate_summary(node.get("task_summary"))
-            except ValueError as error:
-                failures.append(f"{node_id} task_summary is invalid: {error}")
-            if not isinstance(candidate_ladder, list):
-                failures.append(f"{node_id} candidate_ladder must be a list")
-            else:
-                try:
-                    candidate_pairs = routing_history_module.canonical_pairs(candidate_ladder)
-                except (ValueError, TypeError) as error:
-                    failures.append(f"{node_id} candidate_ladder is invalid: {error}")
-                    candidate_pairs = []
-                if candidate_pairs:
-                    ordered_pairs = [routing_history_module.pair_text(*pair) for pair in candidate_pairs]
-                    if ordered_pairs != candidate_ladder:
-                        failures.append(f"{node_id} candidate_ladder must be canonical")
-                    if routing_history_module.pair_text(model, effort) not in ordered_pairs:
-                        failures.append(f"{node_id} selected pair must be in candidate_ladder")
-                else:
-                    ordered_pairs = []
-                main_candidate_pairs = candidate_pairs
-                if static_suggestion is None or hard_floor is None:
-                    failures.append(f"{node_id} static_suggestion and hard_floor are required")
-                else:
-                    try:
-                        static_pair = routing_history_module.parse_pair(static_suggestion)
-                        hard_pair = routing_history_module.parse_pair(hard_floor)
-                    except (TypeError, ValueError) as error:
-                        failures.append(f"{node_id} static_suggestion or hard_floor is invalid: {error}")
-                    else:
-                        if static_pair not in candidate_pairs or hard_pair not in candidate_pairs:
-                            failures.append(f"{node_id} static_suggestion and hard_floor must be in candidate_ladder")
-                        if routing_history_module.parse_pair(routing_history_module.pair_text(model, effort)) in candidate_pairs and routing_history_module.compare_pair((model, effort), hard_pair) < 0:
-                            failures.append(f"{node_id} selected pair must not be below hard_floor")
-                        node["static_suggestion"] = routing_history_module.pair_text(*static_pair)
-                        node["hard_floor"] = routing_history_module.pair_text(*hard_pair)
-                if not isinstance(node.get("trial"), bool):
-                    failures.append(f"{node_id} trial must be a boolean")
-                if all(routing_condition.get(field) for field in CONTROLLED_FIELDS):
-                    expected_ladder = adaptive_pair_texts_for_profile(
-                        routing_condition["task_family"],
-                        routing_condition["modality"],
-                        routing_condition["risk"],
-                        routing_condition["complexity"],
-                        routing_condition["ambiguity"],
-                    )
-                    if ordered_pairs != expected_ladder:
-                        failures.append(f"{node_id} candidate_ladder must exactly match the full catalog quality ladder")
-                recommendation = node.get("routing_recommendation")
-                if not isinstance(recommendation, dict):
-                    failures.append(f"{node_id} requires routing_recommendation proof")
-                elif candidate_pairs and static_pair is not None and hard_pair is not None:
-                    required_proof_keys = set(RECOMMENDATION_PROOF_FIELDS)
-                    missing_proof_keys = sorted(required_proof_keys - set(recommendation))
-                    if missing_proof_keys:
-                        failures.append(f"{node_id} routing_recommendation proof missing keys: {', '.join(missing_proof_keys)}")
-                    expected_fingerprint = routing_history_module.profile_fingerprint(routing_condition, candidate_pairs, static_pair, hard_pair)
-                    if recommendation.get("selected_pair") != routing_history_module.pair_text(model, effort) or recommendation.get("trial") is not node.get("trial"):
-                        failures.append(f"{node_id} routing_recommendation must match the selected pair and trial")
-                    if recommendation.get("profile_fingerprint") != expected_fingerprint:
-                        failures.append(f"{node_id} routing_recommendation profile fingerprint is invalid")
-                    if enforce_current_recommendation and not missing_proof_keys:
-                        try:
-                            current_recommendation, current_proof = _obsidian_recommendation_and_proof(node, node.get("routing_project_root") or cwd, entry_model, entry_effort)
-                        except (OSError, TypeError, ValueError) as error:
-                            failures.append(f"{node_id} current dual-history recommendation could not be verified: {type(error).__name__}")
-                        else:
-                            if current_recommendation.get("selected_pair") is None:
-                                failures.append(f"{node_id} current dual-history recommendation is exhausted")
-                            if current_proof.get("selected_pair") != routing_history_module.pair_text(model, effort) or current_proof.get("trial") is not node.get("trial"):
-                                failures.append(f"{node_id} selected pair/trial does not match current dual-history recommendation")
-                            stale_fields = [field for field in RECOMMENDATION_PROOF_FIELDS if recommendation.get(field) != current_proof.get(field)]
-                            if stale_fields:
-                                failures.append(f"{node_id} routing_recommendation is stale or not dual-history-derived: {', '.join(stale_fields)}")
-
-            for field in CONTROLLED_FIELDS:
-                if field not in node.get("routing_condition", {}):
-                    failures.append(f"{node_id} routing_condition missing {field}")
-
-    for node_id, node in node_by_id.items():
-        for dependency in node.get("dependencies", []):
-            if dependency not in node_by_id:
-                failures.append(f"{node_id} has missing dependency {dependency}")
-
-    main_result_node = plan.get("main_result_node")
-    if main_result_node not in node_by_id or node_by_id.get(main_result_node, {}).get("phase") != "result":
-        failures.append("main_result_node must name a result-phase node")
-    if "mini_verify_node" in plan:
-        failures.append("mini_verify_node is not valid in schema 2")
-
-    result_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
-    visited = set()
-    while len(visited) < len(result_ids):
-        ready = [
-            node_id
-            for node_id in result_ids - visited
-            if all(dependency in visited for dependency in node_by_id[node_id].get("dependencies", []))
-        ]
-        if not ready:
-            failures.append("result dependencies contain a cycle or depend on Ending Task")
-            break
-        visited.update(ready)
-
-    if main_result_node in node_by_id:
-        missing_from_main = sorted(
-            result_ids - dependency_closure(main_result_node, node_by_id) - {main_result_node}
-        )
-        if missing_from_main:
-            failures.append("main_result_node must depend transitively on every result node: " + ", ".join(missing_from_main))
-        main_routing_condition = node_by_id[main_result_node].get("routing_condition", {})
-        is_grounded_read_only_answer = main_routing_condition.get("task_family") == "grounded" and main_routing_condition.get("artifact") == "answer" and main_routing_condition.get("modality") == "text" and main_routing_condition.get("risk") == "low"
-        if is_grounded_read_only_answer and len(result_ids) > 1:
-            branch_allowlists = [node_by_id[node_id].get("source_allowlist") for node_id in sorted(result_ids - {main_result_node})]
-            branch_allowlists_are_disjoint = all(isinstance(allowlist, list) and allowlist and all(isinstance(source, str) and source for source in allowlist) for allowlist in branch_allowlists)
-            seen_sources = set()
-            for allowlist in branch_allowlists:
-                if not isinstance(allowlist, list) or not allowlist or seen_sources.intersection(allowlist):
-                    branch_allowlists_are_disjoint = False
-                    break
-                seen_sources.update(allowlist)
-            main_node = node_by_id[main_result_node]
-            dependency_only_merge = main_node.get("reads_dependency_results_only") is True and "source_allowlist" not in main_node and main_node.get("fuses_owned_source_with_dependencies") is not True
-            fused_allowlist = main_node.get("source_allowlist")
-            fused_merge = bool(
-                main_node.get("fuses_owned_source_with_dependencies") is True
-                and main_node.get("reads_dependency_results_only") is not True
-                and isinstance(fused_allowlist, list)
-                and len(fused_allowlist) == 1
-                and not seen_sources.intersection(fused_allowlist)
-                and set(main_node.get("dependencies", [])) == result_ids - {main_result_node}
-            )
-            if not branch_allowlists_are_disjoint or not (dependency_only_merge or fused_merge):
-                failures.append("grounded read-only answers allow multiple result nodes only for disjoint source branches plus either a dependency-only merge or one disjoint owned source fused into the main merge")
-
-    ending_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"}
-    declared_ending_required = plan.get("ending_required")
-    if "ending_required" in plan and not isinstance(declared_ending_required, bool):
-        failures.append("ending_required must be a boolean when declared")
-    if declared_ending_required is False:
-        if plan.get("ending_skip_reason") != "no_real_test_or_information_or_memory_or_material_update":
-            failures.append("a no-surface plan must declare ending_skip_reason=no_real_test_or_information_or_memory_or_material_update")
-        if ending_ids:
-            failures.append("a no-surface plan must not contain a task-level Ending node")
-    elif len(ending_ids) != 1:
-        failures.append("the locked plan must include exactly one task-level Ending node; put every acceptance check inside that node")
+                failures.append(f"{node_id} {error}")
+        for key in ("source_allowlist", "read_allowlist", "write_allowlist"):
+            paths = node.get(key, [])
+            if not isinstance(paths, list) or any(not isinstance(path, str) or not path or not path_is_within((cwd / path).resolve(), cwd) for path in paths):
+                failures.append(f"{node_id} {key} must stay inside the project")
+        if node.get("phase") == "ending":
+            failures.extend(ending_checklist_failures(node))
+            if node.get("skill") != ENDING_SKILL:
+                failures.append(f"{node_id} Ending must use {ENDING_SKILL}")
+    if plan.get("complexity_score") is None:
+        plan["complexity_score"] = max((node.get("complexity_score", 0) for node in node_by_id.values() if isinstance(node.get("complexity_score"), int)), default=0)
+        plan["complexity_band"] = complexity_band(plan["complexity_score"])
+        plan["score_source"] = "maximum_node_score"
     else:
-        ending_id = next(iter(ending_ids))
-        ending_node = node_by_id[ending_id]
-        ending_dependencies = ending_node.get("dependencies", [])
-        if ending_dependencies != [main_result_node]:
-            failures.append(f"{ending_id} must depend only and directly on the main result node")
-        if ending_node.get("skill") != ENDING_SKILL:
-            failures.append(f"{ending_id} task-level Ending must use {ENDING_SKILL}; management, optimization, memory, classification, and records are internal closeout actions")
-        if "verifies_node" in ending_node:
-            failures.append(f"{ending_id} verifies_node is obsolete; targeted checks belong in acceptance_checks")
-        failures.extend(ending_checklist_failures(ending_node))
-        if ending_node.get("terminal_closeout") != ENDING_TERMINAL_CLOSEOUT:
-            failures.append(f"{ending_id} must use the single canonical terminal closeout")
-
-    if main_candidate_pairs:
-        candidate_pair_text = {routing_history_module.pair_text(*pair) for pair in main_candidate_pairs}
-        for node_id, node in node_by_id.items():
-            for fallback_pair in node.get("allow_fallback", []):
-                if fallback_pair not in candidate_pair_text:
-                    failures.append(f"{node_id} allow_fallback pair must be in main candidate_ladder: {fallback_pair}")
-
-    failures.extend(validate_dynamic_decomposition(plan, node_by_id))
-
-    return failures
+        plan.setdefault("score_source", "planner_assignment")
+    # Malformed container types cannot safely enter graph traversal or overlap checks.
+    if any(not isinstance(node.get("dependencies", []), list) or any(not isinstance(dep, str) for dep in node.get("dependencies", [])) or any(not isinstance(node.get(key, []), list) or any(not isinstance(path, str) for path in node.get(key, [])) for key in ("source_allowlist", "read_allowlist", "write_allowlist")) for node in node_by_id.values()):
+        return failures + ["dependencies and path allowlists must contain strings"]
+    for node_id, node in node_by_id.items():
+        deps = node.get("dependencies", [])
+        if not isinstance(deps, list):
+            continue
+        if any(dep not in node_by_id or dep == node_id for dep in deps):
+            failures.append(f"{node_id} has missing or self dependencies")
+    remaining = set(node_by_id)
+    settled = set()
+    while remaining:
+        ready = {node_id for node_id in remaining if isinstance(node_by_id[node_id].get("dependencies", []), list) and set(node_by_id[node_id].get("dependencies", [])).issubset(settled)}
+        if not ready:
+            failures.append("dependency graph contains a cycle or missing dependency")
+            break
+        remaining -= ready
+        settled |= ready
+    main = plan.get("main_result_node")
+    if main not in node_by_id or node_by_id[main].get("phase") != "result":
+        failures.append("main_result_node must name a result task")
+    elif any(node_id not in dependency_closure(main, node_by_id) for node_id, node in node_by_id.items() if node.get("phase") == "result" and node_id != main):
+        failures.append("final aggregate must depend on every result task")
+    endings = [node for node in nodes if isinstance(node, dict) and node.get("phase") == "ending"]
+    if len(endings) > 1:
+        failures.append("use at most one memory closeout")
+    for node in endings:
+        if node.get("dependencies") != [main]:
+            failures.append("memory closeout must depend on final aggregate")
+    if plan.get("topology") != "sequential":
+        result_nodes = [node for node in nodes if isinstance(node, dict) and node.get("id") in node_by_id and node.get("phase") == "result"]
+        for index, left in enumerate(result_nodes):
+            for right in result_nodes[index + 1:]:
+                if left["id"] in dependency_closure(right["id"], node_by_id) or right["id"] in dependency_closure(left["id"], node_by_id):
+                    continue
+                for writer, reader in ((left, right), (right, left)):
+                    writes = writer.get("write_allowlist", [])
+                    reads = reader.get("read_allowlist", []) + reader.get("source_allowlist", []) + reader.get("write_allowlist", [])
+                    if writer.get("sandbox") == "workspace-write" and not writes:
+                        failures.append(f"{writer['id']} concurrent write task requires explicit write_allowlist")
+                    if any(path_is_within((cwd / a).resolve(), (cwd / b).resolve()) or path_is_within((cwd / b).resolve(), (cwd / a).resolve()) for a in writes for b in reads):
+                        failures.append(f"{writer['id']} and {reader['id']} share an unordered write surface")
+    return list(dict.fromkeys(failures))
 
 
 def dependency_context(node, completed):
@@ -1300,8 +1015,8 @@ def build_model_switch_summary(plan, records, entry, *, ending_quality_failure_n
         effective_pair = record.get("effective_pair") if isinstance(record.get("effective_pair"), str) and record.get("effective_pair") else None
         effective_model = record.get("effective_model")
         effective_effort = record.get("effective_effort")
-        if effective_pair is None and effective_model and resolved_effort:
-            effective_pair = f"{effective_model}|{resolved_effort}"
+        if effective_pair is None and effective_model and effective_effort:
+            effective_pair = f"{effective_model}|{effective_effort}"
         if effective_pair is None:
             effective_pair = resolved_pair
         if isinstance(requested_pair, str) and "|" in requested_pair:
@@ -1338,7 +1053,13 @@ def build_model_switch_summary(plan, records, entry, *, ending_quality_failure_n
         summary_entry = {
             "node_id": node_id,
             "phase": node.get("phase"),
+            "execution_kind": node.get("execution_kind", "model"),
             "purpose": node.get("purpose") or node.get("task_summary") or node_id,
+            "goal": node.get("purpose") or node.get("task_summary") or node_id,
+            "entry_pair": entry_pair,
+            "assigned_pair": requested_pair,
+            "actual_pair": effective_pair if evidence_level == "runtime_receipt" else None,
+            "assignment_changed": bool(entry_pair and requested_pair and entry_pair != requested_pair),
             "skill": node.get("skill"),
             "stop_condition": node.get("stop_condition") or (stage_record.get("stop_condition") if isinstance(stage_record, dict) else None),
             "step_kind": (node.get("model_memory_scope") or {}).get("step_kind"),
@@ -1449,6 +1170,8 @@ def _has_mismatched_release_record(cache_dir, route_run_id):
 
 
 def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
+    node = dict(node)
+    selected_model_policy.bind_node(node, node.get("_entry_model") or node.get("model"), node.get("_entry_effort") or node.get("effort"))
     if node.get("phase") == "ending":
         node = dict(node)
         apply_ending_fast_route({"nodes": [node]})
@@ -1457,28 +1180,29 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     node_id = node["id"]
     receipt_path = cache_dir / f"{node_id}-receipt.json"
     result_path = cache_dir / f"{node_id}-result.md"
-    skill_path = resolve_node_skill_path(node["skill"], skills_root)
-    if skill_path is None:
-        raise ValueError(f"node skill cannot be resolved: {node['skill']}")
     if node.get("execution_kind") == DETERMINISTIC_SOURCE_READ:
         return _run_deterministic_source_read(node, receipt_path, result_path, workdir)
+    skills = selected_model_policy.governing_skills(node)
+    skill_paths = []
+    for skill in skills:
+        path = resolve_node_skill_path(skill, skills_root)
+        if path is None:
+            raise ValueError(f"node governing skill cannot be resolved: {skill}")
+        skill_paths.append(path.as_posix())
     dependency_text = dependency_context(node, completed)
-    prompt = (
-        f"Owning skill: {node['skill']}\n"
-        f"Node id: {node_id}\n"
-        f"Phase: {node['phase']}\n"
-        f"Execute only this bounded locked node. Read and obey {skill_path.as_posix()}.\n\n"
-        f"{node['prompt']}"
-    )
-    code_bundle = _node_code_rule_bundle(node) if _is_code_implementation(node) else None
+    prompt = (f"Node: {node_id}. Phase: {node['phase']}. Execute this bounded goal. "
+              + selected_model_policy.execution_guidance({**node, "project_root": str(workdir.resolve())})
+              + (" Read governing skill sources: " + json.dumps(skill_paths) if skill_paths else "")
+              + "\n\n" + node["prompt"])
+    code_bundle = _node_code_rule_bundle(node) if selected_model_policy.uses_selected_model(node) and _is_code_implementation(node) else None
     if code_bundle is not None:
         resolved_references = [(skills_root / reference_path).as_posix() for reference_path in code_bundle["reference_paths"]]
-        prompt += f"\n\nCode Gate: {code_bundle['message']} Before reading or editing task source, announce this Code Gate in commentary. Read and obey these references in order: {json.dumps(resolved_references, ensure_ascii=False, separators=(',', ':'))}"
+        prompt += f"\n\nApply the relevant code preferences from: {json.dumps(resolved_references, ensure_ascii=False, separators=(',', ':'))}"
         _emit_code_gate_notice(code_bundle, node_id)
     if dependency_text:
         prompt += f"\n\nCompleted dependency handoff:\n{dependency_text}"
     if node["phase"] == "ending":
-        prompt += "\n\nThis is a direct post-result Ending Task worker. Include the exact line ENDING_TASK=PASS only when the bounded verification/optimization purpose passes. Otherwise include ENDING_TASK=FAIL."
+        prompt += "\n\nThis is a memory-only closeout. Include ENDING_TASK=PASS after scoped memory readback or an explicit missing-memory skip; otherwise ENDING_TASK=FAIL. Never verify or repair the project."
 
     route_marker = "ENDING_TASK_WORKER" if node["phase"] == "ending" else "LOCKED_ROUTE_NODE"
     fallback_pairs = receipt_module.normalize_fallback_pairs(node.get("allow_fallback", []))
@@ -1486,7 +1210,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     adaptive_recommendation = None
     priority_node = _priority_result_node(node, node.get("_decomposition_stage"))
     fixed_scored_node = node.get("phase") == "result" and node.get("selection_basis") == "score_role" and f"{node.get('model')}|{node.get('effort')}" == score_role_pair(node.get("complexity_score"))
-    if node["phase"] == "result" and isinstance(node.get("routing_recommendation"), dict) and node.get("_project_root") and receipt_module.entry_context_active():
+    if not node.get("model_locked") and node["phase"] == "result" and isinstance(node.get("routing_recommendation"), dict) and node.get("_project_root") and receipt_module.entry_context_active():
         try:
             adaptive_recommendation = validate_dispatcher_adaptive_result(node)
         except receipt_module.ReceiptAuthorizationError:
@@ -1541,7 +1265,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         try:
             if args.node_role == "result-producer":
                 if receipt_module.entry_context_active():
-                    if priority_node or fixed_scored_node:
+                    if node.get("model_locked") or priority_node or fixed_scored_node:
                         authorized_pairs = {selected_pair, *fallback_pairs}
                     else:
                         current_recommendation = adaptive_recommendation or validate_dispatcher_adaptive_result(node)
@@ -1646,6 +1370,9 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     receipt["route_attempts"] = route_attempts
     receipt["priority_attempt_pair"] = priority_attempt_pair
     receipt["selected_pair"] = selected_pair
+    receipt["model_locked"] = bool(node.get("model_locked"))
+    receipt["selection_provenance"] = node.get("selection_basis")
+    receipt["governing_skills"] = selected_model_policy.governing_skills(node)
     receipt["active_fallback_pair"] = fallback_pairs[0] if node["phase"] == "ending" and fallback_pairs else selected_pair if priority_attempt_pair != selected_pair else None
     receipt["fallback_policy"] = node.get("fallback_policy")
     receipt["allowed_fallback_pairs"] = planned_pairs[1:]
@@ -1868,43 +1595,14 @@ def _route_run_id():
 
 
 def preflight_plan(plan, entry_model, entry_effort, cwd, skills_root=None, *, history_path=None):
-    normalize_legacy_dynamic_plan(plan)
     plan["execution_lifecycle"] = execution_lifecycle_for_plan(plan)
     failures = validate_plan(plan, entry_model, entry_effort, cwd, skills_root=skills_root, enforce_current_recommendation=plan.get("routing_mode") != DYNAMIC_ROUTING_MODE, history_path=history_path)
     return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "pre-execution-validation", "status": "pass" if not failures else "fail", "failures": failures, "execution_lifecycle": plan["execution_lifecycle"]}
 
 
 def _write_pre_result_repair_handoff(cache_dir, route_run_id, failures, completed_records, deadline_exhausted):
-    operational_records = [record for record in completed_records if record.get("phase") == "result" and record.get("status") != "pass" and record.get("result_published") is not True and record.get("failure_class") in obsidian_model_memory.OPERATIONAL_FAILURES]
-    if not operational_records and not deadline_exhausted:
-        return None
-    handoff_path = Path(cache_dir) / "pre-result-repair-handoff.json"
-    handoff = {
-        "schema_version": DISPATCH_SCHEMA_VERSION,
-        "stage": "pre-result-operational-repair",
-        "status": "reopen",
-        "route_run_id": route_run_id,
-        "target": {"type": "projectless"},
-        "origin_policy": "immutable_evidence_only",
-        "existing_session_mutation": False,
-        "prohibited_actions": ["send", "steer", "interrupt", "terminate", "handoff", "move", "mutate"],
-        "active_write_surface": "wait_without_messaging_or_interruption",
-        "required_completion": "fresh_final_aggregate_then_fresh_ending",
-        "failure_classes": sorted({record.get("failure_class") for record in operational_records if record.get("failure_class")}),
-        "deadline_exhausted": deadline_exhausted,
-        "failures": list(failures),
-        "result_published": False,
-        "final_aggregate_receipt": None,
-        "ending_handoff": None,
-        "ending_status": None,
-        "controller_restriction": None,
-    }
-    handoff_path.write_text(json.dumps(handoff, indent=2) + "\n", encoding="utf-8")
-    try:
-        handoff_path.chmod(0o600)
-    except OSError:
-        pass
-    return handoff_path
+    """Compatibility no-op: the active task owns diagnosis and bounded retries."""
+    return None
 
 
 def _record_pre_result_operational_failures(plan, completed_records, project_root):
@@ -1974,6 +1672,37 @@ def _run_record(result_path, verify_level, verify_status, main_result_receipt_pa
     return {"status": recorder_result.get("status"), "recorder_result": recorder_result, "recommendation": recommendation}
 
 
+def memory_closeout_launch_packet(summary):
+    """Request an app task; this CLI cannot create or acknowledge one."""
+    pair = summary.get("entry_pair")
+    if not pair:
+        entry = summary.get("entry") or {}
+        pair = f"{entry.get('model')}|{entry.get('effort')}"
+    ready = summary.get("final_aggregate_receipt") is True and summary.get("ending_launch_ready") is True
+    return {"schema_version": 3, "stage": "memory-closeout-required", "user_visible": True,
+            "status": "launch-required" if ready else "waiting-for-aggregate-release",
+            "parent_action": "create_visible_projectless_ending_task" if ready else "verify_and_release_final_aggregate",
+            "message": f"Ending memory update: create one visible projectless task using {pair} after active-task verification and final aggregate release. Record its task ID and read back its completion; this launch packet is not a created task.",
+            "target": {"type": "projectless"}, "task_count": 1, "task_created": False,
+            "ending_purpose": "memory_only", "selected_model_required": True, "selected_pair": pair,
+            "verification_owner": "active_task", "final_aggregate_receipt": ready,
+            "ending_launch_ready": ready, "receipt_path": summary.get("receipt_path") or summary.get("downstream_receipt_path"),
+            "result_path": summary.get("result_path") or summary.get("main_result_path"),
+            "ending_handoff_path": summary.get("ending_handoff_path"),
+            "aggregate_result_release_path": summary.get("release_path") or summary.get("aggregate_result_release_path"),
+            "repair_chain_allowed": False, "auto_archive": False}
+
+
+def _plan_model_disclosure(plan, records, entry, timing):
+    stages = build_model_switch_summary(plan, records, entry)
+    main = next((record for record in records if record.get("id") == plan.get("main_result_node")), {})
+    runtime = main if main.get("evidence_level") == "runtime_receipt" and main.get("effective_pair") else None
+    return model_identity_disclosure.model_disclosure_event(
+        plan["complexity_score"], runtime_receipt=runtime,
+        entry_resolution={"status": "task_assignment", **entry},
+        model_switch_summary=stages, timing=timing)
+
+
 def _release_main_result(handoff):
     handoff_data = dict(handoff)
     route_run_id = handoff_data.get("route_run_id")
@@ -2015,7 +1744,15 @@ def _release_main_result(handoff):
     handoff_data["release_path"] = str(release_path)
     handoff_path = Path(handoff_data.get("ending_handoff_path") or cache_dir / "ending-handoff.json")
     handoff_path.write_text(json.dumps(handoff_data, indent=2) + "\n", encoding="utf-8")
-    return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "pass", "route_run_id": route_run_id, "release_path": str(release_path)}
+    required = plan.get("ending_required") is True or any(node.get("phase") == "ending" for node in plan.get("nodes", []))
+    summary = {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "pass", "route_run_id": route_run_id,
+               "release_path": str(release_path), "entry": handoff_data.get("entry"),
+               "main_result_path": str(main_result_path), "downstream_receipt_path": main_record.get("receipt_path"),
+               "ending_handoff_path": str(handoff_path), "final_aggregate_receipt": True,
+               "all_result_nodes_settled": True, "ending_required": required, "ending_launch_ready": required}
+    if required:
+        summary["memory_closeout"] = memory_closeout_launch_packet(summary)
+    return summary
 
 
 def run_plan(
@@ -2033,6 +1770,7 @@ def run_plan(
     first_result_started = time.monotonic()
     first_result_started_ns = time.monotonic_ns()
     preflight = preflight or preflight_plan(plan, entry_model, entry_effort, cwd, skills_root, history_path=history_path)
+    plan.setdefault("execution_lifecycle", preflight.get("execution_lifecycle") or execution_lifecycle_for_plan(plan))
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
     failures = list(preflight["failures"])
     cache_dir = Path(plan["cache_dir"]).expanduser().resolve() if not failures else cwd.resolve() / "work" / "cache" / "invalid-task-route"
@@ -2066,8 +1804,12 @@ def run_plan(
         manifest["manifest_path"] = str(manifest_path)
         return manifest
 
+    for node in plan["nodes"]:
+        selected_model_policy.bind_node(node, entry_model, entry_effort)
+    assignment_notice = _plan_model_disclosure(plan, [], {"model": entry_model, "effort": entry_effort}, "assignment")
+    print(json.dumps(assignment_notice, ensure_ascii=False, separators=(",", ":")), flush=True)
     node_by_id = {node["id"]: node for node in plan["nodes"]}
-    first_result_timeout_seconds = plan["first_result_timeout_seconds"]
+    first_result_timeout_seconds = plan.get("first_result_timeout_seconds", first_result_timeout_seconds)
     runnable_ids = {node_id for node_id, node in node_by_id.items() if node.get("phase") == "result"}
     completed = {}
     ready_records = {}
@@ -2115,28 +1857,32 @@ def run_plan(
                 dependency_ready = sorted(node_id for node_id in runnable_ids if all(dependency in ready_records for dependency in node_by_id[node_id].get("dependencies", [])))
                 if not dependency_ready:
                     break
-                node_id = dependency_ready[0]
                 remaining_seconds = first_result_timeout_seconds - (time.monotonic() - first_result_started)
                 if remaining_seconds <= 0:
                     failures.append("first-result deadline exhausted")
                     deadline_exhausted = True
                     break
-                ready_node = dict(node_by_id[node_id])
-                ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
-                ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
-                ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
-                ready_node["_project_root"] = str(Path(ready_node.get("routing_project_root") or cwd).expanduser().resolve())
-                ready_node["_entry_model"] = entry_model
-                ready_node["_entry_effort"] = entry_effort
-                ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)
-                ready_node["_decomposition_stage"] = _stage_for_node_id(plan, node_id)
-                future = executor.submit(run_node, ready_node, cache_dir, dict(ready_records), state_db, cwd, codex_bin, skills_root)
-                future.add_done_callback(lambda settled_future, settled_node_id=node_id: result_events.put(("settled", settled_node_id, settled_future)))
-                running[node_id] = future
-                active_producers.add(node_id)
-                launch_order.append(node_id)
-                launch_metadata[node_id] = {"dependency_wave": dependency_wave(node_id, node_by_id), "launch_sequence": len(launch_order), "launched_monotonic_ns": time.monotonic_ns()}
-                runnable_ids.remove(node_id)
+                launch_ids = dependency_ready[: maximum_active_producers - len(active_producers)]
+                ready_nodes = []
+                for node_id in launch_ids:
+                    ready_node = dict(node_by_id[node_id])
+                    ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
+                    ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
+                    ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
+                    ready_node["_project_root"] = str(Path(ready_node.get("routing_project_root") or cwd).expanduser().resolve())
+                    ready_node["_entry_model"] = entry_model
+                    ready_node["_entry_effort"] = entry_effort
+                    ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)
+                    ready_node["_decomposition_stage"] = _stage_for_node_id(plan, node_id)
+                    ready_nodes.append((node_id, ready_node))
+                for node_id, ready_node in ready_nodes:
+                    future = executor.submit(run_node, ready_node, cache_dir, dict(ready_records), state_db, cwd, codex_bin, skills_root)
+                    future.add_done_callback(lambda settled_future, settled_node_id=node_id: result_events.put(("settled", settled_node_id, settled_future)))
+                    running[node_id] = future
+                    active_producers.add(node_id)
+                    launch_order.append(node_id)
+                    launch_metadata[node_id] = {"dependency_wave": dependency_wave(node_id, node_by_id), "launch_sequence": len(launch_order), "launched_monotonic_ns": time.monotonic_ns()}
+                    runnable_ids.remove(node_id)
 
             if not running:
                 if runnable_ids and not result_execution_failed and not deadline_exhausted:
@@ -2200,6 +1946,8 @@ def run_plan(
 
     main_record = completed.get(plan["main_result_node"], {})
 
+    if phase_verdict(main_record.get("result_path"), "Aggregate: PASS", "Aggregate: FAIL") == "fail":
+        failures.append("final aggregate reported Aggregate: FAIL")
     status = "pass" if not failures and main_record.get("status") == "pass" else "fail"
     main_result_ready_ns = ready_metadata.get(plan["main_result_node"], {}).get("result_ready_monotonic_ns")
     if isinstance(main_result_ready_ns, bool) or not isinstance(main_result_ready_ns, int):
@@ -2213,6 +1961,8 @@ def run_plan(
 
     if status == "pass":
         ending_handoff = {
+            "purpose": "memory_only",
+            "verification_owner": "active_task",
             "schema_version": DISPATCH_SCHEMA_VERSION,
             "cwd": str(cwd.resolve()),
             "state_db": str(Path(state_db).expanduser().resolve()) if state_db else None,
@@ -2305,7 +2055,14 @@ def run_plan(
         "model_switch_summary": model_switch_summary,
         "operational_model_learning": operational_model_learning,
         "execution_lifecycle": plan["execution_lifecycle"],
+        "model_disclosure": _plan_model_disclosure(plan, ordered, {"model": entry_model, "effort": entry_effort}, "result"),
+        "ending_required": plan.get("ending_required") is True or any(node.get("phase") == "ending" for node in plan["nodes"]),
+        "final_aggregate_receipt": False,
+        "ending_launch_ready": False,
     }
+    if manifest["ending_required"] and status == "pass":
+        manifest["memory_closeout"] = memory_closeout_launch_packet(manifest)
+    print(json.dumps(manifest["model_disclosure"], ensure_ascii=False, separators=(",", ":")), flush=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     manifest["manifest_path"] = str(manifest_path)
     return manifest
@@ -2318,7 +2075,6 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
         return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"], "model_switch_summary": build_model_switch_summary({}, [], {}), "reopen_required": True, "notification_required": True}
 
     plan = handoff.get("plan") if isinstance(handoff.get("plan"), dict) else {}
-    normalize_legacy_dynamic_plan(plan)
     plan["execution_lifecycle"] = execution_lifecycle_for_plan(plan)
     cwd = Path(handoff.get("cwd") or Path.cwd()).expanduser().resolve()
     entry = handoff.get("entry") if isinstance(handoff.get("entry"), dict) else {}
@@ -2373,7 +2129,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
     main_record = completed.get(plan.get("main_result_node"), {})
     ordered = []
     routing_learning = None
-    if not failures:
+    if not failures and ending_ids:
         ending_id = ending_ids[0]
         ending_node = dict(node_by_id[ending_id])
         ending_node["_entry_model"] = entry.get("model")
@@ -2396,22 +2152,10 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
             ending_status = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
             if ending_status != "pass":
                 failures.append(f"Task-level Ending node {ending_record['id']} did not pass ENDING_TASK marker")
-            if main_record and main_node:
-                recorded_learning = _run_record(
-                    main_record.get("receipt_path"),
-                    "real",
-                    ending_status if ending_status in {"pass", "fail"} else "unknown",
-                    main_record.get("receipt_path"),
-                    route_run_id,
-                    main_node,
-                    cwd,
-                    execution_domain=main_node.get("routing_condition", {}).get("execution_domain"),
-                )
-                routing_learning = recorded_learning if isinstance(recorded_learning, dict) else None
 
     status = (
         "pass"
-        if not failures and ordered and all(record.get("status") == "pass" for record in ordered)
+        if not failures and all(record.get("status") == "pass" for record in ordered)
         else "fail"
     )
     summary_records = [record for record in completed_records if isinstance(record, dict)]
@@ -2444,15 +2188,7 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
                 "process_elapsed_ms": None,
             }
         )
-    quality_failure_nodes = []
-    if ordered:
-        for ending_record in ordered:
-            ending_node = node_by_id.get(ending_record.get("id"), {})
-            ending_verdict = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
-            verified_quality_failure = ending_record.get("failure_class") == "quality" or ending_verdict == "fail"
-            if ending_node.get("skill") == ENDING_SKILL and ending_record.get("status") != "pass" and verified_quality_failure:
-                if plan.get("main_result_node"):
-                    quality_failure_nodes.append(plan.get("main_result_node"))
+    quality_failure_nodes = []  # Memory closeout never grades the producer.
     model_switch_summary = build_model_switch_summary(
         plan,
         summary_records,
@@ -2480,7 +2216,11 @@ def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
 
 
 def compact_run_plan_manifest(manifest):
-    return {"schema_version": manifest.get("schema_version"), "status": manifest.get("status"), "failures": manifest.get("failures", []), "manifest_path": manifest.get("manifest_path"), "main_result_path": manifest.get("main_result_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "route_run_id": manifest.get("route_run_id"), "first_result_elapsed_ms": manifest.get("first_result_elapsed_ms"), "deadline_exhausted": manifest.get("deadline_exhausted", False), "result_published": manifest.get("result_published", False), "notification_required": manifest.get("notification_required", False), "reopen_required": manifest.get("reopen_required", False), "execution_lifecycle": manifest.get("execution_lifecycle")}
+    keys = ("schema_version", "status", "failures", "manifest_path", "main_result_path", "ending_handoff_path",
+            "route_run_id", "first_result_elapsed_ms", "deadline_exhausted", "result_published", "notification_required",
+            "reopen_required", "execution_lifecycle", "complexity_score", "complexity_band", "model_disclosure",
+            "model_switch_summary", "ending_required", "final_aggregate_receipt", "ending_launch_ready", "memory_closeout")
+    return {key: manifest[key] for key in keys if key in manifest}
 
 
 def _emit_result_ready_event(result_path, ready_monotonic_ns):
@@ -2523,6 +2263,8 @@ def main():
         manifest = _release_main_result(handoff)
     else:
         manifest = run_ending_handoff(args.handoff, args.codex_bin, args.skills_root)
+    if manifest.get("memory_closeout"):
+        print(json.dumps(manifest["memory_closeout"], ensure_ascii=False, separators=(",", ":")), flush=True)
     stdout_manifest = compact_run_plan_manifest(manifest) if args.command == "run-plan" else manifest
     print(json.dumps(stdout_manifest, separators=(",", ":")))
     return 0 if manifest.get("status") == "pass" else 1

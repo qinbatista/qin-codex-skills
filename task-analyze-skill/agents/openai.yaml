@@ -1,5 +1,8 @@
 interface:
   display_name: "Task Analyze"
-  short_description: "Routing, benchmarks, maintenance, and admitted graph strategy"
+  short_description: "Selected-model skill execution and independent-task routing"
   default_prompt: >-
-    score 0-100;route per stage;2+=>graph;Code Gate;one Quick Check;CODE READY. Complex/advanced/planned_graph:assess child-session topology;admit only 2+ ready disjoint branches with explicit contracts and wait benefit,else bounded reason+current topology;whole graph uses collaboration XOR dispatcher. Parent alone controls children and root completion;child READY!=main done;only final aggregate launches Ending. Ending for observable or material structural/non-trivial-code/conceptual/process update;material=>durable memory closeout;explicit trivial_value_only may skip. Global projectless End;null project readback;Spark-xhigh first;record real quota/5-hour/provider cooldown and skip cooling model for next stronger controller. FAIL creates independent projectless Repair Task;never contact/steer/interrupt/terminate/handoff/move/mutate existing sessions;active-task write conflict waits;fresh parent-linked Ending<=3. Workers evidence-only;all PASS;visible.
+    Use the selected model and effort to understand governing skills and relevant project memory,
+    define task goals, and complete skill-governed work. Route only independent tasks adaptively.
+    Verify complex changes in the active task with bounded checks; skip simple value edits.
+    Ending only summarizes scoped memory with the selected model. Missing memory is optional.

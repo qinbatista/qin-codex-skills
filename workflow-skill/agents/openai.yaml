@@ -1,5 +1,4 @@
 interface:
-  display_name: "Workflow"
-  short_description: "Executes admitted complex delegated routes"
-  default_prompt: >-
-    $workflow-skill: lowest-correct route;2+ stages=>one graph;Quick Check→CODE READY;broad checks in Ending. Safe child-session topology only for disjoint admitted branches;whole graph uses collaboration XOR dispatcher;main monitors/steers/stops and aggregates;child READY != main done;root-only completion/final aggregate Ending;children never launch Ending. Observable or material updates require global projectless Ending;material=>durable memory;explicit trivial_value_only may skip. Spark-xhigh first;real quota/5-hour/provider cooldown persisted and skipped for next stronger controller. FAIL creates isolated projectless Repair;never contacts or interrupts existing sessions;active write conflict waits;fresh Ending<=3. Workers evidence-only;all PASS;no polling.
+  display_name: "workflow-skill"
+  short_description: "Goals, safe delegation, and in-task completion"
+  default_prompt: "Read relevant skills and optional project memory, keep the selected model for governed work, verify proportionately in the active task, and summarize only useful memory at Ending."

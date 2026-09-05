@@ -35,6 +35,12 @@ def make_fake_codex(root, script_text):
 
 
 class ModelExecutionReceiptTests(unittest.TestCase):
+    def setUp(self):
+        # Runtime discovery has its own native/mocked tests; receipt fixtures keep their explicit executable.
+        binding = patch.object(module, "resolve_codex_executable", side_effect=lambda requested, **kwargs: {"path": str(requested), "source": "explicit_argument"})
+        binding.start()
+        self.addCleanup(binding.stop)
+
     def test_immediate_operational_fallback_requires_zero_token_unpublished_failure(self):
         eligible = module.annotate_operational_fallback({"status": "fail", "failure_class": "availability", "turn_completed": False, "tokens": {"total_tokens": 0}, "result_published": False, "route_attempts": [{}]})
         published = dict(eligible, result_published=True)
@@ -261,13 +267,12 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertIn("features.multi_agent=false", command)
         self.assertEqual(command[-1], "-")
         self.assertTrue(run_mock.call_args.kwargs["input"].startswith("LOCKED_ROUTE_NODE"))
-        self.assertIn("This is the result node only", run_mock.call_args.kwargs["input"])
-        self.assertIn("run exactly one smallest safe local Quick Check", run_mock.call_args.kwargs["input"])
-        self.assertIn("publish CODE READY immediately", run_mock.call_args.kwargs["input"])
-        self.assertIn("Do not run broad tests", run_mock.call_args.kwargs["input"])
-        self.assertIn("entry parent owns the one detached End Task", run_mock.call_args.kwargs["input"])
-        self.assertIn("Code Gate is already resolved", run_mock.call_args.kwargs["input"])
-        self.assertIn("Before reading or editing task source", run_mock.call_args.kwargs["input"])
+        self.assertIn("Complete the assigned result", run_mock.call_args.kwargs["input"])
+        self.assertIn("smallest relevant behavior check", run_mock.call_args.kwargs["input"])
+        self.assertIn("Report results and verification honestly", run_mock.call_args.kwargs["input"])
+        self.assertIn("do not start a whole project", run_mock.call_args.kwargs["input"])
+        self.assertIn("Ending is only scoped memory summarization", run_mock.call_args.kwargs["input"])
+        self.assertIn("Apply the relevant code preferences from:", run_mock.call_args.kwargs["input"])
         self.assertIn("code-writing-philosophy.md", run_mock.call_args.kwargs["input"])
         self.assertIn(f"canonical working directory `{Path('/tmp').resolve()}`", run_mock.call_args.kwargs["input"])
         self.assertTrue(run_mock.call_args.kwargs["input"].endswith("same prompt"))
@@ -366,26 +371,22 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertTrue(module.benchmark_cache_root_for(args).is_absolute())
 
     def test_route_markers_define_non_recursive_lifecycle_ownership(self):
-        result_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE", {"schema_version": 1})
-        non_code_boundary = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
-        ending_boundary = module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
-        check_boundary = module.route_node_lifecycle_boundary("ENDING_CHECK_WORKER")
-        self.assertIn("entry parent owns the one detached End Task", result_boundary)
-        self.assertIn("Non-code result only", non_code_boundary)
-        self.assertIn("Batch named immutable inputs into one tool call", non_code_boundary)
-        self.assertIn("no precheck, reread", non_code_boundary)
-        self.assertNotIn("coding-philosophy", non_code_boundary)
-        self.assertIn("delegate only saved capability-routed checks", ending_boundary)
-        self.assertIn("never edit producer files", check_boundary)
+        result = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
+        ending = module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
+        self.assertIn("inside this active task", result)
+        self.assertIn("Skip absent memory", ending)
+        self.assertIn("Do not run verification", ending)
+        with self.assertRaisesRegex(ValueError, "retired"):
+            module.route_node_lifecycle_boundary("ENDING_CHECK_WORKER")
         with self.assertRaisesRegex(ValueError, "unsupported route marker"):
             module.route_node_lifecycle_boundary("UNKNOWN")
 
     def test_non_code_locked_prompt_is_compact_and_does_not_embed_machine_path(self):
         prompt = module.route_node_execution_prompt("LOCKED_ROUTE_NODE", "Return one JSON object.", Path("/private/machine/path"))
-        self.assertIn("Batch named immutable inputs into one tool call", prompt)
-        self.assertIn("Use the current directory directly", prompt)
+        self.assertIn("Return one JSON object", prompt)
+        self.assertIn("relevant existing memory", prompt)
         self.assertNotIn("/private/machine/path", prompt)
-        self.assertLess(len(prompt), 360)
+        self.assertLess(len(prompt), 1200)
 
     def test_run_receipt_includes_sanitized_route_attempt_metadata(self):
         stdout_text = "\n".join([

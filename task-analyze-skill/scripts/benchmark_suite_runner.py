@@ -16,6 +16,9 @@ import threading
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 try:
     from codex_sqlite import CodexSQLiteResolutionError, resolve_codex_sqlite_db, thread_column_capabilities
 except ModuleNotFoundError:
@@ -158,6 +161,7 @@ def read_quota_status(args, codex_home):
             env=command_environment,
             shell=False,
             bufsize=0,
+            **hidden_process_options(),
         )
         response_queue = queue.Queue()
         reader = threading.Thread(target=_read_stream_lines, args=(process.stdout, response_queue), name="benchmark-quota-stdout", daemon=True)
@@ -883,7 +887,7 @@ def execute_run(args, run_plan, prompt_text):
     process = None
     try:
         with stdout_path.open("w", encoding="utf-8", newline="\n") as stdout_handle, stderr_path.open("w", encoding="utf-8", newline="\n") as stderr_handle:
-            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr_handle, text=True, cwd=environment["workdir"], env=command_environment, shell=False, bufsize=1)
+            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr_handle, text=True, cwd=environment["workdir"], env=command_environment, shell=False, bufsize=1, **hidden_process_options())
             process.stdin.write(prompt_text)
             process.stdin.close()
             deadline_ns = started_ns + (args.timeout + args.outer_timeout_grace) * 1_000_000_000
@@ -1038,7 +1042,7 @@ def execute_dual_entry_probe(args, run_plan, prompt_text):
     command_environment["CODEX_OBSIDIAN_VAULT"] = str(codex_home / "memories" / FROZEN_OBSIDIAN_VAULT_NAME)
     summary = {"schema_version": 1, "status": "fail", "reason": "probe_execution_failed", "tier": run_plan["tier"], "primary_run_id": run_plan["run_id"], "primary_entry_pair": run_plan["selected_entry_pair"], "probe_entry_pair": probe["entry_pair"], "expected_result_sha256": run_plan["expected_sha256"], "primary_result_sha256": None, "probe_result_sha256": None, "primary_route_signature": None, "probe_route_signature": None, "route_signature_match": False, "capability_assignment_match": False}
     try:
-        process = subprocess.run(command, input=prompt_text, text=True, capture_output=True, cwd=environment["workdir"], env=command_environment, shell=False, timeout=args.timeout + args.outer_timeout_grace, check=False)
+        process = subprocess.run(command, input=prompt_text, text=True, capture_output=True, cwd=environment["workdir"], env=command_environment, shell=False, timeout=args.timeout + args.outer_timeout_grace, check=False, **hidden_process_options())
         primary_receipt = load_optional_receipt(Path(run_plan["receipts"][0]["path"]))
         primary_result_bytes = Path(run_plan["result_path"]).read_bytes()
         probe_receipt = load_optional_receipt(receipt_path)

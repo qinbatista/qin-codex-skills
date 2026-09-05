@@ -2,20 +2,9 @@
 
 Search this file before UI generation, UI updates, UI optimization, or UI review. Use `rg -n "<component>|<symptom>|<action>" references/ui-problem-index.md`, then read only matching entries.
 
-## Mandatory Basic UI Gate
+## Shared baseline
 
-Every UI edit must apply and every rendered UI acceptance must check all six rules:
-
-| Rule | Blocking requirement | Existing detailed entries |
-| --- | --- | --- |
-| 1. Align shared frames | Peer left/right, top/bottom, or side-by-side regions that share a visual template align outer edges, row starts, gutters, and intended height. Accidental tall/short peer layouts fail. | `UI-012`, `UI-013`, `UI-027`, `UI-041` |
-| 2. One row when it fits | Related labels, values, inputs, buttons, and compact controls stay on one line whenever the target width can hold them readably. Reflow is a real narrow-breakpoint fallback, not a reaction to a slightly undersized component. | `UI-004`, `UI-007`, `UI-022`, `UI-023`, `UI-031`, `UI-032` |
-| 3. Group once | One visual boundary represents one logical group. Existing panels, cards, headings, backgrounds, or spacing groups are not boxed or classified again without a distinct object or task. | `UI-019`, `UI-020`, `UI-035` |
-| 4. Add on the alignment grid | Supplemental information lives inside its owning panel or becomes an explicit aligned row/category with the same outer edges and gutters. Floating, offset, or partially aligned additions fail. | `UI-012`, `UI-023`, `UI-037` |
-| 5. Keep geometry stable | Expected status, loading, error, and optional-content changes do not resize controls or shift surrounding layout unpredictably. | `UI-042` |
-| 6. Keep state truthful | Color, text, icon, badge, and enabled/disabled treatment match the real state or lifecycle. | `UI-043` |
-
-Accessibility, localization, readable target sizes, and narrow viewports may require wrapping or deliberate asymmetry. Record the reason, preserve the alignment system after reflow, and verify the rendered exception. An unexplained exception is a failure.
+Apply the [shared readable UI rules](../../workflow-skill/references/readable-ui.md) to every UI or visual presentation, including PDF reports and slides. That reference owns the twelve principles, accessibility limits, interaction states, and focused rendered checks. The entries below add symptom-specific guidance; they do not replace the baseline.
 
 ## Contents
 

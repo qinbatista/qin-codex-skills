@@ -35,7 +35,7 @@ PRIORITY_PRODUCER_MODEL = PRIORITY_PRODUCER_CONFIG.get("id")
 PRIORITY_PRODUCER_DEFINITIONS = {PRIORITY_PRODUCER_MODEL: {"efforts": list(PRIORITY_PRODUCER_CONFIG["codex_efforts"])}} if PRIORITY_PRODUCER_MODEL else {}
 ENDING_FAST_CONFIG = dict(MODEL_CAPABILITY_CONFIG["ending_fast"])
 ENDING_FAST_PRIMARY_PAIR = ENDING_FAST_CONFIG["primary_pair"]
-ENDING_FAST_PRIMARY_MODEL, ENDING_FAST_PRIMARY_EFFORT = ENDING_FAST_PRIMARY_PAIR.split("|", 1)
+ENDING_FAST_PRIMARY_MODEL, ENDING_FAST_PRIMARY_EFFORT = (None, None)  # Supplied by the selected user pair.
 ENDING_FAST_FALLBACK_PAIR = ENDING_FAST_CONFIG.get("availability_fallback_pair")
 ENDING_FAST_DEFINITIONS = {model["id"]: {"efforts": list(model["codex_efforts"])} for model in MODEL_CAPABILITY_CONFIG["catalog_models"] if model["id"] == ENDING_FAST_PRIMARY_MODEL}
 SPARK_FIRST_CONFIG = PRIORITY_PRODUCER_CONFIG
@@ -64,7 +64,7 @@ ROUTING_THRESHOLDS = {
     "complex_route_minimum_score": 50,
     "advanced_route_minimum_score": 75,
     "maximum_route_attempts": 2,
-    "maximum_ending_repair_rounds": 3,
+    "maximum_ending_repair_rounds": 0,
 }
 EXECUTION_LIFECYCLE_VERSION = 1
 HIGH_RISK_ROUTING_TERMS = ("security", "authentication", "authorization", "payment", "database migration", "production config", "credential", "deployment", "destructive", "安全", "认证", "授权", "支付", "数据迁移", "生产配置", "凭证", "部署", "删除全部", "破坏性")
@@ -264,7 +264,7 @@ def execution_lifecycle_contract(complexity_score, fast_path_eligible=False, gra
     low_ambiguity = str(ambiguity or "low").strip().casefold() in {"", "low"}
     direct = bool(fast_path_eligible and complexity_score <= ROUTING_THRESHOLDS["fast_path_maximum_score"] and low_risk and low_ambiguity and result_node_count == 1 and not graph_admitted)
     mode = "direct" if direct else "planned_graph" if graph_admitted or result_node_count > 1 else "planned_single"
-    return {"schema_version": EXECUTION_LIFECYCLE_VERSION, "mode": mode, "plan_required": not direct, "execution_topology": "dependency_graph" if mode == "planned_graph" else "single", "execution_stages": ["execute"] if direct else ["plan", "execute"], "acceptance_policy": "surface_gated_final_aggregate_projectless_ending", "final_aggregate_only": True, "no_surface_action": "intentionally_skipped_simple_task", "model_selection": "lowest_suitable_capability_history_entry_pair", "repeated_quality_failure": "same_topic_diagnose_then_gradual_model_or_effort_strengthening", "reasoning_effort": "estimated_steps_and_information_burden", "operational_failure": "quality_neutral_retry_or_allowed_fallback", "verified_pass": "retain_then_trial_down_after_two", "topic_change": "reset_same_session_state"}
+    return {"schema_version": EXECUTION_LIFECYCLE_VERSION, "mode": mode, "plan_required": not direct, "execution_topology": "dependency_graph" if mode == "planned_graph" else "single", "execution_stages": ["execute"] if direct else ["plan", "execute"], "acceptance_policy": "in_task_relevant_verification", "final_aggregate_only": True, "no_surface_action": "intentionally_skipped_simple_task", "model_selection": "user_selected_for_governing_skills_else_adaptive", "repeated_quality_failure": "same_topic_diagnose_then_gradual_model_or_effort_strengthening", "reasoning_effort": "user_selected_for_governing_skills_else_estimated_steps", "operational_failure": "quality_neutral_retry_or_allowed_fallback", "verified_pass": "retain_then_trial_down_after_two", "topic_change": "reset_same_session_state"}
 
 EXECUTION_DOMAIN_REGISTRY_VERSION = 2
 EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"
@@ -602,7 +602,6 @@ def public_execution_domain_rows():
 
 
 def pair_text(model, effort):
-    _ensure_supported_pair(model, effort)
     return f"{model}|{effort}"
 
 
@@ -613,7 +612,8 @@ def parse_model_effort_pair(value):
     if value.count("|") != 1:
         raise ValueError("model|effort pair must be separated by one |")
     model, effort = (part.strip() for part in value.split("|", 1))
-    _ensure_supported_pair(model, effort)
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:-]*", model) or effort not in {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}:
+        raise ValueError("invalid model or effort")
     return model, effort
 
 
@@ -720,9 +720,10 @@ def scheduled_source_pair(complexity="easy"):
     return (PRIORITY_PRODUCER_MODEL, effort) if effort in PRIORITY_PRODUCER_CONFIG["adaptive_efforts"] else None
 
 
-def ending_fast_route_fields():
-    fallback_pairs = [ENDING_FAST_FALLBACK_PAIR] if ENDING_FAST_FALLBACK_PAIR else []
-    return {"model": ENDING_FAST_PRIMARY_MODEL, "effort": ENDING_FAST_PRIMARY_EFFORT, "selection_basis": ENDING_FAST_CONFIG["selection_basis"], "allow_fallback": fallback_pairs, "fallback_policy": ENDING_FAST_CONFIG["fallback_policy"]}
+def ending_fast_route_fields(selected_model=None, selected_effort=None):
+    if not selected_model or not selected_effort:
+        raise ValueError("Ending memory requires the user's selected model and effort")
+    return {"model": selected_model, "effort": selected_effort, "selection_basis": "user_selected", "allow_fallback": [], "fallback_policy": "none"}
 
 
 def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):

@@ -1,197 +1,42 @@
 ---
 name: prompt-skill
-description: "Always use for every task whose requested work creates, reviews, edits, repairs, standardizes, tests, summarizes, optimizes, or changes a reusable prompt or durable AI instruction, including system/developer/agent/Custom GPT instructions, image-generation prompts, prompt templates, and prompts embedded in code, config, or workflows. This is the 100% global prompt-task gate across projects. Do not trigger merely because an ordinary request is text. Prompt-in-code also uses its owning code executor; code-skill owns Python and C#."
+description: "Use to create, review, edit, or test reusable prompts and durable AI instructions, including prompts in code and image workflows. Ordinary prose does not trigger it."
 ---
 
 # Prompt Skill
 
 ## Scope
 
-This is the 100% global prompt-task gate across projects. Load it before any task creates, reviews, edits, repairs, standardizes, tests, summarizes, optimizes, or changes a reusable prompt or durable AI instruction. It covers system/developer/agent/Custom GPT instructions, image-generation prompts, prompt templates, and prompts embedded in code, config, or workflows. Ordinary prose does not trigger it merely because it is text. Prompt-in-code also loads its owning code executor; `code-skill` owns Python and C#.
+Use the user's selected model and effort for prompt design and delegated prompt work. Read the relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md); skip it when unavailable. Keep project facts scoped to that project, and explicit global preferences separate. Current instructions and fresh source override stale memory.
 
-For an existing prompt, read the complete target prompt and its direct validator as execution input. This is the prompt-work exception to the ordinary exact-read-only no-skill shortcut; it does not authorize broad repository reading, Task Analyze, Workflow, child models, or pre-result verification. If this gate was missed, stop before more prompt changes and redo the prompt work under this skill.
+## Design
 
-## Core Contract
+State the objective, necessary inputs and their roles, requirements, and output contract. Include success/failure criteria and a verification step when they improve acceptance. Define placeholders, units, enums, missing-value behavior, and reference authority only where relevant.
 
-Every production prompt must make the following behavior explicit when it materially affects the result:
+Keep one authoritative rule per behavior. Merge repeated warnings into a clear rule, resolve contradictions, and remove obvious instructions that add no constraint. Use role, tool order, autonomy limits, verbosity targets, delimiters, or examples only when they change the result. Examples illustrate rules; they do not override them. Do not request private chain-of-thought or force visible planning.
 
-1. **Objective** — the concrete final outcome; never make the model infer the job.
-2. **Context and inputs** — relevant environment, audience, source material, variable placeholders, reference roles, and known limitations.
-3. **Requirements and constraints** — required behavior, prohibited behavior, authority/autonomy boundary, and instruction priority.
-4. **Output contract** — exact artifact, schema, count, layout, format, destination, and response length where applicable.
-5. **Success criteria** — measurable conditions that make the result usable.
-6. **Failure conditions** — observable conditions that reject the result even when an artifact was produced.
-7. **Verification** — checks performed before acceptance and the evidence or receipt that records them.
-
-Role, workflow steps, reasoning effort, verbosity, examples, and delimiters are optional controls. Add them only when they improve behavior; do not add ceremonial sections or persona filler.
-
-## Conditional Controls
-
-Use these controls deliberately instead of inserting them into every prompt:
-
-| Control | Use it when | Rule |
-|---|---|---|
-| Role | A domain perspective, audience, or decision standard changes the result | Name the useful expertise and responsibility; omit fictional biography and generic `You are helpful` text. |
-| Workflow and tool order | Sequence, dependencies, or side effects affect correctness | State the minimum ordered actions, allowed tools, stop condition, and fallback. Do not force a visible plan for a one-step task. |
-| Autonomy and ambiguity | The model may need to choose, assume, ask, or act | Define what it may decide, when a bounded assumption is acceptable, and which missing facts require a question. |
-| Reasoning effort | Risk or complexity justifies more analysis | Request only the necessary effort and concise rationale/checks; never request private chain-of-thought or maximum reasoning by default. |
-| Verbosity | Length, audience, or review cost matters | Give a measurable word, section, item, or detail target instead of `brief but detailed`. |
-| Delimiters | Multiple instruction, source, example, or data blocks could be confused | Use named tags or fenced blocks and state each block's role and authority. |
-| Few-shot examples | A schema, style, boundary, or edge case remains ambiguous after direct rules | Use the fewest representative examples, label input/output clearly, and make explicit rules authoritative over examples. |
-
-Negative instructions are appropriate for critical, plausible failures such as fabrication, unsafe actions, forbidden fields, or copying the wrong reference. Express ordinary behavior positively and measurably; do not build a prompt from a long history of `do not` warnings.
-
-## Consistency And Priority
-
-- Follow the active instruction hierarchy and keep one authoritative rule for each behavior.
-- Resolve contradictions before delivery. When two preferences compete, use the objective, audience, output contract, and higher-authority instruction to choose one observable behavior.
-- Define every placeholder, source role, unit, enum, count, and destination that affects acceptance.
-- Prefer explicit and measurable instructions over vague quality language. Replace `make it good` with the property and check that prove good.
-- Treat examples as illustrations, never as permission to override constraints or invent unavailable facts.
-
-## Spelling correction for durable instructions
-
-- This rule covers every unambiguous English spelling error, not an allow-list of examples. When a user supplies a misspelled English word or technical name, correct it at the input boundary before emitting a durable prompt or instruction. For example, normalize `Oraganization` to `Organization`; preserve the requested casing style and use the corrected form consistently in the output.
-- Use surrounding context and established project vocabulary. If the term may be intentional, proprietary, externally owned, or has more than one plausible correction, retain the supplied form and ask rather than guessing.
-- Do not silently rewrite quoted user prose, user data, external names, or persisted/public contract values. If the name is a compatibility boundary, keep the minimum required legacy alias or migration and make the canonical spelling explicit.
-- When a correction is made, the output must state the original-to-canonical mapping and affected scope before any optional tone or commentary; never claim a correction, test, or deployment that was not actually verified.
+Separate stable policy from per-run data. Ask only for a missing decision that materially changes the result; otherwise proceed with a reasonable stated assumption. Correct unambiguous spelling in new durable instructions and report the original-to-canonical mapping when material. Preserve quoted user prose, user data, external names, and persisted/public contracts.
 
 ## Workflow
 
-1. Inspect the existing prompt, real inputs, bad outputs, and current validator before editing.
-2. State internally: `Prompt idea -> Prompt goal -> observed problems -> smallest complete solution`.
-3. Separate durable rules from per-run variables. Keep static policy in the reusable prompt and pass changing subject/input values through named placeholders or attachments.
-4. Resolve contradictions and precedence first. Merge overlapping negatives into one positive, testable rule rather than accumulating warnings.
-5. Select only the conditional controls that materially reduce ambiguity or failure risk.
-6. Preserve user authority. Ask only when missing information would materially change the result or create high-risk/external effects; otherwise make and disclose a bounded assumption.
-7. Build the prompt in this order when applicable: objective, context/inputs, requirements/constraints, conditional controls, output contract, success/failure conditions, and verification.
-8. For complex work, plan dependencies internally before execution and use `plan -> execute -> review -> finalize` only when those phases improve the result. Do not expose a planning preamble or private reasoning unless the user explicitly requests an appropriate planning artifact.
-9. Put tool order in the prompt only when order affects correctness or side effects. Name the tool purpose, required evidence, fallback, and stop condition when tools are part of the contract.
-10. Present the completed prompt or instruction artifact immediately. Do not put an external trial run, validator, report, or closeout step before that first presentation.
-11. A reusable prompt or durable-instruction change is conceptual/process material unless explicitly proven trivial value-only; material work requires `ending-required` and durable project-memory closeout. Observable surfaces remain valid triggers. Present first, then create one global projectless Ending with null-project readback. Spark-xhigh is first; a persisted real quota/five-hour/provider restriction selects the next stronger supported controller until expiry. Check workers remain evidence-only and all checks PASS.
-12. Grade artifact production separately from acceptance. A downloaded image, valid JSON container, or completed model response is not a pass when semantic, file, structure, or visual gates fail.
-13. If a real prompt check fails or behavior differs, record bounded evidence and create a fresh independent projectless Repair Task. It must not contact, steer, interrupt, terminate, hand off, move, or mutate any existing session; when an active task owns a required write surface it waits without messaging. After scoped repair it runs Quick Check and starts a fresh parent-linked Ending, up to three attempts. Never auto-archive or delete Ending or Repair tasks.
+1. Inspect the existing prompt, its direct consumer/validator, relevant inputs, and observed failures.
+2. Identify the desired result and replace the weakest ambiguous or conflicting rule with the smallest complete instruction.
+3. Verify within this active task. For consequential output behavior, use representative inputs and inspect semantic correctness as well as format. For a simple value-only edit, skip verification. Do not start the whole project or compile it merely to check a prompt unless requested.
+4. Return the artifact and concise evidence. State when a provider trial or stochastic reliability remains untested; one good sample does not prove stability.
+5. Ending only summarizes useful project memory from completed work, using the user's selected model and effort. It performs no verification or repair.
 
-## Recommended Prompt Shape
+## Output-specific checks
 
-Use the smallest subset that fully controls the task:
+| Output | Relevant contract |
+| --- | --- |
+| Structured data | Schema, required fields, types, allowed missing values, and cross-field consistency |
+| Human-readable content | Audience, factual support, terminology, and useful length/organization |
+| Image or multimodal output | Each reference's role; what stays fixed; count, pose, crop, aspect ratio, and actual file/transparency requirements |
+| Prompt in executable code | [Code Skill](../code-skill/SKILL.md) and [string integration](../code-skill/references/prompt-generation.md) for syntax, interpolation, and consumers |
+| Functional code shipped in Skills | [Skill platform compatibility](../code-skill/references/skill-platform-compatibility.md) |
 
-```text
-Role: <only when domain perspective matters>
-
-Objective:
-<one concrete outcome>
-
-Context and inputs:
-- <source or variable role>
-- <environment or limitation>
-
-Requirements:
-- <required capability>
-
-Constraints:
-- <hard boundary or prohibition>
-
-Workflow:
-1. <ordered step only when order matters>
-
-Autonomy and ambiguity:
-- <what may be decided or assumed; what requires a question>
-
-Effort and verbosity:
-- <only when a measurable level or response limit matters>
-
-Output contract:
-<exact format, count, schema, layout, or file contract>
-
-Success criteria:
-- <measurable acceptance condition>
-
-Failure conditions:
-- <observable rejection condition>
-
-Verification:
-- <check and evidence>
-
-Examples:
-<only the minimum labeled examples needed to remove ambiguity>
-```
-
-The headings are a design aid, not a mandatory ceremony. Preserve a project's established prompt style when the same contract is explicit and testable.
-
-## Skill platform contract for functional runtime code
-
-This gate applies when creating or changing functional code shipped inside a Skill or used by a Skill. It does not impose platform policy on ordinary project code.
-
-When code may run on more than one platform, require the author to declare supported platforms, use portable APIs, guard intentional OS-specific behavior, and provide a fallback or explicit unsupported-platform error. Non-target platforms must not execute an unsupported path silently.
-
-When touching functional Skill code, run the checker on the changed scope before publish/merge from the `.codex` directory:
-
-```sh
-# macOS/Linux
-python3 skills/code-skill/scripts/skill_platform_check.py check --skills-root skills --baseline skills/code-skill/assets/skill-platform-baseline.json
-```
-
-```powershell
-# Windows PowerShell
-py -3 skills/code-skill/scripts/skill_platform_check.py check --skills-root skills --baseline skills/code-skill/assets/skill-platform-baseline.json
-```
-
-`python` is acceptable only when it resolves to the intended Python 3 environment.
-
-Portable behavior requirements:
-
-1. Use `pathlib.Path`, `Path.home()`, `Path.cwd()`, `tempfile`, and environment discovery (`os.environ` / `os.getenv`) for files, state, cache, and temp locations unless explicitly bounded.
-2. Resolve external executables with PATH-aware lookup (`shutil.which`, `Get-Command`, `command -v`, or equivalent) before launch.
-3. Fail with a clear unsupported-platform error for unsupported targets.
-
-Reference guard patterns are tracked in `../code-skill/references/skill-platform-compatibility.md` and required for Python, shell, PowerShell, and other supported language/runtime surfaces.
-
-## Image And Multimodal Prompts
-
-- Assign every attachment one role: subject/structure, style, context, data-channel, or edit target. State what must not be copied from each reference.
-- Make camera, pose, count, ordering, aspect ratio, crop, transparency/background, and file-mode requirements measurable.
-- Separate semantic fidelity from file validity. Check both the visible image and the downloaded bytes.
-- For isolated sprites, distinguish real RGBA from a baked checkerboard and reject detached shadows, glow, particles, or meaningful alpha outside the body.
-- For sketch-to-image, count and preserve required structural strokes/parts before adding style detail.
-- For image-to-image and variants, specify what is locked and what is allowed to change.
-- For production stability, compare identical inputs across fresh runs and report automatic/file gates separately from manual visual gates.
-
-## Structured Output Prompts
-
-- Prefer a schema or one valid example over repeated prose about formatting.
-- Define allowed missing-value behavior; never let the model invent unavailable values.
-- Validate parsing, required fields, types, enums, naming, and cross-field consistency.
-- In code strings, escape literal braces correctly while leaving real interpolation placeholders unescaped.
-
-## Acceptance Checklist
-
-Before accepting a production prompt, confirm:
-
-- the objective and final artifact are unambiguous;
-- every material input, placeholder, reference, and authority boundary is defined;
-- requirements are explicit, constraints are non-conflicting, and measurable limits replace vague preferences;
-- role, workflow, tools, autonomy, effort, verbosity, delimiters, and examples appear only when useful;
-- the output contract defines format, count/schema/layout, missing-value behavior, and destination where relevant;
-- success and failure conditions can reject a merely completed but incorrect artifact;
-- verification checks the actual semantic, structural, file, visual, or side-effect requirements without requesting private chain-of-thought.
-- when final target-output validation matters, the prompt tells the target model to check missing fields, invalid format or JSON, unsupported claims, inconsistent terminology, and requirement violations before returning; it corrects a failed check when possible or follows the defined failure contract.
-
-## Project Cache Artifact Policy
-
-Before the first Codex-selected project-support write, read and apply [Project Cache Artifact Policy](../workflow-skill/references/project-cache-artifact-policy.md). It is the single authority for Cache categories, portable paths, the AI-only external-path registry, compact `AGENTS.md` guidance, retention, and cleanup handoff. Load it only when this task will create a support artifact; durable requested deliverables remain in their declared source or output paths.
+Image acceptance distinguishes visible fidelity from file validity: a checkerboard is not alpha, and a downloaded file is not proof of correct structure. Match checks to the actual intended use rather than inserting sprite-specific restrictions into every image prompt.
 
 ## Guardrails
 
-- Do not require a plan in the user-visible response unless the user asked for one or planning is itself the deliverable.
-- Do not expose private chain-of-thought. Request concise rationale, evidence, or checks instead.
-- Do not use "ask instead of guess" as a blanket blocker; it must respect the active autonomy and authorization rules.
-- Do not use maximum reasoning, long output, or many examples by default. Match effort and verbosity to task risk and complexity.
-- Do not make every task follow a visible step-by-step or `plan -> execute -> review` ceremony. Use ordered phases only when they change correctness or control risk.
-- Do not let examples silently become requirements or override explicit instructions.
-- Do not claim stability from one attractive sample.
-- Do not weaken acceptance criteria to make a failing prompt appear successful.
-
-## Handoff
-
-Return the updated prompt or instruction artifact first, followed by a compact change summary, test cohort, pass/fail results, and known remaining risks. Use the compact Result Model Disclosure from `task-analyze-skill/references/route-contract.md` verbatim. Do not expand it into the former repeated model, evidence, previous-model, switch-summary, or reason lines. If the prompt is embedded in executable code, also follow the owning code executor; use `code-skill` and its language-specific rules for Python and C#.
+Preserve user authority and the authorized scope. Do not weaken acceptance criteria to make an output pass. Use [project Cache policy](../workflow-skill/references/project-cache-artifact-policy.md) only when creating support artifacts. Keep reusable instructions concise enough that a capable model can apply the goal without a ritual checklist.

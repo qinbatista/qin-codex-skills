@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import os
+import shutil
 import tempfile
 import unittest
 from unittest import mock
@@ -14,17 +16,95 @@ SPEC.loader.exec_module(MEMORY)
 
 
 class ProjectChangeMemoryTests(unittest.TestCase):
+    def _write_current_runtime(self, vault):
+        source = SCRIPT_PATH.resolve().parents[3] / "qin-llm-wiki" / "qin_llm_wiki" / "templates" / "vault" / "AI Memory"
+        if os.environ.get("QIN_LLM_WIKI_SOURCE"):
+            source = Path(os.environ["QIN_LLM_WIKI_SOURCE"]) / "qin_llm_wiki" / "templates" / "vault" / "AI Memory"
+        if not (source / "ai_memory.py").is_file():
+            self.skipTest("current qin-llm-wiki source is required for canonical runtime integration")
+        destination = vault / "AI Memory"
+        destination.mkdir(parents=True)
+        for name in ("ai_memory.py", "auto_classify.py"):
+            shutil.copyfile(source / name, destination / name)
+
+    def _canonical_record(self, **changes):
+        record = {"project": {"root": ".", "name": "qin-codex-skills", "owner": "Global Codex Skills"}, "module": "memory-integrity",
+                  "summary": "Preserved canonical memory identity", "reason": "Keep one event across memory stores", "result": "Same-project projection reads back",
+                  "verification_status": "passed", "files": ["project-memory-skill/SKILL.md"], "verification": ["Focused adapter checks passed"],
+                  "decisions": [], "risks": [], "id": "20260905T120000Z-123456789abc", "recorded_at": "2026-09-05T12:00:00Z",
+                  "change_kind": "edit", "scope": "file", "supersedes": ""}
+        record.update(changes)
+        return record
+
+    def test_current_canonical_writer_preserves_id_and_repeated_projection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Path(directory) / "vault"
+            self._write_current_runtime(vault)
+            record = self._canonical_record()
+            first = MEMORY._write_root_first_memory(record, vault)
+            second = MEMORY._write_root_first_memory(record, vault)
+            events = MEMORY._read_records(vault / "AI Memory" / "events.jsonl")
+            self.assertTrue(first["read_back_verified"])
+            self.assertTrue(second["read_back_verified"])
+            self.assertEqual(second["event_status"], "duplicate")
+            self.assertEqual([event["event_id"] for event in events], [record["id"]])
+            self.assertEqual(events[0]["project"], "Global Codex Skills")
+            self.assertFalse((vault / "Journal").exists())
+            self.assertFalse(any(vault.rglob("History.md")))
+
+    def test_current_canonical_writer_rejects_conflicting_id_or_generated_duplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Path(directory) / "vault"
+            self._write_current_runtime(vault)
+            record = self._canonical_record()
+            MEMORY._write_root_first_memory(record, vault)
+            events_path = vault / "AI Memory" / "events.jsonl"
+            baseline = events_path.read_bytes()
+            for changed in (self._canonical_record(result="A stale result must not be accepted"), self._canonical_record(project={"owner": "Other Project"}), self._canonical_record(id="20260905T120000Z-abcdef123456")):
+                with self.assertRaisesRegex(ValueError, "conflicts|different event ID"):
+                    MEMORY._write_root_first_memory(changed, vault)
+                self.assertEqual(events_path.read_bytes(), baseline)
+
+    def test_current_canonical_writer_retains_supersession_and_rejects_cross_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Path(directory) / "vault"
+            self._write_current_runtime(vault)
+            first = self._canonical_record()
+            MEMORY._write_root_first_memory(first, vault)
+            corrected = self._canonical_record(id="20260905T120001Z-abcdef123456", recorded_at="2026-09-05T12:00:01Z", supersedes=first["id"], result="Corrected memory result preserves its predecessor")
+            output = MEMORY._write_root_first_memory(corrected, vault)
+            self.assertTrue(output["read_back_verified"])
+            events_path = vault / "AI Memory" / "events.jsonl"
+            events = MEMORY._read_records(events_path)
+            self.assertEqual(events[-1]["supersedes"], first["id"])
+            self.assertIn(first["id"], events[-1]["decisions"][-1])
+            baseline = events_path.read_bytes()
+            wrong = self._canonical_record(id="20260905T120002Z-fedcba123456", project={"owner": "Other Project"}, supersedes=first["id"], result="Cross-project memory must be rejected")
+            with self.assertRaisesRegex(ValueError, "same project"):
+                MEMORY._write_root_first_memory(wrong, vault)
+            self.assertEqual(events_path.read_bytes(), baseline)
+
+    def test_incompatible_canonical_runtime_fails_without_history_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Path(directory) / "vault"
+            runtime = vault / "AI Memory" / "ai_memory.py"
+            runtime.parent.mkdir(parents=True)
+            runtime.write_text("def record_event(**kwargs):\n    raise AssertionError('must fail before writing')\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "same-ID writer capabilities"):
+                MEMORY._write_obsidian(self._canonical_record(), vault)
+            self.assertEqual(list(vault.rglob("*.md")), [])
+
     def _write_root_first_runtime(self, vault):
         runtime = vault / "AI Memory" / "ai_memory.py"
         runtime.parent.mkdir(parents=True, exist_ok=True)
-        runtime.write_text("import json\nfrom pathlib import Path\n\nEVENTS_PATH = Path(__file__).with_name('events.jsonl')\n\ndef import_legacy(source):\n    record = json.loads(Path(source).read_text(encoding='utf-8').strip())\n    project = record.get('project', {}).get('owner') or record.get('project', {}).get('name') or 'Unknown'\n    events = [json.loads(line) for line in EVENTS_PATH.read_text(encoding='utf-8').splitlines()] if EVENTS_PATH.exists() else []\n    fields = ('summary', 'reason', 'result', 'verification_status', 'files', 'verification', 'decisions', 'risks', 'supersedes')\n    event = {'event_id': record['id'], 'project': project, 'module_changes': [{'module': record['module']}], **{field: record.get(field) for field in fields}}\n    if not any(item.get('event_id') == event['event_id'] for item in events):\n        events.append(event)\n        EVENTS_PATH.write_text(''.join(json.dumps(item, separators=(',', ':')) + '\\\n' for item in events), encoding='utf-8')\n        return {'status': 'written', 'imported': 1}\n    return {'status': 'written', 'imported': 0}\n\ndef render_views():\n    return None\n", encoding="utf-8")
+        runtime.write_text("import json\nfrom pathlib import Path\n\nEVENTS_PATH = Path(__file__).with_name('events.jsonl')\nRECEIVED_PATH = Path(__file__).with_name('received.json')\n\ndef import_legacy(source):\n    record = json.loads(Path(source).read_text(encoding='utf-8').strip())\n    RECEIVED_PATH.write_text(json.dumps(record, separators=(',', ':')), encoding='utf-8')\n    project = record.get('project', {}).get('owner') or record.get('project', {}).get('name') or 'Unknown'\n    events = [json.loads(line) for line in EVENTS_PATH.read_text(encoding='utf-8').splitlines()] if EVENTS_PATH.exists() else []\n    fields = ('summary', 'reason', 'result', 'verification_status', 'files', 'verification', 'decisions', 'risks', 'supersedes')\n    event = {'event_id': record['id'], 'project': project, 'module_changes': [{'module': record['module']}], **{field: record.get(field) for field in fields}}\n    if not any(item.get('event_id') == event['event_id'] for item in events):\n        events.append(event)\n        EVENTS_PATH.write_text(''.join(json.dumps(item, separators=(',', ':')) + '\\\n' for item in events), encoding='utf-8')\n        return {'status': 'written', 'imported': 1}\n    return {'status': 'written', 'imported': 0}\n\ndef render_views():\n    return None\n", encoding="utf-8")
 
     def test_root_first_vault_never_creates_legacy_projection_files(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             vault = Path(temporary_directory) / "vault"
             self._write_root_first_runtime(vault)
             runtime = vault / "AI Memory" / "ai_memory.py"
-            record = {"project": {"root": ".", "name": "Example"}, "module": "runtime", "summary": "Updated runtime", "reason": "Keep one memory", "result": "Passed", "verification_status": "passed", "files": ["src.py"], "verification": [], "decisions": [], "risks": [], "id": "test-id", "recorded_at": "2026-08-01T00:00:00Z", "change_kind": "edit", "scope": "code", "supersedes": ""}
+            record = {"project": {"root": ".", "name": "Example", "owner": "Example"}, "module": "runtime", "summary": "Updated runtime", "reason": "Keep one memory", "result": "Passed", "verification_status": "passed", "files": ["src.py"], "verification": [], "decisions": [], "risks": [], "id": "test-id", "recorded_at": "2026-08-01T00:00:00Z", "change_kind": "edit", "scope": "code", "supersedes": ""}
             output = MEMORY._write_obsidian(record, vault)
             self.assertEqual(output["status"], "written")
             self.assertEqual(output["root"], "AI Memory/events.jsonl")
@@ -78,7 +158,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         self.assertIsNone(explicit_missing)
         self.assertIsNone(unavailable)
 
-    def test_project_registry_vault_is_shared_by_coverage_and_result_projection(self):
+    def test_project_registry_vault_projects_result_without_coverage_ceremony(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             home = root / "home"
@@ -93,11 +173,20 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             (project / "Cache" / "cache_path.json").write_text(json.dumps(registry), encoding="utf-8")
             with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
                 result = MEMORY.record_change(project, "runtime", "code", "edit", "Recorded registry-backed result", "Use one resolved vault for all memory layers", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, symbols=["__module__"])
-            coverage_index_exists = (vault / result["coverage"]["obsidian"]["index"]).is_file()
-        self.assertEqual(result["coverage"]["obsidian"]["status"], "written")
+        self.assertEqual(result["coverage"]["status"], "not-required")
         self.assertEqual(result["obsidian"]["status"], "written")
         self.assertTrue(result["projection"]["read_back_verified"])
-        self.assertTrue(coverage_index_exists)
+
+    def test_codex_worktrees_do_not_inherit_global_skill_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            with mock.patch.object(MEMORY.Path, "home", lambda: home):
+                self.assertEqual(MEMORY._registered_owner(home / ".codex/skills/code-skill"), "Global Codex Skills")
+                for child in ("worktrees/abc/MuseAI", "tasks/project", "memories"):
+                    root = home / ".codex" / child
+                    root.mkdir(parents=True)
+                    self.assertIsNone(MEMORY._registered_owner(root))
+                    self.assertFalse(MEMORY._record_matches_project({"project_owner": "Global Codex Skills"}, MEMORY._project_identity(root)))
 
     def test_windows_file_lock_uses_msvcrt_byte_lock(self):
         lock_handle = mock.Mock()
@@ -195,6 +284,36 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             self.assertEqual(written["status"], "written")
             self.assertEqual(recalled["matches"][0]["id"], written["record_id"])
 
+    def test_registered_source_and_same_name_clone_have_isolated_local_and_vault_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "home"
+            source = home / "Documents" / "AIProject" / "qin-codex-skills"
+            clone = root / "other" / "qin-codex-skills"
+            source.mkdir(parents=True)
+            clone.mkdir(parents=True)
+            vault = root / "vault"
+            self._write_root_first_runtime(vault)
+            with mock.patch.object(MEMORY.Path, "home", lambda: home):
+                clone_record = MEMORY.record_change(clone, "layout", "file", "edit", "Adjusted clone layout", "Keep clone decisions separate", "Clone layout recorded locally", "not-run", ["layout.py"], store=root / "store", vault=vault, inspect_working_line=False)
+                source_record = MEMORY.record_change(source, "layout", "file", "edit", "Adjusted source layout", "Keep source decisions separate", "Source layout recorded", "not-run", ["layout.py"], store=root / "store", vault=vault, inspect_working_line=False)
+                source_recall = MEMORY.search_records(source, store=root / "store", inspect_working_line=False)
+                clone_recall = MEMORY.search_records(clone, store=root / "store", inspect_working_line=False)
+                self.assertFalse(MEMORY._record_matches_project({"project": {"name": "qin-codex-skills", "root": str(clone)}}, MEMORY._project_identity(source)))
+                previous_cwd = Path.cwd()
+                try:
+                    os.chdir(source)
+                    self.assertIsNone(MEMORY._registered_owner("."))
+                    self.assertFalse(MEMORY._record_matches_project({"project": MEMORY._project_identity(clone)}, MEMORY._project_identity(source)))
+                finally:
+                    os.chdir(previous_cwd)
+            self.assertEqual([record["id"] for record in source_recall["matches"]], [source_record["record_id"]])
+            self.assertEqual([record["id"] for record in clone_recall["matches"]], [clone_record["record_id"]])
+            self.assertEqual(clone_record["obsidian"]["reason"], "unregistered_project_root")
+            projected = MEMORY._read_records(vault / "AI Memory" / "events.jsonl")
+            self.assertEqual([event["event_id"] for event in projected], [source_record["record_id"]])
+            self.assertEqual(projected[0]["project"], "Global Codex Skills")
+
     def test_supersedes_accepts_registered_project_move_but_rejects_clone(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
@@ -250,7 +369,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             self.assertIsNone(clone_target)
             self.assertEqual(clone_title, "")
 
-    def test_global_codex_root_is_skills_history_with_longest_match(self):
+    def test_global_codex_root_does_not_claim_unregistered_child_projects(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             home = temporary / "home"
@@ -262,8 +381,8 @@ class ProjectChangeMemoryTests(unittest.TestCase):
                 clone_target, _ = MEMORY._canonical_history_target({"project": {"root": str(temporary / "other" / ".codex")}}, Path("/tmp/vault"))
             self.assertEqual(canonical_title, "Global Codex Skills")
             self.assertEqual(canonical_target, Path("/tmp/vault/Skills/Global Codex Skills History.md"))
-            self.assertEqual(descendant_title, "Global Codex Skills")
-            self.assertEqual(descendant_target, Path("/tmp/vault/Skills/Global Codex Skills History.md"))
+            self.assertEqual(descendant_title, "")
+            self.assertIsNone(descendant_target)
             self.assertIsNone(clone_target)
 
     def test_global_codex_skill_source_checkout_shares_global_owner(self):
@@ -605,6 +724,9 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         self.assertEqual(missing_search["status"], "no-matches")
 
     def test_duplicate_retries_missing_projection_and_persists_read_back_receipts(self):
+        owner_patch = mock.patch.object(MEMORY, "_registered_owner", return_value="ExampleProject")
+        owner_patch.start()
+        self.addCleanup(owner_patch.stop)
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project = root / "project"
@@ -625,6 +747,9 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         self.assertEqual(receipts[-1]["event_id"], duplicate["record_id"])
 
     def test_root_first_readback_rejects_same_id_with_stale_content(self):
+        owner_patch = mock.patch.object(MEMORY, "_registered_owner", return_value="ExampleProject")
+        owner_patch.start()
+        self.addCleanup(owner_patch.stop)
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project = root / "project"
@@ -675,6 +800,9 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         self.assertEqual([receipt["attempt"] for receipt in receipts], [1, 2])
 
     def test_reconcile_retries_failed_projection_and_correction_projects_supersedes_decision(self):
+        owner_patch = mock.patch.object(MEMORY, "_registered_owner", return_value="ExampleProject")
+        owner_patch.start()
+        self.addCleanup(owner_patch.stop)
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project = root / "project"
@@ -737,12 +865,12 @@ class ProjectChangeMemoryTests(unittest.TestCase):
                     )
                 self.assertFalse((store / "index.jsonl").exists())
 
-    def test_qin_source_alias_projects_and_reads_back_as_global_owner(self):
+    def test_explicit_source_owner_projects_and_reads_back_as_global_owner(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             vault = Path(temporary_directory) / "disposable-vault"
             self._write_root_first_runtime(vault)
             record = {
-                "project": {"root": ".", "name": "qin-codex-skills", "owner": ""},
+                "project": {"root": ".", "name": "qin-codex-skills", "owner": "Global Codex Skills"},
                 "module": "memory-integrity",
                 "summary": "Recorded canonical owner result",
                 "reason": "Keep source and installed global skills under one owner",
@@ -761,6 +889,18 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             output = MEMORY._write_root_first_memory(record, vault)
             event = MEMORY._read_records(vault / "AI Memory" / "events.jsonl")[0]
         self.assertEqual(event["project"], "Global Codex Skills")
+        self.assertTrue(output["read_back_verified"])
+
+    def test_root_first_projection_excludes_private_working_line_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            vault = Path(temporary_directory) / "disposable-vault"
+            self._write_root_first_runtime(vault)
+            private_metadata = {"remote": "synthetic-private-remote", "branch": "synthetic-private-branch", "commit": "synthetic-private-commit", "version": "synthetic-private-version"}
+            record = {"project": {"root": "synthetic-private-root", "name": "qin-codex-skills", "owner": "Global Codex Skills", "working_line": private_metadata}, "module": "memory-integrity", "summary": "Recorded private projection boundary", "reason": "Keep repository identity in the local ledger only", "result": "Projection readback passed", "verification_status": "passed", "files": ["project-memory-skill/scripts/project_change_memory.py"], "verification": ["Focused projection check passed"], "decisions": [], "risks": [], "id": "20260830T120000Z-123456789abc", "recorded_at": "2026-08-30T12:00:00Z", "change_kind": "edit", "scope": "code", "supersedes": ""}
+            output = MEMORY._write_root_first_memory(record, vault)
+            received = json.loads((vault / "AI Memory" / "received.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["project"]["working_line"], private_metadata)
+        self.assertEqual(received["project"], {"name": "qin-codex-skills", "owner": "Global Codex Skills"})
         self.assertTrue(output["read_back_verified"])
 
     def test_remove_invalid_rebuilds_indexes_tombstones_and_blocks_reconcile(self):

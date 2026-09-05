@@ -4,7 +4,7 @@ Load this category only when the Unity C# task touches Unity Gaming Services, cl
 
 ## Stable boundary
 
-- Keep the path `public facade -> neutral interface -> selected provider -> optional SDK`. Public game code depends on the neutral contract; provider and SDK types stay behind the selected implementation.
+- When optional or interchangeable providers require a stable boundary, public game code depends on a neutral contract and provider/SDK types stay behind the selected implementation. Do not manufacture facade/interface/provider layers for a direct single-owner operation.
 - A facade is allowed only when it owns real public compatibility, validation, state translation, lifecycle, or provider selection. If it merely calls another method with the same arguments and return value, remove it and call the real owner once.
 - Keep initialization explicit with observable states such as uninitialized, initializing, ready, and failed. Coalesce concurrent initialization, reject or queue calls according to the declared contract, and do not initialize the same SDK from multiple owners.
 - Forward each callback or operation once. Avoid duplicate event bridges, duplicate save calls, nested manager-to-manager forwarding, and hidden initialization in getters or unrelated methods.

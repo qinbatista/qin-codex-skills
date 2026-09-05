@@ -15,6 +15,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 _CODEX_SQLITE_PATH = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "codex_sqlite.py"
 _CODEX_SQLITE_SPEC = importlib.util.spec_from_file_location("management_codex_sqlite", _CODEX_SQLITE_PATH)
 _CODEX_SQLITE = importlib.util.module_from_spec(_CODEX_SQLITE_SPEC)
@@ -452,6 +455,7 @@ def run_live_probe(auth_path, workdir, prompt):
             capture_output=True,
             text=True,
             timeout=180,
+            **hidden_process_options(),
         )
         session_files = sorted((temp_home / "sessions").rglob("*.jsonl"))
         latest_session = session_files[-1] if session_files else None
@@ -955,8 +959,8 @@ def command_add_account(args):
         raise ValueError("Use either --login or --source, not both together.")
 
     if args.login:
-        print("Starting `codex login`. Sign into the account you want to back up, then this command will save the new auth.json.")
-        subprocess.run(["codex", "login"], check=True)
+        print("Starting device login without opening a browser. Follow the displayed sign-in instructions; this command will then save the new auth.json.")
+        subprocess.run(["codex", "login", "--device-auth"], check=True, **hidden_process_options())
 
     source = args.source.expanduser().resolve() if args.source else (args.codex_home / "auth.json")
     if not source.exists():

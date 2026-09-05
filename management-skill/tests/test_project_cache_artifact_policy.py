@@ -98,46 +98,30 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         for required_text in (*REQUIRED_POLICY_TEXT, *REQUIRED_DETAILED_PATH_TEXT, *REQUIRED_DETAILED_AGENTS_TEXT, *REQUIRED_DETAILED_REGISTRY_TEXT):
             self.assertIn(required_text, policy_text, f"{PROJECT_CACHE_POLICY_PATH}: {required_text}")
 
-    def test_every_primary_skill_routes_support_writes_to_the_canonical_contract(self):
-        for skill_name in PRIMARY_SKILLS:
-            skill_text = (SKILLS_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
-            self.assertIn("Project Cache Artifact Policy", skill_text, skill_name)
-            expected_link = "references/project-cache-artifact-policy.md" if skill_name == "workflow-skill" else "../workflow-skill/references/project-cache-artifact-policy.md"
-            self.assertIn(expected_link, skill_text, skill_name)
-            self.assertIn("Load it only when this task will create a support artifact", skill_text, skill_name)
+    def test_workflow_links_the_single_cache_policy(self):
+        text = (SKILLS_ROOT / "workflow-skill/SKILL.md").read_text()
+        self.assertIn("references/project-cache-artifact-policy.md", text)
+        self.assertIn("references/task-resource-lifecycle.md", text)
 
-    def test_installable_entry_rule_has_the_project_cache_contract(self):
-        policy_text = GLOBAL_ENTRY_RULE_PATH.read_text(encoding="utf-8")
-        self.assertIn("Project Cache artifact policy", policy_text, str(GLOBAL_ENTRY_RULE_PATH))
-        for required_text in REQUIRED_GLOBAL_POLICY_TEXT:
-            self.assertIn(required_text, policy_text, f"{GLOBAL_ENTRY_RULE_PATH}: {required_text}")
+
+    def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
+        text = GLOBAL_ENTRY_RULE_PATH.read_text()
+        self.assertIn("project Cache/tmp-*", text)
+        self.assertIn("preserve unrelated work", text)
+
 
     @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
     def test_installed_global_agents_has_the_same_contract(self):
-        policy_text = GLOBAL_AGENTS_PATH.read_text(encoding="utf-8")
-        self.assertIn("Project Cache artifact policy", policy_text, str(GLOBAL_AGENTS_PATH))
-        for required_text in REQUIRED_GLOBAL_POLICY_TEXT:
-            self.assertIn(required_text, policy_text, f"{GLOBAL_AGENTS_PATH}: {required_text}")
+        self.assertIn("project Cache/tmp-*", GLOBAL_AGENTS_PATH.read_text())
 
-    def test_task_resource_lifecycle_is_canonical_and_narrowly_scoped(self):
-        workflow_text = (SKILLS_ROOT / "workflow-skill" / "SKILL.md").read_text(encoding="utf-8")
-        verify_text = (SKILLS_ROOT / "verify-skill" / "SKILL.md").read_text(encoding="utf-8")
-        reference_text = (SKILLS_ROOT / "workflow-skill" / "references" / "task-resource-lifecycle.md").read_text(encoding="utf-8")
-        cache_policy_text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
-        for required in (
-            "Task Resource Lifecycle (内存优化)",
-            "exclusive `Cache/tmp-<task>` root",
-            "retention reason plus a next review point",
-            "Reusable formal tests stay in source",
-            "No resource cleanup or reclamation operation may message",
-        ):
-            self.assertIn(required, reference_text)
-        self.assertIn("[Task Resource Lifecycle](references/task-resource-lifecycle.md)", workflow_text)
-        self.assertIn("[Task Resource Lifecycle](../workflow-skill/references/task-resource-lifecycle.md)", verify_text)
-        self.assertIn("`Cache/remote-<name>/` or `Cache/remote-test/` for explicitly retained material", cache_policy_text)
-        self.assertIn("Reusable formal tests remain source tests", cache_policy_text)
-        self.assertNotIn("`remote-test/` is the reserved test bucket for small local tests", cache_policy_text)
-        self.assertNotIn("No lifecycle operation may message, interrupt", reference_text)
+
+    def test_resource_policy_limits_automatic_cleanup(self):
+        text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text()
+        self.assertIn("last consumer", text)
+        self.assertIn("task-owned `Cache/tmp-*`", text)
+        self.assertIn("shared, pre-existing, conflicted, Unity, dated, or remote", text)
+        self.assertIn("never controls, interrupts, archives, or deletes another", text)
+
 
     def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):
         task_root = SKILLS_ROOT / "Cache" / "tmp-cache-artifact-policy-smoke"
@@ -253,21 +237,12 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 if directory.is_dir() and not any(directory.iterdir()):
                     directory.rmdir()
 
-    def test_project_handoffs_do_not_require_absolute_project_paths(self):
-        routed_skill_paths = (
-            SKILLS_ROOT / "task-analyze-skill" / "SKILL.md",
-            SKILLS_ROOT / "workflow-skill" / "SKILL.md",
-            SKILLS_ROOT / "code-skill" / "SKILL.md",
-            SKILLS_ROOT / "verify-skill" / "SKILL.md",
-        )
-        for instruction_path in routed_skill_paths:
-            instruction_text = instruction_path.read_text(encoding="utf-8")
-            self.assertIn("project-cache-artifact-policy.md", instruction_text, str(instruction_path))
-            self.assertNotIn("absolute project paths", instruction_text, str(instruction_path))
-        for instruction_path in (PROJECT_CACHE_POLICY_PATH, SKILLS_ROOT / "task-analyze-skill" / "references" / "route-contract.md"):
-            instruction_text = instruction_path.read_text(encoding="utf-8")
-            self.assertIn("project-root-relative paths", instruction_text, str(instruction_path))
-            self.assertNotIn("absolute project paths", instruction_text, str(instruction_path))
+    def test_portable_paths_have_one_canonical_owner(self):
+        text = PROJECT_CACHE_POLICY_PATH.read_text()
+        self.assertIn("project-root-relative paths", text)
+        self.assertIn("native APIs", text)
+        self.assertIn("AI-only", text)
+
 
 
 if __name__ == "__main__":

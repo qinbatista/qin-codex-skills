@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the Obsidian-selected adaptive producer with one stronger operational fallback."""
+"""Execute the selected model for skill work; adapt independent tasks only."""
 
 import argparse
 import hashlib
@@ -29,6 +29,7 @@ task_route_dispatcher = _load_file("obsidian_adaptive_dispatcher", SCRIPT_DIR / 
 resolve_entry_model = _load_file("obsidian_adaptive_entry", SCRIPT_DIR / "resolve_entry_model.py")
 model_identity_disclosure = _load_file("obsidian_adaptive_identity_disclosure", SCRIPT_DIR / "model_identity_disclosure.py")
 routing_policy = _load_file("obsidian_adaptive_routing_policy", SCRIPT_DIR / "routing_policy.py")
+selected_model_policy = _load_file("obsidian_selected_model_policy", SCRIPT_DIR / "selected_model_policy.py")
 obsidian_model_memory = _load_file(
     "obsidian_adaptive_memory",
     SKILLS_ROOT / "project-memory-skill" / "scripts" / "obsidian_model_memory.py",
@@ -49,7 +50,8 @@ def _emit_result_ready(result_path, ready_monotonic_ns):
 
 
 def _emit_ending_required(summary):
-    event = {"schema_version": 1, "stage": "ending-required", "parent_action": "create_projectless_end_task", "launch_state": "required_unacknowledged", "host_tool": "codex_app__create_thread", "thread_target": {"type": "projectless"}, "placement_readback_tool": "codex_app__list_threads", "ack_required": True, "final_aggregate_receipt": True, "aggregate_result_state": summary.get("aggregate_result_state"), "ending_real_status": summary.get("ending_real_status"), "ending_triggers": summary.get("ending_triggers", []), "material_update_classification": summary.get("material_update_classification"), "project_memory_closeout_required": summary.get("project_memory_closeout_required") is True, "complexity_score": summary.get("complexity_score"), "complexity_band": summary.get("complexity_band"), "receipt_path": summary.get("receipt_path"), "result_path": summary.get("result_path")}
+    event = task_route_dispatcher.memory_closeout_launch_packet(summary)
+    summary["memory_closeout"] = event
     print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
@@ -98,7 +100,11 @@ def _model_route_notice(args, recommendation):
     model_changed = bool(previous_model and attempt_model and previous_model != "unknown" and attempt_model != "unknown" and previous_model != attempt_model)
     effort_changed = bool(route_changed and not model_changed)
     task_part = _route_part_label(args, recommendation)
-    if repeated_failure and route_changed and model_changed:
+    model_locked = bool(recommendation.get("model_locked") or selected_model_policy.uses_selected_model(args))
+    if model_locked:
+        kind = "user_selected_skill_model"
+        message = f"Model route: preserving the user's selected model and effort {entry_pair} for the {task_part}. Governing skills and memory requirements keep this pair fixed."
+    elif repeated_failure and route_changed and model_changed:
         kind = "session_model_escalation"
         message = f"Model update: increased the model to {attempt_pair} for the {task_part} after repeated same-session failure. Entry model remains {entry_pair}; effort is estimated independently from the steps for this part."
     elif repeated_failure and route_changed and effort_changed:
@@ -109,7 +115,7 @@ def _model_route_notice(args, recommendation):
         message = f"Model route: repeated same-session failure detected; using {attempt_pair} for the {task_part}. Entry model remains {entry_pair}; this route is not a Real-pass claim."
     else:
         kind = "route_selection"
-        message = f"Model route: using {attempt_pair} for the {task_part}; entry model is {entry_pair}. Model family and effort were selected separately for this task part."
+        message = f"Model route: using {attempt_pair} for the {task_part}; entry model is {entry_pair}. Model family and effort were selected separately for this independent task."
     return {"kind": kind, "message": message, "task_part": task_part, "entry_pair": entry_pair, "previous_pair": previous_pair, "selected_pair": selected_pair, "attempt_pair": attempt_pair, "model_changed": model_changed, "effort_changed": effort_changed, "repeated_failure": repeated_failure, "route_changed": route_changed, "session_user_effort": session_summary.get("user_effort"), "estimated_steps": session_summary.get("step_estimate"), "estimated_effort": session_summary.get("estimated_effort"), "model_difficulty": session_summary.get("model_difficulty"), "information_burden": session_summary.get("information_burden")}
 
 
@@ -152,6 +158,27 @@ def _emit_execution_lifecycle_notice(contract):
     print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
+def _single_model_disclosure(args, recommendation, receipt=None):
+    pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
+    if not pair:
+        return model_identity_disclosure.model_disclosure_event(args.complexity_score, entry_resolution={"status": "unavailable"}, timing="assignment")
+    model, effort = pair.split("|", 1)
+    node = {"id": "result", "phase": "result", "purpose": getattr(args, "task_summary", "") or args.operation or args.task_type,
+            "model": model, "effort": effort, "complexity_score": args.complexity_score,
+            "complexity_band": obsidian_model_memory.complexity_band(args.complexity_score), "dependencies": []}
+    record = dict(receipt or {})
+    record["id"] = "result"
+    actual = record if record.get("effective_pair") and record.get("resolved_pair") else None
+    if actual:
+        record["evidence_level"] = "runtime_receipt"
+        record["model_evidence_source"] = "runtime_receipt"
+    stages = task_route_dispatcher.build_model_switch_summary({"nodes": [node]}, [record] if receipt else [],
+                 {"model": args.resolved_entry_model, "effort": args.resolved_entry_effort})
+    return model_identity_disclosure.model_disclosure_event(args.complexity_score,
+                 runtime_receipt=actual, entry_resolution={"status": "task_assignment", "model": model, "effort": effort},
+                 model_switch_summary=stages, timing="result" if receipt else "assignment")
+
+
 def _emit_route_ready(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation.get("selected_pair")
     notice = _model_route_notice(args, recommendation)
@@ -161,6 +188,7 @@ def _emit_route_ready(args, recommendation):
         event.update({"session_state": session_summary.get("state"), "session_user_effort": session_summary.get("user_effort"), "session_failure_recorded": session_summary.get("failure_recorded"), "session_escalation": recommendation.get("session_escalation")})
     print(json.dumps(event, separators=(",", ":")), flush=True)
     _emit_model_route_notice(notice)
+    print(json.dumps(_single_model_disclosure(args, recommendation), ensure_ascii=False, separators=(",", ":")), flush=True)
     _emit_code_rule_notice(getattr(args, "code_rule_bundle", None))
 
 
@@ -204,7 +232,7 @@ def material_update_classification(task_type, operation="", prompt="", declared_
 
 
 def ending_surface_requirements(task_type, operation="", prompt="", real_test=False, information_update=False, memory_update=False, material_update_kind="auto"):
-    """Identify observable work that gives a detached Ending a real purpose."""
+    """Identify durable changes worth summarizing in project memory."""
     task_type = str(task_type or "").strip().lower()
     operation = str(operation or "").strip().lower()
     material_kind = material_update_classification(task_type, operation, prompt, material_update_kind)
@@ -216,36 +244,21 @@ def ending_surface_requirements(task_type, operation="", prompt="", real_test=Fa
 
 
 def result_lifecycle_policy(successful_result, task_type, complexity_score, risk, multi_stage=False, prompt="", operation="", real_test=False, information_update=False, memory_update=False, material_update_kind="auto"):
-    band = obsidian_model_memory.complexity_band(complexity_score)
-    code_change = task_type == "code"
-    material_update = material_update_classification(task_type, operation, prompt, material_update_kind)
-    ending_surface = ending_surface_requirements(task_type, operation, prompt, real_test, information_update, memory_update, material_update)
-    ending_triggers = [name for name, enabled in ending_surface.items() if enabled]
-    if material_update in MATERIAL_ENDING_KINDS:
-        ending_triggers.append("material_update")
-    ending_required = bool(successful_result and ending_triggers)
-    if not successful_result:
-        ending_real_status = "not_started"
-        ending_requirement = "not_started"
-    elif ending_required:
-        ending_real_status = "missing_expected_code_ending" if code_change and band == "small" and risk == "low" and not multi_stage else "missing_expected_non_simple"
-        ending_requirement = "required"
-    else:
-        ending_real_status = "intentionally_skipped_simple_task"
-        ending_requirement = "no_real_ending_surface"
-    return {
-        "ending_required": ending_required,
-        "ending_requirement": ending_requirement,
-        "ending_real_status": ending_real_status,
-        "ending_surface": ending_surface,
-        "ending_triggers": ending_triggers,
-        "material_update_classification": material_update,
-        "project_memory_closeout_required": bool(successful_result and material_update in MATERIAL_ENDING_KINDS),
-        "ending_skip_reason": None if ending_required or not successful_result else "no_real_test_or_information_or_memory_or_material_update",
-        "producer_check_scope": "one_smallest_local_quick_check" if code_change else "completion_check_only",
-        "first_result_release": "immediate_after_quick_check",
-        "deferred_verification_owner": "projectless_ending" if ending_required else "none",
-    }
+    material = material_update_classification(task_type, operation, prompt, material_update_kind)
+    surface = ending_surface_requirements(task_type, operation, prompt, real_test, information_update, memory_update, material)
+    # A check result alone is not a reason to create persistent memory.
+    durable = bool(surface["memory_update"] or material in MATERIAL_ENDING_KINDS or information_update)
+    required = bool(successful_result and durable)
+    simple = material == "trivial_value_only" and not real_test
+    return {"ending_required": required, "ending_requirement": "memory_only" if required else "none",
+            "ending_real_status": "memory_pending" if required else "skipped",
+            "ending_surface": surface, "ending_triggers": ["durable_memory"] if required else [],
+            "ending_purpose": "memory_only", "ending_model_policy": "user_selected",
+            "material_update_classification": material, "project_memory_closeout_required": required,
+            "ending_skip_reason": None if required else "no_durable_memory_change",
+            "producer_check_scope": "skip_simple_value_change" if simple else "smallest_relevant_behavior_check",
+            "first_result_release": "after_in_task_verification", "verification_owner": "active_task",
+            "deferred_verification_owner": "none"}
 
 
 def _atomic_write_json(path, value):
@@ -305,10 +318,14 @@ def _receipt_args(args, selected, *, lean_context_mode=False):
 
 
 def _recommend(args, prompt=""):
+    if selected_model_policy.uses_selected_model(args):
+        return selected_model_policy.recommendation(args.resolved_entry_model, args.resolved_entry_effort)
     return obsidian_model_memory.recommend_model(
         args.project_root,
         args.task_type,
         args.module,
+        governing_skills=selected_model_policy.governing_skills(args),
+        skill_governed=False if getattr(args, "skill_independent", False) else None,
         file_value=args.file,
         symbol=args.symbol,
         code_kind=args.code_kind,
@@ -658,7 +675,7 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     nodes.append(main_node)
     lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
     if lifecycle_policy["ending_required"]:
-        nodes.append({"id": "ending-verify", "phase": "ending", "skill": "verify-skill", **task_route_dispatcher.ending_fast_route_fields(), "dependencies": ["merge-result"], "prompt": "Audit only the released scheduled-route receipts, dependency coverage, and exact published result. Do not rerun sources, tests, APIs, edits, or repairs.", "sandbox": "read-only", "timeout": 60})
+        nodes.append({"id": "ending-verify", "phase": "ending", "skill": "project-memory-skill", "model": entry_model, "effort": entry_effort, "selection_basis": "user_selected", "allow_fallback": [], "dependencies": ["merge-result"], "prompt": "Summarize only durable changes and preferences in existing memory for this project. Skip when no relevant memory is configured. Do not verify or repair.", "sandbox": "read-only", "timeout": 60})
     args.execution_lifecycle = getattr(args, "execution_lifecycle", None) or routing_policy.execution_lifecycle_contract(args.complexity_score, False, True, sum(node.get("phase") == "result" for node in nodes), args.risk, args.ambiguity)
     schedule_mode = "parallel_source_capture_single_synthesis" if deterministic_capture else "parallel_sources_fused_final" if fused_source else "parallel_independent_sources"
     return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": schedule_mode, "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "deterministic_source_capture": deterministic_capture, "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900), "ending_required": lifecycle_policy["ending_required"], "ending_skip_reason": lifecycle_policy["ending_skip_reason"], "execution_lifecycle": args.execution_lifecycle}, recommendation
@@ -751,10 +768,17 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
         manifest.get("first_result_elapsed_ms"),
     )
     receipt["execution_summary"] = execution_summary
+    receipt["model_switch_summary"] = manifest.get("model_switch_summary", {})
+    receipt["model_disclosure"] = manifest.get("model_disclosure") or model_identity_disclosure.model_disclosure_event(
+        args.complexity_score, runtime_receipt=receipt if receipt.get("effective_pair") else None,
+        entry_resolution={"status": "task_assignment", "model": entry_model, "effort": entry_effort},
+        model_switch_summary=receipt["model_switch_summary"])
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
     summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), **lifecycle_policy, "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_lifecycle": args.execution_lifecycle, "execution_summary": execution_summary}
+    summary["model_disclosure"] = receipt["model_disclosure"]
+    summary["model_switch_summary"] = receipt["model_switch_summary"]
     summary["code_rule_bundle"] = receipt["code_rule_bundle"]
     summary.update({"aggregate_result_release_path": receipt["aggregate_result_release_path"], "final_aggregate_receipt": receipt["final_aggregate_receipt"], "aggregate_result_state": receipt["aggregate_result_state"], "ending_launch_ready": receipt["ending_launch_ready"]})
     if args.emit_result:
@@ -789,6 +813,8 @@ def _pre_execution_failure(receipt_args):
 
 def _attempt_pairs(args, recommendation):
     attempt_pair = recommendation.get("attempt_pair") or recommendation["selected_pair"]
+    if recommendation.get("model_locked"):
+        return [attempt_pair]
     active_pair = recommendation.get("active_fallback_pair")
     _, active_pairs = obsidian_model_memory.load_shared_ladder(args.ladder)
     pairs = [attempt_pair]
@@ -801,7 +827,7 @@ def _attempt_pairs(args, recommendation):
 
 
 def _exact_contract_recommendation(prompt, recommendation):
-    if not _is_exact_expression_contract(prompt):
+    if recommendation.get("model_locked") or not _is_exact_expression_contract(prompt):
         return recommendation
     guarded = dict(recommendation)
     pair = task_route_dispatcher.MODEL_ROLE_PAIRS["frontier_complex"]
@@ -874,7 +900,7 @@ def run(args, prompt):
     args.resolved_entry_model, args.resolved_entry_effort, args.resolved_entry_source = _resolved_entry_pair(args)
     recommendation = _exact_contract_recommendation(prompt, _recommend(args, prompt))
     _emit_route_ready(args, recommendation)
-    sources = scheduled_source_paths(prompt, args.workdir)
+    sources = [] if recommendation.get("model_locked") else scheduled_source_paths(prompt, args.workdir)
     admission = schedule_admission(prompt, args.workdir, sources) if sources else None
     lean_context_mode = _lean_context_eligible(args, prompt, bool(admission and admission["admitted"]))
     args.execution_lifecycle = routing_policy.execution_lifecycle_contract(args.complexity_score, getattr(args, "fast_path_eligible", False), bool(admission and admission["admitted"]), len(sources) + 1 if admission and admission["admitted"] else 1, args.risk, args.ambiguity)
@@ -897,7 +923,7 @@ def run(args, prompt):
         receipt_args = _receipt_args(args, selected, lean_context_mode=lean_context_mode)
         try:
             with model_execution_receipt.adaptive_producer_authorization():
-                attempt_receipt = model_execution_receipt.run_receipt(receipt_args, prompt)
+                attempt_receipt = model_execution_receipt.run_receipt(receipt_args, selected_model_policy.execution_guidance(args) + "\n\n" + prompt)
         except (OSError, ValueError):
             attempt_receipt = _pre_execution_failure(receipt_args)
         visible_result = bool(args.result_output.is_file() and args.result_output.stat().st_size > 0)
@@ -932,6 +958,7 @@ def run(args, prompt):
     receipt["execution_lifecycle"] = args.execution_lifecycle
     learning_context = _model_learning_context(args)
     receipt["model_learning_context"] = learning_context
+    receipt["model_locked"] = selected_model_policy.uses_selected_model(args)
     if isinstance(recommendation.get("session_effort"), dict) and recommendation["session_effort"].get("available"):
         receipt["session_effort"] = recommendation["session_effort"]
         receipt["session_escalation"] = recommendation.get("session_escalation")
@@ -969,6 +996,8 @@ def run(args, prompt):
         "operational_fallback" if len(receipts) > 1 else None,
     )
     receipt["execution_summary"] = execution_summary
+    receipt["model_disclosure"] = _single_model_disclosure(args, recommendation, receipt)
+    print(json.dumps(receipt["model_disclosure"], ensure_ascii=False, separators=(",", ":")), flush=True)
     _atomic_write_json(args.receipt_output, receipt)
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
     ready_ns = receipt.get("result_ready_monotonic_ns")
@@ -1012,6 +1041,7 @@ def run(args, prompt):
         **lifecycle_policy,
         "model_learning_context": learning_context,
         "model_route_notice": receipt["model_route_notice"],
+        "model_disclosure": receipt["model_disclosure"],
         "code_rule_bundle": receipt["code_rule_bundle"],
         "execution_lifecycle": args.execution_lifecycle,
         "execution_summary": execution_summary,
@@ -1052,10 +1082,15 @@ def resolve_fast_path_args(args, prompt):
     args.workdir = workdir
     args.project_root = project_root
     args.task_type = task_type
+    args.governing_skills = list(getattr(args, "governing_skill", []) or [])
+    if not getattr(args, "skill_independent", False) and not args.governing_skills:
+        inferred = {"code": "code-skill", "debug": "code-skill", "prompt": "prompt-skill", "visual": "emil-design-eng" if (SKILLS_ROOT / "emil-design-eng/SKILL.md").is_file() else "code-skill"}.get(task_type)
+        if inferred and (SKILLS_ROOT / inferred / "SKILL.md").is_file():
+            args.governing_skills = [inferred]
     args.module = module_name
     args.routing_reasons = list(routing["reasons"])
     args.material_result_stages = list(routing["material_result_stages"])
-    args.graph_required = bool(fast_path and routing["graph_required"])
+    args.graph_required = False  # Decomposition belongs to the selected-model planner, not keyword counts.
     args.fast_path_eligible = bool(fast_path and args.complexity_score <= routing_policy.ROUTING_THRESHOLDS["fast_path_maximum_score"] and not routing["risk_override"] and args.risk == "low" and args.ambiguity == "low" and task_type in {"code", "question", "writing"})
     args.task_name = args.task_name or os.environ.get("CODEX_TASK_NAME", "")
     args.task_group = args.task_group or os.environ.get("CODEX_TASK_GROUP", "")
@@ -1106,13 +1141,15 @@ def parse_args(argv=None):
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--ignore-user-config", action="store_true")
     parser.add_argument("--allow-fallback", action="append", default=[])
+    parser.add_argument("--governing-skill", action="append", default=[], help="Actual skill governing this task; repeat as needed.")
+    parser.add_argument("--skill-independent", action="store_true", help="Planner confirmed no skill governs this independent task; cannot override named governing skills.")
     parser.add_argument("--entry-model")
     parser.add_argument("--entry-effort")
     parser.add_argument("--emit-result", action="store_true")
-    parser.add_argument("--real-test", action="store_true", help="Declare a real test or runtime verification surface for the detached Ending.")
-    parser.add_argument("--information-update", action="store_true", help="Declare an information/documentation update surface for the detached Ending.")
-    parser.add_argument("--memory-update", action="store_true", help="Declare a durable memory/history update surface for the detached Ending.")
-    parser.add_argument("--material-update-kind", choices=sorted(MATERIAL_UPDATE_KINDS), default="auto", help="Classify a durable update; structural, code, conceptual, and process updates require Ending plus project-memory closeout. Use trivial_value_only only for a proven value-only edit.")
+    parser.add_argument("--real-test", action="store_true", help="Declare a real test or runtime verification surface for verification inside the active task.")
+    parser.add_argument("--information-update", action="store_true", help="Declare an information/documentation update surface for verification inside the active task.")
+    parser.add_argument("--memory-update", action="store_true", help="Declare a durable memory/history update surface for verification inside the active task.")
+    parser.add_argument("--material-update-kind", choices=sorted(MATERIAL_UPDATE_KINDS), default="auto", help="Classify a durable update; structural, code, conceptual, and process updates may produce a memory-only closeout. Use trivial_value_only only for a proven value-only edit.")
     return parser.parse_args(argv)
 
 

@@ -61,6 +61,12 @@ except ModuleNotFoundError:
     _session_effort_spec.loader.exec_module(session_effort)
 
 
+import importlib.util
+_selected_path = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "selected_model_policy.py"
+_selected_spec = importlib.util.spec_from_file_location("memory_selected_model_policy", _selected_path)
+selected_model_policy = importlib.util.module_from_spec(_selected_spec)
+_selected_spec.loader.exec_module(selected_model_policy)
+
 SCHEMA_VERSION = 1
 LOCAL_MEMORY_SCHEMA_VERSION = 1
 MIN_REAL_PASSES_BEFORE_DOWNGRADE = 2
@@ -953,8 +959,21 @@ def _operational_fallback_pair(selected_pair, pairs):
     return pairs[selected_index + 1] if selected_index + 1 < len(pairs) else None
 
 
-def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", task_group="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None, session_prompt="", session_id="", session_context=None):
+def recommend_model(project_root, task_type, module, *, file_value="", symbol="", code_kind="general", operation="work", modality="text", complexity="easy", complexity_score=None, risk="low", ambiguity="low", task_summary="", task_name="", task_group="", step_kind="", capability_tags=None, entry_model="", entry_effort="", vault=None, ladder=DEFAULT_LADDER, local_store=None, session_prompt="", session_id="", session_context=None, governing_skills=None, skill_governed=None, memory_update=False):
     started_ns = time.perf_counter_ns()
+    inferred_skill = {"code": "code-skill", "debug": "code-skill", "prompt": "prompt-skill", "visual": "emil-design-eng" if (Path(__file__).resolve().parents[2] / "emil-design-eng/SKILL.md").is_file() else "code-skill"}.get(task_type)
+    inferred = skill_governed is None and inferred_skill and (Path(__file__).resolve().parents[2] / inferred_skill / "SKILL.md").is_file()
+    governed = selected_model_policy.uses_selected_model({"task_type": task_type, "operation": operation, "governing_skills": governing_skills or [], "skill_governed": bool(skill_governed or inferred), "memory_update": memory_update})
+    if governed:
+        result = selected_model_policy.recommendation(entry_model, entry_effort)
+        score = complexity_score if complexity_score is not None else 65 if complexity == "complex" else 35
+        result.update({"schema_version": SCHEMA_VERSION, "project_key": project_change_memory._project_identity(project_root)["key"],
+                       "complexity_score": score, "complexity_band": complexity_band(score), "task_type": task_type, "module": module,
+                       "memory_coverage": {"status": "optional_scoped_read", "written": False}, "transfer_record_count": 0,
+                       "local_record_count": 0, "obsidian_record_count": 0, "selection_basis": "user_selected",
+                       "entry_model": entry_model, "entry_effort": entry_effort, "attempt_model": entry_model, "attempt_effort": entry_effort,
+                       "pass_counts": {}, "failed_model": None, "success_model": None, "quality_samples": 0})
+        return result
     shared, pairs = load_shared_ladder(ladder)
     query = _query(project_root, task_type, module, file_value, symbol, code_kind, operation, modality, complexity, complexity_score, risk, ambiguity, task_summary, step_kind, capability_tags, task_name, task_group)
     if isinstance(session_context, dict):
@@ -967,19 +986,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     query.update({"task_name": query.get("task_name", ""), "task_group": query.get("task_group", ""), "task_scope_key": query.get("task_scope_key", "") if str(task_name or "").strip() else "", "task_group_key": query.get("task_group_key", ""), "codex_session_key": session_summary.get("codex_session_key") if active_scope else "", "scope_enforced": active_scope})
     entry = _entry_context(shared, pairs, entry_model, entry_effort)
     vault_path, memory_root = _memory_root(query, vault)
-    coverage_store = _resolve_coverage_store()
-    memory_coverage_result = memory_coverage.ensure_coverage(
-        project_root,
-        query["module"],
-        symbol=query["symbol"],
-        files=[query["file"]] if query["file"] else [],
-        task_type=query["task_type"],
-        code_kind=query["code_kind"],
-        operation=query["operation"],
-        source="model-route",
-        vault=vault_path,
-        store=coverage_store,
-    )
+    memory_coverage_result = {"status": "optional_scoped_read", "written": False}
     model_switch = model_switch_reference(project_root, vault=vault)
     owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
     obsidian_configured = _is_configured_owner(vault_path, owner)
@@ -1006,21 +1013,7 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     records, specificity, score = _best_scope_records(project_records, query)
     transfer_records = []
     transfer_selection_basis = None
-    if not records or specificity == "project_task":
-        local_transfer_candidates = _transferable_local_records(all_local_records, query)
-        obsidian_transfer_candidates = _transferable_local_records(native_read["transfer_records"], query)
-        transfer_candidates = _merge_model_records(local_transfer_candidates, obsidian_transfer_candidates)
-        transfer_records, transfer_specificity, transfer_score = _best_scope_records(transfer_candidates, query)
-        if transfer_records and (not records or transfer_score > score):
-            records = transfer_records
-            specificity = f"cross_project_{transfer_specificity}"
-            score = transfer_score
-            selected_event_ids = {_model_event_key(record) for record in transfer_records}
-            local_transfer_ids = {_model_event_key(record) for record in local_transfer_candidates}
-            obsidian_transfer_ids = {_model_event_key(record) for record in obsidian_transfer_candidates}
-            uses_local = bool(selected_event_ids & local_transfer_ids)
-            uses_obsidian = bool(selected_event_ids & obsidian_transfer_ids)
-            transfer_selection_basis = "local_and_obsidian_linked_transfer_history" if uses_local and uses_obsidian else "obsidian_linked_transfer_history" if uses_obsidian else "local_transfer_history"
+    # Routing history remains project-scoped; never import another project.
     active = _active_recommendation(shared, pairs, query, records, entry["entry_anchor_pair"])
     selected_pair = active["selected_pair"]
     priority_pair = _priority_producer_pair(shared, query)
@@ -1093,8 +1086,8 @@ def recommend_model(project_root, task_type, module, *, file_value="", symbol=""
     return {
         "schema_version": SCHEMA_VERSION,
         "source": "local_and_obsidian_model_history",
-        "memory_available": True,
-        "local_memory_available": True,
+        "memory_available": bool(project_records),
+        "local_memory_available": bool(local_records),
         "obsidian_memory_available": obsidian_configured,
         "memory_coverage": memory_coverage_result,
         "model_switch_status": model_switch["status"],
@@ -1346,33 +1339,13 @@ def _native_model_records(vault_path, owner, category, query):
     current_records = _read_embedded_records(current_source)
     current_bytes = current_source.stat().st_size if current_source.exists() else 0
     page_count = int(current_source.exists())
-    shared_page = _shared_category_page(vault_path, category)
-    try:
-        shared_text = shared_page.read_text(encoding="utf-8")
-    except OSError:
-        shared_text = ""
-    page_count += int(bool(shared_text))
-    candidate_pages = []
-    fingerprint = query["capability_fingerprint"]
-    for line in shared_text.splitlines():
-        match = re.search(r"\[\[([^\]]+)\]\].*?fingerprints:\s*([^\s]+)", line)
-        if match and fingerprint in set(match.group(2).split(",")):
-            target = match.group(1).split("|", 1)[0].split("#", 1)[0].strip()
-            candidate = (vault_path / (target if target.endswith(".md") else target + ".md")).resolve()
-            try:
-                candidate.relative_to(vault_path.resolve())
-            except ValueError:
-                continue
-            if candidate != current_page.resolve() and candidate.is_file():
-                candidate_pages.append(candidate)
-    transfer_records = []
-    candidate_bytes = 0
-    for candidate in sorted(set(candidate_pages)):
-        candidate_bytes += candidate.stat().st_size
-        transfer_records.extend(_read_embedded_records(candidate))
-    transfer_records = _merge_model_records([], transfer_records)
-    linked_documents = [_vault_relative_path(vault_path, candidate).as_posix() for candidate in sorted(set(candidate_pages))]
-    return {"current_records": current_records, "transfer_records": transfer_records, "page_count": page_count + len(linked_documents), "read_bytes": current_bytes + len(shared_text.encode("utf-8")) + candidate_bytes, "candidate_records": len(current_records) + len(transfer_records), "project_index_document": _vault_relative_path(vault_path, _owner_index(vault_path, owner)).as_posix(), "model_switch_document": _vault_relative_path(vault_path, model_switch).as_posix(), "current_document": _vault_relative_path(vault_path, current_page).as_posix(), "current_source_document": _vault_relative_path(vault_path, current_source).as_posix(), "shared_index_document": _vault_relative_path(vault_path, _shared_routing_directory(vault_path) / "index.md").as_posix(), "shared_document": _vault_relative_path(vault_path, shared_page).as_posix(), "linked_documents": linked_documents}
+    return {"current_records": current_records, "transfer_records": [], "page_count": page_count,
+            "read_bytes": current_bytes, "candidate_records": len(current_records),
+            "project_index_document": _vault_relative_path(vault_path, _owner_index(vault_path, owner)).as_posix(),
+            "model_switch_document": _vault_relative_path(vault_path, model_switch).as_posix(),
+            "current_document": _vault_relative_path(vault_path, current_page).as_posix(),
+            "current_source_document": _vault_relative_path(vault_path, current_source).as_posix(),
+            "shared_index_document": "", "shared_document": "", "linked_documents": []}
 
 
 def _render_category_page(vault_path, owner, category, records):
@@ -1691,6 +1664,7 @@ def record_model_observation(project_root, task_type, module, pair, real_status,
         ladder=ladder,
         local_store=local_store,
         session_prompt=task_summary,
+        skill_governed=False,
     )
     timestamp = recorded_at or datetime.now(timezone.utc)
     owner = query["project"].get("owner") or project_change_memory._registered_owner(query["project"]["root"])
@@ -1882,6 +1856,8 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
     receipt_bytes = receipt_path.read_bytes()
     receipt_sha256 = hashlib.sha256(receipt_bytes).hexdigest()
     receipt = json.loads(receipt_bytes.decode("utf-8"))
+    if receipt.get("model_locked") or receipt.get("selection_provenance") == "user_selected" or selected_model_policy.uses_selected_model(receipt):
+        return {"status": "skipped", "reason": "user_selected_skill_model", "learning_eligible": False, "written": False}
     pair = _receipt_pair(receipt)
     receipt_entry_model, receipt_entry_effort, receipt_entry_source = _receipt_entry(receipt)
     if entry_model and receipt_entry_model and (entry_model, entry_effort) != (receipt_entry_model, receipt_entry_effort):
@@ -1944,6 +1920,7 @@ def record_model_result(project_root, task_type, module, receipt_path, real_stat
         local_store=local_store,
         session_prompt=task_summary,
         session_context=receipt.get("session_effort") if isinstance(receipt.get("session_effort"), dict) else None,
+        skill_governed=False,
     )
     priority_attempt_pair = receipt.get("priority_attempt_pair") or receipt.get("requested_pair")
     operational_failure_pairs = receipt.get("operational_failure_pairs") if isinstance(receipt.get("operational_failure_pairs"), list) else []
@@ -2298,6 +2275,8 @@ def parse_args(argv=None):
     recommend = commands.add_parser("recommend")
     _add_scope_arguments(recommend)
     recommend.add_argument("--compact", action="store_true")
+    recommend.add_argument("--governing-skill", action="append", default=[])
+    recommend.add_argument("--skill-independent", action="store_true")
     record = commands.add_parser("record")
     _add_scope_arguments(record, summary_required=True)
     record.add_argument("--receipt", type=Path, required=True)
@@ -2331,7 +2310,7 @@ def main(argv=None):
     else:
         scope = {"file_value": args.file, "symbol": args.symbol, "code_kind": args.code_kind, "operation": args.operation, "modality": args.modality, "complexity": args.complexity, "complexity_score": args.complexity_score, "risk": args.risk, "ambiguity": args.ambiguity, "task_summary": args.task_summary, "task_name": args.task_name, "task_group": args.task_group, "session_id": args.session_id, "step_kind": args.step_kind, "capability_tags": args.capability_tag, "entry_model": args.entry_model, "entry_effort": args.entry_effort, **common}
         if args.command == "recommend":
-            output = recommend_model(args.project_root, args.task_type, args.module, **scope)
+            output = recommend_model(args.project_root, args.task_type, args.module, governing_skills=args.governing_skill, skill_governed=False if args.skill_independent else None, **scope)
             if args.compact:
                 output = _compact_recommendation(output)
         else:

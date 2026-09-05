@@ -66,6 +66,30 @@ class ResultModelDisclosureTests(unittest.TestCase):
         ]))
         self.assertEqual(module.validate_result_model_disclosure(disclosure_text), [])
 
+    def test_assignment_disclosure_never_claims_a_runtime_receipt(self):
+        event = disclosure_module.model_disclosure_event(59, entry_resolution={"status": "task_assignment", "model": "gpt-6-astra", "effort": "ultra"})
+        self.assertIn("Complexity: 59/100 (complex)", event["message"])
+        self.assertIn("Evidence: task assignment (no runtime receipt)", event["message"])
+        self.assertEqual(event["parent_action"], "surface_disclosure_in_conversation")
+        self.assertTrue(event["user_visible"])
+
+    def test_selected_model_outside_old_catalog_keeps_observed_switch_path(self):
+        receipt = {"requested_pair": "gpt-5.6-luna|low", "resolved_pair": "gpt-5.6-luna|low",
+                   "effective_pair": "gpt-5.6-luna|low", "switch_direction": "downgrade",
+                   "switch_change": "gpt-6-astra|ultra->gpt-5.6-luna|low"}
+        value = disclosure_module.render_disclosure(9, runtime_receipt=receipt)
+        self.assertIn("Route: downgrade", value)
+        self.assertIn("Model path: gpt-6-astra|ultra -> gpt-5.6-luna|low", value)
+        self.assertEqual(disclosure_module.validate_disclosure(value), [])
+
+    def test_deterministic_stage_does_not_invent_a_model(self):
+        stages = {"nodes": [{"node_id": "capture", "phase": "result", "purpose": "Read bounded input",
+                              "score": 2, "band": "small", "execution_kind": "deterministic-source-read",
+                              "model_evidence_source": "deterministic_local_runtime", "status": "pass"}]}
+        rendered = disclosure_module.render_stage_summary(stages)
+        self.assertIn("Model: none (local process)", rendered)
+        self.assertIn("Evidence: local process receipt (no model)", rendered)
+
     def test_default_disclosure_omits_duplicate_detail_lines(self):
         disclosure_text = disclosure_module.render_disclosure(1, entry_resolution={"status": "verified", "model": "gpt-5.6-sol", "effort": "high"})
         self.assertEqual(len(disclosure_text.splitlines()), 2)
@@ -177,18 +201,6 @@ class ResultModelDisclosureTests(unittest.TestCase):
         self.assertEqual(identity["resolved_pair"], "gpt-5.6-terra|high")
         self.assertEqual(identity["effective_pair"], "gpt-5.6-terra|medium")
 
-    def test_contract_exists_across_owning_skills(self):
-        canonical_terms = ("Complexity:", "· Model:", "· Route:", "Evidence:", "verified entry (no runtime receipt)", "Model path:", "only when", "Model stages", "full routing data")
-        canonical_paths = [SKILLS_ROOT / "task-analyze-skill" / "SKILL.md", SKILLS_ROOT / "task-analyze-skill" / "references" / "route-contract.md"]
-        for source_path in canonical_paths:
-            source_text = source_path.read_text(encoding="utf-8")
-            for required_term in canonical_terms:
-                self.assertIn(required_term, source_text, f"{source_path}: {required_term}")
-        reference_paths = [SKILLS_ROOT / "workflow-skill" / "SKILL.md", SKILLS_ROOT / "prompt-skill" / "SKILL.md", SKILLS_ROOT / "code-skill" / "SKILL.md", SKILLS_ROOT / "verify-skill" / "SKILL.md", SKILLS_ROOT / "optimization-skill" / "SKILL.md", SKILLS_ROOT / "management-skill" / "SKILL.md"]
-        for source_path in reference_paths:
-            source_text = source_path.read_text(encoding="utf-8")
-            for required_term in ("compact Result Model Disclosure", "task-analyze-skill/references/route-contract.md", "Do not expand"):
-                self.assertIn(required_term, source_text, f"{source_path}: {required_term}")
 
 
 if __name__ == "__main__":

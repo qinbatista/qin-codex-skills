@@ -3,6 +3,7 @@ import json
 import tempfile
 import threading
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +15,16 @@ MODULE_SPEC.loader.exec_module(manage_auth_profiles)
 
 
 class ManageAuthProfilesTest(unittest.TestCase):
+    def test_requested_login_uses_device_auth_without_opening_browser(self):
+        with tempfile.TemporaryDirectory() as directory:
+            codex_home = Path(directory)
+            (codex_home / "auth.json").write_text('{}')
+            args = SimpleNamespace(login=True, source=None, codex_home=codex_home, name="test", force=False, dry_run=False)
+            with patch.object(manage_auth_profiles.subprocess, "run") as run:
+                manage_auth_profiles.command_add_account(args)
+            self.assertEqual(run.call_args.args[0], ["codex", "login", "--device-auth"])
+            self.assertTrue(run.call_args.kwargs["check"])
+
     def test_discover_profiles_collects_account_state_in_parallel(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             codex_home = Path(temp_dir)

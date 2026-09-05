@@ -16,6 +16,9 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
 DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/latest.json")
@@ -234,7 +237,7 @@ def command_result(check_id: str, target: str, command: list[str], root: Path, t
         temporary_cache = tempfile.mkdtemp(prefix="codex-skill-gate-")
         environment["CODEX_PROJECT_CACHE_ROOT"] = temporary_cache
     try:
-        completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment)
+        completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())
     finally:
         if temporary_cache is not None:
             shutil.rmtree(temporary_cache, ignore_errors=True)

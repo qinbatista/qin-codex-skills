@@ -1,0 +1,4 @@
+interface:
+  display_name: "project-memory-skill"
+  short_description: "Scoped recall and concise memory-only closeout"
+  default_prompt: "Read only relevant project memory if present. Summarize durable outcomes and preferences with the selected model and effort. Skip unavailable memory; preserve project isolation."

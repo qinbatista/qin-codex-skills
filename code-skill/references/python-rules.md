@@ -1,87 +1,37 @@
 # Python Rules
 
-Use `execution_domain=python` in routing evidence for Python work. This domain shares `code-skill` with other registry-owned code domains but is not interchangeable with their language rules or evidence.
+Use [code-writing philosophy](code-writing-philosophy.md) for general ownership, direct calls, result ownership, spelling, and surgical scope. Preserve behavior unless the user requests a change.
 
-Apply these rules whenever writing or editing Python modules, classes, functions, scripts, tests, snippets, or Python prompt assignments.
+## Style
 
-## Behavior
+- Prefer one physical line for clear signatures, calls, constructors, literals, and comprehensions. Introduce meaningful intermediate values when needed; wrap for genuine clarity or tooling constraints.
+- Preserve manual formatting. Do not run `ruff format`, `black`, or another formatter unless requested.
+- Keep imports at the top. Add no demos, TODOs, placeholders, or unnecessary `__main__` guards.
+- Use specific full-word names. Inline single-use values when readable; retain variables that clarify meaning.
+- Avoid one-off tiny helpers, nested wrappers, and extra classes. Put the steps in the actual owning function; extract only for reuse or a meaningful reduction in complexity.
+- For host scripts, subprocesses, and tests, follow [portable, quiet execution](skill-platform-compatibility.md). Use `sys.executable`, argument arrays, native paths, and hidden child launches; preserve valid platform-specific code and the caller's output/error/lifecycle handling.
 
-- Preserve behavior unless the user explicitly asks for new behavior.
-- For vague requests such as optimize, clean up, refactor, or improve, treat the task as style enforcement plus behavior-preserving micro-optimization only.
-- When independent repeated work is present or discovered during optimization, also read `references/parallelization.md` and parallelize only when the same observable result can be verified.
-- Return only code when the user asks for raw Python output.
+## Contracts
 
-## Formatting And Structure
+Read established JSON keys and return values directly. Do not search speculative aliases, repeat type checks at every call site, or add fallback values without a real contract. Validate untrusted inputs at their boundary and fix owned producers instead of repairing their output in each caller.
 
-- Keep every function signature and every function/method call with parameters on one physical line, no matter how many parameters it has.
-- Do not wrap argument lists over multiple lines. This includes constructors, builtins such as `any()`/`all()`, logging calls, helper calls, and chained method calls.
-- Keep every Python dict, list, set, tuple, and comprehension literal on one physical line when it appears in executable code. This includes assignments such as `prompt_json = {...}`, return values, log payloads, and inline input/output objects.
-- Do not write vertical payload literals like `prompt_json = { ... }`. Create clear intermediate variables first when needed, then keep the final literal on one line.
-- For long calls, create clear intermediate variables first, then keep the final call on one line.
-- Preserve the existing manual formatting style of the touched file.
-- Do not run `ruff format`, `black`, or any auto-formatter unless explicitly requested.
-- Keep imports at the top of the file.
-- Do not add demos, TODOs, unused imports, placeholder logic, or unnecessary `__main__` guards unless requested.
+When an AI helper guarantees parsed JSON with `json_root="object"` or `json_root="array"`, use that object directly; do not parse it again. Keep semantic extraction/naming/review rules in the prompt and local code focused on the schema and integration.
 
-## Names And Variables
+## Control flow
 
-- Use descriptive full-word names and correct English spelling.
-- Avoid vague placeholder names such as `out`, `result`, `data`, `item`, `obj`, or `response` when a more specific meaning is known.
-- Do not bind a value to `_`, and do not use `_` in tuple unpacking to suppress an unused return member. Access the required member directly, change the producer contract when it is owned here, or use a meaningful name only when the value is genuinely read. Pattern wildcards such as `case _` remain valid because they do not create a discarded value binding.
-- Inline any value or variable used exactly once when it remains readable.
-- Create variables only when reused or when they clearly improve readability.
-
-## Helpers And Abstractions
-
-- Do not add one-off class helper methods that are only called by one other method.
-- Do not add trivial module-level helper functions for short path joins, tiny normalization steps, or one-line predicates used by one local flow.
-- Inline one-off logic into the actual method or function unless extraction removes real complexity or is reused.
-- Do not keep awkward source logic in place and add wrappers, retry-only branches, or compatibility layers when the underlying function can be fixed directly.
-- Write logic functions step by step inside the owning function. When the input and return contract are confirmed, express any needed conditions in that function instead of adding wrapper functions, nested functions, or caller-side routing layers.
-- Do not create a same-arguments, same-return pass-through function. Call the owning function once at the real call site unless the boundary adds validation, translation, transaction, lifecycle, platform, provider, or public compatibility semantics.
-- Reject accidental self-recursion: a function must not call itself as its only action. Intentional recursion requires a visible base case and progress toward it.
-
-## Contracts And Guards
-
-- Trust declared function inputs and return shapes.
-- When a source JSON key, object field, or return value is confirmed, read that exact value directly. Do not search sibling aliases, typo variants, protective keys, or backup holder objects such as `user_text`, `user`, `text`, and misspelled variants unless the real source contract requires them.
-- Do not repeatedly check `dict`, `list`, `int`, or similar types across call sites unless explicitly requested.
-- Do not add fallback/default/compatibility branches, alternate input aliases, empty-value substitutes, or caller-side repair logic unless requested or required by a real external API contract.
-- Do not validate or repair a called function's return format at the caller; fix the producing function, helper contract, or prompt instead.
-- If an AI helper guarantees parsed JSON through `json_root="object"` or `json_root="array"`, use the returned `dict` or `list` directly with no `json.loads`, `ast.literal_eval`, string fallback, or duplicate parse check.
-- For AI extraction, naming, or review flows, put semantic rules in the prompt and keep local code limited to minimal schema normalization.
-
-## Quick Check And Detached Ending
-
-- Before presenting a light/local Python edit, run the smallest safe focused smoke that exercises the changed function. For API, large-file, expensive, destructive, or import-side-effect-heavy work, skip the heavy run; use `py_compile` or AST parsing plus direct changed function, variable, import, and reference checks.
-- Before final Ending or release-gate PASS, run `code-skill/scripts/code_rule_guard.py --diff-from HEAD` on changed Python files so new discard bindings, pass-through wrappers, only-action self-recursion, and avoidable vertical calls fail deterministically without rewriting unchanged legacy code.
-- Present `CODE READY` immediately after exactly one Quick Check. A durable Python change normally exposes `real_test`; non-trivial Python changes are material and require one persistent global projectless Ending plus durable project-memory closeout. Only explicit `trivial_value_only` work with no other surface may skip. Prove null placement with `list_threads` and `projectId=null`. Spark is first; a persisted real provider quota/five-hour restriction selects the next stronger controller until cooldown expiry. Capability-routed Terra/Sol `ENDING_CHECK_WORKER` nodes may collect semantic evidence. Multiple checks stay inside that one Ending lifecycle, and every required check must PASS.
-- Before durable closeout, compare Skill/AGENTS, fresh evidence, and effective project-result memory. Memory-only defects permit Ending correction; Skill/execution defects create a fresh isolated Repair Task and write no replacement result memory.
-- A failing verifier records bounded evidence and creates the generated independent projectless Repair Task. It never contacts or interrupts an existing session; active-task ownership makes it wait without messaging. After scoped repair it runs Quick Check and starts a fresh parent-linked Ending, for at most three attempts.
-- Record an optional simplification idea without editing only when the delivered behavior is already correct and no repair is required.
-
-## Error Handling
-
-- Use at most one `try`/`except` per function.
-- Keep `try`/`except` scopes narrow when only one call is risky.
-- When an `except` branch only logs and returns or raises, keep the log call on one physical line and inline single-use error formatting.
-
-## Branching
-
-- Use plain `if`/`else` for exactly two mutually exclusive outcomes.
-- Use Python `match`/`case` for three or more outcomes only when the runtime supports Python 3.10 or newer; use `if`/`elif` when a script must run on Python 3.9.
-- For complex predicates that are not one selector, use `match True` with guarded `case _ if ...` branches only when Python 3.10+ is guaranteed.
-- Normalize string comparisons with `str(...).strip().lower()` before comparing; do not enumerate casing variants.
+- Use at most one narrow `try`/`except` per function where the error contract permits; do not introduce exceptions as normal branching.
+- Use `if`/`else` for two outcomes. Prefer `match`/`case` for three or more on Python 3.10+; use compatible `if`/`elif` when older runtimes require it.
+- Normalize case-insensitive string comparisons once with `str(...).strip().lower()` rather than enumerating casing variants. Preserve case-sensitive contracts.
+- Read [parallelization](parallelization.md) only for authorized concurrency changes and preserve order, cancellation, errors, and side effects.
 
 ## Logging
 
-Use exactly this call shape on one line when logging is part of the code:
+When the project has this logger, preserve its one-line call shape:
 
 ```python
 self.__log_manager.print(function_emoji, status_text, execute_time, function_name, log_message)
 ```
 
-- `status_text` must be `"done"`, `"warning"`, `"error"`, or `"pass"`.
-- Log exactly one success message per function at the end of the main successful path.
-- Log only important failures or warnings, at most one log per failure branch.
-- Do not log every branch or small step.
+Statuses are `"done"`, `"warning"`, `"error"`, or `"pass"`. Emit one success message at the end of the successful path and at most one log per important failure branch. Do not add this project logger to unrelated projects or log every step.
+
+Verify the changed path during the task with focused tests, AST parsing, or direct-reference checks appropriate to its risk. Do not import side-effect-heavy modules merely to check syntax. Ending only records useful project memory.

@@ -7,6 +7,10 @@ import json
 import re
 import subprocess
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
 
 CSHARP_DISCARD_ASSIGNMENT = re.compile(r"^\s*_\s*=", re.MULTILINE)
 CSHARP_TUPLE_DISCARD = re.compile(r"\([^\n)]*\b_\b[^\n)]*\)\s*=", re.MULTILINE)
@@ -138,15 +142,15 @@ def filter_violations(violations, included_lines):
 
 
 def git_added_lines(path, reference):
-    root_process = subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False, shell=False)
+    root_process = subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False, shell=False, **hidden_process_options())
     if root_process.returncode != 0:
         raise ValueError("git_root_unavailable")
     repository_root = Path(root_process.stdout.strip()).resolve()
     relative_path = path.resolve().relative_to(repository_root).as_posix()
-    tracked_process = subprocess.run(["git", "-C", str(repository_root), "ls-files", "--error-unmatch", "--", relative_path], capture_output=True, text=True, check=False, shell=False)
+    tracked_process = subprocess.run(["git", "-C", str(repository_root), "ls-files", "--error-unmatch", "--", relative_path], capture_output=True, text=True, check=False, shell=False, **hidden_process_options())
     if tracked_process.returncode != 0:
         return set(range(1, len(path.read_text(encoding="utf-8").splitlines()) + 1))
-    diff_process = subprocess.run(["git", "-C", str(repository_root), "diff", "--unified=0", reference, "--", relative_path], capture_output=True, text=True, check=False, shell=False)
+    diff_process = subprocess.run(["git", "-C", str(repository_root), "diff", "--unified=0", reference, "--", relative_path], capture_output=True, text=True, check=False, shell=False, **hidden_process_options())
     if diff_process.returncode != 0:
         raise ValueError("git_diff_unavailable")
     added_lines = set()

@@ -1,0 +1,13 @@
+"""Run a review export worker on Windows, macOS, or Linux."""
+
+import subprocess
+import sys
+
+
+def run_job(args, *, cwd=None, env=None, timeout=10, input_text=None):
+    options = {"start_new_session": True}
+    if sys.platform == "win32":
+        options = {"creationflags": subprocess.CREATE_NEW_CONSOLE}
+    return subprocess.run(
+        " ".join(args), shell=True, cwd=cwd, timeout=10, check=True, **options
+    )

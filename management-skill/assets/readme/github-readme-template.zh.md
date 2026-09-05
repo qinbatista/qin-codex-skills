@@ -1,100 +1,54 @@
-<div align="center">
+# qin-codex-skills
 
-# 🚀 Auto Best Model
+精简的全局 Skill：代码结构、UI 偏好、任务协作与项目记忆。
 
-**专用于 Codex · 每个任务评分 · 先完成主任务 · 真实证据或重要更新必须做 Ending**
+用户选择的模型负责阅读相关 Skill 和项目记忆，理解任务并定义各子任务目标。受 Skill 约束的工作保留用户选择的**模型和推理强度**；独立且不受 Skill 约束的常规工作仍可自适应选模。纯工具调用无需额外模型。
 
-**优势：** 简单任务快跑，复杂任务选择最低正确模型，主结果先交付，私有学习留在本地，最后独立验收。已保存的最高版本家族质量梯级 · 只有你主动要求本地模型更新时才刷新 · 0–24 分小型低风险编辑先经同会话结果门再试 Spark-low · 更大任务使用已保存的质量梯级
+## 工作流程
 
-| 分数 | 档位 | 默认行为 |
-|---:|---|---|
-| 0–24 | Simple | 小型低风险工作先过同会话结果门，再试 `gpt-5.3-codex-spark|low` |
-| 25–49 | Standard | 使用已保存的最低正确质量档 |
-| 50–74 | Complex | 按能力使用已保存档；有依赖的工作保持同一上下文 |
-| 75–100 | Advanced | 使用更强保存档，必要时拆成复合任务图 |
+1. 读取相关 Skill 和当前项目记忆；记忆缺失直接跳过。
+2. 展示任务评分、模型/推理强度和路由；子任务展示目标、评分、模型、依赖和结果。简单任务直接执行；需要时计划依赖，把独立目标交给写入范围清晰的子任务。
+3. 在当前任务内验证重要改动，选择能证明行为的最小检查。简单数值修改默认跳过。只有用户要求相应范围时才启动或编译整个项目。
+4. 完成后用用户选择的模型总结值得保留的信息。按用户授权的流程创建独立、可见、无项目绑定的 Ending 记忆任务，展示任务链接和记忆回读。Ending 只更新记忆，不验证、不修复、不跑基准。
 
-**冻结 v48 Benchmark：** Direct `gpt-5.6-sol|ultra` → Auto Best Model 入口 `gpt-5.6-luna|max`；20 次运行，0 retry/fallback/repair，4/4 Sol 入口探针 PASS。稳定执行 `267.692s → 94.534s`（**+64.686%**）；logical token `1,653,005 → 317,799`（**+80.774%**）。
+项目记忆互相隔离；只读取明确相关的共享偏好。当前摘要保留代码结构、UI 设计选择、文档组织和重要决定，不重复堆积任务记录。
 
-[English](./README.md)
+## Skill
 
-</div>
-
-## 🔄 核心流程
-
-<picture>
-  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-zh-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow-zh.svg" alt="先评分并完成主结果，真实证据或重要更新会创建独立 projectless Ending">
-</picture>
-
-## ✅ 先完成主任务；真实证据或重要更新必须做 Ending
-
-1. 每个任务按 0–100 评分，读取相关 Skill 并完成要求。代码只运行一次最小 Quick Check，然后返回 `CODE READY`。
-2. 有真实 surface，或属于结构、非纯数值代码、思路、流程的重要更新时，必须发出 `ending-required`；重要更新还必须完成持久项目记忆。只有明确的纯数值小改动且没有其他 surface 才可 skip。
-3. 唯一全局 projectless Ending 必须读回空项目上下文。Spark-xhigh 优先；真实额度、五小时或 provider 限制会记录限制时间与重试时间，冷却期间直接使用下一档更强主控，冷却结束后恢复 Spark 优先。
-4. 失败时新建独立 projectless Repair Task，绝不发送、steer、中止、终止、handoff、移动或修改任何现有任务/session；若写入面由活动任务占用，Repair 只等待且不发消息打断。Ending 与 Repair 都保持可见。
-
-## ⚡ 模型与私有学习
-
-<picture>
-  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
-  <img src="./management-skill/assets/readme/model-router.svg" alt="基于 receipt 的最低正确模型路由">
-</picture>
-
-- **入口：** 步骤能力与难度历史选择最低正确档；Sol/高入口可下降，Luna-max/更低入口可升级。
-- **学习：** 一次 PASS 保留；两次匹配 PASS 才试降一档；质量失败升一档；操作故障不按质量失败学习。
-- **调度：** 复合任务分步骤路由；有依赖的多文件工作保持一个上下文 producer。
-- **记忆：** Model Switch 与原生类别链接按项目 → Model Switch → 类别 → 共享类别记录；不用 JSON sidecar；项目/任务等保持为字段。
-
-## 规则
-
-- **Producer：** 显示分数、档位和路由；复用最低正确档。
-- **Prompt：** 可复用 Prompt 和持久 AI 指令加载 Prompt Skill。
-- **路由：** 只在明确要求或端到端证据成立时委派。
-- **交付：** 先完成并返回主结果，再后台验证。
-- **验证：** 三个真实 surface 才创建 Ending；否则明确 skip。
-- **文件：** 修改前回溯项目/模块/文件历史；完成后记录验证结果。
-- **记忆：** 本地 JSONL，可选 Obsidian；代码要求 symbol。
-- **模型：** 使用保存梯级；主动更新才刷新；cache 缺失保留旧值。
-- **隐私：** secret、原始 Prompt/结果、receipt、ledger 和 cache 留在本地。
-
-## 📊 真实自适应 Benchmark：先完成，再后台验证
-
-冻结 v48 比较 Direct `gpt-5.6-sol|ultra` 与从 `gpt-5.6-luna|max` 进入的 Auto Best Model；主指标只计算干净的稳定选中执行。
-
-<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="冻结 v48 的四档 Direct 与 Auto Benchmark"></picture>
-
-**10 组 A/B · 20 次运行 · 20/20 预期结果和证据门 PASS · 4/4 Sol 入口探针 PASS · 0 retry/fallback/repair**
-
-| 档位 | Direct token | Auto token | token 节省 | Direct 时间 | Auto 时间 | 时间节省 |
-|---|---:|---:|---:|---:|---:|---:|
-| Simple | 146,062 | 94,622 | **+35.218%** | 79.212s | 30.568s | **+61.410%** |
-| Standard | 73,474 | 47,806 | **+34.935%** | 25.346s | 16.588s | **+34.554%** |
-| Complex | 644,587 | 87,297 | **+86.457%** | 65.990s | 20.642s | **+68.720%** |
-| Advanced | 788,882 | 88,074 | **+88.836%** | 97.144s | 26.736s | **+72.478%** |
-| **All** | **1,653,005** | **317,799** | **+80.774%** | **267.692s** | **94.534s** | **+64.686%** |
-
-**结果：每个档位和总体的两个主指标都下降。** 首结果总体更慢（`265.243s → 294.040s`）；Ending 不计入主指标（Direct `0.687s`、Auto `0.691s`、合计 `1.378s`）。Logical token 不是计费 token；冻结 cohort 不代表普遍保证。[方法报告](./task-analyze-skill/TEST_AND_BENCHMARK.md)当前标为 v47；对齐前以[脱敏 v48 JSON 证据](./task-analyze-skill/assets/model-routing-benchmark-example.json)为准。
-
-## 🧩 八个公开 Skill
-
-- [`Task Analyze`](./task-analyze-skill/SKILL.md) — 评分、路由、Benchmark 与准入。
-- [`Workflow`](./workflow-skill/SKILL.md) — 执行已准入的锁定路线。
-- [`Prompt`](./prompt-skill/SKILL.md) — 管理可复用 Prompt 与持久 AI 指令。
-- [`Code`](./code-skill/SKILL.md) — 管理 Python、C#、Unity C# 与已注册代码域。
-- [`Project Memory`](./project-memory-skill/SKILL.md) — 项目覆盖、回溯与验证记录。
-- [`Verify`](./verify-skill/SKILL.md) — 结果后的 Real Verify 与回归证据。
-- [`Optimization`](./optimization-skill/SKILL.md) — 将稳定重复工作变成工具。
-- [`Management`](./management-skill/SKILL.md) — 管理私有 profile 与公共镜像。
-
-## 🛠️ 已注册执行域
-
-<!-- EXECUTION_DOMAIN_TABLE -->
+| Skill | 核心职责 |
+| --- | --- |
+| [Task Analyze](task-analyze-skill/SKILL.md) | 受约束工作保留用户模型，独立工作自适应选模。 |
+| [Workflow](workflow-skill/SKILL.md) | 明确目标、必要计划、安全并行。 |
+| [Code](code-skill/SKILL.md) | 直接清晰的代码、明确职责、一致 UI。 |
+| [Prompt](prompt-skill/SKILL.md) | 清晰的目标、限制、输入和输出。 |
+| [Verify](verify-skill/SKILL.md) | 在完成前用最小相关证据验证。 |
+| [Project Memory](project-memory-skill/SKILL.md) | 相关记忆读取与简洁持久摘要。 |
+| [Optimization](optimization-skill/SKILL.md) | 按需简化，以实测支持结果。 |
+| [Management](management-skill/SKILL.md) | 可恢复安装与授权发布。 |
 
 ## 安装或更新
 
-GitHub 发布版已经过维护者门禁；消费者安装或更新只 fresh download 并安全替换八个 Skill，保留用户全局 `AGENTS.md`，不重复 unit、platform、regression、parity、attestation 或 Ending 验证。替换已记录的 Codex 全局模板是独立的 `install-global-agents` 显式操作，带持久恢复点；`bridge-user-skills` 只预览官方用户 Skill 路径链接，必须加 `--apply` 才会创建。
+```text
+python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
+```
 
-- **macOS/Linux 首次安装或更新：** `stage="$(mktemp -d)" && git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git "$stage/qin-codex-skills" && python3 "$stage/qin-codex-skills/management-skill/scripts/sync_global_skills.py" deploy --source-dir "$stage/qin-codex-skills" && rm -rf "$stage"`。
-- **Windows PowerShell 首次安装或更新：** `$ErrorActionPreference='Stop'; $stage=Join-Path $env:TEMP ("qin-codex-skills-"+[guid]::NewGuid()); try { git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git $stage; if ($LASTEXITCODE) { throw 'clone failed' }; py -3 "$stage\management-skill\scripts\sync_global_skills.py" deploy --source-dir $stage; if ($LASTEXITCODE) { throw 'deploy failed' } } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }`。保留无关本地 Skill 和私有 `task-analyze-skill/local/` 状态。
+Windows 使用 `py -3 -B`。安装以锁、备份和恢复机制替换八个托管 Skill，保留其他 Skill、用户 AGENTS 和私有路由历史。明确更新全局 AGENTS 时使用 `install-global-agents --source-dir .`，并生成可恢复备份。
 
-**隐私：** 公共镜像严格包含上面的八个 Skill，排除 auth、secret、私有 ledger、路由历史、cache、原始 Prompt/结果、receipt 和临时文件；发布前运行安全扫描。**镜像：** `qin-codex-skills` · `auto-best-model`
+源代码修改、本地安装和 GitHub 发布是不同结果。发布命令 `push` 在暂存或远端写入前运行当前发布检查。
+
+## 实测与基准
+
+八次真实 Astra/ultra 调用修复了隔离的示例界面和跨平台进程函数，并计算精确汇总。输出、实际模型、Skill 阅读和渲染检查均通过；其中一次阅读证据被检测器误判，已根据原始完整文件输出更正，原始失败仍保留。
+
+| 对比 | 无 Skill：token / 秒 | 安装 Skill：token / 秒 | 结果 |
+| --- | ---: | ---: | --- |
+| 原版，三组配对 | 768,610 / 752.11 | 1,113,558 / 988.72 | token 多 44.88%，耗时多 31.46% |
+| 精简重复验证后，一组配对 | 271,203 / 278.46 | 344,268 / 310.86 | token 多 26.94%，耗时多 11.63% |
+
+**本次基准没有证明节省。** token 包含缓存输入。两组收到同一份完整明确的任务说明；样本、缓存和延迟限制结论，且本次单模型对比不衡量自适应选模或记忆生命周期的节省。独立真实工作流已验证：受规则约束的审查用 Astra/ultra，独立计算用 Luna/low，两者并行；汇总和可见的记忆 Ending 均用 Astra/ultra。Windows 原生预检 73 项通过，1 项按平台预期跳过。
+
+八个入口文件由 24,126 词精简到 3,777 词，减少 84.34%；文本缩减不等于执行节省。[全部实测、模型分工、失败记录和统计边界](management-skill/assets/readme/current-workflow-benchmark.md)。
+
+## 代码规则归属
+
+<!-- EXECUTION_DOMAIN_TABLE -->

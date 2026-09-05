@@ -11,6 +11,9 @@ import unittest
 import uuid
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "task_resource_ledger.py"
 SPEC = importlib.util.spec_from_file_location("task_resource_ledger", SCRIPT_PATH)
@@ -408,7 +411,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
             ]
             return subprocess.run(
                 command, check=True, capture_output=True, text=True
-            )
+            , **hidden_process_options())
 
         run("init", "--task-id", "cli-task", "--task-root", cli_task_root)
         run(

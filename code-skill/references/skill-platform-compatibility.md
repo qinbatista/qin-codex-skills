@@ -1,85 +1,32 @@
-# Skill-platform compatibility examples
+# Skill Runtime Portability
 
-This reference applies when the edited functional code is shipped inside a Skill runtime surface (`scripts`, `bin`, `tools`) and must remain portable unless intentionally OS-specific.
+For scripts, tests, and background commands, use portable host APIs and keep execution invisible. Preserve working Windows, macOS, and Linux branches when platform behavior differs; do not replace them with a one-platform shortcut. Project code follows its declared runtime and supported platforms, including fixed containers or managed runtimes.
 
-This gate applies when creating/changing functional code inside a Skill or used by a Skill. It does not apply to ordinary project code.
+- Prefer one Python entry point over new shell/PowerShell wrappers. Preserve necessary existing platform implementations. Declare supported platforms and fail clearly on unsupported ones.
+- Use `pathlib`, environment/config discovery, and `tempfile` for paths. Keep local machine paths out of source.
+- Resolve external tools through PATH-aware discovery before launching. Use `sys.executable` for child Python and subprocess argument arrays instead of `shell=True`.
+- Guard OS-specific imports, APIs, and subprocess options such as `fcntl`, `msvcrt`, `os.killpg`, `os.startfile`, `start_new_session`, and Windows `creationflags`.
+- A wrapper forwards arguments and exit status; it does not duplicate business logic.
 
-## Required author declarations
+## Quiet execution
 
-- Declare target supported platforms in code docs/comments.
-- For host-run local automation, prefer one portable Python entry point over paired `.cmd` and `.sh` implementations; a necessary native wrapper forwards arguments and exit codes without owning business logic.
-- Require a clear unsupported-platform error or fallback for targets outside supported set.
-- Use `pathlib.Path`, `Path.home()`, `Path.cwd()`, `tempfile`, and env discovery (`os.environ` / `os.getenv`) for portable file/dir logic.
-- Resolve executables via PATH-aware checks before launch.
-- Launch child Python code with `sys.executable`, never a hard-coded `python`, `python3`, or `py` command.
-- Guard platform-only Python modules and APIs such as `fcntl`, `msvcrt`, `os.killpg`, `os.startfile`, `start_new_session`, and Windows `creationflags`.
-- Avoid `shell=True` in shared code; build subprocess commands as argument arrays.
+- Use the current non-interactive tool session and capture output/errors there or in task-owned logs. Do not open or activate a terminal, browser, generated report, or other app unless the user explicitly asks to show it. Do not change OS-wide settings or hide/close unrelated windows.
+- Apply `code-skill/scripts/hidden_process.py`'s `hidden_process_options()` to every maintained Skill `subprocess.run`/`Popen` launch, including nested helpers and tests. Project code uses the same guarded policy in its own process owner, without depending on an installed Skill path. Keep the caller's streams, arguments, environment, exit status, timeout, and cancellation behavior. Hidden execution must still report failures.
+- On Windows, the helper combines `CREATE_NO_WINDOW` with a copied `STARTUPINFO` using `STARTF_USESHOWWINDOW` and `SW_HIDE`. It preserves compatible flags and standard handles, and rejects `CREATE_NEW_CONSOLE` and `DETACHED_PROCESS`, which disable that guarantee. It passes no Windows options on macOS/Linux.
+- Console hiding does not make GUI applications headless. Use the application's native background/headless/export mode for browser checks, document rendering, and similar work; disable automatic preview opening. Prefer a CLI/API when an application cannot run invisibly, and report an unverified GUI boundary rather than opening a window.
 
-## Guard examples
-
-### Python
+For example, after importing the shared helper:
 
 ```python
-if sys.platform == "darwin":
-    exe = shutil.which("osacompile")
-    if not exe:
-        raise RuntimeError("darwin path requires osacomply; set TOOL_PATH")
-elif os.name == "nt":
-    raise RuntimeError("Windows is unsupported for this flow")
-else:
-    exe = shutil.which("convert")
+result = subprocess.run([sys.executable, "worker.py"], capture_output=True, text=True, timeout=30, check=True, shell=False, **hidden_process_options())
 ```
 
-### Shell (`.sh`, `.bash`, `.zsh`)
+## Focused checks
 
-```sh
-if [ "$(uname)" = "Darwin" ]; then
-  osacompile="$(command -v osacompile || true)"
-  [ -n "$osacompile" ] || { echo "darwin tool missing"; exit 3; }
-else
-  echo "unsupported platform"
-  exit 3
-fi
+Run the focused platform check during the task when runtime code changes. From the Skills root, the command is:
+
+```text
+python3 code-skill/scripts/skill_platform_check.py check --skills-root . --baseline code-skill/assets/skill-platform-baseline.json
 ```
 
-### PowerShell (`.ps1`)
-
-```powershell
-if ($IsWindows) {
-  $tool = Get-Command magick -ErrorAction SilentlyContinue
-  if (-not $tool) { throw "Windows path unsupported: missing magick" }
-} else {
-  throw "only Windows supported"
-}
-```
-
-### JavaScript / TypeScript
-
-```ts
-if (process.platform === "darwin") {
-  const tool = process.env.PATH ? "osacompile" : undefined
-  if (!tool) throw new Error("darwin path unsupported: missing tool")
-} else {
-  throw new Error("only darwin supported")
-}
-```
-
-## Minimal required checks
-
-- Ensure every OS-specific command path is inside explicit platform guard.
-- Ensure every platform-only Python import, API, and subprocess option is guarded.
-- Ensure Python child processes use `sys.executable`.
-- Ensure portable branches include concrete fallback or explicit `UnsupportedPlatformError`/`RuntimeError`/`throw`/exit code.
-- Run the checker on changed functional files and include results in project completion flow. From the `.codex` directory, use the launcher appropriate to the host:
-
-```sh
-# macOS/Linux
-python3 skills/code-skill/scripts/skill_platform_check.py check --skills-root skills --baseline skills/code-skill/assets/skill-platform-baseline.json
-```
-
-```powershell
-# Windows PowerShell
-py -3 skills/code-skill/scripts/skill_platform_check.py check --skills-root skills --baseline skills/code-skill/assets/skill-platform-baseline.json
-```
-
-`python` is acceptable only when it resolves to the intended Python 3 environment.
+On Windows use `py -3` instead of `python3` in the existing tool session; use `python` only when it resolves to the intended Python 3 environment. Child Python processes use `sys.executable`. Test the changed native branch when available and distinguish runtime evidence from simulated/static checks. Checker success alone does not prove execution or window suppression on every platform.

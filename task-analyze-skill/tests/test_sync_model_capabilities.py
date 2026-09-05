@@ -13,6 +13,9 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import sync_model_capabilities
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 
 def catalog_model(slug, priority, description, modalities=("text", "image"), supported_in_api=True):
     levels = [{"effort": effort, "description": effort} for effort in ("low", "medium", "high")]
@@ -32,12 +35,12 @@ class SyncModelCapabilitiesTests(unittest.TestCase):
             registry, snapshot = sync_model_capabilities.desired_outputs(cache_path)
             self.assertIn(registry["source"]["catalog_sha256"], snapshot)
             self.assertIn("`quick-code`", snapshot)
-            self.assertIn("Active quality family: `gpt-9.9`", snapshot)
-            self.assertNotIn("`gpt-9.8-legacy`", snapshot)
+            self.assertIn("only for skill-independent adaptive work", snapshot)
+            self.assertIn("`gpt-9.8-legacy`", snapshot)
             for model in registry["models"]:
                 self.assertIn(f"`{model['id']}`", snapshot)
-            self.assertIn("Only the highest registered numeric GPT family is active", snapshot)
-            self.assertIn("change only when the user explicitly runs the manual update command", snapshot)
+            self.assertIn("selected model and effort govern skill work", snapshot)
+            self.assertIn("Ordinary task execution does not refresh this file", snapshot)
             self.assertIn("sync_model_capabilities.py --update", snapshot)
 
     def test_sync_and_check_cover_registry_and_markdown_together(self):
@@ -130,11 +133,11 @@ class SyncModelCapabilitiesTests(unittest.TestCase):
             snapshot_path = root / "model-capabilities.md"
             cache_path.write_text(json.dumps(catalog()), encoding="utf-8")
             command = [sys.executable, str(SCRIPTS_DIR / "sync_model_capabilities.py"), "--models-cache", str(cache_path), "--registry", str(registry_path), "--output", str(snapshot_path)]
-            no_action = subprocess.run(command, capture_output=True, text=True, check=False)
+            no_action = subprocess.run(command, capture_output=True, text=True, check=False, **hidden_process_options())
             self.assertNotEqual(no_action.returncode, 0)
-            update = subprocess.run(command + ["--update"], capture_output=True, text=True, check=False)
+            update = subprocess.run(command + ["--update"], capture_output=True, text=True, check=False, **hidden_process_options())
             self.assertEqual(update.returncode, 0, update.stderr)
-            check = subprocess.run(command + ["--check"], capture_output=True, text=True, check=False)
+            check = subprocess.run(command + ["--check"], capture_output=True, text=True, check=False, **hidden_process_options())
             self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
             self.assertIn("model registry is current", check.stdout)
             self.assertIn("model capability snapshot is current", check.stdout)
@@ -147,10 +150,10 @@ class SyncModelCapabilitiesTests(unittest.TestCase):
             snapshot_path = root / "model-capabilities.md"
             cache_path.write_text(json.dumps(catalog()), encoding="utf-8")
             command = [sys.executable, str(SCRIPTS_DIR / "sync_model_capabilities.py"), "--models-cache", str(cache_path), "--registry", str(registry_path), "--output", str(snapshot_path), "--update"]
-            generated = subprocess.run(command, capture_output=True, text=True, check=False)
+            generated = subprocess.run(command, capture_output=True, text=True, check=False, **hidden_process_options())
             self.assertEqual(generated.returncode, 0, generated.stderr)
             cache_path.unlink()
-            retained = subprocess.run(command, capture_output=True, text=True, check=False)
+            retained = subprocess.run(command, capture_output=True, text=True, check=False, **hidden_process_options())
             self.assertEqual(retained.returncode, 0, retained.stderr)
             self.assertIn("retained saved model registry", retained.stdout)
 

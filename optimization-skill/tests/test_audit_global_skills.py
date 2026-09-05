@@ -48,6 +48,23 @@ class AuditGlobalSkillsTest(unittest.TestCase):
 
         self.assertIn("missing command/reference path: verify-skill/scripts/missing_ending_ledger.py", audit_result["errors"])
 
+    def test_markdown_link_followed_by_punctuation_is_a_real_reference(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            skills_root = Path(temporary_directory)
+            checked_skill = self.write_skill(skills_root, "checked-skill", "Read [rules](references/rules.md); preserve the contract.")
+            reference = checked_skill / "references" / "rules.md"
+            reference.parent.mkdir()
+            reference.write_text("Keep one rule per behavior.\n", encoding="utf-8")
+            audit_result = audit_global_skills.audit_skill(checked_skill, skills_root)
+        self.assertEqual([], audit_result["errors"])
+
+    def test_compact_skill_does_not_require_routing_or_placement_sections(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            skills_root = Path(temporary_directory)
+            checked_skill = self.write_skill(skills_root, "checked-skill", "Keep one owner and check the changed behavior.")
+            audit_result = audit_global_skills.audit_skill(checked_skill, skills_root)
+        self.assertEqual([], audit_result["warnings"])
+
     def test_prose_slash_list_with_trailing_punctuation_is_not_a_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             skills_root = Path(temporary_directory)

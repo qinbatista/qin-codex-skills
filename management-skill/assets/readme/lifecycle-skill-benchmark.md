@@ -4,7 +4,7 @@ Date: 2026-07-17
 Frozen cohort: `real-adaptive-two-world-benchmark-v34`  
 Entry model in both arms: `gpt-5.6-sol | ultra`
 
-> **Frozen historical cohort:** This report preserves the v34 policy and measurements exactly as executed on 2026-07-17. The current lifecycle still scores production from 0–100 and prioritizes Spark-low for eligible small edits, but now creates one fast projectless Ending per task: fixed `gpt-5.3-codex-spark|xhigh`, with registry-floor Luna-low allowed only when Spark is explicitly unavailable. A failed check returns evidence to the origin and the fresh Ending starts Spark-first again. These later policy changes can affect future Auto results, so this cohort is evidence—not a forecast. The fixed Direct arm, controller exclusion, and task-versus-task-plus-Ending accounting method remain unchanged.
+> **Historical evidence only:** These measurements describe the superseded 2026-07-17 workflow. They do not validate or predict the current selected-model, in-task verification, memory-only Ending workflow. All policy descriptions and charts below refer only to that old cohort.
 
 ## Technical summary
 

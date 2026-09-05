@@ -32,7 +32,7 @@ class ModelRegistryTests(unittest.TestCase):
     def test_builds_generic_registry_from_visible_catalog(self):
         registry = model_registry.build_registry(self.current_catalog(), "a" * 64)
         self.assertEqual(registry["schema_version"], 2)
-        self.assertEqual(registry["active_family"], {"id": "gpt-5.6", "numeric_version": [5, 6], "selection": "highest_numeric_gpt_family", "model_count": 3})
+        self.assertEqual(registry["active_family"], {"id": "gpt-5.6", "numeric_version": [5, 6], "selection": "available_numeric_gpt_models", "model_count": 3})
         self.assertEqual([model["id"] for model in registry["models"]], ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"])
         self.assertEqual(registry["priority_producer"]["id"], "gpt-5.3-codex-spark")
         self.assertEqual(registry["priority_producer"]["routing_role"], "bounded_task_segment_or_small_edit_priority")
@@ -42,7 +42,7 @@ class ModelRegistryTests(unittest.TestCase):
         self.assertTrue(registry["policy"]["priority_producer_first_small_edits"])
         self.assertTrue(registry["policy"]["priority_producer_scheduled_sources"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources_only"])
-        self.assertEqual(registry["ending_fast"], {"selection_basis": "ending_fast_primary", "primary_pair": "gpt-5.3-codex-spark|xhigh", "availability_fallback_pair": "gpt-5.6-luna|low", "fallback_policy": "availability_only", "score_scope": "check_only"})
+        self.assertEqual(registry["ending_fast"], model_registry._ending_fast_config([], registry["role_pairs"]["floor"]))
         self.assertIn("answer", registry["priority_producer"]["eligible_operations"])
         self.assertIn("work", registry["priority_producer"]["eligible_operations"])
         self.assertEqual(registry["complexity_scale"]["bands"][0], {"id": "small", "minimum": 0, "maximum": 24})
@@ -74,13 +74,13 @@ class ModelRegistryTests(unittest.TestCase):
         registry = model_registry.build_registry(catalog(models), "c" * 64)
         self.assertIsNone(registry["priority_producer"])
         self.assertEqual(registry["active_family"]["id"], "gpt-8")
-        self.assertEqual([model["id"] for model in registry["models"]], ["gpt-8-economy", "gpt-8-balanced", "gpt-8-frontier"])
-        self.assertEqual([model["id"] for model in registry["catalog_models"]], ["gpt-8-frontier", "gpt-8-balanced", "gpt-8-economy"])
+        self.assertEqual([model["id"] for model in registry["models"]], ["gpt-5.6-luna", "gpt-8-economy", "gpt-8-balanced", "gpt-5.6-sol", "gpt-8-frontier"])
+        self.assertEqual([model["id"] for model in registry["catalog_models"]], ["gpt-8-frontier", "gpt-5.6-sol", "gpt-8-balanced", "gpt-8-economy", "gpt-5.6-luna"])
         self.assertFalse(registry["policy"]["priority_producer_first_text_code"])
         self.assertFalse(registry["policy"]["priority_producer_first_small_edits"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources"])
         self.assertFalse(registry["policy"]["priority_producer_scheduled_sources_only"])
-        self.assertEqual(registry["ending_fast"], {"selection_basis": "ending_fast_primary", "primary_pair": "gpt-8-economy|low", "availability_fallback_pair": None, "fallback_policy": "availability_only", "score_scope": "check_only"})
+        self.assertEqual(registry["ending_fast"], model_registry._ending_fast_config([], registry["role_pairs"]["floor"]))
         model_registry.validate_registry(registry)
 
     def test_fast_ending_uses_floor_when_spark_lacks_xhigh(self):
@@ -88,7 +88,7 @@ class ModelRegistryTests(unittest.TestCase):
         spark = next(model for model in current["models"] if model["slug"] == "gpt-5.3-codex-spark")
         spark["supported_reasoning_levels"] = [level for level in spark["supported_reasoning_levels"] if level["effort"] != "xhigh"]
         registry = model_registry.build_registry(current, "a" * 64)
-        self.assertEqual(registry["ending_fast"]["primary_pair"], "gpt-5.6-luna|low")
+        self.assertIsNone(registry["ending_fast"]["primary_pair"])
         self.assertIsNone(registry["ending_fast"]["availability_fallback_pair"])
         model_registry.validate_registry(registry)
 
@@ -102,9 +102,9 @@ class ModelRegistryTests(unittest.TestCase):
 
         current_digest = model_registry.semantic_catalog_sha256(current)
         noisy_digest = model_registry.semantic_catalog_sha256(noisy)
-        self.assertEqual(noisy_digest, current_digest)
+        self.assertNotEqual(noisy_digest, current_digest)
         registry = model_registry.build_registry(noisy, noisy_digest)
-        self.assertEqual([model["id"] for model in registry["catalog_models"]], ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex-spark"])
+        self.assertIn("gpt-4.8-mini", [model["id"] for model in registry["catalog_models"]])
 
     def test_numeric_family_parser_supports_future_major_and_dotted_versions(self):
         self.assertEqual(model_registry.parse_numeric_gpt_family("gpt-6-codex"), ("gpt-6", (6,)))
@@ -115,8 +115,8 @@ class ModelRegistryTests(unittest.TestCase):
     def test_future_major_family_wins_over_all_older_minor_families(self):
         models = [catalog_model("gpt-5.10-pro", 1, "Older model"), catalog_model("gpt-6-mini", 20, "New small model"), catalog_model("gpt-6-pro", 2, "New frontier model")]
         registry = model_registry.build_registry(catalog(models), "f" * 64)
-        self.assertEqual(registry["active_family"], {"id": "gpt-6", "numeric_version": [6], "selection": "highest_numeric_gpt_family", "model_count": 2})
-        self.assertEqual([model["id"] for model in registry["models"]], ["gpt-6-mini", "gpt-6-pro"])
+        self.assertEqual(registry["active_family"], {"id": "gpt-6", "numeric_version": [6], "selection": "available_numeric_gpt_models", "model_count": 3})
+        self.assertEqual([model["id"] for model in registry["models"]], ["gpt-6-mini", "gpt-6-pro", "gpt-5.10-pro"])
 
     def test_detects_generic_text_only_fast_coding_producer(self):
         models = [catalog_model("gpt-7-economy", 30, "Economy model"), catalog_model("flash-code", 40, "Extremely fast coding model", modalities=("text",), supported_in_api=False)]

@@ -1,104 +1,58 @@
-<div align="center">
+# qin-codex-skills
 
-# 🚀 Auto Best Model
+Concise global skills for code structure, UI preferences, task coordination, and project memory.
 
-**Codex-only · score every task · finish first · Ending for real evidence or material updates**
+The model you select reads relevant skills and project memory, understands the task, and defines specific goals. Work governed by those skills keeps your selected model **and reasoning effort**. Independent routine work can still use adaptive model selection; mechanical tool calls need no extra model.
 
-**Why use it:** fast small tasks, the lowest-correct model for harder work, result-first delivery, private learning, and independent evidence. Saved highest-family quality ladder · refreshed only when you request a local model update · Small 0–24 low-risk edits try Spark-low after same-session outcome gate · larger work uses the saved quality ladder
+## Workflow
 
-| Score | Band | Default behavior |
-|---:|---|---|
-| 0–24 | Simple | Eligible small, low-risk work tries `gpt-5.3-codex-spark|low` after the same-session outcome gate |
-| 25–49 | Standard | Saved lowest-correct quality pair |
-| 50–74 | Complex | Capability-aware saved pair; dependent work stays contextual |
-| 75–100 | Advanced | Stronger saved pair and compound-task graph when needed |
+1. Read applicable skills and matching project memory. Missing memory is a normal skip.
+2. Show the task score, selected model/effort and route. Execute directly or plan useful dependencies; disclose delegated goals, scores, pairs, dependencies and outcomes.
+3. Verify consequential changes inside the task using the smallest convincing check. Simple value edits skip verification unless requested. Whole-project startup or compilation requires requested scope.
+4. Complete the result, then summarize useful durable changes in memory with the selected model. Ending is memory-only: under the user-authorized lifecycle, create one separate visible projectless task, show its link and saved-memory readback; never verify, repair or benchmark in Ending.
 
-**Frozen v48 benchmark:** Direct `gpt-5.6-sol|ultra` → Auto Best Model entry `gpt-5.6-luna|max`; 20 runs, 0 retries/fallbacks/repairs, 4/4 Sol-entry probes PASS. Steady execution `267.692s → 94.534s` (**+64.686%**); logical tokens `1,653,005 → 317,799` (**+80.774%**).
+Project memories stay isolated. Shared preferences are read only when relevant. Current summaries retain code structure, UI design choices, document organization, and important decisions without duplicating task transcripts.
 
-[中文说明](./README.zh.md)
+## Skills
 
-</div>
-
-## 🔄 Core flow
-
-<picture>
-  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/core-flow-mobile.svg">
-  <img src="./management-skill/assets/readme/core-flow.svg" alt="Score and finish the result first; real evidence or material updates create an independent projectless Ending">
-</picture>
-
-## ✅ Finish first. End for evidence or material updates.
-
-1. Score every task 0–100, load relevant Skills, and finish the requested result. Code runs one smallest Quick Check, then returns `CODE READY`.
-2. Observable surfaces and material structural, non-trivial code, conceptual, or process updates emit `ending-required`. Material updates also require durable project-memory closeout. Only explicit trivial value-only work with no other surface may skip.
-3. Create exactly one global-only projectless End Task with null-project readback. Spark-xhigh is first. A recorded model quota, five-hour, provider-rate, or retry-after restriction makes the next launch skip the cooling model and select the next stronger supported controller; Spark returns after cooldown.
-4. All checks must PASS. Failure creates a fresh independent projectless Repair Task. It never contacts, steers, interrupts, terminates, hands off, moves, or mutates any existing task/session; when an active task owns a required write surface it waits without messaging. Endings and Repairs stay visible.
-
-## ⚡ Models & private learning
-
-<picture>
-  <source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-router-mobile.svg">
-  <img src="./management-skill/assets/readme/model-router.svg" alt="Receipt-backed lowest-correct model routing">
-</picture>
-
-- **Cold start:** Step capability and difficulty history choose the lowest-correct pair; Sol/high may descend and Luna-max/lower may upgrade.
-- **Learning:** One Real PASS retains a pair; two matched PASS results may trial one rung down; quality failure ascends one rung.
-- **Operational:** A zero-result failure gets one stronger fallback and is not learned as a quality failure; compound steps route independently.
-- **Memory:** Change history is local JSONL + optional Obsidian. Native project → Model Switch → category → shared-category links hold records; no JSON sidecar or full-history read; context kept as fields.
-
-## Rules
-
-- **Producer:** Show score/band and route; reuse the frozen lowest-correct pair.
-- **Prompt:** Reusable prompts and durable AI instructions load Prompt Skill.
-- **Route:** Delegate only on explicit request or current end-to-end proof.
-- **Deliver:** Finish and return the main result before background verification.
-- **Verify:** Real surfaces create Ending; no surface records the explicit skip.
-- **Files:** Recall project/module/file history before editing; record the verified change after.
-- **Memory:** Local JSONL plus optional Obsidian; require project/module and code symbols.
-- **Models:** Use saved ladder; explicit update refreshes highest GPT family; missing cache preserves it.
-- **Privacy:** Secrets, raw prompts/results, receipts, ledgers, caches, and work artifacts stay local.
-
-## 📊 Real adaptive benchmark: finish first, verify in background
-
-Frozen v48 compares Direct `gpt-5.6-sol|ultra` with Auto Best Model entering on `gpt-5.6-luna|max`. Primary metrics count clean steady selected execution; other overhead stays separate.
-
-<picture><source media="(max-width: 600px)" srcset="./management-skill/assets/readme/model-benchmark-example-mobile.svg"><img src="./management-skill/assets/readme/model-benchmark-example.svg" alt="Frozen v48 Direct versus Auto benchmark across four score bands"></picture>
-
-**10 A/B pairs · 20 runs · 20/20 expected results and evidence gates PASS · 4/4 Sol-entry route probes PASS · 0 retries/fallbacks/repairs**
-
-| Band | Direct tokens | Auto tokens | Token saving | Direct time | Auto time | Time saving |
-|---|---:|---:|---:|---:|---:|---:|
-| Simple | 146,062 | 94,622 | **+35.218%** | 79.212s | 30.568s | **+61.410%** |
-| Standard | 73,474 | 47,806 | **+34.935%** | 25.346s | 16.588s | **+34.554%** |
-| Complex | 644,587 | 87,297 | **+86.457%** | 65.990s | 20.642s | **+68.720%** |
-| Advanced | 788,882 | 88,074 | **+88.836%** | 97.144s | 26.736s | **+72.478%** |
-| **All** | **1,653,005** | **317,799** | **+80.774%** | **267.692s** | **94.534s** | **+64.686%** |
-
-**Result: every tier and the aggregate lower both primary metrics.** First result was slower overall (`265.243s → 294.040s`). Ending stays after the primary benchmark and is excluded (`0.687s` Direct, `0.691s` Auto, `1.378s` combined). Logical tokens are usage proxies, not billing tokens; this frozen cohort is not universal. The [method report](./task-analyze-skill/TEST_AND_BENCHMARK.md) is currently labeled v47; use the [sanitized v48 JSON evidence](./task-analyze-skill/assets/model-routing-benchmark-example.json) for exact v48 values until alignment is repaired.
-
-## 🧩 Eight public Skills
-
-- [`Task Analyze`](./task-analyze-skill/SKILL.md) — score, route, benchmark, and admit.
-- [`Workflow`](./workflow-skill/SKILL.md) — execute admitted locked routes.
-- [`Prompt`](./prompt-skill/SKILL.md) — govern reusable prompts and durable AI instructions.
-- [`Code`](./code-skill/SKILL.md) — govern Python, C#, Unity C#, and registered code domains.
-- [`Project Memory`](./project-memory-skill/SKILL.md) — cover, recall, and record verified project changes.
-- [`Verify`](./verify-skill/SKILL.md) — run post-result Real Verify and regression evidence.
-- [`Optimization`](./optimization-skill/SKILL.md) — turn stable repeated work into tools.
-- [`Management`](./management-skill/SKILL.md) — manage private profiles and the public mirror.
-
-## 🛠️ Registered execution domains
-
-- `general` · general · `workflow-skill` · active · Spark schedule: no · [rules](./task-analyze-skill/references/model-selection.md)
-- `python` · code · `code-skill` · active · Spark schedule: source-eligible · [rules](./code-skill/references/python-rules.md)
-- `csharp` · code · `code-skill` · history-only · Spark schedule: source-eligible · [rules](./code-skill/references/csharp-rules.md)
-- `unity_csharp` · code · `code-skill` · active · Spark schedule: source-eligible · [rules](./code-skill/references/unity-csharp-rules.md)
-- `code_unspecified` · code · `code-skill` · history-only · Spark schedule: source-eligible · [rules](./code-skill/references/spark-small-code.md)
+| Skill | Core idea |
+| --- | --- |
+| [Task Analyze](task-analyze-skill/SKILL.md) | Preserve selected models for governed work; adapt independent work. |
+| [Workflow](workflow-skill/SKILL.md) | Clear goals, useful plans, safe parallel ownership. |
+| [Code](code-skill/SKILL.md) | Direct readable code, explicit responsibilities, consistent UI. |
+| [Prompt](prompt-skill/SKILL.md) | Clear goals, constraints, inputs, and output contracts. |
+| [Verify](verify-skill/SKILL.md) | Focused evidence before completion. |
+| [Project Memory](project-memory-skill/SKILL.md) | Relevant recall and concise durable summaries. |
+| [Optimization](optimization-skill/SKILL.md) | Requested simplification with measured results. |
+| [Management](management-skill/SKILL.md) | Recoverable installation and authorized publication. |
 
 ## Install or update
 
-Releases replace eight managed Skills. User `AGENTS.md` files stay untouched. `install-global-agents` creates a backup; `bridge-user-skills` requires `--apply`.
+```text
+python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
+```
 
-- **macOS/Linux, first install or update:** `stage="$(mktemp -d)" && git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git "$stage/qin-codex-skills" && python3 "$stage/qin-codex-skills/management-skill/scripts/sync_global_skills.py" deploy --source-dir "$stage/qin-codex-skills" && rm -rf "$stage"`.
-- **Windows PowerShell, first install or update:** `$ErrorActionPreference='Stop'; $stage=Join-Path $env:TEMP ("qin-codex-skills-"+[guid]::NewGuid()); try { git clone --depth 1 https://github.com/qinbatista/qin-codex-skills.git $stage; if ($LASTEXITCODE) { throw 'clone failed' }; py -3 "$stage\management-skill\scripts\sync_global_skills.py" deploy --source-dir $stage; if ($LASTEXITCODE) { throw 'deploy failed' } } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force } }`. Preserves unrelated Skills and private `task-analyze-skill/local/` state.
+On Windows, use `py -3 -B` with the same Python entry point. Installation replaces the eight managed skills with locking, backup, and recovery. It preserves unrelated skills, user AGENTS, and private routing history. An explicitly requested global AGENTS update uses `install-global-agents --source-dir .` and creates a restorable backup.
 
-**Privacy:** The public mirror contains exactly the eight Skills above and excludes auth, secrets, private ledgers, routing history, caches, raw prompts/results, receipts, and work artifacts; every publish runs a safety scan. **Mirrors:** `qin-codex-skills` · `auto-best-model`
+Source edits, installed updates, and GitHub publication are distinct. The publisher's `push` command runs the current release gate before staging or remote writes.
+
+## Real testing and benchmark
+
+Eight real Astra/ultra runs repaired an isolated review dashboard and portable process runner, calculated exact totals, and passed output, runtime, skill-read and visual checks. One false-negative read classification was corrected against the original captured file contents; its raw failure remains disclosed.
+
+| Comparison | Control tokens / seconds | Installed tokens / seconds | Result |
+| --- | ---: | ---: | --- |
+| Original, three pairs | 768,610 / 752.11 | 1,113,558 / 988.72 | 44.88% more tokens; 31.46% slower |
+| Focused-verification revision, one pair | 271,203 / 278.46 | 344,268 / 310.86 | 26.94% more tokens; 11.63% slower |
+
+**This benchmark did not establish savings.** Logical tokens include cached input. The full explicit brief, small sample, cache and latency limit interpretation; the single-controller comparison does not measure adaptive-model or memory-lifecycle savings. A separate live graph ran governed review on Astra/ultra and independent calculation on Luna/low in parallel, then integrated on Astra/ultra and completed a visible Astra/ultra memory-only Ending. Native Windows preflight passed 73 tests with one expected platform skip.
+
+The eight entry files shrank from 24,126 to 3,777 words (84.34%). That is instruction compression, separate from execution efficiency. [Every trial, model distribution, failure and measurement boundary](management-skill/assets/readme/current-workflow-benchmark.md).
+
+## Code reference owners
+
+- `general` · general · `workflow-skill` · active · [rules](./task-analyze-skill/references/model-selection.md)
+- `python` · code · `code-skill` · active · [rules](./code-skill/references/python-rules.md)
+- `csharp` · code · `code-skill` · history-only · [rules](./code-skill/references/csharp-rules.md)
+- `unity_csharp` · code · `code-skill` · active · [rules](./code-skill/references/unity-csharp-rules.md)
+- `code_unspecified` · code · `code-skill` · history-only · [rules](./code-skill/references/spark-small-code.md)

@@ -1,5 +1,5 @@
 interface:
   display_name: "Prompt Skill"
-  short_description: "Global gate for reusable prompts and durable AI instructions"
+  short_description: "Concise reusable prompts and durable AI instructions"
   default_prompt: >-
-    Always use $prompt-skill: this is the 100% global prompt-task gate for durable prompts/instructions; ordinary prose does not trigger it; present the artifact first. Reusable prompt changes are conceptual/process material: require projectless Ending plus durable memory unless explicit trivial_value_only. Spark-xhigh first; persisted real quota cooldown selects the next stronger controller. Failure creates independent projectless Repair, never contacts or interrupts existing sessions, waits for active write ownership, then fresh parent-linked Ending. Workers evidence-only.
+    Apply $prompt-skill with the user's selected model and effort. Read relevant same-project memory if available. Define the objective, inputs, necessary constraints, and output contract; remove redundant or conflicting rules. Verify consequential prompt behavior in the active task and report what was tested. Ending only summarizes useful project memory.

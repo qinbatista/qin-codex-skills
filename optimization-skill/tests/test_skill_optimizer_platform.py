@@ -65,6 +65,16 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
         warnings = OPTIMIZER.build_warnings("# Skill\n", headings, [], [], [], [Path("scripts/check.py")])
         self.assertEqual([], warnings)
 
+    def test_compact_skill_needs_no_ceremonial_sections(self):
+        warnings = OPTIMIZER.build_warnings("Use for bounded edits. Preserve scope and check the changed output.\n", [], [], [], [], [Path("scripts/check.py")])
+        self.assertEqual([], warnings)
+
+    def test_duplicate_rules_are_still_reported_without_heading_checks(self):
+        duplicate = OPTIMIZER.DuplicateInstruction([2, 3], "Keep a clear ownership boundary.")
+        warnings = OPTIMIZER.build_warnings("# Skill\n", [], [], [], [duplicate], [])
+        self.assertEqual(1, len(warnings))
+        self.assertIn("duplicate", warnings[0])
+
     def test_scan_is_concise_by_default_and_verbose_on_request(self):
         summary = OPTIMIZER.SkillSummary(Path("sample"), Path("sample/SKILL.md"), "sample", "long description", ["Scope", "Workflow"], 12)
         concise_output = io.StringIO()

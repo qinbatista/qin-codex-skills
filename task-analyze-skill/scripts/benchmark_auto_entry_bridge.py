@@ -12,6 +12,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROMPT_PATH_ENV = "CODEX_AUTO_BENCHMARK_PROMPT_PATH"
@@ -224,7 +227,7 @@ def run_adaptive_entry(adaptive_runner, entry_pair, task_sandbox, source_root, w
     command_environment = os.environ.copy()
     for key in SESSION_SCOPE_ENVIRONMENT_KEYS:
         command_environment.pop(key, None)
-    process = subprocess.run(command, input=prompt_text, text=True, capture_output=True, cwd=workspace, env=command_environment, shell=False, timeout=timeout + 30, check=False)
+    process = subprocess.run(command, input=prompt_text, text=True, capture_output=True, cwd=workspace, env=command_environment, shell=False, timeout=timeout + 30, check=False, **hidden_process_options())
     if process.returncode != 0:
         raise RuntimeError(f"adaptive runner failed: {adaptive_runner_failure_code(process)}")
     summaries = []

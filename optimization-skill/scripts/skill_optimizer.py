@@ -12,6 +12,9 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
 SCRIPT_CANDIDATES = [
     (
         re.compile(r"\b(open|launch)\b.*\b(browser|chrome|safari|firefox)\b", re.IGNORECASE),
@@ -39,10 +42,6 @@ SECTION_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 COMMAND_PATH_PATTERN = re.compile(r"(?<![\w./~<-])(?:<codex-home>/skills/|~/.codex/skills/|/|\.\.?/)?(?:[\w.-]+/)+[\w.-]+\.(?:py|sh|applescript)\b")
 LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
-SCOPE_HEADINGS = {"Activation Boundary", "Inline Boundary", "Internal Route Selection", "Objective", "Persistent End Task Thread", "Required Scope", "Scope", "Trigger"}
-WORKFLOW_HEADINGS = {"Admitted Execution", "Before Editing: Bounded Recall", "Commands", "Result-First Boundary", "Workflow", "Required Workflow"}
-GUARDRAIL_HEADINGS = {"Activation Boundary", "Authority", "Failure Conditions", "Graph And Claim Gates", "Guardrails", "Locked Plan Gate", "Mandatory Ending Task", "Privacy And Authorization", "Runtime Proof And A/B Policy"}
-VERIFICATION_HEADINGS = {"Acceptance Checklist", "Definition of Done", "Main Result And Ending Task", "Quick Check, First Result, Then Detached Ending", "Verification"}
 
 
 @dataclass
@@ -290,12 +289,6 @@ def build_warnings(skill_text: str, headings: list[str], section_lengths: list[t
     _line_count = len(skill_text.splitlines())
     if _line_count > 220:
         _warnings.append(f"SKILL.md is {_line_count} lines. Move details into scripts or references if it keeps growing.")
-    if not any(_heading in SCOPE_HEADINGS for _heading in headings):
-        _warnings.append("Add a short Trigger or Scope section so users can tell when the skill should be used.")
-    if not any(_heading in WORKFLOW_HEADINGS or "Workflow" in _heading or "Execution" in _heading for _heading in headings):
-        _warnings.append("Add a Workflow section so the skill has a predictable execution order.")
-    if not any(_heading in GUARDRAIL_HEADINGS or "Failure" in _heading for _heading in headings):
-        _warnings.append("Add a Guardrails section so optimization does not change the skill's behavior by accident.")
     for _heading, _length in section_lengths:
         if _length > 45:
             _warnings.append(f"Section `{_heading}` is {_length} lines. Consider moving repeated detail into scripts or references.")
@@ -303,8 +296,6 @@ def build_warnings(skill_text: str, headings: list[str], section_lengths: list[t
         _warnings.append(f"{len(duplicate_instructions)} duplicate or overlapping instruction lines were found. Merge repeated requirements into one clearer rule.")
     if script_candidates and not command_paths:
         _warnings.append("The skill contains static step candidates but no script paths were referenced.")
-    if command_paths and not any(_heading in VERIFICATION_HEADINGS or _heading in WORKFLOW_HEADINGS or _heading in GUARDRAIL_HEADINGS or "Verification" in _heading or "Acceptance" in _heading or "Workflow" in _heading for _heading in headings):
-        _warnings.append("The skill references helper commands but does not have a Verification section.")
     return _warnings
 
 
@@ -381,7 +372,7 @@ def validate_script(script_path: Path) -> list[str]:
         if not _shell:
             _errors.append(f"Shell syntax check unavailable on {sys.platform}: bash is not on PATH.")
             return _errors
-        _result = subprocess.run([_shell, "-n", str(script_path)], capture_output=True, text=True)
+        _result = subprocess.run([_shell, "-n", str(script_path)], capture_output=True, text=True, **hidden_process_options())
         if _result.returncode != 0:
             _errors.append(f"Shell syntax check failed for {script_path}: {_result.stderr.strip() or _result.stdout.strip()}")
     elif script_path.suffix == ".applescript":
@@ -392,7 +383,7 @@ def validate_script(script_path: Path) -> list[str]:
                 return _errors
             with tempfile.TemporaryDirectory() as _temporary_directory:
                 _output_path = Path(_temporary_directory) / "skill_optimizer_compile.scpt"
-                _result = subprocess.run([_compiler, "-o", str(_output_path), str(script_path)], capture_output=True, text=True)
+                _result = subprocess.run([_compiler, "-o", str(_output_path), str(script_path)], capture_output=True, text=True, **hidden_process_options())
                 if _result.returncode != 0:
                     _errors.append(f"AppleScript compile failed for {script_path}: {_result.stderr.strip() or _result.stdout.strip()}")
         else:

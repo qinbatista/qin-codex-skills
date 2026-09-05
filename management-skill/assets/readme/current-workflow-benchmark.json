@@ -1,0 +1,506 @@
+{
+  "schema_version": 1,
+  "status": "pass",
+  "design": {
+    "task": "Responsive review dashboard repair, portable hidden Python process owner, and exact independent ledger totals",
+    "selected_pair_both_conditions": "gpt-6-astra|ultra",
+    "conditions": [
+      "control without the eight managed skills",
+      "installed managed skills"
+    ],
+    "platform": "macOS",
+    "all_attempts_retained": true,
+    "token_definition": "Logical total = all reported input tokens including cached input, plus output tokens. Cached input is a subset, not added twice.",
+    "time_definition": "Trial wall time includes isolated setup, real provider execution, focused acceptance, evidence retention, and cleanup.",
+    "outside_timing": [
+      "development pilot",
+      "additional parent visual review",
+      "native Windows checks",
+      "publication and deployment",
+      "shared aggregate memory Ending"
+    ],
+    "direct_controller_boundary": "Same selected model/effort, isolated homes, no delegated models and no per-trial personal memory or Ending. This isolates the installed workflow context, not adaptive-model savings."
+  },
+  "studies": [
+    {
+      "name": "confirmatory-v1",
+      "paired_rounds": 3,
+      "status": "pass",
+      "gates": {
+        "expected_trial_count": true,
+        "no_extra_attempts_omitted": true,
+        "retained_metrics_agree": true,
+        "all_trial_acceptance": true,
+        "summary_complete": true,
+        "summary_acceptance_or_documented_adjudication": true,
+        "source_snapshot_unchanged": true,
+        "selected_pair": true,
+        "equal_initial_inputs": true,
+        "uniform_reanalysis_proof_valid": true
+      },
+      "raw_summary_all_acceptance_passed": false,
+      "uniform_read_reanalysis": "validated",
+      "trials": [
+        {
+          "repeat": 1,
+          "condition": "control",
+          "raw_status": "pass",
+          "status": "pass",
+          "read_classifier_adjudication": null,
+          "logical_total_tokens": 298308,
+          "cached_input_tokens": 263424,
+          "input_tokens": 290920,
+          "output_tokens": 7388,
+          "total_seconds": 273.497972,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true
+          }
+        },
+        {
+          "repeat": 1,
+          "condition": "installed",
+          "raw_status": "pass",
+          "status": "pass",
+          "read_classifier_adjudication": null,
+          "logical_total_tokens": 466855,
+          "cached_input_tokens": 415232,
+          "input_tokens": 456973,
+          "output_tokens": 9882,
+          "total_seconds": 385.998645,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true
+          }
+        },
+        {
+          "repeat": 2,
+          "condition": "installed",
+          "raw_status": "pass",
+          "status": "pass",
+          "read_classifier_adjudication": null,
+          "logical_total_tokens": 306775,
+          "cached_input_tokens": 205440,
+          "input_tokens": 300400,
+          "output_tokens": 6375,
+          "total_seconds": 279.351036,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true
+          }
+        },
+        {
+          "repeat": 2,
+          "condition": "control",
+          "raw_status": "pass",
+          "status": "pass",
+          "read_classifier_adjudication": null,
+          "logical_total_tokens": 270621,
+          "cached_input_tokens": 230784,
+          "input_tokens": 263502,
+          "output_tokens": 7119,
+          "total_seconds": 257.237521,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true
+          }
+        },
+        {
+          "repeat": 3,
+          "condition": "control",
+          "raw_status": "pass",
+          "status": "pass",
+          "read_classifier_adjudication": null,
+          "logical_total_tokens": 199681,
+          "cached_input_tokens": 168320,
+          "input_tokens": 193764,
+          "output_tokens": 5917,
+          "total_seconds": 221.376941,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true
+          }
+        },
+        {
+          "repeat": 3,
+          "condition": "installed",
+          "raw_status": "fail",
+          "status": "pass",
+          "read_classifier_adjudication": "Uniform reanalysis confirmed complete frozen skill content in the successful combined command; original failure, time, and tokens are retained.",
+          "logical_total_tokens": 339928,
+          "cached_input_tokens": 259200,
+          "input_tokens": 331614,
+          "output_tokens": 8314,
+          "total_seconds": 323.374826,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true
+          }
+        }
+      ],
+      "arms": {
+        "control": {
+          "trials": 3,
+          "passed": 3,
+          "logical_total_tokens": 768610,
+          "cached_input_tokens": 662528,
+          "total_seconds": 752.112434,
+          "median_seconds": 257.237521
+        },
+        "installed": {
+          "trials": 3,
+          "passed": 3,
+          "logical_total_tokens": 1113558,
+          "cached_input_tokens": 879872,
+          "total_seconds": 988.724507,
+          "median_seconds": 323.374826
+        }
+      },
+      "comparison": {
+        "eligible": true,
+        "installed_lower_time_and_tokens": false,
+        "token_change_percent": 44.88,
+        "time_change_percent": 31.46
+      }
+    },
+    {
+      "name": "revision-v2-pair",
+      "paired_rounds": 1,
+      "status": "pass",
+      "gates": {
+        "expected_trial_count": true,
+        "no_extra_attempts_omitted": true,
+        "retained_metrics_agree": true,
+        "all_trial_acceptance": true,
+        "summary_complete": true,
+        "summary_acceptance_or_documented_adjudication": true,
+        "source_snapshot_unchanged": true,
+        "selected_pair": true,
+        "equal_initial_inputs": true
+      },
+      "raw_summary_all_acceptance_passed": true,
+      "uniform_read_reanalysis": "not_available",
+      "trials": [
+        {
+          "repeat": 1,
+          "condition": "control",
+          "raw_status": "pass",
+          "status": "pass",
+          "read_classifier_adjudication": null,
+          "logical_total_tokens": 271203,
+          "cached_input_tokens": 214272,
+          "input_tokens": 263890,
+          "output_tokens": 7313,
+          "total_seconds": 278.462884,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true
+          }
+        },
+        {
+          "repeat": 1,
+          "condition": "installed",
+          "raw_status": "pass",
+          "status": "pass",
+          "read_classifier_adjudication": null,
+          "logical_total_tokens": 344268,
+          "cached_input_tokens": 286464,
+          "input_tokens": 335452,
+          "output_tokens": 8816,
+          "total_seconds": 310.857137,
+          "actual_pairs": [
+            "gpt-6-astra|ultra"
+          ],
+          "gates": {
+            "raw_pass_or_documented_classifier_adjudication": true,
+            "actual_selected_pair": true,
+            "real_provider": true,
+            "provider_completed": true,
+            "complete_reconciled_tokens": true,
+            "valid_elapsed_time": true,
+            "focused_acceptance": true,
+            "saved_acceptance_readback": true,
+            "required_skill_content_reads": true,
+            "control_has_no_managed_read": true,
+            "no_unrelated_memory": true,
+            "frozen_inputs_unchanged": true,
+            "visual_review": true,
+            "no_unexplained_failure": true,
+            "revised_verify_finish_content_read": true
+          }
+        }
+      ],
+      "arms": {
+        "control": {
+          "trials": 1,
+          "passed": 1,
+          "logical_total_tokens": 271203,
+          "cached_input_tokens": 214272,
+          "total_seconds": 278.462884,
+          "median_seconds": 278.462884
+        },
+        "installed": {
+          "trials": 1,
+          "passed": 1,
+          "logical_total_tokens": 344268,
+          "cached_input_tokens": 286464,
+          "total_seconds": 310.857137,
+          "median_seconds": 310.857137
+        }
+      },
+      "comparison": {
+        "eligible": true,
+        "installed_lower_time_and_tokens": false,
+        "token_change_percent": 26.94,
+        "time_change_percent": 11.63
+      }
+    }
+  ],
+  "revision_controls": {
+    "status": "pass",
+    "gates": {
+      "same_task_after_private_path_normalization": true,
+      "same_fixture": true,
+      "same_output_checker": true,
+      "same_checker_dependencies": true,
+      "same_model_effort_and_tools": true,
+      "declared_source_changes_only": true,
+      "prospective_verify_policy_hash": true,
+      "prospective_pair_after_original_study": true,
+      "one_fresh_pair_declared": true
+    },
+    "source_changes": [
+      {
+        "file": "task-analyze-skill/scripts/benchmark_installed_skills.py",
+        "explanation": "Explicit UTF-8 stream decoding and controlled Python UTF-8 mode, plus a combined-command content-read classifier correction; macOS already used UTF-8. Original study logs are uniformly reanalyzed without changing measured time or tokens."
+      },
+      {
+        "file": "task-analyze-skill/tests/test_benchmark_installed_skills.py",
+        "explanation": "Native Windows credential-link fallback, Unicode, and content-read classifier regressions for the setup/evidence corrections."
+      },
+      {
+        "file": "verify-skill/SKILL.md",
+        "explanation": "Reuse adequate evidence, add only uncovered checks, and avoid behavior reruns after formatting-only repairs."
+      }
+    ],
+    "unexpected_source_change_count": 0,
+    "attribution_limit": "V2 contains a generic Verify policy clarification and disclosed portable setup corrections; one fresh pair cannot isolate a causal contribution or establish a stable general advantage."
+  },
+  "development_pilot": {
+    "retained_separately": true,
+    "logical_total_tokens": 333360,
+    "seconds": 325.279962,
+    "limit": "Single installed development run with an earlier oracle; browser sandbox prevented worker rendering, so parent performed real headless acceptance. Excluded from both comparative studies."
+  },
+  "native_preflight": {
+    "status": "pass",
+    "scope": "Native Windows preflight; outside macOS trial timing",
+    "tests": [
+      {
+        "suite": "test_benchmark_installed_skills",
+        "tests": 21,
+        "skipped": 0,
+        "pass": true
+      },
+      {
+        "suite": "test_hidden_process*",
+        "tests": 13,
+        "skipped": 0,
+        "pass": true
+      },
+      {
+        "suite": "test_codex_executable",
+        "tests": 11,
+        "skipped": 1,
+        "pass": true
+      },
+      {
+        "suite": "test_ending_memory*",
+        "tests": 29,
+        "skipped": 0,
+        "pass": true
+      }
+    ],
+    "interactive_desktop_observed": false,
+    "limit": "Native subprocess/runtime tests and a separate pilot check do not constitute a timed Windows benchmark or proof for every later candidate output."
+  },
+  "functional_workflow": {
+    "status": "pass",
+    "root_score": 59,
+    "root_band": "complex",
+    "selected_pair": "gpt-6-astra|ultra",
+    "stages": [
+      {
+        "goal": "Skill-governed code review",
+        "score": 20,
+        "band": "small",
+        "assigned_pair": "gpt-6-astra|ultra",
+        "actual_pair": "gpt-6-astra|ultra",
+        "governing_skill": "code-skill",
+        "dependencies": [],
+        "acceptance": "pass",
+        "runtime_pair_verified": true,
+        "turn_completed": true
+      },
+      {
+        "goal": "Independent data calculation",
+        "score": 20,
+        "band": "small",
+        "assigned_pair": "gpt-5.6-luna|low",
+        "actual_pair": "gpt-5.6-luna|low",
+        "governing_skill": null,
+        "dependencies": [],
+        "acceptance": "pass",
+        "runtime_pair_verified": true,
+        "turn_completed": true
+      },
+      {
+        "goal": "Result integration",
+        "score": 20,
+        "band": "small",
+        "assigned_pair": "gpt-6-astra|ultra",
+        "actual_pair": "gpt-6-astra|ultra",
+        "governing_skill": "verify-skill",
+        "dependencies": [
+          "Skill-governed code review",
+          "Independent data calculation"
+        ],
+        "acceptance": "pass",
+        "runtime_pair_verified": true,
+        "turn_completed": true
+      }
+    ],
+    "ending": {
+      "completed_task_disclosure": {
+        "score": 28,
+        "band": "standard",
+        "source": "live completed Ending task readback"
+      },
+      "actual_pair": "gpt-6-astra|ultra",
+      "projectless": true,
+      "visible": true,
+      "purpose": "memory_only",
+      "local_readback": true,
+      "vault_readback": true
+    },
+    "limit": "Prior verified Astra/Luna/Astra distribution and visible memory Ending are functional evidence, not part of this direct-controller timing comparison."
+  },
+  "entry_compression": {
+    "before_words": 24126,
+    "after_words": 3777,
+    "reduction_percent": 84.34,
+    "scope": "Eight SKILL.md entry documents only; word reduction is not measured runtime savings."
+  },
+  "limitations": [
+    "Three original pairs and one prospective revision pair are separate task-specific samples, never pooled or used to replace failures.",
+    "V2 was selected after observing earlier work; its fresh pair is prospective revision validation, not an independent confirmation of a general advantage.",
+    "Quality requires completed runtime identity, required successful skill reads, frozen independent acceptance, and desktop/narrow visual review; missing proof stays pending.",
+    "Provider cache, latency and local load can vary; no price estimates, broad savings claim, or universal model ranking is inferred.",
+    "Runtime records are local operational evidence, not backend-signed attestation."
+  ]
+}

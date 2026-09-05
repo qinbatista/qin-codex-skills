@@ -33,6 +33,7 @@ DISCLOSURE_PATTERN = re.compile(r"^Complexity:\s*(?P<score>\d+)/100 \((?P<band>s
 STAGE_ROUTE_LABELS = {"upgrade": "upgrade", "downgrade": "downgrade", "freeze": "frozen", "no_switch": "no switch", "operational_fallback": "fallback"}
 STAGE_EVIDENCE_LABELS = {
     "runtime_receipt": "runtime receipt",
+    "deterministic_local_runtime": "local process receipt (no model)",
     "verified_entry": "verified entry (no runtime receipt)",
     "task_assignment": "task assignment (no runtime receipt)",
     "configured_selection": "configured selection (no runtime receipt)",
@@ -40,10 +41,14 @@ STAGE_EVIDENCE_LABELS = {
 }
 
 
+def _valid_selected_pair(pair):
+    return bool(isinstance(pair, str) and re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:-]*\|(?:none|minimal|low|medium|high|xhigh|max|ultra)", pair))
+
+
 def _allowed_pairs(registry=None):
     active_registry = registry or load_registry()
     active_model_ids = {pair.split("|", 1)[0] for pair in active_registry["role_pairs"].values()}
-    allowed = {f"{model['id']}|{effort}" for model in active_registry["models"] if model["id"] in active_model_ids for effort in model["codex_efforts"]}
+    allowed = {f"{model['id']}|{effort}" for model in active_registry["models"] for effort in model["codex_efforts"]}
     priority_producer = active_registry.get("priority_producer")
     if isinstance(priority_producer, dict):
         allowed.update(f"{priority_producer['id']}|{effort}" for effort in priority_producer["codex_efforts"])
@@ -77,18 +82,19 @@ def resolve_disclosure_identity(runtime_receipt=None, entry_resolution=None, reg
     receipt_pairs = _receipt_pairs(runtime_receipt)
     if receipt_pairs is not None:
         for pair in receipt_pairs:
-            if pair not in _allowed_pairs(registry):
+            if not _valid_selected_pair(pair):
                 raise ValueError(f"runtime receipt uses unsupported model pair: {pair}")
         return {"source": "runtime_receipt", "requested_pair": receipt_pairs[0], "resolved_pair": receipt_pairs[1], "effective_pair": receipt_pairs[2]}
     if not isinstance(entry_resolution, dict):
         raise ValueError("verified entry resolution is required when no runtime receipt exists")
-    if entry_resolution.get("status") == "verified":
+    if entry_resolution.get("status") in {"verified", "task_assignment", "configured_selection"}:
         model = entry_resolution.get("model")
         effort = entry_resolution.get("effort")
         entry_pair = f"{model}|{effort}" if isinstance(model, str) and isinstance(effort, str) else None
-        if entry_pair not in _allowed_pairs(registry):
+        if not _valid_selected_pair(entry_pair):
             raise ValueError(f"verified entry uses unsupported model pair: {entry_pair}")
-        return {"source": "verified_entry", "requested_pair": entry_pair, "resolved_pair": entry_pair, "effective_pair": entry_pair}
+        source = "verified_entry" if entry_resolution["status"] == "verified" else entry_resolution["status"]
+        return {"source": source, "requested_pair": entry_pair, "resolved_pair": entry_pair, "effective_pair": entry_pair}
     if entry_resolution.get("status") == "unavailable":
         return {"source": "unavailable", "requested_pair": "unknown|unknown", "resolved_pair": "unknown|unknown", "effective_pair": "unknown|unknown"}
     raise ValueError("entry resolver did not verify a model identity")
@@ -115,7 +121,7 @@ def render_stage_summary(model_switch_summary, registry=None):
     if not isinstance(model_switch_summary, dict):
         return ""
     nodes = [node for node in model_switch_summary.get("nodes", []) if isinstance(node, dict)]
-    if len(nodes) < 2:
+    if not nodes:
         return ""
     allowed_pairs = _allowed_pairs(registry)
     lines = [f"Model stages ({len(nodes)}):"]
@@ -129,20 +135,26 @@ def render_stage_summary(model_switch_summary, registry=None):
         band = node.get("band")
         if band != _complexity_band(score):
             raise ValueError(f"stage {node_id} complexity band does not match its score")
+        deterministic = node.get("execution_kind") == "deterministic-source-read"
         pair = node.get("effective_pair") or node.get("resolved_pair") or node.get("requested_pair") or "unknown|unknown"
         evidence_source = node.get("model_evidence_source") or "unavailable"
-        if pair != "unknown|unknown" and pair not in allowed_pairs:
+        if pair != "unknown|unknown" and not _valid_selected_pair(pair):
             raise ValueError(f"stage {node_id} uses unsupported model pair: {pair}")
         if evidence_source not in STAGE_EVIDENCE_LABELS:
             raise ValueError(f"stage {node_id} uses unsupported evidence source: {evidence_source}")
-        if pair == "unknown|unknown" and evidence_source != "unavailable":
+        if pair == "unknown|unknown" and evidence_source != "unavailable" and not deterministic:
             raise ValueError(f"stage {node_id} unknown pair requires unavailable evidence")
+        if deterministic:
+            pair = "none (local process)"
         route = STAGE_ROUTE_LABELS.get(node.get("route_change"), "no switch")
         status = _compact_stage_value(node.get("status"), "pending", 24).upper()
         dependencies = node.get("relations", {}).get("dependencies") if isinstance(node.get("relations"), dict) else None
         dependency_text = ", ".join(str(value) for value in dependencies) if isinstance(dependencies, list) and dependencies else "entry"
+        assignment = node.get("assigned_pair")
+        entry_pair = node.get("entry_pair")
+        assignment_text = f" · Assignment: {entry_pair} -> {assignment}" if node.get("assignment_changed") else ""
         lines.append(
-            f"{index}. {purpose} [{phase}:{node_id}] · Complexity: {score}/100 ({band}) · Model: {pair} · Route: {route} · Status: {status} · Evidence: {STAGE_EVIDENCE_LABELS[evidence_source]} · Dependencies: {dependency_text}"
+            f"{index}. {purpose} [{phase}:{node_id}] · Complexity: {score}/100 ({band}) · Model: {pair} · Route: {route} · Status: {status} · Evidence: {STAGE_EVIDENCE_LABELS[evidence_source]} · Dependencies: {dependency_text}{assignment_text}"
         )
     return "\n".join(lines)
 
@@ -168,7 +180,7 @@ def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=N
                 switch_direction in {"upgrade", "downgrade"}
                 and len(switch_pairs) >= 2
                 and switch_pairs[-1] == effective_pair
-                and all(pair in _allowed_pairs(registry) for pair in switch_pairs)
+                and all(_valid_selected_pair(pair) for pair in switch_pairs)
             )
             if valid_switch:
                 route_label = switch_direction
@@ -177,8 +189,8 @@ def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=N
                         model_path.append(pair)
             else:
                 route_label = "frozen" if switch_direction == "freeze" else "no switch"
-    elif identity["source"] == "verified_entry":
-        evidence_label = "verified entry (no runtime receipt)"
+    elif identity["source"] in {"verified_entry", "task_assignment", "configured_selection"}:
+        evidence_label = STAGE_EVIDENCE_LABELS[identity["source"]]
         route_label = "no switch"
     else:
         evidence_label = "unavailable"
@@ -191,6 +203,17 @@ def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=N
     if stage_summary:
         lines.extend(["", stage_summary])
     return "\n".join(lines)
+
+
+def model_disclosure_event(complexity_score, *, runtime_receipt=None, entry_resolution=None, model_switch_summary=None, timing="result"):
+    """Return a conversation-ready disclosure; a tool event alone is not user delivery."""
+    message = render_disclosure(complexity_score, runtime_receipt=runtime_receipt,
+                                entry_resolution=entry_resolution, model_switch_summary=model_switch_summary)
+    return {"schema_version": 1, "stage": "model-disclosure", "timing": timing,
+            "user_visible": True, "parent_action": "surface_disclosure_in_conversation",
+            "message": message, "complexity_score": complexity_score,
+            "complexity_band": _complexity_band(complexity_score),
+            "model_stages": (model_switch_summary or {}).get("nodes", [])}
 
 
 def normalize_result_disclosure(result_text, complexity_score, runtime_receipt=None, entry_resolution=None, registry=None, model_switch_summary=None):
@@ -233,7 +256,7 @@ def validate_disclosure(disclosure_text, registry=None):
             failures.append("unknown | unknown is valid only when the resolver explicitly reports unavailable")
     else:
         allowed_pairs = _allowed_pairs(registry)
-        unsupported_pairs = [pair for pair in known_pairs if pair not in allowed_pairs]
+        unsupported_pairs = [pair for pair in known_pairs if not _valid_selected_pair(pair)]
         if unsupported_pairs:
             failures.append(f"model disclosure contains unsupported model pair: {unsupported_pairs[0]}")
         if evidence == "unavailable" or evidence_level == "unavailable":

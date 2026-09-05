@@ -1,36 +1,7 @@
 # Router extension guide
 
-`skills/task-analyze-skill/scripts/routing_policy.py::EXECUTION_DOMAINS` is the single authoritative registry for active execution domains. Domain IDs are immutable evidence keys: do not rename an existing ID, and use `code_unspecified` only for migration and historical evidence.
+Keep responsibilities separate: `selected_model_policy.py` owns the user-selection boundary; `routing_policy.py` owns independent-task scores and code-domain lookup; runners execute; receipts report; project memory owns scoped durable context.
 
-## Add one active domain
+Add an execution domain through `EXECUTION_DOMAINS` with its owning skill and one language reference. Domain keys are stable evidence identifiers. Language/style guidance belongs in the code skill, not model metadata. Only one active language profile applies; optional categories are loaded when the actual change needs them.
 
-For a new registry-owned code domain, make one additive registry row with all nine required metadata fields: `display_name`, `kind`, `language_aliases`, `owner_skill`, `owner_enforced`, `spark_first`, `reference_path`, `active`, and `history_only`. Then add the matching reference page and generic routing/validator coverage that reads the registry. Do not edit every validator, scenario, or skill description just to enumerate the new domain. A new additive domain value does not require a schema-version bump.
-
-The normal seam is:
-
-1. Add one `EXECUTION_DOMAINS` row with an immutable ID and reference path.
-2. Add the domain-specific executor reference and, when applicable, a language/style reference under `code-skill/references/`.
-3. Add one representative routing scenario and generic registry-driven tests for valid, unknown, and migration-only domains.
-4. Update concise user documentation only where the active domain list or extension seam is explained.
-
-The stable `tiny-code`, `code-easy`, and `code-complex` profile presets are domain-parameterized. A new active code-domain registry row becomes usable through those presets automatically; do not duplicate profile rows per language. Python and the single Unity C# profile are current active examples. The historical `csharp` key remains inactive; new `csharp` and `c#` aliases resolve to `unity_csharp`.
-
-Discover the current non-mutating registry view with:
-
-```bash
-python3 skills/task-analyze-skill/scripts/model_routing_history.py domains
-```
-
-Keep language rules in executor references, not in registry metadata. Every code producer receives the universal Code Gate first, then one active language profile and only matched category references. Current active code examples are `python` and `unity_csharp`; `general` is the non-code default.
-
-## Evidence and migration
-
-`execution_domain` is part of adaptive-profile identity. New records use the exact registry ID. When reading legacy records with no domain, infer `code_unspecified` for legacy code evidence and `general` otherwise; never reinterpret old evidence as a newly named active domain. `code_unspecified` is not an extension target.
-
-The current model|effort executes ordinary inline work and is not a model-quality learning feature. Only after full Task Analyze is explicitly activated does that pair also become route-coordination metadata. Inline tool/model work presents its completed result with no foreground verifier, child receipt, or adaptive producer sample. Admitted delegated routes carry complete `routing_recommendation` and end-to-end performance-admission proof, then record the producer receipt and Ending Real outcome; deterministic controller recording needs no decorative Luna call.
-
-Execution domain describes the requested execution work, not every language found in inspected sources. A read-only repository answer can inspect Python, C#, or Unity C# while remaining `execution_domain=general`; use a code domain only for code creation, changes, execution, or code-path validation.
-
-## Canonical policy
-
-Correctness is the gate. Ordinary work defaults to inline current-model execution regardless of apparent complexity. Two or three explicit independent read-only sources first cost-admit one producer; only context pressure or an explicit latency contract may run disjoint allowlists plus a dependency-results-only or exact-owned fused-final merge. Exact-owned small text sources may use deterministic zero-token captures followed by one adaptive synthesis. A small/standard generic immutable-source exact-JSON worker may omit redundant global catalogs through the audited lean runtime view while retaining project instructions, runtime evidence, source, sandbox, and output contract; every other task retains full context, and unsupported platforms safely fall back. Dependency-coupled work remains one producer. Consider any other frozen calibrated child or graph only after the complete Global path has positive current admission for the same entry/configuration/workload cohort. Tokens and elapsed time are receipt evidence for like-for-like optimization and never override quality, safety, or authority boundaries.
+Test new behavior at its executable boundary: selected pair preserved across attempts, independent route still adapts, absent memory is harmless, unrelated memory is not read, and invalid dependencies/shared writes fail before launch. Avoid tests that require exact documentation phrases or resurrect the retired Ending verification workflow.

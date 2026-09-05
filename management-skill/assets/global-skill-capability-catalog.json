@@ -15,7 +15,16 @@
     "maintainer_publication_owns_release_validation": true,
     "github_publication_requires_pass": true,
     "retirement_requires_explicit_user_decision": true,
-    "process_contract_is_not_result_memory": true
+    "process_contract_is_not_result_memory": true,
+    "workflow_version": 2,
+    "verification_owner": "active_task",
+    "ending_purpose": "memory_only",
+    "selected_model_for_governed_tasks": true,
+    "missing_memory": "skip",
+    "task_score_disclosure": "required",
+    "model_disclosure": "assignment_then_runtime",
+    "ending_placement": "visible_projectless_under_user_authorized_lifecycle",
+    "ending_completion": "task_acknowledgement_and_scoped_memory_readback"
   },
   "managed_skills": [
     "task-analyze-skill",
@@ -28,86 +37,450 @@
     "management-skill"
   ],
   "checks": [
-    {"id": "public-skill-set", "kind": "builtin", "targets": ["source", "deployed"], "timeout_seconds": 30},
-    {"id": "task-analyze-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 1200, "command": ["{python}", "-m", "unittest", "discover", "-s", "task-analyze-skill/tests", "-p", "test_*.py"]},
-    {"id": "lifecycle-trigger-matrix", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 120, "command": ["{python}", "-m", "unittest", "discover", "-s", "task-analyze-skill/tests", "-p", "test_execution_lifecycle.py"]},
-    {"id": "prompt-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "-m", "unittest", "discover", "-s", "prompt-skill/tests", "-p", "test_*.py"]},
-    {"id": "code-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 600, "command": ["{python}", "-m", "unittest", "discover", "-s", "code-skill/tests", "-p", "test_*.py"]},
-    {"id": "project-memory-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 600, "command": ["{python}", "-m", "unittest", "discover", "-s", "project-memory-skill/tests", "-p", "test_*.py"]},
-    {"id": "verify-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "-m", "unittest", "discover", "-s", "verify-skill/tests", "-p", "test_*.py"]},
-    {"id": "optimization-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "-m", "unittest", "discover", "-s", "optimization-skill/tests", "-p", "test_*.py"]},
-    {"id": "management-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 900, "command": ["{python}", "-m", "unittest", "discover", "-s", "management-skill/tests", "-p", "test_*.py"]},
-    {"id": "task-analyze-validator", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "task-analyze-skill/scripts/validate_task_analyze_skill.py", "--skill-dir", "task-analyze-skill", "--global-agents", "{global_agents}", "--global-skills-root", "."]},
-    {"id": "workflow-validator", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "workflow-skill/scripts/validate_workflow_skill.py"]},
-    {"id": "workflow-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "-m", "unittest", "discover", "-s", "workflow-skill/tests", "-p", "test_*.py"]},
-    {"id": "model-capability-sync", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "task-analyze-skill/scripts/sync_model_capabilities.py", "--check"]},
-    {"id": "platform-check", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "code-skill/scripts/skill_platform_check.py", "check", "--skills-root", ".", "--baseline", "code-skill/assets/skill-platform-baseline.json"]},
-    {"id": "optimization-audit", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "optimization-skill/scripts/audit_global_skills.py", "."]},
-    {"id": "cache-layout-units", "kind": "command", "targets": ["source", "deployed"], "timeout_seconds": 300, "command": ["{python}", "-m", "unittest", "discover", "-s", "management-skill/tests", "-p", "test_cache_layout.py"]},
-    {"id": "code-sample-attestation", "kind": "attestation", "targets": ["source"], "timeout_seconds": 30, "path": "management-skill/assets/regression-attestations/code-writing-samples.json", "evidence": "Cache/remote-test/code-writing-philosophy/review/forward-test-report.json", "watched_files": ["code-skill/SKILL.md", "code-skill/agents/openai.yaml", "code-skill/references/code-writing-philosophy.md", "code-skill/references/coding-approach.md", "code-skill/references/python-rules.md", "code-skill/tests/test_code_writing_philosophy.py"]},
-    {"id": "unity-five-attestation", "kind": "attestation", "targets": ["source"], "timeout_seconds": 30, "path": "management-skill/assets/regression-attestations/unity-five-trials.json", "evidence": "Cache/remote-test/unity-game-code-structure-design/result.json", "watched_files": ["code-skill/SKILL.md", "code-skill/agents/openai.yaml", "code-skill/references/csharp-rules.md", "code-skill/references/unity-csharp-rules.md", "code-skill/references/unity-game-code-structure-design.md", "code-skill/references/unity-lifecycle-and-serialization.md", "code-skill/references/unity-service-integration.md", "code-skill/scripts/code_rule_guard.py", "code-skill/tests/test_code_writing_philosophy.py"]},
-    {"id": "memory-execution-consistency-attestation", "kind": "attestation", "targets": ["source"], "timeout_seconds": 30, "path": "management-skill/assets/regression-attestations/memory-execution-consistency.json", "evidence": "Cache/remote-test/memory-execution-consistency/result.json", "bind_evidence": true, "watched_files": ["AGENTS.md", "task-analyze-skill/assets/global-agents-entry-rule.md", "task-analyze-skill/scripts/task_route_dispatcher.py", "task-analyze-skill/scripts/validate_task_analyze_skill.py", "workflow-skill/SKILL.md", "code-skill/references/python-rules.md", "project-memory-skill/SKILL.md", "project-memory-skill/scripts/project_change_memory.py", "project-memory-skill/scripts/memory_coverage.py", "project-memory-skill/scripts/obsidian_model_memory.py", "project-memory-skill/tests/test_project_change_memory.py", "project-memory-skill/tests/test_memory_coverage.py", "project-memory-skill/tests/test_obsidian_model_memory.py", "verify-skill/SKILL.md", "verify-skill/scripts/ending_verification_plan.py", "verify-skill/scripts/ending_task_ledger.py", "management-skill/assets/global-skill-capability-catalog.json", "management-skill/scripts/global_skill_regression_gate.py", "management-skill/tests/test_global_skill_regression_gate.py"]},
-    {"id": "git-diff-check", "kind": "command", "targets": ["source"], "timeout_seconds": 60, "command": ["git", "diff", "--check"]},
-    {"id": "deployment-parity", "kind": "builtin", "targets": ["cross"], "timeout_seconds": 120},
-    {"id": "global-agents-parity", "kind": "builtin", "targets": ["cross"], "timeout_seconds": 30}
+    {
+      "id": "public-skill-set",
+      "kind": "builtin",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "task-analyze-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 1200,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "task-analyze-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "prompt-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "prompt-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "code-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "code-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "project-memory-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 600,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "project-memory-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "verify-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "verify-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "optimization-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "optimization-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "management-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 900,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "management-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "task-analyze-validator",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "task-analyze-skill/scripts/validate_task_analyze_skill.py",
+        "--skill-dir",
+        "task-analyze-skill",
+        "--global-agents",
+        "{global_agents}",
+        "--global-skills-root",
+        "."
+      ]
+    },
+    {
+      "id": "workflow-validator",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "workflow-skill/scripts/validate_workflow_skill.py"
+      ]
+    },
+    {
+      "id": "workflow-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "workflow-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "platform-check",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "code-skill/scripts/skill_platform_check.py",
+        "check",
+        "--skills-root",
+        ".",
+        "--baseline",
+        "code-skill/assets/skill-platform-baseline.json"
+      ]
+    },
+    {
+      "id": "optimization-audit",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "optimization-skill/scripts/audit_global_skills.py",
+        "."
+      ]
+    },
+    {
+      "id": "cache-layout-units",
+      "kind": "command",
+      "targets": [
+        "source",
+        "deployed"
+      ],
+      "timeout_seconds": 300,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "management-skill/tests",
+        "-p",
+        "test_cache_layout.py"
+      ]
+    },
+    {
+      "id": "git-diff-check",
+      "kind": "command",
+      "targets": [
+        "source"
+      ],
+      "timeout_seconds": 60,
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ]
+    },
+    {
+      "id": "deployment-parity",
+      "kind": "builtin",
+      "targets": [
+        "cross"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "global-agents-parity",
+      "kind": "builtin",
+      "targets": [
+        "cross"
+      ],
+      "timeout_seconds": 30
+    }
   ],
   "capabilities": [
-    {"id": "GSR-001", "owner_skill": "management-skill", "name": "固定八个公共 Skill", "function": "公共源码与远端只包含八个批准的 Skill，同时保留本地无关 Skill。", "checks": ["public-skill-set", "management-units", "optimization-audit", "deployment-parity"]},
-    {"id": "GSR-002", "owner_skill": "management-skill", "name": "源码、部署与发布分离", "function": "仓库源码是维护权威；本地全局部署与 GitHub 发布是两个独立动作，禁止从安装镜像反向覆盖源码。", "checks": ["management-units", "deployment-parity"]},
-    {"id": "GSR-003", "owner_skill": "management-skill", "name": "显式全局 AGENTS 模板", "function": "deploy/pull/legacy sync 保留用户 AGENTS 内容；只有显式 install-global-agents 才写入 Codex 全局目标，并先创建可持久恢复的备份。发布门禁只在隔离候选布局中检查模板字节一致性，不把用户自定义内容当作部署漂移。", "checks": ["management-units", "global-agents-parity"]},
-    {"id": "GSR-004", "owner_skill": "task-analyze-skill", "name": "0-100 复杂度评分", "function": "每次提交使用 small、standard、complex、advanced 四个固定分段。", "checks": ["task-analyze-units", "task-analyze-validator"]},
-    {"id": "GSR-005", "owner_skill": "task-analyze-skill", "name": "入口模型与解决模型分离", "function": "先保留 entry，再按难度、信息负担、步骤和历史选择 solver；允许 Sol 降级与 Luna 升级。", "checks": ["task-analyze-units", "task-analyze-validator", "model-capability-sync"]},
-    {"id": "GSR-006", "owner_skill": "task-analyze-skill", "name": "Spark 小任务与质量升降档", "function": "低风险小任务优先 Spark；质量失败抑制同指纹并升级；两个 Real PASS 后才试降一级。", "checks": ["task-analyze-units", "model-capability-sync"]},
-    {"id": "GSR-007", "owner_skill": "task-analyze-skill", "name": "多阶段独立路由", "function": "任何 producer 前先按中英文意图盘点 inspect、simulate、change、test、deploy、publish；两个以上阶段硬切独立节点并分别选模；零参 runner 不执行模型而返回 route-required，父入口只构建一次 graph 并调用一次 dispatcher；Ending 分数只控制检查范围；仅并行依赖就绪且无共享写入的节点。", "checks": ["task-analyze-units", "workflow-validator"]},
-    {"id": "GSR-008", "owner_skill": "task-analyze-skill", "name": "准确模型身份披露", "function": "结果公开 Complexity、Model、Route、Evidence；多阶段列出全部实际阶段且 receipt 优先。", "checks": ["task-analyze-units", "task-analyze-validator"]},
-    {"id": "GSR-009", "owner_skill": "task-analyze-skill", "name": "模型路由记忆", "function": "本地 receipt ledger 为快速权威，Obsidian 使用原生链接并保留项目、任务、模块、文件和 symbol 范围。", "checks": ["task-analyze-units", "project-memory-units"]},
-    {"id": "GSR-010", "owner_skill": "project-memory-skill", "name": "Ending 与重要更新记忆收口", "function": "真实 surface 或结构、非纯数值代码、思路、流程重要更新进入 Ending；重要更新强制 durable project-memory closeout；只有明确 trivial_value_only 且无其他 surface 才跳过；候选与记忆仅保存脱敏持久信息。", "checks": ["project-memory-units", "verify-units"]},
-    {"id": "GSR-011", "owner_skill": "project-memory-skill", "name": "项目模块方法记忆覆盖", "function": "修改前按项目、模块、文件和 symbol 回溯；方法级代码必须有 symbol，模块级用 __module__，Ending PASS 后才记结果。", "checks": ["project-memory-units", "verify-units"]},
-    {"id": "GSR-012", "owner_skill": "workflow-skill", "name": "代码结果优先", "function": "生产者先读取所有相关代码、哲学、语言、平台和领域 Skill，完成代码后只运行一次最小本地 Quick Check，立即返回 CODE READY；广泛测试、构建、UI、全量 lint、日志清理和重复审查不得阻塞首个结果。", "checks": ["task-analyze-units", "workflow-validator", "code-units"]},
-    {"id": "GSR-013", "owner_skill": "workflow-skill", "name": "Ending observable/material 条件交接", "function": "observable surface 或 material structural/code/conceptual/process 更新发出 ending-required；material 强制 memory closeout；只有明确 trivial_value_only 且无其他 surface 才记录 intentionally_skipped_simple_task。", "checks": ["task-analyze-units", "workflow-validator", "verify-units"]},
-    {"id": "GSR-014", "owner_skill": "verify-skill", "name": "全局独立 projectless Ending", "function": "每个 Ending-required 任务只在全部结果节点和子流程完成、最终 aggregate receipt 已发布后创建一个持久全局 projectless End Task；子 receipt 不触发 Ending。生命周期创建前必须用终态 model-memory 的同一合同验证 receipt context、capability、entry 与 executed pair，旧合同 receipt/protocol 缺陷只能终态 FAIL 且不得伪造模型学习。既有任务按一个保存的有界检查或收尾动作持续推进。create_thread target 必须精确为 projectless 且不含项目、环境、当前任务或 parent attachment。启动提示必须携带一个绝对 origin project root，并让相对 plan、evidence、receipt 指针基于该 root 解析，不依赖无关的 projectless cwd。原项目 binding 只用于执行上下文；list_threads 必须读回 projectId=null 或无项目字段后才能 ack。项目 session、当前任务、同任务 subtask、缺少读回或 ack 均为 BLOCKED。", "checks": ["verify-units", "workflow-validator", "task-analyze-validator"]},
-    {"id": "GSR-015", "owner_skill": "verify-skill", "name": "Ending 最小真实验证", "function": "执行能证明交付状态的最小真实命令、API、构建、渲染、视觉或状态检查；文字不能代替证据，当前不可变 PASS 报告只复查绑定 digest 与最终状态。", "checks": ["verify-units", "workflow-validator"]},
-    {"id": "GSR-016", "owner_skill": "verify-skill", "name": "失败创建隔离 Repair session", "function": "Verifier 不改生产文件；失败自动创建全新 global projectless Repair Task，禁止发送、steer、中止、终止、handoff、移动或修改任何现有 session；活动任务占用写入面时 Repair 等待且不发消息；修复后用同一 failed-parent ID 启动 fresh Ending；最多三次。", "checks": ["verify-units", "project-memory-units", "workflow-validator"]},
-    {"id": "GSR-017", "owner_skill": "verify-skill", "name": "Ending 终态永久可见", "function": "PASS、FAIL、BLOCKED 不自动归档或删除，并报告尝试、适配度、下一路线与记忆状态。", "checks": ["verify-units", "workflow-validator"]},
-    {"id": "GSR-018", "owner_skill": "prompt-skill", "name": "Prompt Skill 100% 入口", "function": "可复用 prompt 与持久 AI 指令的创建、修改、测试必须加载 Prompt；普通文案不误触发。", "checks": ["prompt-units", "task-analyze-units", "task-analyze-validator"]},
-    {"id": "GSR-019", "owner_skill": "code-skill", "name": "所有语言的代码书写哲学", "function": "先读项目结构和 AGENTS，写最少 coherent change，保持清晰 ownership，并检查内存、磁盘、CPU、资源和长期生命周期；禁止用 _ 隐藏结果或 Task、同参同返回套娃转发和无基线自递归；清楚可读时保持一行；Python/Unity C# 新增行由 code_rule_guard 确定性拦截；过程与结果记忆分离。", "checks": ["code-units", "task-analyze-units", "code-sample-attestation", "platform-check"]},
-    {"id": "GSR-020", "owner_skill": "code-skill", "name": "单一 Unity C# 配置与分类规则", "function": "新 C# 只进入一个 Unity C# 公共配置；通用写法每次必载，结构、生命周期/序列化、服务集成按任务命中加载；Unity 游戏仍保留 Controller、Manager、ScriptableObject 核心和有触发条件的模式。", "checks": ["code-units", "task-analyze-units", "task-analyze-validator", "unity-five-attestation", "platform-check"]},
-    {"id": "GSR-021", "owner_skill": "code-skill", "name": "跨平台执行", "function": "Host/Skill 工具使用 portable Python 和 native path，覆盖 Windows、macOS、Linux，同时保留 Unity/Docker 运行时边界。", "checks": ["code-units", "optimization-units", "management-units", "platform-check"]},
-    {"id": "GSR-022", "owner_skill": "management-skill", "name": "Cache 三类目录与结构化 AGENTS", "function": "支持产物只进项目 Cache；一次性任务与普通测试 scratch 使用 tmp-*；YYYYMMDD 仅用于有 reason/review 的短期复用；remote-* 与 remote-test 仅用于用户或项目契约明确保留的材料；可复用正式测试留在 source；机器路径只进 AI-only registry；项目 AGENTS 只保留稳定结构、owner、入口和硬约束。", "checks": ["management-units", "cache-layout-units", "code-units", "platform-check"]},
-    {"id": "GSR-023", "owner_skill": "management-skill", "name": "公开 README、SVG 与 benchmark 证据", "function": "中英文模板和桌面/移动 SVG 可解析且无裁切；benchmark 只声明来源明确的稳定结果，small、standard、complex、advanced 四档必须分别在完整执行时间和 token 上胜出；确定性零 token source capture 与精简 bounded-worker context 必须由 receipt/route signature 公开，并在主指标后单列 controller、retry 与 Ending；session census 必须拒绝隐藏会话，运行前 SQLite 不可见时只允许由完整的 result-ready/运行后 DB 与匹配 rollout 差集恢复基线。", "checks": ["management-units", "task-analyze-units"]},
-    {"id": "GSR-024", "owner_skill": "optimization-skill", "name": "Optimization 有界触发", "function": "只在明确优化或稳定重复工作时触发，把已验证流程固化为 portable 资产且保持行为。", "checks": ["optimization-units", "optimization-audit", "platform-check"]},
-    {"id": "GSR-025", "owner_skill": "management-skill", "name": "全能力非回归发布门禁", "function": "任何全局 Skill 新增或修改都保留完整发布门禁；消费者安装或更新只替换已发布源，不重复任何质量门禁；GitHub commit/push 在全门禁 PASS 前仍全部阻断。", "checks": ["management-units", "public-skill-set", "deployment-parity", "global-agents-parity", "git-diff-check"]},
-    {"id": "GSR-026", "owner_skill": "verify-skill", "name": "Spark 优先与主控冷却升级", "function": "Ending 首选 gpt-5.3-codex-spark|xhigh；真实额度、五小时、provider rate 或 retry-after 失败持久记录 restricted_at/retry_at/cooldown_until；冷却期间跳过受限模型并选择下一更强支持主控，到期恢复 Spark；质量失败绝不生成冷却。", "checks": ["task-analyze-units", "verify-units", "project-memory-units", "workflow-validator", "management-units"]},
-    {"id": "GSR-027", "owner_skill": "project-memory-skill", "name": "过程、执行与有效结果记忆一致", "function": "当前过程 Skill/AGENTS、真实执行证据和 effective 项目结果记忆必须三方一致。Ending 只可为纯记忆缺陷追加纠正或重投影；Skill/执行缺陷不得写结果记忆，必须创建隔离 Repair Task；下一任务只读取 effective 结果。", "checks": ["memory-execution-consistency-attestation", "task-analyze-units", "task-analyze-validator", "workflow-validator", "project-memory-units", "verify-units"]},
-    {"id": "GSR-028", "owner_skill": "project-memory-skill", "name": "项目结果记忆完整性防线", "function": "生产 recorder 在写入前拒绝占位语义；测试显式使用 disposable store/vault；Global Codex Skills 与 qin-codex-skills 统一 owner 回读；已证实的非法记录只可用 exact-ID tombstone 重建本地索引并阻断 reconcile 回灌。", "checks": ["project-memory-units", "memory-execution-consistency-attestation", "platform-check"]},
-    {"id": "GSR-029", "owner_skill": "project-memory-skill", "name": "唯一 Coverage 权威与无截断投影", "function": "Coverage 只读取显式 CODEX_PROJECT_MEMORY_COVERAGE 或 canonical local store，绝不从 vault/model store 推导；append、merge、projection 共用事务锁；legacy rogue store 仅在验证合并和重投影后按 exact path 删除。", "checks": ["project-memory-units", "memory-execution-consistency-attestation", "platform-check"]},
-    {"id": "GSR-030", "owner_skill": "code-skill", "name": "UI 用户体验哲学", "function": "所有 UI 与面向用户的 UI 信息先给出真实状态反馈；非阻塞工作可后台继续但不得伪称完成；在有助理解时优先使用可访问的图标、emoji、图片、状态样式或图示，而非密集文字。", "checks": ["code-units", "code-sample-attestation"]},
-    {"id": "GSR-031", "owner_skill": "verify-skill", "name": "Ending 能力路由检查 worker", "function": "当前 Spark-first 或 restriction-aware controller 直接运行确定性检查；语义检查按保存 surface 委派 Terra/Sol ENDING_CHECK_WORKER。worker 只读 Skill、执行一个检查并写证据，禁止编辑、修复、路由或创建生命周期。", "checks": ["task-analyze-units", "verify-units", "workflow-validator"]},
-    {"id": "GSR-032", "owner_skill": "task-analyze-skill", "name": "同会话未解决问题渐进升级", "function": "同一 Codex session 先排除当前 turn，再以 route event 与终态 runtime receipt 确认同主题是否已解决；只有质量/正确性失败或明确纠正反馈才逐步增强模型，已验证 PASS 与新主题均不继承升级状态，operational failure 只触发重试/回退；Spark fast path 也不得绕过该状态判断。", "checks": ["task-analyze-units", "project-memory-units", "task-analyze-validator"]},
-    {"id": "GSR-033", "owner_skill": "task-analyze-skill", "name": "代码 Code Gate 百分百启动披露", "function": "显式中英文修改、部署、提交意图优先于“看一下、是否”等问句外壳；每个代码生产者在读写源码前先公开 code-rule-notice，强制加载统一代码哲学、一个活跃语言配置和仅命中的分类规则；缺少披露或统一哲学引用即路由失败；其他业务 Skill 拥有实现时也不得绕过。", "checks": ["task-analyze-units", "task-analyze-validator", "workflow-validator", "code-units"]},
-    {"id": "GSR-034", "owner_skill": "task-analyze-skill", "name": "计划执行验收生命周期百分百触发", "function": "每个 routed result 在源码工作前公开 execution-lifecycle-notice 并把同一契约写入 receipt/summary/plan/manifest：合格的 0-24 超简单单结果 direct，其他单结果 plan+single execution，多结果在模型启动前硬切 plan+dependency graph；零参 runner 对多阶段只返回 route-required，禁止误跑单生产者；精确 owned 小文本可零 token 并行 capture 后只调用一次 adaptive synthesis，合格的通用只读 exact-JSON 小/标准任务可用保留项目规则与证据的精简 runtime view，其他任务保持 full context，Windows/链接不可用安全回退；模型按难度、信息负担、步骤和历史选最低合适路线，只有同主题质量/正确性失败逐步增强，operational failure 保持质量中立；验收只由有 surface 的最终 aggregate receipt 启动一个 projectless Ending。", "checks": ["lifecycle-trigger-matrix", "task-analyze-units", "task-analyze-validator", "workflow-validator"]},
-    {"id": "GSR-035", "owner_skill": "management-skill", "name": "消费者安全替换安装", "function": "用户明确安装或更新时，以 cross-process target lock 串行 staging、replacement、rollback 与 cleanup，并用 fsynced transaction manifest 恢复 crash/kill 中断；只允许源字节物化、八个 managed source 可用性、recoverable opaque backup 与 safe exact-target write。每次都无条件替换八个 managed Skill，即使内容相同或旧 target 是 file、symlink、junction；用户 AGENTS 不属于普通替换集合。显式 install-global-agents 使用单独的持久备份/恢复路径；无关 Skill 与 task-analyze-skill/local 不透明保留。消费者 deploy/pull/legacy sync 绝不运行 routing、public-safety、platform、regression、parity、attestation、content-diff、Ending 或 whole-tree hash；发布者在 push 前单独运行一次完整门禁。", "checks": ["management-units"]},
-    {"id": "GSR-036", "owner_skill": "workflow-skill", "name": "内存优化与任务资源生命周期", "function": "任务只登记和释放自身创建的精确 path/runtime/UI 资源；持久结果读回与最后 consumer 均完成后按分支反向依赖顺序释放；共享资源使用显式 consumer map；日期、remote、preexisting、共享、Unity 和冲突资源保留或 deferred；Ending 先保存证据且只释放自身或明确 handoff 的资源；任何资源清理都不得消息、打断、终止、归档、删除或控制其他 task、thread、session 或 Ending。", "checks": ["workflow-units", "workflow-validator", "platform-check", "cache-layout-units"]},
-    {"id": "GSR-037", "owner_skill": "workflow-skill", "name": "主控子 Session 并行编排", "function": "复杂或大型任务在 producer 前评估安全自动 child-session 拓扑，仅当至少两个 dependency-ready 分支具有明确的相对 workdir、输入输出、互不重叠写入面和 Cache 边界且能减少等待时才准入；整张图只选择 collaboration children 或 dispatcher，绝不混跑。主 session 使用 spawn/list/wait/send/followup/interrupt 监控、更新、转向或定向中止子 session，子 session 只在 read/write allowlists、dependencies、required、Cache 和 stop 边界内工作，不得控制 sibling、启动 Ending 或声明主任务完成；平台打包使用隔离副本或 worktree，同一项目根目录下的代码模块可共享 workdir 但仅限 disjoint 写入。child READY 不等于 main done；全部 child settled 后仅 root 检查 final aggregate 并决定完成及启动唯一 Ending；不安全或工具不可用时回退现有 single producer/dispatcher。", "checks": ["workflow-units", "workflow-validator", "task-analyze-validator"]}
+    {
+      "id": "selected-model",
+      "owner_skill": "task-analyze-skill",
+      "name": "Selected-model ownership",
+      "function": "Skill-governed work and memory preserve the user-selected model and effort; only independent unconstrained work routes adaptively.",
+      "checks": [
+        "task-analyze-units",
+        "project-memory-units"
+      ]
+    },
+    {
+      "id": "adaptive-routing",
+      "owner_skill": "task-analyze-skill",
+      "name": "Independent adaptive work",
+      "function": "Complexity and verified history choose suitable models only for skill-independent tasks; mechanical tools need no model.",
+      "checks": [
+        "task-analyze-units"
+      ]
+    },
+    {
+      "id": "coordination",
+      "owner_skill": "workflow-skill",
+      "name": "Clear goals and safe parallel work",
+      "function": "Use bounded goals, dependencies, disjoint writes and root-owned completion; avoid mandatory decomposition of simple work.",
+      "checks": [
+        "workflow-units",
+        "workflow-validator",
+        "task-analyze-units"
+      ]
+    },
+    {
+      "id": "verification",
+      "owner_skill": "verify-skill",
+      "name": "Verification inside the task",
+      "function": "Use focused real evidence for consequential changes, skip simple values, and require user scope for whole-project runs.",
+      "checks": [
+        "verify-units",
+        "workflow-validator"
+      ]
+    },
+    {
+      "id": "ending-memory",
+      "owner_skill": "project-memory-skill",
+      "name": "Memory-only Ending",
+      "function": "Summarize durable facts using the selected model; never launch verification, automatic repair, or compulsory detached tasks.",
+      "checks": [
+        "project-memory-units",
+        "verify-units"
+      ]
+    },
+    {
+      "id": "project-isolation",
+      "owner_skill": "project-memory-skill",
+      "name": "Optional scoped recall",
+      "function": "Read only matching project memory and explicitly relevant shared preferences; skip absent memory; cross-project reads require an explicit audit.",
+      "checks": [
+        "project-memory-units",
+        "task-analyze-units"
+      ]
+    },
+    {
+      "id": "concise-code",
+      "owner_skill": "code-skill",
+      "name": "Reusable code and visual presentation preferences",
+      "function": "Preserve explicit code ownership and readable structure; every UI, PDF report, document and slide layout applies the shared readable UI baseline, including work without code changes.",
+      "checks": [
+        "code-units",
+        "prompt-units",
+        "workflow-units",
+        "verify-units"
+      ]
+    },
+    {
+      "id": "privacy",
+      "owner_skill": "project-memory-skill",
+      "name": "Durable concise facts",
+      "function": "Keep effective current outcomes and useful history without raw prompts, secrets, or project mixing; read back writes.",
+      "checks": [
+        "project-memory-units"
+      ]
+    },
+    {
+      "id": "installation",
+      "owner_skill": "management-skill",
+      "name": "Recoverable managed installation",
+      "function": "Lock, backup, replace exact managed sources, recover after interruption, preserve unrelated skills and private local history.",
+      "checks": [
+        "management-units"
+      ]
+    },
+    {
+      "id": "agents-preservation",
+      "owner_skill": "management-skill",
+      "name": "Global AGENTS preservation",
+      "function": "Normal installation preserves user AGENTS; explicit AGENTS installation creates a persistent restorable backup.",
+      "checks": [
+        "management-units",
+        "global-agents-parity"
+      ]
+    },
+    {
+      "id": "source-publication",
+      "owner_skill": "management-skill",
+      "name": "Source, installation and publication",
+      "function": "Source owns maintained behavior; local installation and authorized remote publication remain separate; publication runs current release checks first.",
+      "checks": [
+        "management-units",
+        "public-skill-set",
+        "deployment-parity",
+        "git-diff-check"
+      ]
+    },
+    {
+      "id": "portability",
+      "owner_skill": "code-skill",
+      "name": "Portable host execution",
+      "function": "Host helpers use portable Python, native paths and noninteractive execution without forcing whole project builds.",
+      "checks": [
+        "code-units",
+        "platform-check"
+      ]
+    },
+    {
+      "id": "optimization",
+      "owner_skill": "optimization-skill",
+      "name": "Measured simplification",
+      "function": "Optimize requested or recurring work with measured evidence; do not invent model savings or trigger routine benchmarks.",
+      "checks": [
+        "optimization-units",
+        "optimization-audit"
+      ]
+    },
+    {
+      "id": "resources",
+      "owner_skill": "workflow-skill",
+      "name": "Scoped resource ownership",
+      "function": "Dispose only task-owned scratch after last-consumer readback; preserve shared resources and other tasks.",
+      "checks": [
+        "workflow-units",
+        "cache-layout-units"
+      ]
+    },
+    {
+      "id": "concise-contracts",
+      "owner_skill": "management-skill",
+      "name": "Concise current instructions",
+      "function": "Entries and references describe current responsibilities without repeated lifecycle ceremonies; behavioral tests replace obsolete workflow text checks.",
+      "checks": [
+        "task-analyze-validator",
+        "workflow-validator",
+        "management-units"
+      ]
+    }
   ],
   "retired_architectures": [
-    {"id": "RET-001", "name": "仅复杂任务运行 Ending", "replacement": "GSR-013"},
-    {"id": "RET-002", "name": "项目内 Ending task", "replacement": "GSR-014"},
-    {"id": "RET-003", "name": "PASS 后自清理或自动归档 Ending", "replacement": "GSR-017"},
-    {"id": "RET-004", "name": "独立 Fix Task 或替代 repair session", "replacement": "GSR-016"},
-    {"id": "RET-005", "name": "主线程等待 foreground Mini Test 或 Ending", "replacement": "GSR-012"},
-    {"id": "RET-006", "name": "可写 model_experience.json 或 Obsidian JSON sidecar", "replacement": "GSR-009"},
-    {"id": "RET-007", "name": "把项目专属 Skill 放进公共镜像", "replacement": "GSR-001"},
-    {"id": "RET-008", "name": "code_unspecified 用于新代码", "replacement": "GSR-005"},
-    {"id": "RET-009", "name": "已安装全局目录作为发布源", "replacement": "GSR-002"},
-    {"id": "RET-010", "name": "旧模型家族进入活动质量梯级", "replacement": "GSR-005"},
-    {"id": "RET-011", "name": "Ending 按分数进入质量梯级且禁止 Spark", "replacement": "GSR-026"},
-    {"id": "RET-012", "name": "每个独立检查创建一个 Ending thread", "replacement": "GSR-014"},
-    {"id": "RET-013", "name": "生产线程在返回代码前执行广泛验证或重复审查", "replacement": "GSR-012"},
-    {"id": "RET-014", "name": "Spark 主控亲自完成所有语义和视觉判断", "replacement": "GSR-031"},
-    {"id": "RET-015", "name": "普通 C# 与 Unity C# 使用两套活跃基础规则", "replacement": "GSR-020"},
-    {"id": "RET-016", "name": "所有任务强制同一复杂计划或把 operational failure 当质量失败", "replacement": "GSR-034"},
-    {"id": "RET-017", "name": "全门禁 PASS 之前禁止首次本地安装写入并让用户执行门禁", "replacement": "GSR-035"},
-    {"id": "RET-018", "name": "本地安装前运行 routing、public-safety、platform、regression、parity、attestation 或 content-difference 门禁", "replacement": "GSR-035"}
+    {
+      "id": "legacy-detached-verification",
+      "name": "Fixed Spark Ending verification and automatic repair tasks",
+      "replacement": "ending-memory"
+    },
+    {
+      "id": "legacy-universal-routing",
+      "name": "Mandatory adaptive delegation and repeated Code Gate ceremonies for skill-governed work",
+      "replacement": "selected-model"
+    },
+    {
+      "id": "legacy-benchmark-attestations",
+      "name": "Old workflow benchmark and text attestation evidence as current release requirements",
+      "replacement": "concise-contracts"
+    }
   ]
 }

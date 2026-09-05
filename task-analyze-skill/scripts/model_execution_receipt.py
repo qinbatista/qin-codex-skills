@@ -17,6 +17,17 @@ from functools import partial
 from pathlib import Path
 from tempfile import mkstemp
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
+try:
+    from codex_executable import resolve_codex_executable
+except ModuleNotFoundError:
+    _executable_spec = importlib.util.spec_from_file_location("task_analyze_codex_executable", Path(__file__).with_name("codex_executable.py"))
+    _executable_module = importlib.util.module_from_spec(_executable_spec)
+    _executable_spec.loader.exec_module(_executable_module)
+    resolve_codex_executable = _executable_module.resolve_codex_executable
+
 try:
     from routing_policy import MODEL_EFFORTS, parse_model_effort_pair, pair_text
 except ModuleNotFoundError:
@@ -56,7 +67,7 @@ ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER", "ENDING_CHECK_WORKER
 RESULT_READY_BEGIN = "RESULT_READY_BEGIN"
 RESULT_READY_END = "RESULT_READY_END"
 RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
-FAILURE_DETAILS = {"process_launch_failure", "timeout", "non_zero_exit", "invalid_json_events", "model_unavailable", "permission_denied", "sandbox_denied", "context_overflow", "rate_limited", "network_api_failure", "runtime_metadata_missing", "model_protocol_mismatch", "stream_result_protocol", "benchmark_launch_protocol", "turn_not_completed"}
+FAILURE_DETAILS = {"process_launch_failure", "client_version_incompatible", "timeout", "non_zero_exit", "invalid_json_events", "model_unavailable", "permission_denied", "sandbox_denied", "context_overflow", "rate_limited", "network_api_failure", "runtime_metadata_missing", "model_protocol_mismatch", "stream_result_protocol", "benchmark_launch_protocol", "turn_not_completed"}
 TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "uncached_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens")
 BENCHMARK_RUN_ID_PATTERN = re.compile(r"^benchmark-[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 ENTRY_CONTEXT_ENV = "CODEX_TASK_ANALYZE_ENTRY_CONTEXT"
@@ -115,19 +126,17 @@ def prepare_lean_context_home(codex_home):
 
 
 def route_node_lifecycle_boundary(marker, code_rule_bundle=None):
+    common = ("Read the governing skills and relevant existing memory for this project before work; missing memory is optional. "
+              "Keep other projects' memory separate. The assigned model and effort are fixed for skill-governed work. ")
     if marker == "LOCKED_ROUTE_NODE":
-        if code_rule_bundle is None:
-            return "Non-code result only. Load a Skill only if this assignment requires its domain. Batch named immutable inputs into one tool call when possible; no precheck, reread, edit, test, or Ending. Return exactly as requested and stop."
-        return (
-            "This is the result node only. Load every owning, coding-philosophy, language, platform, and domain Skill required by the assigned change before editing. "
-            "Finish the requested code first, run exactly one smallest safe local Quick Check, publish CODE READY immediately, and stop. "
-            "Do not run broad tests, full builds, UI or visual verification, repository-wide lint, log cleanup, release gates, repeated source review, or independent acceptance here; "
-            "the entry parent owns the one detached End Task after this node's passing receipt."
-        )
+        return common + ("Complete the assigned result and verify meaningful or complex changes inside this active task with the smallest relevant behavior check. "
+                         "Skip verification for simple value-only edits; do not start a whole project or full build unless requested. "
+                         "Report results and verification honestly. Ending is only scoped memory summarization, not verification or repair.")
     if marker == "ENDING_TASK_WORKER":
-        return "Own only the one detached Ending lifecycle. Run direct checks yourself and delegate only saved capability-routed checks to ENDING_CHECK_WORKER nodes; never create a nested End/Fix lifecycle or edit the producer result."
+        return common + ("Summarize durable changes, structure and preferences into existing scoped project memory using the user's selected model and effort. "
+                         "Skip absent memory. Do not run verification, tests, builds, repairs, routing or nested tasks.")
     if marker == "ENDING_CHECK_WORKER":
-        return "Execute only the assigned verification check under the saved pair and required Skills. Write fresh evidence, never edit producer files, never start routing or an End/Fix lifecycle, and return the evidence to the Spark Ending controller."
+        raise ValueError("Ending check workers are retired; verify inside the active task")
     raise ValueError(f"unsupported route marker {marker}")
 
 
@@ -281,6 +290,8 @@ def _confirmed_unconsumed_availability_failure(receipt, tokens):
 
 
 def immediate_operational_fallback(receipt):
+    if isinstance(receipt, dict) and receipt.get("failure_detail") == "client_version_incompatible":
+        return False  # Changing the selected model does not repair a stale client.
     if not isinstance(receipt, dict) or receipt.get("status") == "pass" or receipt.get("result_published") is True or receipt.get("turn_completed") is True:
         return False
     tokens = receipt.get("tokens") if isinstance(receipt.get("tokens"), dict) else {}
@@ -328,6 +339,8 @@ def infer_failure_detail(process, timed_out, stdout_summary, stderr_text, proces
         return "process_launch_failure"
     normalized_error = str(stderr_text or "").casefold()
     failure_signals = set(stdout_summary.get("failure_signals") or [])
+    if "client_version_incompatible" in failure_signals or "requires a newer version of codex" in normalized_error:
+        return "client_version_incompatible"
     if "sandbox_denied" in failure_signals or "sandbox" in normalized_error and any(marker in normalized_error for marker in ("deny", "forbid", "permission")):
         return "sandbox_denied"
     if "permission_denied" in failure_signals or any(marker in normalized_error for marker in ("permission denied", "operation not permitted", "access denied")):
@@ -360,6 +373,8 @@ def infer_failure_detail(process, timed_out, stdout_summary, stderr_text, proces
 def failure_class_for_detail(detail, availability_failure=False):
     if detail is None:
         return None
+    if detail == "client_version_incompatible":
+        return "execution"
     if detail == "timeout":
         return "timeout"
     if detail in {"model_unavailable", "rate_limited", "network_api_failure"} or availability_failure:
@@ -517,7 +532,7 @@ def parse_stdout_events(stdout_text):
             summary["turn_completed"] = False
             failure_message = event.get("message") or (event.get("error") or {}).get("message") or ""
             normalized_message = str(failure_message).casefold()
-            signal_patterns = {"rate_limited": ("usage limit", "rate limit", "purchase more credits", "quota", "credits"), "model_unavailable": ("capacity", "temporarily unavailable", "model unavailable", "model not found"), "permission_denied": ("permission denied", "operation not permitted", "access denied"), "sandbox_denied": ("sandbox denied", "sandbox forbidden"), "context_overflow": ("context length", "context window", "maximum context"), "network_api_failure": ("network", "connection refused", "connection reset", "dns", "api error")}
+            signal_patterns = {"client_version_incompatible": ("requires a newer version of codex",), "rate_limited": ("usage limit", "rate limit", "purchase more credits", "quota", "credits"), "model_unavailable": ("capacity", "temporarily unavailable", "model unavailable", "model not found"), "permission_denied": ("permission denied", "operation not permitted", "access denied"), "sandbox_denied": ("sandbox denied", "sandbox forbidden"), "context_overflow": ("context length", "context window", "maximum context"), "network_api_failure": ("network", "connection refused", "connection reset", "dns", "api error")}
             for signal, markers in signal_patterns.items():
                 if any(marker in normalized_message for marker in markers) and signal not in summary["failure_signals"]:
                     summary["failure_signals"].append(signal)
@@ -627,7 +642,7 @@ def run_streaming_result_process(command, execution_prompt, args, command_enviro
     thread_ids = []
     duplicate_result_detected = []
     stream_errors = []
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=args.workdir, env=command_environment, shell=False, bufsize=1)
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=args.workdir, env=command_environment, shell=False, bufsize=1, **hidden_process_options())
 
     def publish_result(result_message):
         if result_messages:
@@ -891,8 +906,12 @@ def benchmark_auto_launch_evidence(cache_root, workload_sha256, expected_entry_p
 
 def build_codex_exec_command(args, lean_context_active=False):
     """Build a non-interactive child command without dropping approval policy."""
+    explicit = getattr(args, "codex_bin_explicit", False) or any(value == "--codex-bin" or value.startswith("--codex-bin=") for value in sys.argv[1:])
+    resolution = resolve_codex_executable(args.codex_bin, explicit=explicit)
+    args.codex_executable_resolution = resolution
+    executable = [sys.executable, resolution["path"]] if resolution["path"].endswith(".py") else [resolution["path"]]
     command = [
-        args.codex_bin,
+        *executable,
         "exec",
         "--model",
         args.model,
@@ -952,7 +971,7 @@ def code_gate_execution_contract(bundle):
         if not resolved_reference.is_file():
             raise ValueError(f"code_rule_bundle_reference_missing:{reference_path}")
         resolved_references.append(resolved_reference.as_posix())
-    return f"Code Gate is already resolved. Before reading or editing task source, first state in commentary: {bundle['message']} Read and obey these references in order: {json.dumps(resolved_references, ensure_ascii=False, separators=(',', ':'))}\n"
+    return f"Apply the relevant code preferences from: {json.dumps(resolved_references, ensure_ascii=False, separators=(',', ':'))}\n"
 
 
 def run_receipt(args, prompt_text):
@@ -1035,7 +1054,7 @@ def run_receipt(args, prompt_text):
             result_ready_monotonic_ns = streamed_process["result_ready_monotonic_ns"]
             duplicate_result_detected = streamed_process["duplicate_result_detected"]
         else:
-            process = subprocess.run(command, input=execution_prompt, text=True, cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout, **({"env": command_environment} if command_environment is not None else {}))
+            process = subprocess.run(command, input=execution_prompt, text=True, cwd=args.workdir, capture_output=True, check=False, shell=False, timeout=args.timeout, **({"env": command_environment} if command_environment is not None else {}), **hidden_process_options())
 
             process_stdout = process.stdout.decode("utf-8", errors="replace") if isinstance(process.stdout, bytes) else process.stdout or ""
             process_stderr = process.stderr.decode("utf-8", errors="replace") if isinstance(process.stderr, bytes) else process.stderr or ""
@@ -1115,6 +1134,10 @@ def run_receipt(args, prompt_text):
             receipt["benchmark_auto_bridge_result_verified"] = benchmark_launch_evidence["bridge_result_verified"]
             receipt["benchmark_selected_execution"] = benchmark_launch_evidence["selected_execution"]
     receipt["failure_class"] = failure_class
+    receipt["codex_executable"] = getattr(args, "codex_executable_resolution", None)
+    if failure_detail == "client_version_incompatible":
+        receipt["recovery_action"] = "retry_same_model_with_compatible_codex_runtime"
+        receipt["model_quality_failure"] = False
     receipt["route_attempts"] = [attempt]
     if streamed_result_required:
         receipt["result_published"] = streamed_matching_result is not None and args.result_output.is_file()
@@ -1225,7 +1248,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Capture sanitized Codex model receipts and compare like-for-like runs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
     run_parser = subparsers.add_parser("run")
-    run_parser.add_argument("--model", choices=sorted(MODEL_EFFORTS), required=True)
+    run_parser.add_argument("--model", required=True)
     run_parser.add_argument("--effort", required=True)
     run_parser.add_argument("--workload-id", required=True)
     run_parser.add_argument("--output", type=Path, required=True)

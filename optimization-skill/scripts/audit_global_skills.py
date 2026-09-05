@@ -20,7 +20,6 @@ FORBIDDEN_SKILL_NAME_PATTERNS = (
     "qin-codex-skills-github-sync",
     "qin-git-push-safety",
 )
-REQUIRED_COMMON_SECTIONS = ("Generated File Placement", "Internal Route Selection")
 LONG_REFERENCE_LINE_LIMIT = 100
 SKILL_BODY_LINE_WARNING = 220
 SKILL_BODY_LINE_LIMIT = 500
@@ -131,17 +130,11 @@ def audit_skill(skill_dir, skills_root=None):
     description = metadata.get("description", "")
     if not description:
         result["errors"].append("description is empty")
-    elif not re.search(r"\bUse (when|at|for)\b", description):
-        result["warnings"].append("description may not clearly state trigger conditions with Use when/at/for")
     if len(description) > 850:
         result["warnings"].append("description is long; trigger metadata may waste context")
     if any(pattern in text for pattern in FORBIDDEN_SKILL_NAME_PATTERNS):
         result["errors"].append("old qin-* skill name reference found")
 
-    skill_headings = headings(body)
-    for section in REQUIRED_COMMON_SECTIONS:
-        if section not in skill_headings:
-            result["warnings"].append(f"missing common section: {section}")
     if len(text.splitlines()) > SKILL_BODY_LINE_LIMIT:
         result["errors"].append(f"SKILL.md has more than {SKILL_BODY_LINE_LIMIT} lines")
     elif len(text.splitlines()) > SKILL_BODY_LINE_WARNING:
@@ -152,7 +145,7 @@ def audit_skill(skill_dir, skills_root=None):
         if resolved_path and not resolved_path.exists():
             result["errors"].append(f"missing linked file: {raw_link}")
     for raw_path in command_paths(text):
-        clean_path = raw_path.rstrip(".,)")
+        clean_path = raw_path.rstrip(".,);:")
         if clean_path != raw_path and not Path(clean_path).suffix:
             continue
         resolved_path = resolve_reference(clean_path, skill_dir, skills_root)

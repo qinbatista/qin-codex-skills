@@ -1,5 +1,4 @@
 interface:
-  display_name: "Verify Skill"
-  short_description: "Explicit verification or post-result Ending Real"
-  default_prompt: >-
-    $verify-skill: Ending for real_test|information_update|memory_update or material structural/non-trivial-code/conceptual/process update;material=>durable memory closeout;only explicit trivial_value_only may skip. One global projectless Ending;list_threads projectId=null/absent. Spark-xhigh first;real quota/5-hour/provider limit=>record cooldown timestamps,skip cooling model,next stronger controller;quality failure never cooldown. FAIL=>fresh independent projectless Repair Task;never send/steer/interrupt/terminate/handoff/move/mutate existing sessions;active write conflict=>wait without messaging;fresh parent-linked Ending<=3. Check workers evidence-only;all PASS;tasks stay visible.
+  display_name: "verify-skill"
+  short_description: "Focused verification inside the active task"
+  default_prompt: "Check the changed behavior with the smallest convincing evidence. Skip simple value-only changes; do not start or compile a whole project unless requested. Ending is memory-only."

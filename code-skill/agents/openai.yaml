@@ -1,5 +1,5 @@
 interface:
   display_name: "Code Skill"
-  short_description: "Universal code-writing process and domain executor"
+  short_description: "General code structure, style, and lifecycle preferences"
   default_prompt: >-
-    $code-skill: exact artifact-free read-only work stays outside; before source work emit Code Gate; universal philosophy+one language profile from references/code-writing-philosophy.md. New C# always routes to unity_csharp. Never hide results or Tasks in _; reject same-argument pass-through wrappers and accidental self-recursion; keep complete clear code on one line. one Quick Check: Run one smallest Quick Check; publish CODE READY. Non-trivial code is material=>global projectless Ending+durable memory; only explicit trivial_value_only may skip. Spark-xhigh first; provider quota cooldown persisted; cooling model skipped for the next stronger controller. FAIL=>fresh independent projectless Repair; never contact/interrupt/steer/mutate existing sessions; active write conflict waits; fresh parent-linked Ending. Workers evidence-only; all PASS; Never self-verify.
+    Apply $code-skill with the user's selected model and effort. Read relevant same-project memory when available, code-writing philosophy, and only matched language/UI references. Preserve ownership, direct calls, explicit result ownership, and concise readable formatting. Verify meaningful changes in the active task using the smallest convincing check; simple value-only edits may skip. Ending only summarizes project memory.

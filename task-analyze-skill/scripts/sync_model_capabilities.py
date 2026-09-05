@@ -36,33 +36,10 @@ def effort_markdown_lines(registry):
 
 
 def build_snapshot(registry):
-    source = registry["source"]
-    lines = ["# Cached Model Capabilities", "", "This snapshot and the shared JSON registry come from the local Codex catalog. They change only when the user explicitly runs the manual update command; ordinary routing reads the saved registry without scanning the catalog.", "", "- Source: `~/.codex/models_cache.json`", f"- Codex client version: `{source['client_version']}`", f"- Local catalog snapshot: `{source['fetched_at']}`", f"- Semantic catalog SHA-256: `{source['catalog_sha256']}`", f"- Registry schema: `{registry['schema_version']}`", f"- Active quality family: `{registry['active_family']['id']}` (highest numeric GPT family)", "", "## Quality ladder", "", "Only the highest registered numeric GPT family is active. Within that family, models are weakest to strongest using the provider's current priority order.", "", "| Rank | Display name | Model ID | Role | Inputs | Context | API | Default effort | Supported efforts | Speed tiers |", "|---:|---|---|---|---|---:|---|---|---|---|"]
-    for model in registry["models"]:
-        roles = ", ".join(model["capability_roles"]) or "quality"
-        inputs = ", ".join(model["input_modalities"])
-        context = f"{model['context_window']:,}" if isinstance(model["context_window"], int) else "unknown"
-        api_support = "yes" if model["supported_in_api"] else "no"
-        speed_tiers = ", ".join(model["additional_speed_tiers"]) or "default"
-        efforts = ", ".join(model["codex_efforts"])
-        lines.append(f"| {model['capability_rank']} | {model['display_name']} | `{model['id']}` | {roles} | {inputs} | {context} | {api_support} | `{model['default_effort']}` | {efforts} | {speed_tiers} |")
-    lines.extend(["", "## Catalog-visible models", "", "Only the highest numeric GPT family plus the catalog-backed priority producer and fixed Ending primary are retained in this routing snapshot. Older unrelated visible models may be present in the machine cache, but they are excluded from the registry, semantic digest, and routing candidates so background catalog refreshes cannot reintroduce them.", "", "| Display name | Model ID | Catalog role | Provider priority | Supported efforts |", "|---|---|---|---:|---|"])
+    lines = ["# Available model capabilities", "", f"Catalog digest: `{registry['source']['catalog_sha256']}`", "", "This local catalog snapshot is used only for skill-independent adaptive work. The user's selected model and effort govern skill work and memory summaries, even when this snapshot is older than their selection.", "", "| Model | Supported efforts |", "|---|---|"]
     for model in registry["catalog_models"]:
-        lines.append(f"| {model['display_name']} | `{model['id']}` | {model['catalog_role']} | {model['provider_priority']} | {', '.join(model['codex_efforts'])} |")
-    lines.extend(["", "## Priority text/code producer", ""])
-    priority_producer = registry.get("priority_producer")
-    if priority_producer is None:
-        lines.append("The current catalog does not advertise a specialized text-only fast coding producer. Eligible work starts on the quality ladder.")
-    else:
-        lines.extend([f"- Model: `{priority_producer['id']}` ({priority_producer['display_name']})", f"- Positioning: {priority_producer['provider_positioning']}", f"- Inputs: {', '.join(priority_producer['input_modalities'])}; API: {'yes' if priority_producer['supported_in_api'] else 'no'}", f"- Easy / complex effort: `{priority_producer['effort_by_complexity']['easy']}` / `{priority_producer['effort_by_complexity']['complex']}`", "- This producer is attempted before eligible low-risk text/code/write/execute task segments scoring 0-24, regardless of parent score, and is not part of the weakest-to-strongest quality ladder."])
-    ending_fast = registry["ending_fast"]
-    fallback_text = f"`{ending_fast['availability_fallback_pair']}`" if ending_fast["availability_fallback_pair"] else "none"
-    lines.extend(["", "## Fast Ending route", "", f"- Primary: `{ending_fast['primary_pair']}`", f"- Availability-only fallback: {fallback_text}", f"- Selection basis: `{ending_fast['selection_basis']}`; fallback policy: `{ending_fast['fallback_policy']}`.", "- Complexity score and band scope the proportional check only; they never select the Ending model."])
-    private_learning = registry["private_learning_contract"]
-    lines.extend(["", "## Private learning contract", "", f"- Authority: `{private_learning['authority']}`", f"- Local path: `{private_learning['local_path_template']}`", f"- Obsidian entry: `{private_learning['projection_path_template']}`", f"- Obsidian records: `{private_learning['record_path_template']}`", f"- Native wikilink graph: `{str(private_learning['native_wikilink_graph']).lower()}`; stable categories: {', '.join(private_learning['stable_categories'])}.", f"- Stable event dedupe: `{str(private_learning['event_id_dedupe']).lower()}`", f"- Specificity: {' / '.join(private_learning['specificity_order'])}", f"- Context stays in fields: `{str(private_learning['fields_only']).lower()}`; per-context hierarchy notes: `{str(private_learning['hierarchy_notes']).lower()}`; legacy local JSON: `{private_learning['legacy_local_json']}`.", "", "## Dynamic defaults", "", f"- Floor: `{registry['role_pairs']['floor']}`", f"- Balanced cold start: `{registry['default_cold_start']}`", f"- Balanced complex: `{registry['role_pairs']['balanced_complex']}`", f"- Frontier complex: `{registry['role_pairs']['frontier_complex']}`", "", "| Task type | Easy | Complex |", "|---|---|---|"])
-    for task_type, levels in registry["cold_start_defaults"].items():
-        lines.append(f"| {task_type} | `{levels['easy']}` | `{levels['complex']}` |")
-    lines.extend(["", "## Effort compatibility", "", *effort_markdown_lines(registry), "- Unsupported efforts are normalized within the selected model's advertised effort list.", "", "## Manual update", "", "```bash", "python3 scripts/sync_model_capabilities.py --update", "python3 scripts/sync_model_capabilities.py --check", "```", ""])
+        lines.append(f"| `{model['id']}` | {', '.join(model['codex_efforts'])} |")
+    lines.extend(["", "Catalog priority provides a cold-start quality order; measured same-project outcomes may refine independent-task choices. Operational failures do not grade model quality. Ending is memory-only with the selected pair and no automatic fallback.", "", "Use `sync_model_capabilities.py --update` for an explicitly requested catalog refresh. Ordinary task execution does not refresh this file.", ""])
     return "\n".join(lines)
 
 

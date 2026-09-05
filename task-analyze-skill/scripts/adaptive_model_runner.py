@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one adaptive producer without allowing the entry model to pick its pair."""
+"""Execute independently routable work; keep governed work on the selected pair."""
 
 import argparse
 import json
@@ -27,6 +27,7 @@ def _load_sibling(module_name):
 
 
 model_routing_history = _load_sibling("model_routing_history")
+selected_model_policy = _load_sibling("selected_model_policy")
 model_execution_receipt = _load_sibling("model_execution_receipt")
 strategy_performance = _load_sibling("strategy_performance")
 
@@ -81,6 +82,14 @@ def _profile_arguments(args):
 
 
 def _validated_recommendation(args):
+    if selected_model_policy.uses_selected_model(args):
+        pair = getattr(args, "entry_pair", None)
+        if not pair or "|" not in pair:
+            raise RunnerFailure("selected_pair_required")
+        model, effort = pair.split("|", 1)
+        recommendation = selected_model_policy.recommendation(model, effort)
+        recommendation["profile_fingerprint"] = model_execution_receipt.sha256_text("skill-governed")
+        return recommendation, (model, effort)
     recommendation = model_routing_history.recommend_route(_profile_arguments(args))
     if not isinstance(recommendation, dict):
         raise RunnerFailure("recommendation_invalid")
@@ -167,7 +176,8 @@ def _summary(args, *, status, selected_pair=None, trial=False, reason, profile_f
         "elapsed_ms": receipt.get("process_elapsed_ms") if isinstance(receipt, dict) else None,
         "first_result_elapsed_ms": first_result_elapsed_ms,
         "total_tokens": tokens.get("total_tokens"),
-        "real_verify_status": "pending" if status == "pass" else "not_started",
+        "verification_owner": "active_task",
+        "real_verify_status": "reported_by_active_task" if status == "pass" else "not_started",
         "result_published": result_published,
         "notification_required": failed_after_presentation,
         "reopen_required": failed_after_presentation,
@@ -188,6 +198,8 @@ def _performance_arguments(args, recommendation, prompt_text):
 
 
 def _performance_admission(args, recommendation, prompt_text):
+    if recommendation.get("model_locked"):
+        return {"execution_mode": "inline_entry", "reason": "user_selected_skill_model", "admitted": False}
     if getattr(args, "benchmark_calibration", False):
         return {"schema_version": 1, "execution_mode": "delegated_adaptive", "reason": "explicit_benchmark_calibration", "admitted": False, "calibration": True}
     performance_args = _performance_arguments(args, recommendation, prompt_text)
@@ -204,7 +216,7 @@ def run_adaptive(args, prompt_text):
         raise RunnerFailure("prompt_required")
     if args.timeout <= 0 or args.receipt_output == args.result_output:
         raise RunnerFailure("runner_arguments_invalid")
-    if Path(args.history).expanduser().resolve() == model_routing_history.DEFAULT_HISTORY_PATH.resolve():
+    if not selected_model_policy.uses_selected_model(args) and Path(args.history).expanduser().resolve() == model_routing_history.DEFAULT_HISTORY_PATH.resolve():
         if args.result_output.exists():
             args.result_output.unlink()
         return _summary(args, status="inline", reason="legacy_local_model_history_inactive", execution_mode="inline_entry")

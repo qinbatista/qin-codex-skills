@@ -116,7 +116,7 @@ class RoutingPolicyTests(unittest.TestCase):
         model_ids = [row["id"] for row in rows["models"]]
         self.assertEqual(rows["schema_version"], 2)
         self.assertEqual(model_ids, module.ACTIVE_MODEL_ORDER)
-        self.assertEqual(rows["active_family"]["selection"], "highest_numeric_gpt_family")
+        self.assertEqual(rows["active_family"]["selection"], "available_numeric_gpt_models")
         self.assertEqual(rows["active_family"]["model_count"], len(model_ids))
         self.assertEqual({row["id"] for row in rows["catalog_models"] if row["catalog_role"] == "active_quality"}, set(model_ids))
         self.assertTrue(set(model_ids).issubset({row["id"] for row in rows["catalog_models"]}))
@@ -127,8 +127,12 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(rows["role_models"]["frontier"], model_ids[-1])
         self.assertNotIn(module.PRIORITY_PRODUCER_MODEL, model_ids)
         self.assertIn("private_learning_contract", rows)
-        self.assertEqual(rows["ending_fast"], {"selection_basis": "ending_fast_primary", "primary_pair": "gpt-5.3-codex-spark|xhigh", "availability_fallback_pair": "gpt-5.6-luna|low", "fallback_policy": "availability_only", "score_scope": "check_only"})
-        self.assertEqual(module.ending_fast_route_fields(), {"model": "gpt-5.3-codex-spark", "effort": "xhigh", "selection_basis": "ending_fast_primary", "allow_fallback": ["gpt-5.6-luna|low"], "fallback_policy": "availability_only"})
+        self.assertIsNone(rows["ending_fast"]["primary_pair"])
+        self.assertEqual(rows["ending_fast"]["selection_basis"], "user_selected")
+        with self.assertRaises(ValueError):
+            module.ending_fast_route_fields()
+        fields = module.ending_fast_route_fields("gpt-6-astra", "ultra")
+        self.assertEqual((fields["model"], fields["effort"], fields["allow_fallback"]), ("gpt-6-astra", "ultra", []))
         self.assertTrue(all(module.ACTIVE_MODEL_EFFORTS[row["id"]] == set(row["codex_efforts"]) for row in rows["models"]))
 
     def test_custom_schema_v2_registry_accepts_no_priority_producer(self):
@@ -140,7 +144,7 @@ class RoutingPolicyTests(unittest.TestCase):
         registry["policy"]["priority_producer_first_small_edits"] = False
         registry["policy"]["priority_producer_task_segments"] = False
         registry["policy"]["priority_producer_scheduled_sources"] = False
-        next(row for row in registry["catalog_models"] if row["id"] == priority_id)["catalog_role"] = "ending_fast_primary"
+        registry["catalog_models"] = [row for row in registry["catalog_models"] if row["id"] != priority_id]
         with tempfile.TemporaryDirectory(prefix="routing-policy-registry-") as temporary:
             registry_path = Path(temporary) / "model-capability-ladder.json"
             registry_path.write_text(json.dumps(registry), encoding="utf-8")

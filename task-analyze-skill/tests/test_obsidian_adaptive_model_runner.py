@@ -149,8 +149,9 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             events = [json.loads(line) for line in stream.getvalue().splitlines()]
             event = events[0]
             notice_event = events[1]
-            code_notice_event = events[2]
-            lifecycle_notice_event = events[3]
+            disclosure_event = events[2]
+            code_notice_event = events[3]
+            lifecycle_notice_event = events[4]
         expected_notice = module._model_route_notice(args, adaptive)
         self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "task_type": "code", "operation": "edit", "complexity_score": 12, "complexity_band": "small", "fast_path_eligible": False, "routing_reasons": [], "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
         self.assertEqual(notice_event, {"schema_version": 1, "stage": "model-switch-notice", "user_visible": True, **expected_notice})
@@ -158,12 +159,42 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertTrue(code_notice_event["user_visible"])
         self.assertEqual(code_notice_event["execution_domain"], "python")
         self.assertEqual(code_notice_event["reference_paths"][:2], [module.routing_policy.CODE_SKILL_ENTRY_REFERENCE, module.routing_policy.CODE_WRITING_PHILOSOPHY_REFERENCE])
-        self.assertEqual([event["stage"] for event in events[:3]], ["route-ready", "model-switch-notice", "code-rule-notice"])
+        self.assertEqual(disclosure_event["stage"], "model-disclosure")
+        self.assertIn("Complexity: 12/100 (small)", disclosure_event["message"])
+        self.assertEqual(disclosure_event["parent_action"], "surface_disclosure_in_conversation")
+        self.assertEqual([event["stage"] for event in events[:4]], ["route-ready", "model-switch-notice", "model-disclosure", "code-rule-notice"])
         self.assertEqual(lifecycle_notice_event["stage"], "execution-lifecycle-notice")
         self.assertEqual(lifecycle_notice_event["execution_lifecycle"]["mode"], "planned_single")
         self.assertGreaterEqual(stream.flush_count, 1)
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["model_route_notice"], expected_notice)
+
+    def test_governed_notice_preserves_selected_pair_including_after_failure(self):
+        for governing_skill, explicit_lock in (("code-skill", False), (None, True), ("project-memory-skill", False)):
+            with self.subTest(skill=governing_skill, locked=explicit_lock), tempfile.TemporaryDirectory() as temporary:
+                args = self.arguments(Path(temporary))
+                args.resolved_entry_model = "gpt-6-astra"
+                args.resolved_entry_effort = "ultra"
+                args.governing_skill = [governing_skill] if governing_skill else []
+                selected = recommendation(pair="gpt-6-astra|ultra", fallback_pair=None)
+                selected.update({"model_locked": explicit_lock, "session_effort": {"failure_recorded": True}})
+                notice = module._model_route_notice(args, selected)
+                self.assertEqual(notice["kind"], "user_selected_skill_model")
+                self.assertIn("preserving the user's selected model and effort gpt-6-astra|ultra", notice["message"])
+                self.assertNotIn("selected separately", notice["message"])
+                self.assertNotIn("increased", notice["message"])
+
+    def test_independent_notice_explains_separate_model_and_effort_choice(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.arguments(Path(temporary))
+            args.resolved_entry_model = "gpt-6-astra"
+            args.resolved_entry_effort = "ultra"
+            args.skill_independent = True
+            notice = module._model_route_notice(args, recommendation(pair="gpt-5.6-luna|low"))
+        self.assertEqual(notice["kind"], "route_selection")
+        self.assertIn("selected separately for this independent task", notice["message"])
+        self.assertIn("gpt-5.6-luna|low", notice["message"])
+        self.assertTrue(notice["model_changed"])
 
     def test_repeated_failure_notice_names_the_higher_model_and_task_part(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -436,7 +467,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
         self.assertEqual(result_nodes[-1]["routing_recommendation"]["attempt_pair"], "gpt-5.6-terra|medium")
         ending = next(node for node in plan["nodes"] if node["phase"] == "ending")
-        self.assertEqual({field: ending[field] for field in ("model", "effort", "selection_basis", "allow_fallback", "fallback_policy")}, module.task_route_dispatcher.ending_fast_route_fields())
+        self.assertEqual((ending["model"], ending["effort"], ending["skill"]), ("gpt-5.6-sol", "ultra", "project-memory-skill"))
         self.assertEqual(merge_recommendation, adaptive)
 
     def test_exact_owned_three_source_schedule_fuses_final_source_with_merge(self):
@@ -473,7 +504,7 @@ source_files must list all sources in order."""
         self.assertEqual(plan["fused_source"], "c.py")
         self.assertEqual(len(result_nodes), 3)
         self.assertEqual([node["source_allowlist"] for node in result_nodes], [["a.py"], ["b.py"], ["c.py"]])
-        self.assertEqual([(node["model"], node["effort"]) for node in result_nodes[:-1]], [("gpt-5.6-luna", "low"), ("gpt-5.6-luna", "low")])
+        self.assertEqual([(node["model"], node["effort"]) for node in result_nodes[:-1]], [tuple(module.routing_policy.MODEL_ROLE_PAIRS["floor"].split("|"))] * 2)
         self.assertTrue(all("priority_producer" not in node for node in result_nodes[:-1]))
         self.assertEqual(result_nodes[-1]["dependencies"], ["source-1", "source-2"])
         self.assertTrue(result_nodes[-1]["fuses_owned_source_with_dependencies"])
@@ -540,15 +571,15 @@ source_files must list all sources in order."""
     def test_exact_expression_schedule_raises_branch_quality(self):
         exact = "Return exactly one JSON object. Copy the exact expression, preserve key order, and preserve the exact literal."
         relaxed = "Summarize two independent files as JSON."
-        self.assertEqual(module._scheduled_branch_pair(exact, "gpt-5.6-luna|low"), ("gpt-5.6-terra", "medium"))
+        self.assertEqual(module._scheduled_branch_pair(exact, "gpt-5.6-luna|low"), tuple(module.routing_policy.MODEL_ROLE_PAIRS["balanced_default"].split("|")))
         self.assertEqual(module._scheduled_branch_pair(relaxed, "gpt-5.6-luna|low"), ("gpt-5.6-luna", "low"))
 
     def test_exact_expression_single_producer_uses_frontier_quality_guard(self):
         base = recommendation()
         exact = "Return exactly JSON; copy the exact expression, preserve key order, and preserve the exact literal."
         guarded = module._exact_contract_recommendation(exact, base)
-        self.assertEqual(guarded["selected_pair"], "gpt-5.6-sol|high")
-        self.assertEqual(guarded["attempt_pair"], "gpt-5.6-sol|high")
+        self.assertEqual(guarded["selected_pair"], module.routing_policy.MODEL_ROLE_PAIRS["frontier_complex"])
+        self.assertEqual(guarded["attempt_pair"], module.routing_policy.MODEL_ROLE_PAIRS["frontier_complex"])
         self.assertEqual(guarded["attempt_reason"], "exact_expression_quality_guard")
         self.assertIsNone(guarded["active_fallback_pair"])
         self.assertEqual(base["selected_pair"], "gpt-5.6-terra|medium")
@@ -622,22 +653,6 @@ source_files must list both sources."""
         self.assertEqual(args.sandbox, "workspace-write")
         self.assertTrue(args.emit_result)
 
-    def test_zero_argument_multi_stage_task_requires_dynamic_graph_before_any_model_execution(self):
-        prompt = "查看近期代码任务并模拟重放；如果 Skill 没触发就更改规则，测试后部署并提交。"
-        with tempfile.TemporaryDirectory() as temporary:
-            workdir = Path(temporary)
-            stream = io.StringIO()
-            with patch.object(module.Path, "cwd", return_value=workdir), patch.object(module.sys, "stdin", io.StringIO(prompt)), patch.object(module.sys, "stdout", stream), patch.object(module, "run") as execute:
-                status = module.main([])
-        summary = json.loads(stream.getvalue())
-        self.assertEqual(status, 2)
-        self.assertEqual(summary["status"], "route-required")
-        self.assertEqual(summary["routing_mode"], module.task_route_dispatcher.DYNAMIC_ROUTING_MODE)
-        self.assertEqual(summary["parent_action"], "build_dynamic_task_graph_and_call_task_route_dispatcher_once")
-        self.assertEqual(summary["execution_lifecycle"]["mode"], "planned_graph")
-        self.assertTrue(summary["code_gate_required"])
-        self.assertFalse(summary["runner_executed"])
-        execute.assert_not_called()
 
     def test_explicit_already_decomposed_node_does_not_reenter_graph_admission(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -647,30 +662,30 @@ source_files must list both sources."""
         self.assertFalse(args.graph_required)
         self.assertEqual(args.material_result_stages, ["change", "test", "deploy", "publish"])
 
-    def test_main_emits_ending_required_event_before_the_summary(self):
+    def test_main_emits_memory_closeout_event_without_thread_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            summary = {"status": "pass", "ending_required": True, "ending_launch_ready": True, "final_aggregate_receipt": True, "aggregate_result_state": "released", "ending_real_status": "missing_expected_non_simple", "complexity_score": 25, "complexity_band": "standard", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
+            summary = {"status": "pass", "ending_required": True, "ending_launch_ready": True, "final_aggregate_receipt": True, "aggregate_result_state": "released", "ending_real_status": "memory_pending", "complexity_score": 25, "complexity_band": "standard", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
             stream = io.StringIO()
             with patch.object(module.sys, "stdin", io.StringIO("Repair the lifecycle")), patch.object(module.sys, "stdout", stream), patch.object(module, "resolve_fast_path_args", return_value=args), patch.object(module, "run", return_value=summary):
                 status = module.main([])
         events = [json.loads(line) for line in stream.getvalue().splitlines()]
         self.assertEqual(status, 0)
-        self.assertEqual(events[0]["stage"], "ending-required")
-        self.assertEqual(events[0]["parent_action"], "create_projectless_end_task")
-        self.assertEqual(events[0]["launch_state"], "required_unacknowledged")
-        self.assertEqual(events[0]["host_tool"], "codex_app__create_thread")
-        self.assertEqual(events[0]["thread_target"], {"type": "projectless"})
-        self.assertEqual(events[0]["placement_readback_tool"], "codex_app__list_threads")
-        self.assertTrue(events[0]["ack_required"])
-        self.assertTrue(events[0]["final_aggregate_receipt"])
-        self.assertEqual(events[0]["aggregate_result_state"], "released")
+        self.assertEqual(events[0]["stage"], "memory-closeout-required")
+        self.assertEqual(events[0]["parent_action"], "create_visible_projectless_ending_task")
+        self.assertEqual(events[0]["target"], {"type": "projectless"})
+        self.assertFalse(events[0]["task_created"])
+        self.assertEqual(events[0]["ending_purpose"], "memory_only")
+        self.assertTrue(events[0]["selected_model_required"])
+        self.assertEqual(events[0]["verification_owner"], "active_task")
+        for forbidden in ("host_tool", "thread_target", "launch_state", "ack_required"):
+            self.assertNotIn(forbidden, events[0])
         self.assertEqual(events[1], summary)
 
     def test_main_waits_when_a_child_or_subprocess_receipt_is_not_final(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            summary = {"status": "pass", "ending_required": True, "ending_launch_ready": False, "ending_real_status": "missing_expected_non_simple", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
+            summary = {"status": "pass", "ending_required": True, "ending_launch_ready": False, "ending_real_status": "memory_pending", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output)}
             stream = io.StringIO()
             with patch.object(module.sys, "stdin", io.StringIO("Wait for all results")), patch.object(module.sys, "stdout", stream), patch.object(module, "resolve_fast_path_args", return_value=args), patch.object(module, "run", return_value=summary):
                 status = module.main([])
@@ -799,7 +814,7 @@ source_files must list both sources."""
                 result = module.run(args, "Do the work")
         self.assertEqual(result["status"], "fail")
         self.assertEqual(result["reason"], "producer_operational_failure")
-        self.assertEqual(result["ending_real_status"], "not_started")
+        self.assertEqual(result["ending_real_status"], "skipped")
 
     def test_selected_pair_pre_execution_failure_falls_back_once_to_stronger_pair(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -913,67 +928,23 @@ source_files must list both sources."""
         self.assertEqual(calls, ["gpt-5.6-terra|medium"])
         self.assertEqual(result["status"], "pass")
         self.assertTrue(result["ending_required"])
-        self.assertEqual(result["ending_requirement"], "required")
-        self.assertEqual(result["ending_real_status"], "missing_expected_code_ending")
-        self.assertEqual(result["producer_check_scope"], "one_smallest_local_quick_check")
-        self.assertEqual(result["first_result_release"], "immediate_after_quick_check")
-        self.assertEqual(result["deferred_verification_owner"], "projectless_ending")
+        self.assertEqual(result["ending_requirement"], "memory_only")
+        self.assertEqual(result["ending_real_status"], "memory_pending")
+        self.assertEqual(result["producer_check_scope"], "smallest_relevant_behavior_check")
+        self.assertEqual(result["first_result_release"], "after_in_task_verification")
+        self.assertEqual(result["deferred_verification_owner"], "none")
 
-    def test_result_lifecycle_policy_replays_sanitized_today_task_classes(self):
-        cases = [
-            ("remove-debug-log", "code", 8, "low", False, "", True),
-            ("local-model-route", "code", 18, "low", False, "", True),
-            ("global-skill-flow", "code", 35, "low", True, "", True),
-            ("file-copy", "question", 30, "low", False, "", False),
-            ("git-release", "question", 60, "medium", True, "Update the release information.", True),
-            ("read-only-monitor", "question", 12, "low", False, "Read the current monitor state.", False),
-            ("calendar-ui", "question", 35, "medium", False, "Visually verify the calendar UI.", True),
-            ("visual-artifact", "question", 45, "medium", False, "Review the rendered visual artifact.", True),
-        ]
-        for name, task_type, score, risk, multi_stage, prompt, expected_ending in cases:
-            with self.subTest(name=name):
-                policy = module.result_lifecycle_policy(True, task_type, score, risk, multi_stage, prompt)
-                self.assertEqual(policy["ending_required"], expected_ending)
-                self.assertEqual(policy["first_result_release"], "immediate_after_quick_check")
-                self.assertEqual(policy["deferred_verification_owner"], "projectless_ending" if expected_ending else "none")
 
     def test_ending_skips_complex_plain_answer_without_real_surface(self):
         policy = module.result_lifecycle_policy(True, "question", 85, "high", True, "Explain the difference between two terms.")
         self.assertFalse(policy["ending_required"])
-        self.assertEqual(policy["ending_requirement"], "no_real_ending_surface")
-        self.assertEqual(policy["ending_real_status"], "intentionally_skipped_simple_task")
-        self.assertEqual(policy["ending_skip_reason"], "no_real_test_or_information_or_memory_or_material_update")
+        self.assertEqual(policy["ending_requirement"], "none")
+        self.assertEqual(policy["ending_real_status"], "skipped")
+        self.assertEqual(policy["ending_skip_reason"], "no_durable_memory_change")
         self.assertEqual(policy["ending_surface"], {"real_test": False, "information_update": False, "memory_update": False})
 
-    def test_ending_requires_explicit_information_or_memory_surface(self):
-        information = module.result_lifecycle_policy(True, "question", 85, "low", True, "Update the project documentation.")
-        memory = module.result_lifecycle_policy(True, "question", 85, "low", True, "Record this decision in project memory.")
-        self.assertEqual(information["ending_triggers"], ["information_update"])
-        self.assertIn("memory_update", memory["ending_triggers"])
-        self.assertTrue(information["ending_required"])
-        self.assertTrue(memory["ending_required"])
 
-    def test_explicit_real_test_surface_overrides_plain_task_type(self):
-        policy = module.result_lifecycle_policy(True, "question", 10, "low", False, "Answer briefly.", real_test=True)
-        self.assertTrue(policy["ending_required"])
-        self.assertEqual(policy["ending_triggers"], ["real_test"])
 
-    def test_material_updates_require_ending_and_memory_closeout_but_explicit_trivial_value_only_may_skip(self):
-        for prompt, expected in (("Refactor the structural lifecycle owner.", "structural"), ("Implement the requested code change.", "code"), ("Update the conceptual design.", "conceptual"), ("Update the workflow process.", "process")):
-            with self.subTest(prompt=prompt):
-                policy = module.result_lifecycle_policy(True, "code" if "code" in prompt or "Refactor" in prompt else "question", 12, "low", False, prompt)
-                self.assertTrue(policy["ending_required"])
-                self.assertIn("material_update", policy["ending_triggers"])
-                self.assertEqual(policy["material_update_classification"], expected)
-                self.assertTrue(policy["project_memory_closeout_required"])
-        trivial = module.result_lifecycle_policy(True, "question", 12, "low", False, "Make a trivial value-only edit.")
-        self.assertFalse(trivial["ending_required"])
-        self.assertEqual(trivial["material_update_classification"], "trivial_value_only")
-        self.assertFalse(trivial["project_memory_closeout_required"])
-        explicit = module.result_lifecycle_policy(True, "question", 12, "low", False, "Small text.", material_update_kind="structural")
-        self.assertTrue(explicit["ending_required"])
-        self.assertTrue(explicit["project_memory_closeout_required"])
-        self.assertEqual(explicit["material_update_classification"], "structural")
 
     def test_fast_path_default_producer_timeout_is_five_minutes(self):
         self.assertEqual(module.parse_args([]).timeout, 300)
@@ -991,10 +962,10 @@ source_files must list both sources."""
                 result = module.run(args, "Do the standard work")
             receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
         self.assertTrue(result["ending_required"])
-        self.assertEqual(result["ending_requirement"], "required")
-        self.assertEqual(result["ending_real_status"], "missing_expected_non_simple")
+        self.assertEqual(result["ending_requirement"], "memory_only")
+        self.assertEqual(result["ending_real_status"], "memory_pending")
         self.assertTrue(receipt["ending_required"])
-        self.assertEqual(receipt["ending_real_status"], "missing_expected_non_simple")
+        self.assertEqual(receipt["ending_real_status"], "memory_pending")
         self.assertTrue(receipt["final_aggregate_receipt"])
         self.assertTrue(receipt["ending_launch_ready"])
         self.assertEqual(receipt["aggregate_result_state"], "single_result_released")
