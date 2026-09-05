@@ -57,7 +57,9 @@ Prior live task: **59/100 (complex)**. This separate check demonstrated actual m
 
 The eight skill entry documents shrank from **24,126 to 3,777 words (84.34%)**. This is document compression, not runtime savings.
 
-Native Windows preflight: **73 passed, one expected POSIX-only skip**, outside macOS timing. A later hidden native PowerShell read also preserved exact Unicode content and passed the corrected read classifier. Actual console-free child/runtime checks ran through noninteractive SSH; the interactive desktop was not observed. The earlier pilot's native check and prior UI/PDF examples do not prove every later candidate or every application.
+Final Windows deployment matched all eight managed skills to source/macOS bytes. **60 tests passed, one expected POSIX-only skip (61 run)** across four installed suites. All eight retained process runners passed native checks, including absent child consoles, intentional exit 7 and actual timeouts. The earlier preflight and Unicode read-parser checks also passed.
+
+An additional Windows provider smoke **failed HTTP 401** before a completed turn; token usage is unavailable. SSH could not access the existing keyring. A bounded hidden interactive auth probe failed to launch (alias exit 1; native launcher access denied), and its scheduled task was removed. No credentials were exported, no login UI opened, and no further provider retry ran. These Windows checks are outside macOS timing; completed Windows model execution and interactive-desktop window behavior remain unverified.
 
 Acceptance combines runtime/model identity, successful required skill-content reads, exact behavior and headless geometry/interaction checks, and parent desktop/narrow visual review. Missing or failed evidence cannot yield an all-pass or efficiency-win claim. Small samples, provider cache/latency, and local load limit interpretation; no pricing or general savings is inferred.
 

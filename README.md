@@ -38,14 +38,16 @@ Source edits, installed updates, and GitHub publication are distinct. The publis
 
 ## Real testing and benchmark
 
-Eight real Astra/ultra runs repaired an isolated review dashboard and portable process runner, calculated exact totals, and passed output, runtime, skill-read and visual checks. One false-negative read classification was corrected against the original captured file contents; its raw failure remains disclosed.
+Eight real Astra/ultra runs passed output, runtime, skill-read and visual checks for the dashboard, portable runner and exact totals. Captured file contents resolved one read-classifier false negative; the raw failure remains disclosed.
 
 | Comparison | Control tokens / seconds | Installed tokens / seconds | Result |
 | --- | ---: | ---: | --- |
 | Original, three pairs | 768,610 / 752.11 | 1,113,558 / 988.72 | 44.88% more tokens; 31.46% slower |
 | Focused-verification revision, one pair | 271,203 / 278.46 | 344,268 / 310.86 | 26.94% more tokens; 11.63% slower |
 
-**This benchmark did not establish savings.** Logical tokens include cached input. The full explicit brief, small sample, cache and latency limit interpretation; the single-controller comparison does not measure adaptive-model or memory-lifecycle savings. A separate live graph ran governed review on Astra/ultra and independent calculation on Luna/low in parallel, then integrated on Astra/ultra and completed a visible Astra/ultra memory-only Ending. Native Windows preflight passed 73 tests with one expected platform skip.
+**This benchmark did not establish savings.** Tokens include cached input. The explicit brief, small sample, cache and latency limit interpretation; this comparison does not measure adaptive-model or memory-lifecycle efficiency. Separately, governed review used Astra/ultra and independent calculation used Luna/low in parallel; Astra/ultra integrated and completed a visible memory-only Ending.
+
+Windows: eight installed skills matched source/macOS bytes; **60 passed, one expected skip**. Eight process runners passed native checks without child consoles. Provider smoke failed HTTP 401; SSH keyring access failed and hidden auth probing could not launch. Windows model execution remains unverified.
 
 The eight entry files shrank from 24,126 to 3,777 words (84.34%). That is instruction compression, separate from execution efficiency. [Every trial, model distribution, failure and measurement boundary](management-skill/assets/readme/current-workflow-benchmark.md).
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "pass",
+  "status": "partial",
   "design": {
     "task": "Responsive review dashboard repair, portable hidden Python process owner, and exact independent ledger totals",
     "selected_pair_both_conditions": "gpt-6-astra|ultra",
@@ -399,7 +399,7 @@
   },
   "native_preflight": {
     "status": "pass",
-    "scope": "Native Windows preflight; outside macOS trial timing",
+    "scope": "Earlier native Windows preflight; outside macOS trial timing",
     "tests": [
       {
         "suite": "test_benchmark_installed_skills",
@@ -501,6 +501,81 @@
     "V2 was selected after observing earlier work; its fresh pair is prospective revision validation, not an independent confirmation of a general advantage.",
     "Quality requires completed runtime identity, required successful skill reads, frozen independent acceptance, and desktop/narrow visual review; missing proof stays pending.",
     "Provider cache, latency and local load can vary; no price estimates, broad savings claim, or universal model ranking is inferred.",
-    "Runtime records are local operational evidence, not backend-signed attestation."
-  ]
+    "Runtime records are local operational evidence, not backend-signed attestation.",
+    "Additional Windows provider smoke failed HTTP 401 before a completed turn; no token total or successful Windows model execution is claimed."
+  ],
+  "status_scope": "All macOS study acceptance passed; additional Windows provider verification failed authentication.",
+  "native_release": {
+    "installation": {
+      "status": "pass",
+      "managed_skills": 8,
+      "source_mac_windows_bytes_match": true,
+      "preserved_unrelated_skills_and_private_history": true
+    },
+    "installed_tests": {
+      "status": "pass",
+      "run": 61,
+      "passed": 60,
+      "skipped": 1,
+      "skip_reason": "Expected POSIX-only case",
+      "suites": [
+        {
+          "suite": "test_hidden_process",
+          "run": 10,
+          "passed": 10,
+          "skipped": 0
+        },
+        {
+          "suite": "test_codex_executable",
+          "run": 11,
+          "passed": 10,
+          "skipped": 1
+        },
+        {
+          "suite": "test_benchmark_installed_skills",
+          "run": 25,
+          "passed": 25,
+          "skipped": 0
+        },
+        {
+          "suite": "test_ending_memory_launch",
+          "run": 15,
+          "passed": 15,
+          "skipped": 0
+        }
+      ]
+    },
+    "benchmark_candidate_native_checks": {
+      "status": "pass",
+      "cases": 8,
+      "native_platform": "win32",
+      "all_child_consoles_absent": true,
+      "intentional_exit_code": 7,
+      "actual_timeouts_propagated": true,
+      "scope": "Process behavior and ledger acceptance for all eight retained outputs; not a native browser or provider benchmark."
+    },
+    "provider_smoke": {
+      "status": "fail",
+      "attempts": 1,
+      "requested_pair": "gpt-6-astra|ultra",
+      "cli_version": "0.153.1",
+      "http_status": 401,
+      "turn_completed": false,
+      "logical_total_tokens": null,
+      "token_status": "unavailable",
+      "ssh_keyring_access": "failed",
+      "interactive_auth_probe": {
+        "status": "could_not_launch",
+        "alias_exit_code": 1,
+        "native_launch_error": "0x80070005",
+        "owned_scheduled_task_removed": true,
+        "credential_exported": false,
+        "login_ui_opened": false
+      },
+      "further_provider_retry": false
+    },
+    "interactive_desktop_observed": false,
+    "timing_scope": "Additional Windows installation, native checks, provider failure and auth probes are excluded from both macOS comparisons.",
+    "limit": "Native code checks passed; completed Windows model execution and interactive-desktop window behavior remain unverified."
+  }
 }
