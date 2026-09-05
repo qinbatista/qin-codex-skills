@@ -71,6 +71,9 @@ class RoutingVisibilityTests(unittest.TestCase):
             self.assertEqual(packet["ending_purpose"], "memory_only")
             self.assertEqual(packet["verification_owner"], "active_task")
             self.assertFalse(packet["repair_chain_allowed"])
+            self.assertIn("ordinary unpinned task", packet["message"])
+            self.assertIn("even if absent from recent tasks", packet["message"])
+            self.assertIn("Do not pin, move, reorder, or open it automatically", packet["message"])
 
 
 if __name__ == "__main__":

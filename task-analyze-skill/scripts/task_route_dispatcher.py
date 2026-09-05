@@ -1682,7 +1682,7 @@ def memory_closeout_launch_packet(summary):
     return {"schema_version": 3, "stage": "memory-closeout-required", "user_visible": True,
             "status": "launch-required" if ready else "waiting-for-aggregate-release",
             "parent_action": "create_visible_projectless_ending_task" if ready else "verify_and_release_final_aggregate",
-            "message": f"Ending memory update: create one visible projectless task using {pair} after active-task verification and final aggregate release. Record its task ID and read back its completion; this launch packet is not a created task.",
+            "message": f"Ending memory update: create one projectless task using {pair} after active-task verification and final aggregate release. Leave it as an ordinary unpinned task. Report its link and read back its completion by task ID, even if absent from recent tasks. Do not pin, move, reorder, or open it automatically; this launch packet is not a created task.",
             "target": {"type": "projectless"}, "task_count": 1, "task_created": False,
             "ending_purpose": "memory_only", "selected_model_required": True, "selected_pair": pair,
             "verification_owner": "active_task", "final_aggregate_receipt": ready,

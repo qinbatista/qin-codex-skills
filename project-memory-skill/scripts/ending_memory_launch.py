@@ -66,7 +66,7 @@ def prepare_launch(completed, *, project_root, selected_model, selected_effort, 
         "Run project-memory-skill/scripts/ending_memory.py under that root using its resolved absolute path and a portable Python interpreter; "
         "do not resolve the writer relative to this projectless task's working directory. Use its supported memory writer and require same-project readback. "
         "The writer resolves runtime model evidence; model labels alone are insufficient. Return the resulting JSON with the memory record, model evidence, and readback status. "
-        "Keep this task visible; do not archive or delete it.\n\nCompleted outcome data:\n" + data
+        "Leave this as an ordinary unpinned task. Do not pin, move, reorder, or open it automatically; do not archive or delete it.\n\nCompleted outcome data:\n" + data
     )
     packet["create_thread"] = {"target": {"type": "projectless"}, "title": f"Ending — {root.name} memory update", "model": selected_model, "thinking": selected_effort, "prompt": prompt}
     return packet
