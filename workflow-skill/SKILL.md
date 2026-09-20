@@ -9,6 +9,8 @@ The user's selected model understands the request, reads relevant skills and ava
 
 For every UI or visual presentation task, including websites, PDF reports, documents, and slide presentations, read the [shared readable UI rules](references/readable-ui.md). Apply them even without code changes and when another Skill owns rendering or export.
 
+For any browser-based test, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence.
+
 ## Execute
 
 1. Identify the requested result, project, constraints, and useful context. Show score/band, selected model/effort, route and identity evidence. Memory is optional: skip missing files and never substitute another project's records.

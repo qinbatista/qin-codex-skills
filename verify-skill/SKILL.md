@@ -16,6 +16,8 @@ Verify before declaring the task complete. Keep the user's selected model and ef
 
 Prefer existing runtimes and focused checks. Do not start the whole application, compile the whole project, launch Unity, run every test, or incur external costs unless the user requested that scope. If only a broader action resolves uncertainty, report the gap and ask for that action rather than claiming success.
 
+For any browser-based verification, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence.
+
 Use [portable, quiet execution](../code-skill/references/skill-platform-compatibility.md): hide every test subprocess, use native headless rendering, and capture output without opening or activating windows. Preserve supported platform branches and report which were actually tested.
 
 ## Finish

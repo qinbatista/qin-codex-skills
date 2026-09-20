@@ -8,6 +8,8 @@ Keep the user's selected model and reasoning effort for all skill-governed work 
 
 For every UI or visual presentation task (websites, tools, PDF reports, documents, or slide presentations), read and apply `workflow-skill/references/readable-ui.md` from the installed Skills root. This baseline applies even without code changes or when another Skill owns rendering/export; carry it into delegated goals.
 
+For any browser-based test, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence.
+
 Use direct execution for simple work and a short plan for complex work. Delegate when useful, with explicit goals, dependencies and disjoint writes. Show each delegated goal, score, assigned pair and dependencies, then its actual pair/status. State why a model changes or stays selected. The main task owns integration and completion; direct tool work needs no invented model execution.
 
 Verify meaningful or complex changes in the active task using the smallest relevant behavior check. Skip verification for simple value-only changes. Do not launch the whole project or a full build unless requested. Report actual evidence and limitations.
