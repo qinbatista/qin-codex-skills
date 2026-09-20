@@ -11,8 +11,6 @@ The model you select reads relevant skills and project memory, understands the t
 3. Verify consequential changes inside the task using the smallest convincing check. Simple value edits skip verification unless requested. Whole-project startup or compilation requires requested scope.
 4. Complete the result, then summarize useful durable changes in memory with the selected model. Ending is memory-only: under the user-authorized lifecycle, create one separate visible projectless task, show its link and saved-memory readback; never verify, repair or benchmark in Ending.
 
-For browser-based tests, the default surface is the Codex or ChatGPT built-in browser. A named external browser requires an explicit user request; unavailable built-in-browser coverage stays an explicit limitation.
-
 Project memories stay isolated. Shared preferences are read only when relevant. Current summaries retain code structure, UI design choices, document organization, and important decisions without duplicating task transcripts.
 
 ## Skills
