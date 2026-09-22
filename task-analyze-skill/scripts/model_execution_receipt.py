@@ -868,7 +868,7 @@ def benchmark_auto_launch_evidence(cache_root, workload_sha256, expected_entry_p
     result_text = None
     bridge_result_verified = False
     if verified:
-        output_root = workspaces[0] / "Cache" / "tmp-task-analyze" / "bridge-output"
+        output_root = workspaces[0] / "Cache" / "temp-task-analyze" / "bridge-output"
         try:
             candidate_text = (output_root / "result.json").read_text(encoding="utf-8")
             bridge_receipt = strict_json_loads((output_root / "receipt.json").read_text(encoding="utf-8"))
@@ -947,7 +947,7 @@ def route_node_execution_prompt(marker, prompt_text, workdir, code_rule_bundle=N
 def benchmark_cache_root_for(args):
     if getattr(args, "result_output", None) is not None:
         return Path(args.result_output).expanduser().resolve().parent / "auto-route-cache"
-    return Path(args.workdir).expanduser().resolve() / "Cache" / "tmp-task-analyze" / args.workload_id
+    return Path(args.workdir).expanduser().resolve() / "Cache" / "temp-task-analyze" / args.workload_id
 
 
 def code_gate_execution_contract(bundle):

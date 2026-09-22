@@ -6,6 +6,7 @@ __pycache__/
 .env
 .env.*
 cache/
+/Cache/
 outputs/
 work/
 data/cache/

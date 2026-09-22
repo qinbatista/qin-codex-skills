@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
-"""Validate the three-category layout of project Cache directories."""
+"""Validate the two-category layout of project Cache directories."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 
-DATE_DIRECTORY = re.compile(r"\d{8}\Z")
 SKIP_DIRECTORY_NAMES = {
     ".git",
     ".venv",
@@ -33,16 +30,10 @@ SKIP_DIRECTORY_NAMES = {
 def classify_directory(name: str) -> Optional[str]:
     """Return the allowed category or None for a legacy/unknown directory."""
 
-    if name.startswith("tmp-") and len(name) > len("tmp-"):
-        return "tmp"
+    if name.startswith("temp-") and len(name) > len("temp-"):
+        return "temp"
     if name.startswith("remote-") and len(name) > len("remote-"):
         return "remote"
-    if DATE_DIRECTORY.fullmatch(name):
-        try:
-            datetime.strptime(name, "%Y%m%d")
-        except ValueError:
-            return None
-        return "date"
     return None
 
 
@@ -63,11 +54,12 @@ def discover_cache_roots(project_root: Path) -> list[Path]:
     return sorted(roots)
 
 
-def inspect_cache_root(cache_root: Path) -> dict[str, object]:
+def inspect_cache_root(cache_root: Path, project_root: Path | None = None) -> dict[str, object]:
     invalid: list[str] = []
-    categories: dict[str, list[str]] = {"tmp": [], "remote": [], "date": []}
+    categories: dict[str, list[str]] = {"temp": [], "remote": []}
     for child in sorted(cache_root.iterdir(), key=lambda path: path.name):
-        if not child.is_dir():
+        if not child.is_dir() or child.is_symlink():
+            invalid.append(child.name)
             continue
         category = classify_directory(child.name)
         if category is None:
@@ -75,9 +67,9 @@ def inspect_cache_root(cache_root: Path) -> dict[str, object]:
         else:
             categories[category].append(child.name)
     return {
-        "path": cache_root.as_posix(),
+        "path": cache_root.relative_to(project_root).as_posix() if project_root is not None else cache_root.name,
         "status": "pass" if not invalid else "fail",
-        "invalid_directories": invalid,
+        "invalid_entries": invalid,
         "categories": categories,
     }
 
@@ -85,11 +77,11 @@ def inspect_cache_root(cache_root: Path) -> dict[str, object]:
 def inspect_project(project_root: Path) -> dict[str, object]:
     resolved_root = project_root.expanduser().resolve()
     cache_roots = discover_cache_roots(resolved_root)
-    reports = [inspect_cache_root(cache_root) for cache_root in cache_roots]
+    reports = [inspect_cache_root(cache_root, resolved_root) for cache_root in cache_roots]
     invalid_roots = [report for report in reports if report["status"] != "pass"]
     return {
-        "schema_version": 1,
-        "project_root": resolved_root.as_posix(),
+        "schema_version": 2,
+        "project_root": ".",
         "status": "pass" if not invalid_roots else "fail",
         "cache_roots": reports,
     }
@@ -112,7 +104,7 @@ def main() -> int:
     else:
         for cache_root in report["cache_roots"]:
             status = cache_root["status"]
-            invalid = ", ".join(cache_root["invalid_directories"]) or "none"
+            invalid = ", ".join(cache_root["invalid_entries"]) or "none"
             print(f"{status}: {cache_root['path']} invalid={invalid}")
         print(f"status: {report['status']}")
     return 0 if report["status"] == "pass" else 1

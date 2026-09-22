@@ -370,17 +370,29 @@ def _readable_directory(value, require_absolute=False):
 def _registry_vault(project_root):
     if project_root is None:
         return None
-    registry_path = Path(project_root).expanduser().resolve() / "Cache" / "cache_path.json"
+    project_root = Path(project_root).expanduser().resolve()
+    registry_path = project_root / "Cache" / "remote-ai-paths" / "registry.json"
     try:
         payload = json.loads(registry_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1 or payload.get("scope") != "ai_only" or not isinstance(payload.get("paths"), dict):
+    if not isinstance(payload, dict) or payload.get("schema_version") != 2 or payload.get("scope") != "ai_only" or not isinstance(payload.get("paths"), dict):
         return None
     entry = payload["paths"].get("obsidian_vault")
     if not isinstance(entry, dict) or entry.get("kind") != "directory" or not str(entry.get("purpose") or "").strip():
         return None
-    return _readable_directory(entry.get("path"), require_absolute=True)
+    base = {"home": Path.home(), "project": project_root}.get(entry.get("base"))
+    relative = entry.get("path")
+    if base is None or not isinstance(relative, str) or not relative or relative.startswith(("/", "~")) or "\\" in relative or ":" in relative:
+        return None
+    parts = relative.split("/")
+    if any(part in {"", ".", ".."} or any(ord(character) < 32 for character in part) for part in parts):
+        return None
+    base = base.resolve()
+    candidate = (base.joinpath(*parts)).resolve()
+    if not candidate.is_relative_to(base):
+        return None
+    return _readable_directory(candidate, require_absolute=True)
 
 
 def _obsidian_config_paths():

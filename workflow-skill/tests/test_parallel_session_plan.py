@@ -47,7 +47,7 @@ class ParallelSessionPlanTests(unittest.TestCase):
             PARALLEL_PLAN.validate_plan(plan(branches, benefit="Independent work should be faster"))
 
     def test_platform_builds_use_isolated_temporary_copies(self):
-        task_root = "Cache/tmp-platform-build"
+        task_root = "Cache/temp-platform-build"
         platforms = ["windows", "macos", "linux"]
         branches = [branch(name, f"{task_root}/{name}", [f"BuildInputs/{name}"], [f"{task_root}/{name}"], cache={"class": "temporary", "root": f"{task_root}/{name}"}) for name in platforms]
         summary = PARALLEL_PLAN.validate_plan(plan(branches, benefit="Independent platform copies reduce package time", temporary_root=task_root))
@@ -122,6 +122,9 @@ class ParallelSessionPlanTests(unittest.TestCase):
         remote_branch = branch("remote", "Cache/remote-build/remote", ["Inputs/Remote"], ["Cache/remote-build/remote"], cache={"class": "remote", "root": "Cache/remote-build/remote", "retention_reason": "Reusable remote fixture", "review_point": "Next release"})
         with self.assertRaisesRegex(PARALLEL_PLAN.PlanValidationError, "missing required fields"):
             PARALLEL_PLAN.validate_plan(plan([remote_branch]))
+        dated_branch = branch("dated", "Cache/20260823/dated", ["Inputs/Dated"], ["Cache/20260823/dated"], cache={"class": "dated", "root": "Cache/20260823/dated", "retention_reason": "Old policy", "review_point": "Tomorrow"})
+        with self.assertRaisesRegex(PARALLEL_PLAN.PlanValidationError, "cache class is invalid"):
+            PARALLEL_PLAN.validate_plan(plan([dated_branch]))
 
     def test_raw_control_ids_emails_and_absolute_paths_are_rejected(self):
         logical_plan = plan([branch("core", "Modules/Core", ["Modules/Core"], ["Modules/Core/Generated"])])

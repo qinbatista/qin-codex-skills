@@ -120,12 +120,12 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             home = root / "home"
             project = root / "project"
             explicit_vault = root / "explicit-vault"
-            registry_vault = root / "registry-vault"
+            registry_vault = home / "registry-vault"
             environment_vault = root / "environment-vault"
-            for directory in (home, project / "Cache", explicit_vault, registry_vault, environment_vault):
+            for directory in (home, project / "Cache" / "remote-ai-paths", explicit_vault, registry_vault, environment_vault):
                 directory.mkdir(parents=True, exist_ok=True)
-            registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": str(registry_vault), "kind": "directory", "purpose": "Project result-memory projection"}}}
-            (project / "Cache" / "cache_path.json").write_text(json.dumps(registry), encoding="utf-8")
+            registry = {"schema_version": 2, "scope": "ai_only", "paths": {"obsidian_vault": {"base": "home", "path": "registry-vault", "kind": "directory", "purpose": "Project result-memory projection"}}}
+            (project / "Cache" / "remote-ai-paths" / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
             with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.dict(MEMORY.os.environ, {"CODEX_OBSIDIAN_VAULT": str(environment_vault)}, clear=False):
                 explicit = MEMORY._resolve_vault(explicit_vault, project)
                 registered = MEMORY._resolve_vault(None, project)
@@ -142,15 +142,19 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             open_vault = root / "open-vault"
             closed_vault = root / "closed-vault"
             config = home / ".config" / "obsidian" / "obsidian.json"
-            (project / "Cache").mkdir(parents=True)
+            (project / "Cache" / "remote-ai-paths").mkdir(parents=True)
             open_vault.mkdir()
             closed_vault.mkdir()
             config.parent.mkdir(parents=True)
-            invalid_registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": "relative-vault", "kind": "directory", "purpose": "Invalid relative path"}}}
-            (project / "Cache" / "cache_path.json").write_text(json.dumps(invalid_registry), encoding="utf-8")
+            invalid_registry = {"schema_version": 2, "scope": "ai_only", "paths": {"obsidian_vault": {"base": "home", "path": str(open_vault), "kind": "directory", "purpose": "Invalid absolute path"}}}
+            registry_path = project / "Cache" / "remote-ai-paths" / "registry.json"
+            registry_path.write_text(json.dumps(invalid_registry), encoding="utf-8")
             config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}, "open": {"path": str(open_vault), "open": True}}}), encoding="utf-8")
             with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.object(MEMORY, "_obsidian_config_paths", return_value=[config]), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
                 configured = MEMORY._resolve_vault(None, project)
+                invalid_registry["paths"]["obsidian_vault"]["path"] = "../open-vault"
+                registry_path.write_text(json.dumps(invalid_registry), encoding="utf-8")
+                self.assertIsNone(MEMORY._registry_vault(project))
                 explicit_missing = MEMORY._resolve_vault(root / "missing", project)
                 config.write_text(json.dumps({"vaults": {"closed": {"path": str(closed_vault), "open": False}}}), encoding="utf-8")
                 unavailable = MEMORY._resolve_vault(None, project)
@@ -164,13 +168,13 @@ class ProjectChangeMemoryTests(unittest.TestCase):
             home = root / "home"
             project = home / "Documents" / "AIProject" / "qin-codex-skills"
             store = root / "store"
-            vault = root / "vault"
-            (project / "Cache").mkdir(parents=True)
+            vault = home / "vault"
+            (project / "Cache" / "remote-ai-paths").mkdir(parents=True)
             (project / "script.py").write_text("value = 1\n", encoding="utf-8")
-            registry = {"schema_version": 1, "scope": "ai_only", "paths": {"obsidian_vault": {"path": str(vault), "kind": "directory", "purpose": "Project result-memory projection"}}}
+            registry = {"schema_version": 2, "scope": "ai_only", "paths": {"obsidian_vault": {"base": "home", "path": "vault", "kind": "directory", "purpose": "Project result-memory projection"}}}
             vault.mkdir()
             self._write_root_first_runtime(vault)
-            (project / "Cache" / "cache_path.json").write_text(json.dumps(registry), encoding="utf-8")
+            (project / "Cache" / "remote-ai-paths" / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
             with mock.patch.object(MEMORY.Path, "home", lambda: home), mock.patch.dict(MEMORY.os.environ, {}, clear=True):
                 result = MEMORY.record_change(project, "runtime", "code", "edit", "Recorded registry-backed result", "Use one resolved vault for all memory layers", "Runtime passed", "passed", ["script.py"], ["Runtime check passed"], store=store, symbols=["__module__"])
         self.assertEqual(result["coverage"]["status"], "not-required")
@@ -399,7 +403,7 @@ class ProjectChangeMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             home = temporary / "home"
-            cache_fixture = home / ".codex" / "Cache" / "tmp-project-memory-fixture"
+            cache_fixture = home / ".codex" / "Cache" / "temp-project-memory-fixture"
             cache_fixture.mkdir(parents=True)
             with mock.patch.object(MEMORY.Path, "home", lambda: home):
                 owner = MEMORY._registered_owner(cache_fixture)

@@ -42,7 +42,7 @@ class WorkflowBenchmarkFixtureTests(unittest.TestCase):
     def setUp(self):
         cache = Path(__file__).resolve().parents[2] / "Cache"
         cache.mkdir(exist_ok=True)
-        self.directory = tempfile.TemporaryDirectory(prefix="tmp-workflow-benchmark-oracle-", dir=str(cache))
+        self.directory = tempfile.TemporaryDirectory(prefix="temp-workflow-benchmark-oracle-", dir=str(cache))
         self.addCleanup(self.directory.cleanup)
         self.workspace = Path(self.directory.name)
         shutil.copytree(FIXTURE / "input", self.workspace, dirs_exist_ok=True)

@@ -625,8 +625,11 @@ def _scheduled_branch_pair(prompt, floor_pair):
 def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_recommendation=None):
     schedule_digest = hashlib.sha256((str(args.workdir) + "\0" + prompt).encode("utf-8")).hexdigest()[:16]
     configured_cache_root = getattr(args, "cache_root", None)
-    cache_root = Path(configured_cache_root).expanduser().resolve() if configured_cache_root is not None else Path(args.project_root).expanduser().resolve() / "Cache" / "tmp-task-analyze"
+    cache_root = Path(configured_cache_root).expanduser().resolve() if configured_cache_root is not None else Path(args.project_root).expanduser().resolve() / "Cache" / "temp-task-analyze"
     cache_dir = cache_root / f"adaptive-schedule-{schedule_digest}"
+    workdir = Path(args.workdir).expanduser().resolve()
+    if not cache_dir.is_relative_to(workdir):
+        raise ValueError("scheduled Cache root must be inside the active project")
     floor_pair = task_route_dispatcher.MODEL_ROLE_PAIRS["floor"]
     floor_model, floor_effort = floor_pair.split("|", 1)
     schedule_producer = task_route_dispatcher.PRIORITY_PRODUCER_CONFIG
@@ -663,8 +666,8 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
         main_node["fuses_owned_source_with_dependencies"] = True
     else:
         main_node["reads_dependency_results_only"] = True
-    main_node["routing_project_root"] = str(Path(args.project_root).expanduser().resolve())
-    recommendation, proof = task_route_dispatcher._obsidian_recommendation_and_proof(main_node, main_node["routing_project_root"], entry_model, entry_effort)
+    main_node["routing_project_root"] = os.path.relpath(Path(args.project_root).expanduser().resolve(), workdir)
+    recommendation, proof = task_route_dispatcher._obsidian_recommendation_and_proof(main_node, str(Path(args.project_root).expanduser().resolve()), entry_model, entry_effort)
     selected_pair = recommendation.get("selected_pair")
     if not selected_pair:
         raise ValueError("scheduled merge recommendation is exhausted")
@@ -675,7 +678,7 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
     args.execution_lifecycle = getattr(args, "execution_lifecycle", None) or routing_policy.execution_lifecycle_contract(args.complexity_score, False, True, sum(node.get("phase") == "result" for node in nodes), args.risk, args.ambiguity)
     schedule_mode = "parallel_source_capture_single_synthesis" if deterministic_capture else "parallel_sources_fused_final" if fused_source else "parallel_independent_sources"
-    return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": schedule_mode, "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "deterministic_source_capture": deterministic_capture, "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900), "ending_required": lifecycle_policy["ending_required"], "ending_skip_reason": lifecycle_policy["ending_skip_reason"], "execution_lifecycle": args.execution_lifecycle}, recommendation
+    return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": schedule_mode, "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "deterministic_source_capture": deterministic_capture, "cache_dir": cache_dir.relative_to(workdir).as_posix(), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900), "ending_required": lifecycle_policy["ending_required"], "ending_skip_reason": lifecycle_policy["ending_skip_reason"], "execution_lifecycle": args.execution_lifecycle}, recommendation
 
 
 def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admission=None):
@@ -1074,7 +1077,7 @@ def resolve_fast_path_args(args, prompt):
     args.complexity_band = complexity_band
     identity = "\0".join((str(project_root), task_type, module_name, args.file, args.symbol, args.code_kind, args.operation, args.modality, str(args.complexity_score), complexity_band, args.risk, args.ambiguity, getattr(args, "step_kind", ""), ",".join(getattr(args, "capability_tag", [])), prompt))
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-    default_output_root = project_root / "Cache" / "tmp-task-analyze" / "adaptive-producer" / f"fast-{digest}"
+    default_output_root = project_root / "Cache" / "temp-task-analyze" / "adaptive-producer" / f"fast-{digest}"
     args.workdir = workdir
     args.project_root = project_root
     args.task_type = task_type
@@ -1096,7 +1099,7 @@ def resolve_fast_path_args(args, prompt):
     args.workload_id = args.workload_id or f"fast-{digest}"
     args.receipt_output = Path(args.receipt_output) if args.receipt_output is not None else default_output_root / "receipt.json"
     args.result_output = Path(args.result_output) if args.result_output is not None else default_output_root / "result.txt"
-    args.cache_root = Path(args.cache_root).expanduser().resolve() if args.cache_root is not None else project_root / "Cache" / "tmp-task-analyze"
+    args.cache_root = Path(args.cache_root).expanduser().resolve() if args.cache_root is not None else project_root / "Cache" / "temp-task-analyze"
     args.sandbox = args.sandbox or ("workspace-write" if fast_path else "read-only")
     args.emit_result = bool(args.emit_result or fast_path)
     if args.timeout <= 0 or args.receipt_output == args.result_output:
@@ -1129,7 +1132,7 @@ def parse_args(argv=None):
     parser.add_argument("--workload-id")
     parser.add_argument("--receipt-output", type=Path)
     parser.add_argument("--result-output", type=Path)
-    parser.add_argument("--cache-root", type=Path, help="Runtime-derived root for scheduled graph support artifacts; defaults to project Cache/tmp-task-analyze.")
+    parser.add_argument("--cache-root", type=Path, help="Runtime-derived root for scheduled graph support artifacts; defaults to project Cache/temp-task-analyze.")
     parser.add_argument("--workdir", type=Path, default=Path.cwd())
     parser.add_argument("--state-db", type=Path, help="Optional explicit Codex runtime SQLite database; otherwise resolve CODEX_SQLITE_HOME, CODEX_HOME, then the default runtime root.")
     parser.add_argument("--codex-bin", default="codex")

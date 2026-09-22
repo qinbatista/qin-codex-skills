@@ -826,6 +826,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_publishable_source_paths_exclude_unrelated_or_private_content(self):
         self.assertTrue(sync_global_skills.publishable_source_path(Path("verify-skill/SKILL.md")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path("AGENTS.md")))
+        self.assertTrue(sync_global_skills.publishable_source_path(Path(".gitignore")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path("README.zh.md")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path(".github/workflows/ci.yml")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("notes.txt")))

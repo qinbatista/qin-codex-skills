@@ -71,7 +71,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             emit_result=True,
             entry_model="gpt-6-sol",
             entry_effort="ultra",
-            cache_root=project / "Cache" / "tmp-task-analyze",
+            cache_root=project / "Cache" / "temp-task-analyze",
         )
 
     def test_executes_exact_obsidian_selected_pair_and_returns_result(self):
@@ -117,7 +117,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertEqual(args.complexity_band, module.obsidian_model_memory.complexity_band(args.complexity_score))
         self.assertRegex(args.workload_id, r"^fast-[0-9a-f]{16}$")
         self.assertEqual(args.receipt_output.parent, args.result_output.parent)
-        expected_output_root = workdir / "Cache" / "tmp-task-analyze" / "adaptive-producer" / args.workload_id
+        expected_output_root = workdir / "Cache" / "temp-task-analyze" / "adaptive-producer" / args.workload_id
         self.assertEqual(args.receipt_output.parent, expected_output_root.resolve())
         self.assertNotIn("codex-home", str(args.receipt_output))
         self.assertEqual(args.sandbox, "workspace-write")
@@ -540,7 +540,9 @@ source_files must list all sources in order."""
         self.assertTrue(all(node["model"] is None and node["effort"] is None for node in captures))
         self.assertEqual(merge["dependencies"], ["source-1", "source-2", "source-3"])
         self.assertTrue(merge["reads_dependency_results_only"])
-        self.assertEqual(merge["routing_project_root"], str(Path(args.project_root).resolve()))
+        self.assertEqual(merge["routing_project_root"], ".")
+        self.assertTrue(plan["cache_dir"].startswith("Cache/temp-"))
+        self.assertFalse(Path(plan["cache_dir"]).is_absolute())
         self.assertEqual((merge["model"], merge["effort"]), ("gpt-6-luna", "low"))
 
     def test_large_exact_owned_sources_keep_model_source_audit_path(self):

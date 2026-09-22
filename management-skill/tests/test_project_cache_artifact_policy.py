@@ -30,10 +30,10 @@ REQUIRED_POLICY_TEXT = (
     "project-support write",
     "ordinary test scratch",
     "intermediate code",
-    "`Cache/tmp-<name>/`",
+    "`Cache/temp-<name>/`",
     "`Cache/remote-<name>/`",
-    "`Cache/<YYYYMMDD>/`",
-    "`Cache/remote-test/`",
+    "only `Cache/temp-<name>/`",
+    "only when the user or project contract explicitly requires retention",
     "top-level `tmp/`, `tests/`, or `work/`",
     "legacy top-level directory",
     "`~/.codex/cache`",
@@ -57,9 +57,9 @@ REQUIRED_POLICY_TEXT = (
     "test results",
     "generated data",
     "troubleshooting",
-    "Cache/cache_path.json",
+    "Cache/remote-ai-paths/registry.json",
     "AI-only",
-    "project-external",
+    "external-path registry",
     "bounded",
     "Obsidian",
 )
@@ -83,15 +83,6 @@ REQUIRED_DETAILED_REGISTRY_TEXT = (
     "replace the registry atomically",
     "CODEX_OBSIDIAN_VAULT",
 )
-REQUIRED_GLOBAL_POLICY_TEXT = (
-    "Cache:project support only in `<project-root>/Cache/`",
-    "one-task scratch/test/intermediate=>`tmp-*`",
-    "short reuse=>`<YYYYMMDD>`+reason/review",
-    "`remote-*`/`remote-test/`=>explicit retain only",
-    "formal reusable tests stay source",
-)
-
-
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     def test_canonical_project_cache_contract_retains_every_required_rule(self):
         policy_text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
@@ -106,25 +97,25 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
 
     def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
         text = GLOBAL_ENTRY_RULE_PATH.read_text()
-        self.assertIn("project Cache/tmp-*", text)
-        self.assertIn("preserve unrelated work", text)
+        self.assertIn("project Cache/temp-*", text)
+        self.assertIn("Preserve unrelated work", text)
 
 
     @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
     def test_installed_global_agents_has_the_same_contract(self):
-        self.assertIn("project Cache/tmp-*", GLOBAL_AGENTS_PATH.read_text())
+        self.assertIn("project Cache/temp-*", GLOBAL_AGENTS_PATH.read_text())
 
 
     def test_resource_policy_limits_automatic_cleanup(self):
         text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text()
         self.assertIn("last consumer", text)
-        self.assertIn("task-owned `Cache/tmp-*`", text)
-        self.assertIn("shared, pre-existing, conflicted, Unity, dated, or remote", text)
+        self.assertIn("task-owned `Cache/temp-*`", text)
+        self.assertIn("shared, pre-existing, conflicted, Unity, or remote", text)
         self.assertIn("never controls, interrupts, archives, or deletes another", text)
 
 
     def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):
-        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-artifact-policy-smoke"
+        task_root = SKILLS_ROOT / "Cache" / "temp-cache-artifact-policy-smoke"
         project_root = task_root / "fixture-project"
         cache_root = project_root / "Cache"
         existing_category = cache_root / "remote-test"
@@ -144,7 +135,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     directory.rmdir()
 
     def test_management_sync_uses_the_configured_project_cache(self):
-        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-artifact-policy-sync-smoke"
+        task_root = SKILLS_ROOT / "Cache" / "temp-cache-artifact-policy-sync-smoke"
         try:
             with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_root)}):
                 with SYNC.temporary_workspace("mirror-") as workspace:
@@ -160,14 +151,14 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
 
     def test_management_sync_default_paths_are_derived_from_the_project(self):
         expected_project_root = SYNC_SCRIPT_PATH.resolve().parents[2]
-        expected_cache_root = expected_project_root / "Cache" / "tmp-management-skill-sync"
+        expected_cache_root = expected_project_root / "Cache" / "temp-management-skill-sync"
         self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, expected_project_root)
         self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, expected_project_root)
         self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_cache_root)
         self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_cache_root / "state" / "management-skill-sync.json")
 
     def test_important_cache_content_is_registered_in_project_agents(self):
-        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-agents-registration-smoke"
+        task_root = SKILLS_ROOT / "Cache" / "temp-cache-agents-registration-smoke"
         project_root = task_root / "fixture-project"
         important_path = project_root / "Cache" / "remote-test" / "logic-regression" / "run_check.py"
         details_path = important_path.parent / "README.md"
@@ -194,11 +185,11 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 if directory.is_dir() and not any(directory.iterdir()):
                     directory.rmdir()
 
-    def test_absolute_path_registry_is_ai_only_and_project_code_does_not_depend_on_it(self):
-        task_root = SKILLS_ROOT / "Cache" / "tmp-cache-path-registry-smoke"
+    def test_relative_path_registry_is_ai_only_and_project_code_does_not_depend_on_it(self):
+        task_root = SKILLS_ROOT / "Cache" / "temp-cache-path-registry-smoke"
         project_root = task_root / "fixture-project"
-        registry_path = project_root / "Cache" / "cache_path.json"
-        external_target = task_root / "external" / "vault"
+        registry_path = project_root / "Cache" / "remote-ai-paths" / "registry.json"
+        external_target = project_root / "external" / "vault"
         project_source = project_root / "src" / "app.py"
         try:
             external_target.mkdir(parents=True, exist_ok=True)
@@ -206,11 +197,12 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             registry_path.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "scope": "ai_only",
                         "paths": {
                             "obsidian_vault": {
-                                "path": str(external_target.resolve()),
+                                "base": "project",
+                                "path": "external/vault",
                                 "kind": "directory",
                                 "purpose": "AI-only vault access",
                             }
@@ -225,12 +217,12 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
 
             registry = json.loads(registry_path.read_text(encoding="utf-8"))
             entry = registry["paths"]["obsidian_vault"]
-            self.assertEqual(registry["schema_version"], 1)
+            self.assertEqual(registry["schema_version"], 2)
             self.assertEqual(registry["scope"], "ai_only")
-            self.assertTrue(Path(entry["path"]).is_absolute())
-            self.assertTrue(Path(entry["path"]).is_dir())
+            self.assertFalse(Path(entry["path"]).is_absolute())
+            self.assertTrue((project_root / entry["path"]).is_dir())
             self.assertTrue(registry_path.is_relative_to(project_root / "Cache"))
-            self.assertNotIn("cache_path.json", project_source.read_text(encoding="utf-8"))
+            self.assertNotIn("registry.json", project_source.read_text(encoding="utf-8"))
         finally:
             shutil.rmtree(task_root)
             for directory in (task_root.parent, task_root.parent.parent):

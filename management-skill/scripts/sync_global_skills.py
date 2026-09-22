@@ -53,7 +53,7 @@ def load_skill_platform_checker(skills_dir):
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
 DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_PROJECT_ROOT = Path.cwd().resolve()
-DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "tmp-management-skill-sync"
+DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "temp-management-skill-sync"
 DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
@@ -63,6 +63,7 @@ __pycache__/
 .env
 .env.*
 cache/
+/Cache/
 outputs/
 work/
 data/cache/
@@ -1442,7 +1443,7 @@ def source_repository_root(source_dir):
 
 def publishable_source_path(relative_path):
     relative_path = Path(relative_path)
-    if relative_path.as_posix() in {"AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml"}:
+    if relative_path.as_posix() in {".gitignore", "AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml"}:
         return True
     if not relative_path.parts or relative_path.parts[0] not in APPROVED_GLOBAL_SKILL_NAMES:
         return False
@@ -1535,7 +1536,7 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
         return
     if readme_changes:
         print_lines("Rendered source README files:", readme_changes)
-    publication_paths = ["AGENTS.md", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER]
+    publication_paths = [".gitignore", "AGENTS.md", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER]
     if (source_dir / ".github" / "workflows" / "ci.yml").is_file():
         publication_paths.insert(3, ".github/workflows/ci.yml")
     run_command(["git", "add", "--", *publication_paths], cwd=source_dir)

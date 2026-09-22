@@ -17,7 +17,6 @@ import re
 import stat
 import sys
 import uuid
-from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterator
 
@@ -28,7 +27,6 @@ LEDGER_NAME = ".codex-task-resource-ledger.json"
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 HASH_KEY_RE = re.compile(r"^[0-9a-f]{24}$")
-DATE_RE = re.compile(r"^[0-9]{8}$")
 MAX_MANIFEST_ENTRIES = 4096
 RUNTIME_KINDS = {"process", "server", "browser_tab", "app_window", "software_instance"}
 FORBIDDEN_RUNTIME_KINDS = {"task", "thread", "session", "ending", "codex_task", "codex_thread"}
@@ -101,11 +99,11 @@ def _relative_path(value: Any) -> str:
 def _task_root_path(value: Any) -> str:
     value = _relative_path(value)
     parts = value.split("/")
-    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith("tmp-"):
-        _fail("task_root must be one exact Cache/tmp-<name> directory")
-    suffix = parts[1][4:]
+    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith("temp-"):
+        _fail("task_root must be one exact Cache/temp-<name> directory")
+    suffix = parts[1][5:]
     if not suffix or not IDENTIFIER_RE.fullmatch(suffix):
-        _fail("task_root tmp name must be non-empty and portable")
+        _fail("task_root temp name must be non-empty and portable")
     return value
 
 
@@ -124,15 +122,9 @@ def _retained_path(value: Any) -> tuple[str, str]:
     if len(parts) < 2 or parts[0] != "Cache":
         _fail("retained task artifacts must remain below project Cache")
     category = parts[1]
-    if category == "remote-test" or category.startswith("remote-"):
+    if category.startswith("remote-") and len(category) > len("remote-"):
         return value, "remote"
-    if DATE_RE.fullmatch(category):
-        try:
-            datetime.strptime(category, "%Y%m%d")
-        except ValueError as error:
-            raise ValueError("date retention folder must be a real YYYYMMDD date") from error
-        return value, "dated"
-    _fail("retained path must be below Cache/remote-*, Cache/remote-test, or Cache/YYYYMMDD")
+    _fail("retained path must be below Cache/remote-<name>")
 
 
 def _canonical_root(project_root: str | Path) -> Path:
@@ -495,7 +487,7 @@ def record_retained_path(
     path, category = _retained_path(path)
     reason = _require_text(reason, "retention reason")
     next_review = _require_text(next_review, "next review")
-    if category == "remote" and not (authorized_by_user or authorized_by_contract):
+    if not (authorized_by_user or authorized_by_contract):
         _fail("remote retention requires explicit user or project-contract authorization")
     resource = _new_resource(ledger, resource_id, "path", purpose, scope)
     resource.update(
@@ -506,7 +498,7 @@ def record_retained_path(
             "state": "retained",
             "retained_reason": reason,
             "next_review": next_review,
-            "retention_authority": "user" if authorized_by_user else "project_contract" if authorized_by_contract else "dated_review",
+            "retention_authority": "user" if authorized_by_user else "project_contract",
         }
     )
     _audit(ledger, "record_retained", resource["id"], "retained", reason)

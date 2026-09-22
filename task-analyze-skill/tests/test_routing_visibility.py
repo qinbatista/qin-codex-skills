@@ -19,7 +19,7 @@ class RoutingVisibilityTests(unittest.TestCase):
     def make_plan(self, root):
         return {"schema_version": 2, "entry": {"model": "gpt-6-astra", "effort": "ultra"},
                 "complexity": "complex", "complexity_score": 59, "topology": "sequential",
-                "cache_dir": str(root / "Cache/tmp-visible-route"), "main_result_node": "result", "ending_required": True,
+                "cache_dir": "Cache/temp-visible-route", "main_result_node": "result", "ending_required": True,
                 "nodes": [{"id": "collect", "phase": "result", "model": "gpt-6-luna", "effort": "low",
                            "skill_independent": True, "purpose": "Collect a bounded count", "complexity_score": 5,
                            "prompt": "Count the listed items.", "dependencies": []},
@@ -58,7 +58,7 @@ class RoutingVisibilityTests(unittest.TestCase):
             self.assertTrue(manifest["ending_launch_ready"])
             release = json.loads(Path(manifest["release_path"]).read_text())
             self.assertEqual(release["main_result_node"], plan["main_result_node"])
-            self.assertFalse((Path(plan["cache_dir"]) / "ending-handoff.json").exists())
+            self.assertFalse((root / plan["cache_dir"] / "ending-handoff.json").exists())
             packet = manifest["memory_closeout"]
             self.assertEqual(packet["status"], "launch-required")
             self.assertEqual(packet["target"], {"type": "projectless"})

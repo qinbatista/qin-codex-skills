@@ -2,7 +2,7 @@
 
 The main selected model classifies governing skills before assigning tasks. Model selection is a boundary, not a consequence of score: governed work and memory keep the user's selected pair; independent work may adapt.
 
-A dispatcher plan contains `schema_version: 2`, `entry: {model, effort}`, `complexity: easy|complex`, `topology: sequential|parallel|mixed`, `cache_dir`, `nodes`, and `main_result_node`. Scratch belongs to `Cache/tmp-*` under the active project.
+A dispatcher plan contains `schema_version: 2`, `entry: {model, effort}`, `complexity: easy|complex`, `topology: sequential|parallel|mixed`, `cache_dir`, `nodes`, and `main_result_node`. Scratch belongs to `Cache/temp-*` under the active project.
 
 Each work node declares `id`, `phase: result`, `prompt` (bounded goal), `model`, `effort`, `dependencies`, and a sandbox. Provide `governing_skills` or a substantive `skill` when a skill governs the result. `skill_governed: true` carries inherited constraints, including into helper scripts. Do not use an independence claim to erase a named governing skill.
 

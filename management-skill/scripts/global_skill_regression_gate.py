@@ -165,7 +165,7 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
         raise RuntimeError("global AGENTS asset is missing its explicit-install directive")
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
     temporary_cache_root = tempfile.TemporaryDirectory(prefix="codex-skill-candidates-") if os.name == "nt" and not configured_cache_root else None
-    default_cache_root = project_root / "Cache" / "tmp-global-skill-regression"
+    default_cache_root = project_root / "Cache" / "temp-global-skill-regression"
     cache_root = Path(configured_cache_root).expanduser() if configured_cache_root else Path(temporary_cache_root.name) if temporary_cache_root is not None else default_cache_root
     cache_root.mkdir(parents=True, exist_ok=True)
     structural_agents_path = project_root / "AGENTS.md"

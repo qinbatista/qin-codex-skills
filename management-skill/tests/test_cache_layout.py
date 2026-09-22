@@ -12,28 +12,32 @@ SPEC.loader.exec_module(CACHE_LAYOUT)
 
 class CacheLayoutTests(unittest.TestCase):
     def test_allowed_categories_are_classified(self):
-        self.assertEqual(CACHE_LAYOUT.classify_directory("tmp-build"), "tmp")
+        self.assertEqual(CACHE_LAYOUT.classify_directory("temp-build"), "temp")
         self.assertEqual(CACHE_LAYOUT.classify_directory("remote-test"), "remote")
-        self.assertEqual(CACHE_LAYOUT.classify_directory("20260820"), "date")
+        self.assertIsNone(CACHE_LAYOUT.classify_directory("20260820"))
+        self.assertIsNone(CACHE_LAYOUT.classify_directory("tmp-build"))
         self.assertIsNone(CACHE_LAYOUT.classify_directory("tests"))
         self.assertIsNone(CACHE_LAYOUT.classify_directory("20261340"))
 
-    def test_check_ignores_reserved_files_and_reports_legacy_directories(self):
+    def test_check_rejects_non_category_entries_and_uses_relative_reports(self):
         with tempfile.TemporaryDirectory(prefix="cache-layout-") as temporary:
             root = Path(temporary)
             cache_root = root / "Cache"
             cache_root.mkdir()
-            (cache_root / "cache_path.json").write_text("{}\n", encoding="utf-8")
             (cache_root / "remote-test").mkdir()
-            (cache_root / "tmp-build").mkdir()
+            (cache_root / "temp-build").mkdir()
             report = CACHE_LAYOUT.inspect_project(root)
             self.assertEqual(report["status"], "pass")
-            self.assertEqual(report["cache_roots"][0]["invalid_directories"], [])
+            self.assertEqual(report["cache_roots"][0]["invalid_entries"], [])
+            self.assertEqual(report["cache_roots"][0]["path"], "Cache")
+            self.assertEqual(report["project_root"], ".")
 
             (cache_root / "tests").mkdir()
+            (cache_root / "20260820").mkdir()
+            (cache_root / "cache_path.json").write_text("{}\n", encoding="utf-8")
             report = CACHE_LAYOUT.inspect_project(root)
             self.assertEqual(report["status"], "fail")
-            self.assertEqual(report["cache_roots"][0]["invalid_directories"], ["tests"])
+            self.assertEqual(report["cache_roots"][0]["invalid_entries"], ["20260820", "cache_path.json", "tests"])
 
     def test_discovery_does_not_descend_into_cache_or_engine_directories(self):
         with tempfile.TemporaryDirectory(prefix="cache-discovery-") as temporary:

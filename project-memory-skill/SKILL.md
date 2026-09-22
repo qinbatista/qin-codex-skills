@@ -29,6 +29,6 @@ Use the vault's supported writer and amendment/supersession operations. Keep his
 - Keep project-specific decisions in that project. Only explicitly general preferences belong in shared memory.
 - Save concise facts and project-relative files, not raw prompts, transcripts, reasoning, credentials, absolute host paths, or other projects' content.
 - Do not hand-edit event stores. Read back the saved result; failed projections remain pending rather than being reported as synchronized.
-- Preserve unrelated records and useful history. Put probes in an explicit isolated store under `Cache/tmp-*`; never test against production memory.
+- Preserve unrelated records and useful history. Put probes in an explicit isolated store under `Cache/temp-*`; never test against production memory.
 
 Adaptive routing history is separate from user/project memory. Its outcomes may adjust only skill-independent tasks; it never overrides the user's selected model for skill-governed work or memory.

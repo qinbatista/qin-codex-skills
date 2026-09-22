@@ -120,7 +120,7 @@ def contract_check(runner, platform):
 def real_execution_check(runner, root):
     # Call the candidate only after all three launch-option contracts pass.
     # Temporary support files stay inside this task-owned workspace.
-    with tempfile.TemporaryDirectory(prefix="tmp-behavior-", dir=str(root)) as directory:
+    with tempfile.TemporaryDirectory(prefix="temp-behavior-", dir=str(root)) as directory:
         directory = Path(directory)
         worker = directory / "worker with spaces.py"
         worker.write_text(

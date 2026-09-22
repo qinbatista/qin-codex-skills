@@ -24,7 +24,7 @@ HASH = hashlib.sha256(b"verified-readback").hexdigest()
 
 class TaskResourceLedgerTests(unittest.TestCase):
     def setUp(self):
-        self.scratch_parent = Path.cwd() / "Cache" / "tmp-task-resource-units"
+        self.scratch_parent = Path.cwd() / "Cache" / "temp-task-resource-units"
         self.scratch_parent.mkdir(parents=True, exist_ok=True)
         self.temporary_directory = tempfile.TemporaryDirectory(
             prefix="case-", dir=self.scratch_parent
@@ -32,7 +32,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.project_root = Path(self.temporary_directory.name)
         (self.project_root / "Cache").mkdir()
         self.task_id = "producer-task"
-        self.task_root = f"Cache/tmp-case-{uuid.uuid4().hex}"
+        self.task_root = f"Cache/temp-case-{uuid.uuid4().hex}"
         self.ledger = LEDGER.new_ledger(
             self.project_root, self.task_id, self.task_root
         )
@@ -173,14 +173,16 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertTrue(LEDGER.prepare_release(self.ledger, "ending-output"))
 
     def test_retained_and_preexisting_resources_are_never_release_candidates(self):
-        dated = LEDGER.record_retained_path(
-            self.ledger,
-            "dated",
-            "Cache/20260823/report.json",
-            "short reuse",
-            "inspect tomorrow",
-            "2026-08-24",
-        )
+        with self.assertRaisesRegex(ValueError, "Cache/remote"):
+            LEDGER.record_retained_path(
+                self.ledger,
+                "dated",
+                "Cache/20260823/report.json",
+                "short reuse",
+                "inspect tomorrow",
+                "2026-08-24",
+                authorized_by_user=True,
+            )
         with self.assertRaisesRegex(ValueError, "explicit user or project-contract"):
             LEDGER.record_retained_path(
                 self.ledger,
@@ -205,10 +207,9 @@ class TaskResourceLedgerTests(unittest.TestCase):
             "Library/Artifacts",
             "Unity-managed cache",
         )
-        self.assertEqual(dated["state"], "retained")
         self.assertEqual(remote["state"], "retained")
         self.assertEqual(preexisting["state"], "preexisting")
-        for resource_id in ("dated", "remote", "unity-cache"):
+        for resource_id in ("remote", "unity-cache"):
             with self.assertRaisesRegex(ValueError, "remains untouched"):
                 LEDGER.prepare_release(self.ledger, resource_id)
 
@@ -278,13 +279,13 @@ class TaskResourceLedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different project root"):
             LEDGER.cleanup_path(self.ledger, other_root, "bound")
         self.assertTrue(target.exists())
-        occupied = self.project_root / "Cache" / "tmp-occupied"
+        occupied = self.project_root / "Cache" / "temp-occupied"
         occupied.mkdir()
         sentinel = occupied / "user.txt"
         sentinel.write_text("keep", encoding="utf-8")
         with self.assertRaises(FileExistsError):
             LEDGER.new_ledger(
-                self.project_root, "other-task", "Cache/tmp-occupied"
+                self.project_root, "other-task", "Cache/temp-occupied"
             )
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
 
@@ -304,13 +305,13 @@ class TaskResourceLedgerTests(unittest.TestCase):
         invalid_paths = (
             "../outside",
             "/absolute/path",
-            "Cache/tmp-case/../outside",
+            "Cache/temp-case/../outside",
             "Cache\\tmp-case\\file",
             "C:/outside/file",
             "//server/share/file",
-            "Cache/tmp-case/file:stream",
-            "Cache/tmp-case/control\x01",
-            "Cache/tmp-/file",
+            "Cache/temp-case/file:stream",
+            "Cache/temp-case/control\x01",
+            "Cache/temp-/file",
         )
         for index, invalid_path in enumerate(invalid_paths):
             with self.subTest(path=invalid_path):
@@ -397,7 +398,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
     def test_cli_round_trip_removes_only_the_registered_path(self):
         cli_project = self.project_root / "cli-project"
         (cli_project / "Cache").mkdir(parents=True)
-        cli_task_root = "Cache/tmp-cli-roundtrip"
+        cli_task_root = "Cache/temp-cli-roundtrip"
         ledger_path = cli_project / cli_task_root / LEDGER.LEDGER_NAME
 
         def run(*arguments):

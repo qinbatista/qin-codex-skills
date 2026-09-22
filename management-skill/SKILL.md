@@ -23,4 +23,4 @@ Only an explicit global AGENTS update uses `install-global-agents`; it creates a
 
 Publish only when authorized. The script's `push` command runs the release gate before README generation, staging, commit, or remote mutation. The catalog lists current behaviors and executable checks; retire obsolete workflow tests when the user changes those behaviors. Never invent attestation evidence.
 
-Keep source portable and free of private history, machine paths, and secrets. Temporary support belongs in `Cache/tmp-*`; reusable tests stay with their skill.
+Keep source portable and free of private history, machine paths, and secrets. Temporary support belongs in `Cache/temp-*`; reusable tests stay with their skill.

@@ -12,7 +12,6 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -20,10 +19,9 @@ from typing import Any
 SCHEMA_VERSION = 1
 MAX_BRANCHES = 8
 BRANCH_STATUSES = {"passed", "working", "failed", "blocked", "cancelled", "skipped"}
-CACHE_CLASSES = {"none", "temporary", "dated", "remote"}
+CACHE_CLASSES = {"none", "temporary", "remote"}
 FORBIDDEN_ACTIVE_STATUSES = {"working", "failed", "blocked", "cancelled"}
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-DATE_RE = re.compile(r"^[0-9]{8}$")
 EMAIL_RE = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])")
 UUID_RE = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b")
 RAW_CONTROL_IDENTIFIER_RE = re.compile(r"\b(?:session|thread|agent)[_-][A-Za-z0-9_-]{8,}\b", re.IGNORECASE)
@@ -160,8 +158,8 @@ def _temporary_root(value: Any) -> str | None:
         return None
     value = _relative_path(value, "main.temporary_root")
     parts = _path_parts(value)
-    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith("tmp-") or not IDENTIFIER_RE.fullmatch(parts[1][4:]):
-        _fail("main.temporary_root must be one exact Cache/tmp-<name> directory")
+    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith("temp-") or not IDENTIFIER_RE.fullmatch(parts[1][5:]):
+        _fail("main.temporary_root must be one exact Cache/temp-<name> directory")
     return value
 
 
@@ -187,23 +185,12 @@ def _validate_cache(cache_value: Any, branch_name: str, workdir: str, writes: li
         _require_exact_keys(cache, {"class", "root"}, set(), f"branch {branch_name} cache")
         if temporary_root is None or cache_root != f"{temporary_root}/{branch_name}":
             _fail(f"branch {branch_name} temporary cache root must be its direct directory below main.temporary_root")
-    elif cache_class == "dated":
-        _require_exact_keys(cache, {"class", "root", "retention_reason", "review_point"}, set(), f"branch {branch_name} cache")
-        parts = _path_parts(cache_root)
-        if len(parts) < 3 or parts[0] != "Cache" or not DATE_RE.fullmatch(parts[1]):
-            _fail(f"branch {branch_name} dated cache root must be below Cache/YYYYMMDD")
-        try:
-            datetime.strptime(parts[1], "%Y%m%d")
-        except ValueError as error:
-            raise PlanValidationError(f"branch {branch_name} dated cache root uses an invalid date") from error
-        _sanitized_text(cache["retention_reason"], f"branch {branch_name} retention_reason")
-        _sanitized_text(cache["review_point"], f"branch {branch_name} review_point")
     else:
         _require_exact_keys(cache, {"class", "root", "retention_authority", "retention_reason", "review_point"}, set(), f"branch {branch_name} cache")
         parts = _path_parts(cache_root)
-        remote_category_valid = len(parts) >= 2 and parts[0] == "Cache" and (parts[1] == "remote-test" or parts[1].startswith("remote-") and len(parts[1]) > len("remote-"))
+        remote_category_valid = len(parts) >= 2 and parts[0] == "Cache" and parts[1].startswith("remote-") and len(parts[1]) > len("remote-")
         if not remote_category_valid:
-            _fail(f"branch {branch_name} remote cache root must be below Cache/remote-* or Cache/remote-test")
+            _fail(f"branch {branch_name} remote cache root must be below Cache/remote-<name>")
         if not isinstance(cache["retention_authority"], str) or cache["retention_authority"] not in {"user", "project_contract"}:
             _fail(f"branch {branch_name} remote cache requires user or project-contract authority")
         _sanitized_text(cache["retention_reason"], f"branch {branch_name} retention_reason")

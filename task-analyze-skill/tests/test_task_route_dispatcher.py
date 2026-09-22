@@ -22,7 +22,7 @@ def node(name, dependencies=None, **kwargs):
 
 def plan(root, nodes=None):
     nodes = nodes or [node("result")]
-    return {"schema_version": 2, "entry": {"model": "gpt-6-astra", "effort": "ultra"}, "complexity": "complex", "topology": "parallel", "cache_dir": str(root / "Cache/tmp-route"), "nodes": nodes, "main_result_node": nodes[-1]["id"]}
+    return {"schema_version": 2, "entry": {"model": "gpt-6-astra", "effort": "ultra"}, "complexity": "complex", "topology": "parallel", "cache_dir": "Cache/temp-route", "nodes": nodes, "main_result_node": nodes[-1]["id"]}
 
 
 def fake_record(item, cache, text="Result ready"):
@@ -54,6 +54,25 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             value = plan(root)
             value["entry"] = {"model": "unknown", "effort": "unknown"}
             self.assertTrue(module.validate_plan(value, "unknown", "unknown", root, SKILLS_ROOT))
+
+    def test_cache_path_requires_relative_temp_family(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for bad in (str(root / "Cache/temp-route"), "Cache/20260823", "Cache/remote-route", "Cache/tmp-route", "Cache/temp-route/../remote-route", "Cache\\temp-route", "Cache/temp-route/C:/private"):
+                with self.subTest(path=bad):
+                    value = plan(root)
+                    value["cache_dir"] = bad
+                    self.assertTrue(any("cache_dir" in error or "Cache/temp" in error for error in module.validate_plan(value, "gpt-6-astra", "ultra", root, SKILLS_ROOT)))
+
+    def test_node_paths_reject_absolute_config_values(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            value = plan(root)
+            value["nodes"][0]["source_allowlist"] = [str(root / "source.py")]
+            value["nodes"][0]["routing_project_root"] = str(root)
+            errors = module.validate_plan(value, "gpt-6-astra", "ultra", root, SKILLS_ROOT)
+            self.assertTrue(any("source_allowlist" in error for error in errors))
+            self.assertTrue(any("routing_project_root" in error for error in errors))
 
     def test_parallel_write_overlap_requires_ordering(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -123,7 +142,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("final aggregate reported Aggregate: FAIL", result["failures"])
             self.assertIsNone(result["release_path"])
-            self.assertFalse((Path(value["cache_dir"]) / "ending-handoff.json").exists())
+            self.assertFalse((root / value["cache_dir"] / "ending-handoff.json").exists())
 
     def test_run_node_rebinds_pair_even_without_plan_validation(self):
         with tempfile.TemporaryDirectory() as temp:

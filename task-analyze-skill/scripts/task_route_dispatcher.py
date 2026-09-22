@@ -709,13 +709,16 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None, *, enf
     else:
         plan["first_result_timeout_seconds"] = timeout
     cache_value = plan.get("cache_dir")
-    cache = (cwd / cache_value).resolve() if isinstance(cache_value, str) and cache_value else None
+    cache_parts = cache_value.split("/") if isinstance(cache_value, str) and cache_value else []
+    portable_cache = bool(cache_parts) and all(part not in {"", ".", ".."} for part in cache_parts) and "\\" not in cache_value and ":" not in cache_value
+    raw_cache = Path(cache_value) if portable_cache else None
+    cache = (cwd / raw_cache).resolve() if raw_cache is not None and not raw_cache.is_absolute() else None
     if cache is None or not path_is_within(cache, cwd):
-        failures.append("cache_dir must resolve inside the active project")
+        failures.append("cache_dir must be a project-relative path inside the active project")
     elif cache.relative_to(cwd).parts[:1] != ("Cache",):
         failures.append("cache_dir must be inside project Cache")
-    elif len(cache.relative_to(cwd).parts) < 2 or not cache.relative_to(cwd).parts[1].startswith("tmp-"):
-        failures.append("task route scratch must use Cache/tmp-*")
+    elif len(cache.relative_to(cwd).parts) < 2 or not cache.relative_to(cwd).parts[1].startswith("temp-") or len(cache.relative_to(cwd).parts[1]) == len("temp-"):
+        failures.append("task route scratch must use Cache/temp-*")
     if plan.get("complexity_score") is not None:
         try:
             plan["complexity_band"] = complexity_band(plan["complexity_score"])
@@ -764,6 +767,9 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None, *, enf
             failures.append(f"{node_id} requires a bounded task goal")
         if not isinstance(node.get("dependencies", []), list):
             failures.append(f"{node_id} dependencies must be a list")
+        routing_root = node.get("routing_project_root")
+        if routing_root is not None and (not isinstance(routing_root, str) or not routing_root or Path(routing_root).is_absolute() or "\\" in routing_root or ":" in routing_root):
+            failures.append(f"{node_id} routing_project_root must be relative to the active project")
         score = node.get("complexity_score")
         if score is None:
             score = analyze_prompt_routing(node.get("prompt") or "")["complexity_score"]
@@ -778,8 +784,8 @@ def validate_plan(plan, entry_model, entry_effort, cwd, skills_root=None, *, enf
                 failures.append(f"{node_id} {error}")
         for key in ("source_allowlist", "read_allowlist", "write_allowlist"):
             paths = node.get(key, [])
-            if not isinstance(paths, list) or any(not isinstance(path, str) or not path or not path_is_within((cwd / path).resolve(), cwd) for path in paths):
-                failures.append(f"{node_id} {key} must stay inside the project")
+            if not isinstance(paths, list) or any(not isinstance(path, str) or not path or Path(path).is_absolute() or "\\" in path or ":" in path or ".." in path.split("/") or not path_is_within((cwd / path).resolve(), cwd) for path in paths):
+                failures.append(f"{node_id} {key} must be project-relative and stay inside the project")
         if node.get("phase") == "ending":
             failures.extend(ending_checklist_failures(node))
             if node.get("skill") != ENDING_SKILL:
@@ -1655,7 +1661,7 @@ def run_plan(
     plan.setdefault("execution_lifecycle", preflight.get("execution_lifecycle") or execution_lifecycle_for_plan(plan))
     first_result_timeout_seconds = plan.get("first_result_timeout_seconds", 180 if plan.get("complexity") == "easy" else 600)
     failures = list(preflight["failures"])
-    cache_dir = Path(plan["cache_dir"]).expanduser().resolve() if not failures else cwd.resolve() / "work" / "cache" / "invalid-task-route"
+    cache_dir = (Path(cwd).resolve() / plan["cache_dir"]).resolve() if not failures else Path(cwd).resolve() / "Cache" / "temp-task-analyze" / "invalid-task-route"
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / "dispatch-manifest.json"
 
@@ -1751,7 +1757,7 @@ def run_plan(
                     ready_node["timeout"] = min(ready_node.get("timeout", 180), max(1, int(remaining_seconds)))
                     ready_node["_deadline_monotonic"] = first_result_started + first_result_timeout_seconds
                     ready_node["_fallback_reserve_seconds"] = 30 if plan["complexity"] == "easy" else 90
-                    ready_node["_project_root"] = str(Path(ready_node.get("routing_project_root") or cwd).expanduser().resolve())
+                    ready_node["_project_root"] = str((Path(cwd).resolve() / (ready_node.get("routing_project_root") or ".")).resolve())
                     ready_node["_entry_model"] = entry_model
                     ready_node["_entry_effort"] = entry_effort
                     ready_node["_result_ready_callback"] = result_ready_callback_for(node_id)

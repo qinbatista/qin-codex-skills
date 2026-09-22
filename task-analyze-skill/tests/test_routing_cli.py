@@ -51,7 +51,7 @@ class RoutingCLITests(unittest.TestCase):
     def test_dispatcher_preserves_selected_pair_through_offline_subprocess(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            plan = {"schema_version": 2, "entry": {"model": "gpt-6-astra", "effort": "ultra"}, "complexity": "easy", "topology": "sequential", "cache_dir": str(root / "Cache/tmp-route"), "main_result_node": "result", "nodes": [{"id": "result", "phase": "result", "skill": "code-skill", "model": "gpt-6-luna", "effort": "low", "prompt": "Apply the current code structure preference.", "dependencies": [], "sandbox": "read-only", "complexity_score": 5}]}
+            plan = {"schema_version": 2, "entry": {"model": "gpt-6-astra", "effort": "ultra"}, "complexity": "easy", "topology": "sequential", "cache_dir": "Cache/temp-route", "main_result_node": "result", "nodes": [{"id": "result", "phase": "result", "skill": "code-skill", "model": "gpt-6-luna", "effort": "low", "prompt": "Apply the current code structure preference.", "dependencies": [], "sandbox": "read-only", "complexity_score": 5}]}
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(plan))
             command = [sys.executable, str(SCRIPTS / "task_route_dispatcher.py"), "run-plan", str(plan_path), "--cwd", str(root), "--codex-bin", str(FAKE), "--skills-root", str(ROOT), "--state-db", str(root / "fixture-state.sqlite")]
