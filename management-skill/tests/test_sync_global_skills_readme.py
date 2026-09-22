@@ -672,7 +672,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 REAL_RUN_RELEASE_GATE(source_dir, skills_dir, "deployed")
 
             command = runner.call_args.args[0]
-            self.assertEqual(Path(command[1]), installed_gate.resolve())
+            self.assertEqual(command[1], "-B")
+            self.assertEqual(Path(command[2]), installed_gate.resolve())
 
     def test_deploy_preserves_unrelated_runtime_skill_without_running_platform_checker(self):
         with tempfile.TemporaryDirectory() as temp_dir:

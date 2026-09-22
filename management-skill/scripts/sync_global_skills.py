@@ -190,6 +190,7 @@ def run_release_gate(source_dir, skills_dir, mode):
         raise RuntimeError(f"Retained-capability validation is unavailable after installation: {gate_path}")
     command = [
         sys.executable,
+        "-B",
         str(gate_path),
         "check",
         "--project-root",
