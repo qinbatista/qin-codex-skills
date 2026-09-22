@@ -4,11 +4,17 @@ Load this reference only when a task will create a Codex-selected support artifa
 
 ## Placement and retention
 
-- Resolve the authoritative project root before the first project-support write. Put disposable evidence, receipts, logs, snapshots, generated media, comparisons, debug data, intermediate code, test results, and ordinary test scratch in that project's `Cache/temp-<name>/`. Use a fresh task-owned directory or a context-managed temporary directory; remove it when its last real consumer is done. Reusable formal tests remain source tests.
+- Resolve the authoritative project root before the first project-support write. Put disposable evidence, receipts, logs, snapshots, generated media, comparisons, debug data, intermediate code, test results, and ordinary test scratch in that project's `Cache/temp-<name>/`. Use a fresh task-owned directory or a context-managed temporary directory; remove it when its last real consumer is done.
 - If no project can be identified, use an isolated task-owned scratch directory under the runtime-resolved `CODEX_HOME/sessions/` when available. Treat it as disposable; never place important output there or alter existing Codex-managed session records.
 - Use `Cache/remote-<name>/` only when the user or project contract explicitly requires retention. Record its concrete project use, retention reason, owner, and sync status in project guidance; the sync destination is pending until the user chooses it. Never claim a remote folder was synced without a separate sync and readback. Preserve every `remote-*` folder during automatic cleanup. Move important work out of `temp-*` and update every relative reference.
 - Do not create new top-level `tmp/`, `tests/`, or `work/` support folders, and never use `~/.codex/cache` or `~/.codex/tmp` for project artifacts. If a legacy top-level directory already exists, preserve its contents and move it only through an authorized, ownership-safe migration.
 - Keep `Cache/` ignored. A private AI-only external-path registry, when needed, belongs under `Cache/remote-ai-paths/registry.json`.
+
+## Test file placement
+
+- When project logic or goals change, inventory existing test files and their runner references. Remove obsolete and duplicate cases; revise a useful existing case before adding another file. Keep only tests that exercise a current behavior or a deliberate compatibility boundary.
+- Put a retained test harness under that project's `Cache/remote-<name>/` only if it still runs there and does not need to ship with source or a clean-clone release. Record its project use, reason, owner, and pending sync destination. Otherwise use the toolchain's versioned, non-runtime development area, such as a skill's `tests/` or an appropriate Unity editor-only area. Keep tests out of runtime source and deliverable folders.
+- After moving or removing a test, update runner commands, imports, fixture paths, documentation, and release checks, then execute the affected test from its final location. Do not keep a stale copy at the old path.
 
 ## Portable paths and external resources
 

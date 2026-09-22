@@ -37,6 +37,11 @@ REQUIRED_POLICY_TEXT = (
     "only when the user or project contract explicitly requires retention",
     "sync destination is pending",
     "Preserve every `remote-*` folder during automatic cleanup",
+    "## Test file placement",
+    "Remove obsolete and duplicate cases",
+    "only if it still runs there",
+    "versioned, non-runtime development area",
+    "execute the affected test from its final location",
     "top-level `tmp/`, `tests/`, or `work/`",
     "legacy top-level directory",
     "`~/.codex/cache`",
@@ -97,6 +102,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         text = (SKILLS_ROOT / "workflow-skill/SKILL.md").read_text()
         self.assertIn("references/project-cache-artifact-policy.md", text)
         self.assertIn("references/task-resource-lifecycle.md", text)
+        self.assertIn("Cache and test placement policy", (SKILLS_ROOT / "verify-skill/SKILL.md").read_text())
 
 
     def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
@@ -104,6 +110,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         self.assertIn("project's task-owned Cache/temp-*", text)
         self.assertIn("CODEX_HOME/sessions", text)
         self.assertIn("never auto-clean it", text)
+        self.assertIn("remove obsolete or duplicate tests", text)
         self.assertIn("Preserve unrelated work", text)
 
 
