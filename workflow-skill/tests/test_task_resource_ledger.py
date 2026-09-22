@@ -152,25 +152,37 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertFalse(first.exists())
         self.assertFalse(second.exists())
 
-    def test_ending_evidence_must_be_persisted_before_handoff_release(self):
+    def test_ending_cannot_own_resources_or_delay_cleanup(self):
+        with self.assertRaisesRegex(ValueError, "active producer"):
+            LEDGER.new_ledger(
+                self.project_root, "ending-task", "Cache/temp-ending-task", role="ending"
+            )
         LEDGER.acquire_path(
             self.ledger,
             self.project_root,
             "ending-output",
             self._path("ending.txt"),
-            "Ending fixture",
+            "legacy Ending fixture",
         )
-        LEDGER.handoff(
-            self.ledger, "ending-output", "ending-task", role="ending"
+        with self.assertRaisesRegex(ValueError, "memory-only"):
+            LEDGER.handoff(
+                self.ledger, "ending-output", "ending-task", role="ending"
+            )
+        resource = next(
+            item for item in self.ledger["resources"] if item["id"] == "ending-output"
         )
+        resource["consumers"][LEDGER._task_key("ending-task")] = {
+            "role": "ending", "readback_digest": None
+        }
+        self.ledger["ending_evidence"] = {}
+        LEDGER.validate_ledger(self.ledger)
         target = self.project_root.joinpath(*self._path("ending.txt").split("/"))
-        target.write_text("evidence consumer", encoding="utf-8")
+        target.write_text("released by main task", encoding="utf-8")
         LEDGER.seal_path(self.ledger, self.project_root, "ending-output")
-        self._pass_barriers("ending-output", "ending-task")
-        with self.assertRaisesRegex(ValueError, "persist evidence"):
-            LEDGER.prepare_release(self.ledger, "ending-output")
-        LEDGER.record_evidence_persisted(self.ledger, "ending-task", HASH)
+        self._pass_barriers("ending-output")
         self.assertTrue(LEDGER.prepare_release(self.ledger, "ending-output"))
+        self.assertTrue(LEDGER.cleanup_path(self.ledger, self.project_root, "ending-output"))
+        self.assertFalse(target.exists())
 
     def test_retained_and_preexisting_resources_are_never_release_candidates(self):
         with self.assertRaisesRegex(ValueError, "Cache/remote"):
@@ -208,6 +220,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
             "Unity-managed cache",
         )
         self.assertEqual(remote["state"], "retained")
+        self.assertEqual(remote["sync_status"], "destination_pending")
         self.assertEqual(preexisting["state"], "preexisting")
         for resource_id in ("remote", "unity-cache"):
             with self.assertRaisesRegex(ValueError, "remains untouched"):

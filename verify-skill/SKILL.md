@@ -22,7 +22,7 @@ Use [portable, quiet execution](../code-skill/references/skill-platform-compatib
 
 ## Finish
 
-Map requirements to existing evidence before adding checks. Use an adequate supplied checker; add a case only for an uncovered requirement or observed failure. Fix failures here, then rerun only affected checks. After a style-check failure, rerun that check for a formatting-only fix; leave unaffected behavior checks alone. Stop when relevant checks and visual review pass; do not add overlapping tests or repeat unaffected checks. Report compact pass counts, failures, skips and limitations instead of dumping successful reports.
+Map requirements to existing evidence before adding checks. Use an adequate supplied checker; add a case only for an uncovered requirement or observed failure. Fix failures here, then rerun only affected checks. After a style-check failure, rerun that check for a formatting-only fix; leave unaffected behavior checks alone. Stop when relevant checks and visual review pass; do not add overlapping tests or repeat unaffected checks. After readback, close task-opened review surfaces and remove task-owned temporary verification files unless the user still needs to review them or debugging continues. Report compact pass counts, failures, skips and limitations instead of dumping successful reports.
 
 Ending belongs to [Project Memory](../project-memory-skill/SKILL.md) and only updates local memory with facts established here. It never verifies, repairs, or changes this task's result. Historical Ending plans must not execute old check commands.
 

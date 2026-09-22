@@ -26,20 +26,23 @@ PRIMARY_SKILLS = (
     "management-skill",
 )
 REQUIRED_POLICY_TEXT = (
-    "<project-root>/Cache/",
+    "that project's `Cache/temp-<name>/`",
     "project-support write",
     "ordinary test scratch",
     "intermediate code",
     "`Cache/temp-<name>/`",
     "`Cache/remote-<name>/`",
-    "only `Cache/temp-<name>/`",
+    "`CODEX_HOME/sessions/`",
+    "never place important output there",
     "only when the user or project contract explicitly requires retention",
+    "sync destination is pending",
+    "Preserve every `remote-*` folder during automatic cleanup",
     "top-level `tmp/`, `tests/`, or `work/`",
     "legacy top-level directory",
     "`~/.codex/cache`",
     "`~/.codex/tmp`",
     "Project-root `AGENTS.md`",
-    "owner/source",
+    "owner/source of truth",
     "Important retained Cache",
     "explicit authorization",
     "local-machine path",
@@ -68,7 +71,8 @@ REQUIRED_DETAILED_PATH_TEXT = (
     "Windows drive-letter absolute path",
 )
 REQUIRED_DETAILED_AGENTS_TEXT = (
-    "retention/version-control status",
+    "project use, retention reason",
+    "sync status",
     "one concise `AGENTS.md` registry entry",
     "owning source, project documentation, or a README",
     "Update `AGENTS.md` only when",
@@ -97,20 +101,27 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
 
     def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
         text = GLOBAL_ENTRY_RULE_PATH.read_text()
-        self.assertIn("project Cache/temp-*", text)
+        self.assertIn("project's task-owned Cache/temp-*", text)
+        self.assertIn("CODEX_HOME/sessions", text)
+        self.assertIn("never auto-clean it", text)
         self.assertIn("Preserve unrelated work", text)
 
 
     @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
     def test_installed_global_agents_has_the_same_contract(self):
-        self.assertIn("project Cache/temp-*", GLOBAL_AGENTS_PATH.read_text())
+        text = GLOBAL_AGENTS_PATH.read_text()
+        self.assertIn("project's task-owned Cache/temp-*", text)
+        self.assertIn("CODEX_HOME/sessions", text)
+        self.assertIn("never auto-clean it", text)
 
 
     def test_resource_policy_limits_automatic_cleanup(self):
         text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text()
-        self.assertIn("last consumer", text)
-        self.assertIn("task-owned `Cache/temp-*`", text)
-        self.assertIn("shared, pre-existing, conflicted, Unity, or remote", text)
+        self.assertIn("last needed readback", text)
+        self.assertIn("`Cache/temp-*` scratch", text)
+        self.assertIn("`Cache/remote-*` is retained", text)
+        self.assertIn("pending user review", text)
+        self.assertIn("Ending records local memory", text)
         self.assertIn("never controls, interrupts, archives, or deletes another", text)
 
 

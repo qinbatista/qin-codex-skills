@@ -251,8 +251,8 @@ def new_ledger(
     role: str = "producer",
 ) -> dict[str, Any]:
     """Create an exclusive task root and return its bound in-memory ledger."""
-    if role not in {"producer", "ending"}:
-        _fail("role must be producer or ending")
+    if role != "producer":
+        _fail("new task resource ledgers belong to the active producer")
     task_root = _task_root_path(task_root)
     root = _canonical_root(project_root)
     cache_root = root / "Cache"
@@ -273,7 +273,6 @@ def new_ledger(
             "cache_root_identity": _binding_identity(cache_root),
             "task_root_identity": _binding_identity(task_root_absolute),
         },
-        "ending_evidence": {},
         "next_sequence": 1,
         "resources": [],
         "audit": [],
@@ -307,11 +306,12 @@ def validate_ledger(ledger: Any) -> dict[str, Any]:
             _fail(f"{identity_name} is invalid")
     if not isinstance(ledger.get("resources"), list) or not isinstance(ledger.get("audit"), list):
         _fail("ledger resources and audit must be lists")
-    if not isinstance(ledger.get("ending_evidence"), dict):
-        _fail("ending_evidence must be an object")
-    for task_key, digest in ledger["ending_evidence"].items():
-        if not HASH_KEY_RE.fullmatch(str(task_key)) or not DIGEST_RE.fullmatch(str(digest)):
-            _fail("ending evidence entry is invalid")
+    if "ending_evidence" in ledger:
+        if not isinstance(ledger["ending_evidence"], dict):
+            _fail("legacy ending_evidence must be an object")
+        for task_key, digest in ledger["ending_evidence"].items():
+            if not HASH_KEY_RE.fullmatch(str(task_key)) or not DIGEST_RE.fullmatch(str(digest)):
+                _fail("legacy ending evidence entry is invalid")
     resource_ids: set[str] = set()
     acquisition_sequences: set[int] = set()
     for resource in ledger["resources"]:
@@ -499,6 +499,7 @@ def record_retained_path(
             "retained_reason": reason,
             "next_review": next_review,
             "retention_authority": "user" if authorized_by_user else "project_contract",
+            "sync_status": "destination_pending",
         }
     )
     _audit(ledger, "record_retained", resource["id"], "retained", reason)
@@ -630,8 +631,8 @@ def handoff(
     resource = _resource(ledger, resource_id)
     if resource["state"] != "acquired" or (resource["kind"] == "path" and resource.get("identity") is not None):
         _fail("handoff must be explicit before a path is sealed or release begins")
-    if role not in {"downstream", "ending"}:
-        _fail("handoff role must be downstream or ending")
+    if role != "downstream":
+        _fail("Ending is memory-only and cannot own a resource handoff")
     task_key = _task_key(downstream_task_id)
     if task_key in resource["consumers"]:
         _fail("duplicate consumer handoff is forbidden")
@@ -639,35 +640,12 @@ def handoff(
     _audit(ledger, "handoff", resource["id"], "acquired", f"explicit {role} consumer added")
 
 
-def record_evidence_persisted(ledger: dict[str, Any], ending_task_id: str, evidence_digest: str) -> None:
-    task_key = _task_key(ending_task_id)
-    ending_keys = {
-        consumer_key
-        for resource in ledger["resources"]
-        for consumer_key, consumer in resource["consumers"].items()
-        if consumer.get("role") == "ending"
-    }
-    if ledger["owner_role"] == "ending":
-        ending_keys.add(ledger["owner_task_key"])
-    if task_key not in ending_keys:
-        _fail("evidence receipt must belong to this ledger's exact Ending consumer")
-    ledger["ending_evidence"][task_key] = _digest(evidence_digest, "evidence digest")
-    _audit(ledger, "evidence_persisted", None, "acquired", "Ending evidence and terminal record persisted")
-
-
 def _release_barriers(ledger: dict[str, Any], resource: dict[str, Any]) -> None:
     if not resource.get("durable_result_digest"):
         _fail("release requires durable result readback")
-    incomplete = [consumer for consumer in resource["consumers"].values() if not consumer.get("readback_digest")]
+    incomplete = [consumer for consumer in resource["consumers"].values() if consumer.get("role") != "ending" and not consumer.get("readback_digest")]
     if incomplete:
         _fail("release requires every explicit consumer readback")
-    ending_keys = [
-        task_key for task_key, consumer in resource["consumers"].items() if consumer.get("role") == "ending"
-    ]
-    if ledger["owner_role"] == "ending" and ledger["owner_task_key"] not in ending_keys:
-        ending_keys.append(ledger["owner_task_key"])
-    if any(task_key not in ledger["ending_evidence"] for task_key in ending_keys):
-        _fail("Ending must persist evidence and its terminal record before release")
 
 
 def _enforce_scope_lifo(ledger: dict[str, Any], resource: dict[str, Any]) -> None:
@@ -999,7 +977,7 @@ def _build_parser() -> argparse.ArgumentParser:
     init = subparsers.add_parser("init")
     init.add_argument("--task-id", required=True)
     init.add_argument("--task-root", required=True)
-    init.add_argument("--role", choices=("producer", "ending"), default="producer")
+    init.add_argument("--role", choices=("producer",), default="producer")
 
     acquire = subparsers.add_parser("acquire-path")
     acquire.add_argument("--id", required=True)
@@ -1045,11 +1023,7 @@ def _build_parser() -> argparse.ArgumentParser:
     handoff_parser = subparsers.add_parser("handoff")
     handoff_parser.add_argument("--id", required=True)
     handoff_parser.add_argument("--task-id", required=True)
-    handoff_parser.add_argument("--role", choices=("downstream", "ending"), default="downstream")
-
-    evidence = subparsers.add_parser("evidence-persisted")
-    evidence.add_argument("--task-id", required=True)
-    evidence.add_argument("--digest", required=True)
+    handoff_parser.add_argument("--role", choices=("downstream",), default="downstream")
 
     prepare = subparsers.add_parser("prepare-release")
     prepare.add_argument("--id", required=True)
@@ -1117,8 +1091,6 @@ def main() -> int:
                     record_consumer_readback(ledger, args.id, args.task_id, args.digest)
                 elif args.command == "handoff":
                     handoff(ledger, args.id, args.task_id, role=args.role)
-                elif args.command == "evidence-persisted":
-                    record_evidence_persisted(ledger, args.task_id, args.digest)
                 elif args.command == "prepare-release":
                     prepare_release(ledger, args.id)
                 elif args.command == "cleanup-path":
