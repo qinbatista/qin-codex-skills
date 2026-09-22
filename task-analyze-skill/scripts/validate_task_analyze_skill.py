@@ -31,8 +31,8 @@ def validate(skill_dir, models_cache_path=None, global_agents_path=None, global_
         spec = importlib.util.spec_from_file_location("validate_selected_policy", policy_path)
         policy = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(policy)
-        for model, effort in [("gpt-5.6-luna", "max"), ("gpt-6-astra", "ultra")]:
-            node = {"skill": "code-skill", "model": "gpt-5.3-codex-spark", "effort": "low", "allow_fallback": ["gpt-5.6-sol|high"]}
+        for model, effort in [("gpt-6-luna", "max"), ("gpt-6-astra", "ultra")]:
+            node = {"skill": "code-skill", "model": "gpt-6-luna", "effort": "low", "allow_fallback": ["gpt-6-sol|high"]}
             policy.bind_node(node, model, effort)
             if (node["model"], node["effort"], node["allow_fallback"]) != (model, effort, []):
                 failures.append("governed task does not preserve the selected pair")

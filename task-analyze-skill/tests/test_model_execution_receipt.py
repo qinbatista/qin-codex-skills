@@ -61,10 +61,10 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             "failure_detail": "rate_limited",
             "turn_completed": False,
             "result_published": False,
-            "resolved_model": "gpt-5.3-codex-spark",
-            "resolved_pair": "gpt-5.3-codex-spark|low",
-            "effective_model": "gpt-5.3-codex-spark",
-            "effective_pair": "gpt-5.3-codex-spark|low",
+            "resolved_model": "gpt-6-luna",
+            "resolved_pair": "gpt-6-luna|low",
+            "effective_model": "gpt-6-luna",
+            "effective_pair": "gpt-6-luna|low",
             "availability": {"has_credits": False},
             "tokens": {"input_tokens": None, "output_tokens": None, "total_tokens": None},
             "route_attempts": [{}],
@@ -135,11 +135,11 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_parse_rollout_allowlist_reads_resolved_model_reroute_tokens_and_timing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             rollout_path = Path(temp_dir) / "rollout.jsonl"
-            events = [{"type": "turn_context", "payload": {"turn_id": "turn-1", "model": "gpt-5.6-terra", "effort": "high", "base_instructions": "do not copy"}}, {"type": "event_msg", "payload": {"type": "model_reroute", "from_model": "gpt-5.6-terra", "to_model": "gpt-5.6-luna", "reason": "allowed fallback"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 120, "cached_input_tokens": 20, "output_tokens": 30, "reasoning_output_tokens": 10, "total_tokens": 150}}, "rate_limits": {"limit_id": "premium", "credits": {"has_credits": True, "unlimited": False}, "rate_limit_reached_type": None}}}, {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 420, "time_to_first_token_ms": 40}}]
+            events = [{"type": "turn_context", "payload": {"turn_id": "turn-1", "model": "gpt-6-sol", "effort": "high", "base_instructions": "do not copy"}}, {"type": "event_msg", "payload": {"type": "model_reroute", "from_model": "gpt-6-sol", "to_model": "gpt-6-luna", "reason": "allowed fallback"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 120, "cached_input_tokens": 20, "output_tokens": 30, "reasoning_output_tokens": 10, "total_tokens": 150}}, "rate_limits": {"limit_id": "premium", "credits": {"has_credits": True, "unlimited": False}, "rate_limit_reached_type": None}}}, {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 420, "time_to_first_token_ms": 40}}]
             rollout_path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
             observed = module.parse_rollout_allowlist(rollout_path)
-        self.assertEqual(observed["turn_context"], {"turn_id": "turn-1", "model": "gpt-5.6-terra", "effort": "high"})
-        self.assertEqual(observed["reroutes"][-1]["to_model"], "gpt-5.6-luna")
+        self.assertEqual(observed["turn_context"], {"turn_id": "turn-1", "model": "gpt-6-sol", "effort": "high"})
+        self.assertEqual(observed["reroutes"][-1]["to_model"], "gpt-6-luna")
         self.assertEqual(observed["usage"]["total_tokens"], 150)
         self.assertEqual(observed["task_complete"]["time_to_first_token_ms"], 40)
         self.assertEqual(observed["availability"]["limit_id"], "premium")
@@ -168,7 +168,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             state_db.touch()
             Path(f"{state_db}-wal").touch()
             failed_connection = FakeConnection(error=module.sqlite3.OperationalError("temporarily unavailable"))
-            row = ("thread-1", str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 42, "test", "openai", "exec")
+            row = ("thread-1", str(Path(temp_dir) / "rollout.jsonl"), "gpt-6-sol", "ultra", 42, "test", "openai", "exec")
             successful_connection = FakeConnection(row=row)
             with patch.object(module.sqlite3, "connect", side_effect=[failed_connection, successful_connection]) as connect, patch.object(module.time, "sleep") as sleep:
                 observed = module.read_thread_state(state_db, "thread-1")
@@ -176,7 +176,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         sleep.assert_called_once_with(0.1)
         self.assertTrue(failed_connection.closed)
         self.assertTrue(successful_connection.closed)
-        self.assertEqual(observed["model"], "gpt-5.6-sol")
+        self.assertEqual(observed["model"], "gpt-6-sol")
         self.assertEqual(observed["effort"], "ultra")
         self.assertEqual(observed["tokens_used"], 42)
 
@@ -201,7 +201,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             state_db = Path(temp_dir) / "state.sqlite"
             state_db.touch()
             primary_connection = FakeConnection(error=module.sqlite3.OperationalError("readonly shm unavailable"))
-            row = ("thread-immutable", str(Path(temp_dir) / "rollout.jsonl"), "gpt-5.6-sol", "ultra", 77, "test", "openai", "exec")
+            row = ("thread-immutable", str(Path(temp_dir) / "rollout.jsonl"), "gpt-6-sol", "ultra", 77, "test", "openai", "exec")
             immutable_connection = FakeConnection(row=row)
             with patch.object(module.sqlite3, "connect", side_effect=[primary_connection, immutable_connection]) as connect, patch.object(module.time, "sleep") as sleep:
                 observed = module.read_thread_state(state_db, "thread-immutable")
@@ -213,7 +213,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         sleep.assert_not_called()
         self.assertTrue(primary_connection.closed)
         self.assertTrue(immutable_connection.closed)
-        self.assertEqual(observed["model"], "gpt-5.6-sol")
+        self.assertEqual(observed["model"], "gpt-6-sol")
         self.assertEqual(observed["tokens_used"], 77)
 
     def test_read_thread_state_raises_persistent_operational_error_after_bound(self):
@@ -236,7 +236,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             rollout_path = sessions_root / "rollout-thread-fallback.jsonl"
             events = [
                 {"type": "session_meta", "payload": {"id": "thread-fallback", "cli_version": "test-cli", "model_provider": "openai", "source": "exec", "private_prompt": "must-not-leak"}},
-                {"type": "turn_context", "payload": {"turn_id": "turn-fallback", "model": "gpt-5.6-luna", "effort": "low", "base_instructions": "must-not-leak"}},
+                {"type": "turn_context", "payload": {"turn_id": "turn-fallback", "model": "gpt-6-luna", "effort": "low", "base_instructions": "must-not-leak"}},
                 {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 35, "cached_input_tokens": 5, "output_tokens": 7, "reasoning_output_tokens": 1, "total_tokens": 42}}}},
                 {"type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 9}},
             ]
@@ -244,7 +244,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             with patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False), patch.object(module, "resolve_codex_sqlite_db", return_value=None):
                 observed = module.read_thread_state(None, "thread-fallback")
         self.assertEqual(observed["rollout_path"], rollout_path)
-        self.assertEqual(observed["model"], "gpt-5.6-luna")
+        self.assertEqual(observed["model"], "gpt-6-luna")
         self.assertEqual(observed["effort"], "low")
         self.assertEqual(observed["tokens_used"], 42)
         self.assertEqual(observed["metadata_status"], "degraded")
@@ -255,22 +255,22 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_run_receipt_requests_exact_model_and_effort_over_stdin(self):
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-1"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2}})])
         process = SimpleNamespace(stdout=stdout_text, stderr="one warning\n", returncode=0)
-        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-5.3-codex-spark", "effort": "high", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-        rollout = {"turn_context": {"turn_id": "turn-1", "model": "gpt-5.3-codex-spark", "effort": "high"}, "reroutes": [], "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2, "total_tokens": 110}, "task_complete": {"duration_ms": 300, "time_to_first_token_ms": 100}}
+        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-6-luna", "effort": "high", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "turn-1", "model": "gpt-6-luna", "effort": "high"}, "reroutes": [], "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10, "reasoning_output_tokens": 2, "total_tokens": 110}, "task_complete": {"duration_ms": 300, "time_to_first_token_ms": 100}}
         code_rule_bundle = {"schema_version": 1, "execution_domain": "python", "entry_reference": "code-skill/SKILL.md", "universal_reference": "code-skill/references/code-writing-philosophy.md", "category_ids": [], "reference_paths": ["code-skill/SKILL.md", "code-skill/references/code-writing-philosophy.md", "code-skill/references/python-rules.md"], "labels": ["universal code philosophy", "Python"], "message": "Code Gate loaded: universal code philosophy, Python."}
-        args = argparse.Namespace(model="gpt-5.3-codex-spark", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="same-work", allow_fallback=[], code_rule_bundle=code_rule_bundle)
+        args = argparse.Namespace(model="gpt-6-luna", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="same-work", allow_fallback=[], code_rule_bundle=code_rule_bundle)
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
         command = run_mock.call_args.args[0]
-        self.assertIn("gpt-5.3-codex-spark", command)
+        self.assertIn("gpt-6-luna", command)
         self.assertIn('model_reasoning_effort="high"', command)
         self.assertIn("features.multi_agent=false", command)
         self.assertEqual(command[-1], "-")
         self.assertTrue(run_mock.call_args.kwargs["input"].startswith("LOCKED_ROUTE_NODE"))
         self.assertIn("Complete the assigned result", run_mock.call_args.kwargs["input"])
-        self.assertIn("smallest relevant behavior check", run_mock.call_args.kwargs["input"])
+        self.assertIn("smallest real behavior check or output readback", run_mock.call_args.kwargs["input"])
         self.assertIn("Report results and verification honestly", run_mock.call_args.kwargs["input"])
-        self.assertIn("do not start a whole project", run_mock.call_args.kwargs["input"])
+        self.assertIn("Do not start a whole project", run_mock.call_args.kwargs["input"])
         self.assertIn("Ending is only scoped memory summarization", run_mock.call_args.kwargs["input"])
         self.assertIn("Apply the relevant code preferences from:", run_mock.call_args.kwargs["input"])
         self.assertIn("code-writing-philosophy.md", run_mock.call_args.kwargs["input"])
@@ -285,9 +285,9 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_run_receipt_uses_lean_home_only_for_an_explicit_bounded_worker(self):
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-lean"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 20, "cached_input_tokens": 5, "output_tokens": 2, "reasoning_output_tokens": 1}})])
         process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
-        thread_state = {"rollout_path": Path("/tmp/rollout-lean"), "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 22, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-        rollout = {"turn_context": {"turn_id": "turn-lean", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 20, "cached_input_tokens": 5, "output_tokens": 2, "reasoning_output_tokens": 1, "total_tokens": 22}, "task_complete": {"duration_ms": 8, "time_to_first_token_ms": 3}}
-        args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="lean-work", allow_fallback=[], code_rule_bundle=None, lean_context_mode=True, minimal_context_mode=True)
+        thread_state = {"rollout_path": Path("/tmp/rollout-lean"), "model": "gpt-6-luna", "effort": "low", "tokens_used": 22, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "turn-lean", "model": "gpt-6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 20, "cached_input_tokens": 5, "output_tokens": 2, "reasoning_output_tokens": 1, "total_tokens": 22}, "task_complete": {"duration_ms": 8, "time_to_first_token_ms": 3}}
+        args = argparse.Namespace(model="gpt-6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="lean-work", allow_fallback=[], code_rule_bundle=None, lean_context_mode=True, minimal_context_mode=True)
         with tempfile.TemporaryDirectory() as temporary:
             parent_home = Path(temporary) / "full"
             lean_home = Path(temporary) / "lean"
@@ -306,14 +306,14 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             module.code_gate_execution_contract(bundle)
 
     def test_child_command_explicitly_disables_approval_prompts_without_bypassing_sandbox(self):
-        args = argparse.Namespace(codex_bin="codex", model="gpt-5.6-luna", effort="max", sandbox="workspace-write", ignore_user_config=True)
+        args = argparse.Namespace(codex_bin="codex", model="gpt-6-luna", effort="max", sandbox="workspace-write", ignore_user_config=True)
         command = module.build_codex_exec_command(args)
         self.assertIn('approval_policy="never"', command)
         self.assertIn("--sandbox", command)
         self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", command)
 
     def test_lean_child_disables_only_bounded_nonessential_features(self):
-        args = argparse.Namespace(codex_bin="codex", model="gpt-5.6-luna", effort="low", sandbox="read-only", ignore_user_config=False)
+        args = argparse.Namespace(codex_bin="codex", model="gpt-6-luna", effort="low", sandbox="read-only", ignore_user_config=False)
         command = module.build_codex_exec_command(args, lean_context_active=True)
         disabled = [command[index + 1] for index, value in enumerate(command[:-1]) if value == "--disable"]
         self.assertEqual(disabled, list(module.LEAN_CONTEXT_DISABLED_FEATURES))
@@ -358,7 +358,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_workspace_write_child_adds_only_result_parent_as_writable_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             result_path = Path(temporary) / "one-run" / "result.json"
-            args = argparse.Namespace(codex_bin="codex", model="gpt-5.6-luna", effort="max", sandbox="workspace-write", ignore_user_config=True, result_output=result_path)
+            args = argparse.Namespace(codex_bin="codex", model="gpt-6-luna", effort="max", sandbox="workspace-write", ignore_user_config=True, result_output=result_path)
             command = module.build_codex_exec_command(args)
         self.assertEqual(command.count("--add-dir"), 1)
         self.assertEqual(command[command.index("--add-dir") + 1], str(result_path.resolve().parent))
@@ -372,10 +372,11 @@ class ModelExecutionReceiptTests(unittest.TestCase):
 
     def test_route_markers_define_non_recursive_lifecycle_ownership(self):
         result = module.route_node_lifecycle_boundary("LOCKED_ROUTE_NODE")
-        ending = module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
         self.assertIn("inside this active task", result)
-        self.assertIn("Skip absent memory", ending)
-        self.assertIn("Do not run verification", ending)
+        self.assertIn("output readback", result)
+        self.assertEqual(module.ROUTE_MARKERS, {"LOCKED_ROUTE_NODE"})
+        with self.assertRaisesRegex(ValueError, "retired"):
+            module.route_node_lifecycle_boundary("ENDING_TASK_WORKER")
         with self.assertRaisesRegex(ValueError, "retired"):
             module.route_node_lifecycle_boundary("ENDING_CHECK_WORKER")
         with self.assertRaisesRegex(ValueError, "unsupported route marker"):
@@ -396,17 +397,17 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             json.dumps({"type": "turn.completed", "usage": {"input_tokens": 101, "cached_input_tokens": 1, "output_tokens": 9, "reasoning_output_tokens": 0}}),
         ])
         process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
-        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-        rollout = {"turn_context": {"turn_id": "turn-2", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 101, "cached_input_tokens": 1, "output_tokens": 9, "reasoning_output_tokens": 0, "total_tokens": 110}, "task_complete": {"duration_ms": 200, "time_to_first_token_ms": 20}}
-        args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="route-attempt", allow_fallback=[])
+        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-6-luna", "effort": "low", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "turn-2", "model": "gpt-6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 101, "cached_input_tokens": 1, "output_tokens": 9, "reasoning_output_tokens": 0, "total_tokens": 110}, "task_complete": {"duration_ms": 200, "time_to_first_token_ms": 20}}
+        args = argparse.Namespace(model="gpt-6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="route-attempt", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
-        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-5.6-luna", "-c", "model_reasoning_effort=\"low\"", "-c", "features.multi_agent=false", "-c", 'approval_policy="never"', "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
+        self.assertEqual(run_mock.call_args.args[0], ["codex", "exec", "--model", "gpt-6-luna", "-c", "model_reasoning_effort=\"low\"", "-c", "features.multi_agent=false", "-c", 'approval_policy="never"', "--sandbox", "read-only", "--skip-git-repo-check", "--json", "--ignore-user-config", "-"])
         attempt = receipt["route_attempts"][0]
-        self.assertEqual(attempt["requested_pair"], "gpt-5.6-luna|low")
-        self.assertEqual(attempt["resolved_pair"], "gpt-5.6-luna|low")
-        self.assertEqual(attempt["effective_pair"], "gpt-5.6-luna|low")
-        self.assertEqual(attempt["executed_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(attempt["requested_pair"], "gpt-6-luna|low")
+        self.assertEqual(attempt["resolved_pair"], "gpt-6-luna|low")
+        self.assertEqual(attempt["effective_pair"], "gpt-6-luna|low")
+        self.assertEqual(attempt["executed_pair"], "gpt-6-luna|low")
         self.assertEqual(attempt["status"], "pass")
         self.assertIsNone(attempt["failure_class"])
         self.assertTrue(attempt["model_match"])
@@ -419,16 +420,16 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_run_receipt_marks_execution_failure_class_when_runtime_fails_before_resolution(self):
         stdout_text = json.dumps({"type": "thread.started", "thread_id": "thread-1"})
         process = SimpleNamespace(stdout=stdout_text, stderr="boom", returncode=1)
-        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-5.3-codex-spark", "effort": "low", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-6-luna", "effort": "low", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
         rollout = {"turn_context": {}, "reroutes": [], "usage": {}, "task_complete": {}}
-        args = argparse.Namespace(model="gpt-5.3-codex-spark", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="runtime-fail", allow_fallback=[])
+        args = argparse.Namespace(model="gpt-6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="runtime-fail", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
         self.assertEqual(run_mock.call_args.args[0][0], "codex")
         attempt = receipt["route_attempts"][0]
         self.assertEqual(attempt["status"], "fail")
         self.assertEqual(attempt["failure_class"], "execution")
-        self.assertEqual(attempt["requested_pair"], "gpt-5.3-codex-spark|low")
+        self.assertEqual(attempt["requested_pair"], "gpt-6-luna|low")
         self.assertIsNone(attempt["resolved_pair"])
         self.assertIsNone(attempt["effective_pair"])
         self.assertIsNone(receipt["resolved_model"])
@@ -441,9 +442,9 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_run_receipt_ignores_stale_thread_state_when_rollout_missing_turn_context(self):
         stdout_text = json.dumps({"type": "thread.started", "thread_id": "thread-1"})
         process = SimpleNamespace(stdout=stdout_text, stderr="boom", returncode=1)
-        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-5.3-codex-spark", "effort": "low", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        thread_state = {"rollout_path": Path("/tmp/rollout"), "model": "gpt-6-luna", "effort": "low", "tokens_used": 110, "cli_version": "test", "model_provider": "openai", "source": "exec"}
         rollout = {"turn_context": {}, "reroutes": [], "usage": {}, "task_complete": {}}
-        args = argparse.Namespace(model="gpt-5.6-terra", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="runtime-fail-stale", allow_fallback=[])
+        args = argparse.Namespace(model="gpt-6-sol", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="runtime-fail-stale", allow_fallback=[])
         with patch.object(module.subprocess, "run", return_value=process), patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             receipt = module.run_receipt(args, "same prompt")
         attempt = receipt["route_attempts"][0]
@@ -453,15 +454,15 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertIsNone(receipt["effective_model"])
         self.assertEqual(attempt["status"], "fail")
         self.assertFalse(receipt["turn_completed"])
-        self.assertEqual(attempt["executed_pair"], "gpt-5.6-terra|low")
+        self.assertEqual(attempt["executed_pair"], "gpt-6-sol|low")
 
     def test_failed_run_receipt_is_sanitized_and_does_not_claim_execution(self):
         args = argparse.Namespace(
-            model="gpt-5.6-luna",
+            model="gpt-6-luna",
             effort="high",
             workload_id="timeout-proof",
             entry_task=False,
-            allow_fallback=["gpt-5.6-terra|medium"],
+            allow_fallback=["gpt-6-sol|medium"],
         )
         receipt = module.failed_run_receipt(args, "timeout")
         self.assertEqual(receipt["status"], "fail")
@@ -470,7 +471,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertFalse(receipt["turn_completed"])
         self.assertFalse(receipt["metrics_complete"])
         self.assertFalse(receipt["tokens_lower_bound"])
-        self.assertEqual(receipt["route_attempts"][0]["executed_pair"], "gpt-5.6-luna|high")
+        self.assertEqual(receipt["route_attempts"][0]["executed_pair"], "gpt-6-luna|high")
         self.assertNotIn("error", json.dumps(receipt).lower())
 
     def test_run_receipt_preserves_sanitized_timeout_telemetry_from_partial_bytes(self):
@@ -478,9 +479,9 @@ class ModelExecutionReceiptTests(unittest.TestCase):
             result_output = Path(temp_dir) / "partial-result.md"
             partial_stdout = "\n".join([json.dumps({"type": "thread.started", "thread_id": "thread-timeout"}), json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "secret partial response"}}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 70, "output_tokens": 30, "total_tokens": 100}})])
             timeout_error = module.subprocess.TimeoutExpired(["codex", "exec"], 30, output=partial_stdout.encode("utf-8"), stderr=b"private stderr")
-            thread_state = {"rollout_path": Path(temp_dir) / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 125, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-            rollout = {"turn_context": {"turn_id": "turn-timeout", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [{"from_model": "gpt-5.6-luna", "to_model": "gpt-5.6-terra", "reason": "capacity"}], "usage": {"input_tokens": 80, "cached_input_tokens": 5, "output_tokens": 45, "reasoning_output_tokens": 12, "total_tokens": 125}, "task_complete": {"duration_ms": 900, "time_to_first_token_ms": 30}}
-            args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=result_output, timeout=30, workdir=Path(temp_dir), state_db=Path(temp_dir) / "state.sqlite", workload_id="timeout-work", allow_fallback=["gpt-5.6-terra|low"])
+            thread_state = {"rollout_path": Path(temp_dir) / "rollout.jsonl", "model": "gpt-6-luna", "effort": "low", "tokens_used": 125, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+            rollout = {"turn_context": {"turn_id": "turn-timeout", "model": "gpt-6-luna", "effort": "low"}, "reroutes": [{"from_model": "gpt-6-luna", "to_model": "gpt-6-sol", "reason": "capacity"}], "usage": {"input_tokens": 80, "cached_input_tokens": 5, "output_tokens": 45, "reasoning_output_tokens": 12, "total_tokens": 125}, "task_complete": {"duration_ms": 900, "time_to_first_token_ms": 30}}
+            args = argparse.Namespace(model="gpt-6-luna", effort="low", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, result_output=result_output, timeout=30, workdir=Path(temp_dir), state_db=Path(temp_dir) / "state.sqlite", workload_id="timeout-work", allow_fallback=["gpt-6-sol|low"])
             with patch.object(module.subprocess, "run", side_effect=timeout_error), patch.object(module, "read_thread_state", return_value=thread_state) as read_state, patch.object(module, "parse_rollout_allowlist", return_value=rollout):
                 receipt = module.run_receipt(args, "confidential prompt")
         self.assertEqual(read_state.call_args.args[1], "thread-timeout")
@@ -490,8 +491,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertFalse(receipt["metrics_complete"])
         self.assertTrue(receipt["tokens_lower_bound"])
         self.assertEqual(receipt["tokens"]["total_tokens"], 125)
-        self.assertEqual(receipt["resolved_model"], "gpt-5.6-luna")
-        self.assertEqual(receipt["effective_model"], "gpt-5.6-terra")
+        self.assertEqual(receipt["resolved_model"], "gpt-6-luna")
+        self.assertEqual(receipt["effective_model"], "gpt-6-sol")
         self.assertEqual(receipt["route_attempts"][0]["failure_class"], "timeout")
         self.assertEqual(receipt["workload_prompt_sha256"], module.sha256_text("confidential prompt"))
         self.assertGreaterEqual(receipt["process_elapsed_ms"], 0)
@@ -501,8 +502,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertNotIn("confidential prompt", json.dumps(receipt))
 
     def test_compare_receipts_reports_positive_savings_for_routed_run(self):
-        routed = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "prompt_sha256": "wrapper-a", "output_sha256": "same-output", "effective_model": "gpt-5.3-codex-spark", "resolved_effort": "high", "process_elapsed_ms": 800, "tokens": {"total_tokens": 120, "uncached_input_tokens": 80}}
-        baseline = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "prompt_sha256": "wrapper-b", "output_sha256": "same-output", "effective_model": "gpt-5.6-sol", "resolved_effort": "ultra", "process_elapsed_ms": 1400, "tokens": {"total_tokens": 200, "uncached_input_tokens": 130}}
+        routed = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "prompt_sha256": "wrapper-a", "output_sha256": "same-output", "effective_model": "gpt-6-luna", "resolved_effort": "high", "process_elapsed_ms": 800, "tokens": {"total_tokens": 120, "uncached_input_tokens": 80}}
+        baseline = {"status": "pass", "workload_id": "same-work", "workload_prompt_sha256": "same-workload", "prompt_sha256": "wrapper-b", "output_sha256": "same-output", "effective_model": "gpt-6-sol", "resolved_effort": "ultra", "process_elapsed_ms": 1400, "tokens": {"total_tokens": 200, "uncached_input_tokens": 130}}
         comparison = module.compare_receipts(routed, baseline)
         self.assertTrue(comparison["valid_like_for_like_smoke"])
         self.assertTrue(comparison["performance_eligible"])
@@ -562,9 +563,9 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_entry_launch_installs_inherited_context_marker(self):
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "entry-thread"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0}})])
         process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
-        thread_state = {"rollout_path": Path("/tmp/entry-rollout"), "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-        rollout = {"turn_context": {"turn_id": "entry-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
-        args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=True, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="entry-marker", allow_fallback=[])
+        thread_state = {"rollout_path": Path("/tmp/entry-rollout"), "model": "gpt-6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "entry-turn", "model": "gpt-6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+        args = argparse.Namespace(model="gpt-6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=True, result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="entry-marker", allow_fallback=[])
         with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
             receipt = module.run_receipt(args, "entry task")
@@ -577,9 +578,9 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         raw_prompt = "exact raw benchmark prompt\nwithout a locked marker"
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "direct-thread"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0}})])
         process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
-        thread_state = {"rollout_path": Path("/tmp/direct-rollout"), "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-        rollout = {"turn_context": {"turn_id": "direct-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
-        args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, benchmark_run_id="benchmark-direct-benchmark", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="direct-benchmark", allow_fallback=[])
+        thread_state = {"rollout_path": Path("/tmp/direct-rollout"), "model": "gpt-6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "direct-turn", "model": "gpt-6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+        args = argparse.Namespace(model="gpt-6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, benchmark_run_id="benchmark-direct-benchmark", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="direct-benchmark", allow_fallback=[])
         with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
             os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
             receipt = module.run_receipt(args, raw_prompt)
@@ -621,9 +622,9 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "commentary after result"}})
                 emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
             """))
-            thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-            rollout = {"turn_context": {"turn_id": "benchmark-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
-            args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, bootstrap_task=False, benchmark_run_id="benchmark-stream-result", result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="stream-result", allow_fallback=[])
+            thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+            rollout = {"turn_context": {"turn_id": "benchmark-turn", "model": "gpt-6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
+            args = argparse.Namespace(model="gpt-6-sol", effort="ultra", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=True, bootstrap_task=False, benchmark_run_id="benchmark-stream-result", result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="stream-result", allow_fallback=[])
             result_published = threading.Event()
             with patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), patch("builtins.print", side_effect=lambda *_args, **_kwargs: result_published.set()) as print_mock, ThreadPoolExecutor(max_workers=1) as executor:
                 started = time.monotonic()
@@ -673,9 +674,9 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 emit({"type": "item.completed", "item": {"type": "agent_message", "text": "RESULT_READY_BEGIN\\nLATER RESULT\\nRESULT_READY_END"}})
                 emit({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}})
             """))
-            thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "low", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-            rollout = {"turn_context": {"turn_id": "production-turn", "model": "gpt-5.6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
-            args = argparse.Namespace(model="gpt-5.6-luna", effort="low", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=False, benchmark_run_id=None, node_role="result-producer", route_marker="LOCKED_ROUTE_NODE", stream_result_ready=True, result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="production-stream", allow_fallback=[])
+            thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-6-luna", "effort": "low", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+            rollout = {"turn_context": {"turn_id": "production-turn", "model": "gpt-6-luna", "effort": "low"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 250, "time_to_first_token_ms": 1}}
+            args = argparse.Namespace(model="gpt-6-luna", effort="low", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=False, benchmark_run_id=None, node_role="result-producer", route_marker="LOCKED_ROUTE_NODE", stream_result_ready=True, result_output=result_path, timeout=2, workdir=root, state_db=root / "state.sqlite", workload_id="production-stream", allow_fallback=[])
             with patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(module.run_receipt, args, "bounded production task")
                 time.sleep(0.05)
@@ -700,16 +701,16 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         raw_prompt = "exact Global inline-bootstrap benchmark prompt"
         stdout_text = "\n".join([json.dumps({"type": "thread.started", "thread_id": "bootstrap-thread"}), json.dumps({"type": "turn.completed", "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0}})])
         process = SimpleNamespace(stdout=stdout_text, stderr="", returncode=0)
-        thread_state = {"rollout_path": Path("/tmp/bootstrap-rollout"), "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-        rollout = {"turn_context": {"turn_id": "bootstrap-turn", "model": "gpt-5.6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+        thread_state = {"rollout_path": Path("/tmp/bootstrap-rollout"), "model": "gpt-6-sol", "effort": "ultra", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+        rollout = {"turn_context": {"turn_id": "bootstrap-turn", "model": "gpt-6-sol", "effort": "ultra"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
         with tempfile.TemporaryDirectory() as temporary:
             prompt_path = Path(temporary) / "prompt.txt"
             prompt_path.write_text(raw_prompt, encoding="utf-8")
-            args = argparse.Namespace(model="gpt-5.6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-benchmark", benchmark_prompt_path=prompt_path, result_output=None, timeout=30, workdir=Path(temporary), state_db=Path(temporary) / "state.sqlite", workload_id="bootstrap-benchmark", allow_fallback=[])
+            args = argparse.Namespace(model="gpt-6-sol", effort="ultra", codex_bin="codex", sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-benchmark", benchmark_prompt_path=prompt_path, result_output=None, timeout=30, workdir=Path(temporary), state_db=Path(temporary) / "state.sqlite", workload_id="bootstrap-benchmark", allow_fallback=[])
             with patch.dict(os.environ, {}, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout):
                 os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
                 receipt = module.run_receipt(args, raw_prompt)
-        execution_prompt = module.auto_benchmark_execution_prompt(raw_prompt, "gpt-5.6-sol|ultra")
+        execution_prompt = module.auto_benchmark_execution_prompt(raw_prompt, "gpt-6-sol|ultra")
         self.assertEqual(run_mock.call_args.kwargs["input"], execution_prompt)
         self.assertIn("AUTO_BENCHMARK_ENTRY", execution_prompt)
         self.assertIn("benchmark_auto_entry_bridge.py", execution_prompt)
@@ -722,7 +723,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PROMPT_PATH"], str(prompt_path.resolve()))
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_WORKLOAD_SHA256"], module.sha256_text(raw_prompt))
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_PYTHON"], str(Path(module.sys.executable).resolve()))
-        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"], "gpt-5.6-sol")
+        self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_MODEL"], "gpt-6-sol")
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_ENTRY_EFFORT"], "ultra")
         self.assertEqual(run_mock.call_args.kwargs["env"][module.BENCHMARK_TASK_SANDBOX_ENV], "read-only")
         self.assertEqual(run_mock.call_args.kwargs["env"]["CODEX_AUTO_BENCHMARK_CACHE_ROOT"], str(args.workdir.resolve() / "Cache" / "tmp-task-analyze" / args.workload_id))
@@ -739,7 +740,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_bootstrap_uses_verified_bridge_result_only_when_controller_final_is_empty(self):
         raw_prompt = "exact adaptive bridge handoff prompt"
         bridge_result = '{"answer":1}'
-        bridge_receipt_result = "Complexity: 18/100 (small) · Model: gpt-5.3-codex-spark|low · Route: downgrade\nEvidence: runtime receipt\n\n" + bridge_result
+        bridge_receipt_result = "Complexity: 18/100 (small) · Model: gpt-6-luna|low · Route: downgrade\nEvidence: runtime receipt\n\n" + bridge_result
         for terminal_message, handoff_expected in (("", True), ("wrong non-json final", False)):
             with self.subTest(terminal_message=terminal_message), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -765,7 +766,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 workspace = cache_root / "source-copy-one"
                 output_root = workspace / "Cache" / "tmp-task-analyze" / "bridge-output"
                 output_root.mkdir(parents=True)
-                (cache_root / "adaptive-entry-launch.json").write_text(json.dumps({"schema_version": 3, "workload_sha256": module.sha256_text(raw_prompt), "entry_pair": "gpt-5.6-luna|max"}) + "\n", encoding="utf-8")
+                (cache_root / "adaptive-entry-launch.json").write_text(json.dumps({"schema_version": 3, "workload_sha256": module.sha256_text(raw_prompt), "entry_pair": "gpt-6-luna|max"}) + "\n", encoding="utf-8")
                 (output_root / "result.json").write_text(bridge_receipt_result + "\n", encoding="utf-8")
                 bridge_receipt = {
                     "status": "pass",
@@ -773,8 +774,8 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                     "result_published": True,
                     "duplicate_result_detected": False,
                     "output_sha256": module.sha256_text(bridge_result),
-                    "selected_pair": "gpt-5.6-luna|max",
-                    "effective_pair": "gpt-5.6-luna|max",
+                    "selected_pair": "gpt-6-luna|max",
+                    "effective_pair": "gpt-6-luna|max",
                     "tokens": {"total_tokens": 12},
                     "process_elapsed_ms": 5,
                     "route_attempts": [{"status": "pass", "process_elapsed_ms": 5, "tokens": {"total_tokens": 12}}],
@@ -782,13 +783,13 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                     "trial": False,
                     "recommendation_state": "frozen",
                     "selection_provenance": "local_history",
-                    "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-5.6-luna|max"}],
+                    "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-6-luna|max"}],
                     "node_role": "result-producer",
                 }
                 (output_root / "receipt.json").write_text(json.dumps(bridge_receipt) + "\n", encoding="utf-8")
-                thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-5.6-luna", "effort": "max", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
-                rollout = {"turn_context": {"turn_id": "bootstrap-handoff-turn", "model": "gpt-5.6-luna", "effort": "max"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
-                args = argparse.Namespace(model="gpt-5.6-luna", effort="max", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-handoff", benchmark_prompt_path=prompt_path, result_output=result_path, timeout=30, workdir=root, state_db=root / "state.sqlite", workload_id="bootstrap-handoff", allow_fallback=[])
+                thread_state = {"rollout_path": root / "rollout.jsonl", "model": "gpt-6-luna", "effort": "max", "tokens_used": 12, "cli_version": "test", "model_provider": "openai", "source": "exec"}
+                rollout = {"turn_context": {"turn_id": "bootstrap-handoff-turn", "model": "gpt-6-luna", "effort": "max"}, "reroutes": [], "usage": {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "reasoning_output_tokens": 0, "total_tokens": 12}, "task_complete": {"duration_ms": 5, "time_to_first_token_ms": 1}}
+                args = argparse.Namespace(model="gpt-6-luna", effort="max", codex_bin=str(fake_codex), sandbox="read-only", ignore_user_config=False, entry_task=False, direct_task=False, bootstrap_task=True, benchmark_run_id="benchmark-bootstrap-handoff", benchmark_prompt_path=prompt_path, result_output=result_path, timeout=30, workdir=root, state_db=root / "state.sqlite", workload_id="bootstrap-handoff", allow_fallback=[])
                 with patch.dict(os.environ, {}, clear=False), patch.object(module, "read_thread_state", return_value=thread_state), patch.object(module, "parse_rollout_allowlist", return_value=rollout), patch("builtins.print") as print_mock:
                     os.environ.pop(module.ENTRY_CONTEXT_ENV, None)
                     receipt = module.run_receipt(args, raw_prompt)
@@ -834,7 +835,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 module.authorize_receipt_run(wrong_id)
 
     def test_direct_task_and_entry_task_are_cli_mutually_exclusive(self):
-        argv = ["run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", "conflict", "--output", "/tmp/conflict.json", "--entry-task", "--direct-task", "--benchmark-run-id", "benchmark-conflict"]
+        argv = ["run", "--model", "gpt-6-sol", "--effort", "ultra", "--workload-id", "conflict", "--output", "/tmp/conflict.json", "--entry-task", "--direct-task", "--benchmark-run-id", "benchmark-conflict"]
         with self.assertRaises(SystemExit):
             module.parse_args(argv)
 
@@ -852,7 +853,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
                 module.authorize_receipt_run(stream_verifier)
 
     def test_direct_result_producer_is_rejected_inside_entry_context(self):
-        args = argparse.Namespace(model="gpt-5.6-terra", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, route_marker="LOCKED_ROUTE_NODE", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="blocked-fixed-result", allow_fallback=[])
+        args = argparse.Namespace(model="gpt-6-sol", effort="high", codex_bin="codex", sandbox="read-only", ignore_user_config=True, entry_task=False, route_marker="LOCKED_ROUTE_NODE", result_output=None, timeout=30, workdir=Path("/tmp"), state_db=Path("/tmp/state.sqlite"), workload_id="blocked-fixed-result", allow_fallback=[])
         with patch.dict(os.environ, {module.ENTRY_CONTEXT_ENV: "1"}, clear=False), patch.object(module.subprocess, "run") as run_mock:
             with self.assertRaisesRegex(module.ReceiptAuthorizationError, "entry_context_adaptive_runner_required") as raised:
                 module.run_receipt(args, "private bounded prompt")

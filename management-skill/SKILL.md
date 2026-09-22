@@ -11,7 +11,7 @@ Use for requested skill maintenance, installation, or publication. Read related 
 
 Each skill's source directory is its owner. Keep entry instructions concise, put distinct domain guidance in linked references, and remove obsolete rules when the workflow changes. Global skills describe reusable concepts and preferences; project skills own concrete domain implementations.
 
-Preserve unrelated edits, private routing history, and unrelated installed skills. Test changed behavior with focused cases in the active task. Ending only writes useful memory with the selected model.
+Preserve unrelated edits, private routing history, and unrelated installed skills. Execute real checks of changed behavior in the active task and fix failures there. Ending only writes useful local memory with the selected model; it cannot gate publication or repair work.
 
 ## Install
 

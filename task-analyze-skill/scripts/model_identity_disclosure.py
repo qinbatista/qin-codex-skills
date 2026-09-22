@@ -41,17 +41,13 @@ STAGE_EVIDENCE_LABELS = {
 }
 
 
-def _valid_selected_pair(pair):
-    return bool(isinstance(pair, str) and re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:-]*\|(?:none|minimal|low|medium|high|xhigh|max|ultra)", pair))
+def _valid_selected_pair(pair, registry=None):
+    return isinstance(pair, str) and pair in _allowed_pairs(registry)
 
 
 def _allowed_pairs(registry=None):
     active_registry = registry or load_registry()
-    active_model_ids = {pair.split("|", 1)[0] for pair in active_registry["role_pairs"].values()}
     allowed = {f"{model['id']}|{effort}" for model in active_registry["models"] for effort in model["codex_efforts"]}
-    priority_producer = active_registry.get("priority_producer")
-    if isinstance(priority_producer, dict):
-        allowed.update(f"{priority_producer['id']}|{effort}" for effort in priority_producer["codex_efforts"])
     return allowed
 
 
@@ -82,7 +78,7 @@ def resolve_disclosure_identity(runtime_receipt=None, entry_resolution=None, reg
     receipt_pairs = _receipt_pairs(runtime_receipt)
     if receipt_pairs is not None:
         for pair in receipt_pairs:
-            if not _valid_selected_pair(pair):
+            if not _valid_selected_pair(pair, registry):
                 raise ValueError(f"runtime receipt uses unsupported model pair: {pair}")
         return {"source": "runtime_receipt", "requested_pair": receipt_pairs[0], "resolved_pair": receipt_pairs[1], "effective_pair": receipt_pairs[2]}
     if not isinstance(entry_resolution, dict):
@@ -91,7 +87,7 @@ def resolve_disclosure_identity(runtime_receipt=None, entry_resolution=None, reg
         model = entry_resolution.get("model")
         effort = entry_resolution.get("effort")
         entry_pair = f"{model}|{effort}" if isinstance(model, str) and isinstance(effort, str) else None
-        if not _valid_selected_pair(entry_pair):
+        if not _valid_selected_pair(entry_pair, registry):
             raise ValueError(f"verified entry uses unsupported model pair: {entry_pair}")
         source = "verified_entry" if entry_resolution["status"] == "verified" else entry_resolution["status"]
         return {"source": source, "requested_pair": entry_pair, "resolved_pair": entry_pair, "effective_pair": entry_pair}
@@ -138,7 +134,7 @@ def render_stage_summary(model_switch_summary, registry=None):
         deterministic = node.get("execution_kind") == "deterministic-source-read"
         pair = node.get("effective_pair") or node.get("resolved_pair") or node.get("requested_pair") or "unknown|unknown"
         evidence_source = node.get("model_evidence_source") or "unavailable"
-        if pair != "unknown|unknown" and not _valid_selected_pair(pair):
+        if pair != "unknown|unknown" and not _valid_selected_pair(pair, registry):
             raise ValueError(f"stage {node_id} uses unsupported model pair: {pair}")
         if evidence_source not in STAGE_EVIDENCE_LABELS:
             raise ValueError(f"stage {node_id} uses unsupported evidence source: {evidence_source}")
@@ -180,7 +176,7 @@ def render_disclosure(complexity_score, runtime_receipt=None, entry_resolution=N
                 switch_direction in {"upgrade", "downgrade"}
                 and len(switch_pairs) >= 2
                 and switch_pairs[-1] == effective_pair
-                and all(_valid_selected_pair(pair) for pair in switch_pairs)
+                and all(_valid_selected_pair(pair, registry) for pair in switch_pairs)
             )
             if valid_switch:
                 route_label = switch_direction
@@ -255,8 +251,7 @@ def validate_disclosure(disclosure_text, registry=None):
         if any(pair != "unknown|unknown" for pair in known_pairs) or evidence != "unavailable" or evidence_level != "unavailable":
             failures.append("unknown | unknown is valid only when the resolver explicitly reports unavailable")
     else:
-        allowed_pairs = _allowed_pairs(registry)
-        unsupported_pairs = [pair for pair in known_pairs if not _valid_selected_pair(pair)]
+        unsupported_pairs = [pair for pair in known_pairs if not _valid_selected_pair(pair, registry)]
         if unsupported_pairs:
             failures.append(f"model disclosure contains unsupported model pair: {unsupported_pairs[0]}")
         if evidence == "unavailable" or evidence_level == "unavailable":

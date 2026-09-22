@@ -116,7 +116,7 @@ class RoutingPolicyTests(unittest.TestCase):
         model_ids = [row["id"] for row in rows["models"]]
         self.assertEqual(rows["schema_version"], 2)
         self.assertEqual(model_ids, module.ACTIVE_MODEL_ORDER)
-        self.assertEqual(rows["active_family"]["selection"], "available_numeric_gpt_models")
+        self.assertEqual(rows["active_family"]["selection"], "requested_gpt6_variants")
         self.assertEqual(rows["active_family"]["model_count"], len(model_ids))
         self.assertEqual({row["id"] for row in rows["catalog_models"] if row["catalog_role"] == "active_quality"}, set(model_ids))
         self.assertTrue(set(model_ids).issubset({row["id"] for row in rows["catalog_models"]}))
@@ -127,24 +127,11 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(rows["role_models"]["frontier"], model_ids[-1])
         self.assertNotIn(module.PRIORITY_PRODUCER_MODEL, model_ids)
         self.assertIn("private_learning_contract", rows)
-        self.assertIsNone(rows["ending_fast"]["primary_pair"])
-        self.assertEqual(rows["ending_fast"]["selection_basis"], "user_selected")
-        with self.assertRaises(ValueError):
-            module.ending_fast_route_fields()
-        fields = module.ending_fast_route_fields("gpt-6-astra", "ultra")
-        self.assertEqual((fields["model"], fields["effort"], fields["allow_fallback"]), ("gpt-6-astra", "ultra", []))
+        self.assertNotIn("ending_fast", rows)
         self.assertTrue(all(module.ACTIVE_MODEL_EFFORTS[row["id"]] == set(row["codex_efforts"]) for row in rows["models"]))
 
     def test_custom_schema_v2_registry_accepts_no_priority_producer(self):
         registry = deepcopy(module.MODEL_CAPABILITY_CONFIG)
-        priority_id = registry["priority_producer"]["id"]
-        registry["priority_producer"] = None
-        registry["policy"]["priority_producer_first_text_code"] = False
-        registry["policy"]["priority_producer_scheduled_sources_only"] = False
-        registry["policy"]["priority_producer_first_small_edits"] = False
-        registry["policy"]["priority_producer_task_segments"] = False
-        registry["policy"]["priority_producer_scheduled_sources"] = False
-        registry["catalog_models"] = [row for row in registry["catalog_models"] if row["id"] != priority_id]
         with tempfile.TemporaryDirectory(prefix="routing-policy-registry-") as temporary:
             registry_path = Path(temporary) / "model-capability-ladder.json"
             registry_path.write_text(json.dumps(registry), encoding="utf-8")
@@ -165,19 +152,19 @@ class RoutingPolicyTests(unittest.TestCase):
                 module.MODEL_CAPABILITY_CONFIG_PATH = original_path
         self.assertEqual(loaded["source"]["catalog_sha256"], module.MODEL_CAPABILITY_CONFIG["source"]["catalog_sha256"])
 
-    def test_priority_producer_handles_small_edits_and_bounded_task_segments(self):
+    def test_fixed_priority_producer_is_disabled_for_all_tasks(self):
         rows = module.public_model_capability_rows()
-        priority = rows["priority_producer"]
-        self.assertEqual(rows["spark_first"], priority)
-        self.assertEqual(module.priority_first_pair("code", "text", "edit", "easy", 18), (priority["id"], priority["effort_by_complexity"]["easy"]))
+        self.assertIsNone(rows["priority_producer"])
+        self.assertEqual(rows["spark_first"], {})
+        self.assertIsNone(module.priority_first_pair("code", "text", "edit", "easy", 18))
         self.assertIsNone(module.priority_first_pair("code", "text", "edit", "complex"))
-        self.assertEqual(module.spark_first_pair("document", "text", "write", "easy", 12), (priority["id"], priority["effort_by_complexity"]["easy"]))
-        self.assertEqual(module.priority_first_pair("question", "text", "answer", "easy", 8), (priority["id"], priority["effort_by_complexity"]["easy"]))
-        self.assertEqual(module.priority_first_pair("summary", "text", "work", "easy", 10), (priority["id"], priority["effort_by_complexity"]["easy"]))
-        self.assertEqual(module.priority_first_pair("question", "text", "work", "easy", 16, "execute"), (priority["id"], priority["effort_by_complexity"]["easy"]))
+        self.assertIsNone(module.spark_first_pair("document", "text", "write", "easy", 12))
+        self.assertIsNone(module.priority_first_pair("question", "text", "answer", "easy", 8))
+        self.assertIsNone(module.priority_first_pair("summary", "text", "work", "easy", 10))
+        self.assertIsNone(module.priority_first_pair("question", "text", "work", "easy", 16, "execute"))
         self.assertIsNone(module.priority_first_pair("code", "text", "edit", "easy", 25))
-        self.assertEqual(module.scheduled_source_pair("easy"), (priority["id"], priority["effort_by_complexity"]["easy"]))
-        self.assertEqual(module.scheduled_source_pair("complex"), (priority["id"], priority["effort_by_complexity"]["complex"]))
+        self.assertIsNone(module.scheduled_source_pair("easy"))
+        self.assertIsNone(module.scheduled_source_pair("complex"))
         self.assertIsNone(module.priority_first_pair("code", "mixed", "edit", "easy"))
         self.assertIsNone(module.priority_first_pair("code", "text", "review", "easy"))
         self.assertIsNone(module.priority_first_pair("question", "text", "audit", "easy", 8, "execute"))
@@ -212,55 +199,30 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertEqual(module.resolve_execution_domain(owning_skill="sites:sites-building", task_family="integration", purpose="implement"), "general")
 
     def setUp(self):
-        self.pairs = module.canonical_pairs(
-            [
-                "gpt-5.3-codex-spark|low",
-                "gpt-5.3-codex-spark|medium",
-                "gpt-5.3-codex-spark|high",
-                "gpt-5.3-codex-spark|xhigh",
-                "gpt-5.6-luna|low",
-                "gpt-5.6-luna|medium",
-                "gpt-5.6-luna|high",
-                "gpt-5.6-luna|xhigh",
-                "gpt-5.6-luna|max",
-                "gpt-5.6-terra|low",
-                "gpt-5.6-terra|medium",
-                "gpt-5.6-terra|high",
-                "gpt-5.6-terra|xhigh",
-                "gpt-5.6-terra|max",
-                "gpt-5.6-terra|ultra",
-                "gpt-5.6-sol|low",
-                "gpt-5.6-sol|medium",
-                "gpt-5.6-sol|high",
-                "gpt-5.6-sol|xhigh",
-                "gpt-5.6-sol|max",
-                "gpt-5.6-sol|ultra",
-            ]
-        )
+        self.pairs = module.canonical_pairs(module.normal_adaptive_pair_texts())
 
     def test_downgrade_boundary_transitions(self):
-        self.assertEqual(module.downgrade_pair(("gpt-5.6-sol", "ultra"), self.pairs), ("gpt-5.6-sol", "max"))
-        self.assertEqual(module.downgrade_pair(("gpt-5.6-sol", "low"), self.pairs), ("gpt-5.6-terra", "ultra"))
-        self.assertEqual(module.downgrade_pair(("gpt-5.6-terra", "low"), self.pairs), ("gpt-5.6-luna", "max"))
-        self.assertEqual(module.downgrade_pair(("gpt-5.6-luna", "low"), self.pairs), ("gpt-5.3-codex-spark", "xhigh"))
-        self.assertIsNone(module.downgrade_pair(("gpt-5.3-codex-spark", "low"), self.pairs))
+        self.assertEqual(module.downgrade_pair(("gpt-6-sol", "ultra"), self.pairs), ("gpt-6-sol", "max"))
+        self.assertEqual(module.downgrade_pair(("gpt-6-sol", "low"), self.pairs), ("gpt-6-luna", "max"))
+        self.assertEqual(module.downgrade_pair(("gpt-6-luna", "max"), self.pairs), ("gpt-6-luna", "xhigh"))
+        self.assertIsNone(module.downgrade_pair(("gpt-6-luna", "low"), self.pairs))
 
     def test_upgrade_boundary_transitions(self):
-        self.assertEqual(module.upgrade_pair(("gpt-5.3-codex-spark", "low"), self.pairs), ("gpt-5.3-codex-spark", "medium"))
-        self.assertEqual(module.upgrade_pair(("gpt-5.3-codex-spark", "xhigh"), self.pairs), ("gpt-5.6-luna", "low"))
-        self.assertEqual(module.upgrade_pair(("gpt-5.6-luna", "medium"), self.pairs), ("gpt-5.6-luna", "high"))
-        self.assertEqual(module.upgrade_pair(("gpt-5.6-luna", "max"), self.pairs), ("gpt-5.6-terra", "low"))
-        self.assertEqual(module.upgrade_pair(("gpt-5.6-terra", "ultra"), self.pairs), ("gpt-5.6-sol", "low"))
-        self.assertIsNone(module.upgrade_pair(("gpt-5.6-sol", "ultra"), self.pairs))
+        self.assertEqual(module.upgrade_pair(("gpt-6-luna", "low"), self.pairs), ("gpt-6-luna", "medium"))
+        self.assertEqual(module.upgrade_pair(("gpt-6-luna", "xhigh"), self.pairs), ("gpt-6-luna", "max"))
+        self.assertEqual(module.upgrade_pair(("gpt-6-luna", "medium"), self.pairs), ("gpt-6-luna", "high"))
+        self.assertEqual(module.upgrade_pair(("gpt-6-luna", "max"), self.pairs), ("gpt-6-sol", "low"))
+        self.assertEqual(module.upgrade_pair(("gpt-6-sol", "ultra"), self.pairs), ("gpt-6-astra", "low"))
+        self.assertIsNone(module.upgrade_pair(("gpt-6-astra", "ultra"), self.pairs))
 
     def test_sparse_eligible_pairs_preserve_model_then_effort_rules(self):
-        sparse_upgrade = [("gpt-5.6-luna", "low"), ("gpt-5.6-luna", "max"), ("gpt-5.6-terra", "xhigh"), ("gpt-5.6-sol", "low")]
+        sparse_upgrade = [("gpt-6-luna", "low"), ("gpt-6-luna", "max"), ("gpt-6-sol", "xhigh"), ("gpt-6-sol", "low")]
         sparse_upgrade_pairs = module.canonical_pairs([f"{model}|{effort}" for model, effort in sparse_upgrade])
-        self.assertEqual(module.upgrade_pair(("gpt-5.6-luna", "low"), sparse_upgrade_pairs), ("gpt-5.6-luna", "max"))
+        self.assertEqual(module.upgrade_pair(("gpt-6-luna", "low"), sparse_upgrade_pairs), ("gpt-6-luna", "max"))
 
-        sparse_downgrade = [("gpt-5.6-luna", "max"), ("gpt-5.6-luna", "xhigh"), ("gpt-5.6-terra", "ultra"), ("gpt-5.3-codex-spark", "medium")]
+        sparse_downgrade = [("gpt-6-luna", "max"), ("gpt-6-luna", "xhigh"), ("gpt-6-sol", "ultra"), ("gpt-6-luna", "medium")]
         sparse_downgrade_pairs = module.canonical_pairs([f"{model}|{effort}" for model, effort in sparse_downgrade])
-        self.assertEqual(module.downgrade_pair(("gpt-5.6-terra", "low"), sparse_downgrade_pairs), ("gpt-5.6-luna", "max"))
+        self.assertEqual(module.downgrade_pair(("gpt-6-sol", "low"), sparse_downgrade_pairs), ("gpt-6-luna", "max"))
 
     def test_registry_extension_without_rank_code_changes(self):
         original_definitions = deepcopy(module.MODEL_DEFINITIONS)
@@ -270,15 +232,15 @@ class RoutingPolicyTests(unittest.TestCase):
         original_indexes = {model: dict(indexes) for model, indexes in module.MODEL_EFFORT_INDEX.items()}
         original_position = dict(module.MODEL_POSITION)
         try:
-            insertion_index = original_order.index("gpt-5.6-terra")
+            insertion_index = original_order.index("gpt-6-sol")
             module.MODEL_ORDER[:] = original_order[:insertion_index] + ["gpt-future-aurora"] + original_order[insertion_index:]
             module.MODEL_EFFORTS["gpt-future-aurora"] = {"low", "high"}
             module.MODEL_EFFORT_INDEX["gpt-future-aurora"] = {"low": 0, "high": 1}
             module.MODEL_POSITION = {model: index for index, model in enumerate(module.MODEL_ORDER)}
 
-            extended_pairs = module.canonical_pairs(["gpt-5.3-codex-spark|low", "gpt-5.6-luna|high", "gpt-future-aurora|low", "gpt-future-aurora|high", "gpt-5.6-terra|low"])
-            self.assertEqual(module.upgrade_pair(("gpt-5.6-luna", "high"), extended_pairs), ("gpt-future-aurora", "low"))
-            self.assertEqual(module.downgrade_pair(("gpt-future-aurora", "low"), extended_pairs), ("gpt-5.6-luna", "high"))
+            extended_pairs = module.canonical_pairs(["gpt-6-luna|low", "gpt-6-luna|high", "gpt-future-aurora|low", "gpt-future-aurora|high", "gpt-6-sol|low"])
+            self.assertEqual(module.upgrade_pair(("gpt-6-luna", "high"), extended_pairs), ("gpt-future-aurora", "low"))
+            self.assertEqual(module.downgrade_pair(("gpt-future-aurora", "low"), extended_pairs), ("gpt-6-luna", "high"))
         finally:
             module.MODEL_DEFINITIONS.clear()
             module.MODEL_DEFINITIONS.update(original_definitions)
@@ -292,15 +254,15 @@ class RoutingPolicyTests(unittest.TestCase):
             module.MODEL_POSITION.update(original_position)
 
     def test_parse_model_effort_pair_trims_whitespace(self):
-        self.assertEqual(module.parse_model_effort_pair(" gpt-5.6-luna | medium "), ("gpt-5.6-luna", "medium"))
-        self.assertEqual(module.parse_model_effort_pair("\tgpt-5.6-terra|\txhigh "), ("gpt-5.6-terra", "xhigh"))
-        self.assertEqual(module.parse_model_effort_pair("gpt-5.6-sol |xhigh"), ("gpt-5.6-sol", "xhigh"))
+        self.assertEqual(module.parse_model_effort_pair(" gpt-6-luna | medium "), ("gpt-6-luna", "medium"))
+        self.assertEqual(module.parse_model_effort_pair("\tgpt-6-sol|\txhigh "), ("gpt-6-sol", "xhigh"))
+        self.assertEqual(module.parse_model_effort_pair("gpt-6-sol |xhigh"), ("gpt-6-sol", "xhigh"))
 
     def test_parse_model_effort_pair_requires_exactly_one_separator_after_trimming(self):
         with self.assertRaises(ValueError):
-            module.parse_model_effort_pair(" gpt-5.6-luna| medium| high ")
+            module.parse_model_effort_pair(" gpt-6-luna| medium| high ")
         with self.assertRaises(ValueError):
-            module.parse_model_effort_pair("gpt-5.6-luna||low")
+            module.parse_model_effort_pair("gpt-6-luna||low")
 
     def test_resolve_execution_domain_precedence_and_infer_compatibility(self):
         self.assertEqual(
@@ -410,7 +372,7 @@ class RoutingPolicyTests(unittest.TestCase):
             "python": "code-skill/references/python-rules.md",
             "csharp": "code-skill/references/csharp-rules.md",
             "unity_csharp": "code-skill/references/unity-csharp-rules.md",
-            "code_unspecified": "code-skill/references/spark-small-code.md",
+            "code_unspecified": "code-skill/references/legacy-code-unspecified.md",
         }
         for domain in expected_paths:
             self.assertEqual(module.EXECUTION_DOMAINS[domain]["reference_path"], expected_paths[domain])

@@ -16,5 +16,5 @@ class CurrentWorkflowTests(unittest.TestCase):
         node={"phase":"ending","purpose":"memory","checks":["old check"],"model":"gpt-6-astra","effort":"ultra","selected_pair":"gpt-6-astra|ultra"}
         self.assertEqual(MODULE.validate_trace("bad",[node])["status"],"fail")
     def test_missing_or_changed_selected_pair_is_rejected(self):
-        for node in [{"skill":"code-skill"},{"phase":"ending","purpose":"memory","selected_pair":"gpt-6-astra|ultra","model":"gpt-5.6-luna","effort":"max"}]:
+        for node in [{"skill":"code-skill"},{"phase":"ending","purpose":"memory","selected_pair":"gpt-6-astra|ultra","model":"gpt-6-luna","effort":"max"}]:
             self.assertEqual(MODULE.validate_trace("bad",[node])["status"],"fail")

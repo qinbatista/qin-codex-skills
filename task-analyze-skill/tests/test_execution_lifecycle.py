@@ -73,16 +73,16 @@ class ExecutionLifecycleTests(unittest.TestCase):
         simple = session_effort.classify_task("Implement one bounded function.", task_type="code", operation="implement", complexity_score=18)
         difficult = session_effort.classify_task("Diagnose and repair a difficult architecture bug in 8 steps with dependencies.", task_type="debug", operation="fix", complexity_score=60)
         frontier = session_effort.classify_task("Deep research across many sources with comprehensive all context.", task_type="research", complexity_score=90)
-        self.assertEqual(simple["model_family"], "gpt-5.6-terra")
-        self.assertEqual(difficult["model_family"], "gpt-5.6-terra")
-        self.assertEqual(frontier["model_family"], "gpt-5.6-sol")
+        self.assertEqual(simple["model_family"], "gpt-6-sol")
+        self.assertEqual(difficult["model_family"], "gpt-6-sol")
+        self.assertEqual(frontier["model_family"], "gpt-6-astra")
         self.assertIn(difficult["estimated_effort"], {"medium", "high", "max", "ultra"})
 
     def test_repeated_quality_failure_strengthens_only_the_same_solving_route(self):
-        summary = {"preferred_solving_pair": "gpt-5.6-terra|low", "route_reason": "bounded_core_solving_low_route"}
-        pairs = ["gpt-5.6-luna|low", "gpt-5.6-terra|low", "gpt-5.6-sol|low"]
-        upgraded = session_effort.solve_route_pair(summary, "gpt-5.6-terra|low", pairs)
-        self.assertEqual(upgraded["pair"], "gpt-5.6-sol|low")
+        summary = {"preferred_solving_pair": "gpt-6-sol|low", "route_reason": "bounded_core_solving_low_route"}
+        pairs = ["gpt-6-luna|low", "gpt-6-sol|low", "gpt-6-astra|low"]
+        upgraded = session_effort.solve_route_pair(summary, "gpt-6-sol|low", pairs)
+        self.assertEqual(upgraded["pair"], "gpt-6-astra|low")
         self.assertEqual(upgraded["reason"], "repeated_core_route_model_upgrade_same_task_class")
         contract = routing_policy.execution_lifecycle_contract(60)
         self.assertEqual(contract["operational_failure"], "quality_neutral_retry_or_allowed_fallback")

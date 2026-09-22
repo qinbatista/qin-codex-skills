@@ -37,7 +37,7 @@ SUMMARY = "Return one bounded grounded answer with deterministic JSON proof."
 FINGERPRINT = "f" * 64
 
 
-def recommendation(pair="gpt-5.6-terra|max", reason="verified_quality_boundary", trial=False):
+def recommendation(pair="gpt-6-sol|max", reason="verified_quality_boundary", trial=False):
     model, effort = pair.split("|")
     return {
         "selected_pair": pair,
@@ -50,8 +50,8 @@ def recommendation(pair="gpt-5.6-terra|max", reason="verified_quality_boundary",
     }
 
 
-def arguments(root, ladder=None, static="gpt-5.6-terra|medium", hard="gpt-5.6-luna|low"):
-    ladder = ladder or ["gpt-5.6-luna|low", "gpt-5.6-terra|medium", "gpt-5.6-terra|max", "gpt-5.6-sol|max"]
+def arguments(root, ladder=None, static="gpt-6-sol|medium", hard="gpt-6-luna|low"):
+    ladder = ladder or ["gpt-6-luna|low", "gpt-6-sol|medium", "gpt-6-sol|max", "gpt-6-astra|max"]
     values = dict(
         **CONDITION,
         task_summary=SUMMARY,
@@ -132,7 +132,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             root = Path(temporary)
             args = arguments(root)
             args.benchmark_calibration = False
-            with patch.object(module, "_validated_recommendation", return_value=(recommendation(), ("gpt-5.6-terra", "max"))), patch.object(module.model_execution_receipt, "run_receipt") as execute:
+            with patch.object(module, "_validated_recommendation", return_value=(recommendation(), ("gpt-6-sol", "max"))), patch.object(module.model_execution_receipt, "run_receipt") as execute:
                 summary = module.run_adaptive(args, "bounded prompt")
         self.assertEqual(summary["status"], "inline")
         self.assertEqual(summary["execution_mode"], "inline_entry")
@@ -143,12 +143,12 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             root = Path(temporary)
             args = arguments(root)
             args.benchmark_calibration = False
-            args.entry_pair = "gpt-5.6-sol|ultra"
+            args.entry_pair = "gpt-6-sol|ultra"
             args.config_cohort = "c" * 64
             args.strategy_version = "inline-v1"
             args.producer_contract_version = "producer-v1"
             admission = {"schema_version": 1, "execution_mode": "delegated_adaptive", "reason": "repeated_end_to_end_pareto_win", "admitted": True}
-            with patch.object(module, "_validated_recommendation", return_value=(recommendation(), ("gpt-5.6-terra", "max"))), patch.object(module.strategy_performance, "recommend_mode", return_value=admission), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()) as execute:
+            with patch.object(module, "_validated_recommendation", return_value=(recommendation(), ("gpt-6-sol", "max"))), patch.object(module.strategy_performance, "recommend_mode", return_value=admission), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_receipt_run()) as execute:
                 summary = module.run_adaptive(args, "bounded prompt")
         self.assertEqual(summary["status"], "pass")
         self.assertEqual(summary["execution_mode"], "delegated_adaptive")
@@ -179,7 +179,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             pairs = module.model_routing_history.canonical_pairs(args.candidate_ladder)
             static_pair = module.model_routing_history.parse_pair(args.static_suggestion)
             hard_pair = module.model_routing_history.parse_pair(args.hard_floor)
-            selected_pair = ("gpt-5.6-sol", "max")
+            selected_pair = ("gpt-6-sol", "max")
             history = module.model_routing_history.empty_history()
             history["conditions"][module.model_routing_history.condition_key(condition)] = {
                 "condition": condition,
@@ -187,21 +187,21 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
                 "candidate_ladder": args.candidate_ladder,
                 "static_suggestion": args.static_suggestion,
                 "hard_floor": args.hard_floor,
-                "success_model": "gpt-5.6-sol|max",
+                "success_model": "gpt-6-sol|max",
                 "failed_model": None,
                 "active_ladder_fingerprint": module.model_routing_history.ladder_fingerprint(pairs, hard_pair),
                 "profile_fingerprint": module.model_routing_history.profile_fingerprint(condition, pairs, static_pair, hard_pair),
                 "calibration_state": "frozen",
-                "best_pair": "gpt-5.6-sol|max",
+                "best_pair": "gpt-6-sol|max",
                 "selection_basis": "quality_boundary",
                 "cost_evidence": {"status": "not_evaluated", "compared_pairs": [], "shared_cohort_count": 0, "shared_cohort_digest": None, "scores": {}},
                 "tasks": [{
                     "run_id": "run-frozen",
                     "summary": SUMMARY,
-                    "requested_pair": "gpt-5.6-sol|max",
-                    "resolved_pair": "gpt-5.6-sol|max",
-                    "effective_pair": "gpt-5.6-sol|max",
-                    "executed_pair": "gpt-5.6-sol|max",
+                    "requested_pair": "gpt-6-sol|max",
+                    "resolved_pair": "gpt-6-sol|max",
+                    "effective_pair": "gpt-6-sol|max",
+                    "executed_pair": "gpt-6-sol|max",
                     "operational_failure_pairs": [],
                     "receipt_status": "pass",
                     "real_status": "pass",
@@ -226,8 +226,8 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
 
             with patch.object(module.model_execution_receipt, "run_receipt", side_effect=capture):
                 summary = module.run_adaptive(args, "bounded prompt")
-        self.assertEqual(summary["selected_pair"], "gpt-5.6-sol|max")
-        self.assertEqual(calls, [("gpt-5.6-sol", "max")])
+        self.assertEqual(summary["selected_pair"], "gpt-6-sol|max")
+        self.assertEqual(calls, [("gpt-6-sol", "max")])
 
     def test_empty_history_uses_static_suggestion(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -236,8 +236,8 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             args.candidate_ladder = module.model_routing_history.adaptive_pair_texts_for_profile(
                 args.task_family, args.modality, args.risk, args.complexity, args.ambiguity
             )
-            args.static_suggestion = "gpt-5.6-terra|medium"
-            args.hard_floor = "gpt-5.6-luna|low"
+            args.static_suggestion = "gpt-6-sol|medium"
+            args.hard_floor = "gpt-6-luna|low"
             selected = []
 
             def capture(receipt_args, prompt_text):
@@ -247,7 +247,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             with patch.object(module.model_execution_receipt, "run_receipt", side_effect=capture):
                 summary = module.run_adaptive(args, "bounded prompt")
         self.assertEqual(summary["reason"], "no_bounds_use_static")
-        self.assertEqual(selected, ["gpt-5.6-terra|medium"])
+        self.assertEqual(selected, ["gpt-6-sol|medium"])
 
     def test_missing_selected_pair_fails_before_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -351,7 +351,7 @@ class AdaptiveModelRunnerTests(unittest.TestCase):
             root = Path(temporary)
             args = arguments(root)
             args.result_output.write_text("stale result\n", encoding="utf-8")
-            failed = {"status": "fail", "requested_pair": "gpt-5.6-terra|max", "failure_class": "timeout", "tokens": {"total_tokens": 9}, "process_elapsed_ms": 30}
+            failed = {"status": "fail", "requested_pair": "gpt-6-sol|max", "failure_class": "timeout", "tokens": {"total_tokens": 9}, "process_elapsed_ms": 30}
             with patch.object(module.model_routing_history, "recommend_route", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", return_value=failed), patch.object(module.model_routing_history, "record_event") as record:
                 summary = module.run_adaptive(args, "bounded prompt")
         self.assertEqual(summary["reason"], "producer_operational_failure")

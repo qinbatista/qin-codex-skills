@@ -40,15 +40,12 @@ DISCLOSURE_SPEC.loader.exec_module(model_identity_disclosure)
 try:
     from routing_policy import (
         ACTIVE_MODEL_EFFORTS,
-        ENDING_FAST_CONFIG,
-        ENDING_FAST_PRIMARY_PAIR,
         EXECUTION_DOMAINS,
         MODEL_ROLE_PAIRS,
         PRIORITY_PRODUCER_CONFIG,
         adaptive_pair_texts_for_profile,
         analyze_prompt_routing,
         code_rule_bundle,
-        ending_fast_route_fields,
         execution_lifecycle_contract,
         execution_domain_is_active,
         expected_owner_skill,
@@ -65,15 +62,12 @@ except ModuleNotFoundError:
     _routing_policy = _importlib_util.module_from_spec(_routing_policy_spec)
     _routing_policy_spec.loader.exec_module(_routing_policy)
     ACTIVE_MODEL_EFFORTS = _routing_policy.ACTIVE_MODEL_EFFORTS
-    ENDING_FAST_CONFIG = _routing_policy.ENDING_FAST_CONFIG
-    ENDING_FAST_PRIMARY_PAIR = _routing_policy.ENDING_FAST_PRIMARY_PAIR
     EXECUTION_DOMAINS = _routing_policy.EXECUTION_DOMAINS
     MODEL_ROLE_PAIRS = _routing_policy.MODEL_ROLE_PAIRS
     PRIORITY_PRODUCER_CONFIG = _routing_policy.PRIORITY_PRODUCER_CONFIG
     adaptive_pair_texts_for_profile = _routing_policy.adaptive_pair_texts_for_profile
     analyze_prompt_routing = _routing_policy.analyze_prompt_routing
     code_rule_bundle = _routing_policy.code_rule_bundle
-    ending_fast_route_fields = _routing_policy.ending_fast_route_fields
     execution_lifecycle_contract = _routing_policy.execution_lifecycle_contract
     execution_domain_is_active = _routing_policy.execution_domain_is_active
     expected_owner_skill = _routing_policy.expected_owner_skill
@@ -101,7 +95,7 @@ _selected_policy_spec.loader.exec_module(selected_model_policy)
 NODE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 DISPATCH_SCHEMA_VERSION = 2
 DYNAMIC_ROUTING_MODE = "dynamic_task_graph"
-ALLOWED_PHASES = {"result", "ending"}
+ALLOWED_PHASES = {"result"}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 DETERMINISTIC_SOURCE_READ = "deterministic-source-read"
 DECOMPOSITION_POLICY = "max_safe"
@@ -121,7 +115,6 @@ PROJECT_RESULT_CONSISTENCY_ACTIONS = {
     for name, action in {"aligned": "merge_current_memory", "no_prior_memory": "skip_missing_memory", "memory_record_defect": "correct_memory", "memory_projection_defect": "reconcile_projection"}.items()
 }
 PROJECT_RESULT_CONSISTENCY_POLICY = {"correction_owner": "ending_memory_only", "producer_defect_owner": "active_task", "next_task_memory": "project_scoped_current_only", "actions": PROJECT_RESULT_CONSISTENCY_ACTIONS}
-ENDING_TERMINAL_CLOSEOUT = {"purpose": "memory_only", "model_policy": "user_selected", "verification_owner": "active_task"}
 
 
 CONTROLLED_FIELDS = [
@@ -160,39 +153,15 @@ def score_role_pair(score):
     return MODEL_ROLE_PAIRS[role]
 
 
-def apply_ending_fast_route(plan):
-    """Compatibility name: Ending now preserves the selected pair and writes memory."""
-    entry = plan.get("entry", {})
-    for node in plan.get("nodes", []):
-        if isinstance(node, dict) and node.get("phase") == "ending":
-            model = entry.get("model") or node.get("_entry_model") or node.get("model")
-            effort = entry.get("effort") or node.get("_entry_effort") or node.get("effort")
-            selected_model_policy.bind_node(node, model, effort)
-            node["skill"] = ENDING_SKILL
-            node["terminal_closeout"] = dict(ENDING_TERMINAL_CLOSEOUT)
-    return plan
-
-
 def ending_checklist_failures(node):
     forbidden = {"acceptance_checks", "verifies_node", "repair_launch", "check_workers"}.intersection(node)
     return [f"{node.get('id', 'ending')} Ending is memory-only; move {field} into active-task verification" for field in sorted(forbidden)]
-
-
-def ending_worker_prompt(node):
-    return ("Summarize completed changes and durable user preferences into current project memory. "
-            "Use the user's selected model and effort. Read only this project's relevant existing memory; skip absent memory. "
-            "Do not run tests, verify results, repair code or create tasks. "
-            + node.get("prompt", ""))
 
 
 def project_result_consistency_action(classification):
     if classification not in PROJECT_RESULT_CONSISTENCY_ACTIONS:
         raise ValueError(f"unknown project-result consistency classification: {classification}")
     return dict(PROJECT_RESULT_CONSISTENCY_ACTIONS[classification])
-
-
-def ending_availability_fallback(receipt):
-    return bool(isinstance(receipt, dict) and receipt.get("status") != "pass" and receipt.get("failure_class") == "availability" and receipt.get("turn_completed") is not True and receipt.get("result_published") is not True)
 
 
 def _get_node_decomposition(node, decomposition):
@@ -1123,9 +1092,9 @@ def _aggregate_attempt_metrics(route_attempts):
     return {"strategy_tokens": strategy_tokens, "strategy_elapsed_ms": strategy_elapsed_ms, "metrics_complete": strategy_tokens.get("total_tokens") is not None and strategy_elapsed_ms is not None}
 
 
-def _ending_release_path(cache_dir, route_run_id):
+def _result_release_path(cache_dir, route_run_id):
     safe_route_run_id = re.sub(r"[^a-zA-Z0-9._-]", "-", route_run_id)
-    return Path(cache_dir) / f"{safe_route_run_id}.ending-release.json"
+    return Path(cache_dir) / f"{safe_route_run_id}.result-release.json"
 
 
 def _release_record(route_run_id, completed, cache_dir):
@@ -1133,7 +1102,7 @@ def _release_record(route_run_id, completed, cache_dir):
         "schema_version": DISPATCH_SCHEMA_VERSION,
         "route_run_id": route_run_id,
         "released_at": datetime.now(timezone.utc).isoformat(),
-        "released_by": "release-main-result",
+        "released_by": "run-plan",
         "main_result_node": completed.get("main_result_node"),
         "main_result_receipt_path": completed.get("main_result_receipt_path"),
         "main_result_path": completed.get("main_result_path"),
@@ -1152,30 +1121,11 @@ def _write_release_record(path, record):
         pass
 
 
-def _read_release_record(path):
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def _has_mismatched_release_record(cache_dir, route_run_id):
-    for release_path in Path(cache_dir).glob("*.ending-release.json"):
-        release_record = _read_release_record(release_path)
-        if not isinstance(release_record, dict):
-            continue
-        if release_record.get("route_run_id") and release_record.get("route_run_id") != route_run_id:
-            return True
-    return False
-
-
 def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", skills_root=None):
     node = dict(node)
+    if node.get("phase") != "result":
+        raise ValueError("only result nodes execute in the main task")
     selected_model_policy.bind_node(node, node.get("_entry_model") or node.get("model"), node.get("_entry_effort") or node.get("effort"))
-    if node.get("phase") == "ending":
-        node = dict(node)
-        apply_ending_fast_route({"nodes": [node]})
-        node["prompt"] = ending_worker_prompt(node)
     skills_root = resolve_skills_root(skills_root)
     node_id = node["id"]
     receipt_path = cache_dir / f"{node_id}-receipt.json"
@@ -1201,10 +1151,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
         _emit_code_gate_notice(code_bundle, node_id)
     if dependency_text:
         prompt += f"\n\nCompleted dependency handoff:\n{dependency_text}"
-    if node["phase"] == "ending":
-        prompt += "\n\nThis is a memory-only closeout. Include ENDING_TASK=PASS after scoped memory readback or an explicit missing-memory skip; otherwise ENDING_TASK=FAIL. Never verify or repair the project."
-
-    route_marker = "ENDING_TASK_WORKER" if node["phase"] == "ending" else "LOCKED_ROUTE_NODE"
+    route_marker = "LOCKED_ROUTE_NODE"
     fallback_pairs = receipt_module.normalize_fallback_pairs(node.get("allow_fallback", []))
     selected_pair = f"{node['model']}|{node['effort']}"
     adaptive_recommendation = None
@@ -1333,12 +1280,6 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
             failure_class = attempt_receipt.get("failure_class")
             status = attempt_receipt.get("status") or "fail"
 
-        if status == "pass" and node["phase"] == "ending":
-            status = phase_verdict(result_path, "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
-            if status != "pass":
-                status = "fail"
-                failure_class = "protocol"
-                attempt_receipt["status"] = "fail"
         if status == "pass" and node["phase"] == "result" and (not result_path.is_file() or result_path.stat().st_size == 0):
             status = "fail"
             failure_class = "protocol"
@@ -1352,18 +1293,12 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
             attempt_receipt["selection_basis"] = node.get("selection_basis")
         attempt_receipt["result_published"] = bool(result_path.is_file() and result_path.stat().st_size > 0)
         attempt_receipt = receipt_module.annotate_operational_fallback(attempt_receipt)
-        if node["phase"] == "ending":
-            attempt_receipt["fallback_eligible"] = ending_availability_fallback(attempt_receipt)
-            if attempt_receipt.get("route_attempts"):
-                attempt_receipt["route_attempts"][-1]["fallback_eligible"] = attempt_receipt["fallback_eligible"]
         attempt_receipt_path.write_text(json.dumps(attempt_receipt, indent=2) + "\n", encoding="utf-8")
         route_attempts.append(_normalize_route_attempt(attempt_receipt, pair_text, status, failure_class))
         receipt = attempt_receipt
         if status == "pass":
             break
-        result_fallback = node["phase"] == "result" and receipt_module.immediate_operational_fallback(attempt_receipt)
-        ending_fallback = node["phase"] == "ending" and node.get("fallback_policy") == "availability_only" and ending_availability_fallback(attempt_receipt)
-        if not result_fallback and not ending_fallback:
+        if not receipt_module.immediate_operational_fallback(attempt_receipt):
             break
 
     attempt_metrics = _aggregate_attempt_metrics(route_attempts)
@@ -1373,7 +1308,7 @@ def run_node(node, cache_dir, completed, state_db, workdir, codex_bin="codex", s
     receipt["model_locked"] = bool(node.get("model_locked"))
     receipt["selection_provenance"] = node.get("selection_basis")
     receipt["governing_skills"] = selected_model_policy.governing_skills(node)
-    receipt["active_fallback_pair"] = fallback_pairs[0] if node["phase"] == "ending" and fallback_pairs else selected_pair if priority_attempt_pair != selected_pair else None
+    receipt["active_fallback_pair"] = selected_pair if priority_attempt_pair != selected_pair else None
     receipt["fallback_policy"] = node.get("fallback_policy")
     receipt["allowed_fallback_pairs"] = planned_pairs[1:]
     receipt["operational_failure_pairs"] = [
@@ -1688,7 +1623,6 @@ def memory_closeout_launch_packet(summary):
             "verification_owner": "active_task", "final_aggregate_receipt": ready,
             "ending_launch_ready": ready, "receipt_path": summary.get("receipt_path") or summary.get("downstream_receipt_path"),
             "result_path": summary.get("result_path") or summary.get("main_result_path"),
-            "ending_handoff_path": summary.get("ending_handoff_path"),
             "aggregate_result_release_path": summary.get("release_path") or summary.get("aggregate_result_release_path"),
             "repair_chain_allowed": False, "auto_archive": False}
 
@@ -1701,58 +1635,6 @@ def _plan_model_disclosure(plan, records, entry, timing):
         plan["complexity_score"], runtime_receipt=runtime,
         entry_resolution={"status": "task_assignment", **entry},
         model_switch_summary=stages, timing=timing)
-
-
-def _release_main_result(handoff):
-    handoff_data = dict(handoff)
-    route_run_id = handoff_data.get("route_run_id")
-    if not isinstance(route_run_id, str) or not route_run_id:
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": None, "failures": ["ending handoff is missing route_run_id"]}
-
-    cache_dir = Path(handoff_data.get("cache_dir") or Path.cwd()).expanduser().resolve()
-    plan = handoff_data.get("plan") if isinstance(handoff_data.get("plan"), dict) else {}
-    completed = {
-        record.get("id"): record
-        for record in handoff_data.get("completed", [])
-        if isinstance(record, dict) and isinstance(record.get("id"), str)
-    }
-    main_node_id = handoff_data.get("main_result_node") or plan.get("main_result_node")
-    main_record = completed.get(main_node_id) if isinstance(main_node_id, str) else None
-    if main_record is None:
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["ending handoff is missing the main result record"]}
-    if main_record.get("status") != "pass":
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["main result must complete before release"]}
-    unfinished_result_nodes = [node["id"] for node in plan.get("nodes", []) if isinstance(node, dict) and node.get("phase") == "result" and completed.get(node.get("id"), {}).get("status") != "pass"]
-    if unfinished_result_nodes:
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["all result nodes must complete before release: " + ", ".join(unfinished_result_nodes)]}
-    main_result_path = Path(main_record.get("result_path") or "")
-    if not main_result_path.is_file() or main_result_path.stat().st_size == 0:
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "fail", "route_run_id": route_run_id, "failures": ["main result output must exist and be non-empty before release"]}
-
-    release_path = _ending_release_path(cache_dir, route_run_id)
-    release_record = _release_record(
-        route_run_id,
-        {
-            "main_result_node": main_node_id,
-            "main_result_receipt_path": main_record.get("receipt_path"),
-            "main_result_path": main_record.get("result_path"),
-        },
-        cache_dir,
-    )
-    _write_release_record(release_path, release_record)
-    handoff_data["released"] = True
-    handoff_data["release_path"] = str(release_path)
-    handoff_path = Path(handoff_data.get("ending_handoff_path") or cache_dir / "ending-handoff.json")
-    handoff_path.write_text(json.dumps(handoff_data, indent=2) + "\n", encoding="utf-8")
-    required = plan.get("ending_required") is True or any(node.get("phase") == "ending" for node in plan.get("nodes", []))
-    summary = {"schema_version": DISPATCH_SCHEMA_VERSION, "status": "pass", "route_run_id": route_run_id,
-               "release_path": str(release_path), "entry": handoff_data.get("entry"),
-               "main_result_path": str(main_result_path), "downstream_receipt_path": main_record.get("receipt_path"),
-               "ending_handoff_path": str(handoff_path), "final_aggregate_receipt": True,
-               "all_result_nodes_settled": True, "ending_required": required, "ending_launch_ready": required}
-    if required:
-        summary["memory_closeout"] = memory_closeout_launch_packet(summary)
-    return summary
 
 
 def run_plan(
@@ -1949,74 +1831,28 @@ def run_plan(
     if phase_verdict(main_record.get("result_path"), "Aggregate: PASS", "Aggregate: FAIL") == "fail":
         failures.append("final aggregate reported Aggregate: FAIL")
     status = "pass" if not failures and main_record.get("status") == "pass" else "fail"
+    main_result_path = Path(main_record.get("result_path") or "")
+    if status == "pass" and (not main_result_path.is_file() or main_result_path.stat().st_size == 0):
+        failures.append("main result output must exist and be non-empty before release")
+        status = "fail"
     main_result_ready_ns = ready_metadata.get(plan["main_result_node"], {}).get("result_ready_monotonic_ns")
     if isinstance(main_result_ready_ns, bool) or not isinstance(main_result_ready_ns, int):
         main_result_ready_ns = main_record.get("result_ready_monotonic_ns")
     first_result_elapsed_ms = round((main_result_ready_ns - first_result_started_ns) / 1_000_000) if isinstance(main_result_ready_ns, int) and main_result_ready_ns >= first_result_started_ns else round((time.monotonic() - first_result_started) * 1000)
     result_published = bool(main_record.get("result_published") is True or plan["main_result_node"] in published_ids)
     receipt_failure_after_result = any(bool(record.get("result_published") is True or record.get("id") in published_ids) and record.get("status") != "pass" for record in ordered)
-    ending_handoff_path = cache_dir / "ending-handoff.json"
-    ending_manifest_path = cache_dir / "ending-dispatch-manifest.json"
-    ending_release_path = _ending_release_path(cache_dir, route_run_id)
-
+    release_path = None
     if status == "pass":
-        ending_handoff = {
-            "purpose": "memory_only",
-            "verification_owner": "active_task",
-            "schema_version": DISPATCH_SCHEMA_VERSION,
-            "cwd": str(cwd.resolve()),
-            "state_db": str(Path(state_db).expanduser().resolve()) if state_db else None,
-            "entry": {"model": entry_model, "effort": entry_effort},
-            "route_run_id": route_run_id,
-            "plan": plan,
-            "completed": ordered,
-            "main_result_node": plan.get("main_result_node"),
-            "cache_dir": str(cache_dir),
-            "released": False,
-            "release_path": str(ending_release_path),
-            "ending_manifest_path": str(ending_manifest_path),
-        }
-        ending_handoff_path.write_text(json.dumps(ending_handoff, indent=2) + "\n", encoding="utf-8")
-        try:
-            ending_handoff_path.chmod(0o600)
-        except OSError:
-            pass
+        release_path = _result_release_path(cache_dir, route_run_id)
+        _write_release_record(release_path, _release_record(route_run_id, {
+            "main_result_node": plan["main_result_node"],
+            "main_result_receipt_path": main_record.get("receipt_path"),
+            "main_result_path": main_record.get("result_path"),
+        }, cache_dir))
 
-    complete_summary_records = list(ordered)
-    for node in plan.get("nodes", []):
-        if not isinstance(node, dict) or node.get("phase") != "ending":
-            continue
-        if any(record.get("id") == node["id"] for record in ordered):
-            continue
-        complete_summary_records.append(
-            {
-                "id": node["id"],
-                "model": node.get("model"),
-                "effort": node.get("effort"),
-                "status": "pending",
-                "dependencies": list(node.get("dependencies", [])),
-                "complexity_score": node.get("complexity_score"),
-                "complexity_band": node.get("complexity_band"),
-                "requested_model": node.get("model"),
-                "requested_effort": node.get("effort"),
-                "requested_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
-                "resolved_model": node.get("model"),
-                "resolved_effort": node.get("effort"),
-                "resolved_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
-                "effective_model": node.get("model"),
-                "effective_effort": node.get("effort"),
-                "effective_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
-                "model_evidence_source": "task_assignment",
-                "evidence_level": "UNVERIFIED (no runtime receipt)",
-                "failure_class": None,
-                "operational_fallback": False,
-                "tokens": {},
-                "process_elapsed_ms": None,
-            }
-        )
     model_switch_summary = build_model_switch_summary(
         plan,
-        complete_summary_records,
+        ordered,
         {"model": entry_model, "effort": entry_effort},
         ending_quality_failure_nodes=(),
     )
@@ -2041,9 +1877,7 @@ def run_plan(
         "main_result_node": plan["main_result_node"],
         "main_result_path": main_record.get("result_path"),
         "downstream_receipt_path": main_record.get("receipt_path"),
-        "ending_nodes_pending": [node["id"] for node in plan["nodes"] if node.get("phase") == "ending"],
-        "ending_handoff_path": str(ending_handoff_path) if status == "pass" else None,
-        "ending_manifest_path": str(ending_manifest_path) if status == "pass" else None,
+        "release_path": str(release_path) if release_path else None,
         "first_result_timeout_seconds": first_result_timeout_seconds,
         "first_result_elapsed_ms": first_result_elapsed_ms,
         "deadline_exhausted": deadline_exhausted,
@@ -2056,9 +1890,9 @@ def run_plan(
         "operational_model_learning": operational_model_learning,
         "execution_lifecycle": plan["execution_lifecycle"],
         "model_disclosure": _plan_model_disclosure(plan, ordered, {"model": entry_model, "effort": entry_effort}, "result"),
-        "ending_required": plan.get("ending_required") is True or any(node.get("phase") == "ending" for node in plan["nodes"]),
-        "final_aggregate_receipt": False,
-        "ending_launch_ready": False,
+        "ending_required": plan.get("ending_required") is True,
+        "final_aggregate_receipt": status == "pass",
+        "ending_launch_ready": status == "pass" and plan.get("ending_required") is True,
     }
     if manifest["ending_required"] and status == "pass":
         manifest["memory_closeout"] = memory_closeout_launch_packet(manifest)
@@ -2068,155 +1902,8 @@ def run_plan(
     return manifest
 
 
-def run_ending_handoff(handoff_path, codex_bin="codex", skills_root=None):
-    try:
-        handoff = json.loads(handoff_path.expanduser().resolve().read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        return {"schema_version": DISPATCH_SCHEMA_VERSION, "stage": "ending", "status": "fail", "failures": [f"invalid ending handoff: {type(error).__name__}"], "model_switch_summary": build_model_switch_summary({}, [], {}), "reopen_required": True, "notification_required": True}
-
-    plan = handoff.get("plan") if isinstance(handoff.get("plan"), dict) else {}
-    plan["execution_lifecycle"] = execution_lifecycle_for_plan(plan)
-    cwd = Path(handoff.get("cwd") or Path.cwd()).expanduser().resolve()
-    entry = handoff.get("entry") if isinstance(handoff.get("entry"), dict) else {}
-    state_db = Path(handoff["state_db"]).expanduser().resolve() if handoff.get("state_db") else None
-    route_run_id = handoff.get("route_run_id")
-    failures = []
-    if not route_run_id:
-        failures.append("ending handoff is missing route_run_id")
-    cache_dir = Path(handoff.get("cache_dir") or plan.get("cache_dir") or cwd / "work" / "cache" / "invalid-task-route").expanduser().resolve()
-    if route_run_id:
-        release_path = Path(handoff.get("release_path") or _ending_release_path(cache_dir, route_run_id))
-        release_record = _read_release_record(release_path)
-        if not isinstance(release_record, dict):
-            if _has_mismatched_release_record(cache_dir, route_run_id):
-                failures.append("ending handoff release does not match route_run_id")
-            else:
-                failures.append("ending handoff is not released")
-        elif release_record.get("route_run_id") != route_run_id:
-            failures.append("ending handoff release does not match route_run_id")
-        elif handoff.get("released") is not True:
-            failures.append("ending handoff is not marked released")
-        elif release_record.get("main_result_node") != (handoff.get("main_result_node") or plan.get("main_result_node")):
-            failures.append("ending handoff release does not match the main result node")
-    if not failures:
-        failures.extend(
-            validate_plan(
-                plan,
-                entry.get("model"),
-                entry.get("effort"),
-                cwd,
-                skills_root=skills_root,
-                enforce_current_recommendation=False,
-            )
-        )
-    manifest_path = Path(
-        handoff.get("ending_manifest_path") or cache_dir / "ending-dispatch-manifest.json"
-    ).expanduser().resolve()
-    completed_records = handoff.get("completed") if isinstance(handoff.get("completed"), list) else []
-    completed = {
-        record.get("id"): record
-        for record in completed_records
-        if isinstance(record, dict) and record.get("status") == "pass" and record.get("id")
-    }
-    node_by_id = {
-        node["id"]: node
-        for node in plan.get("nodes", [])
-        if isinstance(node, dict) and isinstance(node.get("id"), str)
-    }
-
-    ending_ids = [node_id for node_id, node in node_by_id.items() if node.get("phase") == "ending"]
-    main_node = node_by_id.get(plan.get("main_result_node"), {})
-    main_record = completed.get(plan.get("main_result_node"), {})
-    ordered = []
-    routing_learning = None
-    if not failures and ending_ids:
-        ending_id = ending_ids[0]
-        ending_node = dict(node_by_id[ending_id])
-        ending_node["_entry_model"] = entry.get("model")
-        ending_node["_entry_effort"] = entry.get("effort")
-        if not all(dependency in completed for dependency in ending_node.get("dependencies", [])):
-            failures.append("task-level Ending dependency was not satisfied")
-        else:
-            ending_record = run_node(
-                ending_node,
-                cache_dir,
-                dict(completed),
-                state_db,
-                cwd,
-                codex_bin,
-                skills_root,
-            )
-            ordered.append(ending_record)
-            if ending_record.get("status") != "pass":
-                failures.append(f"Ending Task node {ending_record['id']} failed")
-            ending_status = phase_verdict(ending_record.get("result_path"), "ENDING_TASK=PASS", "ENDING_TASK=FAIL")
-            if ending_status != "pass":
-                failures.append(f"Task-level Ending node {ending_record['id']} did not pass ENDING_TASK marker")
-
-    status = (
-        "pass"
-        if not failures and all(record.get("status") == "pass" for record in ordered)
-        else "fail"
-    )
-    summary_records = [record for record in completed_records if isinstance(record, dict)]
-    summary_records.extend(ordered)
-    completed_node_ids = {record.get("id") for record in summary_records if isinstance(record, dict) and record.get("id")}
-    for node in plan.get("nodes", []):
-        if not isinstance(node, dict) or not node.get("id") or node["id"] in completed_node_ids:
-            continue
-        summary_records.append(
-            {
-                "id": node["id"],
-                "model": node.get("model"),
-                "effort": node.get("effort"),
-                "status": "pending",
-                "dependencies": list(node.get("dependencies", [])),
-                "requested_model": node.get("model"),
-                "requested_effort": node.get("effort"),
-                "requested_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
-                "resolved_model": node.get("model"),
-                "resolved_effort": node.get("effort"),
-                "resolved_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
-                "effective_model": node.get("model"),
-                "effective_effort": node.get("effort"),
-                "effective_pair": f"{node.get('model')}|{node.get('effort')}" if node.get("model") and node.get("effort") else None,
-                "model_evidence_source": "task_assignment",
-                "evidence_level": "UNVERIFIED (no runtime receipt)",
-                "failure_class": None,
-                "operational_fallback": False,
-                "tokens": {},
-                "process_elapsed_ms": None,
-            }
-        )
-    quality_failure_nodes = []  # Memory closeout never grades the producer.
-    model_switch_summary = build_model_switch_summary(
-        plan,
-        summary_records,
-        entry,
-        ending_quality_failure_nodes=quality_failure_nodes,
-    )
-
-    manifest = {
-        "schema_version": DISPATCH_SCHEMA_VERSION,
-        "stage": "ending",
-        "status": status,
-        "failures": failures,
-        "entry": entry,
-        "nodes": ordered,
-        "model_switch_summary": model_switch_summary,
-        "reopen_required": status != "pass",
-        "notification_required": status != "pass",
-        "routing_learning": routing_learning,
-        "execution_lifecycle": plan["execution_lifecycle"],
-    }
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    manifest["manifest_path"] = str(manifest_path)
-    return manifest
-
-
 def compact_run_plan_manifest(manifest):
-    keys = ("schema_version", "status", "failures", "manifest_path", "main_result_path", "ending_handoff_path",
+    keys = ("schema_version", "status", "failures", "manifest_path", "main_result_path", "release_path",
             "route_run_id", "first_result_elapsed_ms", "deadline_exhausted", "result_published", "notification_required",
             "reopen_required", "execution_lifecycle", "complexity_score", "complexity_band", "model_disclosure",
             "model_switch_summary", "ending_required", "final_aggregate_receipt", "ending_launch_ready", "memory_closeout")
@@ -2241,28 +1928,14 @@ def main():
     preflight_parser.add_argument("plan", type=Path)
     preflight_parser.add_argument("--cwd", type=Path, default=Path.cwd())
     preflight_parser.add_argument("--skills-root", type=Path)
-    ending_parser = subparsers.add_parser("run-ending")
-    ending_parser.add_argument("handoff", type=Path)
-    ending_parser.add_argument("--codex-bin", default="codex")
-    ending_parser.add_argument("--skills-root", type=Path)
-    release_parser = subparsers.add_parser("release-main-result")
-    release_parser.add_argument("handoff", type=Path)
-
-
     args = parser.parse_args()
-    if args.command in {"run-plan", "validate-plan"}:
-        plan = json.loads(args.plan.expanduser().resolve().read_text(encoding="utf-8"))
-        entry = plan.get("entry") if isinstance(plan.get("entry"), dict) else {}
-        preflight = preflight_plan(plan, entry.get("model"), entry.get("effort"), args.cwd.expanduser().resolve(), args.skills_root)
-        if args.command == "validate-plan":
-            manifest = preflight
-        else:
-            manifest = run_plan(plan, entry.get("model"), entry.get("effort"), args.cwd.expanduser().resolve(), args.state_db.expanduser().resolve() if args.state_db else None, args.codex_bin, args.skills_root, result_ready_callback=_emit_result_ready_event, preflight=preflight)
-    elif args.command == "release-main-result":
-        handoff = json.loads(args.handoff.expanduser().resolve().read_text(encoding="utf-8"))
-        manifest = _release_main_result(handoff)
+    plan = json.loads(args.plan.expanduser().resolve().read_text(encoding="utf-8"))
+    entry = plan.get("entry") if isinstance(plan.get("entry"), dict) else {}
+    preflight = preflight_plan(plan, entry.get("model"), entry.get("effort"), args.cwd.expanduser().resolve(), args.skills_root)
+    if args.command == "validate-plan":
+        manifest = preflight
     else:
-        manifest = run_ending_handoff(args.handoff, args.codex_bin, args.skills_root)
+        manifest = run_plan(plan, entry.get("model"), entry.get("effort"), args.cwd.expanduser().resolve(), args.state_db.expanduser().resolve() if args.state_db else None, args.codex_bin, args.skills_root, result_ready_callback=_emit_result_ready_event, preflight=preflight)
     if manifest.get("memory_closeout"):
         print(json.dumps(manifest["memory_closeout"], ensure_ascii=False, separators=(",", ":")), flush=True)
     stdout_manifest = compact_run_plan_manifest(manifest) if args.command == "run-plan" else manifest

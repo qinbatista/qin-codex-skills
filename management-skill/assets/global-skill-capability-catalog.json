@@ -23,7 +23,8 @@
     "missing_memory": "skip",
     "task_score_disclosure": "required",
     "model_disclosure": "assignment_then_runtime",
-    "ending_placement": "visible_projectless_under_user_authorized_lifecycle",
+    "ending_placement": "visible_unpinned_projectless_recent_task",
+    "ending_independent_of_main_result": true,
     "ending_completion": "task_acknowledgement_and_scoped_memory_readback"
   },
   "managed_skills": [
@@ -346,7 +347,7 @@
       "id": "verification",
       "owner_skill": "verify-skill",
       "name": "Verification inside the task",
-      "function": "Use focused real evidence for consequential changes, skip simple values, and require user scope for whole-project runs.",
+      "function": "Use focused real behavior evidence or output readback for changed code and consequential results; require user scope for whole-project runs.",
       "checks": [
         "verify-units",
         "workflow-validator"
@@ -356,7 +357,7 @@
       "id": "ending-memory",
       "owner_skill": "project-memory-skill",
       "name": "Memory-only Ending",
-      "function": "Summarize durable facts using the selected model; never launch verification, automatic repair, or compulsory detached tasks.",
+      "function": "Record durable local memory in a separate unpinned recent task using the selected model; never gate the main result, verify, or repair.",
       "checks": [
         "project-memory-units",
         "verify-units"
@@ -469,7 +470,7 @@
   "retired_architectures": [
     {
       "id": "legacy-detached-verification",
-      "name": "Fixed Spark Ending verification and automatic repair tasks",
+      "name": "Ending verification and automatic repair tasks",
       "replacement": "ending-memory"
     },
     {

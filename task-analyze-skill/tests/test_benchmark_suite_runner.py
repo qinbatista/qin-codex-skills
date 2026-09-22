@@ -57,7 +57,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         workload_sha256 = hashlib.sha256(raw_workload.encode("utf-8")).hexdigest()
         return "\\n".join([
             "AUTO_BENCHMARK_ENTRY",
-            "You are the fixed gpt-5.6-luna|max controller. The workload body is deliberately absent.",
+            "You are the fixed gpt-6-luna|max controller. The workload body is deliberately absent.",
             "Launch exactly one bridge process: invoke the executable in CODEX_AUTO_BENCHMARK_PYTHON directly, with no interpreter discovery or substitution, on `skills/task-analyze-skill/scripts/benchmark_auto_entry_bridge.py` resolved under CODEX_HOME; pass `--prompt-file` from CODEX_AUTO_BENCHMARK_PROMPT_PATH and `--workdir` as the current working directory. Use the longest supported initial wait. If the tool yields a running session, poll that same session until exit; polling is not a retry and must never launch a second process.",
             "On exit 0, return the bridge stdout JSON byte-for-byte and stop. Do not read the prompt/source, solve, explain, verify, retry, launch another task, or run Ending/Fix.",
             f"BOUND_WORKLOAD_SHA256: {workload_sha256}",
@@ -85,11 +85,11 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         adaptive_thread_id = f"{thread_id}-adaptive"
         adaptive_tokens = 400
         adaptive_rollout_path = sessions_root / f"rollout-{adaptive_thread_id}.jsonl"
-        adaptive_rollout_events = [{"type": "session_meta", "payload": {"id": adaptive_thread_id, "source": "subagent"}}, {"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "max"}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": adaptive_tokens}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
+        adaptive_rollout_events = [{"type": "session_meta", "payload": {"id": adaptive_thread_id, "source": "subagent"}}, {"type": "turn_context", "payload": {"model": "gpt-6-luna", "effort": "max"}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": adaptive_tokens}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
         adaptive_rollout_path.write_text("\\n".join(json.dumps(event) for event in adaptive_rollout_events) + "\\n", encoding="utf-8")
         adaptive_source = json.dumps({"subagent": {"thread_spawn": {"parent_thread_id": thread_id}}})
         connection = sqlite3.connect(state_db)
-        connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (adaptive_thread_id, str(adaptive_rollout_path), adaptive_source, "gpt-5.6-luna", "max", adaptive_tokens))
+        connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", (adaptive_thread_id, str(adaptive_rollout_path), adaptive_source, "gpt-6-luna", "max", adaptive_tokens))
         connection.commit()
         connection.close()
     temporary_result = args.result_output.with_suffix(".tmp")
@@ -130,7 +130,7 @@ FAKE_RECEIPT_RUNNER = textwrap.dedent("""
         receipt["benchmark_auto_workspace_count"] = 1
         receipt["benchmark_auto_bridge_result_verified"] = True
         tier = args.workload_id.split("-r", 1)[0]
-        selected_pairs = {"simple": "gpt-5.3-codex-spark|low", "medium": "gpt-5.6-terra|medium", "complex": "gpt-5.6-luna|max", "advanced": "gpt-5.6-sol|high"}
+        selected_pairs = {"simple": "gpt-6-luna|low", "medium": "gpt-6-sol|medium", "complex": "gpt-6-luna|max", "advanced": "gpt-6-sol|high"}
         selected_pair = selected_pairs[tier]
         route_signature = {"selected_pair": selected_pair, "effective_pair": selected_pair, "scheduled_graph": False, "assigned_pairs": [selected_pair], "trial": False, "recommendation_state": "frozen", "selection_provenance": "dual_model_history", "context_mode": "full", "capability_assignment": [{"node_id": tier, "effective_pair": selected_pair}]}
         receipt["benchmark_selected_execution"] = {"schema_version": 2, "receipt_sha256": hashlib.sha256(adaptive_thread_id.encode("utf-8")).hexdigest(), "selected_pair": selected_pair, "effective_pair": selected_pair, "steady_state_logical_tokens": adaptive_tokens, "steady_state_execution_elapsed_ms": 1, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": route_signature}
@@ -168,9 +168,9 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         module_source = snapshot_root / "core" / "script" / "module" / "universal_POM_helper.py"
         ai_source.parent.mkdir(parents=True)
         module_source.parent.mkdir(parents=True)
-        ai_source.write_text('OPENAI_TESTING_DEFAULT_MODEL = "gpt-5.6-terra"\nPOM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL\n', encoding="utf-8")
+        ai_source.write_text('OPENAI_TESTING_DEFAULT_MODEL = "gpt-6-sol"\nPOM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL\n', encoding="utf-8")
         module_source.write_text("class UniversalPOMHelper:\n    pass\n", encoding="utf-8")
-        simple_expected = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.6-terra", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-5.6-terra\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
+        simple_expected = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-6-sol", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-6-sol\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
         medium_expected = {"class": "UniversalPOMHelper", "method": "build_pom", "prompt_keys_read": ["user_text"], "mutates_prompt_json": ["size_structure"], "always_return_keys": ["Measurement", "sample_size"], "optional_return_keys": ["universal_debug"], "calls_user_pom_helper": False, "source": "core/script/module/universal_POM_helper.py"}
         complex_expected = {"entry": "UniversalPOMHelper.build_pom", "early_exit_conditions": ["not measurement_names"], "stages": [], "final_merge_fields": ["id"], "always_return_keys": ["Measurement", "sample_size"], "optional_return_keys": ["universal_debug"], "source_files": ["core/script/module/universal_POM_helper.py"]}
         advanced_expected = {**complex_expected, "entry": "UniversalPOMHelper.build_advanced_pom"}
@@ -183,7 +183,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
 
     def write_codex_home(self, path, label):
         path.mkdir()
-        (path / "config.toml").write_text('model = "gpt-5.6-sol"\n', encoding="utf-8")
+        (path / "config.toml").write_text('model = "gpt-6-sol"\n', encoding="utf-8")
         (path / "AGENTS.md").write_text(f"# {label}\n", encoding="utf-8")
         (path / "models_cache.json").write_text('{"models":[]}\n', encoding="utf-8")
         memories_root = path / "memories"
@@ -222,8 +222,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
     def test_default_repeat_count_is_six(self):
         args = module.parse_args(["--suite-root", "/suite", "--direct-codex-home", "/direct", "--global-codex-home", "/global"])
         self.assertEqual(args.repeat_count, 6)
-        self.assertEqual(f"{args.direct_model}|{args.direct_effort}", "gpt-5.6-sol|ultra")
-        self.assertEqual(f"{args.auto_entry_model}|{args.auto_entry_effort}", "gpt-5.6-luna|max")
+        self.assertEqual(f"{args.direct_model}|{args.direct_effort}", "gpt-6-sol|ultra")
+        self.assertEqual(f"{args.auto_entry_model}|{args.auto_entry_effort}", "gpt-6-luna|max")
 
     def test_first_result_timestamp_excludes_delayed_post_result_receipt_work(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -277,7 +277,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             state_db_path = Path(temporary) / "state_5.sqlite"
             locking_connection = sqlite3.connect(state_db_path, check_same_thread=False)
             locking_connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
-            locking_connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/rollout.jsonl", "exec", "gpt-5.6-sol", "ultra", 71100))
+            locking_connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/rollout.jsonl", "exec", "gpt-6-sol", "ultra", 71100))
             locking_connection.commit()
             locking_connection.execute("BEGIN EXCLUSIVE")
 
@@ -308,7 +308,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             self.assertGreaterEqual(diagnostics["attempt_count"], 1)
         else:
             self.assertGreaterEqual(diagnostics["sqlite_error_count"], 1)
-            self.assertEqual(diagnostics["last_sqlite_error_name"], "SQLITE_BUSY_OR_LOCKED")
+            self.assertIn(diagnostics["last_sqlite_error_name"], {"SQLITE_BUSY", "SQLITE_BUSY_OR_LOCKED"})
 
     def test_post_run_census_fails_closed_when_required_thread_never_appears(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -325,7 +325,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             state_db_path = Path(temporary) / "state_5.sqlite"
             connection = sqlite3.connect(state_db_path)
             connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
-            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-5.6-sol", "ultra", 71100))
+            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-6-sol", "ultra", 71100))
             connection.commit()
             connection.close()
 
@@ -333,7 +333,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
                 time.sleep(0.1)
                 child_connection = sqlite3.connect(state_db_path)
                 child_source = json.dumps({"subagent": {"thread_spawn": {"parent_thread_id": "root-thread"}}})
-                child_connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("child-thread", "/tmp/child.jsonl", child_source, "gpt-5.6-luna", "low", 500))
+                child_connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("child-thread", "/tmp/child.jsonl", child_source, "gpt-6-luna", "low", 500))
                 child_connection.commit()
                 child_connection.close()
 
@@ -351,7 +351,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             state_db_path = Path(temporary) / "state_5.sqlite"
             connection = sqlite3.connect(state_db_path)
             connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
-            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-5.6-sol", "ultra", 72075))
+            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-6-sol", "ultra", 72075))
             connection.commit()
             connection.close()
             real_connect = sqlite3.connect
@@ -385,7 +385,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             state_db_path = sqlite_home / "state_5.sqlite"
             connection = sqlite3.connect(state_db_path)
             connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
-            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("existing-thread", str(sessions_root / "rollout-existing.jsonl"), "exec", "gpt-5.6-sol", "ultra", 10))
+            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("existing-thread", str(sessions_root / "rollout-existing.jsonl"), "exec", "gpt-6-sol", "ultra", 10))
             connection.commit()
             connection.close()
             diagnostics = {}
@@ -402,7 +402,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             connection = sqlite3.connect(state_db_path)
             self.assertEqual(connection.execute("PRAGMA journal_mode=WAL").fetchone()[0], "wal")
             connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
-            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-5.6-sol", "ultra", 71112))
+            connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-6-sol", "ultra", 71112))
             connection.commit()
             connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             connection.close()
@@ -439,7 +439,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
             writer_connection = sqlite3.connect(state_db_path)
             self.assertEqual(writer_connection.execute("PRAGMA journal_mode=WAL").fetchone()[0], "wal")
             writer_connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, source TEXT NOT NULL, model TEXT, reasoning_effort TEXT, tokens_used INTEGER NOT NULL)")
-            writer_connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-5.6-sol", "ultra", 100))
+            writer_connection.execute("INSERT INTO threads (id, rollout_path, source, model, reasoning_effort, tokens_used) VALUES (?, ?, ?, ?, ?, ?)", ("root-thread", "/tmp/root.jsonl", "exec", "gpt-6-sol", "ultra", 100))
             writer_connection.commit()
             self.assertGreater(Path(f"{state_db_path}-wal").stat().st_size, 0)
             diagnostics = {}
@@ -453,10 +453,10 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
     def test_final_census_recovers_from_exact_foreground_and_completed_rollout_set(self):
         with tempfile.TemporaryDirectory() as temporary:
             rollout_path = Path(temporary) / "rollout-root-thread.jsonl"
-            events = [{"type": "session_meta", "payload": {"id": "root-thread"}}, {"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "ultra"}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": 72075}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
+            events = [{"type": "session_meta", "payload": {"id": "root-thread"}}, {"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "ultra"}}, {"type": "event_msg", "payload": {"type": "task_started"}}, {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"total_tokens": 72075}}}}, {"type": "event_msg", "payload": {"type": "task_complete"}}]
             rollout_path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
             before = {"complete": True, "threads": {}}
-            foreground = {"complete": True, "threads": {"root-thread": {"thread_id": "root-thread", "rollout_path": str(rollout_path), "source": "exec", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 100}}}
+            foreground = {"complete": True, "threads": {"root-thread": {"thread_id": "root-thread", "rollout_path": str(rollout_path), "source": "exec", "model": "gpt-6-sol", "effort": "ultra", "tokens_used": 100}}}
             before_rollouts = {"available": False, "complete": True, "thread_ids": set()}
             after_rollouts = {"available": True, "complete": True, "thread_ids": {"root-thread"}}
             diagnostics = {"status": "incomplete"}
@@ -469,7 +469,7 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
 
     def test_final_census_recovery_rejects_extra_rollout_session(self):
         before = {"complete": True, "threads": {}}
-        foreground = {"complete": True, "threads": {"root-thread": {"thread_id": "root-thread", "rollout_path": "/unused", "source": "exec", "model": "gpt-5.6-sol", "effort": "ultra", "tokens_used": 100}}}
+        foreground = {"complete": True, "threads": {"root-thread": {"thread_id": "root-thread", "rollout_path": "/unused", "source": "exec", "model": "gpt-6-sol", "effort": "ultra", "tokens_used": 100}}}
         before_rollouts = {"available": False, "complete": True, "thread_ids": set()}
         after_rollouts = {"available": True, "complete": True, "thread_ids": {"root-thread", "hidden-child"}}
         self.assertIsNone(module.recover_final_snapshot_from_foreground(before, foreground, before_rollouts, after_rollouts))
@@ -527,8 +527,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual([(call["run_id"], call["direct"]) for call in performance_calls[8:]], [("simple-r02-global", False), ("simple-r02-direct", True), ("medium-r02-global", False), ("medium-r02-direct", True), ("complex-r02-global", False), ("complex-r02-direct", True), ("advanced-r02-global", False), ("advanced-r02-direct", True)])
         self.assertEqual([call["run_id"] for call in probe_calls], ["simple-r01-global-sol-entry-probe", "medium-r01-global-sol-entry-probe", "complex-r01-global-sol-entry-probe", "advanced-r01-global-sol-entry-probe"])
         self.assertTrue(all(call["plan_exists"] for call in calls))
-        self.assertTrue(all((call["model"], call["effort"]) == (("gpt-5.6-sol", "ultra") if call["direct"] else ("gpt-5.6-luna", "max")) and call["sandbox"] == ("read-only" if call["direct"] else "danger-full-access") and call["benchmark_task_sandbox"] == (None if call["direct"] else "read-only") and call["workdir"] == str((root / "snapshot").resolve()) for call in performance_calls))
-        self.assertTrue(all((call["model"], call["effort"]) == ("gpt-5.6-sol", "ultra") and call["sandbox"] == "danger-full-access" and call["benchmark_task_sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in probe_calls))
+        self.assertTrue(all((call["model"], call["effort"]) == (("gpt-6-sol", "ultra") if call["direct"] else ("gpt-6-luna", "max")) and call["sandbox"] == ("read-only" if call["direct"] else "danger-full-access") and call["benchmark_task_sandbox"] == (None if call["direct"] else "read-only") and call["workdir"] == str((root / "snapshot").resolve()) for call in performance_calls))
+        self.assertTrue(all((call["model"], call["effort"]) == ("gpt-6-sol", "ultra") and call["sandbox"] == "danger-full-access" and call["benchmark_task_sandbox"] == "read-only" and call["workdir"] == str((root / "snapshot").resolve()) for call in probe_calls))
         self.assertTrue(all(Path(call["state_db"]).is_absolute() and Path(call["state_db"]).parent == Path(call["codex_home"]) / "runtime-sqlite" for call in calls))
         self.assertTrue(all(call["benchmark_run_id"] == f"benchmark-{call['run_id']}" for call in calls))
         self.assertTrue(all(call["direct"] != call["bootstrap"] and call["entry"] is False and call["entry_env_present"] is False for call in calls))
@@ -542,8 +542,8 @@ class BenchmarkSuiteRunnerTests(unittest.TestCase):
         self.assertEqual(plan["runs"][1]["environment"]["config_path"], str((root / "global-home" / "config.toml").resolve()))
         self.assertEqual(plan["runs"][0]["receipts"][0]["role"], "result-producer")
         self.assertEqual(plan["runs"][1]["receipts"][0]["role"], "result-producer")
-        self.assertEqual(plan["runs"][0]["selected_entry_pair"], "gpt-5.6-sol|ultra")
-        self.assertEqual(plan["runs"][1]["selected_entry_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(plan["runs"][0]["selected_entry_pair"], "gpt-6-sol|ultra")
+        self.assertEqual(plan["runs"][1]["selected_entry_pair"], "gpt-6-luna|max")
         self.assertEqual(len([run for run in plan["runs"] if "dual_entry_probe" in run]), 4)
         self.assertTrue(all(run_summary.get("sol_entry_probe_status") == "pass" for run_summary in result["runs"] if run_summary["run_id"].endswith("r01-global")))
         self.assertEqual(plan["runs"][0]["environment"]["visible_catalog_sha256"], plan["runs"][1]["environment"]["visible_catalog_sha256"])

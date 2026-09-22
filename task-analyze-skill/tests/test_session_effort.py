@@ -20,7 +20,7 @@ class SessionEffortTests(unittest.TestCase):
     def write_session(self, root, session_id, project, turns=None):
         session_path = root / "2026" / "08" / "03" / f"rollout-{session_id}.jsonl"
         session_path.parent.mkdir(parents=True)
-        turns = turns or [("turn-1", "gpt-5.6-luna", "max", "implement the SVG corner trace."), ("turn-2", "gpt-5.6-luna", "max", "still wrong, fix the SVG corner line."), ("turn-3", "gpt-5.6-terra", "max", "again, fix the SVG corner line.")]
+        turns = turns or [("turn-1", "gpt-6-luna", "max", "implement the SVG corner trace."), ("turn-2", "gpt-6-luna", "max", "still wrong, fix the SVG corner line."), ("turn-3", "gpt-6-sol", "max", "again, fix the SVG corner line.")]
         events = [{"type": "session_meta", "payload": {"session_id": session_id, "cwd": str(project)}}]
         for turn_id, model, effort, message in turns:
             events.extend([{"type": "turn_context", "payload": {"turn_id": turn_id, "model": model, "effort": effort}}, {"type": "event_msg", "payload": {"type": "user_message", "message": f"My request for Codex: {message}"}}])
@@ -49,14 +49,14 @@ class SessionEffortTests(unittest.TestCase):
             summary = module.assess_session(prompt, project, project_key="demo", task_type="code", module="svg-repair", operation="fix", modality="mixed", complexity_score=65, task_summary=prompt, session_id=session_id, sessions_root=root / "sessions", local_store=store)
             self.assertTrue(summary["failure_recorded"])
             self.assertEqual(summary["state"], "repeated_failure")
-            self.assertEqual(summary["last_model_pair"], "gpt-5.6-luna|max")
+            self.assertEqual(summary["last_model_pair"], "gpt-6-luna|max")
             self.assertEqual(summary["route_class"], "core_solving_short_difficult")
-            self.assertEqual(summary["preferred_solving_pair"], "gpt-5.6-terra|low")
-            self.assertEqual(module.next_escalation_pair(summary["last_model_pair"], ["gpt-5.6-luna|max", "gpt-5.6-terra|max", "gpt-5.6-sol|max", "gpt-5.6-sol|ultra"]), "gpt-5.6-terra|max")
-            written = module.record_session_effort(summary, project_key="demo", task_type="code", module="svg-repair", complexity_score=65, complexity_band="complex", selected_pair="gpt-5.6-terra|max", requested_pair="gpt-5.6-luna|max", local_store=store)
+            self.assertEqual(summary["preferred_solving_pair"], "gpt-6-sol|low")
+            self.assertEqual(module.next_escalation_pair(summary["last_model_pair"], ["gpt-6-luna|max", "gpt-6-sol|max", "gpt-6-sol|max", "gpt-6-sol|ultra"]), "gpt-6-sol|max")
+            written = module.record_session_effort(summary, project_key="demo", task_type="code", module="svg-repair", complexity_score=65, complexity_band="complex", selected_pair="gpt-6-sol|max", requested_pair="gpt-6-luna|max", local_store=store)
             self.assertEqual(written["status"], "written")
             next_summary = module.assess_session("Again, fix the SVG corner line.", project, project_key="demo", task_type="code", module="svg-repair", operation="fix", modality="mixed", complexity_score=65, task_summary="Again, fix the SVG corner line.", session_id=session_id, sessions_root=root / "sessions", local_store=store)
-            self.assertEqual(next_summary["last_model_pair"], "gpt-5.6-terra|max")
+            self.assertEqual(next_summary["last_model_pair"], "gpt-6-sol|max")
 
     def test_transformed_current_tail_is_not_counted_as_prior_work(self):
         session_id = "019fc8e5-87da-7082-90b9-6d505404d229"
@@ -64,7 +64,7 @@ class SessionEffortTests(unittest.TestCase):
             root = Path(temporary)
             project = root / "project"
             project.mkdir()
-            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-5.6-luna", "max", "implement the session history model route.")])
+            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-6-luna", "max", "implement the session history model route.")])
             summary = module.assess_session("Can you implement the model routing session history?", project, project_key="demo", task_type="code", module="routing", operation="implement", modality="text", complexity_score=40, task_summary="Can you implement the model routing session history?", session_id=session_id, sessions_root=root / "sessions", local_store=root / "events.jsonl")
         self.assertEqual(summary["current_turn_match"], "semantic_tail")
         self.assertEqual(summary["same_task_turns"], 0)
@@ -78,12 +78,12 @@ class SessionEffortTests(unittest.TestCase):
             project = root / "project"
             project.mkdir()
             store = root / "events.jsonl"
-            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-5.6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-5.6-luna", "max", "continue the session history model route.")])
-            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-5.6-luna|max", "pass")
+            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-6-luna", "max", "continue the session history model route.")])
+            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-6-luna|max", "pass")
             summary = module.assess_session("Continue the session history model route.", project, project_key="demo", task_type="code", module="routing", operation="implement", modality="text", complexity_score=65, task_summary="Continue the session history model route.", session_id=session_id, sessions_root=root / "sessions", local_store=store)
         self.assertEqual(summary["resolution_state"], "verified_pass")
         self.assertEqual(summary["last_model_source"], "verified_terminal")
-        self.assertEqual(summary["last_model_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(summary["last_model_pair"], "gpt-6-luna|max")
         self.assertFalse(summary["failure_recorded"])
 
     def test_corrective_feedback_escalates_from_verified_terminal_pair(self):
@@ -93,13 +93,13 @@ class SessionEffortTests(unittest.TestCase):
             project = root / "project"
             project.mkdir()
             store = root / "events.jsonl"
-            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-5.6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-5.6-luna", "max", "still wrong, repair the session history model route.")])
-            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-5.6-luna|max", "pass")
+            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-6-luna", "max", "still wrong, repair the session history model route.")])
+            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-6-luna|max", "pass")
             summary = module.assess_session("Still wrong, repair the session history model route.", project, project_key="demo", task_type="code", module="routing", operation="fix", modality="text", complexity_score=65, task_summary="Still wrong, repair the session history model route.", session_id=session_id, sessions_root=root / "sessions", local_store=store)
         self.assertTrue(summary["failure_recorded"])
         self.assertEqual(summary["resolution_state"], "feedback_unresolved")
         self.assertEqual(summary["last_model_source"], "verified_terminal")
-        self.assertEqual(module.solve_route_pair(summary, summary["last_model_pair"], ["gpt-5.6-luna|max", "gpt-5.6-terra|low", "gpt-5.6-sol|low"])["pair"], "gpt-5.6-terra|low")
+        self.assertEqual(module.solve_route_pair(summary, summary["last_model_pair"], ["gpt-6-luna|max", "gpt-6-sol|low", "gpt-6-sol|low"])["pair"], "gpt-6-sol|low")
 
     def test_verified_terminal_failure_marks_same_topic_unresolved_without_feedback_words(self):
         session_id = "019fc8e5-87da-7082-90b9-6d505404d229"
@@ -108,8 +108,8 @@ class SessionEffortTests(unittest.TestCase):
             project = root / "project"
             project.mkdir()
             store = root / "events.jsonl"
-            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-5.6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-5.6-luna", "max", "continue the session history model route.")])
-            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-5.6-luna|max", "fail")
+            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-6-luna", "max", "continue the session history model route.")])
+            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-6-luna|max", "fail")
             summary = module.assess_session("Continue the session history model route.", project, project_key="demo", task_type="code", module="routing", operation="implement", modality="text", complexity_score=65, task_summary="Continue the session history model route.", session_id=session_id, sessions_root=root / "sessions", local_store=store)
         self.assertTrue(summary["failure_recorded"])
         self.assertEqual(summary["resolution_state"], "verified_failure")
@@ -122,8 +122,8 @@ class SessionEffortTests(unittest.TestCase):
             project = root / "project"
             project.mkdir()
             store = root / "events.jsonl"
-            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-5.6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-5.6-luna", "max", "continue the session history model route.")])
-            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-5.6-luna|max", "fail", "execution")
+            self.write_session(root / "sessions", session_id, project, [("turn-1", "gpt-6-luna", "max", "implement the session history model route."), ("turn-2", "gpt-6-luna", "max", "continue the session history model route.")])
+            self.write_terminal_outcome(store, session_id, "routing", "turn-1", "gpt-6-luna|max", "fail", "execution")
             summary = module.assess_session("Continue the session history model route.", project, project_key="demo", task_type="code", module="routing", operation="implement", modality="text", complexity_score=65, task_summary="Continue the session history model route.", session_id=session_id, sessions_root=root / "sessions", local_store=store)
         self.assertFalse(summary["failure_recorded"])
         self.assertEqual(summary["latest_terminal_outcome"], "operational_failure")
@@ -152,10 +152,10 @@ class SessionEffortTests(unittest.TestCase):
             events = [
                 {"type": "session_meta", "payload": {"session_id": session_id, "cwd": str(project)}},
                 {"type": "response_item", "payload": {"role": "user", "type": "message", "content": [{"type": "input_text", "text": "Injected context, not a task turn."}]}},
-                {"type": "turn_context", "payload": {"turn_id": "turn-1", "model": "gpt-5.6-luna", "effort": "max"}},
+                {"type": "turn_context", "payload": {"turn_id": "turn-1", "model": "gpt-6-luna", "effort": "max"}},
                 {"type": "response_item", "payload": {"role": "user", "type": "message", "content": [{"type": "input_text", "text": "Implement the session history model route."}]}},
                 {"type": "event_msg", "payload": {"type": "user_message", "message": "Implement the session history model route."}},
-                {"type": "turn_context", "payload": {"turn_id": "turn-2", "model": "gpt-5.6-luna", "effort": "max"}},
+                {"type": "turn_context", "payload": {"turn_id": "turn-2", "model": "gpt-6-luna", "effort": "max"}},
                 {"type": "response_item", "payload": {"role": "user", "type": "message", "content": [{"type": "input_text", "text": "Still wrong, fix the session history model route."}]}},
                 {"type": "event_msg", "payload": {"type": "user_message", "message": "Still wrong, fix the session history model route."}},
             ]
@@ -165,8 +165,8 @@ class SessionEffortTests(unittest.TestCase):
         self.assertTrue(summary["failure_recorded"])
         self.assertEqual(summary["turn_count"], 2)
         self.assertEqual(summary["same_task_turns"], 1)
-        self.assertEqual(summary["last_model_pair"], "gpt-5.6-luna|max")
-        self.assertEqual(module.solve_route_pair(summary, summary["last_model_pair"], ["gpt-5.6-luna|max", "gpt-5.6-terra|low", "gpt-5.6-sol|low"])["pair"], "gpt-5.6-terra|low")
+        self.assertEqual(summary["last_model_pair"], "gpt-6-luna|max")
+        self.assertEqual(module.solve_route_pair(summary, summary["last_model_pair"], ["gpt-6-luna|max", "gpt-6-sol|low", "gpt-6-sol|low"])["pair"], "gpt-6-sol|low")
 
     def test_session_and_explicit_task_scope_are_hashed_and_isolated(self):
         first_session = module.session_key("019fc8e5-87da-7082-90b9-6d505404d229")
@@ -194,45 +194,45 @@ class SessionEffortTests(unittest.TestCase):
         self.assertFalse(isolated["matched"])
         self.assertEqual(isolated["reason"], "unrelated_session")
 
-    def test_escalation_stops_at_sol_ultra(self):
-        pairs = ["gpt-5.6-luna|max", "gpt-5.6-terra|max", "gpt-5.6-sol|max", "gpt-5.6-sol|ultra"]
-        self.assertEqual(module.next_escalation_pair("gpt-5.6-luna|max", pairs), "gpt-5.6-terra|max")
-        self.assertEqual(module.next_escalation_pair("gpt-5.6-terra|max", pairs), "gpt-5.6-sol|max")
-        self.assertEqual(module.next_escalation_pair("gpt-5.6-sol|max", pairs), "gpt-5.6-sol|ultra")
-        self.assertIsNone(module.next_escalation_pair("gpt-5.6-sol|ultra", pairs))
+    def test_escalation_stops_at_astra_ultra(self):
+        pairs = ["gpt-6-luna|max", "gpt-6-sol|max", "gpt-6-astra|max", "gpt-6-astra|ultra"]
+        self.assertEqual(module.next_escalation_pair("gpt-6-luna|max", pairs), "gpt-6-sol|max")
+        self.assertEqual(module.next_escalation_pair("gpt-6-sol|max", pairs), "gpt-6-astra|max")
+        self.assertEqual(module.next_escalation_pair("gpt-6-astra|max", pairs), "gpt-6-astra|ultra")
+        self.assertIsNone(module.next_escalation_pair("gpt-6-astra|ultra", pairs))
 
     def test_task_class_selects_cheaper_image_and_max_long_solving_routes(self):
         image = module.classify_task("Read the image and compare the sleeve shape.", operation="inspect", modality="image", complexity_score=20)
         medium_task = module.classify_task("Read the design, compare all corners, and fix the SVG.", operation="fix", modality="mixed", complexity_score=55)
         long_task = module.classify_task("Trace all outlines first, then inspect every intersection, update multiple files, run tests, and export the final result.", operation="fix", modality="mixed", complexity_score=65)
         frontier_task = module.classify_task("Comprehensively read and understand massive information from many sources, synthesize tradeoffs, choose an architecture, and write the final plan.", operation="analyze", modality="text", complexity_score=70)
-        explicit_entry = module.classify_task("Use gpt-5.6-luna|max as the entry model, then fix this difficult SVG.", operation="fix", modality="mixed", complexity_score=65)
+        explicit_entry = module.classify_task("Use gpt-6-luna|max as the entry model, then fix this difficult SVG.", operation="fix", modality="mixed", complexity_score=65)
         generic_code = module.classify_task("Implement the database migration and run tests.", task_type="code", operation="implement", modality="text", complexity_score=55)
         simple_prose = module.classify_task("Write a short email confirming the meeting.", task_type="general", operation="write", modality="text", complexity_score=10)
         self.assertEqual(image["solving_surface"], "image_inspection")
-        self.assertEqual(image["preferred_solving_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(image["preferred_solving_pair"], "gpt-6-luna|low")
         self.assertEqual(medium_task["estimated_effort"], "medium")
-        self.assertEqual(medium_task["preferred_solving_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(medium_task["preferred_solving_pair"], "gpt-6-sol|medium")
         self.assertEqual(long_task["task_length"], "long")
-        self.assertEqual(long_task["preferred_solving_pair"], "gpt-5.6-terra|max")
-        self.assertEqual(frontier_task["model_family"], "gpt-5.6-sol")
+        self.assertEqual(long_task["preferred_solving_pair"], "gpt-6-sol|max")
+        self.assertEqual(frontier_task["model_family"], "gpt-6-astra")
         self.assertEqual(frontier_task["estimated_effort"], "max")
-        self.assertEqual(frontier_task["preferred_solving_pair"], "gpt-5.6-sol|max")
-        self.assertEqual(explicit_entry["explicit_route_hint"], "gpt-5.6-luna|max")
-        self.assertEqual(explicit_entry["preferred_solving_pair"], "gpt-5.6-terra|low")
-        self.assertEqual(generic_code["preferred_solving_pair"], "gpt-5.6-terra|medium")
-        self.assertEqual(simple_prose["preferred_solving_pair"], "gpt-5.6-luna|low")
+        self.assertEqual(frontier_task["preferred_solving_pair"], "gpt-6-astra|max")
+        self.assertEqual(explicit_entry["explicit_route_hint"], "gpt-6-luna|max")
+        self.assertEqual(explicit_entry["preferred_solving_pair"], "gpt-6-sol|low")
+        self.assertEqual(generic_code["preferred_solving_pair"], "gpt-6-sol|medium")
+        self.assertEqual(simple_prose["preferred_solving_pair"], "gpt-6-luna|low")
 
     def test_solving_route_keeps_effort_class_when_model_strengthens(self):
-        pairs = ["gpt-5.6-luna|low", "gpt-5.6-luna|max", "gpt-5.6-terra|low", "gpt-5.6-terra|max", "gpt-5.6-sol|low", "gpt-5.6-sol|max"]
-        short_core = {"preferred_solving_pair": "gpt-5.6-terra|low", "route_reason": "short_difficult_core_solving_light_route", "last_model_source": "context"}
-        long_core = {"preferred_solving_pair": "gpt-5.6-terra|max", "route_reason": "long_core_solving_max_route", "last_model_source": "context"}
-        image = {"preferred_solving_pair": "gpt-5.6-luna|low", "route_reason": "cheaper_image_inspection_route", "last_model_source": "context"}
-        self.assertEqual(module.solve_route_pair(short_core, "gpt-5.6-luna|max", pairs)["pair"], "gpt-5.6-terra|low")
-        self.assertEqual(module.solve_route_pair(short_core, "gpt-5.6-terra|low", pairs)["pair"], "gpt-5.6-sol|low")
-        self.assertEqual(module.solve_route_pair(long_core, "gpt-5.6-luna|max", pairs)["pair"], "gpt-5.6-terra|max")
-        self.assertEqual(module.solve_route_pair(image, "gpt-5.6-luna|max", pairs)["pair"], "gpt-5.6-luna|low")
-        self.assertEqual(module.solve_route_pair(short_core, "gpt-5.6-luna|max", ["gpt-5.6-luna|max"])["pair"], "gpt-5.6-terra|low")
+        pairs = ["gpt-6-luna|low", "gpt-6-luna|max", "gpt-6-sol|low", "gpt-6-sol|max", "gpt-6-astra|low", "gpt-6-astra|max"]
+        short_core = {"preferred_solving_pair": "gpt-6-sol|low", "route_reason": "short_difficult_core_solving_light_route", "last_model_source": "context"}
+        long_core = {"preferred_solving_pair": "gpt-6-sol|max", "route_reason": "long_core_solving_max_route", "last_model_source": "context"}
+        image = {"preferred_solving_pair": "gpt-6-luna|low", "route_reason": "cheaper_image_inspection_route", "last_model_source": "context"}
+        self.assertEqual(module.solve_route_pair(short_core, "gpt-6-luna|max", pairs)["pair"], "gpt-6-sol|low")
+        self.assertEqual(module.solve_route_pair(short_core, "gpt-6-sol|low", pairs)["pair"], "gpt-6-astra|low")
+        self.assertEqual(module.solve_route_pair(long_core, "gpt-6-luna|max", pairs)["pair"], "gpt-6-sol|max")
+        self.assertEqual(module.solve_route_pair(image, "gpt-6-luna|max", pairs)["pair"], "gpt-6-luna|low")
+        self.assertEqual(module.solve_route_pair(short_core, "gpt-6-luna|max", ["gpt-6-luna|max"])["pair"], "gpt-6-sol|low")
 
 
 if __name__ == "__main__":

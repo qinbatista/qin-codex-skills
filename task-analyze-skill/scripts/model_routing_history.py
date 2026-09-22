@@ -902,9 +902,6 @@ def recommend_route(args):
             return _recommendation(condition, record, pairs, static_pair, hard_pair, None, reason, False, "quality_boundary")
 
         static_eligible = static_pair in eligible_pairs
-        tiny = ("gpt-5.3-codex-spark", "low") if is_tiny_spark_profile(condition["task_family"], condition["modality"], condition["risk"], condition["complexity"], condition["ambiguity"]) and ("gpt-5.3-codex-spark", "low") in eligible_pairs else None
-        tiny_runtime_failure = bool(tiny and any(task.get("operational_failure_pairs") for task in record["tasks"]))
-
         selected = None
         reason = "no_bounds_use_static"
         trial = False
@@ -916,16 +913,13 @@ def recommend_route(args):
             if condition["risk"] == "high":
                 selected = static_pair if static_eligible else pairs[-1]
                 reason = "high_risk_no_autodowngrade"
-            elif failure_pair is None and success_pair is None and tiny and not tiny_runtime_failure:
-                selected = tiny
-                reason = "tiny_spark_auto"
             else:
                 selected = static_pair if static_eligible else eligible_pairs[0]
                 reason = "no_bounds_use_static"
         elif failure_pair is None and success_pair is not None:
-            if tiny_runtime_failure or _has_unverified_quality_failure(record):
+            if _has_unverified_quality_failure(record):
                 selected = static_pair if static_eligible else eligible_pairs[0]
-                reason = "operational_failure_static_fallback" if tiny_runtime_failure else "quality_failure_receipt_unverified"
+                reason = "quality_failure_receipt_unverified"
             elif condition["risk"] == "high":
                 selected = static_pair if static_eligible else pairs[-1]
                 reason = "high_risk_no_autodowngrade"

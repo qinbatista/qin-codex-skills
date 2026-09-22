@@ -231,7 +231,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(readme, expected)
         self.assertLess(len(template.split()), 600)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
-        for concept in ("selected model", "reasoning effort", "adaptive model selection", "Missing memory", "inside the task", "smallest convincing check", "Simple value edits skip", "Ending is memory-only", "Project memories stay isolated"):
+        for concept in ("selected model", "reasoning effort", "adaptive model selection", "Missing memory", "inside the task", "real behavior check", "unpinned", "Project memories stay isolated"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
@@ -241,7 +241,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         for retired in ("Spark schedule", "Spark-xhigh", "CODE READY", "Frozen v48", "+80.774%", "+64.686%", "Repair Task", "finish first, verify in background"):
             self.assertNotIn(retired, readme)
         self.assertIn("mechanical tool calls need no extra model", readme)
-        self.assertIn("This benchmark did not establish savings", readme)
+        self.assertNotIn("background verify", readme)
 
     def test_chinese_readme_is_compact_and_has_the_same_policy(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="zh")
@@ -249,7 +249,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
         self.assertEqual(readme, expected)
         self.assertLess(len(template.splitlines()), 80)
-        for concept in ("用户选择的", "模型和推理强度", "记忆缺失直接跳过", "在当前任务内验证", "简单数值修改默认跳过", "Ending 只更新记忆", "项目记忆互相隔离", "本次基准没有证明节省"):
+        for concept in ("用户选择的", "模型和推理强度", "记忆缺失直接跳过", "在当前任务内", "真实行为检查", "本地记忆", "项目记忆互相隔离"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
@@ -995,11 +995,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                             "verification_shape": "mini_real",
                         },
                         "summary": "test local private model_experience preservation",
-                        "candidate_ladder": ["gpt-5.3-codex-spark|low", "gpt-5.6-luna|low", "gpt-5.6-luna|medium"],
-                        "hard_floor": "gpt-5.3-codex-spark|low",
-                        "static_suggestion": "gpt-5.6-luna|low",
-                        "failed_model": "gpt-5.6-luna|low",
-                        "success_model": "gpt-5.6-luna|medium",
+                        "candidate_ladder": ["gpt-6-luna|low", "gpt-6-luna|low", "gpt-6-luna|medium"],
+                        "hard_floor": "gpt-6-luna|low",
+                        "static_suggestion": "gpt-6-luna|low",
+                        "failed_model": "gpt-6-luna|low",
+                        "success_model": "gpt-6-luna|medium",
                         "tasks": [],
                     }
                 },

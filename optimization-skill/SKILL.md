@@ -17,7 +17,7 @@ Read relevant project memory on every task through [project memory](../project-m
 2. Capture a representative baseline when claiming performance or behavior preservation.
 3. Choose the smallest useful change. Keep judgment in the Skill, long optional context in references, repeatable mechanics in scripts, and reusable fixtures in assets. Do not replace sound reasoning with brittle automation.
 4. Apply the relevant code or prompt preferences and change only the authorized scope.
-5. Verify during the active task with identical inputs and the smallest convincing comparison. For complex or high-risk changes, an independent review can run inside the same task. Simple value-only edits may skip verification. Do not start or compile the whole project unless requested.
+5. Verify during the active task with identical inputs and the smallest real comparison or output readback. For complex or high-risk changes, an independent review can run inside the same task. Do not start or compile the whole project unless requested.
 6. Report the artifact, measured comparison, and remaining limitations. Ending only writes concise project memory with the user's selected model and effort; it does not verify, repair, or benchmark.
 
 For a Skill-root review, the optional `scripts/skill_optimizer.py scan <skills-root>` lists visible Skills; `audit <skill-path>` checks references and duplicate instructions. Use these when they save work, not as required pre-reading ceremony.

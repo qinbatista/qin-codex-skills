@@ -33,15 +33,10 @@ ACTIVE_MODEL_DEFINITIONS = {row["id"]: {"efforts": list(row["codex_efforts"])} f
 PRIORITY_PRODUCER_CONFIG = dict(MODEL_CAPABILITY_CONFIG["priority_producer"] or {})
 PRIORITY_PRODUCER_MODEL = PRIORITY_PRODUCER_CONFIG.get("id")
 PRIORITY_PRODUCER_DEFINITIONS = {PRIORITY_PRODUCER_MODEL: {"efforts": list(PRIORITY_PRODUCER_CONFIG["codex_efforts"])}} if PRIORITY_PRODUCER_MODEL else {}
-ENDING_FAST_CONFIG = dict(MODEL_CAPABILITY_CONFIG["ending_fast"])
-ENDING_FAST_PRIMARY_PAIR = ENDING_FAST_CONFIG["primary_pair"]
-ENDING_FAST_PRIMARY_MODEL, ENDING_FAST_PRIMARY_EFFORT = (None, None)  # Supplied by the selected user pair.
-ENDING_FAST_FALLBACK_PAIR = ENDING_FAST_CONFIG.get("availability_fallback_pair")
-ENDING_FAST_DEFINITIONS = {model["id"]: {"efforts": list(model["codex_efforts"])} for model in MODEL_CAPABILITY_CONFIG["catalog_models"] if model["id"] == ENDING_FAST_PRIMARY_MODEL}
 SPARK_FIRST_CONFIG = PRIORITY_PRODUCER_CONFIG
 SPARK_MODEL = PRIORITY_PRODUCER_MODEL
 SPARK_MODEL_DEFINITIONS = PRIORITY_PRODUCER_DEFINITIONS
-MODEL_DEFINITIONS = {**PRIORITY_PRODUCER_DEFINITIONS, **ENDING_FAST_DEFINITIONS, **ACTIVE_MODEL_DEFINITIONS}
+MODEL_DEFINITIONS = {**PRIORITY_PRODUCER_DEFINITIONS, **ACTIVE_MODEL_DEFINITIONS}
 
 MODEL_ORDER = list(MODEL_DEFINITIONS.keys())
 MODEL_EFFORT_ORDER = list(MODEL_CAPABILITY_CONFIG["effort_order"])
@@ -264,7 +259,7 @@ def execution_lifecycle_contract(complexity_score, fast_path_eligible=False, gra
     low_ambiguity = str(ambiguity or "low").strip().casefold() in {"", "low"}
     direct = bool(fast_path_eligible and complexity_score <= ROUTING_THRESHOLDS["fast_path_maximum_score"] and low_risk and low_ambiguity and result_node_count == 1 and not graph_admitted)
     mode = "direct" if direct else "planned_graph" if graph_admitted or result_node_count > 1 else "planned_single"
-    return {"schema_version": EXECUTION_LIFECYCLE_VERSION, "mode": mode, "plan_required": not direct, "execution_topology": "dependency_graph" if mode == "planned_graph" else "single", "execution_stages": ["execute"] if direct else ["plan", "execute"], "acceptance_policy": "in_task_relevant_verification", "final_aggregate_only": True, "no_surface_action": "intentionally_skipped_simple_task", "model_selection": "user_selected_for_governing_skills_else_adaptive", "repeated_quality_failure": "same_topic_diagnose_then_gradual_model_or_effort_strengthening", "reasoning_effort": "user_selected_for_governing_skills_else_estimated_steps", "operational_failure": "quality_neutral_retry_or_allowed_fallback", "verified_pass": "retain_then_trial_down_after_two", "topic_change": "reset_same_session_state"}
+    return {"schema_version": EXECUTION_LIFECYCLE_VERSION, "mode": mode, "plan_required": not direct, "execution_topology": "dependency_graph" if mode == "planned_graph" else "single", "execution_stages": ["execute"] if direct else ["plan", "execute"], "acceptance_policy": "in_task_real_verification", "final_aggregate_only": True, "no_surface_action": "not_applicable_to_read_only_result", "model_selection": "user_selected_for_governing_skills_else_adaptive", "repeated_quality_failure": "same_topic_diagnose_then_gradual_model_or_effort_strengthening", "reasoning_effort": "user_selected_for_governing_skills_else_estimated_steps", "operational_failure": "quality_neutral_retry_or_allowed_fallback", "verified_pass": "retain_then_trial_down_after_two", "topic_change": "reset_same_session_state"}
 
 EXECUTION_DOMAIN_REGISTRY_VERSION = 2
 EXECUTION_DOMAIN_REGISTRY_DEFAULT = "general"
@@ -330,7 +325,7 @@ EXECUTION_DOMAINS = {
         "owner_skill": "code-skill",
         "owner_enforced": False,
         "spark_first": True,
-        "reference_path": "code-skill/references/spark-small-code.md",
+        "reference_path": "code-skill/references/legacy-code-unspecified.md",
         "active": False,
         "history_only": True,
     },
@@ -720,12 +715,6 @@ def scheduled_source_pair(complexity="easy"):
     return (PRIORITY_PRODUCER_MODEL, effort) if effort in PRIORITY_PRODUCER_CONFIG["adaptive_efforts"] else None
 
 
-def ending_fast_route_fields(selected_model=None, selected_effort=None):
-    if not selected_model or not selected_effort:
-        raise ValueError("Ending memory requires the user's selected model and effort")
-    return {"model": selected_model, "effort": selected_effort, "selection_basis": "user_selected", "allow_fallback": [], "fallback_policy": "none"}
-
-
 def adaptive_pair_texts_for_profile(task_family, modality, risk, complexity="easy", ambiguity="low"):
     return [pair_text(*pair) for pair in adaptive_ladder_for_profile(task_family, modality, risk, complexity, ambiguity)]
 
@@ -790,7 +779,6 @@ def public_model_capability_rows():
         "role_pairs": dict(MODEL_ROLE_PAIRS),
         "policy": dict(ADAPTIVE_POLICY),
         "priority_producer": dict(PRIORITY_PRODUCER_CONFIG) if PRIORITY_PRODUCER_CONFIG else None,
-        "ending_fast": dict(ENDING_FAST_CONFIG),
         "spark_first": dict(SPARK_FIRST_CONFIG),
         "private_learning_contract": dict(MODEL_CAPABILITY_CONFIG["private_learning_contract"]),
         "default_cold_start": MODEL_CAPABILITY_CONFIG["default_cold_start"],

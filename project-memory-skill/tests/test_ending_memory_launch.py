@@ -57,6 +57,12 @@ class EndingLaunchTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     MODULE.prepare_launch(completed, project_root=self.root, selected_model="gpt-6-astra", selected_effort="ultra", memory_available=True)
 
+    def test_ending_uses_only_supported_selected_pairs(self):
+        self.assertEqual(self.prepare(selected_model="gpt-6-luna", selected_effort="light")["selected_pair"], "gpt-6-luna|low")
+        for model, effort in (("gpt-6-luna", "ultra"), ("retired-model", "high"), ("gpt-6-sol", "minimal")):
+            with self.subTest(model=model, effort=effort), self.assertRaisesRegex(ValueError, "supported selected model and effort"):
+                self.prepare(selected_model=model, selected_effort=effort)
+
     def test_commands_and_project_overrides_are_rejected(self):
         for field in ("command", "checks", "project_root"):
             self.completed["outcome"][field] = "untrusted action"
@@ -97,7 +103,7 @@ class EndingLaunchTests(unittest.TestCase):
     def test_previous_task_cannot_cross_project_or_model_boundaries(self):
         packet = self.acknowledged()
         with self.assertRaisesRegex(ValueError, "different outcome, project, or selected model"):
-            self.prepare(previous=packet, selected_model="gpt-5.6-luna", selected_effort="max")
+            self.prepare(previous=packet, selected_model="gpt-6-luna", selected_effort="max")
         self.completed["task_id"] = "other-task"
         with self.assertRaises(ValueError):
             self.prepare(previous=packet)
@@ -107,7 +113,7 @@ class EndingLaunchTests(unittest.TestCase):
         result = {"status": "written", "purpose": "memory_only", "record_id": "memory-record", "read_back_verified": True,
                   "project": {"key": packet["project_key"]}, "model_evidence": {"source": "verified_session", "pair": "gpt-6-astra|ultra"}}
         self.assertEqual(MODULE.record_completion(packet, result)["status"], "complete")
-        for changes in ({"status": "failed"}, {"read_back_verified": False}, {"project": {"key": "other"}}, {"model_evidence": {"source": "configured_selection", "pair": "gpt-6-astra|ultra"}}, {"model_evidence": {"source": "verified_session", "pair": "gpt-5.6-luna|max"}}):
+        for changes in ({"status": "failed"}, {"read_back_verified": False}, {"project": {"key": "other"}}, {"model_evidence": {"source": "configured_selection", "pair": "gpt-6-astra|ultra"}}, {"model_evidence": {"source": "verified_session", "pair": "gpt-6-luna|max"}}):
             with self.assertRaises(ValueError):
                 MODULE.record_completion(packet, {**result, **changes})
         with self.assertRaisesRegex(ValueError, "acknowledged visible Ending"):

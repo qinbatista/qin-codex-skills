@@ -26,7 +26,7 @@ class CjkRoutingTests(unittest.TestCase):
                 self.assertLessEqual(arguments.complexity_score, 24)
                 self.assertTrue(arguments.fast_path_eligible)
 
-    def test_simple_cjk_edits_use_small_fast_path_and_priority_tier(self):
+    def test_simple_cjk_edits_keep_real_verification_without_fixed_priority_model(self):
         cases = (("把这个变量从5改成6", "edit"), ("修复这个拼写错误", "fix"), ("删除这一行日志", "delete"), ("给这个函数改个名字", "rename"), ("修改 PlayerController.cs，把 jumpHeight 从 5 改成 6", "edit"))
         for prompt, operation in cases:
             with self.subTest(prompt=prompt):
@@ -36,7 +36,8 @@ class CjkRoutingTests(unittest.TestCase):
                 self.assertLessEqual(arguments.complexity_score, 24)
                 self.assertTrue(arguments.fast_path_eligible)
                 selected = RUNNER.routing_policy.priority_first_pair(arguments.task_type, arguments.modality, arguments.operation, arguments.complexity, arguments.complexity_score)
-                self.assertEqual(selected, ("gpt-5.3-codex-spark", "low"))
+                self.assertIsNone(selected)
+                self.assertEqual(RUNNER.result_lifecycle_policy(True, arguments.task_type, arguments.complexity_score, arguments.risk)["producer_check_scope"], "real_changed_behavior_or_readback")
                 self.assertTrue(RUNNER.result_lifecycle_policy(True, arguments.task_type, arguments.complexity_score, arguments.risk)["ending_required"])
 
     def test_cjk_medium_requests_leave_fast_path(self):

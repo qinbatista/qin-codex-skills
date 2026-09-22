@@ -4,17 +4,17 @@
   "scope": "shared_non_personal",
   "source": {
     "models_cache": "~/.codex/models_cache.json",
-    "client_version": "0.153.4",
-    "fetched_at": "2026-09-05T07:50:47.718010Z",
-    "catalog_sha256": "5f013d3c4bafc5876080ae91da6ac945e457d8c764991a7c2f370af8d13076fd"
+    "client_version": "0.155.0",
+    "fetched_at": "2026-09-22T22:01:15.433463Z",
+    "catalog_sha256": "049bef806afc754f0b57d861fbbca6116bf3bc9deeca2ec315de0fcde345929c"
   },
   "active_family": {
     "id": "gpt-6",
     "numeric_version": [
       6
     ],
-    "selection": "available_numeric_gpt_models",
-    "model_count": 6
+    "selection": "requested_gpt6_variants",
+    "model_count": 3
   },
   "catalog_models": [
     {
@@ -43,35 +43,10 @@
       "catalog_role": "active_quality"
     },
     {
-      "id": "gpt-5.6-sol",
-      "display_name": "GPT-5.6-Sol",
-      "provider_priority": 6,
-      "provider_positioning": "Reliable agentic workhorse for everyday tasks.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max",
-        "ultra"
-      ],
-      "default_effort": "low",
-      "additional_speed_tiers": [
-        "fast"
-      ],
-      "catalog_role": "active_quality"
-    },
-    {
-      "id": "gpt-5.6-terra",
-      "display_name": "GPT-5.6-Terra",
-      "provider_priority": 7,
-      "provider_positioning": "Balanced agentic coding model for everyday work.",
+      "id": "gpt-6-sol",
+      "display_name": "GPT-6-Sol",
+      "provider_priority": 2,
+      "provider_positioning": "GPT-6 Sol Codex model.",
       "supported_in_api": true,
       "input_modalities": [
         "text",
@@ -93,10 +68,10 @@
       "catalog_role": "active_quality"
     },
     {
-      "id": "gpt-5.6-luna",
-      "display_name": "GPT-5.6-Luna",
-      "provider_priority": 8,
-      "provider_positioning": "Fast and affordable agentic coding model.",
+      "id": "gpt-6-luna",
+      "display_name": "GPT-6-Luna",
+      "provider_priority": 3,
+      "provider_positioning": "GPT-6 Luna Codex model.",
       "supported_in_api": true,
       "input_modalities": [
         "text",
@@ -115,70 +90,6 @@
         "fast"
       ],
       "catalog_role": "active_quality"
-    },
-    {
-      "id": "gpt-5.5",
-      "display_name": "GPT-5.5",
-      "provider_priority": 12,
-      "provider_positioning": "Proven previous-generation model for coding and general work.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "medium",
-      "additional_speed_tiers": [
-        "fast"
-      ],
-      "catalog_role": "active_quality"
-    },
-    {
-      "id": "gpt-5.4-mini",
-      "display_name": "GPT-5.4-Mini",
-      "provider_priority": 23,
-      "provider_positioning": "Small, fast, and cost-efficient model for simpler coding tasks.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "medium",
-      "additional_speed_tiers": [],
-      "catalog_role": "active_quality"
-    },
-    {
-      "id": "gpt-5.3-codex-spark",
-      "display_name": "GPT-5.3-Codex-Spark",
-      "provider_priority": 26,
-      "provider_positioning": "Ultra-fast coding model.",
-      "supported_in_api": false,
-      "input_modalities": [
-        "text"
-      ],
-      "context_window": 128000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "high",
-      "additional_speed_tiers": [],
-      "catalog_role": "priority_producer"
     }
   ],
   "ladder_direction": "weakest_to_strongest",
@@ -218,15 +129,15 @@
     "quality_complex_threshold": 50
   },
   "role_models": {
-    "weak": "gpt-5.4-mini",
-    "balanced": "gpt-5.6-sol",
+    "weak": "gpt-6-luna",
+    "balanced": "gpt-6-sol",
     "frontier": "gpt-6-astra"
   },
   "role_pairs": {
-    "floor": "gpt-5.4-mini|low",
-    "weak_default": "gpt-5.4-mini|medium",
-    "balanced_default": "gpt-5.6-sol|low",
-    "balanced_complex": "gpt-5.6-sol|high",
+    "floor": "gpt-6-luna|low",
+    "weak_default": "gpt-6-luna|medium",
+    "balanced_default": "gpt-6-sol|medium",
+    "balanced_complex": "gpt-6-sol|high",
     "frontier_complex": "gpt-6-astra|high"
   },
   "policy": {
@@ -240,119 +151,14 @@
     "skill_governed_model_policy": "user_selected",
     "memory_model_policy": "user_selected",
     "adaptive_scope": "skill_independent_only",
-    "priority_producer_first_text_code": true,
-    "priority_producer_first_small_edits": true,
-    "priority_producer_task_segments": true,
-    "priority_producer_scheduled_sources": true,
+    "priority_producer_first_text_code": false,
+    "priority_producer_first_small_edits": false,
+    "priority_producer_task_segments": false,
+    "priority_producer_scheduled_sources": false,
     "priority_producer_scheduled_sources_only": false,
-    "minimum_pair": "gpt-5.4-mini|low"
+    "minimum_pair": "gpt-6-luna|low"
   },
-  "priority_producer": {
-    "enabled": true,
-    "id": "gpt-5.3-codex-spark",
-    "display_name": "GPT-5.3-Codex-Spark",
-    "routing_role": "bounded_task_segment_or_small_edit_priority",
-    "provider_priority": 26,
-    "provider_positioning": "Ultra-fast coding model.",
-    "supported_in_api": false,
-    "input_modalities": [
-      "text"
-    ],
-    "context_window": 128000,
-    "codex_efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ],
-    "adaptive_efforts": [
-      "low",
-      "high"
-    ],
-    "effort_by_complexity": {
-      "easy": "low",
-      "complex": "high"
-    },
-    "eligible_task_types": [
-      "question",
-      "summary",
-      "document",
-      "prompt",
-      "code",
-      "debug",
-      "integration",
-      "script",
-      "normal-script-update",
-      "code-design",
-      "finding-bugs",
-      "documentation-instructions"
-    ],
-    "eligible_modalities": [
-      "text"
-    ],
-    "eligible_operations": [
-      "answer",
-      "command",
-      "delete",
-      "edit",
-      "execute",
-      "fix",
-      "modify",
-      "rename",
-      "replace",
-      "respond",
-      "transform",
-      "update",
-      "work",
-      "write"
-    ],
-    "small_edit_task_types": [
-      "document",
-      "prompt",
-      "code",
-      "script",
-      "normal-script-update",
-      "documentation-instructions"
-    ],
-    "small_edit_operations": [
-      "delete",
-      "edit",
-      "fix",
-      "modify",
-      "rename",
-      "replace",
-      "update",
-      "write"
-    ],
-    "small_edit_maximum_complexity_score": 24,
-    "task_segment_purposes": [
-      "author-probe",
-      "command",
-      "edit",
-      "execute",
-      "implement",
-      "transform",
-      "write"
-    ],
-    "task_segment_maximum_complexity_score": 24,
-    "excluded_operations": [
-      "audit",
-      "lookup",
-      "read",
-      "review",
-      "status",
-      "verify"
-    ],
-    "operational_fallback": "contextual_quality_pair",
-    "quality_failure": "suppress_matching_complexity_band_and_upgrade"
-  },
-  "ending_fast": {
-    "selection_basis": "user_selected",
-    "primary_pair": null,
-    "availability_fallback_pair": null,
-    "fallback_policy": "none",
-    "purpose": "memory_only"
-  },
+  "priority_producer": null,
   "private_learning_contract": {
     "authority": "dual_local_and_obsidian",
     "local_path_template": "~/.codex/model-routing-memory/events.jsonl",
@@ -378,119 +184,71 @@
     "hierarchy_notes": false,
     "legacy_local_json": "read_only_inactive"
   },
-  "default_cold_start": "gpt-5.6-sol|low",
+  "default_cold_start": "gpt-6-sol|medium",
   "cold_start_defaults": {
     "question": {
-      "easy": "gpt-5.4-mini|low",
-      "complex": "gpt-5.6-sol|low"
+      "easy": "gpt-6-luna|low",
+      "complex": "gpt-6-sol|medium"
     },
     "summary": {
-      "easy": "gpt-5.4-mini|low",
-      "complex": "gpt-5.6-sol|low"
+      "easy": "gpt-6-luna|low",
+      "complex": "gpt-6-sol|medium"
     },
     "spreadsheet": {
-      "easy": "gpt-5.6-sol|low",
-      "complex": "gpt-5.6-sol|high"
+      "easy": "gpt-6-sol|medium",
+      "complex": "gpt-6-sol|high"
     },
     "document": {
-      "easy": "gpt-5.4-mini|medium",
-      "complex": "gpt-5.6-sol|high"
+      "easy": "gpt-6-luna|medium",
+      "complex": "gpt-6-sol|high"
     },
     "code": {
-      "easy": "gpt-5.6-sol|low",
-      "complex": "gpt-5.6-sol|high"
+      "easy": "gpt-6-sol|medium",
+      "complex": "gpt-6-sol|high"
     },
     "debug": {
-      "easy": "gpt-5.6-sol|low",
+      "easy": "gpt-6-sol|medium",
       "complex": "gpt-6-astra|high"
     },
     "integration": {
-      "easy": "gpt-5.6-sol|high",
+      "easy": "gpt-6-sol|high",
       "complex": "gpt-6-astra|high"
     },
     "prompt": {
-      "easy": "gpt-5.6-sol|low",
+      "easy": "gpt-6-sol|medium",
       "complex": "gpt-6-astra|high"
     },
     "visual": {
-      "easy": "gpt-5.6-sol|low",
+      "easy": "gpt-6-sol|medium",
       "complex": "gpt-6-astra|high"
     },
     "script": {
-      "easy": "gpt-5.6-sol|low",
-      "complex": "gpt-5.6-sol|high"
+      "easy": "gpt-6-sol|medium",
+      "complex": "gpt-6-sol|high"
     },
     "normal-script-update": {
-      "easy": "gpt-5.6-sol|low",
-      "complex": "gpt-5.6-sol|high"
+      "easy": "gpt-6-sol|medium",
+      "complex": "gpt-6-sol|high"
     },
     "code-design": {
-      "easy": "gpt-5.6-sol|low",
-      "complex": "gpt-5.6-sol|high"
+      "easy": "gpt-6-sol|medium",
+      "complex": "gpt-6-sol|high"
     },
     "finding-bugs": {
-      "easy": "gpt-5.6-sol|low",
+      "easy": "gpt-6-sol|medium",
       "complex": "gpt-6-astra|high"
     },
     "documentation-instructions": {
-      "easy": "gpt-5.4-mini|medium",
-      "complex": "gpt-5.6-sol|high"
+      "easy": "gpt-6-luna|medium",
+      "complex": "gpt-6-sol|high"
     }
   },
   "models": [
     {
-      "id": "gpt-5.4-mini",
-      "display_name": "GPT-5.4-Mini",
-      "provider_priority": 23,
-      "provider_positioning": "Small, fast, and cost-efficient model for simpler coding tasks.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "medium",
-      "additional_speed_tiers": [],
-      "capability_rank": 1,
-      "capability_roles": [
-        "weak"
-      ]
-    },
-    {
-      "id": "gpt-5.5",
-      "display_name": "GPT-5.5",
-      "provider_priority": 12,
-      "provider_positioning": "Proven previous-generation model for coding and general work.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "default_effort": "medium",
-      "additional_speed_tiers": [
-        "fast"
-      ],
-      "capability_rank": 2,
-      "capability_roles": []
-    },
-    {
-      "id": "gpt-5.6-luna",
-      "display_name": "GPT-5.6-Luna",
-      "provider_priority": 8,
-      "provider_positioning": "Fast and affordable agentic coding model.",
+      "id": "gpt-6-luna",
+      "display_name": "GPT-6-Luna",
+      "provider_priority": 3,
+      "provider_positioning": "GPT-6 Luna Codex model.",
       "supported_in_api": true,
       "input_modalities": [
         "text",
@@ -508,14 +266,16 @@
       "additional_speed_tiers": [
         "fast"
       ],
-      "capability_rank": 3,
-      "capability_roles": []
+      "capability_rank": 1,
+      "capability_roles": [
+        "weak"
+      ]
     },
     {
-      "id": "gpt-5.6-terra",
-      "display_name": "GPT-5.6-Terra",
-      "provider_priority": 7,
-      "provider_positioning": "Balanced agentic coding model for everyday work.",
+      "id": "gpt-6-sol",
+      "display_name": "GPT-6-Sol",
+      "provider_priority": 2,
+      "provider_positioning": "GPT-6 Sol Codex model.",
       "supported_in_api": true,
       "input_modalities": [
         "text",
@@ -534,33 +294,7 @@
       "additional_speed_tiers": [
         "fast"
       ],
-      "capability_rank": 4,
-      "capability_roles": []
-    },
-    {
-      "id": "gpt-5.6-sol",
-      "display_name": "GPT-5.6-Sol",
-      "provider_priority": 6,
-      "provider_positioning": "Reliable agentic workhorse for everyday tasks.",
-      "supported_in_api": true,
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_window": 272000,
-      "codex_efforts": [
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max",
-        "ultra"
-      ],
-      "default_effort": "low",
-      "additional_speed_tiers": [
-        "fast"
-      ],
-      "capability_rank": 5,
+      "capability_rank": 2,
       "capability_roles": [
         "balanced"
       ]
@@ -588,7 +322,7 @@
       "additional_speed_tiers": [
         "fast"
       ],
-      "capability_rank": 6,
+      "capability_rank": 3,
       "capability_roles": [
         "frontier"
       ]

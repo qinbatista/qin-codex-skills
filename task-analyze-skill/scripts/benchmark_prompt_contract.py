@@ -5,8 +5,8 @@ import hashlib
 
 
 AUTO_BENCHMARK_ENTRY_MARKER = "AUTO_BENCHMARK_ENTRY"
-AUTO_BENCHMARK_ENTRY_PAIR = "gpt-5.6-luna|max"
-AUTO_BENCHMARK_ENTRY_PAIRS = frozenset({"gpt-5.6-luna|max", "gpt-5.6-sol|ultra"})
+AUTO_BENCHMARK_ENTRY_PAIR = "gpt-6-luna|max"
+AUTO_BENCHMARK_ENTRY_PAIRS = frozenset({"gpt-6-luna|max", "gpt-6-sol|ultra"})
 BOUND_WORKLOAD_SHA256 = "BOUND_WORKLOAD_SHA256"
 
 

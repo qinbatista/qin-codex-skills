@@ -70,7 +70,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
         runtime_session = {"thread_id": thread_id, "parent_thread_id": None, "source_kind": "root", "model": model, "effort": effort, "tokens_used": total_tokens, "rollout_sha256": "a" * 64, "rollout_model": model, "rollout_effort": effort, "rollout_total_tokens": total_tokens, "turn_completed": True}
         runtime_sessions = [runtime_session]
         if arm == "global":
-            adaptive_pair = "gpt-5.6-terra|high"
+            adaptive_pair = "gpt-6-sol|high"
             adaptive_model, adaptive_effort = adaptive_pair.split("|", 1)
             runtime_sessions.append({"thread_id": f"{thread_id}-adaptive", "parent_thread_id": thread_id, "source_kind": "subagent", "model": adaptive_model, "effort": adaptive_effort, "tokens_used": task_tokens, "rollout_sha256": "b" * 64, "rollout_model": adaptive_model, "rollout_effort": adaptive_effort, "rollout_total_tokens": task_tokens, "turn_completed": True})
         before_thread_ids = []
@@ -121,9 +121,9 @@ class BenchmarkPublicExportTests(unittest.TestCase):
                     self.make_receipt(receipt_path, thread_id, selected_pair, result_message, total_tokens, prompt_sha256, run_id, arm, result_ready_monotonic_ns, prompt_path.read_text(encoding="utf-8"))
                     if arm == "global":
                         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-                        capability_assignment = [{"node_id": "result", "step_kind": "implementation", "capability_tags": ["code-authoring"], "effective_pair": "gpt-5.6-terra|high"}]
-                        signature = {"selected_pair": "gpt-5.6-terra|high", "effective_pair": "gpt-5.6-terra|high", "scheduled_graph": False, "assigned_pairs": ["gpt-5.6-terra|high"], "trial": False, "recommendation_state": "frozen", "selection_provenance": "local_history", "context_mode": "full", "capability_assignment": capability_assignment}
-                        selected_execution = {"schema_version": 2, "receipt_sha256": "b" * 64, "selected_pair": "gpt-5.6-terra|high", "effective_pair": "gpt-5.6-terra|high", "steady_state_logical_tokens": task_tokens, "steady_state_execution_elapsed_ms": 60, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": signature}
+                        capability_assignment = [{"node_id": "result", "step_kind": "implementation", "capability_tags": ["code-authoring"], "effective_pair": "gpt-6-sol|high"}]
+                        signature = {"selected_pair": "gpt-6-sol|high", "effective_pair": "gpt-6-sol|high", "scheduled_graph": False, "assigned_pairs": ["gpt-6-sol|high"], "trial": False, "recommendation_state": "frozen", "selection_provenance": "local_history", "context_mode": "full", "capability_assignment": capability_assignment}
+                        selected_execution = {"schema_version": 2, "receipt_sha256": "b" * 64, "selected_pair": "gpt-6-sol|high", "effective_pair": "gpt-6-sol|high", "steady_state_logical_tokens": task_tokens, "steady_state_execution_elapsed_ms": 60, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": signature}
                         receipt["benchmark_selected_execution"] = selected_execution
                         self.write_json(receipt_path, receipt)
                     self.make_evidence(evidence_path, run_id, thread_id, selected_pair, total_tokens, first_result_ms, producer_elapsed_ms, arm, task_tokens)
@@ -316,7 +316,7 @@ class BenchmarkPublicExportTests(unittest.TestCase):
                     elif tamper_case == "manifest_metric":
                         manifest["logical_total_tokens"] = 1
                     elif tamper_case == "manifest_runtime_pair":
-                        manifest["executed_pairs"] = ["gpt-5.6-luna|low"]
+                        manifest["executed_pairs"] = ["gpt-6-luna|low"]
                     else:
                         manifest["caller_claimed_pass"] = True
                     self.write_json(manifest_path, manifest)

@@ -26,17 +26,17 @@ disclosure = load("model_identity_disclosure")
 
 class SelectedModelPolicyTests(unittest.TestCase):
     def test_exact_user_pair_preserved_for_each_governing_surface(self):
-        for model, effort in [("gpt-5.6-luna", "max"), ("gpt-6-astra", "ultra")]:
+        for model, effort in [("gpt-6-luna", "max"), ("gpt-6-astra", "ultra")]:
             for skill in ["code-skill", "emil-design-eng", "prompt-skill", "project-memory-skill"]:
                 with self.subTest(model=model, skill=skill):
-                    node = {"skill": skill, "model": "gpt-5.3-codex-spark", "effort": "low", "priority_producer": True, "allow_fallback": ["gpt-5.6-sol|high"]}
+                    node = {"skill": skill, "model": "gpt-6-luna", "effort": "low", "priority_producer": True, "allow_fallback": ["gpt-6-sol|high"]}
                     policy.bind_node(node, model, effort)
                     self.assertEqual((node["model"], node["effort"]), (model, effort))
                     self.assertEqual(node["allow_fallback"], [])
                     self.assertNotIn("priority_producer", node)
 
     def test_incidental_shell_inherits_governing_constraint(self):
-        node = {"skill_governed": True, "operation": "execute", "complexity_score": 1, "model": "gpt-5.3-codex-spark", "effort": "low"}
+        node = {"skill_governed": True, "operation": "execute", "complexity_score": 1, "model": "gpt-6-luna", "effort": "low"}
         policy.bind_node(node, "gpt-6-astra", "ultra")
         self.assertEqual(node["model"], "gpt-6-astra")
 
@@ -45,10 +45,10 @@ class SelectedModelPolicyTests(unittest.TestCase):
         self.assertTrue(policy.uses_selected_model({"skill_governed": False, "routing_condition": {"owning_skill": "emil-design-eng"}}))
 
     def test_routing_machinery_alone_does_not_lock_an_independent_task(self):
-        node = {"skill": "workflow-skill", "model": "gpt-5.6-luna", "effort": "low"}
+        node = {"skill": "workflow-skill", "model": "gpt-6-luna", "effort": "low"}
         self.assertFalse(policy.uses_selected_model(node))
         policy.bind_node(node, "gpt-6-astra", "ultra")
-        self.assertEqual(node["model"], "gpt-5.6-luna")
+        self.assertEqual(node["model"], "gpt-6-luna")
 
     def test_memory_summary_always_preserves_user_pair(self):
         for scope in ({"phase": "ending"}, {"task_type": "memory"}, {"memory_update": True}, {"operation": "memory-summary"}):
@@ -58,6 +58,14 @@ class SelectedModelPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "selected_model_required"):
             policy.bind_node({"skill": "code-skill"}, "unknown", "unknown")
 
+    def test_only_current_supported_pairs_are_admitted(self):
+        self.assertEqual(policy.selected_pair("gpt-6-sol", "light"), "gpt-6-sol|low")
+        self.assertEqual(policy.bind_node({"skill": "code-skill"}, "gpt-6-sol", "light")["effort"], "low")
+        with self.assertRaisesRegex(ValueError, "selected_effort_unsupported_for_model"):
+            policy.selected_pair("gpt-6-luna", "ultra")
+        with self.assertRaisesRegex(ValueError, "selected_model_required"):
+            policy.selected_pair("retired-model", "low")
+
     def test_selected_recommendation_never_reads_adaptive_history(self):
         args = SimpleNamespace(governing_skills=["code-skill"], resolved_entry_model="gpt-6-astra", resolved_entry_effort="ultra")
         with patch.object(runner.obsidian_model_memory, "recommend_model", side_effect=AssertionError("history must not select governed work")):
@@ -66,12 +74,12 @@ class SelectedModelPolicyTests(unittest.TestCase):
         self.assertIsNone(recommendation["active_fallback_pair"])
 
     def test_exact_output_guard_cannot_upgrade_governed_work(self):
-        recommendation = policy.recommendation("gpt-5.6-luna", "max")
+        recommendation = policy.recommendation("gpt-6-luna", "max")
         with patch.object(runner, "_is_exact_expression_contract", return_value=True):
-            self.assertEqual(runner._exact_contract_recommendation("exact expression", recommendation)["selected_pair"], "gpt-5.6-luna|max")
+            self.assertEqual(runner._exact_contract_recommendation("exact expression", recommendation)["selected_pair"], "gpt-6-luna|max")
 
     def test_selected_pair_rejects_automatic_fallback_even_if_caller_supplies_one(self):
-        args = SimpleNamespace(allow_fallback=["gpt-5.6-sol|high"])
+        args = SimpleNamespace(allow_fallback=["gpt-6-sol|high"])
         with patch.object(runner.obsidian_model_memory, "load_shared_ladder", side_effect=AssertionError("not adaptive")):
             self.assertEqual(runner._attempt_pairs(args, policy.recommendation("gpt-6-astra", "ultra")), ["gpt-6-astra|ultra"])
 
@@ -96,9 +104,9 @@ class SelectedModelPolicyTests(unittest.TestCase):
         self.assertEqual(result["verification_owner"], "active_task")
         self.assertEqual(result["deferred_verification_owner"], "none")
 
-    def test_simple_value_change_skips_verification(self):
+    def test_simple_value_change_requires_real_readback(self):
         result = runner.result_lifecycle_policy(True, "code", 8, "low", material_update_kind="trivial_value_only")
-        self.assertEqual(result["producer_check_scope"], "skip_simple_value_change")
+        self.assertEqual(result["producer_check_scope"], "real_changed_behavior_or_readback")
         self.assertFalse(result["ending_required"])
 
     def test_material_change_only_requests_memory_closeout(self):

@@ -20,7 +20,7 @@ def arm(tokens, first_result_ms, total_wall_ms, gate_status="pass", steady_token
 
 class StrategyPerformanceTests(unittest.TestCase):
     def arguments(self, history, workload_hash="a" * 64):
-        return SimpleNamespace(history=history, profile_fingerprint="b" * 64, entry_pair="gpt-5.6-sol|ultra", config_cohort="c" * 64, sandbox_label="danger-full-access", strategy_version="inline-v1", producer_contract_version="producer-v1", workload_prompt_sha256=workload_hash, minimum_paired_samples=6, minimum_savings_percent=5.0)
+        return SimpleNamespace(history=history, profile_fingerprint="b" * 64, entry_pair="gpt-6-sol|ultra", config_cohort="c" * 64, sandbox_label="danger-full-access", strategy_version="inline-v1", producer_contract_version="producer-v1", workload_prompt_sha256=workload_hash, minimum_paired_samples=6, minimum_savings_percent=5.0)
 
     def write_sample(self, path, direct=None, global_arm=None):
         path.write_text(json.dumps({"direct": direct or arm(100, 100, 120), "global": global_arm or arm(70, 70, 80)}), encoding="utf-8")

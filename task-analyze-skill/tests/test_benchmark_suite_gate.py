@@ -14,8 +14,8 @@ module = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(module)
 
 
-LEGACY_SIMPLE_EXPECTED = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.6-terra", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-5.6-terra\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
-LEGACY_SIMPLE_ACTUAL = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-5.6-terra", "definition_chain": ["POM_BOM_TEXT_AGENT_MODEL=OPENAI_TESTING_DEFAULT_MODEL", "OPENAI_TESTING_DEFAULT_MODEL=\"gpt-5.6-terra\""], "source": "core/script/ai/ai_model_catalog.py"}
+LEGACY_SIMPLE_EXPECTED = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-6-sol", "definition_chain": ["OPENAI_TESTING_DEFAULT_MODEL = \"gpt-6-sol\"", "POM_BOM_TEXT_AGENT_MODEL = OPENAI_TESTING_DEFAULT_MODEL"], "source": "core/script/ai/ai_model_catalog.py"}
+LEGACY_SIMPLE_ACTUAL = {"symbol": "POM_BOM_TEXT_AGENT_MODEL", "resolved_value": "gpt-6-sol", "definition_chain": ["POM_BOM_TEXT_AGENT_MODEL=OPENAI_TESTING_DEFAULT_MODEL", "OPENAI_TESTING_DEFAULT_MODEL=\"gpt-6-sol\""], "source": "core/script/ai/ai_model_catalog.py"}
 
 
 class BenchmarkSuiteGateTests(unittest.TestCase):
@@ -57,7 +57,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
     def make_foreground_session(self, runtime_session):
         return {key: runtime_session[key] for key in module.FOREGROUND_SESSION_KEYS}
 
-    def make_evidence(self, path, run_id, session_ids, first_result_ms, total_wall_ms, pair="gpt-5.6-sol|ultra", total_tokens=100, runtime_sessions=None, foreground_sessions=None, foreground_main_thread_id=None):
+    def make_evidence(self, path, run_id, session_ids, first_result_ms, total_wall_ms, pair="gpt-6-sol|ultra", total_tokens=100, runtime_sessions=None, foreground_sessions=None, foreground_main_thread_id=None):
         runtime_sessions = runtime_sessions or [self.make_runtime_session(session_id, pair, total_tokens) for session_id in session_ids]
         foreground_sessions = [self.make_foreground_session(runtime_session) for runtime_session in runtime_sessions] if foreground_sessions is None else foreground_sessions
         foreground_main_thread_id = foreground_main_thread_id or foreground_sessions[0]["thread_id"]
@@ -71,7 +71,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         return evidence
 
     def selected_execution(self, task_tokens):
-        pair = "gpt-5.6-luna|max"
+        pair = "gpt-6-luna|max"
         signature = {
             "selected_pair": pair,
             "effective_pair": pair,
@@ -111,11 +111,11 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             "benchmark_run_id": f"benchmark-{run_plan['run_id']}-sol-entry-probe",
             "requested_pair": module.SOL_ENTRY_PROBE_PAIR,
             "effective_pair": module.SOL_ENTRY_PROBE_PAIR,
-            "requested_model": "gpt-5.6-sol",
+            "requested_model": "gpt-6-sol",
             "requested_effort": "ultra",
-            "resolved_model": "gpt-5.6-sol",
+            "resolved_model": "gpt-6-sol",
             "resolved_effort": "ultra",
-            "effective_model": "gpt-5.6-sol",
+            "effective_model": "gpt-6-sol",
             "output_sha256": hashlib.sha256(result_message.encode("utf-8")).hexdigest(),
             "benchmark_selected_execution": selected_execution,
         })
@@ -218,7 +218,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                     self.make_receipt(receipt_path, thread_id, pair, "result-producer", result_message, tokens, prompt_sha256, run_id, arm, result_ready_monotonic_ns, prompt_text)
                     runtime_sessions = [self.make_runtime_session(thread_id, pair, tokens)]
                     if arm == "global":
-                        runtime_sessions.append(self.make_runtime_session(f"{thread_id}-adaptive", "gpt-5.6-luna|max", task_tokens, thread_id, "subagent"))
+                        runtime_sessions.append(self.make_runtime_session(f"{thread_id}-adaptive", "gpt-6-luna|max", task_tokens, thread_id, "subagent"))
                         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
                         selected_execution = self.selected_execution(task_tokens)
                         receipt["benchmark_selected_execution"] = selected_execution
@@ -288,11 +288,11 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             summary = module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
             direct = json.loads((root / "manifests" / "simple-1-direct.json").read_text(encoding="utf-8"))
             global_manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
-            forged = dict(next(run for run in plan["runs"] if run["run_id"] == "simple-1-global"), selected_entry_pair="gpt-5.6-sol|ultra")
+            forged = dict(next(run for run in plan["runs"] if run["run_id"] == "simple-1-global"), selected_entry_pair="gpt-6-sol|ultra")
         self.assertEqual(summary["overall_status"], "pass")
-        self.assertEqual(direct["selected_entry_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(direct["selected_entry_pair"], "gpt-6-sol|ultra")
         self.assertEqual(direct["controller_tokens_excluded"], 0)
-        self.assertEqual(global_manifest["selected_entry_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(global_manifest["selected_entry_pair"], "gpt-6-luna|max")
         self.assertEqual(global_manifest["controller_tokens_excluded"], 51)
         self.assertEqual(global_manifest["task_session_count"], 1)
         self.assertEqual(global_manifest["logical_total_tokens"], 401)
@@ -859,7 +859,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                     evidence["state_snapshot"]["after_thread_ids_sha256"] = "b" * 64
                 else:
                     main_thread_id = evidence["runtime_sessions"][0]["thread_id"]
-                    child_pair = "gpt-5.6-sol|ultra"
+                    child_pair = "gpt-6-sol|ultra"
                     child_source_kind = "root" if case_name == "hidden_root" else "subagent"
                     child_parent = None if case_name == "hidden_root" else main_thread_id
                     child_session = self.make_runtime_session(f"{case_name}-session", child_pair, 50, child_parent, child_source_kind, case_name != "incomplete_child")
@@ -881,7 +881,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             target_paths = run_paths["simple-1-global"]
             evidence = json.loads(target_paths["evidence"].read_text(encoding="utf-8"))
             main_thread_id = evidence["runtime_sessions"][0]["thread_id"]
-            child_session = self.make_runtime_session("child-session", "gpt-5.6-luna|low", 50, main_thread_id, "subagent", True)
+            child_session = self.make_runtime_session("child-session", "gpt-6-luna|low", 50, main_thread_id, "subagent", True)
             evidence["runtime_sessions"].append(child_session)
             evidence["launched_session_ids"].append(child_session["thread_id"])
             evidence["state_snapshot"]["after_thread_count"] += 1
@@ -896,8 +896,8 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
         self.assertEqual(manifest["runtime_session_count"], 3)
         self.assertEqual(manifest["runtime_descendant_session_count"], 2)
         self.assertEqual(manifest["unreceipted_descendant_count"], 2)
-        self.assertEqual(manifest["result_producer_pair"], "gpt-5.6-luna|max")
-        self.assertEqual(manifest["executed_pairs"], ["gpt-5.6-luna|max", "gpt-5.6-luna|max", "gpt-5.6-luna|low"])
+        self.assertEqual(manifest["result_producer_pair"], "gpt-6-luna|max")
+        self.assertEqual(manifest["executed_pairs"], ["gpt-6-luna|max", "gpt-6-luna|max", "gpt-6-luna|low"])
         self.assertEqual(manifest["logical_total_tokens"], 451)
 
     def test_receipt_backed_mixed_pair_ending_root_is_allowed_and_excluded_from_task_tokens(self):
@@ -908,7 +908,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             target_paths = run_paths[target_run["run_id"]]
             result_message = target_paths["result"].read_text(encoding="utf-8").rstrip("\n")
             ending_path = target_paths["receipt"].with_name("ending-receipt.json")
-            ending_pair = "gpt-5.6-luna|low"
+            ending_pair = "gpt-6-luna|low"
             ending_workload_sha256 = "b" * 64
             ending_receipt = self.make_receipt(ending_path, "ending-session", ending_pair, "ending", result_message, 70, ending_workload_sha256, "ending-workload", "global")
             ending_receipt.update({"node_type": "locked-route-node", "authorization_source": "outside-entry-context"})
@@ -925,11 +925,11 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
             module.evaluate_suite(plan_path, root / "manifests", root / "summary.json")
             manifest = json.loads((root / "manifests" / "simple-1-global.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["acceptance_status"], "pass")
-        self.assertEqual(manifest["result_producer_pair"], "gpt-5.6-luna|max")
+        self.assertEqual(manifest["result_producer_pair"], "gpt-6-luna|max")
         self.assertEqual(manifest["runtime_root_session_count"], 2)
         self.assertEqual(manifest["unreceipted_descendant_count"], 1)
         self.assertEqual(manifest["logical_total_tokens"], 401)
-        self.assertEqual(manifest["executed_pairs"], ["gpt-5.6-luna|max", "gpt-5.6-luna|max", ending_pair])
+        self.assertEqual(manifest["executed_pairs"], ["gpt-6-luna|max", "gpt-6-luna|max", ending_pair])
 
     def test_foreground_census_rejects_incomplete_unknown_mismatched_and_excess_tokens(self):
         cases = ["incomplete", "unknown", "mismatched", "excess"]
@@ -943,13 +943,13 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                     expected_failure = "evidence_foreground_state_snapshot_incomplete"
                 elif case_name == "unknown":
                     main_thread_id = evidence["foreground_main_thread_id"]
-                    unknown_session = self.make_foreground_session(self.make_runtime_session("unknown-session", "gpt-5.6-sol|ultra", 1, main_thread_id, "subagent"))
+                    unknown_session = self.make_foreground_session(self.make_runtime_session("unknown-session", "gpt-6-sol|ultra", 1, main_thread_id, "subagent"))
                     evidence["foreground_sessions"].append(unknown_session)
                     evidence["foreground_state_snapshot"]["after_thread_count"] += 1
                     evidence["foreground_state_snapshot"]["after_thread_ids_sha256"] = module.sha256_text(module.canonical_json(sorted(session["thread_id"] for session in evidence["foreground_sessions"])))
                     expected_failure = "evidence_foreground_unknown_session"
                 elif case_name == "mismatched":
-                    evidence["foreground_sessions"][0]["model"] = "gpt-5.6-luna"
+                    evidence["foreground_sessions"][0]["model"] = "gpt-6-luna"
                     expected_failure = "evidence_foreground_session_mismatch"
                 else:
                     evidence["foreground_sessions"][0]["tokens_used"] = evidence["runtime_sessions"][0]["tokens_used"] + 1
@@ -985,7 +985,7 @@ class BenchmarkSuiteGateTests(unittest.TestCase):
                 self.make_receipt(receipt_path, thread_id, pair, "result-producer", result_message, 100, "a" * 64, f"legacy-{arm}", arm, 1_000_000_000 + 10 * 1_000_000)
                 runtime_sessions = [self.make_runtime_session(thread_id, pair, 100)]
                 if arm == "global":
-                    runtime_sessions.append(self.make_runtime_session(f"{thread_id}-adaptive", "gpt-5.6-luna|max", 50, thread_id, "subagent"))
+                    runtime_sessions.append(self.make_runtime_session(f"{thread_id}-adaptive", "gpt-6-luna|max", 50, thread_id, "subagent"))
                 foreground_sessions = [self.make_foreground_session(runtime_session) for runtime_session in runtime_sessions]
                 self.make_evidence(evidence_path, f"legacy-{arm}", [runtime_session["thread_id"] for runtime_session in runtime_sessions], 10, 20, pair, 100, runtime_sessions, foreground_sessions, thread_id)
                 run_plan = {"run_id": f"legacy-{arm}", "pair_id": "legacy-simple", "tier": "simple", "repeat_index": 1, "arm": arm, "order_index": 1 if arm == "direct" else 2, "prompt_sha256": "a" * 64, "expected_result_path": "expected.json", "expected_sha256": hashlib.sha256(expected_path.read_bytes()).hexdigest(), "result_path": "result.json", "evidence_path": "evidence.json", "receipts": [{"path": "receipt.json", "pair": pair, "role": "result-producer", "bind_result": True, "workload_prompt_sha256": "a" * 64}], "selected_entry_pair": pair, "entry_execution_mode": "executed"}

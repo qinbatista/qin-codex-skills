@@ -8,9 +8,9 @@ SPEC.loader.exec_module(MODULE)
 
 
 class VerificationScopeTests(unittest.TestCase):
-    def test_simple_values_skip_unless_requested(self):
-        self.assertFalse(MODULE.verification_plan("value")["required"])
-        self.assertEqual(MODULE.verification_plan("value", requested=True)["checks"], ["changed_value_readback"])
+    def test_simple_values_require_real_readback(self):
+        self.assertTrue(MODULE.verification_plan("value")["required"])
+        self.assertEqual(MODULE.verification_plan("value")["checks"], ["changed_value_readback"])
 
     def test_ui_requires_rendered_behavior(self):
         plan = MODULE.verification_plan("ui")

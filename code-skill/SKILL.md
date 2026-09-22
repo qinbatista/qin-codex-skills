@@ -15,7 +15,7 @@ Use the user's selected model and effort for work governed by these rules, inclu
 
 1. Read the nearest project `AGENTS.md`, the owning source, and relevant project memory on every task. Use [project memory](../project-memory-skill/SKILL.md) for scoped lookup; if no memory is available, continue. Never import another project's facts or turn a project-specific preference into a global rule. Fresh source and current user instructions take precedence over memory.
 2. Read [code-writing philosophy](references/code-writing-philosophy.md) and only the references needed below. Identify the existing owner and make the smallest coherent change, preserving unrelated work.
-3. Verify meaningful behavior in this active task using the smallest convincing check. Fix failures here before claiming completion. A simple value-only change may skip verification.
+3. Verify changed code in this active task using a real readback or behavior check at the smallest convincing boundary. Fix failures here before claiming completion.
 4. Report the changed behavior, evidence, and remaining limitations. Ending only summarizes durable project memory, using the user's selected model and effort; it does not verify or repair code.
 
 ## References
@@ -34,7 +34,7 @@ Use the user's selected model and effort for work governed by these rules, inclu
 
 ## Verification
 
-Use focused function tests, direct-reference checks, a small real fixture, or targeted syntax validation according to the risk. For rendered UI, inspect the affected state at relevant desktop and narrow widths; source/CSS alone does not prove alignment. For changed Python/C# style, `scripts/code_rule_guard.py --diff-from HEAD <changed-files>` checks newly added lines without rewriting legacy code. The guard supplements behavior evidence.
+Use focused function tests, direct-reference checks, or a small real fixture according to the changed behavior. Syntax validation and mocks can support diagnosis but do not prove runtime behavior. For rendered UI, inspect the affected state at relevant desktop and narrow widths; source/CSS alone does not prove alignment. For changed Python/C# style, `scripts/code_rule_guard.py --diff-from HEAD <changed-files>` checks newly added lines without rewriting legacy code. The guard supplements behavior evidence.
 
 Do not start the whole project, run a full build, or compile all of Unity just to check a local change unless the user requests it. If only broader execution could prove a claim, state that limit and deliver the evidence actually obtained. Do not execute expensive, destructive, or external side effects solely for a routine check.
 

@@ -61,7 +61,7 @@ class ResolveEntryModelTests(unittest.TestCase):
             archived.write_text(
                 json.dumps({"type": "session_meta", "payload": {"id": "thread-ab"}})
                 + "\n"
-                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "ultra"}}),
+                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "ultra"}}),
                 encoding="utf-8",
             )
             self.assertEqual(module.resolve_entry_model("thread-a", temporary), {"status": "unverified"})
@@ -70,12 +70,12 @@ class ResolveEntryModelTests(unittest.TestCase):
             other.write_text(
                 json.dumps({"type": "session_meta", "payload": {"id": thread_id}})
                 + "\n"
-                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-terra", "effort": "low"}}),
+                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "low"}}),
                 encoding="utf-8",
             )
             self.assertEqual(
                 module.resolve_entry_model(thread_id, temporary),
-                {"status": "verified", "model": "gpt-5.6-terra", "effort": "low"},
+                {"status": "verified", "model": "gpt-6-sol", "effort": "low"},
             )
 
     def test_exact_suffix_match_and_open_set(self):
@@ -90,25 +90,25 @@ class ResolveEntryModelTests(unittest.TestCase):
             archive_decoy.parent.mkdir(parents=True, exist_ok=True)
             events = [
                 {"type": "session_meta", "payload": {"id": thread_id}},
-                {"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "low"}},
+                {"type": "turn_context", "payload": {"model": "gpt-6-luna", "effort": "low"}},
             ]
             matching.write_text("\n".join(json.dumps(event) for event in events), encoding="utf-8")
             near_match.write_text(
                 json.dumps({"type": "session_meta", "payload": {"id": thread_id}})
                 + "\n"
-                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "ultra"}}),
+                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "ultra"}}),
                 encoding="utf-8",
             )
             decoy.write_text(
                 json.dumps({"type": "session_meta", "payload": {"id": thread_id}})
                 + "\n"
-                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "high"}}),
+                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "high"}}),
                 encoding="utf-8",
             )
             archive_decoy.write_text(
                 json.dumps({"type": "session_meta", "payload": {"id": thread_id}})
                 + "\n"
-                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-terra", "effort": "max"}}),
+                + json.dumps({"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "max"}}),
                 encoding="utf-8",
             )
 
@@ -121,7 +121,7 @@ class ResolveEntryModelTests(unittest.TestCase):
 
             with patch("pathlib.Path.open", spy_open):
                 resolved = module.resolve_entry_model(thread_id, temporary)
-            self.assertEqual(resolved, {"status": "verified", "model": "gpt-5.6-luna", "effort": "low"})
+            self.assertEqual(resolved, {"status": "verified", "model": "gpt-6-luna", "effort": "low"})
             resolved_matching = str(matching.resolve())
             self.assertIn(resolved_matching, [str(Path(path).resolve()) for path in opened])
             self.assertNotIn(str(near_match.resolve()), [str(Path(path).resolve()) for path in opened])
@@ -136,7 +136,7 @@ class ResolveEntryModelTests(unittest.TestCase):
             matching = sessions_dir / f"session-{thread_id}.jsonl"
             events = [
                 {"type": "session_meta", "payload": {"id": "not-the-thread"}},
-                {"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "ultra"}},
+                {"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "ultra"}},
             ]
             matching.write_text("\n".join(json.dumps(event) for event in events), encoding="utf-8")
             self.assertEqual(module.resolve_entry_model(thread_id, temporary), {"status": "unverified"})

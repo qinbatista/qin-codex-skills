@@ -23,7 +23,7 @@ def catalog_model(slug, priority, description, modalities=("text", "image"), sup
 
 
 def catalog():
-    models = [catalog_model("gpt-9.9-expert", 1, "Frontier model"), catalog_model("gpt-9.9-balanced", 10, "Balanced everyday model"), catalog_model("gpt-9.9-economy", 20, "Small model"), catalog_model("gpt-9.8-legacy", 25, "Older model"), catalog_model("quick-code", 30, "Ultra-fast coding model", modalities=("text",), supported_in_api=False)]
+    models = [catalog_model("gpt-6-astra", 1, "Demanding work"), catalog_model("gpt-6-sol", 2, "General work"), catalog_model("gpt-6-luna", 3, "Bounded work"), catalog_model("retired-model", 25, "Unavailable route")]
     return {"client_version": "9.9.9", "fetched_at": "2026-07-15T01:00:00Z", "models": models}
 
 
@@ -34,9 +34,8 @@ class SyncModelCapabilitiesTests(unittest.TestCase):
             cache_path.write_text(json.dumps(catalog()), encoding="utf-8")
             registry, snapshot = sync_model_capabilities.desired_outputs(cache_path)
             self.assertIn(registry["source"]["catalog_sha256"], snapshot)
-            self.assertIn("`quick-code`", snapshot)
             self.assertIn("only for skill-independent adaptive work", snapshot)
-            self.assertIn("`gpt-9.8-legacy`", snapshot)
+            self.assertNotIn("`retired-model`", snapshot)
             for model in registry["models"]:
                 self.assertIn(f"`{model['id']}`", snapshot)
             self.assertIn("selected model and effort govern skill work", snapshot)

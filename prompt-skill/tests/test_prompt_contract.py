@@ -24,7 +24,7 @@ class PromptContractTests(unittest.TestCase):
             self.assertIn(concept, self.skill)
 
     def test_verification_is_proportional_and_in_active_task(self):
-        for concept in ("Verify within this active task", "semantic correctness", "simple value-only", "skip verification", "Do not start the whole project", "Ending only summarizes", "no verification or repair", "one good sample does not prove stability"):
+        for concept in ("Verify within this active task", "semantic correctness", "simple value-only", "Read back", "Do not start the whole project", "Ending only summarizes", "no verification or repair", "one good sample does not prove stability"):
             self.assertIn(concept, self.skill)
 
     def test_retired_route_and_ending_verifier_contracts_are_absent(self):

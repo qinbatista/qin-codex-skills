@@ -26,10 +26,10 @@ TASK_NAME_MAX_LENGTH = 96
 UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 UUID_SEARCH_PATTERN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
 PAIR_PATTERN = re.compile(r"^gpt-[^|]+\|(?:low|medium|high|xhigh|max|ultra)$")
-MODEL_ORDER = ("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol")
+MODEL_ORDER = ("gpt-6-luna", "gpt-6-sol", "gpt-6-astra")
 EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max", "ultra")
 EFFORT_ALIASES = {"light": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max", "ultra": "ultra"}
-QUALITY_EFFORTS = {"gpt-5.6-luna": ("low", "medium", "high", "xhigh", "max"), "gpt-5.6-terra": EFFORT_ORDER, "gpt-5.6-sol": EFFORT_ORDER}
+QUALITY_EFFORTS = {"gpt-6-luna": ("low", "medium", "high", "xhigh", "max"), "gpt-6-sol": EFFORT_ORDER, "gpt-6-astra": EFFORT_ORDER}
 KNOWN_QUALITY_PAIRS = tuple(f"{model}|{effort}" for model in MODEL_ORDER for effort in QUALITY_EFFORTS[model])
 REPAIR_SIGNALS = frozenset({"again", "already", "broken", "didnt", "failed", "incorrect", "nothing", "redo", "repair", "retry", "still", "unchanged", "wrong"})
 QUALITY_FAILURE_CLASSES = frozenset({"quality", "correctness"})
@@ -45,7 +45,7 @@ DIFFICULTY_TERMS = frozenset({"architecture", "difficult", "geometry", "hard", "
 STEP_ACTION_TERMS = frozenset({"analyze", "check", "choose", "compare", "create", "decide", "deploy", "edit", "export", "fix", "generate", "implement", "inspect", "integrate", "interpret", "make", "migrate", "migration", "modify", "publish", "read", "repair", "research", "review", "run", "solve", "synthesize", "test", "tests", "trace", "transform", "understand", "update", "verify", "write"})
 INFORMATION_BURDEN_TERMS = frozenset({"analyze", "comprehensive", "context", "deep", "every", "information", "massive", "read", "research", "source", "synthesize", "understand", "understanding"})
 FRONTIER_DIFFICULTY_TERMS = frozenset({"ambiguous", "architecture", "comprehensive", "deep", "difficult", "massive", "research", "source", "synthesize", "tradeoff", "understand", "understanding"})
-ROUTE_HINT_PATTERN = re.compile(r"\b(?:gpt[- ]?5\.6[- ]?)?(luna|terra|sol)\s*(?:\||/|-|to)?\s*(light|low|medium|high|xhigh|max|ultra)\b", re.IGNORECASE)
+ROUTE_HINT_PATTERN = re.compile(r"\b(?:gpt[- ]?6[- ]?)?(luna|sol|astra)\s*(?:\||/|-|to)?\s*(light|low|medium|high|xhigh|max|ultra)\b", re.IGNORECASE)
 
 
 def _valid_session_id(value):
@@ -200,7 +200,8 @@ def _explicit_route_hint(text):
     if not match:
         return ""
     model, effort = match.groups()
-    return f"gpt-5.6-{model.lower()}|{EFFORT_ALIASES[effort.lower()]}"
+    pair = f"gpt-6-{model.lower()}|{EFFORT_ALIASES[effort.lower()]}"
+    return pair if pair in KNOWN_QUALITY_PAIRS else ""
 
 
 def _classification_text(prompt, task_summary):
@@ -281,15 +282,15 @@ def classify_task(prompt, *, task_type="", operation="", modality="", complexity
     difficult = frontier or score_difficult or bool(tokens & DIFFICULTY_TERMS)
     difficulty_class = "frontier" if frontier else "difficult" if difficult else "bounded"
     if solving_surface == "image_inspection":
-        model_family = "gpt-5.6-luna"
+        model_family = "gpt-6-luna"
         preferred_pair = f"{model_family}|{effort_class}"
         route_reason = "cheaper_image_inspection_route" if effort_class == "low" else f"cheaper_image_inspection_{effort_class}_route"
     elif frontier:
-        model_family = "gpt-5.6-sol"
+        model_family = "gpt-6-astra"
         preferred_pair = f"{model_family}|{effort_class}"
         route_reason = f"frontier_information_solving_{effort_class}_route"
     elif difficult:
-        model_family = "gpt-5.6-terra"
+        model_family = "gpt-6-sol"
         preferred_pair = f"{model_family}|{effort_class}"
         if solving_surface == "core_solving" and task_length == "short" and effort_class == "low":
             route_reason = "short_difficult_core_solving_light_route"
@@ -298,11 +299,11 @@ def classify_task(prompt, *, task_type="", operation="", modality="", complexity
         else:
             route_reason = f"difficult_solving_{effort_class}_route"
     elif solving_surface == "core_solving":
-        model_family = "gpt-5.6-terra"
+        model_family = "gpt-6-sol"
         preferred_pair = f"{model_family}|{effort_class}"
         route_reason = f"bounded_core_solving_{effort_class}_route"
     else:
-        model_family = "gpt-5.6-luna"
+        model_family = "gpt-6-luna"
         preferred_pair = f"{model_family}|{effort_class}"
         route_reason = f"supporting_task_{effort_class}_route"
     route_class = f"{solving_surface}_{task_length}_{difficulty_class}"

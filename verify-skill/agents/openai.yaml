@@ -1,4 +1,4 @@
 interface:
   display_name: "verify-skill"
   short_description: "Focused verification inside the active task"
-  default_prompt: "Check the changed behavior with the smallest convincing evidence. Skip simple value-only changes; do not start or compile a whole project unless requested. Ending is memory-only."
+  default_prompt: "Check changed behavior with the smallest real evidence; read back simple value changes. Do not start or compile a whole project unless requested. Ending is memory-only."

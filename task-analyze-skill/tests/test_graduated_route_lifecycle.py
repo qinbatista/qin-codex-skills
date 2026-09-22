@@ -11,6 +11,6 @@ class GoalOwnershipTests(unittest.TestCase):
         MODULE.bind_node(node,"gpt-6-astra","ultra")
         self.assertEqual((node["model"],node["effort"]),("gpt-6-astra","ultra"))
     def test_independent_script_retains_its_adaptive_pair(self):
-        node={"task_type":"script","skill_independent":True,"model":"gpt-5.6-luna","effort":"low"}
+        node={"task_type":"script","skill_independent":True,"model":"gpt-6-luna","effort":"low"}
         MODULE.bind_node(node,"gpt-6-astra","ultra")
-        self.assertEqual((node["model"],node["effort"]),("gpt-5.6-luna","low"))
+        self.assertEqual((node["model"],node["effort"]),("gpt-6-luna","low"))

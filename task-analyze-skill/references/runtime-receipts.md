@@ -2,7 +2,7 @@
 
 Receipts record requested, resolved and effective model/effort, completion status, token totals and timing. Match the exact runtime pair; a configured selection or task assignment is not a completed run. Never fabricate receipt evidence for inline tool work.
 
-A process success alone does not prove its output correct. The active task owns relevant verification and final aggregation, including a failed aggregate verdict. Simple value-only edits can explicitly skip verification.
+A process success alone does not prove its output correct. The active task owns real verification and final aggregation, including a failed aggregate verdict. Read back simple value changes; use a representative behavior check for consequential changes.
 
 Skill-governed receipts retain the user's selected pair with no automatic fallback. Independent-task operational fallback must retain failed attempts and aggregate token/time costs. Only in-task behavior evidence may inform correctness learning; memory Ending cannot.
 

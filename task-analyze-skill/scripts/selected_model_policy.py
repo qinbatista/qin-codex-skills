@@ -2,10 +2,14 @@
 """Keep skill-governed work on the user's selected model and reasoning effort."""
 
 from collections.abc import Mapping
+import json
+from pathlib import Path
 
 ROUTING_ONLY_SKILLS = {"task-analyze-skill", "workflow-skill"}
 MEMORY_OPERATIONS = {"memory", "memory-update", "memory-summary", "record-memory", "summarize-memory"}
-VALID_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
+ACTIVE_MODELS = {"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}
+EFFORT_ALIASES = {"light": "low"}
+REGISTRY_PATH = Path(__file__).resolve().parents[1] / "assets" / "model-capability-ladder.json"
 
 
 def _value(spec, key, default=None):
@@ -46,15 +50,19 @@ def uses_selected_model(spec):
 
 
 def selected_pair(model, effort):
-    if not isinstance(model, str) or not model.strip() or model == "unknown" or "|" in model:
+    if model not in ACTIVE_MODELS:
         raise ValueError("selected_model_required")
-    if effort not in VALID_EFFORTS:
-        raise ValueError("selected_effort_required")
-    return f"{model}|{effort}"
+    normalized_effort = EFFORT_ALIASES.get(effort, effort)
+    registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    supported_efforts = next((row["codex_efforts"] for row in registry["models"] if row["id"] == model), [])
+    if normalized_effort not in supported_efforts:
+        raise ValueError(f"selected_effort_unsupported_for_model: {model}|{effort}")
+    return f"{model}|{normalized_effort}"
 
 
 def recommendation(model, effort, baseline=None):
     pair = selected_pair(model, effort)
+    effort = pair.split("|", 1)[1]
     result = dict(baseline or {})
     result.update({"selected_pair": pair, "selected_model": model, "selected_effort": effort,
                    "attempt_pair": pair, "entry_pair": pair, "entry_anchor_pair": pair,
@@ -71,7 +79,7 @@ def recommendation(model, effort, baseline=None):
 def bind_node(node, model, effort):
     """Called before validation and again at execution, including direct run_node."""
     if uses_selected_model(node) and node.get("execution_kind") != "deterministic-source-read":
-        selected_pair(model, effort)
+        effort = selected_pair(model, effort).split("|", 1)[1]
         node.update({"model": model, "effort": effort, "selection_basis": "user_selected",
                      "allow_fallback": [], "fallback_policy": "none", "trial": False,
                      "model_locked": True})
@@ -88,5 +96,5 @@ def execution_guidance(spec):
     return (prefix + project + ui_reference + "Read only relevant existing project/module memory before work; missing memory is optional and must not block execution. "
             "Do not use another project's memory. Preserve the assigned model and effort for governing skills, including helper scripts. "
             "Run scripts and tests without opening or focusing windows: use portable Python, hidden Windows subprocess options, and application-native headless modes; preserve required platform branches and captured output. "
-            "Verify meaningful or complex changes inside this active task with the smallest relevant behavior check; skip verification for simple value-only edits. "
+            "Verify changed code and consequential results inside this active task with a real behavior check or output readback at the smallest relevant boundary, including simple value edits. "
             "Do not start a whole project or full build unless the user requests it. Ending only summarizes durable decisions and changes into scoped memory; it does not verify or repair.")

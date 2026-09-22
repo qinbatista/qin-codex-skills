@@ -51,8 +51,8 @@ class ReadableUIContractTests(unittest.TestCase):
 
     def test_visual_workers_receive_baseline_and_keep_selected_pair(self):
         for skill, task_type in (("emil-design-eng", "visual"), ("pdf:pdf", "document"), ("presentations:Presentations", "presentation")):
-            for model, effort in (("gpt-5.6-luna", "max"), ("gpt-6-astra", "ultra")):
-                node = {"skill": skill, "task_type": task_type, "model": "gpt-5.3-codex-spark", "effort": "low"}
+            for model, effort in (("gpt-6-luna", "max"), ("gpt-6-astra", "ultra")):
+                node = {"skill": skill, "task_type": task_type, "model": "gpt-6-luna", "effort": "low"}
                 policy.bind_node(node, model, effort)
                 with self.subTest(skill=skill, model=model):
                     self.assertEqual((node["model"], node["effort"]), (model, effort))

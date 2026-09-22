@@ -20,7 +20,7 @@ MODULE_SPEC.loader.exec_module(module)
 class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
     def test_bridge_binds_prompt_invokes_adaptive_runner_and_emits_plain_object(self):
         prompt = "bounded benchmark workload\nComplexity score: 18.\n"
-        child_result = "Complexity: 18/100 (small) · Model: gpt-5.3-codex-spark|low · Route: downgrade\nModel path: gpt-5.6-luna|max -> gpt-5.3-codex-spark|low\nEvidence: runtime receipt\n\n{\"b\":2,\"a\":1}"
+        child_result = "Complexity: 18/100 (small) · Model: gpt-6-luna|low · Route: downgrade\nModel path: gpt-6-luna|max -> gpt-6-luna|low\nEvidence: runtime receipt\n\n{\"b\":2,\"a\":1}"
         ready_event = json.dumps({"schema_version": 1, "stage": "result-ready"}, separators=(",", ":"))
         summary = ready_event + "\n" + json.dumps({"status": "pass", "result": child_result}, separators=(",", ":")) + "\n"
         with tempfile.TemporaryDirectory() as temporary:
@@ -43,16 +43,16 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
                 module.CHILD_TIMEOUT_ENV: "120",
                 module.CACHE_ROOT_ENV: str(root / "Cache" / "bridge"),
                 module.PYTHON_ENV: str(Path(module.sys.executable).resolve()),
-                module.ENTRY_MODEL_ENV: "gpt-5.6-luna",
+                module.ENTRY_MODEL_ENV: "gpt-6-luna",
                 module.ENTRY_EFFORT_ENV: "max",
                 module.TASK_SANDBOX_ENV: "read-only",
             }
-            execution = {"schema_version": 2, "receipt_sha256": "a" * 64, "selected_pair": "gpt-5.6-sol|ultra", "effective_pair": "gpt-5.6-sol|ultra", "steady_state_logical_tokens": 12, "steady_state_execution_elapsed_ms": 5, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": {"selected_pair": "gpt-5.6-sol|ultra", "effective_pair": "gpt-5.6-sol|ultra", "scheduled_graph": False, "assigned_pairs": ["gpt-5.6-sol|ultra"], "trial": False, "recommendation_state": "frozen", "selection_provenance": "local_history", "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-5.6-sol|ultra"}]}}
+            execution = {"schema_version": 2, "receipt_sha256": "a" * 64, "selected_pair": "gpt-6-sol|ultra", "effective_pair": "gpt-6-sol|ultra", "steady_state_logical_tokens": 12, "steady_state_execution_elapsed_ms": 5, "calibration_attempt_count": 0, "calibration_failure_elapsed_ms": 0, "calibration_failure_logical_tokens": 0, "route_signature": {"selected_pair": "gpt-6-sol|ultra", "effective_pair": "gpt-6-sol|ultra", "scheduled_graph": False, "assigned_pairs": ["gpt-6-sol|ultra"], "trial": False, "recommendation_state": "frozen", "selection_provenance": "local_history", "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-6-sol|ultra"}]}}
             with patch.dict(os.environ, environment, clear=False), patch.object(module, "run_adaptive_entry", return_value=({"b": 2, "a": 1}, execution)) as run_mock:
                 result = module.run_bridge(args)
         self.assertEqual(result, {"b": 2, "a": 1})
         self.assertEqual(run_mock.call_count, 1)
-        self.assertEqual(run_mock.call_args_list[0].args[1], ("gpt-5.6-luna", "max"))
+        self.assertEqual(run_mock.call_args_list[0].args[1], ("gpt-6-luna", "max"))
         self.assertEqual(run_mock.call_args_list[0].args[2], "read-only")
 
     def test_bridge_rejects_prompt_hash_drift_before_launch(self):
@@ -100,15 +100,15 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
             "trial": False,
             "recommendation_state": "frozen",
             "selection_provenance": "local_history",
-            "selected_pair": "gpt-5.6-luna|low",
-            "effective_pair": "gpt-5.6-luna|low",
+            "selected_pair": "gpt-6-luna|low",
+            "effective_pair": "gpt-6-luna|low",
             "process_elapsed_ms": 7,
             "tokens": {"total_tokens": 11},
             "route_attempts": [{"status": "pass"}],
             "reroutes": [],
             "node_role": "result-producer",
             "lean_context_mode": "active",
-            "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-5.6-luna|low"}],
+            "capability_assignment": [{"node_id": "result", "effective_pair": "gpt-6-luna|low"}],
         }
         projection = module.receipt_projection(receipt)
         self.assertEqual(projection["route_signature"]["context_mode"], "lean_bounded_worker")
@@ -123,8 +123,8 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
             (output_root / "receipt.json").write_text("{}\n", encoding="utf-8")
             process = SimpleNamespace(returncode=0, stdout=json.dumps({"status": "pass", "result": '{"ok":true}'}) + "\n")
             projection = {
-                "selected_pair": "gpt-5.6-luna|low",
-                "route_signature": {"selected_pair": "gpt-5.6-luna|low"},
+                "selected_pair": "gpt-6-luna|low",
+                "route_signature": {"selected_pair": "gpt-6-luna|low"},
             }
             environment = {
                 "CODEX_THREAD_ID": "parent-thread",
@@ -132,7 +132,7 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
                 "BENCHMARK_ENV_MARKER": "preserved",
             }
             with patch.dict(os.environ, environment, clear=False), patch.object(module.subprocess, "run", return_value=process) as run_mock, patch.object(module, "receipt_projection", return_value=projection):
-                result, execution = module.run_adaptive_entry(root / "runner.py", ("gpt-5.6-luna", "max"), "read-only", root / "source", root / "workspace", root / "runtime", output_root, 18, "codex-test", 120, "prompt")
+                result, execution = module.run_adaptive_entry(root / "runner.py", ("gpt-6-luna", "max"), "read-only", root / "source", root / "workspace", root / "runtime", output_root, 18, "codex-test", 120, "prompt")
         command_environment = run_mock.call_args.kwargs["env"]
         self.assertNotIn("CODEX_THREAD_ID", command_environment)
         self.assertNotIn("CODEX_SESSION_ID", command_environment)
@@ -145,7 +145,7 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, patch.object(module.subprocess, "run", return_value=process):
             root = Path(temporary)
             with self.assertRaisesRegex(RuntimeError, "adaptive runner failed: runner_permission_denied") as raised:
-                module.run_adaptive_entry(root / "runner.py", ("gpt-5.6-luna", "max"), "read-only", root / "source", root / "workspace", root / "runtime", root / "output", 18, "codex-test", 120, "prompt")
+                module.run_adaptive_entry(root / "runner.py", ("gpt-6-luna", "max"), "read-only", root / "source", root / "workspace", root / "runtime", root / "output", 18, "codex-test", 120, "prompt")
         self.assertNotIn("private", str(raised.exception))
 
     def test_adaptive_failure_classifies_routing_memory_permission_target(self):
@@ -171,13 +171,13 @@ class BenchmarkAutoEntryBridgeTests(unittest.TestCase):
     def test_launch_claim_allows_exactly_one_adaptive_producer(self):
         with tempfile.TemporaryDirectory() as temporary:
             cache_root = Path(temporary) / "Cache" / "bridge"
-            claim_path = module.claim_adaptive_launch(cache_root, "a" * 64, ("gpt-5.6-luna", "max"))
+            claim_path = module.claim_adaptive_launch(cache_root, "a" * 64, ("gpt-6-luna", "max"))
             self.assertEqual(
                 json.loads(claim_path.read_text(encoding="utf-8")),
-                {"schema_version": 3, "workload_sha256": "a" * 64, "entry_pair": "gpt-5.6-luna|max"},
+                {"schema_version": 3, "workload_sha256": "a" * 64, "entry_pair": "gpt-6-luna|max"},
             )
             with self.assertRaisesRegex(ValueError, "already launched"):
-                module.claim_adaptive_launch(cache_root, "a" * 64, ("gpt-5.6-luna", "max"))
+                module.claim_adaptive_launch(cache_root, "a" * 64, ("gpt-6-luna", "max"))
 
 
 if __name__ == "__main__":

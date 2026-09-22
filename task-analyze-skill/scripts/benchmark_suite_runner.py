@@ -1033,7 +1033,7 @@ def execute_dual_entry_probe(args, run_plan, prompt_text):
     sqlite_home = codex_home / "runtime-sqlite"
     sqlite_home.mkdir(parents=True, exist_ok=True)
     probe_run_id = f"{run_plan['run_id']}-sol-entry-probe"
-    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", "gpt-5.6-sol", "--effort", "ultra", "--workload-id", probe_run_id, "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", args.auto_controller_sandbox, "--timeout", str(args.timeout), "--bootstrap-task", "--benchmark-run-id", f"benchmark-{probe_run_id}", "--benchmark-prompt-path", run_plan["prompt_path"], "--benchmark-task-sandbox", args.sandbox]
+    command = [sys.executable, environment["receipt_runner_path"], "run", "--model", "gpt-6-sol", "--effort", "ultra", "--workload-id", probe_run_id, "--output", str(receipt_path), "--result-output", str(result_path), "--workdir", environment["workdir"], "--codex-bin", args.codex_bin, "--sandbox", args.auto_controller_sandbox, "--timeout", str(args.timeout), "--bootstrap-task", "--benchmark-run-id", f"benchmark-{probe_run_id}", "--benchmark-prompt-path", run_plan["prompt_path"], "--benchmark-task-sandbox", args.sandbox]
     command_environment = os.environ.copy()
     command_environment.pop(ENTRY_CONTEXT_ENV, None)
     command_environment["CODEX_HOME"] = str(codex_home)
@@ -1130,9 +1130,9 @@ def parse_args(argv=None):
     repeat_group = parser.add_mutually_exclusive_group()
     repeat_group.add_argument("--repeat-count", type=int, default=6)
     repeat_group.add_argument("--tier-repeats", help="Even per-tier counts, for example simple=4,medium=2,complex=2,advanced=2.")
-    parser.add_argument("--direct-model", default="gpt-5.6-sol")
+    parser.add_argument("--direct-model", default="gpt-6-sol")
     parser.add_argument("--direct-effort", default="ultra")
-    parser.add_argument("--auto-entry-model", default="gpt-5.6-luna")
+    parser.add_argument("--auto-entry-model", default="gpt-6-luna")
     parser.add_argument("--auto-entry-effort", default="max")
     parser.add_argument("--direct-codex-home", type=Path, required=True)
     parser.add_argument("--global-codex-home", type=Path, required=True)

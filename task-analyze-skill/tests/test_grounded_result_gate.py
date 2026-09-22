@@ -19,7 +19,7 @@ class GroundedResultGateTests(unittest.TestCase):
     def write_case(self, directory, message, receipt_changes=None):
         result_path = directory / "result.md"
         result_path.write_text(message + "\n", encoding="utf-8")
-        receipt = {"schema_version": 1, "node_type": "locked-route-node", "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "model_match": True, "effort_match": True, "pair_match": True, "requested_model": "gpt-5.3-codex-spark", "requested_effort": "low", "requested_pair": "gpt-5.3-codex-spark|low", "resolved_model": "gpt-5.3-codex-spark", "resolved_effort": "low", "effective_model": "gpt-5.3-codex-spark", "effective_pair": "gpt-5.3-codex-spark|low", "output_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest()}
+        receipt = {"schema_version": 1, "node_type": "locked-route-node", "status": "pass", "failure_class": None, "turn_completed": True, "exit_code": 0, "metrics_complete": True, "model_match": True, "effort_match": True, "pair_match": True, "requested_model": "gpt-6-luna", "requested_effort": "low", "requested_pair": "gpt-6-luna|low", "resolved_model": "gpt-6-luna", "resolved_effort": "low", "effective_model": "gpt-6-luna", "effective_pair": "gpt-6-luna|low", "output_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest()}
         receipt.update(receipt_changes or {})
         receipt_path = directory / "receipt.json"
         receipt_path.write_text(json.dumps(receipt), encoding="utf-8")

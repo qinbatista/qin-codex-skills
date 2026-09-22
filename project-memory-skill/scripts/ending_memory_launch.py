@@ -5,9 +5,14 @@ import argparse
 import hashlib
 import json
 from pathlib import Path, PureWindowsPath
-import re
 
 from ending_memory import memory, validate_outcome
+
+
+def _supported_selected_pair(model, effort):
+    registry_path = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "assets" / "model-capability-ladder.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    return any(row["id"] == model and effort in row["codex_efforts"] for row in registry["models"])
 
 
 def prepare_launch(completed, *, project_root, selected_model, selected_effort, memory_available, previous=None):
@@ -15,8 +20,9 @@ def prepare_launch(completed, *, project_root, selected_model, selected_effort, 
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
         raise ValueError("project root must exist")
-    if selected_model == "unknown" or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:-]*", selected_model or "") or selected_effort not in {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}:
-        raise ValueError("the user's selected model and effort are required")
+    selected_effort = "low" if selected_effort == "light" else selected_effort
+    if not _supported_selected_pair(selected_model, selected_effort):
+        raise ValueError("a supported selected model and effort are required")
     if not isinstance(completed, dict) or set(completed) - {"status", "task_id", "project_root", "outcome"}:
         raise ValueError("completed outcome accepts only status, task_id, project_root, and outcome")
     if completed.get("status") != "complete" or not isinstance(completed.get("task_id"), str) or not completed["task_id"].strip():

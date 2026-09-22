@@ -16,7 +16,7 @@ module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
 
 
-def recommendation(pair="gpt-5.6-terra|medium", fallback_pair="gpt-5.6-terra|high"):
+def recommendation(pair="gpt-6-sol|medium", fallback_pair="gpt-6-sol|high"):
     model, effort = pair.split("|", 1)
     return {
         "source": "local_and_obsidian_model_history",
@@ -69,7 +69,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             ignore_user_config=True,
             timeout=60,
             emit_result=True,
-            entry_model="gpt-5.6-sol",
+            entry_model="gpt-6-sol",
             entry_effort="ultra",
             cache_root=project / "Cache" / "tmp-task-analyze",
         )
@@ -79,26 +79,26 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             args = self.arguments(Path(temporary))
 
             def fake_run(receipt_args, prompt):
-                self.assertEqual((receipt_args.model, receipt_args.effort), ("gpt-5.6-terra", "medium"))
+                self.assertEqual((receipt_args.model, receipt_args.effort), ("gpt-6-sol", "medium"))
                 receipt_args.result_output.write_text("RESULT", encoding="utf-8")
-                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
+                return {"status": "pass", "requested_pair": "gpt-6-sol|medium", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
 
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["memory_source"], "local_and_obsidian_model_history")
-        self.assertEqual(result["entry_pair"], "gpt-5.6-sol|ultra")
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(result["entry_pair"], "gpt-6-sol|ultra")
+        self.assertEqual(result["selected_pair"], "gpt-6-sol|medium")
         self.assertEqual(result["result"], "RESULT")
 
     def test_recommendation_receives_resolved_entry_pair(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            args.resolved_entry_model = "gpt-5.6-luna"
+            args.resolved_entry_model = "gpt-6-luna"
             args.resolved_entry_effort = "max"
             with patch.object(module.obsidian_model_memory, "recommend_model", return_value=recommendation()) as recommend:
                 module._recommend(args)
-        self.assertEqual(recommend.call_args.kwargs["entry_model"], "gpt-5.6-luna")
+        self.assertEqual(recommend.call_args.kwargs["entry_model"], "gpt-6-luna")
         self.assertEqual(recommend.call_args.kwargs["entry_effort"], "max")
 
     def test_zero_argument_stdin_fast_path_derives_safe_defaults(self):
@@ -142,7 +142,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
                 self.assertTrue(stream.getvalue().splitlines())
                 self.assertEqual(receipt_args.code_rule_bundle["execution_domain"], "python")
                 receipt_args.result_output.write_text("RESULT", encoding="utf-8")
-                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
+                return {"status": "pass", "requested_pair": "gpt-6-sol|medium", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
 
             with patch.object(module.sys, "stdout", stream), patch.object(module, "_recommend", return_value=adaptive), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
@@ -153,7 +153,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             code_notice_event = events[3]
             lifecycle_notice_event = events[4]
         expected_notice = module._model_route_notice(args, adaptive)
-        self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "task_type": "code", "operation": "edit", "complexity_score": 12, "complexity_band": "small", "fast_path_eligible": False, "routing_reasons": [], "entry_pair": "gpt-5.6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-5.6-terra|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
+        self.assertEqual(event, {"schema_version": 1, "stage": "route-ready", "task_type": "code", "operation": "edit", "complexity_score": 12, "complexity_band": "small", "fast_path_eligible": False, "routing_reasons": [], "entry_pair": "gpt-6-sol|ultra", "entry_source": "explicit", "selected_pair": "gpt-6-sol|medium", "attempt_pair": "gpt-6-sol|medium", "active_fallback_pair": "gpt-6-sol|high", "switch_direction": "no_switch", "switch_change": "initial->gpt-6-sol|medium", "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_pending": True, "user_visible_message": expected_notice["message"], "model_route_notice": expected_notice})
         self.assertEqual(notice_event, {"schema_version": 1, "stage": "model-switch-notice", "user_visible": True, **expected_notice})
         self.assertEqual(code_notice_event["stage"], "code-rule-notice")
         self.assertTrue(code_notice_event["user_visible"])
@@ -190,33 +190,33 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             args.resolved_entry_model = "gpt-6-astra"
             args.resolved_entry_effort = "ultra"
             args.skill_independent = True
-            notice = module._model_route_notice(args, recommendation(pair="gpt-5.6-luna|low"))
+            notice = module._model_route_notice(args, recommendation(pair="gpt-6-luna|low"))
         self.assertEqual(notice["kind"], "route_selection")
         self.assertIn("selected separately for this independent task", notice["message"])
-        self.assertIn("gpt-5.6-luna|low", notice["message"])
+        self.assertIn("gpt-6-luna|low", notice["message"])
         self.assertTrue(notice["model_changed"])
 
     def test_repeated_failure_notice_names_the_higher_model_and_task_part(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            args.resolved_entry_model = "gpt-5.6-luna"
+            args.resolved_entry_model = "gpt-6-luna"
             args.resolved_entry_effort = "max"
-            adaptive = recommendation(pair="gpt-5.6-terra|low", fallback_pair="gpt-5.6-terra|medium")
-            adaptive.update({"step_kind": "debugging", "session_effort": {"failure_recorded": True, "user_effort": 10, "last_model_pair": "gpt-5.6-luna|max", "solving_surface": "core_solving", "step_estimate": 1, "estimated_effort": "low", "model_difficulty": "difficult", "information_burden": "low"}, "session_escalation": {"applied": True, "from_pair": "gpt-5.6-luna|max", "to_pair": "gpt-5.6-terra|low"}})
+            adaptive = recommendation(pair="gpt-6-sol|low", fallback_pair="gpt-6-sol|medium")
+            adaptive.update({"step_kind": "debugging", "session_effort": {"failure_recorded": True, "user_effort": 10, "last_model_pair": "gpt-6-luna|max", "solving_surface": "core_solving", "step_estimate": 1, "estimated_effort": "low", "model_difficulty": "difficult", "information_burden": "low"}, "session_escalation": {"applied": True, "from_pair": "gpt-6-luna|max", "to_pair": "gpt-6-sol|low"}})
             notice = module._model_route_notice(args, adaptive)
         self.assertEqual(notice["kind"], "session_model_escalation")
-        self.assertIn("increased the model to gpt-5.6-terra|low", notice["message"])
+        self.assertIn("increased the model to gpt-6-sol|low", notice["message"])
         self.assertIn("core solving / debugging part", notice["message"])
-        self.assertIn("Entry model remains gpt-5.6-luna|max", notice["message"])
+        self.assertIn("Entry model remains gpt-6-luna|max", notice["message"])
         self.assertEqual(notice["estimated_steps"], 1)
 
     def test_graph_notice_lists_each_modelled_task_part(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            args.resolved_entry_model = "gpt-5.6-luna"
+            args.resolved_entry_model = "gpt-6-luna"
             args.resolved_entry_effort = "max"
-            plan = {"nodes": [{"id": "source-1", "phase": "result", "model": "gpt-5.6-luna", "effort": "low", "step_kind": "analysis", "dependencies": []}, {"id": "merge-result", "phase": "result", "model": "gpt-5.6-terra", "effort": "medium", "step_kind": "integration", "dependencies": ["source-1"]}, {"id": "ending-verify", "phase": "ending", "model": "gpt-5.6-terra", "effort": "high", "dependencies": ["merge-result"]}]}
-            notice = module._graph_model_route_notice(args, plan, recommendation(), recommendation(pair="gpt-5.6-terra|medium"))
+            plan = {"nodes": [{"id": "source-1", "phase": "result", "model": "gpt-6-luna", "effort": "low", "step_kind": "analysis", "dependencies": []}, {"id": "merge-result", "phase": "result", "model": "gpt-6-sol", "effort": "medium", "step_kind": "integration", "dependencies": ["source-1"]}, {"id": "ending-verify", "phase": "ending", "model": "gpt-6-sol", "effort": "high", "dependencies": ["merge-result"]}]}
+            notice = module._graph_model_route_notice(args, plan, recommendation(), recommendation(pair="gpt-6-sol|medium"))
         self.assertEqual(notice["kind"], "graph_model_route")
         self.assertEqual([part["node_id"] for part in notice["parts"]], ["source-1", "merge-result", "ending-verify"])
         self.assertIn("3 task parts have routed model/effort assignments", notice["message"])
@@ -243,33 +243,33 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             prompt = "修改 PlayerController.cs，把 jumpHeight 从5改成6"
             args = module.resolve_fast_path_args(module.parse_args(["--workdir", temporary]), prompt)
-            adaptive = recommendation(pair="gpt-5.6-terra|low", fallback_pair="gpt-5.6-terra|medium")
-            adaptive.update({"session_effort": {"available": True, "failure_recorded": True, "resolution_state": "feedback_unresolved", "user_effort": 3, "last_model_pair": "gpt-5.6-luna|low", "solving_surface": "core_solving", "step_estimate": 1, "estimated_effort": "low", "model_difficulty": "bounded", "information_burden": "low"}, "session_escalation": {"applied": True, "from_pair": "gpt-5.6-luna|low", "to_pair": "gpt-5.6-terra|low"}})
+            adaptive = recommendation(pair="gpt-6-sol|low", fallback_pair="gpt-6-sol|medium")
+            adaptive.update({"session_effort": {"available": True, "failure_recorded": True, "resolution_state": "feedback_unresolved", "user_effort": 3, "last_model_pair": "gpt-6-luna|low", "solving_surface": "core_solving", "step_estimate": 1, "estimated_effort": "low", "model_difficulty": "bounded", "information_burden": "low"}, "session_escalation": {"applied": True, "from_pair": "gpt-6-luna|low", "to_pair": "gpt-6-sol|low"}})
 
             def fake_run(receipt_args, _prompt):
-                self.assertEqual((receipt_args.model, receipt_args.effort), ("gpt-5.6-terra", "low"))
+                self.assertEqual((receipt_args.model, receipt_args.effort), ("gpt-6-sol", "low"))
                 receipt_args.result_output.parent.mkdir(parents=True, exist_ok=True)
                 receipt_args.result_output.write_text("RESULT", encoding="utf-8")
-                return {"status": "pass", "requested_pair": "gpt-5.6-terra|low", "effective_pair": "gpt-5.6-terra|low", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
+                return {"status": "pass", "requested_pair": "gpt-6-sol|low", "effective_pair": "gpt-6-sol|low", "result_published": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 1, "tokens": {"total_tokens": 1}}
 
-            with patch.object(module, "_recommend", return_value=adaptive) as recommend, patch.object(module, "_resolved_entry_pair", return_value=("gpt-5.6-terra", "medium", "configured")), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
+            with patch.object(module, "_recommend", return_value=adaptive) as recommend, patch.object(module, "_resolved_entry_pair", return_value=("gpt-6-sol", "medium", "configured")), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, prompt)
         recommend.assert_called_once_with(args, prompt)
         self.assertEqual(result["memory_source"], "local_and_obsidian_model_history")
-        self.assertEqual(result["selected_pair"], "gpt-5.6-terra|low")
+        self.assertEqual(result["selected_pair"], "gpt-6-sol|low")
         self.assertTrue(result["fast_path_eligible"])
         self.assertTrue(result["session_escalation"]["applied"])
         self.assertTrue(result["ending_required"])
-        self.assertEqual(result["execution_summary"]["selected_pair"], "gpt-5.6-terra|low")
+        self.assertEqual(result["execution_summary"]["selected_pair"], "gpt-6-sol|low")
 
     def test_route_attempts_are_bounded_to_primary_plus_one_fallback(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            args.allow_fallback = ["gpt-5.6-luna|low", "gpt-5.6-sol|high"]
-            recommendation_value = recommendation("gpt-5.6-terra|medium", "gpt-5.6-terra|high")
-            with patch.object(module.obsidian_model_memory, "load_shared_ladder", return_value=({}, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high", "gpt-5.6-luna|low", "gpt-5.6-sol|high"])):
+            args.allow_fallback = ["gpt-6-luna|low", "gpt-6-sol|high"]
+            recommendation_value = recommendation("gpt-6-sol|medium", "gpt-6-sol|high")
+            with patch.object(module.obsidian_model_memory, "load_shared_ladder", return_value=({}, ["gpt-6-sol|medium", "gpt-6-sol|high", "gpt-6-luna|low", "gpt-6-sol|high"])):
                 pairs = module._attempt_pairs(args, recommendation_value)
-        self.assertEqual(pairs, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high"])
+        self.assertEqual(pairs, ["gpt-6-sol|medium", "gpt-6-sol|high"])
         self.assertEqual(len(pairs), module.MAX_PRODUCER_ROUTE_ATTEMPTS)
 
     def test_fast_path_infers_numeric_and_multifile_complexity(self):
@@ -352,11 +352,11 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         scheduled.assert_called_once()
         self.assertEqual(scheduled.call_args.args[0].code_rule_bundle["execution_domain"], "python")
 
-    def test_scheduled_graph_releases_every_result_before_emitting_ending_ready(self):
+    def test_scheduled_graph_uses_result_release_without_ending_handoff(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             args = self.arguments(root)
-            args.resolved_entry_model = "gpt-5.6-sol"
+            args.resolved_entry_model = "gpt-6-sol"
             args.resolved_entry_effort = "ultra"
             args.resolved_entry_source = "explicit"
             args.result_output.write_text("MERGED RESULT", encoding="utf-8")
@@ -365,39 +365,28 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             receipt = {"status": "pass", "result_published": True, "turn_completed": True, "node_type": "locked-route-node", "node_role": "result-producer", "tokens": {"total_tokens": 4}, "route_attempts": []}
             branch_receipt.write_text(json.dumps(receipt), encoding="utf-8")
             main_receipt.write_text(json.dumps(receipt), encoding="utf-8")
-            handoff_path = root / "ending-handoff.json"
-            handoff = {
-                "schema_version": 2,
-                "route_run_id": "graph-final",
-                "cache_dir": str(root / "Cache" / "tmp-task-analyze"),
-                "plan": {"nodes": [{"id": "branch", "phase": "result"}, {"id": "merge", "phase": "result"}]},
-                "completed": [
-                    {"id": "branch", "status": "pass", "phase": "result", "receipt_path": str(branch_receipt), "result_path": str(root / "branch-result.md")},
-                    {"id": "merge", "status": "pass", "phase": "result", "receipt_path": str(main_receipt), "result_path": str(args.result_output)},
-                ],
-                "main_result_node": "merge",
-                "ending_handoff_path": str(handoff_path),
-            }
-            handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+            release_path = root / "graph-final.result-release.json"
+            release_path.write_text(json.dumps({"route_run_id": "graph-final", "main_result_node": "merge"}), encoding="utf-8")
             plan = {
                 "main_result_node": "merge",
                 "schedule_mode": "parallel_independent_sources",
                 "parallel_branch_count": 1,
                 "fused_source": None,
                 "nodes": [
-                    {"id": "branch", "phase": "result", "model": "gpt-5.6-terra", "effort": "medium", "dependencies": []},
-                    {"id": "merge", "phase": "result", "model": "gpt-5.6-terra", "effort": "medium", "dependencies": ["branch"]},
+                    {"id": "branch", "phase": "result", "model": "gpt-6-sol", "effort": "medium", "dependencies": []},
+                    {"id": "merge", "phase": "result", "model": "gpt-6-sol", "effort": "medium", "dependencies": ["branch"]},
                 ],
             }
             manifest = {
                 "status": "pass",
                 "route_run_id": "graph-final",
                 "manifest_path": str(root / "manifest.json"),
-                "ending_handoff_path": str(handoff_path),
+                "release_path": str(release_path),
+                "final_aggregate_receipt": True,
                 "first_result_elapsed_ms": 12,
                 "nodes": [
-                    {"id": "branch", "phase": "result", "receipt_path": str(branch_receipt), "requested_model": "gpt-5.6-terra", "requested_effort": "medium", "model": "gpt-5.6-terra", "effort": "medium", "tokens": {"total_tokens": 4}},
-                    {"id": "merge", "phase": "result", "receipt_path": str(main_receipt), "requested_model": "gpt-5.6-terra", "requested_effort": "medium", "model": "gpt-5.6-terra", "effort": "medium", "tokens": {"total_tokens": 4}},
+                    {"id": "branch", "phase": "result", "receipt_path": str(branch_receipt), "requested_model": "gpt-6-sol", "requested_effort": "medium", "model": "gpt-6-sol", "effort": "medium", "tokens": {"total_tokens": 4}},
+                    {"id": "merge", "phase": "result", "receipt_path": str(main_receipt), "requested_model": "gpt-6-sol", "requested_effort": "medium", "model": "gpt-6-sol", "effort": "medium", "tokens": {"total_tokens": 4}},
                 ],
             }
             with patch.object(module, "_scheduled_plan", return_value=(plan, recommendation())), patch.object(module.task_route_dispatcher, "run_plan", return_value=manifest):
@@ -411,6 +400,7 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
         self.assertTrue(outer_receipt["subprocesses_settled"])
         self.assertEqual(outer_receipt["aggregate_result_state"], "released")
         self.assertTrue(release_exists)
+        self.assertFalse((root / "ending-handoff.json").exists())
 
     def test_schedule_admission_prefers_one_producer_for_small_sources(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -445,29 +435,29 @@ class ObsidianAdaptiveRunnerTests(unittest.TestCase):
             args.complexity = "complex"
             (args.workdir / "a.py").write_text("A = 1\n", encoding="utf-8")
             (args.workdir / "b.py").write_text("B = 2\n", encoding="utf-8")
-            proof = {"selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
-            adaptive = {"selected_pair": "gpt-5.6-terra|medium", "trial": False}
+            proof = {"selected_pair": "gpt-6-sol|medium", "attempt_pair": "gpt-6-sol|medium", "active_fallback_pair": "gpt-6-sol|high", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
+            adaptive = {"selected_pair": "gpt-6-sol|medium", "trial": False}
             with patch.object(module.task_route_dispatcher, "_obsidian_recommendation_and_proof", return_value=(adaptive, proof)):
                 plan, merge_recommendation = module._scheduled_plan(
                     args,
                     "Complete two independent source audits. Do not edit files.\n- a.py\n- b.py",
                     ["a.py", "b.py"],
-                    "gpt-5.6-sol",
+                    "gpt-6-sol",
                     "ultra",
                     recommendation(),
                 )
         result_nodes = [node for node in plan["nodes"] if node["phase"] == "result"]
         self.assertEqual(plan["topology"], "parallel")
-        self.assertEqual(plan["entry"], {"model": "gpt-5.6-sol", "effort": "ultra"})
+        self.assertEqual(plan["entry"], {"model": "gpt-6-sol", "effort": "ultra"})
         self.assertEqual([node["source_allowlist"] for node in result_nodes[:-1]], [["a.py"], ["b.py"]])
-        self.assertEqual([(node["model"], node["effort"]) for node in result_nodes[:-1]], [("gpt-5.3-codex-spark", "low"), ("gpt-5.3-codex-spark", "low")])
-        self.assertTrue(all(node["priority_producer"] is True for node in result_nodes[:-1]))
+        self.assertEqual([(node["model"], node["effort"]) for node in result_nodes[:-1]], [("gpt-6-luna", "low"), ("gpt-6-luna", "low")])
+        self.assertTrue(all("priority_producer" not in node for node in result_nodes[:-1]))
         self.assertIn("Omit unsupported fields", result_nodes[0]["prompt"])
         self.assertIn("Prefer direct defining-source facts", result_nodes[-1]["prompt"])
-        self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
-        self.assertEqual(result_nodes[-1]["routing_recommendation"]["attempt_pair"], "gpt-5.6-terra|medium")
-        ending = next(node for node in plan["nodes"] if node["phase"] == "ending")
-        self.assertEqual((ending["model"], ending["effort"], ending["skill"]), ("gpt-5.6-sol", "ultra", "project-memory-skill"))
+        self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-6-sol", "medium"))
+        self.assertEqual(result_nodes[-1]["routing_recommendation"]["attempt_pair"], "gpt-6-sol|medium")
+        self.assertTrue(all(node["phase"] == "result" for node in plan["nodes"]))
+        self.assertTrue(plan["ending_required"])
         self.assertEqual(merge_recommendation, adaptive)
 
     def test_exact_owned_three_source_schedule_fuses_final_source_with_merge(self):
@@ -493,10 +483,10 @@ gamma is owned only by c.py
 - value: exact assignment
 
 source_files must list all sources in order."""
-            proof = {"selected_pair": "gpt-5.6-terra|medium", "attempt_pair": "gpt-5.6-terra|medium", "active_fallback_pair": "gpt-5.6-terra|high", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
-            adaptive = {"selected_pair": "gpt-5.6-terra|medium", "trial": False}
+            proof = {"selected_pair": "gpt-6-sol|medium", "attempt_pair": "gpt-6-sol|medium", "active_fallback_pair": "gpt-6-sol|high", "trial": False, "reason": "shared_cold_start", "profile_fingerprint": "fingerprint", "calibration_state": "cold_start", "best_pair": None, "selection_basis": "shared_cold_start"}
+            adaptive = {"selected_pair": "gpt-6-sol|medium", "trial": False}
             with patch.object(module.task_route_dispatcher, "_obsidian_recommendation_and_proof", return_value=(adaptive, proof)):
-                plan, _ = module._scheduled_plan(args, prompt, sources, "gpt-5.6-sol", "ultra", recommendation())
+                plan, _ = module._scheduled_plan(args, prompt, sources, "gpt-6-sol", "ultra", recommendation())
         result_nodes = [node for node in plan["nodes"] if node["phase"] == "result"]
         self.assertEqual(plan["topology"], "mixed")
         self.assertEqual(plan["schedule_mode"], "parallel_sources_fused_final")
@@ -510,7 +500,7 @@ source_files must list all sources in order."""
         self.assertTrue(result_nodes[-1]["fuses_owned_source_with_dependencies"])
         self.assertNotIn("reads_dependency_results_only", result_nodes[-1])
         self.assertIn("Dependency results own every other section", result_nodes[-1]["prompt"])
-        self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-5.6-terra", "medium"))
+        self.assertEqual((result_nodes[-1]["model"], result_nodes[-1]["effort"]), ("gpt-6-sol", "medium"))
 
     def test_small_exact_owned_sources_use_parallel_local_capture_and_one_model_synthesis(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -535,10 +525,10 @@ gamma is owned only by c.json
 - gamma
 
 source_files must list all sources in order."""
-            proof = {"selected_pair": "gpt-5.6-luna|low", "attempt_pair": "gpt-5.6-luna|low", "active_fallback_pair": None, "trial": False, "reason": "local_history", "profile_fingerprint": "fingerprint", "calibration_state": "frozen", "best_pair": "gpt-5.6-luna|low", "selection_basis": "local_history"}
-            adaptive = {"selected_pair": "gpt-5.6-luna|low", "trial": False}
+            proof = {"selected_pair": "gpt-6-luna|low", "attempt_pair": "gpt-6-luna|low", "active_fallback_pair": None, "trial": False, "reason": "local_history", "profile_fingerprint": "fingerprint", "calibration_state": "frozen", "best_pair": "gpt-6-luna|low", "selection_basis": "local_history"}
+            adaptive = {"selected_pair": "gpt-6-luna|low", "trial": False}
             with patch.object(module.task_route_dispatcher, "_obsidian_recommendation_and_proof", return_value=(adaptive, proof)):
-                plan = module._scheduled_plan(args, prompt, sources, "gpt-5.6-sol", "ultra", recommendation())[0]
+                plan = module._scheduled_plan(args, prompt, sources, "gpt-6-sol", "ultra", recommendation())[0]
         result_nodes = [node for node in plan["nodes"] if node["phase"] == "result"]
         captures = result_nodes[:-1]
         merge = result_nodes[-1]
@@ -551,7 +541,7 @@ source_files must list all sources in order."""
         self.assertEqual(merge["dependencies"], ["source-1", "source-2", "source-3"])
         self.assertTrue(merge["reads_dependency_results_only"])
         self.assertEqual(merge["routing_project_root"], str(Path(args.project_root).resolve()))
-        self.assertEqual((merge["model"], merge["effort"]), ("gpt-5.6-luna", "low"))
+        self.assertEqual((merge["model"], merge["effort"]), ("gpt-6-luna", "low"))
 
     def test_large_exact_owned_sources_keep_model_source_audit_path(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -571,8 +561,8 @@ source_files must list all sources in order."""
     def test_exact_expression_schedule_raises_branch_quality(self):
         exact = "Return exactly one JSON object. Copy the exact expression, preserve key order, and preserve the exact literal."
         relaxed = "Summarize two independent files as JSON."
-        self.assertEqual(module._scheduled_branch_pair(exact, "gpt-5.6-luna|low"), tuple(module.routing_policy.MODEL_ROLE_PAIRS["balanced_default"].split("|")))
-        self.assertEqual(module._scheduled_branch_pair(relaxed, "gpt-5.6-luna|low"), ("gpt-5.6-luna", "low"))
+        self.assertEqual(module._scheduled_branch_pair(exact, "gpt-6-luna|low"), tuple(module.routing_policy.MODEL_ROLE_PAIRS["balanced_default"].split("|")))
+        self.assertEqual(module._scheduled_branch_pair(relaxed, "gpt-6-luna|low"), ("gpt-6-luna", "low"))
 
     def test_exact_expression_single_producer_uses_frontier_quality_guard(self):
         base = recommendation()
@@ -582,7 +572,7 @@ source_files must list all sources in order."""
         self.assertEqual(guarded["attempt_pair"], module.routing_policy.MODEL_ROLE_PAIRS["frontier_complex"])
         self.assertEqual(guarded["attempt_reason"], "exact_expression_quality_guard")
         self.assertIsNone(guarded["active_fallback_pair"])
-        self.assertEqual(base["selected_pair"], "gpt-5.6-terra|medium")
+        self.assertEqual(base["selected_pair"], "gpt-6-sol|medium")
 
     def test_scheduled_branch_receives_only_its_owned_contract(self):
         prompt = """Complete independent source audits. Do not edit files.
@@ -700,7 +690,7 @@ source_files must list both sources."""
 
             def fake_run(receipt_args, prompt):
                 receipt_args.result_output.write_text("RESULT", encoding="utf-8")
-                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "effective_pair": "gpt-5.6-terra|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
+                return {"status": "pass", "requested_pair": "gpt-6-sol|medium", "effective_pair": "gpt-6-sol|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
 
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "SECRET RAW PROMPT MUST NOT BE STORED")
@@ -711,14 +701,14 @@ source_files must list both sources."""
         self.assertEqual(result["model_learning_context"]["task_summary"], "Edit one method. Keep behavior stable.")
         self.assertEqual(result["model_learning_context"]["step_kind"], "implementation")
         self.assertRegex(result["model_learning_context"]["capability_fingerprint"], r"^[0-9a-f]{64}$")
-        self.assertEqual(receipt["entry_pair"], "gpt-5.6-sol|ultra")
+        self.assertEqual(receipt["entry_pair"], "gpt-6-sol|ultra")
         self.assertNotIn("SECRET RAW PROMPT", json.dumps(receipt))
         self.assertNotIn("SECRET RAW PROMPT", json.dumps(result))
 
     def test_receipt_args_use_an_exact_supported_route_marker(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            receipt_args = module._receipt_args(args, ("gpt-5.3-codex-spark", "low"))
+            receipt_args = module._receipt_args(args, ("gpt-6-luna", "low"))
         self.assertEqual(receipt_args.route_marker, "LOCKED_ROUTE_NODE")
         self.assertIn(receipt_args.route_marker, module.model_execution_receipt.ROUTE_MARKERS)
 
@@ -728,15 +718,15 @@ source_files must list both sources."""
             args.ignore_user_config = False
             args.task_type = "analysis"
             args.code_rule_bundle = None
-            small = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+            small = module._receipt_args(args, ("gpt-6-luna", "low"))
             args.complexity_score = 42
-            standard = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+            standard = module._receipt_args(args, ("gpt-6-luna", "low"))
             args.complexity_score = 68
-            complex_route = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+            complex_route = module._receipt_args(args, ("gpt-6-luna", "low"))
             args.complexity_score = 18
             args.task_type = "code"
             args.code_rule_bundle = {"schema_version": 1}
-            code = module._receipt_args(args, ("gpt-5.6-luna", "low"))
+            code = module._receipt_args(args, ("gpt-6-luna", "low"))
         self.assertTrue(small.minimal_context_mode)
         self.assertTrue(small.ignore_user_config)
         self.assertTrue(standard.minimal_context_mode)
@@ -797,19 +787,19 @@ source_files must list both sources."""
             unavailable["memory_available"] = False
             def fake_run(receipt_args, prompt):
                 receipt_args.result_output.write_text("COLD START RESULT", encoding="utf-8")
-                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "effective_pair": "gpt-5.6-terra|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
+                return {"status": "pass", "requested_pair": "gpt-6-sol|medium", "effective_pair": "gpt-6-sol|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 12, "tokens": {"total_tokens": 34}}
             with patch.object(module, "_recommend", return_value=unavailable), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run) as execute:
                 result = module.run(args, "Do the work")
         self.assertEqual(result["status"], "pass")
         self.assertFalse(result["memory_available"])
-        self.assertTrue(result["result"].startswith("Complexity: 12/100 (small) · Model: gpt-5.6-terra|medium · Route: no switch\nEvidence: runtime receipt"))
+        self.assertTrue(result["result"].startswith("Complexity: 12/100 (small) · Model: gpt-6-sol|medium · Route: no switch\nEvidence: runtime receipt"))
         self.assertTrue(result["result"].endswith("COLD START RESULT"))
         execute.assert_called_once()
 
     def test_failed_execution_is_operational_and_not_quality_learning(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self.arguments(Path(temporary))
-            failed = {"status": "fail", "requested_pair": "gpt-5.6-terra|medium", "result_published": False, "process_elapsed_ms": 5, "tokens": {}}
+            failed = {"status": "fail", "requested_pair": "gpt-6-sol|medium", "result_published": False, "process_elapsed_ms": 5, "tokens": {}}
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", return_value=failed):
                 result = module.run(args, "Do the work")
         self.assertEqual(result["status"], "fail")
@@ -824,7 +814,7 @@ source_files must list both sources."""
             def fake_run(receipt_args, prompt):
                 pair = f"{receipt_args.model}|{receipt_args.effort}"
                 calls.append(pair)
-                if pair == "gpt-5.6-terra|medium":
+                if pair == "gpt-6-sol|medium":
                     return {
                         "status": "fail",
                         "failure_class": "availability",
@@ -855,12 +845,12 @@ source_files must list both sources."""
             with patch.object(module, "_recommend", return_value=adaptive), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
             receipt = __import__("json").loads(args.receipt_output.read_text(encoding="utf-8"))
-        self.assertEqual(calls, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high"])
+        self.assertEqual(calls, ["gpt-6-sol|medium", "gpt-6-sol|high"])
         self.assertEqual(result["status"], "pass")
-        self.assertTrue(result["result"].startswith("Complexity: 12/100 (small) · Model: gpt-5.6-terra|high · Route: fallback"))
-        self.assertIn("Model path: gpt-5.6-terra|medium -> gpt-5.6-terra|high", result["result"])
+        self.assertTrue(result["result"].startswith("Complexity: 12/100 (small) · Model: gpt-6-sol|high · Route: fallback"))
+        self.assertIn("Model path: gpt-6-sol|medium -> gpt-6-sol|high", result["result"])
         self.assertTrue(result["result"].endswith("FALLBACK RESULT"))
-        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.6-terra|medium"])
+        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-6-sol|medium"])
         self.assertEqual(len(receipt["route_attempts"]), 2)
 
     def test_selected_pair_confirmed_rate_limit_with_null_telemetry_falls_back_once(self):
@@ -906,9 +896,9 @@ source_files must list both sources."""
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
             receipt = json.loads(args.receipt_output.read_text(encoding="utf-8"))
-        self.assertEqual(calls, ["gpt-5.6-terra|medium", "gpt-5.6-terra|high"])
+        self.assertEqual(calls, ["gpt-6-sol|medium", "gpt-6-sol|high"])
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-5.6-terra|medium"])
+        self.assertEqual(receipt["operational_failure_pairs"], ["gpt-6-sol|medium"])
         self.assertEqual(len(receipt["route_attempts"]), 2)
 
     def test_small_code_result_returns_after_quick_check_and_requires_detached_ending(self):
@@ -925,12 +915,12 @@ source_files must list both sources."""
             adaptive = recommendation()
             with patch.object(module, "_recommend", return_value=adaptive), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the work")
-        self.assertEqual(calls, ["gpt-5.6-terra|medium"])
+        self.assertEqual(calls, ["gpt-6-sol|medium"])
         self.assertEqual(result["status"], "pass")
         self.assertTrue(result["ending_required"])
         self.assertEqual(result["ending_requirement"], "memory_only")
         self.assertEqual(result["ending_real_status"], "memory_pending")
-        self.assertEqual(result["producer_check_scope"], "smallest_relevant_behavior_check")
+        self.assertEqual(result["producer_check_scope"], "real_changed_behavior_or_readback")
         self.assertEqual(result["first_result_release"], "after_in_task_verification")
         self.assertEqual(result["deferred_verification_owner"], "none")
 
@@ -956,7 +946,7 @@ source_files must list both sources."""
 
             def fake_run(receipt_args, prompt):
                 receipt_args.result_output.write_text("STANDARD RESULT", encoding="utf-8")
-                return {"status": "pass", "requested_pair": "gpt-5.6-terra|medium", "effective_pair": "gpt-5.6-terra|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 3, "tokens": {"total_tokens": 9}}
+                return {"status": "pass", "requested_pair": "gpt-6-sol|medium", "effective_pair": "gpt-6-sol|medium", "result_published": True, "turn_completed": True, "model_match": True, "effort_match": True, "result_ready_monotonic_ns": time.monotonic_ns(), "process_elapsed_ms": 3, "tokens": {"total_tokens": 9}}
 
             with patch.object(module, "_recommend", return_value=recommendation()), patch.object(module.model_execution_receipt, "run_receipt", side_effect=fake_run):
                 result = module.run(args, "Do the standard work")

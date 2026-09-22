@@ -138,7 +138,7 @@ class InstalledBenchmarkTests(unittest.TestCase):
             self.assertEqual(result["event_token_lower_bound"]["total_tokens"], 105)
 
     def test_wrong_model_or_unfinished_turn_fails(self):
-        for model, complete in (("gpt-5.6-luna", True), ("gpt-6-astra", False)):
+        for model, complete in (("gpt-6-luna", True), ("gpt-6-astra", False)):
             with self.subTest(model=model, complete=complete), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 self.write_session(root, "root", model=model, complete=complete)
@@ -236,8 +236,8 @@ class InstalledBenchmarkTests(unittest.TestCase):
 
     def test_intermediate_model_or_effort_changes_fail_even_after_return(self):
         mutations = [
-            [{"type": "event_msg", "payload": {"type": "model_reroute", "from_model": "gpt-6-astra", "to_model": "gpt-5.6-luna"}},
-             {"type": "event_msg", "payload": {"type": "model_reroute", "from_model": "gpt-5.6-luna", "to_model": "gpt-6-astra"}}],
+            [{"type": "event_msg", "payload": {"type": "model_reroute", "from_model": "gpt-6-astra", "to_model": "gpt-6-luna"}},
+             {"type": "event_msg", "payload": {"type": "model_reroute", "from_model": "gpt-6-luna", "to_model": "gpt-6-astra"}}],
             [{"type": "turn_context", "payload": {"model": "gpt-6-astra", "effort": "low"}},
              {"type": "turn_context", "payload": {"model": "gpt-6-astra", "effort": "ultra"}}],
         ]

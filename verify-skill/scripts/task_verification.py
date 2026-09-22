@@ -7,7 +7,7 @@ import json
 
 def verification_plan(change_kind, *, requested=False, whole_project_requested=False):
     scopes = {
-        "value": [],
+        "value": ["changed_value_readback"],
         "logic": ["changed_behavior", "failure_boundary"],
         "structure": ["affected_contract", "direct_consumers"],
         "ui": ["rendered_state", "affected_interaction", "desktop_and_narrow_layout", "containment_and_readability"],
@@ -17,7 +17,7 @@ def verification_plan(change_kind, *, requested=False, whole_project_requested=F
     }
     if change_kind not in scopes:
         raise ValueError("unknown change kind")
-    checks = scopes[change_kind] or (["changed_value_readback"] if requested else [])
+    checks = scopes[change_kind]
     return {
         "owner": "active_task",
         "required": bool(checks),
@@ -25,7 +25,7 @@ def verification_plan(change_kind, *, requested=False, whole_project_requested=F
         "scope": "whole_project_authorized" if whole_project_requested else "affected_behavior_only",
         "whole_project_allowed": bool(whole_project_requested),
         "ending_checks": [],
-        "skip_reason": "simple_value_only" if not checks else "",
+        "skip_reason": "",
     }
 
 

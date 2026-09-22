@@ -27,17 +27,6 @@ EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "l
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
 CHECKOUT_NEUTRAL_TEXT_SUFFIXES = {".json", ".md", ".py", ".svg", ".yaml", ".yml"}
 REQUIRED_PLUGIN_CONTRACTS = (("chrome", "control-chrome"), ("sites", "sites-building"), ("muse-ai-plugin", "muse-ai-dev-skill"))
-MEMORY_EXECUTION_SCENARIO_IDS = {
-    "memory-record-correction",
-    "memory-projection-reconcile",
-    "skill-contract-defect",
-    "execution-drift",
-    "next-task-effective-recall",
-    "invalid-result-integrity",
-    "coverage-authority-integrity",
-}
-
-
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -340,8 +329,6 @@ def attestation_result(check: dict[str, object], project_root: Path) -> dict[str
             errors.append("attestation evidence is missing")
         elif payload.get("evidence_sha256") != sha256_file(evidence_path):
             errors.append("attestation evidence digest is stale")
-        elif check_id == "memory-execution-consistency-attestation" and validate_memory_execution_consistency(evidence_payload) != (len(MEMORY_EXECUTION_SCENARIO_IDS), len(MEMORY_EXECUTION_SCENARIO_IDS)):
-            errors.append("memory-execution consistency evidence is not a complete real pass")
     expected_files = list(map(str, check.get("watched_files", [])))
     watched = payload.get("watched_files", {}) if payload else {}
     if not isinstance(watched, dict) or sorted(watched) != sorted(expected_files):
@@ -511,38 +498,6 @@ def validate_unity_trials(evidence: dict[str, object]) -> tuple[int, int]:
     return len(trials) if isinstance(trials, list) else 0, len(trials) if passed else 0
 
 
-def validate_memory_execution_consistency(evidence: dict[str, object]) -> tuple[int, int]:
-    scenarios = evidence.get("scenarios", {})
-    if not isinstance(scenarios, dict):
-        return 0, 0
-    record_correction = scenarios.get("memory-record-correction", {})
-    projection_reconcile = scenarios.get("memory-projection-reconcile", {})
-    skill_defect = scenarios.get("skill-contract-defect", {})
-    execution_drift = scenarios.get("execution-drift", {})
-    next_recall = scenarios.get("next-task-effective-recall", {})
-    invalid_result_integrity = scenarios.get("invalid-result-integrity", {})
-    coverage_authority_integrity = scenarios.get("coverage-authority-integrity", {})
-    all_scenarios_pass = set(scenarios) == MEMORY_EXECUTION_SCENARIO_IDS and all(isinstance(scenario, dict) and scenario.get("status") == "pass" for scenario in scenarios.values())
-    record_correction_pass = record_correction.get("classification") == "memory_record_defect" and record_correction.get("correction_written") is True and record_correction.get("source_unchanged") is True
-    projection_reconcile_pass = projection_reconcile.get("classification") == "memory_projection_defect" and projection_reconcile.get("reconciled") is True
-    producer_defects_pass = all(
-        scenario.get("memory_write") is False
-        and scenario.get("isolated_repair") is True
-        and scenario.get("existing_session_mutation") is False
-        and scenario.get("repair_launch_tool") == "codex_app__create_thread"
-        and scenario.get("active_task_conflict_action") == "wait_without_interruption"
-        for scenario in (skill_defect, execution_drift)
-    ) and skill_defect.get("classification") == "skill_contract_defect" and execution_drift.get("classification") == "execution_drift"
-    next_recall_pass = next_recall.get("effective_only") is True and next_recall.get("superseded_hidden") is True
-    invalid_result_pass = invalid_result_integrity.get("placeholder_rejected") is True and invalid_result_integrity.get("disposable_store_and_vault") is True and invalid_result_integrity.get("canonical_owner_readback") is True and invalid_result_integrity.get("exact_id_tombstone") is True and invalid_result_integrity.get("reconcile_blocked") is True
-    coverage_authority_pass = coverage_authority_integrity.get("vault_parent_store_absent") is True and coverage_authority_integrity.get("canonical_store_used") is True and coverage_authority_integrity.get("two_model_stores_shared_authority") is True and coverage_authority_integrity.get("concurrent_projection_preserved") is True and coverage_authority_integrity.get("rogue_store_merge_verified") is True
-    execution = evidence.get("execution", {})
-    execution_pass = isinstance(execution, dict) and isinstance(execution.get("current_platform"), str) and bool(execution["current_platform"]) and execution.get("host_boundary") == "portable-python" and execution.get("disposable_runtime_removed") is True
-    expected_count = len(MEMORY_EXECUTION_SCENARIO_IDS)
-    passed = evidence.get("schema_version") == 1 and evidence.get("check_id") == "memory-execution-consistency-attestation" and evidence.get("status") == "pass" and evidence.get("trial_count") == expected_count and evidence.get("passed_trials") == expected_count and execution_pass and all_scenarios_pass and record_correction_pass and projection_reconcile_pass and producer_defects_pass and next_recall_pass and invalid_result_pass and coverage_authority_pass
-    return len(scenarios), len(scenarios) if passed else 0
-
-
 def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
     catalog = load_catalog(project_root)
     check = next((item for item in catalog["checks"] if item.get("id") == check_id), None)
@@ -556,8 +511,6 @@ def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
         trial_count, passed_trials = validate_code_samples(evidence)
     elif check_id == "unity-five-attestation":
         trial_count, passed_trials = validate_unity_trials(evidence)
-    elif check_id == "memory-execution-consistency-attestation":
-        trial_count, passed_trials = validate_memory_execution_consistency(evidence)
     else:
         raise RuntimeError(f"no evidence validator for attestation: {check_id}")
     if trial_count < 1 or passed_trials != trial_count:

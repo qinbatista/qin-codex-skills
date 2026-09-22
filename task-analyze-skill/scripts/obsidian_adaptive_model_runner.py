@@ -237,7 +237,7 @@ def ending_surface_requirements(task_type, operation="", prompt="", real_test=Fa
     operation = str(operation or "").strip().lower()
     material_kind = material_update_classification(task_type, operation, prompt, material_update_kind)
     return {
-        "real_test": bool(real_test or (task_type == "code" and material_kind != "trivial_value_only") or operation in {"test", "verify", "audit", "review", "validate"} or _contains_any_surface_term(prompt, ENDING_REAL_TEST_TERMS)),
+        "real_test": bool(real_test or task_type == "code" or operation in {"test", "verify", "audit", "review", "validate"} or _contains_any_surface_term(prompt, ENDING_REAL_TEST_TERMS)),
         "information_update": bool(information_update or task_type in {"writing", "documentation"} or operation in {"document", "write", "update"} or _contains_any_surface_term(prompt, ENDING_INFORMATION_UPDATE_TERMS)),
         "memory_update": bool(memory_update or operation in {"memory", "record"} or _contains_any_surface_term(prompt, ENDING_MEMORY_UPDATE_TERMS)),
     }
@@ -249,14 +249,13 @@ def result_lifecycle_policy(successful_result, task_type, complexity_score, risk
     # A check result alone is not a reason to create persistent memory.
     durable = bool(surface["memory_update"] or material in MATERIAL_ENDING_KINDS or information_update)
     required = bool(successful_result and durable)
-    simple = material == "trivial_value_only" and not real_test
     return {"ending_required": required, "ending_requirement": "memory_only" if required else "none",
             "ending_real_status": "memory_pending" if required else "skipped",
             "ending_surface": surface, "ending_triggers": ["durable_memory"] if required else [],
             "ending_purpose": "memory_only", "ending_model_policy": "user_selected",
             "material_update_classification": material, "project_memory_closeout_required": required,
             "ending_skip_reason": None if required else "no_durable_memory_change",
-            "producer_check_scope": "skip_simple_value_change" if simple else "smallest_relevant_behavior_check",
+            "producer_check_scope": "real_changed_behavior_or_readback",
             "first_result_release": "after_in_task_verification", "verification_owner": "active_task",
             "deferred_verification_owner": "none"}
 
@@ -641,7 +640,7 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     branch_seed_pair = floor_pair if owned_sections else schedule_pair
     branch_model, branch_effort = _scheduled_branch_pair(prompt, branch_seed_pair)
     branch_pair = f"{branch_model}|{branch_effort}"
-    priority_branch = branch_pair == schedule_pair
+    priority_branch = bool(routing_policy.PRIORITY_PRODUCER_CONFIG.get("enabled") and branch_pair == schedule_pair)
     fused_source = sources[-1] if owned_sections and len(sources) >= 3 and not deterministic_capture else None
     independent_sources = sources[:-1] if fused_source else sources
     branch_ids = []
@@ -674,8 +673,6 @@ def _scheduled_plan(args, prompt, sources, entry_model, entry_effort, entry_reco
     main_node["routing_recommendation"] = proof
     nodes.append(main_node)
     lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
-    if lifecycle_policy["ending_required"]:
-        nodes.append({"id": "ending-verify", "phase": "ending", "skill": "project-memory-skill", "model": entry_model, "effort": entry_effort, "selection_basis": "user_selected", "allow_fallback": [], "dependencies": ["merge-result"], "prompt": "Summarize only durable changes and preferences in existing memory for this project. Skip when no relevant memory is configured. Do not verify or repair.", "sandbox": "read-only", "timeout": 60})
     args.execution_lifecycle = getattr(args, "execution_lifecycle", None) or routing_policy.execution_lifecycle_contract(args.complexity_score, False, True, sum(node.get("phase") == "result" for node in nodes), args.risk, args.ambiguity)
     schedule_mode = "parallel_source_capture_single_synthesis" if deterministic_capture else "parallel_sources_fused_final" if fused_source else "parallel_independent_sources"
     return {"schema_version": 2, "complexity": "complex", "topology": "mixed" if fused_source else "parallel", "schedule_mode": schedule_mode, "fused_source": fused_source, "parallel_branch_count": len(independent_sources), "deterministic_source_capture": deterministic_capture, "cache_dir": str(cache_dir), "entry": {"model": entry_model, "effort": entry_effort}, "nodes": nodes, "main_result_node": "merge-result", "first_result_timeout_seconds": min(max(args.timeout, 60), 900), "ending_required": lifecycle_policy["ending_required"], "ending_skip_reason": lifecycle_policy["ending_skip_reason"], "execution_lifecycle": args.execution_lifecycle}, recommendation
@@ -700,14 +697,13 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     manifest = task_route_dispatcher.run_plan(plan, entry_model, entry_effort, args.workdir, state_db=args.state_db, codex_bin=args.codex_bin, skills_root=SKILLS_ROOT, result_ready_callback=publish_result)
     if manifest.get("status") != "pass" or not args.result_output.is_file():
         return {"status": "fail", "reason": "scheduled_graph_failed", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path"), "failures": manifest.get("failures", []), "ending_real_status": "not_started", "execution_lifecycle": args.execution_lifecycle}
-    handoff_path = Path(manifest.get("ending_handoff_path") or "")
+    release_path = Path(manifest.get("release_path") or "")
     try:
-        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        release_record = json.loads(release_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {"status": "fail", "reason": "scheduled_graph_release_handoff_missing", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path"), "ending_real_status": "not_started"}
-    release = task_route_dispatcher._release_main_result(handoff)
-    if release.get("status") != "pass":
-        return {"status": "fail", "reason": "scheduled_graph_release_failed", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path"), "failures": release.get("failures", []), "ending_real_status": "not_started"}
+        return {"status": "fail", "reason": "scheduled_graph_result_release_missing", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path")}
+    if manifest.get("final_aggregate_receipt") is not True or release_record.get("route_run_id") != manifest.get("route_run_id") or release_record.get("main_result_node") != plan["main_result_node"]:
+        return {"status": "fail", "reason": "scheduled_graph_result_release_mismatch", "execution_mode": "scheduled_adaptive_graph", "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "sources": sources, "manifest_path": manifest.get("manifest_path")}
     result_nodes = [node for node in manifest.get("nodes", []) if node.get("phase") == "result"]
     main_node = next(node for node in result_nodes if node.get("id") == plan["main_result_node"])
     main_receipt = json.loads(Path(main_node["receipt_path"]).read_text(encoding="utf-8"))
@@ -754,7 +750,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     receipt["execution_lifecycle"] = args.execution_lifecycle
     lifecycle_policy = result_lifecycle_policy(True, args.task_type, args.complexity_score, args.risk, True, prompt, args.operation, getattr(args, "real_test", False), getattr(args, "information_update", False), getattr(args, "memory_update", False), getattr(args, "material_update_kind", "auto"))
     receipt.update(lifecycle_policy)
-    receipt.update(_final_aggregate_fields(receipt, len(result_nodes), "released", release["release_path"], manifest.get("route_run_id")))
+    receipt.update(_final_aggregate_fields(receipt, len(result_nodes), "released", release_path, manifest.get("route_run_id")))
     execution_summary = _light_execution_summary(
         args.task_type,
         args.complexity_score,
@@ -776,7 +772,7 @@ def _run_scheduled_graph(args, prompt, sources, recommendation, started_ns, admi
     _atomic_write_json(args.receipt_output, receipt)
     effective_pairs = [node["effective_pair"] for node in receipt["scheduled_nodes"]]
     ready_ns = receipt.get("result_ready_monotonic_ns")
-    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "ending_handoff_path": manifest.get("ending_handoff_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), **lifecycle_policy, "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_lifecycle": args.execution_lifecycle, "execution_summary": execution_summary}
+    summary = {"status": "pass", "reason": "independent_graph_scheduled", "execution_mode": "scheduled_adaptive_graph", "schedule_mode": receipt["schedule_mode"], "schedule_admission": admission, "entry_pair": f"{entry_model}|{entry_effort}", "entry_source": entry_source, "memory_source": recommendation["source"], "memory_available": recommendation["memory_available"], "selected_pair": merge_recommendation.get("selected_pair"), "executed_pair": receipt.get("effective_pair") or receipt.get("requested_pair"), "executed_pairs": effective_pairs, "complexity_score": args.complexity_score, "complexity_band": receipt["complexity_band"], "switch_direction": "no_switch", "switch_change": "scheduled_graph", "scheduled_sources": sources, "parallel_branch_count": receipt["parallel_branch_count"], "fused_source": receipt["fused_source"], "scheduled_result_node_count": len(result_nodes), "receipt_path": str(args.receipt_output), "result_path": str(args.result_output), "result_published": True, "manifest_path": manifest.get("manifest_path"), "total_tokens": tokens.get("total_tokens"), "elapsed_ms": manifest.get("first_result_elapsed_ms"), "first_result_elapsed_ms": round((ready_ns - started_ns) / 1_000_000) if isinstance(ready_ns, int) and ready_ns >= started_ns else manifest.get("first_result_elapsed_ms"), **lifecycle_policy, "model_learning_context": receipt["model_learning_context"], "model_route_notice": graph_notice, "execution_lifecycle": args.execution_lifecycle, "execution_summary": execution_summary}
     summary["model_disclosure"] = receipt["model_disclosure"]
     summary["model_switch_summary"] = receipt["model_switch_summary"]
     summary["code_rule_bundle"] = receipt["code_rule_bundle"]

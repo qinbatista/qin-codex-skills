@@ -23,7 +23,7 @@ def environment(root):
 
 class RoutingCLITests(unittest.TestCase):
     def test_runner_preserves_each_selected_pair_through_offline_subprocess(self):
-        for model, effort in [("gpt-5.6-luna", "max"), ("gpt-6-astra", "ultra")]:
+        for model, effort in [("gpt-6-luna", "max"), ("gpt-6-astra", "ultra")]:
             with self.subTest(model=model), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 command = [sys.executable, str(SCRIPTS / "obsidian_adaptive_model_runner.py"), "--workdir", str(root), "--task-type", "question", "--governing-skill", "code-skill", "--entry-model", model, "--entry-effort", effort, "--codex-bin", str(FAKE), "--state-db", str(root / "fixture-state.sqlite"), "--timeout", "15"]
@@ -51,7 +51,7 @@ class RoutingCLITests(unittest.TestCase):
     def test_dispatcher_preserves_selected_pair_through_offline_subprocess(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            plan = {"schema_version": 2, "entry": {"model": "gpt-6-astra", "effort": "ultra"}, "complexity": "easy", "topology": "sequential", "cache_dir": str(root / "Cache/tmp-route"), "main_result_node": "result", "nodes": [{"id": "result", "phase": "result", "skill": "code-skill", "model": "gpt-5.3-codex-spark", "effort": "low", "prompt": "Apply the current code structure preference.", "dependencies": [], "sandbox": "read-only", "complexity_score": 5}]}
+            plan = {"schema_version": 2, "entry": {"model": "gpt-6-astra", "effort": "ultra"}, "complexity": "easy", "topology": "sequential", "cache_dir": str(root / "Cache/tmp-route"), "main_result_node": "result", "nodes": [{"id": "result", "phase": "result", "skill": "code-skill", "model": "gpt-6-luna", "effort": "low", "prompt": "Apply the current code structure preference.", "dependencies": [], "sandbox": "read-only", "complexity_score": 5}]}
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(plan))
             command = [sys.executable, str(SCRIPTS / "task_route_dispatcher.py"), "run-plan", str(plan_path), "--cwd", str(root), "--codex-bin", str(FAKE), "--skills-root", str(ROOT), "--state-db", str(root / "fixture-state.sqlite")]
@@ -63,7 +63,7 @@ class RoutingCLITests(unittest.TestCase):
             captured = json.loads((root / "fixture-call.json").read_text())
             self.assertEqual((captured["model"], captured["effort"]), ("gpt-6-astra", "ultra"))
             self.assertNotIn("ENDING_TASK_WORKER", captured["prompt"])
-            self.assertEqual(manifest["ending_nodes_pending"], [])
+            self.assertNotIn("ending_nodes_pending", manifest)
             self.assertEqual(summary["complexity_score"], 5)
             self.assertIn("Complexity: 5/100 (small)", summary["model_disclosure"]["message"])
             stages = summary["model_switch_summary"]["nodes"]

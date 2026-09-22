@@ -469,7 +469,6 @@ def execution_domain_table(rows):
     lines = []
     for row in rows:
         state = "active" if row["active"] else "history-only"
-        spark = "source-eligible" if row["spark_first"] else "no"
         lines.append(f"- `{row['id']}` · {row['kind']} · `{row['owner_skill']}` · {state} · [rules](./{row['reference_path']})")
     return "\n".join(lines)
 

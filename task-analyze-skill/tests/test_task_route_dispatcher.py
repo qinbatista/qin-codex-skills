@@ -17,7 +17,7 @@ SKILLS_ROOT = SCRIPT.parents[2]
 
 
 def node(name, dependencies=None, **kwargs):
-    return {"id": name, "phase": "result", "skill": "code-skill", "model": "gpt-5.3-codex-spark", "effort": "low", "prompt": "Update the scoped source and verify the changed behavior.", "dependencies": dependencies or [], "sandbox": "read-only", "complexity_score": 20, **kwargs}
+    return {"id": name, "phase": "result", "skill": "code-skill", "model": "gpt-6-luna", "effort": "low", "prompt": "Update the scoped source and verify the changed behavior.", "dependencies": dependencies or [], "sandbox": "read-only", "complexity_score": 20, **kwargs}
 
 
 def plan(root, nodes=None):
@@ -44,9 +44,9 @@ class TaskRouteDispatcherTests(unittest.TestCase):
     def test_independent_node_can_choose_cheaper_model(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            value = plan(root, [node("collect", skill=None, model="gpt-5.6-luna", effort="low")])
+            value = plan(root, [node("collect", skill=None, model="gpt-6-luna", effort="low")])
             self.assertEqual(module.validate_plan(value, "gpt-6-astra", "ultra", root, SKILLS_ROOT), [])
-            self.assertEqual(value["nodes"][0]["model"], "gpt-5.6-luna")
+            self.assertEqual(value["nodes"][0]["model"], "gpt-6-luna")
 
     def test_missing_selected_model_fails_before_execution(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -84,16 +84,13 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             value = plan(root, [node("a"), node("b")])
             self.assertTrue(any("every result" in error for error in module.validate_plan(value, "gpt-6-astra", "ultra", root, SKILLS_ROOT)))
 
-    def test_memory_ending_optional_selected_and_cannot_verify(self):
+    def test_memory_ending_cannot_be_a_result_graph_node(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             ending = node("memory", ["result"], phase="ending", skill="project-memory-skill", prompt="Summarize scoped memory.")
             value = plan(root, [node("result"), ending])
             value["main_result_node"] = "result"
-            self.assertEqual(module.validate_plan(value, "gpt-6-astra", "ultra", root, SKILLS_ROOT), [])
-            self.assertEqual((ending["model"], ending["effort"]), ("gpt-6-astra", "ultra"))
-            ending["acceptance_checks"] = [{"command": ["build"]}]
-            self.assertTrue(any("memory-only" in error for error in module.validate_plan(value, "gpt-6-astra", "ultra", root, SKILLS_ROOT)))
+            self.assertTrue(any("invalid phase" in error for error in module.validate_plan(value, "gpt-6-astra", "ultra", root, SKILLS_ROOT)))
 
     def test_run_plan_launches_ready_branches_in_parallel_before_merge(self):
         # Retains the user's existing regression for launching a whole ready wave.
@@ -125,13 +122,13 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 result = module.run_plan(value, "gpt-6-astra", "ultra", root, skills_root=SKILLS_ROOT)
             self.assertEqual(result["status"], "fail")
             self.assertIn("final aggregate reported Aggregate: FAIL", result["failures"])
-            self.assertIsNone(result["ending_handoff_path"])
+            self.assertIsNone(result["release_path"])
             self.assertFalse((Path(value["cache_dir"]) / "ending-handoff.json").exists())
 
     def test_run_node_rebinds_pair_even_without_plan_validation(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            item = node("result", _entry_model="gpt-5.6-luna", _entry_effort="max", allow_fallback=["gpt-5.6-sol|high"])
+            item = node("result", _entry_model="gpt-6-luna", _entry_effort="max", allow_fallback=["gpt-6-sol|high"])
             calls = []
             def execute(args, prompt):
                 calls.append((args.model, args.effort, prompt))
@@ -141,24 +138,18 @@ class TaskRouteDispatcherTests(unittest.TestCase):
             with patch.object(module.receipt_module, "run_receipt", side_effect=execute), redirect_stdout(io.StringIO()):
                 result = module.run_node(item, root, {}, None, root, skills_root=SKILLS_ROOT)
             self.assertEqual(result["status"], "pass")
-            self.assertEqual([(model, effort) for model, effort, _ in calls], [("gpt-5.6-luna", "max")])
+            self.assertEqual([(model, effort) for model, effort, _ in calls], [("gpt-6-luna", "max")])
             self.assertIn("missing memory is optional", calls[0][2])
 
-    def test_failed_memory_does_not_grade_or_repair_producer(self):
+    def test_result_completes_without_an_ending_node(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             value = plan(root)
-            ending = node("memory", ["result"], phase="ending", skill="project-memory-skill", prompt="Summarize existing memory.")
-            value["nodes"].append(ending)
             with patch.object(module, "run_node", side_effect=lambda item, cache, *args: fake_record(item, cache)), redirect_stdout(io.StringIO()):
                 result = module.run_plan(value, "gpt-6-astra", "ultra", root, skills_root=SKILLS_ROOT)
-            handoff = Path(result["ending_handoff_path"])
-            module._release_main_result(json.loads(handoff.read_text()))
-            with patch.object(module, "_run_record", side_effect=AssertionError("memory must not grade")), patch.object(module, "run_node", side_effect=lambda item, cache, *args: fake_record(item, cache, "ENDING_TASK=FAIL\n")):
-                ending_result = module.run_ending_handoff(handoff, skills_root=SKILLS_ROOT)
-            self.assertEqual(ending_result["status"], "fail")
-            self.assertIsNone(ending_result["routing_learning"])
-            self.assertNotIn("repair_launch", ending_result)
+            self.assertEqual(result["status"], "pass")
+            self.assertNotIn("ending_nodes_pending", result)
+            self.assertFalse(result["ending_required"])
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ Separate stable policy from per-run data. Ask only for a missing decision that m
 
 1. Inspect the existing prompt, its direct consumer/validator, relevant inputs, and observed failures.
 2. Identify the desired result and replace the weakest ambiguous or conflicting rule with the smallest complete instruction.
-3. Verify within this active task. For consequential output behavior, use representative inputs and inspect semantic correctness as well as format. For a simple value-only edit, skip verification. Do not start the whole project or compile it merely to check a prompt unless requested.
+3. Verify within this active task. For consequential output behavior, use representative inputs and inspect semantic correctness as well as format. Read back simple value-only edits. Do not start the whole project or compile it merely to check a prompt unless requested.
 4. Return the artifact and concise evidence. State when a provider trial or stochastic reliability remains untested; one good sample does not prove stability.
 5. Ending only summarizes useful project memory from completed work, using the user's selected model and effort. It performs no verification or repair.
 

@@ -63,7 +63,7 @@ except ModuleNotFoundError:
     _benchmark_prompt_spec.loader.exec_module(_benchmark_prompt_contract)
     auto_benchmark_execution_prompt = _benchmark_prompt_contract.auto_benchmark_execution_prompt
 
-ROUTE_MARKERS = {"LOCKED_ROUTE_NODE", "ENDING_TASK_WORKER", "ENDING_CHECK_WORKER"}
+ROUTE_MARKERS = {"LOCKED_ROUTE_NODE"}
 RESULT_READY_BEGIN = "RESULT_READY_BEGIN"
 RESULT_READY_END = "RESULT_READY_END"
 RUNTIME_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
@@ -72,8 +72,8 @@ TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "uncached_input_tokens", 
 BENCHMARK_RUN_ID_PATTERN = re.compile(r"^benchmark-[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 ENTRY_CONTEXT_ENV = "CODEX_TASK_ANALYZE_ENTRY_CONTEXT"
 BENCHMARK_TASK_SANDBOX_ENV = "CODEX_AUTO_BENCHMARK_TASK_SANDBOX"
-NODE_ROLES = {"entry", "result-producer", "verification", "repair", "ending", "benchmark-baseline"}
-DISPATCHER_FIXED_ROLES = {"verification", "repair", "ending"}
+NODE_ROLES = {"entry", "result-producer", "verification", "repair", "benchmark-baseline"}
+DISPATCHER_FIXED_ROLES = {"verification", "repair"}
 _NODE_AUTHORIZATION = contextvars.ContextVar("task_analyze_receipt_node_authorization", default=None)
 LEAN_CONTEXT_HOME_NAME = "task-analyze-lean-runtime"
 LEAN_CONTEXT_DISABLED_FEATURES = ("apps", "browser_use", "computer_use", "image_generation", "in_app_browser", "plugins", "skill_search")
@@ -129,14 +129,11 @@ def route_node_lifecycle_boundary(marker, code_rule_bundle=None):
     common = ("Read the governing skills and relevant existing memory for this project before work; missing memory is optional. "
               "Keep other projects' memory separate. The assigned model and effort are fixed for skill-governed work. ")
     if marker == "LOCKED_ROUTE_NODE":
-        return common + ("Complete the assigned result and verify meaningful or complex changes inside this active task with the smallest relevant behavior check. "
-                         "Skip verification for simple value-only edits; do not start a whole project or full build unless requested. "
+        return common + ("Complete the assigned result and verify every changed behavior inside this active task with the smallest real behavior check or output readback. "
+                         "Do not start a whole project or full build unless requested. "
                          "Report results and verification honestly. Ending is only scoped memory summarization, not verification or repair.")
-    if marker == "ENDING_TASK_WORKER":
-        return common + ("Summarize durable changes, structure and preferences into existing scoped project memory using the user's selected model and effort. "
-                         "Skip absent memory. Do not run verification, tests, builds, repairs, routing or nested tasks.")
-    if marker == "ENDING_CHECK_WORKER":
-        raise ValueError("Ending check workers are retired; verify inside the active task")
+    if marker in {"ENDING_TASK_WORKER", "ENDING_CHECK_WORKER"}:
+        raise ValueError("Ending route workers are retired; use a separate local-memory task after the main result")
     raise ValueError(f"unsupported route marker {marker}")
 
 
@@ -161,7 +158,9 @@ def receipt_node_role(args):
             raise ReceiptAuthorizationError("node_role_invalid")
         return explicit_role
     route_marker = getattr(args, "route_marker", "LOCKED_ROUTE_NODE")
-    return "ending" if route_marker == "ENDING_TASK_WORKER" else "verification" if route_marker == "ENDING_CHECK_WORKER" else "result-producer"
+    if route_marker != "LOCKED_ROUTE_NODE":
+        raise ReceiptAuthorizationError("route_marker_retired")
+    return "result-producer"
 
 
 def receipt_node_type(args):

@@ -20,7 +20,7 @@ class EndingMemoryTests(unittest.TestCase):
         return MODULE.closeout(payload, **args)
 
     def test_model_and_effort_must_remain_selected(self):
-        for changes in ({"executing_model": "gpt-5.6-luna"}, {"executing_effort": "high"}):
+        for changes in ({"executing_model": "gpt-6-luna"}, {"executing_effort": "high"}):
             with self.assertRaisesRegex(ValueError, "selected model and effort"):
                 self.call(SCRIPTS, {"summary": "A useful change"}, **changes)
 
@@ -30,7 +30,7 @@ class EndingMemoryTests(unittest.TestCase):
                 self.call(SCRIPTS, {}, **changes)
 
     def test_runtime_evidence_must_match_and_show_completed_execution(self):
-        for receipt in ({"status": "PASS", "turn_completed": True, "effective_pair": "gpt-5.6-luna|max"}, {"status": "PASS", "effective_pair": "gpt-6-astra|ultra"}):
+        for receipt in ({"status": "PASS", "turn_completed": True, "effective_pair": "gpt-6-luna|max"}, {"status": "PASS", "effective_pair": "gpt-6-astra|ultra"}):
             with self.assertRaises(ValueError):
                 MODULE.verify_identity("gpt-6-astra", "ultra", runtime_receipt=receipt)
 
@@ -70,14 +70,14 @@ class EndingMemoryTests(unittest.TestCase):
 
     def test_latest_turn_provider_reroute_cannot_claim_selected_model(self):
         context = {"type": "turn_context", "payload": {"model": "gpt-6-astra", "effort": "ultra", "turn_id": "latest"}}
-        reroute = {"type": "event_msg", "payload": {"type": "model_reroute", "to_model": "gpt-5.6-sol"}}
+        reroute = {"type": "event_msg", "payload": {"type": "model_reroute", "to_model": "gpt-6-sol"}}
         with self.assertRaisesRegex(ValueError, "runtime evidence must match"):
             self.identity_from_events([context, reroute])
 
     def test_previous_turn_or_other_session_reroutes_do_not_change_latest_identity(self):
         context = {"type": "turn_context", "payload": {"model": "gpt-6-astra", "effort": "ultra", "turn_id": "latest"}}
         old = {"type": "turn_context", "payload": {"model": "gpt-6-astra", "effort": "ultra", "turn_id": "old"}}
-        reroute = {"type": "event_msg", "payload": {"type": "model_reroute", "to_model": "gpt-5.6-sol"}}
+        reroute = {"type": "event_msg", "payload": {"type": "model_reroute", "to_model": "gpt-6-sol"}}
         other = {"type": "session_meta", "payload": {"id": "00000000-0000-0000-0000-000000000456"}}
         for events in ([old, reroute, context], [context, other, reroute], [context, {**reroute, "payload": {**reroute["payload"], "turn_id": "old"}}]):
             self.assertEqual(self.identity_from_events(events)["pair"], "gpt-6-astra|ultra")
