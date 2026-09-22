@@ -1,32 +1,34 @@
 # qin-codex-skills
 
-Concise global skills for code structure, UI preferences, task coordination, and project memory.
+This repository maintains eight reusable global Codex skills. They guide task analysis, code and prompt work, verification, project memory, and skill installation. The goal is consistent, reviewable work across projects while each project keeps its own domain rules.
 
-The model you select reads relevant skills and project memory, understands the task, and defines specific goals. Work governed by those skills keeps your selected model **and reasoning effort**. Independent routine work can still use adaptive model selection; mechanical tool calls need no extra model.
+The model and reasoning effort you select stay in charge of work governed by these skills. Independent work without a governing skill may use adaptive model selection based on task complexity and verified outcomes from the same project. Mechanical tool calls need no extra model.
 
-## Workflow
+## What each skill does
 
-1. Read applicable skills and matching project memory. Missing memory is a normal skip.
-2. Show the task score, selected model/effort and route. Execute directly or plan useful dependencies; disclose delegated goals, scores, pairs, dependencies and outcomes.
-3. Verify changed code and consequential results inside the task with one real behavior check or output readback. Whole-project startup or compilation requires requested scope.
-4. Complete the result, then summarize useful durable changes in local memory with the selected model. Ending is a separate unpinned projectless task in recent tasks; its status does not gate the main task, and it never tests or repairs.
-
-Project memories stay isolated. Shared preferences are read only when relevant. Current summaries retain code structure, UI design choices, document organization, and important decisions without duplicating task transcripts.
-
-## Skills
-
-| Skill | Core idea |
+| Skill | Responsibility |
 | --- | --- |
-| [Task Analyze](task-analyze-skill/SKILL.md) | Preserve selected models for governed work; adapt independent work. |
-| [Workflow](workflow-skill/SKILL.md) | Clear goals, useful plans, safe parallel ownership. |
-| [Code](code-skill/SKILL.md) | Direct readable code, explicit responsibilities, consistent UI. |
-| [Prompt](prompt-skill/SKILL.md) | Clear goals, constraints, inputs, and output contracts. |
-| [Verify](verify-skill/SKILL.md) | Focused evidence before completion. |
-| [Project Memory](project-memory-skill/SKILL.md) | Relevant recall and concise durable summaries. |
-| [Optimization](optimization-skill/SKILL.md) | Requested simplification with measured results. |
-| [Management](management-skill/SKILL.md) | Recoverable installation and authorized publication. |
+| [Task Analyze](task-analyze-skill/SKILL.md) | Scores tasks, preserves the selected model and effort, and routes independent work when useful. |
+| [Workflow](workflow-skill/SKILL.md) | Defines goals, dependencies, resource ownership, and completion for direct or delegated work. |
+| [Code](code-skill/SKILL.md) | Guides code structure, readable implementation, and portable, quiet execution. |
+| [Prompt](prompt-skill/SKILL.md) | Shapes reusable prompts with clear inputs, constraints, and output contracts. |
+| [Verify](verify-skill/SKILL.md) | Checks real behavior or outputs in the active task and keeps test coverage focused. |
+| [Project Memory](project-memory-skill/SKILL.md) | Recalls relevant project context and records useful durable changes locally. |
+| [Optimization](optimization-skill/SKILL.md) | Simplifies requested code or workflows and measures claimed improvements. |
+| [Management](management-skill/SKILL.md) | Installs the managed skills recoverably and validates authorized publication. |
 
-## Install or update
+## Task flow
+
+1. Read the applicable skills and matching project memory, then define the goal and evidence needed. Missing memory is a normal skip.
+2. Show the task score, selected model and effort, and route. Work directly or delegate independent pieces with explicit ownership and dependencies.
+3. Finish and verify the result inside the active task with a real behavior check or output readback. Revise useful existing tests before adding files, and clean up disposable task resources after readback.
+4. When useful, record durable changes in local memory through a separate, unpinned projectless Ending task. Ending does not gate, test, or repair the main result.
+
+Project memories stay isolated. Shared preferences are read only when relevant.
+
+## Source and installation
+
+Each skill folder owns its `SKILL.md`, references, helpers, and versioned development tests needed by the release gate. Disposable task work belongs in ignored `Cache/temp-*`; retained local evidence belongs in `Cache/remote-*` with an explicit reason and owner.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

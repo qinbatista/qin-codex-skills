@@ -231,7 +231,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(readme, expected)
         self.assertLess(len(template.split()), 600)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
-        for concept in ("selected model", "reasoning effort", "adaptive model selection", "Missing memory", "inside the task", "real behavior check", "unpinned", "Project memories stay isolated"):
+        for concept in ("This repository maintains eight reusable global Codex skills", "## What each skill does", "selected model", "reasoning effort", "adaptive model selection", "Missing memory", "inside the active task", "real behavior check", "unpinned", "Project memories stay isolated"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
@@ -240,7 +240,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
         for retired in ("Spark schedule", "Spark-xhigh", "CODE READY", "Frozen v48", "+80.774%", "+64.686%", "Repair Task", "finish first, verify in background"):
             self.assertNotIn(retired, readme)
-        self.assertIn("mechanical tool calls need no extra model", readme)
+        self.assertIn("Mechanical tool calls need no extra model", readme)
         self.assertNotIn("background verify", readme)
 
     def test_chinese_readme_is_compact_and_has_the_same_policy(self):
@@ -249,7 +249,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
         self.assertEqual(readme, expected)
         self.assertLess(len(template.splitlines()), 80)
-        for concept in ("用户选择的", "模型和推理强度", "记忆缺失直接跳过", "在当前任务内", "真实行为检查", "本地记忆", "项目记忆互相隔离"):
+        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "用户选择的", "模型和推理强度", "记忆缺失时直接跳过", "在当前任务内", "真实行为检查", "本地记忆", "项目记忆互相隔离"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)

@@ -1,32 +1,34 @@
 # qin-codex-skills
 
-精简的全局 Skill：代码结构、UI 偏好、任务协作与项目记忆。
+本仓库维护八个可复用的全局 Codex Skill。它们指导任务分析、代码和提示词编写、结果验证、项目记忆以及 Skill 的安装与发布。目标是让不同项目中的工作方式一致且可检查，同时由各项目保管自己的领域规则。
 
-用户选择的模型负责阅读相关 Skill 和项目记忆，理解任务并定义各子任务目标。受 Skill 约束的工作保留用户选择的**模型和推理强度**；独立且不受 Skill 约束的常规工作仍可自适应选模。纯工具调用无需额外模型。
+受这些 Skill 约束的工作始终使用用户选择的**模型和推理强度**。不受 Skill 约束的独立任务可根据任务复杂度和同项目已验证的结果调整模型。纯工具调用无需额外模型。
 
-## 工作流程
+## 各 Skill 的职责
 
-1. 读取相关 Skill 和当前项目记忆；记忆缺失直接跳过。
-2. 展示任务评分、模型/推理强度和路由；子任务展示目标、评分、模型、依赖和结果。简单任务直接执行；需要时计划依赖，把独立目标交给写入范围清晰的子任务。
-3. 在当前任务内用真实行为检查或输出回读验证代码改动及重要结果。只有用户要求相应范围时才启动或编译整个项目。
-4. 主任务完成后，用用户选择的模型将值得保留的信息写入本地记忆。Ending 是最近任务列表中独立、未置顶的无项目任务；它的状态不影响主任务，也不负责测试或修复。
-
-项目记忆互相隔离；只读取明确相关的共享偏好。当前摘要保留代码结构、UI 设计选择、文档组织和重要决定，不重复堆积任务记录。
-
-## Skill
-
-| Skill | 核心职责 |
+| Skill | 职责 |
 | --- | --- |
-| [Task Analyze](task-analyze-skill/SKILL.md) | 受约束工作保留用户模型，独立工作自适应选模。 |
-| [Workflow](workflow-skill/SKILL.md) | 明确目标、必要计划、安全并行。 |
-| [Code](code-skill/SKILL.md) | 直接清晰的代码、明确职责、一致 UI。 |
-| [Prompt](prompt-skill/SKILL.md) | 清晰的目标、限制、输入和输出。 |
-| [Verify](verify-skill/SKILL.md) | 在完成前用最小相关证据验证。 |
-| [Project Memory](project-memory-skill/SKILL.md) | 相关记忆读取与简洁持久摘要。 |
-| [Optimization](optimization-skill/SKILL.md) | 按需简化，以实测支持结果。 |
-| [Management](management-skill/SKILL.md) | 可恢复安装与授权发布。 |
+| [Task Analyze](task-analyze-skill/SKILL.md) | 评估任务复杂度，保留所选模型与推理强度，并在适合时为独立工作选择模型。 |
+| [Workflow](workflow-skill/SKILL.md) | 为直接执行或委派的工作明确目标、依赖、资源归属和完成条件。 |
+| [Code](code-skill/SKILL.md) | 指导代码结构、清晰实现以及跨平台、安静的执行方式。 |
+| [Prompt](prompt-skill/SKILL.md) | 为可复用提示词明确输入、约束和输出约定。 |
+| [Verify](verify-skill/SKILL.md) | 在当前任务内验证真实行为或输出，并控制测试覆盖范围。 |
+| [Project Memory](project-memory-skill/SKILL.md) | 读取相关项目上下文，并在本地记录值得保留的变化。 |
+| [Optimization](optimization-skill/SKILL.md) | 简化用户要求的代码或流程，并实测所声称的改进。 |
+| [Management](management-skill/SKILL.md) | 可恢复地安装托管 Skill，并验证获授权的发布。 |
 
-## 安装或更新
+## 任务流程
+
+1. 读取适用的 Skill 和当前项目记忆，再确定目标及所需证据；记忆缺失时直接跳过。
+2. 展示任务评分、所选模型与推理强度及执行路线。直接执行，或以明确的归属和依赖委派独立工作。
+3. 在当前任务内用真实行为检查或输出回读完成验证。优先修改有用的现有测试，并在回读后清理一次性任务资源。
+4. 如有值得长期保留的信息，使用独立、未置顶的无项目 Ending 任务写入本地记忆。Ending 不阻碍、测试或修复主任务结果。
+
+项目记忆互相隔离；只读取明确相关的共享偏好。
+
+## 源码与安装
+
+每个 Skill 目录负责自己的 `SKILL.md`、参考规则、工具和发布检查所需的版本化开发测试。一次性任务文件放在忽略提交的 `Cache/temp-*`；有明确保留原因和负责人的本地证据放在 `Cache/remote-*`。
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
