@@ -406,6 +406,21 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             parity.assert_not_called()
             hasher.assert_not_called()
 
+    def test_cli_install_reports_memory_location_and_backup_requirement(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skills_dir = Path(temp_dir) / "skills"
+            setup = skills_dir / "project-memory-skill" / "scripts" / "obsidian_vault_setup.py"
+            setup.parent.mkdir(parents=True)
+            setup.write_text("# setup entry\n", encoding="utf-8")
+            payload = {"status": "created", "vault": str(Path(temp_dir) / "Obsidian" / "Memory"),
+                       "backup_message": "Back up this entire vault regularly."}
+            completed = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
+            with mock.patch.object(sync_global_skills.subprocess, "run", return_value=completed) as launched, mock.patch("builtins.print") as printer:
+                sync_global_skills.announce_memory_vault(skills_dir)
+        self.assertIn(str(setup.resolve()), launched.call_args.args[0])
+        printer.assert_any_call(f"Obsidian memory vault: {payload['vault']}")
+        printer.assert_any_call(payload["backup_message"])
+
     def test_pull_updates_to_latest_published_bytes_without_consumer_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             sandbox = Path(temp_dir)

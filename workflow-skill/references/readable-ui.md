@@ -1,6 +1,6 @@
 # Readable UI and visual presentation
 
-Apply these shared preferences to every UI or visual presentation task: websites, dashboards, tools, PDF reports, documents, and slide presentations. They apply even when no code changes and another Skill owns the renderer or export. Read relevant project memory first; missing memory skips. Keep project-specific content and style with its project. Skill-governed design retains the user's selected model and effort.
+Apply these shared preferences to every UI or visual presentation task: websites, dashboards, tools, PDF reports, documents, and slide presentations. They apply even when no code changes and another Skill owns the renderer or export. Ensure the Obsidian vault and read relevant project memory first; absent matching notes are a normal skip. Keep project-specific content and style with its project. Skill-governed design retains the user's selected model and effort.
 
 ## Twelve basic principles
 

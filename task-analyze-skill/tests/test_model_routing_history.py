@@ -116,6 +116,7 @@ class ModelRoutingHistoryTests(unittest.TestCase):
                 module.load_history(history)
                 module.status(history)
                 self.assertEqual(history.read_bytes(), before)
+                self.assertFalse(history.with_suffix(".json.lock").exists())
                 history.unlink()
                 self.assertEqual(module.status(history), {"schema_version": 3, "conditions": 0, "tasks": 0})
                 self.assertFalse(history.exists())

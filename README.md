@@ -13,18 +13,24 @@ The model and reasoning effort you select stay in charge of work governed by the
 | [Code](code-skill/SKILL.md) | Guides code structure, readable implementation, and portable, quiet execution. |
 | [Prompt](prompt-skill/SKILL.md) | Shapes reusable prompts with clear inputs, constraints, and output contracts. |
 | [Verify](verify-skill/SKILL.md) | Checks real behavior or outputs in the active task and keeps test coverage focused. |
-| [Project Memory](project-memory-skill/SKILL.md) | Recalls relevant project context and records useful durable changes locally. |
+| [Project Memory](project-memory-skill/SKILL.md) | Recalls relevant project context and records useful durable changes in Obsidian. |
 | [Optimization](optimization-skill/SKILL.md) | Simplifies requested code or workflows and measures claimed improvements. |
 | [Management](management-skill/SKILL.md) | Installs the managed skills recoverably and validates authorized publication. |
 
 ## Task flow
 
-1. Read the applicable skills and matching project memory, then define the goal and evidence needed. Missing memory is a normal skip.
+1. Ensure the Obsidian vault, then read the applicable skills and matching project memory. Missing memory for the exact project is a normal read skip after vault setup.
 2. Show the task score, selected model and effort, and route. Work directly or delegate independent pieces with explicit ownership and dependencies.
 3. Finish and verify the result inside the active task with a real behavior check or output readback. Revise useful existing tests before adding files, and clean up disposable task resources after readback.
-4. When useful, record durable changes in local memory through a separate, unpinned projectless Ending task. Ending does not gate, test, or repair the main result.
+4. When useful, record durable changes in the configured Obsidian vault through a separate, unpinned projectless Ending task. Ending does not gate, test, or repair the main result. If the vault is unavailable, keep the write pending without a Codex-local fallback.
 
-Project memories stay isolated. Shared preferences are read only when relevant.
+Project memories stay isolated. Shared preferences are read only when relevant. Project `AGENTS.md` and Skills own stable operating rules; changing project information and historical outcomes live in Obsidian.
+
+If no memory vault is installed, [Project Memory](project-memory-skill/SKILL.md) connects to [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki), creates a private Obsidian-compatible vault outside Codex and the project, verifies it, and reports its exact location. The default new location is `~/Documents/Obsidian/LLM Memory`; use `CODEX_OBSIDIAN_VAULT` or `--vault` to choose another durable location. Back up the entire vault regularly: it contains all Codex and project memory. The public generator is a template, not a destination for private memory or a backup.
+
+macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --project-root .`
+
+Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.py --project-root .`
 
 ## Source and installation
 
@@ -34,7 +40,7 @@ Each skill folder owns its `SKILL.md`, references, helpers, and versioned develo
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
 ```
 
-On Windows, use `py -3 -B` with the same Python entry point. Installation replaces the eight managed skills with locking, backup, and recovery. It preserves unrelated skills, user AGENTS, and private routing history. An explicitly requested global AGENTS update uses `install-global-agents --source-dir .` and creates a restorable backup.
+On Windows, use `py -3 -B` with the same Python entry point. Installation replaces the eight managed skills with locking, backup, and recovery, then ensures and reports the Obsidian memory vault. It preserves unrelated skills, user AGENTS, and private routing history. An explicitly requested global AGENTS update uses `install-global-agents --source-dir .` and creates a restorable backup.
 
 Source edits, installed updates, and GitHub publication are distinct. The publisher's `push` command runs the current release gate before staging or remote writes.
 

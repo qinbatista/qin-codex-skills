@@ -128,7 +128,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         self.assertIn("`Cache/temp-*` scratch", text)
         self.assertIn("`Cache/remote-*` is retained", text)
         self.assertIn("pending user review", text)
-        self.assertIn("Ending records local memory", text)
+        self.assertIn("Ending records Obsidian memory", text)
         self.assertIn("never controls, interrupts, archives, or deletes another", text)
 
 
@@ -207,7 +207,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         task_root = SKILLS_ROOT / "Cache" / "temp-cache-path-registry-smoke"
         project_root = task_root / "fixture-project"
         registry_path = project_root / "Cache" / "remote-ai-paths" / "registry.json"
-        external_target = project_root / "external" / "vault"
+        external_target = project_root / "external" / "test-fixture"
         project_source = project_root / "src" / "app.py"
         try:
             external_target.mkdir(parents=True, exist_ok=True)
@@ -218,11 +218,11 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                         "schema_version": 2,
                         "scope": "ai_only",
                         "paths": {
-                            "obsidian_vault": {
+                            "test_fixture": {
                                 "base": "project",
-                                "path": "external/vault",
+                                "path": "external/test-fixture",
                                 "kind": "directory",
-                                "purpose": "AI-only vault access",
+                                "purpose": "AI-only test fixture access",
                             }
                         },
                     }
@@ -234,12 +234,13 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             project_source.write_text("def run():\n    return 'project-runtime-independent'\n", encoding="utf-8")
 
             registry = json.loads(registry_path.read_text(encoding="utf-8"))
-            entry = registry["paths"]["obsidian_vault"]
+            entry = registry["paths"]["test_fixture"]
             self.assertEqual(registry["schema_version"], 2)
             self.assertEqual(registry["scope"], "ai_only")
             self.assertFalse(Path(entry["path"]).is_absolute())
             self.assertTrue((project_root / entry["path"]).is_dir())
             self.assertTrue(registry_path.is_relative_to(project_root / "Cache"))
+            self.assertNotIn("obsidian_vault", registry["paths"])
             self.assertNotIn("registry.json", project_source.read_text(encoding="utf-8"))
         finally:
             shutil.rmtree(task_root)

@@ -15,7 +15,7 @@ assert args[0] == "exec"
 assert 'approval_policy="never"' in args
 assert "ENDING_TASK_WORKER" not in prompt
 assert "inside this active task" in prompt
-assert "missing memory is optional" in prompt
+assert "Ensure the Obsidian memory vault" in prompt
 capture_path = root / "fixture-call.json"
 capture_path.write_text(json.dumps({"argv": args, "prompt": prompt, "model": model, "effort": effort}))
 thread_id = str(uuid.uuid4())

@@ -16,7 +16,7 @@ SCHEMA_VERSION = 2
 DEFAULT_MINIMUM_PAIRED_SAMPLES = 6
 DEFAULT_MINIMUM_SAVINGS_PERCENT = 0.0
 DEFAULT_MAXIMUM_PAIR_REGRESSION_PERCENT = 5.0
-DEFAULT_HISTORY_PATH = Path(__file__).resolve().parents[1] / "local" / "adaptive-routing" / "strategy_performance.json"
+DEFAULT_HISTORY_PATH = None
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 PAIR_PATTERN = re.compile(r"^[a-z0-9.-]+\|(low|medium|high|xhigh|max|ultra)$")
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
@@ -36,6 +36,27 @@ def _load_benchmark_gate():
 
 
 benchmark_suite_gate = _load_benchmark_gate()
+
+
+def _vault_root():
+    resolver_path = Path(__file__).resolve().parents[2] / "project-memory-skill" / "scripts" / "project_change_memory.py"
+    spec = importlib.util.spec_from_file_location("strategy_performance_vault_resolver", resolver_path)
+    if spec is None or spec.loader is None:
+        return None
+    resolver = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(resolver)
+    return resolver._resolve_vault()
+
+
+def _history_path(path):
+    if path is None:
+        vault = _vault_root()
+        return vault / "AI Memory" / "Adaptive Routing" / "strategy_performance.json" if vault else None
+    resolved = Path(path).expanduser().resolve()
+    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+    if resolved == codex_home or codex_home in resolved.parents:
+        raise StrategyPerformanceError("Codex-local strategy history is retired")
+    return resolved
 
 
 def _atomic_write_json(path, value):
@@ -60,6 +81,9 @@ def _default_history():
 
 
 def load_history(path):
+    path = _history_path(path)
+    if path is None:
+        return _default_history()
     if not path.exists():
         return _default_history()
     try:
@@ -117,6 +141,9 @@ def validate_sample(sample, workload_prompt_sha256):
 def record_sample(args):
     fields = profile_fields(args)
     history = load_history(args.history)
+    history_path = _history_path(args.history)
+    if history_path is None:
+        raise StrategyPerformanceError("obsidian_vault_unavailable")
     try:
         sample_payload = json.loads(args.sample.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -128,7 +155,7 @@ def record_sample(args):
         raise StrategyPerformanceError("strategy_profile_invalid")
     record["samples"].append(sample)
     history["updated_at"] = datetime.now(timezone.utc).isoformat()
-    _atomic_write_json(args.history, history)
+    _atomic_write_json(history_path, history)
     return recommend_mode(args, history=history)
 
 
@@ -222,6 +249,10 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     try:
+        if args.history is not None:
+            vault = _vault_root()
+            if vault is None or not _history_path(args.history).is_relative_to(vault):
+                raise StrategyPerformanceError("history_outside_obsidian_vault")
         result = record_sample(args) if args.command == "record" else recommend_mode(args)
     except StrategyPerformanceError as error:
         result = {"schema_version": SCHEMA_VERSION, "execution_mode": "inline_entry", "reason": str(error), "admitted": False}

@@ -6,4 +6,4 @@ At completion, inspect the resources this task opened or created. Close task-own
 
 Preserve active debugging work, pending user review, unresolved failures, and outputs still needed by another consumer. Reassess them on the next related task; age or size alone never proves safe deletion. Release disposable resources in reverse acquisition order. For shared, pre-existing, conflicted, or Unity-owned resources, require exact ownership and a confirmed release boundary. `Cache/remote-*` is retained and never part of automatic cleanup.
 
-Cleanup never controls, interrupts, archives, or deletes another Codex task/session, user-opened tab, or Codex-managed session record. Ending records local memory after the main result and does not keep temporary resources alive or gate their cleanup.
+Cleanup never controls, interrupts, archives, or deletes another Codex task/session, user-opened tab, or Codex-managed session record. Ending records Obsidian memory after the main result and does not keep temporary resources alive or gate their cleanup.

@@ -25,11 +25,11 @@ Give each delegated task a goal, inputs, output, write boundary, dependencies an
 
 Verify changed code and consequential outputs **inside the active task** with a real execution or artifact readback at the relevant boundary. Use one verification path; do not label a quick or mocked check as acceptance. For UI changes, inspect the rendered behavior. Do not start or compile a whole project unless requested. Fix failures in this task and report remaining limits.
 
-Ending only updates useful local, scoped memory after the main task and its real verification are complete. It is a separate projectless task in Codex's recent tasks, never pinned or used as a gate for the main task or another task. Show its task link and memory readback when run; skip when nothing durable changed or no store exists. Ending never tests, repairs, benchmarks, publishes, or launches further tasks.
+Ending only updates useful, scoped memory in the configured Obsidian vault after the main task and its real verification are complete. It is a separate projectless task in Codex's recent tasks, never pinned or used as a gate for the main task or another task. Show its task link and vault readback when run; skip when nothing durable changed. An unavailable vault leaves the memory write pending without Codex-local storage. Ending never tests, repairs, benchmarks, publishes, or launches further tasks.
 
 ## Memory and routing tools
 
-Read only related memory for the identified project/module; explicit global preferences apply only when relevant. Missing or unconfigured memory is optional. Never substitute another project's memory or create empty memory structures during routing.
+Ensure the Obsidian memory vault through [Project Memory](../project-memory-skill/SKILL.md), then read only related memory for the identified project/module; explicit global preferences apply only when relevant. Missing matching records are a normal skip. Never substitute another project's memory or create empty project notes during routing.
 
 [`selected_model_policy.py`](scripts/selected_model_policy.py) enforces the model boundary in the runner and dispatcher. [`obsidian_adaptive_model_runner.py`](scripts/obsidian_adaptive_model_runner.py) accepts `--governing-skill` and the selected `--entry-model`/`--entry-effort`. `--skill-independent` is a planner classification and cannot override named governing skills. [`task_route_dispatcher.py`](scripts/task_route_dispatcher.py) executes an optional dependency plan and rebinds governed nodes at execution as well as validation.
 

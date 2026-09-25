@@ -20,7 +20,7 @@
     "verification_owner": "active_task",
     "ending_purpose": "memory_only",
     "selected_model_for_governed_tasks": true,
-    "missing_memory": "skip",
+    "missing_memory": "bootstrap_vault_then_skip_absent_matching_note",
     "task_score_disclosure": "required",
     "model_disclosure": "assignment_then_runtime",
     "ending_placement": "visible_unpinned_projectless_recent_task",
@@ -357,7 +357,7 @@
       "id": "ending-memory",
       "owner_skill": "project-memory-skill",
       "name": "Memory-only Ending",
-      "function": "Record durable local memory in a separate unpinned recent task using the selected model; never gate the main result, verify, or repair.",
+      "function": "Record durable Obsidian memory in a separate unpinned recent task using the selected model; never gate the main result, verify, or repair.",
       "checks": [
         "project-memory-units",
         "verify-units"
@@ -398,7 +398,7 @@
       "id": "installation",
       "owner_skill": "management-skill",
       "name": "Recoverable managed installation",
-      "function": "Lock, backup, replace exact managed sources, recover after interruption, preserve unrelated skills and private local history.",
+      "function": "Lock, backup, replace exact managed sources, recover after interruption, preserve unrelated skills and leave legacy local history read-only.",
       "checks": [
         "management-units"
       ]

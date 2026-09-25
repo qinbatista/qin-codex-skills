@@ -160,8 +160,8 @@
   },
   "priority_producer": null,
   "private_learning_contract": {
-    "authority": "dual_local_and_obsidian",
-    "local_path_template": "~/.codex/model-routing-memory/events.jsonl",
+    "authority": "obsidian_vault",
+    "vault_event_path_template": "AI Memory/Model Routing/events.jsonl",
     "projection_path_template": "Model Switch.md",
     "record_path_template": "<owner-routing>/<Category>.md",
     "native_wikilink_graph": true,

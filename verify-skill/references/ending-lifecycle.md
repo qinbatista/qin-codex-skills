@@ -1,6 +1,6 @@
 # Ending migration
 
-Ending belongs to `project-memory-skill` and only updates local durable memory with the user's selected model and reasoning effort. Real verification and repairs finish inside the active task. Missing memory or no useful change means skip; Ending status never changes the main task result.
+Ending belongs to `project-memory-skill` and only updates durable memory in the configured Obsidian vault with the user's selected model and reasoning effort. Real verification and repairs finish inside the active task. No useful change means skip; an unavailable vault leaves the write pending without Codex-local storage. Ending status never changes the main task result.
 
 The old `ending_verification_plan.py` and `ending_task_ledger.py` entry points refuse execution so stale plans cannot launch checks or repair tasks. Use `task_verification.py` to choose a focused in-task scope and `project-memory-skill/scripts/ending_memory.py` to save a completed summary. Existing evidence/history remains historical; it is not a current instruction.
 

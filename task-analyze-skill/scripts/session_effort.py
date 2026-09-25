@@ -8,6 +8,7 @@ requires a stronger solving route.
 """
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -55,6 +56,26 @@ def _valid_session_id(value):
 def _codex_home():
     configured = os.environ.get("CODEX_HOME")
     return Path(configured).expanduser().resolve() if configured else Path.home() / ".codex"
+
+
+def _routing_store_path(explicit=None):
+    configured = explicit or os.environ.get("CODEX_MODEL_ROUTING_MEMORY")
+    if configured is not None:
+        path = Path(configured).expanduser().resolve()
+        codex_root = _codex_home()
+        if path == codex_root or codex_root in path.parents:
+            raise ValueError("Codex-local model-routing memory is retired")
+        return path
+    memory_path = Path(__file__).resolve().parents[2] / "project-memory-skill" / "scripts" / "project_change_memory.py"
+    spec = importlib.util.spec_from_file_location("session_effort_vault_resolver", memory_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("Obsidian vault resolver unavailable")
+    resolver = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(resolver)
+    vault = resolver._resolve_vault()
+    if vault is None:
+        raise ValueError("Obsidian vault unavailable; session memory is pending")
+    return vault / "AI Memory" / "Model Routing" / "events.jsonl"
 
 
 def session_key(session_id):
@@ -559,7 +580,7 @@ def assess_session(prompt, project_root, *, project_key="", task_type="", module
         prior_users = []
     current_failure = _failure_signals(prompt_text)
     current_tokens = _task_tokens(prompt_text)
-    local_path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
+    local_path = _routing_store_path(local_store)
     local_records, outcomes_by_turn = _read_session_history(local_path, summary["session_key"], project_key, task_type, module, summary["session_task_scope_key"])
     candidate_users = prior_users
     same_task = []
@@ -638,7 +659,7 @@ def record_session_effort(summary, *, project_key, task_type, module, capability
     event_id = hashlib.sha256(event_payload.encode("utf-8")).hexdigest()
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     record = {"session_memory_schema": SESSION_SCHEMA_VERSION, "event_id": event_id, "recorded_at": timestamp, "session_key": str(summary["session_key"]), "codex_session_key": str(summary.get("codex_session_key") or summary.get("session_key") or ""), "session_task_scope_key": str(summary.get("session_task_scope_key") or ""), "task_name": str(summary.get("task_name") or ""), "task_group": str(summary.get("task_group") or ""), "task_scope_key": str(summary.get("task_scope_key") or ""), "task_group_key": str(summary.get("task_group_key") or ""), "task_scope_mode": str(summary.get("task_scope_mode") or "session"), "turn_key": str(summary.get("current_turn_key") or ""), "current_turn_match": str(summary.get("current_turn_match") or "unmatched"), "project_key": str(project_key or ""), "task_type": str(task_type or ""), "module": str(module or ""), "capability_fingerprint": str(capability_fingerprint or ""), "complexity_score": complexity_score, "complexity_band": str(complexity_band or ""), "state": str(summary.get("state") or ""), "resolution_state": str(summary.get("resolution_state") or ""), "latest_terminal_outcome": str(summary.get("latest_terminal_outcome") or ""), "verified_outcome_count": int(summary.get("verified_outcome_count") or 0), "verified_pass_count": int(summary.get("verified_pass_count") or 0), "verified_failure_count": int(summary.get("verified_failure_count") or 0), "unresolved_turn_count": int(summary.get("unresolved_turn_count") or 0), "failure_recorded": bool(summary.get("failure_recorded")), "same_task_turns": int(summary.get("same_task_turns") or 0), "user_effort": int(summary.get("user_effort") or 0), "selected_pair": str(selected_pair or ""), "requested_pair": str(requested_pair or ""), "prior_model_pair": str(summary.get("last_model_pair") or ""), "prior_model_source": str(summary.get("last_model_source") or ""), "model_pairs": [str(pair) for pair in summary.get("model_pairs", []) if isinstance(pair, str)], "task_topic_fingerprint": str(summary.get("task_topic_fingerprint") or ""), "solving_surface": str(summary.get("solving_surface") or ""), "task_length": str(summary.get("task_length") or ""), "step_estimate": int(summary.get("step_estimate") or 0), "step_class": str(summary.get("step_class") or ""), "estimated_effort": str(summary.get("estimated_effort") or ""), "information_burden": str(summary.get("information_burden") or ""), "model_family": str(summary.get("model_family") or ""), "model_difficulty": str(summary.get("model_difficulty") or ""), "difficulty_class": str(summary.get("difficulty_class") or ""), "route_class": str(summary.get("route_class") or ""), "preferred_solving_pair": str(summary.get("preferred_solving_pair") or ""), "route_reason": str(summary.get("route_reason") or ""), "explicit_route_hint": str(summary.get("explicit_route_hint") or "")}
-    path = Path(local_store).expanduser().resolve() if local_store else Path(os.environ.get("CODEX_MODEL_ROUTING_MEMORY") or (Path.home() / ".codex" / "model-routing-memory" / "events.jsonl")).expanduser().resolve()
+    path = _routing_store_path(local_store)
     lock_path = path.with_suffix(path.suffix + ".lock")
     path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+b") as lock_handle:

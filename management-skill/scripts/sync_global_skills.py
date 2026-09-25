@@ -167,10 +167,10 @@ CHINESE_CATEGORY_LABELS = {
     "Management": "管理类 / Management",
     "General": "通用类 / General",
 }
-SKILL_SUMMARIES = {'task-analyze-skill': 'Preserve the selected model for skill-governed work; adapt independent tasks.', 'workflow-skill': 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.', 'prompt-skill': 'Write concise reusable instructions with clear goals, constraints, and output expectations.', 'code-skill': 'Use direct readable code, explicit ownership, language conventions, and coherent UI.', 'project-memory-skill': 'Read relevant project memory and summarize durable facts with the selected model; skip missing memory.', 'optimization-skill': 'Simplify requested or recurring work with measured evidence.', 'verify-skill': 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.', 'management-skill': 'Maintain source, install recoverably, and publish only when authorized.'}
-CHINESE_SKILL_SUMMARIES = {'task-analyze-skill': '受 Skill 约束的工作保留用户模型；独立任务自适应选模。', 'workflow-skill': '明确目标和依赖，安全并行，在当前任务整合并验证。', 'prompt-skill': '编写简洁的可复用指令，明确目标、约束和输出。', 'code-skill': '直接清晰的代码、明确职责、语言规范和一致 UI。', 'project-memory-skill': '读取相关项目记忆，用用户模型总结持久信息；缺失直接跳过。', 'optimization-skill': '按需简化重复工作，以实测支持结果。', 'verify-skill': '在当前任务内验证受影响行为；Ending 只更新记忆。', 'management-skill': '维护源码、可恢复安装、仅按授权发布。'}
-SKILL_CONTENTS = {'task-analyze-skill': [('Purpose', 'Preserve the selected model for skill-governed work; adapt independent tasks.')], 'workflow-skill': [('Purpose', 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.')], 'prompt-skill': [('Purpose', 'Write concise reusable instructions with clear goals, constraints, and output expectations.')], 'code-skill': [('Purpose', 'Use direct readable code, explicit ownership, language conventions, and coherent UI.')], 'project-memory-skill': [('Purpose', 'Read relevant project memory and summarize durable facts with the selected model; skip missing memory.')], 'optimization-skill': [('Purpose', 'Simplify requested or recurring work with measured evidence.')], 'verify-skill': [('Purpose', 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.')], 'management-skill': [('Purpose', 'Maintain source, install recoverably, and publish only when authorized.')]}
-CHINESE_SKILL_CONTENTS = {'task-analyze-skill': [('职责', '受 Skill 约束的工作保留用户模型；独立任务自适应选模。')], 'workflow-skill': [('职责', '明确目标和依赖，安全并行，在当前任务整合并验证。')], 'prompt-skill': [('职责', '编写简洁的可复用指令，明确目标、约束和输出。')], 'code-skill': [('职责', '直接清晰的代码、明确职责、语言规范和一致 UI。')], 'project-memory-skill': [('职责', '读取相关项目记忆，用用户模型总结持久信息；缺失直接跳过。')], 'optimization-skill': [('职责', '按需简化重复工作，以实测支持结果。')], 'verify-skill': [('职责', '在当前任务内验证受影响行为；Ending 只更新记忆。')], 'management-skill': [('职责', '维护源码、可恢复安装、仅按授权发布。')]}
+SKILL_SUMMARIES = {'task-analyze-skill': 'Preserve the selected model for skill-governed work; adapt independent tasks.', 'workflow-skill': 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.', 'prompt-skill': 'Write concise reusable instructions with clear goals, constraints, and output expectations.', 'code-skill': 'Use direct readable code, explicit ownership, language conventions, and coherent UI.', 'project-memory-skill': 'Ensure an Obsidian vault, read exact-project memory, and save durable facts with the selected model.', 'optimization-skill': 'Simplify requested or recurring work with measured evidence.', 'verify-skill': 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.', 'management-skill': 'Maintain source, install recoverably, and publish only when authorized.'}
+CHINESE_SKILL_SUMMARIES = {'task-analyze-skill': '受 Skill 约束的工作保留用户模型；独立任务自适应选模。', 'workflow-skill': '明确目标和依赖，安全并行，在当前任务整合并验证。', 'prompt-skill': '编写简洁的可复用指令，明确目标、约束和输出。', 'code-skill': '直接清晰的代码、明确职责、语言规范和一致 UI。', 'project-memory-skill': '确保 Obsidian 记忆库，读取准确的项目记忆，并用用户模型保存持久信息。', 'optimization-skill': '按需简化重复工作，以实测支持结果。', 'verify-skill': '在当前任务内验证受影响行为；Ending 只更新记忆。', 'management-skill': '维护源码、可恢复安装、仅按授权发布。'}
+SKILL_CONTENTS = {'task-analyze-skill': [('Purpose', 'Preserve the selected model for skill-governed work; adapt independent tasks.')], 'workflow-skill': [('Purpose', 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.')], 'prompt-skill': [('Purpose', 'Write concise reusable instructions with clear goals, constraints, and output expectations.')], 'code-skill': [('Purpose', 'Use direct readable code, explicit ownership, language conventions, and coherent UI.')], 'project-memory-skill': [('Purpose', 'Ensure an Obsidian vault, read exact-project memory, and save durable facts with the selected model.')], 'optimization-skill': [('Purpose', 'Simplify requested or recurring work with measured evidence.')], 'verify-skill': [('Purpose', 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.')], 'management-skill': [('Purpose', 'Maintain source, install recoverably, and publish only when authorized.')]}
+CHINESE_SKILL_CONTENTS = {'task-analyze-skill': [('职责', '受 Skill 约束的工作保留用户模型；独立任务自适应选模。')], 'workflow-skill': [('职责', '明确目标和依赖，安全并行，在当前任务整合并验证。')], 'prompt-skill': [('职责', '编写简洁的可复用指令，明确目标、约束和输出。')], 'code-skill': [('职责', '直接清晰的代码、明确职责、语言规范和一致 UI。')], 'project-memory-skill': [('职责', '确保 Obsidian 记忆库，读取准确的项目记忆，并用用户模型保存持久信息。')], 'optimization-skill': [('职责', '按需简化重复工作，以实测支持结果。')], 'verify-skill': [('职责', '在当前任务内验证受影响行为；Ending 只更新记忆。')], 'management-skill': [('职责', '维护源码、可恢复安装、仅按授权发布。')]}
 
 
 def run_command(command, cwd=None):
@@ -1344,6 +1344,31 @@ def deploy(source_dir, skills_dir):
     return installed_names
 
 
+def announce_memory_vault(skills_dir):
+    """Bootstrap the separate Obsidian vault after a CLI Skill installation."""
+    setup = Path(skills_dir).expanduser().resolve() / "project-memory-skill" / "scripts" / "obsidian_vault_setup.py"
+    if not setup.is_file():
+        print("Obsidian memory setup pending: the installed Project Memory setup script is unavailable.")
+        return
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-B", str(setup), "--project-root", str(Path.cwd())],
+            capture_output=True, text=True, check=False, timeout=180,
+            **hidden_process_options(),
+        )
+        result = json.loads(completed.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+        print(f"Obsidian memory setup pending: {error.__class__.__name__}.")
+        return
+    if completed.returncode or result.get("status") not in {"ready", "created"}:
+        print(f"Obsidian memory setup pending: {result.get('reason', 'setup_failed')}.")
+        return
+    print(f"Obsidian memory vault: {result['vault']}")
+    if result["status"] == "created":
+        print("Open this folder as a vault in Obsidian.")
+    print(result["backup_message"])
+
+
 def remote_changes(repository, skills_dir):
     with temporary_workspace("qin-codex-skills-") as sandbox:
         repository_dir = clone_repository(repository, sandbox, read_only=True)
@@ -1605,10 +1630,12 @@ def main():
     args = parser.parse_args()
     if args.command == "sync":
         sync(args.repo, args.skills_dir, args.message)
+        announce_memory_vault(args.skills_dir)
     elif args.command == "preuse":
         preuse(args.repo, args.skills_dir)
     elif args.command == "pull":
         pull(getattr(args, "pull_repository", args.repo), getattr(args, "pull_skills_dir", args.skills_dir))
+        announce_memory_vault(getattr(args, "pull_skills_dir", args.skills_dir))
     elif args.command == "status":
         status_skills_dir = getattr(args, "status_skills_dir", args.skills_dir)
         source_dir = args.source_dir.expanduser().resolve()
@@ -1626,6 +1653,7 @@ def main():
             raise SystemExit(1)
     elif args.command == "deploy":
         deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
+        announce_memory_vault(getattr(args, "deploy_skills_dir", args.skills_dir))
     elif args.command == "install-global-agents":
         installation = install_global_agents(args.source_dir, getattr(args, "install_agents_skills_dir", args.skills_dir))
         if installation["changed"]:

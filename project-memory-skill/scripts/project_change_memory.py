@@ -22,7 +22,7 @@ from hidden_process import hidden_process_options
 
 
 DEFAULT_STORE = Path.home() / ".codex" / "project-change-memory"
-DEFAULT_VAULT = None
+DEFAULT_VAULT = Path.home() / "Documents" / "Obsidian" / "LLM Memory"
 SCHEMA_VERSION = 1
 SCOPE_VALUES = ("project", "feature", "code", "file")
 CHANGE_KIND_VALUES = ("add", "edit", "rename", "move", "delete", "mixed")
@@ -355,44 +355,19 @@ def _record_projection_receipt(store_path, record, obsidian_status):
     return receipt
 
 
-def _readable_directory(value, require_absolute=False):
+def _readable_directory(value, require_absolute=False, require_memory=True):
     if not str(value or "").strip():
         return None
     candidate = Path(value).expanduser()
     if require_absolute and not candidate.is_absolute():
         return None
     try:
-        return candidate.resolve() if candidate.is_dir() and os.access(candidate, os.R_OK) else None
+        resolved = candidate.resolve() if candidate.is_dir() and os.access(candidate, os.R_OK) else None
+        if resolved is None or not require_memory:
+            return resolved
+        return resolved if (resolved / "AI Memory" / "ai_memory.py").is_file() and (resolved / "Projects").is_dir() else None
     except OSError:
         return None
-
-
-def _registry_vault(project_root):
-    if project_root is None:
-        return None
-    project_root = Path(project_root).expanduser().resolve()
-    registry_path = project_root / "Cache" / "remote-ai-paths" / "registry.json"
-    try:
-        payload = json.loads(registry_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(payload, dict) or payload.get("schema_version") != 2 or payload.get("scope") != "ai_only" or not isinstance(payload.get("paths"), dict):
-        return None
-    entry = payload["paths"].get("obsidian_vault")
-    if not isinstance(entry, dict) or entry.get("kind") != "directory" or not str(entry.get("purpose") or "").strip():
-        return None
-    base = {"home": Path.home(), "project": project_root}.get(entry.get("base"))
-    relative = entry.get("path")
-    if base is None or not isinstance(relative, str) or not relative or relative.startswith(("/", "~")) or "\\" in relative or ":" in relative:
-        return None
-    parts = relative.split("/")
-    if any(part in {"", ".", ".."} or any(ord(character) < 32 for character in part) for part in parts):
-        return None
-    base = base.resolve()
-    candidate = (base.joinpath(*parts)).resolve()
-    if not candidate.is_relative_to(base):
-        return None
-    return _readable_directory(candidate, require_absolute=True)
 
 
 def _obsidian_config_paths():
@@ -423,14 +398,11 @@ def _configured_open_vault():
 
 def _resolve_vault(vault=None, project_root=None):
     if vault is not None:
-        return _readable_directory(vault)
-    registered = _registry_vault(project_root)
-    if registered is not None:
-        return registered
-    configured = _readable_directory(os.environ.get("CODEX_OBSIDIAN_VAULT", ""))
-    if configured is not None:
-        return configured
-    return _configured_open_vault()
+        return _readable_directory(vault, require_memory=False)
+    configured_path = os.environ.get("CODEX_OBSIDIAN_VAULT", "").strip()
+    if configured_path:
+        return _readable_directory(configured_path)
+    return _configured_open_vault() or _readable_directory(DEFAULT_VAULT)
 
 
 def _markdown_entry(record):
@@ -825,6 +797,7 @@ def _fingerprint(record):
 
 
 def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id="", task_group="", symbols=None, inspect_working_line=True):
+    raise RuntimeError("Codex-local project-change memory is retired; record directly in the configured Obsidian AI Memory vault")
     resolved_project_root = Path(project_root).expanduser().resolve()
     resolved_vault = _resolve_vault(vault, resolved_project_root)
     project = _project_identity(project_root)
@@ -899,6 +872,7 @@ def record_change(project_root, module, scope, change_kind, summary, reason, res
 
 
 def remove_invalid_record(project_root, record_id, reason, store=DEFAULT_STORE):
+    raise RuntimeError("Codex-local project-change memory is read-only legacy input; use the Obsidian AI Memory repair commands")
     """Tombstone and physically remove one proven placeholder-only local record."""
     if not RECORD_ID_PATTERN.fullmatch(str(record_id or "")):
         raise ValueError("record-id must be one exact project-change record ID")
@@ -1047,6 +1021,7 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
 
 
 def reconcile_projections(project_root, record_id="", store=DEFAULT_STORE, vault=None):
+    raise RuntimeError("Codex-local projection receipts are retired; migrate legacy records into Obsidian instead")
     resolved_project_root = Path(project_root).expanduser().resolve()
     resolved_vault = _resolve_vault(vault, resolved_project_root)
     project = _project_identity(resolved_project_root)

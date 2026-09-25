@@ -93,7 +93,7 @@ def execution_guidance(spec):
     prefix = f"Governing skills: {', '.join(skills)}. " if skills else ""
     project = f"Active project: {scope}. " if scope else "Use the active project identity. "
     ui_reference = "For any UI or visual presentation, including websites, PDF reports, documents, and slide presentations, read and apply workflow-skill/references/readable-ui.md from the installed Skills root, even without code changes or when another skill owns rendering. "
-    return (prefix + project + ui_reference + "Read only relevant existing project/module memory before work; missing memory is optional and must not block execution. "
+    return (prefix + project + ui_reference + "Ensure the Obsidian memory vault through project-memory-skill, then read only relevant project/module memory; an absent matching note must not block execution. "
             "Do not use another project's memory. Preserve the assigned model and effort for governing skills, including helper scripts. "
             "Run scripts and tests without opening or focusing windows: use portable Python, hidden Windows subprocess options, and application-native headless modes; preserve required platform branches and captured output. "
             "Verify changed code and consequential results inside this active task with a real behavior check or output readback at the smallest relevant boundary, including simple value edits. "

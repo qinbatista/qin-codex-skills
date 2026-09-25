@@ -576,6 +576,19 @@ def _history_from_schema2(raw_history):
 
 def _history_locked(path, mutate=None):
     path = Path(path).expanduser().resolve()
+    codex_roots = (DEFAULT_CODEX_HOME, (Path.home() / ".codex").resolve())
+    codex_local = any(path == root or root in path.parents for root in codex_roots)
+    if codex_local and mutate is not None:
+        raise ValueError("Codex-local model history is read-only")
+    if (path == DEFAULT_HISTORY_PATH.resolve() or codex_local) and mutate is None:
+        # The former installed-Skill history is a read-only migration source.
+        # A status or recall must not create a lock beside it in CODEX_HOME.
+        history = _read_json(path)
+        if isinstance(history, dict) and history.get("schema_version") == SCHEMA_VERSION and isinstance(history.get("conditions"), dict):
+            return history, None
+        if isinstance(history, dict) and history.get("schema_version") == 2:
+            return _history_from_schema2(history), None
+        return _legacy_history(path.with_name("events.jsonl")), None
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
     if os.name != "nt":
         os.chmod(path.parent, 0o700)
@@ -601,7 +614,8 @@ def _history_locked(path, mutate=None):
 
 
 def load_history(path):
-    if Path(path).expanduser().resolve() == DEFAULT_HISTORY_PATH.resolve():
+    resolved = Path(path).expanduser().resolve()
+    if resolved == DEFAULT_HISTORY_PATH.resolve() or resolved == DEFAULT_CODEX_HOME or DEFAULT_CODEX_HOME in resolved.parents:
         return _history_locked(path)[0]
     # Explicit non-default paths remain available to compatibility tests and
     # one-off legacy migration tools.
@@ -1086,7 +1100,7 @@ def record_event(args):
 def status(history_path):
     history_path = Path(history_path).expanduser().resolve()
     if not history_path.exists():
-        if history_path == DEFAULT_HISTORY_PATH.resolve():
+        if history_path == DEFAULT_HISTORY_PATH.resolve() or history_path == DEFAULT_CODEX_HOME or DEFAULT_CODEX_HOME in history_path.parents:
             return {"schema_version": SCHEMA_VERSION, "conditions": 0, "tasks": 0}
         _write_locked(history_path, empty_history())
     history = _history_locked(history_path)[0]

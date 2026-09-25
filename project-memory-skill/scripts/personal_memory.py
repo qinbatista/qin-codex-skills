@@ -2,8 +2,8 @@
 """Capture sanitized personal-memory candidates emitted by Ending.
 
 This bridge keeps personal preference memory separate from project-change and
-adaptive model-routing memory. It writes to the root-first Obsidian runtime
-when available and queues only sanitized candidates when the vault is absent.
+adaptive model-routing memory. It writes only to the root-first Obsidian vault.
+An unavailable vault leaves the write pending without a local queue.
 """
 
 import argparse
@@ -23,7 +23,7 @@ else:
 
 
 SCHEMA_VERSION = 1
-DEFAULT_LOCAL_STORE = Path.home() / ".codex" / "personal-memory" / "pending.jsonl"
+DEFAULT_LOCAL_STORE = Path.home() / ".codex" / "personal-memory" / "pending.jsonl"  # Read-only legacy migration source.
 KINDS = ("preference", "technical-trait")
 AREAS = ("ui", "workflow", "technical", "general")
 BASES = ("explicit_user_request", "repeated_user_correction", "verified_work_pattern")
@@ -95,45 +95,12 @@ def normalize_candidates(candidates):
     return normalized
 
 
-def _config_paths():
-    home = Path.home()
-    if os.name == "nt":
-        return [home / "AppData" / "Roaming" / "obsidian" / "obsidian.json"]
-    if sys.platform == "darwin":
-        return [home / "Library" / "Application Support" / "obsidian" / "obsidian.json"]
-    return [home / ".config" / "obsidian" / "obsidian.json"]
-
-
 def resolve_vault(vault=None):
-    if vault is not None:
-        explicit = Path(vault).expanduser()
-        try:
-            return explicit.resolve() if explicit.is_dir() else None
-        except OSError:
-            return None
-    configured = os.environ.get("CODEX_OBSIDIAN_VAULT", "").strip()
-    if configured:
-        configured_path = Path(configured).expanduser()
-        try:
-            if configured_path.is_dir():
-                return configured_path.resolve()
-        except OSError:
-            pass
-    for config_path in _config_paths():
-        try:
-            payload = json.loads(config_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        vaults = payload.get("vaults", {}) if isinstance(payload, dict) else {}
-        if not isinstance(vaults, dict):
-            continue
-        entries = list(vaults.values())
-        entries.sort(key=lambda entry: (not bool(entry.get("open")), str(entry.get("path", ""))) if isinstance(entry, dict) else (True, ""))
-        for entry in entries:
-            candidate = Path(entry.get("path", "")).expanduser() if isinstance(entry, dict) and entry.get("path") else None
-            if candidate is not None and candidate.is_dir():
-                return candidate.resolve()
-    return None
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from project_change_memory import _resolve_vault
+
+    candidate = _resolve_vault(vault)
+    return candidate if candidate and (candidate / "AI Memory" / "ai_memory.py").is_file() and (candidate / "Projects").is_dir() else None
 
 
 def _runtime(vault_path):
@@ -246,17 +213,7 @@ def _lock(path):
 
 
 def _queue(candidates, project, module, verification_status, local_store):
-    path = _store_path(local_store)
-    envelope = {"schema_version": SCHEMA_VERSION, "queued_at": _now(), "project": project, "module": module, "verification_status": verification_status, "candidates": candidates}
-    with _lock(path):
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(envelope, ensure_ascii=False, separators=(",", ":")) + "\n")
-    try:
-        os.chmod(path.parent, 0o700)
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-    return path
+    raise RuntimeError("Codex-local personal-memory queues are retired")
 
 
 def capture(candidates, *, project="Global Preferences", module="ending-memory", verification_status="passed", vault=None, local_store=None):
@@ -267,17 +224,27 @@ def capture(candidates, *, project="Global Preferences", module="ending-memory",
     module_value = _single_line(module, "module", 160)
     if verification_status not in VERIFICATION_STATUSES:
         raise ValueError(f"verification_status must be one of {', '.join(VERIFICATION_STATUSES)}")
+    if local_store is not None:
+        raise ValueError("local personal-memory queues are retired; use Obsidian")
     vault_path = resolve_vault(vault)
+    if vault_path is None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from obsidian_vault_setup import ensure_vault
+
+        setup = ensure_vault(vault=vault)
+        if setup["status"] in {"ready", "created"}:
+            vault_path = Path(setup["vault"])
+        else:
+            return {"status": "pending", "written": False, "candidates": len(normalized),
+                    "reason": setup.get("reason", "obsidian_vault_unavailable")}
     if vault_path is not None:
         try:
             runtime = _runtime(vault_path)
             result = _record_with_runtime(runtime, vault_path, normalized, project_value, module_value, verification_status)
-            return {"status": "written" if result.get("status") in {"written", "updated", "duplicate"} else result.get("status", "unavailable"), "written": result.get("status") in {"written", "updated"}, "candidates": len(normalized), "vault": "ready", "runtime": result}
+            return {"status": "written" if result.get("status") in {"written", "updated", "duplicate"} else result.get("status", "unavailable"), "written": result.get("status") in {"written", "updated"}, "candidates": len(normalized), "vault": str(vault_path), "runtime": result}
         except (OSError, ValueError, TypeError, ImportError, json.JSONDecodeError) as error:
-            queued_path = _queue(normalized, project_value, module_value, verification_status, local_store)
-            return {"status": "queued", "written": False, "candidates": len(normalized), "reason": str(error), "pending": str(queued_path)}
-    queued_path = _queue(normalized, project_value, module_value, verification_status, local_store)
-    return {"status": "queued", "written": False, "candidates": len(normalized), "reason": "obsidian_vault_unavailable", "pending": str(queued_path)}
+            return {"status": "pending", "written": False, "candidates": len(normalized), "reason": str(error)}
+    return {"status": "pending", "written": False, "candidates": len(normalized), "reason": "obsidian_vault_unavailable"}
 
 
 def _read_pending(path):
@@ -287,6 +254,7 @@ def _read_pending(path):
 
 
 def replay_pending(*, vault=None, local_store=None):
+    """Read and import a legacy queue without modifying its Codex-local source."""
     path = _store_path(local_store)
     pending = _read_pending(path)
     if not pending:
@@ -297,17 +265,12 @@ def replay_pending(*, vault=None, local_store=None):
     remaining = []
     written = 0
     for envelope in pending:
-        result = capture(envelope.get("candidates", []), project=envelope.get("project", "Global Preferences"), module=envelope.get("module", "ending-memory"), verification_status=envelope.get("verification_status", "partial"), vault=vault_path, local_store=path)
+        result = capture(envelope.get("candidates", []), project=envelope.get("project", "Global Preferences"), module=envelope.get("module", "ending-memory"), verification_status=envelope.get("verification_status", "partial"), vault=vault_path)
         if result.get("status") in {"written", "duplicate", "no-candidates"}:
             written += 1
         else:
             remaining.append(envelope)
-    with _lock(path):
-        if remaining:
-            path.write_text("".join(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n" for item in remaining), encoding="utf-8")
-        elif path.exists():
-            path.unlink()
-    return {"status": "written" if not remaining else "partial", "written": not remaining, "records": len(pending), "replayed": written, "remaining": len(remaining)}
+    return {"status": "written" if not remaining else "partial", "written": not remaining, "records": len(pending), "replayed": written, "remaining": len(remaining), "legacy_source_preserved": True}
 
 
 def _candidate_file(path):

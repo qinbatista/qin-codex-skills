@@ -158,7 +158,7 @@ class TaskRouteDispatcherTests(unittest.TestCase):
                 result = module.run_node(item, root, {}, None, root, skills_root=SKILLS_ROOT)
             self.assertEqual(result["status"], "pass")
             self.assertEqual([(model, effort) for model, effort, _ in calls], [("gpt-6-luna", "max")])
-            self.assertIn("missing memory is optional", calls[0][2])
+            self.assertIn("Ensure the Obsidian memory vault", calls[0][2])
 
     def test_result_completes_without_an_ending_node(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -30,20 +30,23 @@ class PersonalMemoryTests(unittest.TestCase):
             self.assertEqual(result, {"status": "no-candidates", "written": False, "candidates": 0})
             self.assertFalse((Path(temporary) / "pending.jsonl").exists())
 
-    def test_missing_vault_queues_only_sanitized_candidates(self):
+    def test_missing_vault_stays_pending_without_a_local_queue(self):
         with tempfile.TemporaryDirectory() as temporary:
             pending = Path(temporary) / "pending.jsonl"
-            result = MEMORY.capture([candidate()], vault=Path(temporary) / "missing-vault", local_store=pending)
-            payload = json.loads(pending.read_text(encoding="utf-8"))
-        self.assertEqual(result["status"], "queued")
-        self.assertEqual(payload["candidates"][0]["statement"], "Prefer compact layouts.")
-        self.assertNotIn("raw", payload)
+            blocked = Path(temporary) / "missing-vault"
+            blocked.mkdir()
+            (blocked / "keep.md").write_text("Keep this note", encoding="utf-8")
+            result = MEMORY.capture([candidate()], vault=blocked)
+            self.assertFalse(pending.exists())
+        self.assertEqual(result["status"], "pending")
+        self.assertEqual(result["reason"], "target_is_not_an_empty_memory_vault")
 
     def test_available_root_first_runtime_receives_candidates(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             runtime_path = root / "AI Memory" / "ai_memory.py"
             runtime_path.parent.mkdir(parents=True)
+            (root / "Projects").mkdir()
             runtime_path.write_text("""
 import json
 from pathlib import Path
@@ -51,7 +54,7 @@ def record_memory_candidates(candidates, **kwargs):
     Path(__file__).with_name('received.json').write_text(json.dumps({'candidates': candidates, 'kwargs': kwargs}, default=str), encoding='utf-8')
     return {'status': 'written', 'owner_documents': ['Preferences/UI Style Preferences.md']}
 """, encoding="utf-8")
-            result = MEMORY.capture([candidate()], vault=root, local_store=root / "pending.jsonl")
+            result = MEMORY.capture([candidate()], vault=root)
             received = json.loads((root / "AI Memory" / "received.json").read_text(encoding="utf-8"))
         self.assertEqual(result["status"], "written")
         self.assertEqual(received["candidates"][0]["area"], "ui")
@@ -62,6 +65,7 @@ def record_memory_candidates(candidates, **kwargs):
             root = Path(temporary)
             runtime_path = root / "AI Memory" / "ai_memory.py"
             runtime_path.parent.mkdir(parents=True)
+            (root / "Projects").mkdir()
             runtime_path.write_text("""
 import json
 from pathlib import Path
@@ -71,7 +75,7 @@ def record_event(project, module, event_type, summary, reason, result, verificat
 def render_views():
     return {'status': 'written'}
 """, encoding="utf-8")
-            result = MEMORY.capture([candidate()], vault=root, local_store=root / "pending.jsonl")
+            result = MEMORY.capture([candidate()], vault=root)
             received = json.loads((root / "AI Memory" / "received.json").read_text(encoding="utf-8"))
             owner_text = (root / "Preferences" / "AI Captured Preferences.md").read_text(encoding="utf-8")
         self.assertEqual(result["status"], "written")

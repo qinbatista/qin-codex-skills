@@ -1,9 +1,11 @@
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "strategy_performance.py"
@@ -30,6 +32,23 @@ class StrategyPerformanceTests(unittest.TestCase):
             recommendation = module.recommend_mode(self.arguments(Path(temporary_directory) / "missing.json"))
             self.assertEqual(recommendation["execution_mode"], "inline_entry")
             self.assertFalse(recommendation["admitted"])
+
+    def test_default_history_writes_only_to_configured_vault(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            vault = root / "vault"
+            (vault / "AI Memory").mkdir(parents=True)
+            (vault / "AI Memory" / "ai_memory.py").write_text("# test vault\n", encoding="utf-8")
+            (vault / "Projects").mkdir()
+            codex_home = root / "codex-home"
+            sample_path = root / "sample.json"
+            self.write_sample(sample_path)
+            args = self.arguments(None)
+            args.sample = sample_path
+            with mock.patch.dict(os.environ, {"CODEX_OBSIDIAN_VAULT": str(vault), "CODEX_HOME": str(codex_home)}):
+                module.record_sample(args)
+            self.assertTrue((vault / "AI Memory" / "Adaptive Routing" / "strategy_performance.json").is_file())
+            self.assertFalse(codex_home.exists())
 
     def test_six_repeated_pareto_wins_admit_delegation(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

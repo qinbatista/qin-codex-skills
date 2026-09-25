@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Enforce project, module, and method memory coverage.
 
-The coverage ledger is a small local JSONL index.  Obsidian receives native
-Markdown pages for the same project/module/method scopes; it is not used as a
-second JSON sidecar or as a replacement for model-routing history.
+The coverage ledger and its project/module/method pages live in the configured
+Obsidian vault. An unavailable vault must not create a Codex-local fallback.
 
 Supported platforms: Windows, macOS, and Linux.
 """
@@ -30,7 +29,21 @@ except ModuleNotFoundError:
 
 
 SCHEMA_VERSION = 1
-DEFAULT_STORE = Path.home() / ".codex" / "project-memory-coverage" / "events.jsonl"
+DEFAULT_STORE = None
+
+
+def _store_path(store=None, vault=None):
+    vault_path = project_change_memory._resolve_vault(vault)
+    configured = store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE")
+    if configured is None:
+        if vault_path is None:
+            raise CoverageError("Obsidian vault unavailable; coverage write is pending")
+        return vault_path / "AI Memory" / "Memory Coverage" / "events.jsonl"
+    path = Path(configured).expanduser().resolve()
+    codex_root = (Path.home() / ".codex").resolve()
+    if path == codex_root or codex_root in path.parents:
+        raise CoverageError("Codex-local coverage stores are retired")
+    return path
 MANAGED_MARKER = "<!-- managed-by: project-memory-skill/memory-coverage -->"
 MODULE_SCOPE_SYMBOL = "__module__"
 METHOD_SENTINELS = {MODULE_SCOPE_SYMBOL, "<module>", "module-level"}
@@ -529,7 +542,7 @@ def ensure_coverage(project_root, module, *, symbol="", symbols=None, files=None
         for method in requested_symbols
         if not is_module_scope_symbol(method)
     )
-    target_store = Path(store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE") or DEFAULT_STORE).expanduser()
+    target_store = _store_path(store, vault)
     with _locked_append(target_store):
         _append_records_unlocked(target_store, events)
         merged = _merge_records(_read_records(target_store))
@@ -545,7 +558,7 @@ def validate_coverage(project_root, module, *, symbol="", symbols=None, files=No
     module = _clean(module, "module", maximum=160, required=True)
     requested_symbols = _normalize_symbols(symbols if symbols is not None else ([symbol] if symbol else []))
     symbol = requested_symbols[0] if requested_symbols else ""
-    target_store = Path(store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE") or DEFAULT_STORE).expanduser()
+    target_store = _store_path(store)
     merged = _merge_records(_read_records(target_store))
     required = [(_scope_key(project["key"], "project"), "project"), (_scope_key(project["key"], "module", module), "module")]
     strict = bool(require_method)
@@ -571,7 +584,7 @@ def validate_coverage(project_root, module, *, symbol="", symbols=None, files=No
 
 
 def coverage_status(project_root=None, *, store=None):
-    target_store = Path(store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE") or DEFAULT_STORE).expanduser()
+    target_store = _store_path(store)
     records = _merge_records(_read_records(target_store))
     if project_root:
         project = project_change_memory._project_identity(project_root)
@@ -583,7 +596,7 @@ def merge_coverage_store(project_root, source_store, *, store=None, vault=None, 
     """Merge one proven rogue coverage ledger into the canonical authority and reproject it."""
     project = project_change_memory._project_identity(project_root)
     source_path = Path(source_store).expanduser().resolve()
-    target_path = Path(store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE") or DEFAULT_STORE).expanduser().resolve()
+    target_path = _store_path(store, vault).resolve()
     if source_path == target_path:
         raise CoverageError("source-store must differ from the canonical target store")
     if delete_source and not vault:
@@ -690,6 +703,12 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     try:
+        vault_path = project_change_memory._resolve_vault(args.vault, getattr(args, "project_root", None))
+        configured_store = args.store or os.environ.get("CODEX_PROJECT_MEMORY_COVERAGE")
+        if configured_store is not None:
+            store_path = Path(configured_store).expanduser().resolve()
+            if vault_path is None or not store_path.is_relative_to(vault_path):
+                raise CoverageError("coverage memory store must be inside the configured Obsidian vault")
         if args.command == "ensure":
             output = ensure_coverage(args.project_root, args.module, symbols=args.symbol, files=args.file, task_type=args.task_type, code_kind=args.code_kind, operation=args.operation, source=args.source, require_method=args.require_method, vault=args.vault, store=args.store)
         elif args.command == "validate":

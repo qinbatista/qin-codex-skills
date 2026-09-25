@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dual local and Obsidian adaptive model-routing memory.
+"""Obsidian-owned adaptive model-routing memory.
 
 Supported platforms: Windows, macOS, and Linux.
 """
@@ -72,7 +72,7 @@ LOCAL_MEMORY_SCHEMA_VERSION = 1
 MIN_REAL_PASSES_BEFORE_DOWNGRADE = 2
 DEFAULT_VAULT = project_change_memory.DEFAULT_VAULT
 DEFAULT_LADDER = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "assets" / "model-capability-ladder.json"
-DEFAULT_LOCAL_STORE = Path.home() / ".codex" / "model-routing-memory" / "events.jsonl"
+DEFAULT_LOCAL_STORE = None
 QUALITY_FAILURES = {"quality", "correctness"}
 OPERATIONAL_FAILURES = {"availability", "timeout", "protocol", "telemetry", "execution", "receipt"}
 FAILURE_CLASSES = {"none"} | QUALITY_FAILURES | OPERATIONAL_FAILURES
@@ -1206,14 +1206,22 @@ def _atomic_write(path, text):
 
 
 def _resolve_local_store(local_store=None):
-    configured = local_store or os.getenv("CODEX_MODEL_ROUTING_MEMORY") or DEFAULT_LOCAL_STORE
-    return Path(configured).expanduser().resolve()
+    configured = local_store or os.getenv("CODEX_MODEL_ROUTING_MEMORY")
+    if configured is None:
+        vault_path = project_change_memory._resolve_vault()
+        if vault_path is None:
+            raise ValueError("Obsidian vault unavailable; model-routing memory is pending")
+        return vault_path / "AI Memory" / "Model Routing" / "events.jsonl"
+    path = Path(configured).expanduser().resolve()
+    codex_root = (Path.home() / ".codex").resolve()
+    if path == codex_root or codex_root in path.parents:
+        raise ValueError("Codex-local model-routing memory is retired")
+    return path
 
 
 def _resolve_coverage_store():
-    """Resolve the one coverage authority without deriving state from a vault or model store."""
-    configured = os.getenv("CODEX_PROJECT_MEMORY_COVERAGE") or memory_coverage.DEFAULT_STORE
-    return Path(configured).expanduser().resolve()
+    """Resolve the Obsidian coverage authority."""
+    return memory_coverage._store_path().resolve()
 
 
 def _projection_state_path(local_store=None):
@@ -2205,7 +2213,7 @@ def memory_status(project_root=None, *, vault=None, ladder=DEFAULT_LADDER, local
     local_records = _read_local_records(local_path)
     priority_producer = shared.get("priority_producer")
     priority_pair_count = len(priority_producer["adaptive_efforts"]) if isinstance(priority_producer, dict) and priority_producer.get("enabled") is True else 0
-    output = {"status": "ready", "authority": "dual_local_and_obsidian", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "local_store": str(local_path), "local_records": len(local_records), "memory_coverage": memory_coverage.coverage_status(project_root, store=coverage_store), "vault": str(vault_path) if vault_path else "", "obsidian_available": vault_path is not None}
+    output = {"status": "ready", "authority": "obsidian_vault", "shared_model_registry": shared["registry_id"], "active_pairs": len(pairs) + priority_pair_count, "active_quality_pairs": len(pairs), "priority_attempt_pairs": priority_pair_count, "priority_producer": priority_producer.get("id") if isinstance(priority_producer, dict) else None, "vault_store": str(local_path), "vault_records": len(local_records), "memory_coverage": memory_coverage.coverage_status(project_root, store=coverage_store), "vault": str(vault_path) if vault_path else "", "obsidian_available": vault_path is not None}
     if project_root:
         project = project_change_memory._project_identity(project_root)
         model_switch = model_switch_reference(project_root, vault=vault)
@@ -2298,6 +2306,13 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    vault_path = project_change_memory._resolve_vault(args.vault, getattr(args, "project_root", None))
+    configured_store = args.local_store or os.getenv("CODEX_MODEL_ROUTING_MEMORY")
+    if configured_store is not None:
+        store_path = Path(configured_store).expanduser().resolve()
+        if vault_path is None or not store_path.is_relative_to(vault_path):
+            print(json.dumps({"status": "blocked", "error": "model-routing memory store must be inside the configured Obsidian vault"}))
+            return 1
     common = {"vault": args.vault, "ladder": args.ladder, "local_store": args.local_store}
     if args.command == "status":
         output = memory_status(args.project_root, **common)

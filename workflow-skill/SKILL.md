@@ -13,12 +13,12 @@ For any browser-based test, prefer the Codex or ChatGPT built-in browser surface
 
 ## Execute
 
-1. Identify the requested result, project, constraints, and useful context. Show score/band, selected model/effort, route and identity evidence. Memory is optional: skip missing files and never substitute another project's records.
+1. Identify the requested result, project, constraints, and useful context. Show score/band, selected model/effort, route and identity evidence. Ensure the Obsidian vault through [Project Memory](../project-memory-skill/SKILL.md), then read exact-project memory. Skip an absent matching note and never substitute another project's records.
 2. Execute simple work directly. Plan when dependencies or uncertainty warrant it. Delegate independent branches with explicit goals, inputs, outputs, ownership, and stop conditions; keep shared writes and output dependencies ordered. Show each delegated goal, score, pair and dependencies, then its actual result status.
 3. Give workers only relevant skills and memory. A script inside a skill-governed code or UI task retains the parent's model constraint; a mechanical tool call needs no model.
 4. Integrate outputs and verify changed code or consequential results inside this task using [Verify](../verify-skill/SKILL.md). Use one real check at the smallest relevant boundary; do not start or compile the whole project unless requested.
 5. Close and remove exact task-owned temporary surfaces and scratch after final readback unless review, debugging, or a downstream consumer still needs them. Revisit clearly superseded temporary previews on a later related task. Keep retained `Cache/remote-*` content. Then report the result and evidence, distinguishing source edits, installation, and publication. The root owns completion; a child's readiness is only an input.
-6. If useful durable information changed, use [project memory](../project-memory-skill/SKILL.md) after the main task is complete. Ending writes only local memory with the user's selected model and effort. It is a separate visible projectless task in recent tasks; show its link and memory readback without pinning it. Ending status never gates the main result or another task. Skip when no useful memory or configured store exists; missing launch capability is pending.
+6. If useful durable information changed, use [project memory](../project-memory-skill/SKILL.md) after the main task is complete. Ending writes only to the configured Obsidian vault with the user's selected model and effort. It is a separate visible projectless task in recent tasks; show its link and vault readback without pinning it. Ending status never gates the main result or another task. Skip when no useful memory exists; an unavailable vault or launch capability is pending without local storage.
 
 ## Boundaries
 

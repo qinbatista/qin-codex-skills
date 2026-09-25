@@ -37,7 +37,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertTrue(policy["selected_model_for_governed_tasks"])
         self.assertEqual(policy["verification_owner"], "active_task")
         self.assertEqual(policy["ending_purpose"], "memory_only")
-        self.assertEqual(policy["missing_memory"], "skip")
+        self.assertEqual(policy["missing_memory"], "bootstrap_vault_then_skip_absent_matching_note")
         self.assertTrue(policy["process_contract_is_not_result_memory"])
 
     def test_catalog_preserves_safe_install_and_publication_separation(self):

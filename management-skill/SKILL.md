@@ -5,17 +5,17 @@ description: "Maintain, install, or publish the managed global skills from their
 
 # Skill Management
 
-Use for requested skill maintenance, installation, or publication. Read related project memory if available; skip missing memory and isolate other projects. Skill-governed maintenance keeps the user's selected model and effort unless the user bypasses skills for the maintenance task.
+Use for requested skill maintenance, installation, or publication. Ensure the Obsidian vault through Project Memory and read related project memory; skip absent matching records and isolate other projects. Skill-governed maintenance keeps the user's selected model and effort unless the user bypasses skills for the maintenance task.
 
 ## Maintain
 
 Each skill's source directory is its owner. Keep entry instructions concise, put distinct domain guidance in linked references, and remove obsolete rules when the workflow changes. Global skills describe reusable concepts and preferences; project skills own concrete domain implementations.
 
-Preserve unrelated edits, private routing history, and unrelated installed skills. Execute real checks of changed behavior in the active task and fix failures there. Ending only writes useful local memory with the selected model; it cannot gate publication or repair work.
+Preserve unrelated edits, Obsidian routing history, and unrelated installed skills. Execute real checks of changed behavior in the active task and fix failures there. Ending only writes useful Obsidian memory with the selected model; it cannot gate publication or repair work.
 
 ## Install
 
-Use `scripts/sync_global_skills.py deploy --source-dir ROOT --skills-dir TARGET`. The installer materializes managed sources, locks the target, backs up recoverably, replaces exact managed targets, and restores on failure. It preserves user AGENTS files, unrelated skills, and `task-analyze-skill/local/`. Installation does not run routing, benchmarks, verification tasks, or a release gate.
+Use `scripts/sync_global_skills.py deploy --source-dir ROOT --skills-dir TARGET`. The installer materializes managed sources, locks the target, backs up recoverably, replaces exact managed targets, and restores on failure. It preserves user AGENTS files and unrelated skills. The CLI then runs Project Memory setup: it reuses the configured vault or creates one from `qin-llm-wiki`, prints the exact path and backup warning, and reports setup failure as pending without writing to Codex. Existing `task-analyze-skill/local/` files are legacy recovery inputs only; the active routing writer uses Obsidian. Installation does not run routing, benchmarks, verification tasks, or a release gate.
 
 Only an explicit global AGENTS update uses `install-global-agents`; it creates a persistent backup with a restore command. Source changes, local installation, and remote publication are distinct outcomes.
 

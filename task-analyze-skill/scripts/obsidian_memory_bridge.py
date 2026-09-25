@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import importlib.util
 import json
-import os
 import re
 from pathlib import Path
 
 
-DEFAULT_VAULT = Path.home() / "Library" / "Mobile Documents" / "iCloud~md~obsidian" / "Documents" / "MyAILLM"
 CANONICAL_SEARCH_FOLDERS = ("Skills", "Projects", "Knowledge")
 LEGACY_SEARCH_FOLDERS = ("Skills", "Projects", "AestheticTaste", "KnowledgeAreas")
 STOP_WORDS = {"about", "after", "also", "and", "any", "for", "from", "have", "into", "like", "more", "need", "only", "other", "should", "task", "that", "the", "then", "this", "use", "user", "with"}
@@ -14,8 +13,11 @@ SENSITIVE_PATTERN = re.compile(r"(?:sk-[A-Za-z0-9_-]{8,}|api[_-]?key|password|to
 
 
 def resolve_vault(vault=None):
-    selected = Path(vault).expanduser() if vault else Path(os.environ.get("CODEX_OBSIDIAN_VAULT", DEFAULT_VAULT)).expanduser()
-    return selected.resolve() if selected.exists() and selected.is_dir() else None
+    script = Path(__file__).resolve().parents[2] / "project-memory-skill" / "scripts" / "project_change_memory.py"
+    specification = importlib.util.spec_from_file_location("bridge_project_memory_resolver", script)
+    resolver = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(resolver)
+    return resolver._resolve_vault(vault)
 
 
 def _query_terms(query):

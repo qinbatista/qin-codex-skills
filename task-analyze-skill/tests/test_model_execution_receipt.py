@@ -385,7 +385,7 @@ class ModelExecutionReceiptTests(unittest.TestCase):
     def test_non_code_locked_prompt_is_compact_and_does_not_embed_machine_path(self):
         prompt = module.route_node_execution_prompt("LOCKED_ROUTE_NODE", "Return one JSON object.", Path("/private/machine/path"))
         self.assertIn("Return one JSON object", prompt)
-        self.assertIn("relevant existing memory", prompt)
+        self.assertIn("Ensure the Obsidian memory vault", prompt)
         self.assertNotIn("/private/machine/path", prompt)
         self.assertLess(len(prompt), 1200)
 

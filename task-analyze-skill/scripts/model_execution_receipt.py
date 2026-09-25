@@ -126,14 +126,14 @@ def prepare_lean_context_home(codex_home):
 
 
 def route_node_lifecycle_boundary(marker, code_rule_bundle=None):
-    common = ("Read the governing skills and relevant existing memory for this project before work; missing memory is optional. "
+    common = ("Ensure the Obsidian memory vault through project-memory-skill, then read relevant exact-project memory before work; an absent matching note is optional. "
               "Keep other projects' memory separate. The assigned model and effort are fixed for skill-governed work. ")
     if marker == "LOCKED_ROUTE_NODE":
         return common + ("Complete the assigned result and verify every changed behavior inside this active task with the smallest real behavior check or output readback. "
                          "Do not start a whole project or full build unless requested. "
                          "Report results and verification honestly. Ending is only scoped memory summarization, not verification or repair.")
     if marker in {"ENDING_TASK_WORKER", "ENDING_CHECK_WORKER"}:
-        raise ValueError("Ending route workers are retired; use a separate local-memory task after the main result")
+        raise ValueError("Ending route workers are retired; use a separate Obsidian memory task after the main result")
     raise ValueError(f"unsupported route marker {marker}")
 
 
