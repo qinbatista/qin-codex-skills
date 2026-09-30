@@ -487,7 +487,7 @@ def _sorted_registered_owner_entries(entries):
     return tuple(sorted(entries, key=lambda item: len(item[0]), reverse=True))
 
 
-HOME_PROJECT_OWNER_ROOTS = ((".codex", "Global Codex Skills"),)
+HOME_PROJECT_OWNER_ROOTS = ((".agents", "Global Codex Skills"), (".codex", "Global Codex Skills"))
 
 # Paths are deliberately relative to the user's Documents folder. Old and
 # current locations may coexist here so moving a repository does not split its
@@ -540,8 +540,8 @@ def _registered_owner(record_root):
     root = _registered_owner_alias(record_root)
     home_roots = {_normalized_registered_root(Path.home() / relative) for relative, owner in HOME_PROJECT_OWNER_ROOTS}
     for registered_root, owner in _registered_project_owners():
-        # Codex hosts unrelated worktrees and tasks as well as global Skills.
-        # Only its root and Skill source directory share the global Skill owner.
+        # User configuration roots can host unrelated plugins, worktrees and tasks.
+        # Only the root and its Skill directory share the global Skill owner.
         if registered_root in home_roots and root != registered_root and not (root == registered_root + "/skills" or root.startswith(registered_root + "/skills/")):
             continue
         if root == registered_root + "/cache" or root.startswith(registered_root + "/cache/"):

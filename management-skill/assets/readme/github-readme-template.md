@@ -36,7 +36,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 ## Source and installation
 
-Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Retire duplicate user copies while preserving `.system` and plugins.
+Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
 Each skill folder owns its `SKILL.md`, references, helpers, and versioned development tests needed by the release gate. Disposable task work belongs in ignored `Cache/temp-*`; retained local evidence belongs in `Cache/remote-*` with an explicit reason and owner.
 

@@ -1282,6 +1282,10 @@ def mirror_repository_to_local(repository_dir, skills_dir):
 def deploy(source_dir, skills_dir):
     source_dir = Path(source_dir).expanduser().resolve()
     skills_dir = lexical_absolute_path(skills_dir)
+    if skills_dir == lexical_absolute_path(OFFICIAL_USER_SKILLS_DIRECTORY):
+        for candidate in (skills_dir, *skills_dir.parents):
+            if os.path.lexists(candidate) and not real_directory_entry(candidate):
+                raise RuntimeError(f"The official user Skill root cannot traverse a symbolic link, junction, or nondirectory: {candidate}")
     with provisional_installation_transaction(source_dir, skills_dir) as snapshot:
         installed_names, installed_agents = install_managed_skills(snapshot)
         print_lines("Replaced managed repository Skills in the local global Skill directory:", installed_names)
@@ -1289,7 +1293,29 @@ def deploy(source_dir, skills_dir):
             print(f"Replaced {installed_agents} explicit global AGENTS.md target(s) with the repository Task Lifecycle contract.")
     print("Preserved user global AGENTS.md files; use install-global-agents for an explicit, recoverable template installation.")
     print("Installation complete: consumer install/update replaced the published managed source without rerunning validation gates.")
+    if skills_dir == lexical_absolute_path(OFFICIAL_USER_SKILLS_DIRECTORY):
+        repair_legacy_user_skills(skills_dir, source_dir, installed_names)
     return installed_names
+
+
+def repair_legacy_user_skills(skills_dir, source_dir, installed_names):
+    legacy = codex_home() / "skills"
+    try:
+        legacy.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        print(f"Legacy user Skill repair pending: {type(error).__name__}: {error}")
+        return
+    try:
+        script = Path(skills_dir) / "management-skill" / "scripts" / "repair_user_skill_root.py"
+        spec = importlib.util.spec_from_file_location("installed_user_skill_root_repair", script)
+        repair = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(repair)
+        result = repair.repair_user_skill_root(legacy_root=legacy, official_root=skills_dir, apply=True, source_dir=source_dir, authoritative_names=installed_names)
+        print(json.dumps({"legacy_user_skill_repair": result}, ensure_ascii=False))
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"Legacy user Skill repair pending: {type(error).__name__}: {error}")
 
 
 def announce_memory_vault(skills_dir):

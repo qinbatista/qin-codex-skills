@@ -14,6 +14,14 @@ SPEC.loader.exec_module(MEMORY)
 
 
 class RetiredCodexMemoryTests(unittest.TestCase):
+    def test_official_skill_owner_preserves_legacy_history_without_matching_other_roots(self):
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(MEMORY.Path, "home", return_value=Path(temporary)):
+            home = Path(temporary)
+            for directory in (".agents/skills/project-memory-skill", ".codex/skills/project-memory-skill", "Documents/AIProject/qin-codex-skills"):
+                self.assertEqual(MEMORY._registered_owner(home / directory), "Global Codex Skills")
+            for directory in (".agents/worktrees/game", ".agents/plugins/plugin", ".agents/cache/session", ".codex/sessions/task", ".codex/plugins/plugin"):
+                self.assertIsNone(MEMORY._registered_owner(home / directory))
+
     def test_legacy_scoped_record_remains_readable_without_rewriting_history(self):
         cache = Path(__file__).resolve().parents[2] / "Cache"
         cache.mkdir(exist_ok=True)

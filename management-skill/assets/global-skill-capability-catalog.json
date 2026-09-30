@@ -337,7 +337,7 @@
       "id": "installation",
       "owner_skill": "management-skill",
       "name": "Recoverable managed installation",
-      "function": "Lock, backup, replace exact managed sources, recover after interruption, preserve unrelated skills and leave legacy local history read-only.",
+      "function": "Install into the official user root with locking, backup and recovery; automatically consolidate verified legacy copies, preserve project scope and private data, and report conflicts or permissions as pending.",
       "checks": [
         "management-units"
       ]

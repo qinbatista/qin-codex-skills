@@ -1,6 +1,6 @@
 ---
 name: management-skill
-description: "Maintain, install, or publish the managed global skills from their source repository."
+description: "Maintain, install, or publish managed global skills, and repair legacy user or project Skill directories and references when encountered."
 ---
 
 # Skill Management
@@ -26,6 +26,8 @@ Preserve unrelated edits, existing private history, and unrelated installed skil
 ## Install
 
 Use the official user Skill directory, `~/.agents/skills`, as the single installation root. `CODEX_HOME` (default `~/.codex`) still owns Codex configuration, global `AGENTS.md`, and bundled system resources; it is not the user Skill root. Do not maintain a second user Skill copy or bridge under `CODEX_HOME/skills`. For an authorized migration, preserve unique content and recoverable backups, verify the destination, then retire the old user copies; preserve `.system` and plugin-managed resources.
+
+When a task exposes an old Skill root, duplicate installation, or stale path in maintained code or instructions, automatically apply the [directory repair workflow](references/skill-directory-repair.md) within the task's scope. Correct the owning source and installed copy together. Project Skills stay under that project's `.agents/skills`. Use the local repair helper for file migration; report unresolved conflicts or permissions without guessing or bypassing controls. Do not rescan every project during ordinary tasks.
 
 Use `scripts/sync_global_skills.py deploy --source-dir ROOT --skills-dir TARGET`. The installer materializes managed sources, locks the target, backs up recoverably, replaces exact managed targets, and restores on failure. It preserves user AGENTS files and unrelated skills. The CLI then runs Project Memory setup: it reuses the configured vault or creates one from `qin-llm-wiki`, prints the exact path and backup warning, and reports setup failure as pending without writing to Codex. Existing `task-analyze-skill/local/` files are legacy recovery inputs only. Installation performs recoverable replacement without running verification tasks or a release gate.
 
