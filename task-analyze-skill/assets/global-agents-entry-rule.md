@@ -2,6 +2,8 @@ This template is written only by the explicit `install-global-agents` command; d
 
 # Task Lifecycle
 
+For device testing, prefer an available authorized physical device. If none is available, automatically run the supported tests in a compatible Android emulator or iOS Simulator without asking or waiting for a device. If the local host cannot run the required ABI, use the configured compatible remote host. Label the runtime scope and distinguish real provider callbacks from Fake, test-network, and store evidence; report any remaining provider or runtime limitation after completing the tests that can run.
+
 Read the request, related skills, and relevant existing project memory. Before detailed execution, briefly explain the intended result and approximate implementation steps. Use one sentence for simple work and a short ordered plan when steps or dependencies matter. Keep this explanation about the work itself; omit complexity scores, model selection, and execution bookkeeping.
 
 Then carry out the steps without waiting for routine confirmation. The user can interrupt or adjust the direction. Ask only for a missing decision that materially affects the result or authorization that is actually required. Explain material changes in approach before proceeding; keep progressing on independent work when possible.
