@@ -693,8 +693,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_deploy_cli_defaults_to_real_official_user_skills(self):
         self.assertEqual(sync_global_skills.OFFICIAL_USER_SKILLS_DIRECTORY, Path.home() / ".agents" / "skills")
         with tempfile.TemporaryDirectory() as temp_dir:
-            official_root = Path(temp_dir) / ".agents" / "skills"
-            legacy_root = Path(temp_dir) / ".codex" / "skills"
+            fixture_home = Path(temp_dir).resolve()
+            official_root = fixture_home / ".agents" / "skills"
+            legacy_root = fixture_home / ".codex" / "skills"
             argv = ["sync_global_skills.py", "deploy", "--source-dir", str(SKILLS_DIR)]
             with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "OFFICIAL_USER_SKILLS_DIRECTORY", official_root), mock.patch.object(sync_global_skills, "announce_memory_vault"):
                 sync_global_skills.main()
