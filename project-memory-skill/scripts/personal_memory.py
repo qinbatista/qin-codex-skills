@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Capture sanitized personal-memory candidates emitted by Ending.
 
-This bridge keeps personal preference memory separate from project-change and
-adaptive model-routing memory. It writes only to the root-first Obsidian vault.
+This bridge keeps personal preferences separate from project-change memory.
+It writes only to the root-first Obsidian vault.
 An unavailable vault leaves the write pending without a local queue.
 """
 

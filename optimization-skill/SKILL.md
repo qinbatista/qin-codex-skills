@@ -7,7 +7,7 @@ description: "Use for requested optimization or an authorized reusable workflow 
 
 ## Scope
 
-Optimize only the requested code, prompt, Skill, or process. The user's selected model and effort handle work governed by relevant Skills; the main model defines the goals. Skill-free mechanical measurements or execution may use adaptive routing.
+Optimize only the requested code, prompt, Skill, or process. Briefly explain the intended improvement and implementation steps before detailed execution.
 
 Read relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md). If unavailable, continue. Keep projects separate and use fresh evidence over stale notes. Record shared preferences globally only when the user makes them global.
 
@@ -15,10 +15,10 @@ Read relevant project memory on every task through [project memory](../project-m
 
 1. Identify the owning path, expected output, and behavior that must remain: order, side effects, cancellation, failure semantics, and public contracts.
 2. Capture a representative baseline when claiming performance or behavior preservation.
-3. Choose the smallest useful change. Keep judgment in the Skill, long optional context in references, repeatable mechanics in scripts, and reusable fixtures in assets. Do not replace sound reasoning with brittle automation.
+3. Choose the smallest useful change. For Skill work, follow the [authoring rules](../management-skill/SKILL.md#authoring-rules): simplify the workflow, reuse local code for deterministic mechanics, and keep per-run data in Cache. Do not replace sound reasoning with brittle automation.
 4. Apply the relevant code or prompt preferences and change only the authorized scope.
 5. Verify during the active task with identical inputs and the smallest real comparison or output readback. For complex or high-risk changes, an independent review can run inside the same task. Do not start or compile the whole project unless requested.
-6. Report the artifact, measured comparison, and remaining limitations. Ending only writes concise project memory with the user's selected model and effort; it does not verify, repair, or benchmark.
+6. Report the artifact, measured comparison, and remaining limitations. Ending only writes concise project memory; it does not verify, repair, or benchmark.
 
 For a Skill-root review, the optional `scripts/skill_optimizer.py scan <skills-root>` lists visible Skills; `audit <skill-path>` checks references and duplicate instructions. Use these when they save work, not as required pre-reading ceremony.
 
@@ -29,7 +29,7 @@ Check output equivalence or the intentional behavior difference, including order
 Claims require measured evidence:
 
 - Use comparable inputs, scope, configuration, and acceptance criteria.
-- Report end-to-end elapsed time and total tokens, including material routing/retry overhead; component timings may explain the result but cannot substitute for totals.
+- Report end-to-end elapsed time and relevant resource use, including material retry overhead; component timings may explain the result but cannot substitute for totals.
 - Keep cached input and reasoning output separate without double-counting them.
 - A single run is a smoke result. Use repeated, preferably alternating trials for a stable speed/cost claim.
 - A failed output invalidates its savings claim. Text size reduction alone is not measured token or runtime savings.

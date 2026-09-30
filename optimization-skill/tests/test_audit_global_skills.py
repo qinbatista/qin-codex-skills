@@ -74,11 +74,11 @@ class AuditGlobalSkillsTest(unittest.TestCase):
         self.assertNotIn("missing command/reference path: scripts/results/fixtures,", audit_result["errors"])
 
     def test_command_paths_preserve_absolute_skill_paths_without_hyphen_suffixes(self):
-        text = "Use `~/.codex/skills/task-analyze-skill/assets/model-capability-ladder.json` and `~/.codex/skills/project-memory-skill/scripts/project_change_memory.py`; leave https://example.test//not-a-local-path alone."
+        text = "Use `~/.codex/skills/code-skill/scripts/code_rule_guard.py` and `~/.codex/skills/project-memory-skill/scripts/project_change_memory.py`; leave https://example.test//not-a-local-path alone."
         command_paths = audit_global_skills.command_paths(text)
 
-        self.assertIn("~/.codex/skills/task-analyze-skill/assets/model-capability-ladder.json", command_paths)
+        self.assertIn("~/.codex/skills/code-skill/scripts/code_rule_guard.py", command_paths)
         self.assertIn("~/.codex/skills/project-memory-skill/scripts/project_change_memory.py", command_paths)
-        self.assertNotIn("analyze-skill/assets/model-capability-ladder.json", command_paths)
+        self.assertNotIn("skill/scripts/code_rule_guard.py", command_paths)
         self.assertNotIn("memory-skill/scripts/project_change_memory.py", command_paths)
         self.assertNotIn("//not-a-local-path", command_paths)

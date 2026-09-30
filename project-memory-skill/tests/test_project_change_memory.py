@@ -1,7 +1,10 @@
 import importlib.util
+import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "project_change_memory.py"
@@ -11,6 +14,24 @@ SPEC.loader.exec_module(MEMORY)
 
 
 class RetiredCodexMemoryTests(unittest.TestCase):
+    def test_legacy_scoped_record_remains_readable_without_rewriting_history(self):
+        cache = Path(__file__).resolve().parents[2] / "Cache"
+        cache.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="temp-legacy-memory-", dir=cache) as temporary:
+            project = Path(temporary) / "project"
+            project.mkdir()
+            store = Path(temporary) / "legacy"
+            store.mkdir()
+            record = {"id": "legacy-result-1", "project": MEMORY._project_identity(project), "module": "memory-closeout", "summary": "Retain completed outcomes", "reason": "Preserve useful history", "result": "The prior project result remains available", "files": ["memory.py"], "verification": [], "decisions": [], "risks": [], "codex_session_key": "5491d61e1213867df58b85d0"}
+            index = store / "index.jsonl"
+            index.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            before = index.read_bytes()
+            with mock.patch.dict(os.environ, {"CODEX_TASK_NAME": "", "CODEX_TASK_GROUP": ""}):
+                result = MEMORY.search_records(project, module="memory-closeout", store=store, session_id="019f2500-aaaa-7000-8000-123456789abc", inspect_working_line=False)
+            self.assertEqual(result["matches"][0]["id"], "legacy-result-1")
+            self.assertEqual(result["matches"][0]["relation_reason"], "same_session")
+            self.assertEqual(index.read_bytes(), before)
+
     def test_legacy_writers_refuse_to_create_codex_local_memory(self):
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "project"

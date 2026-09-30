@@ -18,29 +18,29 @@ from hidden_process import hidden_process_options
 SCRIPT_CANDIDATES = [
     (
         re.compile(r"\b(open|launch)\b.*\b(browser|chrome|safari|firefox)\b", re.IGNORECASE),
-        "If this browser action is repeated and deterministic, move it into the target skill's own script.",
+        "Consider an existing browser tool for this action before proposing a new helper.",
     ),
     (
         re.compile(r"\b(open|launch)\b.*\b(unity|editor|application|app)\b", re.IGNORECASE),
-        "If this repeated app-launch step is stable, move it into the target skill's own script.",
+        "Check whether the application's existing CLI or local launcher already owns this operation.",
     ),
     (
         re.compile(r"\b(window|file|edit|assets|gameobject|component|tools|help)\s*>\s*[\w &./-]+", re.IGNORECASE),
-        "If this menu path is stable and repeated, script it inside the target skill instead of keeping it as long instructions.",
+        "Check for an existing API or local command; a menu path alone does not establish an automation opportunity.",
     ),
     (
         re.compile(r"\b(click|select|focus|activate)\b.*\b(tab|button|menu|window)\b", re.IGNORECASE),
-        "If the target is static and permission-safe, move the repeated UI action into the target skill's own script.",
+        "Use available UI tools when appropriate; preserve judgment for changing targets and permissions.",
     ),
     (
         re.compile(r"\b(wait|poll|check|verify)\b.*\b(file|folder|window|tab|log|result|script)\b", re.IGNORECASE),
-        "Move repeated deterministic checks into the target skill's own script so the skill does not spend tokens re-checking them.",
+        "Reuse an existing local check for deterministic work; keep interpretation and acceptance in the Skill.",
     ),
 ]
 
 SECTION_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-COMMAND_PATH_PATTERN = re.compile(r"(?<![\w./~<-])(?:<codex-home>/skills/|~/.codex/skills/|/|\.\.?/)?(?:[\w.-]+/)+[\w.-]+\.(?:py|sh|applescript)\b")
+COMMAND_PATH_PATTERN = re.compile(r"(?<![\w./\\~<:-])(?:(?:<codex-home>[\\/]skills[\\/]|~[\\/]\.codex[\\/]skills[\\/]|[A-Za-z]:[\\/]|[\\/]{1,2}|\.{1,2}[\\/])(?:[\w.-]+[\\/])*|(?:[\w.-]+[\\/])+)[\w.-]+\.(?:py|sh|applescript)\b")
 LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
 
 
@@ -216,8 +216,9 @@ def extract_command_paths(text: str, skill_dir: Path, repo_root: Path) -> tuple[
     _errors = []
     for _match in COMMAND_PATH_PATTERN.finditer(text):
         _raw_path = _match.group(0)
-        _path_parts = [part.casefold() for part in _raw_path.replace("\\", "/").split("/")]
-        _has_explicit_command_prefix = _raw_path.startswith(("/", "./", "../", "<codex-home>/skills/", "~/.codex/skills/", "skills/"))
+        _normalized_path = _raw_path.replace("\\", "/")
+        _path_parts = [part.casefold() for part in _normalized_path.split("/")]
+        _has_explicit_command_prefix = _normalized_path.startswith(("/", "./", "../", "<codex-home>/skills/", "~/.codex/skills/", "skills/")) or re.match(r"^[A-Za-z]:/", _normalized_path) is not None
         if not _has_explicit_command_prefix and not any(_part in {"bin", "plugins", "scripts", "tools"} for _part in _path_parts):
             continue
         _resolved_path = resolve_reference(_raw_path, skill_dir, repo_root)
@@ -284,18 +285,16 @@ def find_duplicate_instructions(text: str) -> list[DuplicateInstruction]:
     return _duplicate_instructions
 
 
-def build_warnings(skill_text: str, headings: list[str], section_lengths: list[tuple[str, int]], script_candidates: list[ScriptCandidate], duplicate_instructions: list[DuplicateInstruction], command_paths: list[Path]) -> list[str]:
+def build_warnings(skill_text: str, section_lengths: list[tuple[str, int]], duplicate_instructions: list[DuplicateInstruction]) -> list[str]:
     _warnings = []
     _line_count = len(skill_text.splitlines())
     if _line_count > 220:
-        _warnings.append(f"SKILL.md is {_line_count} lines. Move details into scripts or references if it keeps growing.")
+        _warnings.append(f"SKILL.md is {_line_count} lines. Review scope and remove unnecessary detail before adding structure.")
     for _heading, _length in section_lengths:
         if _length > 45:
-            _warnings.append(f"Section `{_heading}` is {_length} lines. Consider moving repeated detail into scripts or references.")
+            _warnings.append(f"Section `{_heading}` is {_length} lines. Review which details change decisions or belong in an existing reference.")
     if duplicate_instructions:
         _warnings.append(f"{len(duplicate_instructions)} duplicate or overlapping instruction lines were found. Merge repeated requirements into one clearer rule.")
-    if script_candidates and not command_paths:
-        _warnings.append("The skill contains static step candidates but no script paths were referenced.")
     return _warnings
 
 
@@ -338,7 +337,7 @@ def audit_skill(skill_dir: Path) -> AuditResult:
     _command_paths, _command_path_errors = extract_command_paths(_skill_text, skill_dir, _repo_root)
     _script_candidates = find_script_candidates(_skill_text)
     _duplicate_instructions = find_duplicate_instructions(_skill_text)
-    _warnings = build_warnings(_skill_text, _headings, _section_lengths, _script_candidates, _duplicate_instructions, _command_paths)
+    _warnings = build_warnings(_skill_text, _section_lengths, _duplicate_instructions)
     _peer_skills = [str(_skill_file.parent.name) for _skill_file in collect_skill_files(_skills_root) if _skill_file.parent != skill_dir]
     return AuditResult(
         skill_dir=skill_dir,
@@ -431,10 +430,6 @@ def format_relative(path: Path, root: Path) -> str:
 
 def print_report(audit_result: AuditResult, verbose: bool = False) -> None:
     _optimization_reasons = [*audit_result.warnings]
-    if audit_result.script_candidates:
-        _optimization_reasons.append(f"{len(audit_result.script_candidates)} repeated deterministic step candidates were found.")
-    if audit_result.duplicate_instructions:
-        _optimization_reasons.append(f"{len(audit_result.duplicate_instructions)} duplicate instruction groups were found.")
     print("Skill")
     print(f"- file: {audit_result.skill_file}")
     print(f"- name: {audit_result.name or '[missing]'}")
@@ -456,11 +451,12 @@ def print_report(audit_result: AuditResult, verbose: bool = False) -> None:
         print("")
         print("Deterministic Summary")
         print(f"- helpers: {', '.join(_path.name for _path in audit_result.command_paths) if audit_result.command_paths else 'none referenced'}")
-        print(f"- static step candidates: {len(audit_result.script_candidates)}")
+        print(f"- optional operation hints: {len(audit_result.script_candidates)}")
         print(f"- duplicate instruction groups: {len(audit_result.duplicate_instructions)}")
     if audit_result.script_candidates:
         print("")
-        print("Script Candidates")
+        print("Optional Operation Review")
+        print("Text matches alone do not prove repetition or a need to change this Skill. Reuse existing tools first; add maintained helpers only for an authorized reusable gap. One-off adapters belong in task Cache.")
         for _candidate in audit_result.script_candidates:
             print(f"- line {_candidate.line_number}: {_candidate.line_text}")
             print(f"  recommendation: {_candidate.recommendation}")

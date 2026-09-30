@@ -10,12 +10,6 @@ INSTALLER_SPEC = importlib.util.spec_from_file_location("skill_alias_install", I
 INSTALLER = importlib.util.module_from_spec(INSTALLER_SPEC)
 INSTALLER_SPEC.loader.exec_module(INSTALLER)
 
-RESOLVER_PATH = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "skill_resolver.py"
-RESOLVER_SPEC = importlib.util.spec_from_file_location("skill_alias_resolver", RESOLVER_PATH)
-RESOLVER = importlib.util.module_from_spec(RESOLVER_SPEC)
-RESOLVER_SPEC.loader.exec_module(RESOLVER)
-
-
 class SkillAliasInstallTests(unittest.TestCase):
     @staticmethod
     def create_skill(root, name="verify-skill", content="version one"):
@@ -32,7 +26,7 @@ class SkillAliasInstallTests(unittest.TestCase):
             canonical = self.create_skill(canonical_root)
             first = INSTALLER.apply_aliases("install", canonical_root, agents_root)
             second = INSTALLER.apply_aliases("upgrade", canonical_root, agents_root)
-            discovered = RESOLVER.resolve_compatible_skill_path("verify-skill", canonical_root, agents_root)
+            discovered = (agents_root / "verify-skill" / "SKILL.md").resolve()
             (canonical / "SKILL.md").write_text("version two", encoding="utf-8")
             alias_content = (agents_root / "verify-skill" / "SKILL.md").read_text(encoding="utf-8")
         self.assertEqual(first["results"], [{"skill": "verify-skill", "action": "linked"}])

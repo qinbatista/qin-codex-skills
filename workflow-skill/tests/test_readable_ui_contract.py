@@ -1,15 +1,11 @@
 """Protect one shared visual baseline and no-code presentation activation."""
 
-import importlib.util
 import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = "workflow-skill/references/readable-ui.md"
-spec = importlib.util.spec_from_file_location("ui_selected_policy", ROOT / "task-analyze-skill/scripts/selected_model_policy.py")
-policy = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(policy)
 
 
 class ReadableUIContractTests(unittest.TestCase):
@@ -38,26 +34,6 @@ class ReadableUIContractTests(unittest.TestCase):
             links = re.findall(r"\[[^\]]+\]\(([^)]+readable-ui\.md)\)", path.read_text())
             self.assertEqual(len(links), 1, entry)
             self.assertEqual((path.parent / links[0]).resolve(), ROOT / REFERENCE)
-
-    def test_no_code_presentation_cannot_be_routed_as_unconstrained_work(self):
-        for task_type in ("visual", "ui", "pdf", "report", "presentation", "slides"):
-            node = {"task_type": task_type, "skill": "workflow-skill", "skill_independent": True}
-            policy.bind_node(node, "gpt-6-astra", "ultra")
-            with self.subTest(task_type=task_type):
-                self.assertEqual((node["model"], node["effort"]), ("gpt-6-astra", "ultra"))
-                self.assertTrue(node["model_locked"])
-        self.assertTrue(policy.uses_selected_model({"routing_condition": {"artifact": "pdf"}}))
-        self.assertFalse(policy.uses_selected_model({"task_type": "question", "skill": "workflow-skill"}))
-
-    def test_visual_workers_receive_baseline_and_keep_selected_pair(self):
-        for skill, task_type in (("emil-design-eng", "visual"), ("pdf:pdf", "document"), ("presentations:Presentations", "presentation")):
-            for model, effort in (("gpt-6-luna", "max"), ("gpt-6-astra", "ultra")):
-                node = {"skill": skill, "task_type": task_type, "model": "gpt-6-luna", "effort": "low"}
-                policy.bind_node(node, model, effort)
-                with self.subTest(skill=skill, model=model):
-                    self.assertEqual((node["model"], node["effort"]), (model, effort))
-                    self.assertEqual(node["allow_fallback"], [])
-                    self.assertIn(REFERENCE, policy.execution_guidance(node))
 
 
 if __name__ == "__main__":

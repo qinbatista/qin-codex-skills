@@ -16,16 +16,14 @@
     "github_publication_requires_pass": true,
     "retirement_requires_explicit_user_decision": true,
     "process_contract_is_not_result_memory": true,
-    "workflow_version": 2,
+    "workflow_version": 3,
     "verification_owner": "active_task",
     "ending_purpose": "memory_only",
-    "selected_model_for_governed_tasks": true,
     "missing_memory": "bootstrap_vault_then_skip_absent_matching_note",
-    "task_score_disclosure": "required",
-    "model_disclosure": "assignment_then_runtime",
     "ending_placement": "visible_unpinned_projectless_recent_task",
     "ending_independent_of_main_result": true,
-    "ending_completion": "task_acknowledgement_and_scoped_memory_readback"
+    "ending_completion": "task_acknowledgement_and_scoped_memory_readback",
+    "execution_preview": "brief_goal_and_steps_before_execution"
   },
   "managed_skills": [
     "task-analyze-skill",
@@ -46,25 +44,6 @@
         "deployed"
       ],
       "timeout_seconds": 30
-    },
-    {
-      "id": "task-analyze-units",
-      "kind": "command",
-      "targets": [
-        "source",
-        "deployed"
-      ],
-      "timeout_seconds": 1200,
-      "command": [
-        "{python}",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "task-analyze-skill/tests",
-        "-p",
-        "test_*.py"
-      ]
     },
     {
       "id": "prompt-units",
@@ -178,25 +157,6 @@
         "management-skill/tests",
         "-p",
         "test_*.py"
-      ]
-    },
-    {
-      "id": "task-analyze-validator",
-      "kind": "command",
-      "targets": [
-        "source",
-        "deployed"
-      ],
-      "timeout_seconds": 300,
-      "command": [
-        "{python}",
-        "task-analyze-skill/scripts/validate_task_analyze_skill.py",
-        "--skill-dir",
-        "task-analyze-skill",
-        "--global-agents",
-        "{global_agents}",
-        "--global-skills-root",
-        "."
       ]
     },
     {
@@ -314,33 +274,13 @@
   ],
   "capabilities": [
     {
-      "id": "selected-model",
-      "owner_skill": "task-analyze-skill",
-      "name": "Selected-model ownership",
-      "function": "Skill-governed work and memory preserve the user-selected model and effort; only independent unconstrained work routes adaptively.",
-      "checks": [
-        "task-analyze-units",
-        "project-memory-units"
-      ]
-    },
-    {
-      "id": "adaptive-routing",
-      "owner_skill": "task-analyze-skill",
-      "name": "Independent adaptive work",
-      "function": "Complexity and verified history choose suitable models only for skill-independent tasks; mechanical tools need no model.",
-      "checks": [
-        "task-analyze-units"
-      ]
-    },
-    {
       "id": "coordination",
       "owner_skill": "workflow-skill",
       "name": "Clear goals and safe parallel work",
-      "function": "Use bounded goals, dependencies, disjoint writes and root-owned completion; avoid mandatory decomposition of simple work.",
+      "function": "Briefly explain goals and implementation steps before execution; keep dependencies ordered and integrate results in the active task.",
       "checks": [
         "workflow-units",
-        "workflow-validator",
-        "task-analyze-units"
+        "workflow-validator"
       ]
     },
     {
@@ -357,7 +297,7 @@
       "id": "ending-memory",
       "owner_skill": "project-memory-skill",
       "name": "Memory-only Ending",
-      "function": "Record durable Obsidian memory in a separate unpinned recent task using the selected model; never gate the main result, verify, or repair.",
+      "function": "Consolidate scoped architecture and method knowledge in one project index and readable view; periodically synthesize project summaries and links in the existing memory-only Ending.",
       "checks": [
         "project-memory-units",
         "verify-units"
@@ -367,10 +307,9 @@
       "id": "project-isolation",
       "owner_skill": "project-memory-skill",
       "name": "Optional scoped recall",
-      "function": "Read only matching project memory and explicitly relevant shared preferences; skip absent memory; cross-project reads require an explicit audit.",
+      "function": "Recall exact project/module/file/symbol entries from a centralized index; exclude stale method facts and expose cross-project links only as separate references.",
       "checks": [
-        "project-memory-units",
-        "task-analyze-units"
+        "project-memory-units"
       ]
     },
     {
@@ -439,7 +378,7 @@
       "id": "optimization",
       "owner_skill": "optimization-skill",
       "name": "Measured simplification",
-      "function": "Optimize requested or recurring work with measured evidence; do not invent model savings or trigger routine benchmarks.",
+      "function": "Optimize requested or recurring work with measured evidence; measure improvements without triggering routine benchmarks.",
       "checks": [
         "optimization-units",
         "optimization-audit"
@@ -461,7 +400,6 @@
       "name": "Concise current instructions",
       "function": "Entries and references describe current responsibilities without repeated lifecycle ceremonies; behavioral tests replace obsolete workflow text checks.",
       "checks": [
-        "task-analyze-validator",
         "workflow-validator",
         "management-units"
       ]
@@ -472,11 +410,6 @@
       "id": "legacy-detached-verification",
       "name": "Ending verification and automatic repair tasks",
       "replacement": "ending-memory"
-    },
-    {
-      "id": "legacy-universal-routing",
-      "name": "Mandatory adaptive delegation and repeated Code Gate ceremonies for skill-governed work",
-      "replacement": "selected-model"
     },
     {
       "id": "legacy-benchmark-attestations",

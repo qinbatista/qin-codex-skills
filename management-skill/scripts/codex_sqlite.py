@@ -12,7 +12,7 @@ from pathlib import Path
 # state databases (never WAL/journal sidecars), then validate the schema below.
 STATE_DATABASE_PATTERN = re.compile(r"^state(?:[_-]([A-Za-z0-9][A-Za-z0-9._-]*))?\.sqlite$")
 THREAD_REQUIRED_COLUMNS = frozenset({"id"})
-THREAD_OPTIONAL_COLUMNS = ("rollout_path", "model", "reasoning_effort", "tokens_used", "cli_version", "model_provider", "source")
+THREAD_OPTIONAL_COLUMNS = ("rollout_path",)
 
 
 class CodexSQLiteResolutionError(ValueError):

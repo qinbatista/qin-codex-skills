@@ -1,4 +1,4 @@
 interface:
   display_name: "management-skill"
   short_description: "Maintain, install, and publish managed skills"
-  default_prompt: "Maintain concise source contracts, preserve user work, test relevant changes in-task, install recoverably, and publish only when authorized."
+  default_prompt: "Keep stable rules and essential workflow concise, reuse local code for deterministic steps, and keep run data in task Cache. Update Skills only for authorized reusable changes, verify in-task, install recoverably, and publish only when authorized."

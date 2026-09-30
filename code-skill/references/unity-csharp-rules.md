@@ -1,6 +1,6 @@
 # Unity C# Rules
 
-This is the common C# style reference. Unity-specific architecture and lifecycle rules apply to Unity projects; other C# work uses its actual runtime. The routing aliases `csharp` and `c#` resolve to `unity_csharp` for compatibility and do not create another writing profile.
+This is the common C# style reference. Unity-specific architecture and lifecycle rules apply to Unity projects; other C# work uses its actual runtime.
 
 Use [code-writing philosophy](code-writing-philosophy.md) for general ownership, direct calls, result ownership, naming, and scope. Project-specific Skills add their APIs and feature contracts rather than copying these rules. Honor current user instructions and preserve serialized/public compatibility.
 

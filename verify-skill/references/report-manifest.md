@@ -213,7 +213,7 @@ Each test case can include:
 Every passing case must include concrete evidence rows, not only a status:
 
 - `input`: the real file, image, URL, payload, command input, code path/snippet, prompt, request, or generated test data
-- `used`: the exact tool, command, script, browser action, API endpoint, model call, or workflow used
+- `used`: the exact tool, command, script, browser action, API endpoint, or workflow used
 - `output`: the real stdout, JSON, return value, screenshot path, rendered artifact, generated file, page state, response, or diff
 - `pass_reason`: why that specific output satisfies the user's requested outcome
 
@@ -244,10 +244,10 @@ Preferred case rows:
 - `response`: raw API response or real returned text when available
 - `input`: real given text, command, payload, prompt, or executed action
 - `input_image_path`: optional real source image to render inside the `Input` row when the case input includes an image
-- `used`: exact command, script, tool, browser route, API endpoint, model call, or workflow used to produce the output
+- `used`: exact command, script, tool, browser route, API endpoint, or workflow used to produce the output
 - `output`: real returned text, log excerpt, or concrete result
 - `pass_reason`: required for passing cases; explain why the observed output satisfies the expected outcome
-- for model names, prompts, system prompts, request payloads, or other long setup text requested by the user, add a clearly named test case near the top, such as `Models and prompt used`, with the model names in `input`, the full prompt in `output`, and a readable prompt-card image in `artifacts` when practical
+- for prompts, request payloads, or other long setup text requested by the user, add a clearly named test case near the top with the inputs, full output, and a readable card image in `artifacts` when practical
 - `function_name`: optional short function or API entry-point name to show in the title row
 - `case_detail_mode`: optional top-level manifest setting. Default is `compact`. Use `full` only when the user explicitly wants all supporting detail rows shown.
 - `show_details`: optional per-case override that forces one case to show its support rows even when the manifest stays compact

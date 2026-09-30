@@ -15,8 +15,8 @@ class PromptContractTests(unittest.TestCase):
         cls.metadata = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
         cls.code_reference = (SKILL_ROOT.parent / "code-skill" / "references" / "prompt-generation.md").read_text(encoding="utf-8")
 
-    def test_trigger_model_and_optional_project_memory(self):
-        for concept in ("reusable prompts", "durable AI instructions", "Ordinary prose does not trigger", "user's selected model and effort", "delegated prompt work", "every task", "skip it when unavailable", "project facts scoped to that project"):
+    def test_trigger_and_optional_project_memory(self):
+        for concept in ("reusable prompts", "durable AI instructions", "Ordinary prose does not trigger", "every task", "skip it when unavailable", "project facts scoped to that project"):
             self.assertIn(concept, self.skill)
 
     def test_prompt_defines_only_material_controls(self):
@@ -47,7 +47,7 @@ class PromptContractTests(unittest.TestCase):
         self.assertLess(len(self.metadata), 750)
         for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", self.skill):
             with self.subTest(target=target):
-                self.assertTrue((SKILL_ROOT / target).exists())
+                self.assertTrue((SKILL_ROOT / target.split("#", 1)[0]).exists())
 
 
 if __name__ == "__main__":

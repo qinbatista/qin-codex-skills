@@ -227,36 +227,30 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_english_readme_uses_template_and_current_contract(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
         template = sync_global_skills.ENGLISH_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
-        expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
+        expected = template
         self.assertEqual(readme, expected)
         self.assertLess(len(template.split()), 600)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
-        for concept in ("This repository maintains eight reusable global Codex skills", "## What each skill does", "selected model", "reasoning effort", "adaptive model selection", "Missing memory", "inside the active task", "real behavior check", "unpinned", "Project memories stay isolated"):
+        for concept in ("This repository maintains eight reusable global Codex skills", "## What each skill does", "implementation steps", "Missing memory", "inside the active task", "real behavior check", "unpinned", "Project memories stay isolated"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
-    def test_readme_routing_preserves_user_choice_and_has_no_retired_lifecycle(self):
-        readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
-        for retired in ("Spark schedule", "Spark-xhigh", "CODE READY", "Frozen v48", "+80.774%", "+64.686%", "Repair Task", "finish first, verify in background"):
-            self.assertNotIn(retired, readme)
-        self.assertIn("Mechanical tool calls need no extra model", readme)
-        self.assertNotIn("background verify", readme)
 
     def test_chinese_readme_is_compact_and_has_the_same_policy(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="zh")
         template = sync_global_skills.CHINESE_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
-        expected = template.replace("<!-- EXECUTION_DOMAIN_TABLE -->", sync_global_skills.execution_domain_table(sync_global_skills.load_staged_routing_policy(self.primary_skill_paths())))
+        expected = template
         self.assertEqual(readme, expected)
         self.assertLess(len(template.splitlines()), 80)
-        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "用户选择的", "模型和推理强度", "记忆缺失时直接跳过", "在当前任务内", "真实行为检查", "本地记忆", "项目记忆互相隔离"):
+        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "先简述任务目标", "记忆缺失时直接跳过", "在当前任务内", "真实行为检查", "本地记忆", "项目记忆互相隔离"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
     def test_readme_documents_installation_preservation_and_portable_entry(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
-        for concept in ("deploy --source-dir .", "py -3 -B", "locking, backup, and recovery", "preserves unrelated skills, user AGENTS, and private routing history", "install-global-agents --source-dir .", "restorable backup", "before staging or remote writes"):
+        for concept in ("deploy --source-dir .", "py -3 -B", "locking, backup, and recovery", "preserves unrelated skills, user AGENTS, and existing private history", "install-global-agents --source-dir .", "restorable backup", "before staging or remote writes"):
             self.assertIn(concept, readme)
         self.assertNotIn("/Users/", readme)
         self.assertNotIn("shell=True", readme)
@@ -276,36 +270,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
 
 
-    def test_snapshot_renders_synthetic_registered_rust_domain_without_generator_changes(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            sandbox = Path(temp_dir)
-            staged_skills = sandbox / "skills"
-            staged_skills.mkdir()
-            for skill_path in self.primary_skill_paths():
-                sync_global_skills.copy_skill_directory(skill_path, staged_skills / skill_path.name)
-            policy = staged_skills / "task-analyze-skill" / "scripts" / "routing_policy.py"
-            text = policy.read_text(encoding="utf-8")
-            text = text.replace('    "code_unspecified": {', '    "rust": {"display_name": "Rust", "kind": "code", "language_aliases": ["rust", "rs"], "owner_skill": "code-skill", "owner_enforced": True, "spark_first": True, "reference_path": "code-skill/references/rust-rules.md", "active": True, "history_only": False},\n    "code_unspecified": {')
-            policy.write_text(text, encoding="utf-8")
-            (staged_skills / "code-skill" / "references" / "rust-rules.md").write_text("# Rust rules\n", encoding="utf-8")
-            repository_dir = sandbox / "repository"
-            repository_dir.mkdir()
-            sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
-            self.assertIn("- `rust` · code · `code-skill` · active", (repository_dir / "README.md").read_text(encoding="utf-8"))
 
-    def test_snapshot_rejects_staged_domain_missing_owner_or_reference(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            sandbox = Path(temp_dir)
-            staged_skills = sandbox / "skills"
-            staged_skills.mkdir()
-            for skill_path in self.primary_skill_paths():
-                sync_global_skills.copy_skill_directory(skill_path, staged_skills / skill_path.name)
-            policy = staged_skills / "task-analyze-skill" / "scripts" / "routing_policy.py"
-            policy.write_text(policy.read_text(encoding="utf-8").replace('"code-skill/references/python-rules.md"', '"missing-skill/references/missing.md"'), encoding="utf-8")
-            repository_dir = sandbox / "repository"
-            repository_dir.mkdir()
-            with self.assertRaisesRegex(RuntimeError, "owner SKILL.md is missing|reference file is missing"):
-                sync_global_skills.prepare_repository_snapshot(repository_dir, staged_skills)
 
     def test_repository_snapshot_contains_every_local_readme_reference(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -395,12 +360,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_consumer_deploy_replaces_all_targets_without_semantic_checks_or_snapshot_hashes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "global-skills"
-            with mock.patch.object(sync_global_skills, "load_staged_routing_policy", side_effect=AssertionError("consumer install must not load routing")) as routing, mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=AssertionError("consumer install must not run platform checks")) as platform, mock.patch.object(sync_global_skills, "run_release_gate", side_effect=AssertionError("consumer install must not run release gates")) as gate, mock.patch.object(sync_global_skills, "global_agents_parity", side_effect=AssertionError("consumer install must not run parity checks")) as parity, mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("consumer install must not hash skill trees")) as hasher:
+            with mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=AssertionError("consumer install must not run platform checks")) as platform, mock.patch.object(sync_global_skills, "run_release_gate", side_effect=AssertionError("consumer install must not run release gates")) as gate, mock.patch.object(sync_global_skills, "global_agents_parity", side_effect=AssertionError("consumer install must not run parity checks")) as parity, mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("consumer install must not hash skill trees")) as hasher:
                 changed_names = sync_global_skills.deploy(SKILLS_DIR, target_dir)
 
             self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
             self.assertEqual([path.name for path in sync_global_skills.skill_directories(target_dir)], sync_global_skills.PRIMARY_SKILL_ORDER)
-            routing.assert_not_called()
             platform.assert_not_called()
             gate.assert_not_called()
             parity.assert_not_called()
@@ -438,7 +402,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             unrelated.parent.mkdir(parents=True)
             unrelated.write_text("unrelated\n", encoding="utf-8")
 
-            with mock.patch.object(sync_global_skills, "clone_repository", return_value=repository_dir), mock.patch.object(sync_global_skills, "repository_head", return_value="published-head"), mock.patch.object(sync_global_skills, "write_sync_state") as state_writer, mock.patch.object(sync_global_skills, "load_staged_routing_policy", side_effect=AssertionError("consumer pull must not load routing")) as routing, mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=AssertionError("consumer pull must not run platform checks")) as platform, mock.patch.object(sync_global_skills, "assert_public_safe", side_effect=AssertionError("consumer pull must not run public safety")) as public_safety, mock.patch.object(sync_global_skills, "global_agents_parity", side_effect=AssertionError("consumer pull must not check parity")) as parity, mock.patch.object(sync_global_skills, "path_differs", side_effect=AssertionError("consumer pull must not pre-diff")) as differ, mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("consumer pull must not hash trees")) as hasher:
+            with mock.patch.object(sync_global_skills, "clone_repository", return_value=repository_dir), mock.patch.object(sync_global_skills, "repository_head", return_value="published-head"), mock.patch.object(sync_global_skills, "write_sync_state") as state_writer, mock.patch.object(sync_global_skills, "load_skill_platform_checker", side_effect=AssertionError("consumer pull must not run platform checks")) as platform, mock.patch.object(sync_global_skills, "assert_public_safe", side_effect=AssertionError("consumer pull must not run public safety")) as public_safety, mock.patch.object(sync_global_skills, "global_agents_parity", side_effect=AssertionError("consumer pull must not check parity")) as parity, mock.patch.object(sync_global_skills, "path_differs", side_effect=AssertionError("consumer pull must not pre-diff")) as differ, mock.patch.object(sync_global_skills, "snapshot_hash", side_effect=AssertionError("consumer pull must not hash trees")) as hasher:
                 changed_names = sync_global_skills.pull("owner/repository", target_dir)
 
             self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
@@ -447,10 +411,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(unrelated.read_text(encoding="utf-8"), "unrelated\n")
             self.assertFalse((target_dir.parent / "AGENTS.md").exists())
             state_writer.assert_called_once_with(sync_global_skills.DEFAULT_STATE_FILE, "owner/repository", "published-head", "", "")
-            for forbidden in (routing, platform, public_safety, parity, differ, hasher, self.release_gate):
+            for forbidden in (platform, public_safety, parity, differ, hasher, self.release_gate):
                 forbidden.assert_not_called()
 
-    def test_consumer_deploy_ignores_routing_validator_and_replaces_previous_opaque_target(self):
+    def test_consumer_deploy_replaces_previous_opaque_target(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             sandbox = Path(temp_dir)
             target_dir = sandbox / "global-skills"
@@ -462,13 +426,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             previous_target.parent.mkdir(parents=True)
             previous_target.symlink_to(outside, target_is_directory=True)
 
-            with mock.patch.object(sync_global_skills, "load_staged_routing_policy", side_effect=AssertionError("consumer install must not load routing")) as routing:
-                sync_global_skills.deploy(SKILLS_DIR, target_dir)
+            sync_global_skills.deploy(SKILLS_DIR, target_dir)
 
             self.assertFalse(previous_target.is_symlink())
             self.assertTrue((previous_target / "SKILL.md").is_file())
             self.assertEqual(outside_sentinel.read_text(encoding="utf-8"), "outside\n")
-            routing.assert_not_called()
             self.release_gate.assert_not_called()
 
     def test_deploy_preserves_directory_agents_target_without_traversal(self):
@@ -981,67 +943,6 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(stale["status"], "fail")
         self.assertIn("differs", stale["reason"])
 
-    def test_private_model_experience_json_is_excluded_and_preserved_on_pull(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            sandbox = Path(temp_dir)
-            repository_dir = sandbox / "repository"
-            local_dir = sandbox / "local"
-            repository_dir.mkdir()
-            local_dir.mkdir()
-            for skill_path in self.primary_skill_paths():
-                sync_global_skills.copy_skill_directory(skill_path, repository_dir / skill_path.name)
-                sync_global_skills.copy_skill_directory(skill_path, local_dir / skill_path.name)
-            private_model_experience = local_dir / "task-analyze-skill" / "local" / "adaptive-routing" / "model_experience.json"
-            private_model_experience.parent.mkdir(parents=True)
-            private_model_experience_data = {
-                "schema_version": 3,
-                "updated_at": "2026-07-10T06:00:00.000000+00:00",
-                "conditions": {
-                    "local-model-experience-test": {
-                        "condition": {
-                            "task_family": "document",
-                            "artifact": "document",
-                            "execution_domain": "general",
-                            "scope": "single",
-                            "ambiguity": "low",
-                            "modality": "text",
-                            "risk": "low",
-                            "complexity": "easy",
-                            "owning_skill": "management-skill",
-                            "project_family": "global-codex-skills",
-                            "verification_shape": "mini_real",
-                        },
-                        "summary": "test local private model_experience preservation",
-                        "candidate_ladder": ["gpt-6-luna|low", "gpt-6-luna|low", "gpt-6-luna|medium"],
-                        "hard_floor": "gpt-6-luna|low",
-                        "static_suggestion": "gpt-6-luna|low",
-                        "failed_model": "gpt-6-luna|low",
-                        "success_model": "gpt-6-luna|medium",
-                        "tasks": [],
-                    }
-                },
-            }
-            private_model_experience_payload = json.dumps(private_model_experience_data, sort_keys=True, indent=2) + "\n"
-            private_model_experience.write_text(private_model_experience_payload, encoding="utf-8")
-            self.assertEqual(json.loads(private_model_experience.read_text(encoding="utf-8")), private_model_experience_data)
-
-            local_skill_paths = [local_dir / skill_name for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER]
-            private_hash_before = sync_global_skills.snapshot_hash(local_skill_paths)
-            self.assertNotIn(private_model_experience, sync_global_skills.included_files(local_dir / "task-analyze-skill"))
-            self.assertEqual(private_hash_before, sync_global_skills.snapshot_hash(local_skill_paths))
-
-            snapshot_dir = sandbox / "snapshot"
-            snapshot_dir.mkdir()
-            copied_names = sync_global_skills.prepare_repository_snapshot(snapshot_dir, local_dir)
-            self.assertEqual(copied_names, sync_global_skills.PRIMARY_SKILL_ORDER)
-            self.assertFalse((snapshot_dir / "task-analyze-skill" / "local").exists())
-            self.assertNotIn(private_model_experience, sync_global_skills.included_files(local_dir / "task-analyze-skill"))
-            self.assertEqual(private_hash_before, sync_global_skills.snapshot_hash([snapshot_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
-            self.assertIn("model_experience", private_model_experience.read_text(encoding="utf-8"))
-
-            (repository_dir / "task-analyze-skill" / "SKILL.md").write_text((repository_dir / "task-analyze-skill" / "SKILL.md").read_text(encoding="utf-8") + "\nremote update\n", encoding="utf-8")
-            sync_global_skills.mirror_repository_to_local(repository_dir, local_dir)
-            self.assertEqual(private_model_experience.read_text(encoding="utf-8"), private_model_experience_payload)
 
 
 if __name__ == "__main__":

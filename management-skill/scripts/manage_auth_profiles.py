@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
 
-_CODEX_SQLITE_PATH = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "codex_sqlite.py"
+_CODEX_SQLITE_PATH = Path(__file__).resolve().with_name("codex_sqlite.py")
 _CODEX_SQLITE_SPEC = importlib.util.spec_from_file_location("management_codex_sqlite", _CODEX_SQLITE_PATH)
 _CODEX_SQLITE = importlib.util.module_from_spec(_CODEX_SQLITE_SPEC)
 _CODEX_SQLITE_SPEC.loader.exec_module(_CODEX_SQLITE)

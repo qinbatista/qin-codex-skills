@@ -167,10 +167,10 @@ CHINESE_CATEGORY_LABELS = {
     "Management": "管理类 / Management",
     "General": "通用类 / General",
 }
-SKILL_SUMMARIES = {'task-analyze-skill': 'Preserve the selected model for skill-governed work; adapt independent tasks.', 'workflow-skill': 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.', 'prompt-skill': 'Write concise reusable instructions with clear goals, constraints, and output expectations.', 'code-skill': 'Use direct readable code, explicit ownership, language conventions, and coherent UI.', 'project-memory-skill': 'Ensure an Obsidian vault, read exact-project memory, and save durable facts with the selected model.', 'optimization-skill': 'Simplify requested or recurring work with measured evidence.', 'verify-skill': 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.', 'management-skill': 'Maintain source, install recoverably, and publish only when authorized.'}
-CHINESE_SKILL_SUMMARIES = {'task-analyze-skill': '受 Skill 约束的工作保留用户模型；独立任务自适应选模。', 'workflow-skill': '明确目标和依赖，安全并行，在当前任务整合并验证。', 'prompt-skill': '编写简洁的可复用指令，明确目标、约束和输出。', 'code-skill': '直接清晰的代码、明确职责、语言规范和一致 UI。', 'project-memory-skill': '确保 Obsidian 记忆库，读取准确的项目记忆，并用用户模型保存持久信息。', 'optimization-skill': '按需简化重复工作，以实测支持结果。', 'verify-skill': '在当前任务内验证受影响行为；Ending 只更新记忆。', 'management-skill': '维护源码、可恢复安装、仅按授权发布。'}
-SKILL_CONTENTS = {'task-analyze-skill': [('Purpose', 'Preserve the selected model for skill-governed work; adapt independent tasks.')], 'workflow-skill': [('Purpose', 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.')], 'prompt-skill': [('Purpose', 'Write concise reusable instructions with clear goals, constraints, and output expectations.')], 'code-skill': [('Purpose', 'Use direct readable code, explicit ownership, language conventions, and coherent UI.')], 'project-memory-skill': [('Purpose', 'Ensure an Obsidian vault, read exact-project memory, and save durable facts with the selected model.')], 'optimization-skill': [('Purpose', 'Simplify requested or recurring work with measured evidence.')], 'verify-skill': [('Purpose', 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.')], 'management-skill': [('Purpose', 'Maintain source, install recoverably, and publish only when authorized.')]}
-CHINESE_SKILL_CONTENTS = {'task-analyze-skill': [('职责', '受 Skill 约束的工作保留用户模型；独立任务自适应选模。')], 'workflow-skill': [('职责', '明确目标和依赖，安全并行，在当前任务整合并验证。')], 'prompt-skill': [('职责', '编写简洁的可复用指令，明确目标、约束和输出。')], 'code-skill': [('职责', '直接清晰的代码、明确职责、语言规范和一致 UI。')], 'project-memory-skill': [('职责', '确保 Obsidian 记忆库，读取准确的项目记忆，并用用户模型保存持久信息。')], 'optimization-skill': [('职责', '按需简化重复工作，以实测支持结果。')], 'verify-skill': [('职责', '在当前任务内验证受影响行为；Ending 只更新记忆。')], 'management-skill': [('职责', '维护源码、可恢复安装、仅按授权发布。')]}
+SKILL_SUMMARIES = {'task-analyze-skill': 'Explain the objective and implementation steps before execution.', 'workflow-skill': 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.', 'prompt-skill': 'Write concise reusable instructions with clear goals, constraints, and output expectations.', 'code-skill': 'Use direct readable code, explicit ownership, language conventions, and coherent UI.', 'project-memory-skill': 'Recall exact project and method knowledge; consolidate architecture and relationships centrally.', 'optimization-skill': 'Simplify requested or recurring work with measured evidence.', 'verify-skill': 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.', 'management-skill': 'Maintain source, install recoverably, and publish only when authorized.'}
+CHINESE_SKILL_SUMMARIES = {'task-analyze-skill': '先简述目标和实现步骤，再按步骤执行。', 'workflow-skill': '明确目标和依赖，安全并行，在当前任务整合并验证。', 'prompt-skill': '编写简洁的可复用指令，明确目标、约束和输出。', 'code-skill': '直接清晰的代码、明确职责、语言规范和一致 UI。', 'project-memory-skill': '集中保存架构与方法知识，精确读取项目记忆并整理关联。', 'optimization-skill': '按需简化重复工作，以实测支持结果。', 'verify-skill': '在当前任务内验证受影响行为；Ending 只更新记忆。', 'management-skill': '维护源码、可恢复安装、仅按授权发布。'}
+SKILL_CONTENTS = {'task-analyze-skill': [('Purpose', 'Explain the objective and implementation steps before execution.')], 'workflow-skill': [('Purpose', 'Define goals, order dependencies, integrate safe parallel work, and verify in the active task.')], 'prompt-skill': [('Purpose', 'Write concise reusable instructions with clear goals, constraints, and output expectations.')], 'code-skill': [('Purpose', 'Use direct readable code, explicit ownership, language conventions, and coherent UI.')], 'project-memory-skill': [('Purpose', 'Recall exact project and method knowledge; consolidate architecture and relationships centrally.')], 'optimization-skill': [('Purpose', 'Simplify requested or recurring work with measured evidence.')], 'verify-skill': [('Purpose', 'Verify changed behavior inside the active task with focused evidence; Ending is memory-only.')], 'management-skill': [('Purpose', 'Maintain source, install recoverably, and publish only when authorized.')]}
+CHINESE_SKILL_CONTENTS = {'task-analyze-skill': [('职责', '先简述目标和实现步骤，再按步骤执行。')], 'workflow-skill': [('职责', '明确目标和依赖，安全并行，在当前任务整合并验证。')], 'prompt-skill': [('职责', '编写简洁的可复用指令，明确目标、约束和输出。')], 'code-skill': [('职责', '直接清晰的代码、明确职责、语言规范和一致 UI。')], 'project-memory-skill': [('职责', '集中保存架构与方法知识，精确读取项目记忆并整理关联。')], 'optimization-skill': [('职责', '按需简化重复工作，以实测支持结果。')], 'verify-skill': [('职责', '在当前任务内验证受影响行为；Ending 只更新记忆。')], 'management-skill': [('职责', '维护源码、可恢复安装、仅按授权发布。')]}
 
 
 def run_command(command, cwd=None):
@@ -443,45 +443,15 @@ def read_skill_metadata(skill_dir):
     return metadata
 
 
-def load_staged_routing_policy(skill_paths):
-    """Load and validate the registry from the exact staged mirror inputs."""
-    by_name = {path.name: path for path in skill_paths}
-    task_skill = by_name.get("task-analyze-skill")
-    if task_skill is None:
-        raise RuntimeError("cannot render execution domains: task-analyze-skill is missing")
-    policy_path = task_skill / "scripts" / "routing_policy.py"
-    if not policy_path.is_file():
-        raise RuntimeError(f"cannot render execution domains: registry is missing: {policy_path}")
-    spec = importlib.util.spec_from_file_location("staged_routing_policy", policy_path)
-    module = importlib.util.module_from_spec(spec)
-    if spec.loader is None:
-        raise RuntimeError("cannot render execution domains: registry loader is unavailable")
-    try:
-        spec.loader.exec_module(module)
-    except (OSError, ValueError) as error:
-        raise RuntimeError(f"cannot render execution domains: {error}") from error
-    try:
-        module.validate_execution_domain_registry(task_skill.parent)
-        return module.public_execution_domain_rows()
-    except (AttributeError, ValueError) as error:
-        raise RuntimeError(f"cannot render execution domains: {error}") from error
 
 
-def execution_domain_table(rows):
-    lines = []
-    for row in rows:
-        state = "active" if row["active"] else "history-only"
-        lines.append(f"- `{row['id']}` · {row['kind']} · `{row['owner_skill']}` · {state} · [rules](./{row['reference_path']})")
-    return "\n".join(lines)
 
 
 def build_readme(skill_paths, language="en"):
     template_path = CHINESE_README_TEMPLATE if language == "zh" else ENGLISH_README_TEMPLATE
     template = template_path.read_text(encoding="utf-8").rstrip() + "\n"
-    marker = "<!-- EXECUTION_DOMAIN_TABLE -->"
-    if template.count(marker) != 1:
-        raise RuntimeError(f"{template_path.name} must contain exactly one execution-domain marker")
-    return template.replace(marker, execution_domain_table(load_staged_routing_policy(skill_paths)))
+    return template
+
 
 
 def readme_language_for_output(output_path):
@@ -563,11 +533,11 @@ def skill_modules(skill_name, language="en"):
 def skill_role(skill_name, language="en"):
     if language == "zh":
         if skill_name == "task-analyze-skill":
-            return "显式路由与准入策略"
-        return "已准入路线执行控制器" if skill_name == "workflow-skill" else "Inline 或已准入路线执行者"
+            return "任务目标与实现步骤"
+        return "执行协调" if skill_name == "workflow-skill" else "领域工作规则"
     if skill_name == "task-analyze-skill":
-        return "Explicit routing and admission strategy"
-    return "Admitted-route controller" if skill_name == "workflow-skill" else "Inline or admitted-route executor"
+        return "Task goals and implementation steps"
+    return "Execution coordination" if skill_name == "workflow-skill" else "Domain work guidance"
 
 
 def skill_summary_lines(skill_name, description, language="en"):
@@ -662,7 +632,7 @@ def build_support_skill_details(rows, language="en"):
 
 
 def workflow_lane_section(language="en"):
-    return ["## Workflow", "", "Selected model + relevant skills/memory → goals → execution → focused in-task verification → result → useful memory only.", ""]
+    return ["## Workflow", "", "Brief goal and steps → execution → focused in-task verification → result → useful memory only.", ""]
 
 
 
@@ -1408,7 +1378,6 @@ def prepare_repository_snapshot(repository_dir, skills_dir):
     skill_paths = skill_directories(skills_dir)
     assert_approved_global_skill_set(skill_paths)
     assert_no_symlinks(skill_paths, "approved source skill trees")
-    load_staged_routing_policy(skill_paths)
     assert_public_safe(skill_paths)
     checker_module = load_skill_platform_checker(skills_dir)
     checker_module.assert_skill_platform_safe(skills_dir, Path(skills_dir) / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=APPROVED_GLOBAL_SKILL_NAMES)

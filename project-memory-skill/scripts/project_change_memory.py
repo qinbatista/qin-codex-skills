@@ -51,14 +51,6 @@ SENSITIVE_PATTERNS = (
 )
 
 
-_SESSION_EFFORT_PATH = Path(__file__).resolve().parents[2] / "task-analyze-skill" / "scripts" / "session_effort.py"
-_SESSION_EFFORT_SPEC = importlib.util.spec_from_file_location("project_memory_session_effort", _SESSION_EFFORT_PATH)
-if _SESSION_EFFORT_SPEC is None or _SESSION_EFFORT_SPEC.loader is None:
-    raise RuntimeError(f"Cannot load session scope runtime: {_SESSION_EFFORT_PATH}")
-_SESSION_EFFORT = importlib.util.module_from_spec(_SESSION_EFFORT_SPEC)
-_SESSION_EFFORT_SPEC.loader.exec_module(_SESSION_EFFORT)
-
-
 def _coverage_runtime():
     """Load the sibling coverage runtime without creating an import cycle."""
     try:
@@ -75,15 +67,57 @@ def _coverage_runtime():
         return coverage
 
 
+def _normalize_task_name(value, fallback="task"):
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    normalized = re.sub(r"(?:sk-[a-z0-9_-]{8,}|/users/[^ ]+|/home/[^ ]+|[a-z]:\\[^ ]+)", "private", normalized, flags=re.IGNORECASE)
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")[:96]
+    if slug:
+        return slug
+    digest = hashlib.sha256(str(value or fallback).encode("utf-8")).hexdigest()[:12]
+    return f"{fallback}-{digest}"
+
+
+def _task_group_key(project_key, task_group="", task_name=""):
+    relation_name = task_group or task_name
+    if not str(relation_name or "").strip():
+        return ""
+    normalized = _normalize_task_name(relation_name, "group")
+    return hashlib.sha256(f"{str(project_key or '').strip().lower()}|task-group|{normalized}".encode("utf-8")).hexdigest()[:24]
+
+
 def _memory_scope(project_key, module, task_name="", task_group="", session_id=""):
-    resolved_session_id = _SESSION_EFFORT.resolve_session_id("", session_id)
+    """Preserve legacy scope identities without reading the chat transcript."""
+    session_candidates = (session_id, os.environ.get("CODEX_THREAD_ID"), os.environ.get("CODEX_SESSION_ID"))
+    resolved_session_id = next((value.strip().lower() for value in session_candidates if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", value.strip(), re.IGNORECASE)), "")
     active_task_name = task_name or os.environ.get("CODEX_TASK_NAME", "")
     active_task_group = task_group or os.environ.get("CODEX_TASK_GROUP", "")
-    normalized_task_name = _SESSION_EFFORT.normalize_task_name(active_task_name) if str(active_task_name or "").strip() else ""
-    normalized_task_group = _SESSION_EFFORT.normalize_task_name(active_task_group, "group") if str(active_task_group or "").strip() else ""
-    task_scope = _SESSION_EFFORT.task_scope_key(project_key, "project-change", module, normalized_task_name) if normalized_task_name else ""
-    group_scope = _SESSION_EFFORT.task_group_key(project_key, normalized_task_group, normalized_task_name)
-    return {"codex_session_key": _SESSION_EFFORT.session_key(resolved_session_id) if resolved_session_id else "", "task_name": normalized_task_name, "task_group": normalized_task_group, "task_scope_key": task_scope, "task_group_key": group_scope, "task_scope_mode": "session+task+group" if resolved_session_id and task_scope and group_scope else "session+task" if resolved_session_id and task_scope else "session+group" if resolved_session_id and group_scope else "session" if resolved_session_id else "task+group" if task_scope and group_scope else "task" if task_scope else "group" if group_scope else "unscoped"}
+    normalized_task_name = _normalize_task_name(active_task_name) if str(active_task_name or "").strip() else ""
+    normalized_task_group = _normalize_task_name(active_task_group, "group") if str(active_task_group or "").strip() else ""
+    task_payload = "|".join((str(project_key or "").strip().lower(), "project-change", str(module or "").strip().lower(), normalized_task_name))
+    task_scope = hashlib.sha256(task_payload.encode("utf-8")).hexdigest()[:24] if normalized_task_name else ""
+    group_scope = _task_group_key(project_key, normalized_task_group, normalized_task_name)
+    session_scope = hashlib.sha256(resolved_session_id.encode("utf-8")).hexdigest()[:24] if resolved_session_id else ""
+    return {"codex_session_key": session_scope, "task_name": normalized_task_name, "task_group": normalized_task_group, "task_scope_key": task_scope, "task_group_key": group_scope, "task_scope_mode": "session+task+group" if resolved_session_id and task_scope and group_scope else "session+task" if resolved_session_id and task_scope else "session+group" if resolved_session_id and group_scope else "session" if resolved_session_id else "task+group" if task_scope and group_scope else "task" if task_scope else "group" if group_scope else "unscoped"}
+
+
+def _scope_relation(record, scope):
+    """Describe related legacy memory without changing project search isolation."""
+    active_session = scope.get("codex_session_key", "")
+    active_task = scope.get("task_scope_key", "")
+    active_group = scope.get("task_group_key", "")
+    if not (active_session or active_task or active_group):
+        return "unscoped_query"
+    same_session = bool(active_session and active_session == (record.get("codex_session_key") or record.get("session_key")))
+    if active_task and active_task == record.get("task_scope_key"):
+        return "same_session_task" if same_session else "related_task_scope"
+    record_project = record.get("project") if isinstance(record.get("project"), dict) else {}
+    record_project_key = record.get("project_key") or record_project.get("key") or ""
+    record_group = record.get("task_group_key") or _task_group_key(record_project_key, record.get("task_group", ""), record.get("task_name", ""))
+    if active_group and active_group == record_group:
+        return "same_session_task_group" if same_session else "related_task_group"
+    if same_session and not (active_task or active_group):
+        return "same_session"
+    return "project_result_scope"
 
 
 def _acquire_file_lock(lock_handle):
@@ -457,7 +491,7 @@ HOME_PROJECT_OWNER_ROOTS = ((".codex", "Global Codex Skills"),)
 
 # Paths are deliberately relative to the user's Documents folder. Old and
 # current locations may coexist here so moving a repository does not split its
-# durable change history or adaptive model learning.
+# durable change history.
 DOCUMENT_PROJECT_OWNER_ROOTS = (
     ("AIProject/qin-codex-skills", "Global Codex Skills"),
     ("Muse/SVGDrawer", "SVGDrawer"),
@@ -1011,8 +1045,7 @@ def search_records(project_root=None, module="", files=None, query="", max_resul
         searchable = " ".join([record["summary"], record["reason"], record["result"], record["module"], *record["files"], *record.get("symbols", []), *record["verification"], *record["decisions"], *record["risks"]]).lower()
         if terms and not all(term in searchable for term in terms):
             continue
-        relation = _SESSION_EFFORT.scope_relation(record, session_key_value=scope.get("codex_session_key", ""), task_scope=scope.get("task_scope_key", ""), task_group_key_value=scope.get("task_group_key", "")) if scope.get("codex_session_key") or scope.get("task_scope_key") or scope.get("task_group_key") else {"reason": "unscoped_query", "matched": True}
-        relation_reason = relation["reason"] if relation.get("matched") else "project_result_scope"
+        relation_reason = _scope_relation(record, scope)
         projection = latest_projections.get(record["id"])
         matches.append({**{key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "symbols", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")}, "effective": record["id"] not in superseded_by, "superseded_by": superseded_by.get(record["id"], []), "projection": projection or {"status": "missing", "written": False, "read_back_verified": False}, "relation_reason": relation_reason, "source_session_key": record.get("codex_session_key", "") or record.get("session_key", "")})
         if len(matches) >= max(1, min(max_results, 25)):

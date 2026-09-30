@@ -7,7 +7,7 @@ description: "Use to create, review, edit, or test reusable prompts and durable 
 
 ## Scope
 
-Use the user's selected model and effort for prompt design and delegated prompt work. Read the relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md); skip it when unavailable. Keep project facts scoped to that project, and explicit global preferences separate. Current instructions and fresh source override stale memory.
+Read the relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md); skip it when unavailable. Recall the exact project and relevant prompt/module/file/symbol context rather than the whole history. Keep project facts scoped to that project, and explicit global preferences separate. Cross-project examples remain labeled references whose applicability must be established here. Current instructions and fresh source override stale memory.
 
 ## Design
 
@@ -17,13 +17,15 @@ Keep one authoritative rule per behavior. Merge repeated warnings into a clear r
 
 Separate stable policy from per-run data. Ask only for a missing decision that materially changes the result; otherwise proceed with a reasonable stated assumption. Correct unambiguous spelling in new durable instructions and report the original-to-canonical mapping when material. Preserve quoted user prose, user data, external names, and persisted/public contracts.
 
+For Skill creation or revision, apply [Skill authoring rules](../management-skill/SKILL.md#authoring-rules): retain essential rules and choices, move deterministic mechanics to existing local code, and keep changing run data out of durable instructions. Simplify the complete workflow before adding another rule or step.
+
 ## Workflow
 
 1. Inspect the existing prompt, its direct consumer/validator, relevant inputs, and observed failures.
 2. Identify the desired result and replace the weakest ambiguous or conflicting rule with the smallest complete instruction.
 3. Verify within this active task. For consequential output behavior, use representative inputs and inspect semantic correctness as well as format. Read back simple value-only edits. Do not start the whole project or compile it merely to check a prompt unless requested.
 4. Return the artifact and concise evidence. State when a provider trial or stochastic reliability remains untested; one good sample does not prove stability.
-5. Ending only summarizes useful project memory from completed work, using the user's selected model and effort. It performs no verification or repair.
+5. Ending only summarizes useful project memory from completed work, consolidating the affected prompt contract and related knowledge in the central project store. It performs no verification or repair and creates no separate note per prompt or task.
 
 ## Output-specific checks
 

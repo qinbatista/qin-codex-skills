@@ -1,8 +1,4 @@
 interface:
   display_name: "Task Analyze"
-  short_description: "Selected-model skill execution and independent-task routing"
-  default_prompt: >-
-    Use the selected model and effort to understand governing skills, ensure the Obsidian vault, and read relevant project memory,
-    define task goals, and complete skill-governed work. Route only independent tasks adaptively.
-    Verify consequential changes in the active task with bounded real checks.
-    Ending only summarizes scoped memory with the selected model. Absent matching notes are a normal skip.
+  short_description: "Explain the implementation steps, then execute"
+  default_prompt: "Use $task-analyze-skill to briefly explain the objective and implementation steps, then complete and verify the work."

@@ -22,7 +22,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         referenced = {check_id for capability in catalog["capabilities"] for check_id in capability["checks"]}
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
-        self.assertTrue({"selected-model", "adaptive-routing", "verification", "ending-memory", "project-isolation", "concise-code", "installation", "source-publication"}.issubset(capability_ids))
+        self.assertTrue({"coordination", "verification", "ending-memory", "project-isolation", "concise-code", "installation", "source-publication"}.issubset(capability_ids))
         for capability in catalog["capabilities"]:
             self.assertIn(capability["owner_skill"], catalog["managed_skills"])
             self.assertTrue(capability["function"].strip())
@@ -31,10 +31,10 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertNotIn("lifecycle-trigger-matrix", check_ids)
         self.assertNotIn("model-capability-sync", check_ids)
 
-    def test_catalog_routes_governed_work_and_memory_to_selected_model(self):
+    def test_catalog_previews_steps_and_keeps_verification_in_task(self):
         policy = GATE.load_catalog(PROJECT_ROOT)["policy"]
-        self.assertEqual(policy["workflow_version"], 2)
-        self.assertTrue(policy["selected_model_for_governed_tasks"])
+        self.assertEqual(policy["workflow_version"], 3)
+        self.assertEqual(policy["execution_preview"], "brief_goal_and_steps_before_execution")
         self.assertEqual(policy["verification_owner"], "active_task")
         self.assertEqual(policy["ending_purpose"], "memory_only")
         self.assertEqual(policy["missing_memory"], "bootstrap_vault_then_skip_absent_matching_note")

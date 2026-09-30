@@ -5,7 +5,7 @@ description: "Verify consequential changes inside the active task with the small
 
 # Verify
 
-Verify before declaring the task complete. Keep the user's selected model and effort when skills govern the work. Ensure the Obsidian vault through Project Memory, read relevant project facts, skip absent matching records, and never borrow another project's facts.
+Verify before declaring the task complete. Read relevant project facts through Project Memory, skip absent matching records, and never borrow another project's facts.
 
 ## Choose evidence
 

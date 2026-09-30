@@ -2,7 +2,7 @@
 
 Identify the visual's role: reusable asset, concept, sketch, reference, or final image. Infer the required size, aspect ratio, transparency, source/reference use, and project style from the request. Generate without extra questions when the brief is sufficient.
 
-Use the available image tool or the provider explicitly required by the user/project. Keep domain art direction in the project skill. The selected model owns skill-governed planning and review; the image provider follows its own tool contract.
+Use the available image tool or the provider explicitly required by the user/project. Keep domain art direction in the project skill and follow the image provider's tool contract.
 
 Inspect the saved image for its intended use: real alpha for cutout assets, readable composition and scale, correct cropping, and fidelity to supplied references. Verify inside the active task. Save outputs in the declared project/output location and show the result to the user.
 

@@ -11,7 +11,7 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 class CodeWritingPhilosophyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.documents = {str(path.relative_to(SKILL_ROOT)): path.read_text(encoding="utf-8") for path in [SKILL_ROOT / "SKILL.md", *sorted((SKILL_ROOT / "references").glob("*.md")), SKILL_ROOT / "agents" / "openai.yaml"]}
+        cls.documents = {path.relative_to(SKILL_ROOT).as_posix(): path.read_text(encoding="utf-8") for path in [SKILL_ROOT / "SKILL.md", *sorted((SKILL_ROOT / "references").glob("*.md")), SKILL_ROOT / "agents" / "openai.yaml"]}
 
     def assert_concepts(self, relative_path, concepts):
         document = self.documents[relative_path].casefold()
@@ -19,8 +19,8 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
             with self.subTest(file=relative_path, concept=concept):
                 self.assertIn(concept.casefold(), document)
 
-    def test_skill_governed_work_keeps_selected_model_and_optional_scoped_memory(self):
-        self.assert_concepts("SKILL.md", ["user's selected model and effort", "including a delegated subtask", "every task", "if no memory is available, continue", "another project's", "mechanical shell command"])
+    def test_code_work_explains_steps_and_uses_optional_scoped_memory(self):
+        self.assert_concepts("SKILL.md", ["implementation steps before detailed execution", "every task", "if no memory is available, continue", "another project's", "mechanical shell command"])
 
     def test_checking_stays_in_task_and_memory_closeout_is_separate(self):
         self.assert_concepts("SKILL.md", ["verify changed code in this active task", "real readback or behavior check", "Ending only summarizes", "does not verify or repair", "Do not start the whole project", "unless the user requests it", "remaining limitations"])
@@ -46,7 +46,7 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
                 self.assertIn(concept.casefold(), document)
 
     def test_unity_style_and_applicability_are_explicit(self):
-        self.assert_concepts("references/unity-csharp-rules.md", ["other C# work uses its actual runtime", "unity_csharp", "one physical line", "single-statement", "explicit concrete type", "`private`", "underscore names", "`internal` access modifier", "case _:", "unless requested"])
+        self.assert_concepts("references/unity-csharp-rules.md", ["other C# work uses its actual runtime", "one physical line", "single-statement", "explicit concrete type", "`private`", "underscore names", "`internal` access modifier", "case _:", "unless requested"])
 
     def test_unity_structure_is_general_and_keeps_data_exceptions(self):
         self.assert_concepts("references/unity-game-code-structure-design.md", ["not feature recipes", "do not apply to Editor", "XXController", "XXManager", "single-instance", "operate autonomously", "serializes ScriptableObject references only", "Transient runtime state", "Immutable constants", "canonical ScriptableObject location", "Factory", "Object Pool", "State", "Command", "Observer", "Prototype", "Singleton"])

@@ -45,7 +45,7 @@ class MemoryCoverageTests(unittest.TestCase):
             task_type="code",
             code_kind="python",
             operation="edit",
-            source="model-route",
+            source="project-memory",
             vault=self.vault,
             store=self.store,
             recorded_at=self.when,
@@ -60,7 +60,7 @@ class MemoryCoverageTests(unittest.TestCase):
         self.assertNotIn(str(self.project), self.store.read_text(encoding="utf-8"))
 
     def test_repeated_route_merges_without_duplicate_native_rows(self):
-        kwargs = {"symbol": "Example.run", "files": ["src/example.py"], "source": "model-route", "vault": self.vault, "store": self.store}
+        kwargs = {"symbol": "Example.run", "files": ["src/example.py"], "source": "project-memory", "vault": self.vault, "store": self.store}
         memory_coverage.ensure_coverage(self.project, "example-module", recorded_at=self.when, **kwargs)
         memory_coverage.ensure_coverage(self.project, "example-module", recorded_at=self.when, **kwargs)
         index = self.vault / "Projects" / "ExampleProject" / "Memory Coverage" / "index.md"
@@ -101,16 +101,7 @@ class MemoryCoverageTests(unittest.TestCase):
     def test_merge_store_preserves_canonical_scopes_reprojects_and_deletes_rogue_store(self):
         rogue_store = self.root / "rogue" / "memory-coverage-events.jsonl"
         (self.project / "src" / "rogue.py").write_text("def rogue():\n    return True\n", encoding="utf-8")
-        memory_coverage.ensure_coverage(
-            self.project,
-            "canonical-module",
-            symbol="Example.run",
-            files=["src/example.py"],
-            source="model-route",
-            vault=self.vault,
-            store=self.store,
-            recorded_at=self.when,
-        )
+        memory_coverage.ensure_coverage(self.project, "canonical-module", symbol="Example.run", files=["src/example.py"], source="project-memory", vault=self.vault, store=self.store, recorded_at=self.when)
         memory_coverage.ensure_coverage(
             self.project,
             "rogue-module",
@@ -221,13 +212,13 @@ class MemoryCoverageTests(unittest.TestCase):
         self.assertEqual(final_module["observation_count"], 1)
 
     def test_projection_removes_only_stale_managed_scope_pages(self):
-        memory_coverage.ensure_coverage(self.project, "example-module", source="model-route", vault=self.vault, store=self.store, recorded_at=self.when)
+        memory_coverage.ensure_coverage(self.project, "example-module", source="project-memory", vault=self.vault, store=self.store, recorded_at=self.when)
         modules = self.vault / "Projects" / "ExampleProject" / "Memory Coverage" / "Modules"
         managed_stale = modules / "managed-stale.md"
         user_page = modules / "user-page.md"
         managed_stale.write_text(f"{memory_coverage.MANAGED_MARKER}\n# stale\n", encoding="utf-8")
         user_page.write_text("# User-owned note\n", encoding="utf-8")
-        result = memory_coverage.ensure_coverage(self.project, "example-module", source="model-route", vault=self.vault, store=self.store, recorded_at=self.when)
+        result = memory_coverage.ensure_coverage(self.project, "example-module", source="project-memory", vault=self.vault, store=self.store, recorded_at=self.when)
         self.assertTrue(result["obsidian"]["readback_verified"])
         self.assertFalse(managed_stale.exists())
         self.assertTrue(user_page.is_file())

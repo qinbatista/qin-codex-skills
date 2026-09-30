@@ -9,14 +9,14 @@ description: "Use for code creation, repair, refactoring, and code review when w
 
 Apply general code preferences in any language; another domain Skill may own its specific APIs and implementation. These are structure and writing preferences, not feature recipes. A mechanical shell command or temporary execution script with no relevant design preference may remain skill-free.
 
-Use the user's selected model and effort for work governed by these rules, including a delegated subtask. Do not downgrade that work by complexity score. The main model understands the request, selects relevant context, and defines each subtask's goal and acceptance criteria.
+Briefly explain the intended change and implementation steps before detailed execution. Define the result and acceptance criteria from the user's request and relevant context.
 
 ## Workflow
 
-1. Read the nearest project `AGENTS.md`, the owning source, and relevant project memory on every task. Use [project memory](../project-memory-skill/SKILL.md) for scoped lookup; if no memory is available, continue. Never import another project's facts or turn a project-specific preference into a global rule. Fresh source and current user instructions take precedence over memory.
+1. Read the nearest project `AGENTS.md`, the owning source, and relevant project memory on every task. Use [project memory](../project-memory-skill/SKILL.md) to recall exact project/module/file/symbol entries and relevant relationships; if no memory is available, continue. Consult architecture when ownership or structure changes. Keep another project's material explicitly labeled as a reference, and establish applicability here before use. Fresh source and current user instructions take precedence over memory; refresh consequential current claims.
 2. Read [code-writing philosophy](references/code-writing-philosophy.md) and only the references needed below. Identify the existing owner and make the smallest coherent change, preserving unrelated work.
 3. Verify changed code in this active task using a real readback or behavior check at the smallest convincing boundary. Fix failures here before claiming completion.
-4. Report the changed behavior, evidence, and remaining limitations. Ending only summarizes durable project memory, using the user's selected model and effort; it does not verify or repair code.
+4. Report the changed behavior, evidence, and remaining limitations. Ending only summarizes durable project memory and consolidates affected architecture, module, and method contracts in the central project store; it does not verify or repair code. Avoid a separate memory file for each task or method.
 
 ## References
 

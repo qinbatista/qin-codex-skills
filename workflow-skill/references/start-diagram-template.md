@@ -1,6 +1,6 @@
 # Optional task diagram
 
-Use a diagram only when dependencies help the user understand the work. Name actual goals and model assignments; omit it for simple work.
+Use a diagram only when dependencies help the user understand the work. Name the implementation steps and their intended outputs; a short prose outline is sufficient for ordinary work.
 
 ```mermaid
 flowchart LR
@@ -11,4 +11,4 @@ flowchart LR
   E --> F[Useful memory only]
 ```
 
-Skill-governed stages and memory retain the selected model and effort. Only independent unconstrained stages may route adaptively. Memory can be skipped when absent or unnecessary.
+Explain the main steps before detailed execution, then follow the outline and incorporate user corrections. Memory can be skipped when absent or unnecessary.
