@@ -34,11 +34,11 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
             repo_root = Path(temporary_directory)
             skill_dir = repo_root / "optimization-skill"
             skill_dir.mkdir()
-            paths = [repo_root / "code-skill" / "scripts" / "check.py", repo_root / "project-memory-skill" / "scripts" / "memory.py", repo_root / "workflow-skill" / "scripts" / "run.py"]
+            paths = [repo_root / "code-skill" / "scripts" / "check.py", repo_root / "project-memory-skill" / "scripts" / "memory.py", repo_root / "workflow-skill" / "scripts" / "run.py", repo_root / "verify-skill" / "check.py"]
             for path in paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("pass\n", encoding="utf-8")
-            text = "`skills/code-skill/scripts/check.py` `<codex-home>/skills/project-memory-skill/scripts/memory.py` `~/.codex/skills/workflow-skill/scripts/run.py` and the external data file `AI Memory/ai_memory.py`"
+            text = "`skills/code-skill/scripts/check.py` `<codex-home>/skills/project-memory-skill/scripts/memory.py` `~/.codex/skills/workflow-skill/scripts/run.py` `~/.agents/skills/verify-skill/check.py` and the external data file `AI Memory/ai_memory.py`"
             for command_text in (text, text.replace("/", "\\")):
                 with self.subTest(command_text=command_text):
                     resolved, errors = OPTIMIZER.extract_command_paths(command_text, skill_dir, repo_root)

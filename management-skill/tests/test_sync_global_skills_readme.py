@@ -84,6 +84,12 @@ def svg_bounds_issues(svg_path):
 
 class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def setUp(self):
+        self.codex_sandbox = tempfile.TemporaryDirectory()
+        self.addCleanup(self.codex_sandbox.cleanup)
+        self.codex_root = Path(self.codex_sandbox.name) / "custom-codex-home"
+        codex_environment = mock.patch.dict(sync_global_skills.os.environ, {"CODEX_HOME": str(self.codex_root)})
+        codex_environment.start()
+        self.addCleanup(codex_environment.stop)
         self.release_gate_patcher = mock.patch.object(sync_global_skills, "run_release_gate")
         self.release_gate = self.release_gate_patcher.start()
         self.addCleanup(self.release_gate_patcher.stop)
@@ -679,10 +685,23 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 "--skills-dir",
                 str(target_dir),
             ]
-            with mock.patch.object(sys, "argv", argv):
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "announce_memory_vault"):
                 sync_global_skills.main()
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
             self.assertFalse((target_dir.parent / "AGENTS.md").exists())
+
+    def test_deploy_cli_defaults_to_real_official_user_skills(self):
+        self.assertEqual(sync_global_skills.OFFICIAL_USER_SKILLS_DIRECTORY, Path.home() / ".agents" / "skills")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            official_root = Path(temp_dir) / ".agents" / "skills"
+            legacy_root = Path(temp_dir) / ".codex" / "skills"
+            argv = ["sync_global_skills.py", "deploy", "--source-dir", str(SKILLS_DIR)]
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "OFFICIAL_USER_SKILLS_DIRECTORY", official_root), mock.patch.object(sync_global_skills, "announce_memory_vault"):
+                sync_global_skills.main()
+            self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([official_root / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
+            self.assertTrue(all(sync_global_skills.real_directory_entry(official_root / name) for name in sync_global_skills.PRIMARY_SKILL_ORDER))
+            self.assertFalse(legacy_root.exists())
+            self.assertFalse((self.codex_root / "AGENTS.md").exists())
 
     def test_pull_cli_accepts_repository_and_skills_dir_after_subcommand(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -725,7 +744,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def test_explicit_global_agents_install_targets_only_codex_scope(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             home_dir = Path(temp_dir) / "home"
-            target_dir = home_dir / ".codex" / "skills"
+            target_dir = home_dir / ".agents" / "skills"
             host_agents = home_dir / "AGENTS.md"
             host_agents.parent.mkdir(parents=True)
             host_agents.write_text("# host instructions\n", encoding="utf-8")
@@ -733,17 +752,19 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             expected = sync_global_skills.canonical_global_agents_text(SKILLS_DIR)
             targets = sync_global_skills.global_agents_targets(target_dir)
             self.assertTrue(installation["changed"])
-            self.assertEqual(targets, [(home_dir / ".codex" / "AGENTS.md").absolute()])
+            self.assertEqual(targets, [(self.codex_root / "AGENTS.md").absolute()])
             self.assertEqual([target.read_text(encoding="utf-8") for target in targets], [expected])
             self.assertEqual(host_agents.read_text(encoding="utf-8"), "# host instructions\n")
+            self.assertFalse((target_dir.parent / "AGENTS.md").exists())
+            self.assertFalse(target_dir.exists())
             parity = sync_global_skills.global_agents_parity(SKILLS_DIR, target_dir)
             self.assertEqual(parity["status"], "pass")
             self.assertEqual(parity["targets"], [str(target) for target in targets])
 
     def test_explicit_global_agents_install_creates_persistent_backup_and_restores_it(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            target_dir = Path(temp_dir) / ".codex" / "skills"
-            target_agents = target_dir.parent / "AGENTS.md"
+            target_dir = Path(temp_dir) / ".agents" / "skills"
+            target_agents = self.codex_root / "AGENTS.md"
             target_agents.parent.mkdir(parents=True)
             target_agents.write_text("# personal instructions\n", encoding="utf-8")
 
@@ -751,6 +772,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
             self.assertTrue(installation["changed"])
             backup_dir = sync_global_skills.global_agents_backup_root(target_dir) / installation["backup_id"]
+            self.assertEqual(backup_dir.parent, self.codex_root / "global-agents-backups")
             self.assertTrue((backup_dir / "previous").is_file())
             self.assertEqual((backup_dir / "previous").read_text(encoding="utf-8"), "# personal instructions\n")
             self.assertEqual(target_agents.read_text(encoding="utf-8"), sync_global_skills.canonical_global_agents_text(SKILLS_DIR))
@@ -764,30 +786,11 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual((backup_dir / "replaced-on-restore").read_text(encoding="utf-8"), "# changed after install\n")
             self.assertEqual(sync_global_skills.list_global_agents_backups(target_dir), [{"id": installation["backup_id"], "state": "restored", "target_existed": True}])
 
-    def test_user_skills_bridge_is_dry_run_by_default_and_never_replaces_conflicts(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            legacy_root = Path(temp_dir) / ".codex" / "skills"
-            official_root = Path(temp_dir) / ".agents" / "skills"
-            for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
-                sync_global_skills.copy_skill_directory(SKILLS_DIR / skill_name, legacy_root / skill_name)
-
-            preview = sync_global_skills.bridge_user_skills(legacy_root, official_root)
-
-            self.assertFalse(preview["applied"])
-            self.assertEqual(preview["planned"], sync_global_skills.PRIMARY_SKILL_ORDER)
-            self.assertFalse(official_root.exists())
-
-            applied = sync_global_skills.bridge_user_skills(legacy_root, official_root, apply=True)
-
-            self.assertTrue(applied["applied"])
-            self.assertEqual(applied["planned"], sync_global_skills.PRIMARY_SKILL_ORDER)
-            for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
-                self.assertTrue((official_root / skill_name).is_symlink())
-                self.assertEqual((official_root / skill_name).resolve(), (legacy_root / skill_name).resolve())
-            (official_root / "management-skill").unlink()
-            (official_root / "management-skill").mkdir()
-            with self.assertRaisesRegex(RuntimeError, "Refusing to replace existing official user Skills: management-skill"):
-                sync_global_skills.bridge_user_skills(legacy_root, official_root)
+    def test_codex_home_fallback_is_independent_of_the_skill_root(self):
+        with mock.patch.dict(sync_global_skills.os.environ, {"CODEX_HOME": ""}):
+            expected = (Path.home() / ".codex").absolute()
+            self.assertEqual(sync_global_skills.codex_home(), expected)
+            self.assertEqual(sync_global_skills.global_agents_targets(Path("unrelated-skills")), [expected / "AGENTS.md"])
 
     def test_push_cli_defaults_to_the_maintained_repository_source(self):
         argv = ["sync_global_skills.py", "push", "--message", "source-first smoke"]
@@ -798,7 +801,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             sync_global_skills.DEFAULT_SOURCE_DIR,
             "source-first smoke",
             False,
-            Path.home() / ".codex" / "skills",
+            Path.home() / ".agents" / "skills",
         )
 
     def test_publishable_source_paths_exclude_unrelated_or_private_content(self):
@@ -937,7 +940,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             target_dir = Path(temp_dir) / "global-skills"
             sync_global_skills.install_global_agents(SKILLS_DIR, target_dir)
             matching = sync_global_skills.global_agents_parity(SKILLS_DIR, target_dir)
-            (target_dir.parent / "AGENTS.md").write_text("# stale\n", encoding="utf-8")
+            (self.codex_root / "AGENTS.md").write_text("# stale\n", encoding="utf-8")
             stale = sync_global_skills.global_agents_parity(SKILLS_DIR, target_dir)
         self.assertEqual(matching["status"], "pass")
         self.assertEqual(stale["status"], "fail")

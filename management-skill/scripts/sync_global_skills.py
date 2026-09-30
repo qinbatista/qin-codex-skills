@@ -706,10 +706,14 @@ def materialized_global_agents_text(source_dir):
     return text[len(GLOBAL_AGENTS_DIRECTIVE):] if text.startswith(GLOBAL_AGENTS_DIRECTIVE) else text
 
 
+def codex_home():
+    """Resolve Codex configuration independently from the user Skill directory."""
+    return lexical_absolute_path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+
+
 def global_agents_targets(skills_dir):
-    """Return the documented Codex global-instructions target for this Skill root."""
-    skills_root = lexical_absolute_path(skills_dir)
-    return [skills_root.parent / "AGENTS.md"]
+    """Keep the existing call signature; Skills do not own Codex instructions."""
+    return [codex_home() / "AGENTS.md"]
 
 
 def legacy_global_agents_targets(skills_dir):
@@ -723,7 +727,7 @@ def legacy_global_agents_targets(skills_dir):
 
 
 def global_agents_backup_root(skills_dir):
-    return lexical_absolute_path(skills_dir).parent / GLOBAL_AGENTS_BACKUP_DIRECTORY
+    return codex_home() / GLOBAL_AGENTS_BACKUP_DIRECTORY
 
 
 def global_agents_target_matches(target, expected_text):
@@ -774,7 +778,7 @@ def install_global_agents(source_dir, skills_dir):
     skills_dir = lexical_absolute_path(skills_dir)
     expected_text = canonical_global_agents_text(source_dir)
     target = global_agents_targets(skills_dir)[0]
-    with installation_lock(skills_dir):
+    with installation_lock(target):
         if global_agents_target_matches(target, expected_text):
             return {"changed": False, "backup_id": None, "target": target}
         backup_dir, manifest = create_global_agents_backup(skills_dir, target)
@@ -804,7 +808,7 @@ def install_global_agents(source_dir, skills_dir):
 
 def restore_global_agents_backup(skills_dir, backup_id):
     skills_dir = lexical_absolute_path(skills_dir)
-    with installation_lock(skills_dir):
+    with installation_lock(global_agents_targets(skills_dir)[0]):
         backup_dir, manifest, target = load_global_agents_backup(skills_dir, backup_id)
         if manifest.get("state") == "restored":
             return {"changed": False, "backup_id": backup_id, "target": target}
@@ -841,33 +845,6 @@ def list_global_agents_backups(skills_dir):
         if isinstance(manifest, dict):
             backups.append({"id": backup_dir.name, "state": manifest.get("state", "invalid"), "target_existed": manifest.get("target_existed")})
     return backups
-
-
-def bridge_user_skills(skills_dir, user_skills_dir=OFFICIAL_USER_SKILLS_DIRECTORY, apply=False):
-    skills_dir = lexical_absolute_path(skills_dir)
-    user_skills_dir = lexical_absolute_path(user_skills_dir)
-    missing = [name for name in PRIMARY_SKILL_ORDER if not real_directory_entry(skills_dir / name)]
-    if missing:
-        raise RuntimeError(f"The legacy Skill root is missing managed Skills: {', '.join(missing)}")
-    planned = []
-    existing = []
-    conflicts = []
-    for name in PRIMARY_SKILL_ORDER:
-        source = skills_dir / name
-        target = user_skills_dir / name
-        if not os.path.lexists(target):
-            planned.append(name)
-        elif target.is_symlink() and target.resolve() == source.resolve():
-            existing.append(name)
-        else:
-            conflicts.append(name)
-    if conflicts:
-        raise RuntimeError(f"Refusing to replace existing official user Skills: {', '.join(conflicts)}")
-    if apply:
-        user_skills_dir.mkdir(parents=True, exist_ok=True)
-        for name in planned:
-            os.symlink(skills_dir / name, user_skills_dir / name, target_is_directory=True)
-    return {"applied": apply, "legacy_root": skills_dir, "user_root": user_skills_dir, "planned": planned, "existing": existing}
 
 
 def deploy_global_agents(source_dir, skills_dir):
@@ -1125,7 +1102,8 @@ def snapshot_from_installation_manifest(transaction_root, payload, skills_dir):
     if schema_version == 1:
         agent_targets = legacy_global_agents_targets(skills_dir)
     elif payload.get("global_agents_included") is True:
-        agent_targets = global_agents_targets(skills_dir)
+        # Historical schema-2 transactions derived AGENTS from their Skill root.
+        agent_targets = [skills_dir.parent / "AGENTS.md"]
     else:
         agent_targets = []
     expected_targets.extend(("agents", target, transaction_root / "staged-agents" / f"{index}.md") for index, target in enumerate(agent_targets))
@@ -1369,7 +1347,7 @@ def pull(repository, skills_dir):
         repository_dir = clone_repository(repository, sandbox, read_only=True)
         changed_names = mirror_repository_to_local(repository_dir, skills_dir)
         record_pull_state(repository, repository_dir, skills_dir)
-        print_lines("Replaced managed remote skills in ~/.codex/skills:", changed_names)
+        print_lines(f"Replaced managed remote skills in {skills_dir}:", changed_names)
         return changed_names
 
 
@@ -1510,7 +1488,7 @@ def remote_branch_head(source_dir, branch_name):
 def push(repository, source_dir, message, dry_run, skills_dir=None):
     source_dir = source_repository_root(source_dir)
     if not dry_run:
-        run_release_gate(source_dir, skills_dir or Path.home() / ".codex" / "skills", "release")
+        run_release_gate(source_dir, skills_dir or OFFICIAL_USER_SKILLS_DIRECTORY, "release")
     skill_paths = skill_directories(source_dir)
     if not dry_run:
         assert_public_safe(skill_paths)
@@ -1563,9 +1541,9 @@ def sync(repository, skills_dir, message):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sync user global Codex skills with GitHub without putting .git in ~/.codex/skills.")
+    parser = argparse.ArgumentParser(description="Sync user global Codex skills with GitHub without putting .git in ~/.agents/skills.")
     parser.add_argument("--repo", default=DEFAULT_REPOSITORY)
-    parser.add_argument("--skills-dir", type=Path, default=Path.home() / ".codex" / "skills")
+    parser.add_argument("--skills-dir", type=Path, default=OFFICIAL_USER_SKILLS_DIRECTORY)
     subparsers = parser.add_subparsers(dest="command", required=True)
     sync_parser = subparsers.add_parser("sync")
     sync_parser.add_argument("--message", default="Sync global Codex skills")
@@ -1587,10 +1565,6 @@ def main():
     restore_agents_parser.add_argument("--skills-dir", type=Path, dest="restore_agents_skills_dir", default=argparse.SUPPRESS)
     list_agents_parser = subparsers.add_parser("list-global-agents-backups")
     list_agents_parser.add_argument("--skills-dir", type=Path, dest="list_agents_skills_dir", default=argparse.SUPPRESS)
-    bridge_parser = subparsers.add_parser("bridge-user-skills")
-    bridge_parser.add_argument("--skills-dir", type=Path, dest="bridge_skills_dir", default=argparse.SUPPRESS)
-    bridge_parser.add_argument("--user-skills-dir", type=Path, default=OFFICIAL_USER_SKILLS_DIRECTORY)
-    bridge_parser.add_argument("--apply", action="store_true")
     render_parser = subparsers.add_parser("render-readme")
     render_parser.add_argument("--output", type=Path, required=True)
     push_parser = subparsers.add_parser("push")
@@ -1638,14 +1612,6 @@ def main():
     elif args.command == "list-global-agents-backups":
         backups = list_global_agents_backups(getattr(args, "list_agents_skills_dir", args.skills_dir))
         print_lines("Persistent global AGENTS backups:", [f"{backup['id']} ({backup['state']})" for backup in backups] or ["none"])
-    elif args.command == "bridge-user-skills":
-        bridge = bridge_user_skills(getattr(args, "bridge_skills_dir", args.skills_dir), args.user_skills_dir, args.apply)
-        action = "Created" if bridge["applied"] else "Planned"
-        print_lines(f"{action} official user Skill links:", bridge["planned"] or ["none"])
-        if bridge["existing"]:
-            print_lines("Existing matching official user Skill links:", bridge["existing"])
-        if not bridge["applied"]:
-            print("No user Skill path was changed; rerun with --apply only after confirming the active Codex runtime needs the official user Skill path.")
     elif args.command == "render-readme":
         skill_paths = skill_directories(args.skills_dir)
         assert_approved_global_skill_set(skill_paths)

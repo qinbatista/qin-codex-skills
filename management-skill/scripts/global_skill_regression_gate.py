@@ -536,7 +536,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     check_parser = subparsers.add_parser("check")
     check_parser.add_argument("--project-root", type=Path, default=Path.cwd())
-    check_parser.add_argument("--skills-dir", type=Path, default=Path.home() / ".codex" / "skills")
+    check_parser.add_argument("--skills-dir", type=Path, default=Path.home() / ".agents" / "skills")
     check_parser.add_argument("--mode", choices=("source", "deployed", "release"), required=True)
     check_parser.add_argument("--output", type=Path)
     check_parser.add_argument("--history", type=Path)

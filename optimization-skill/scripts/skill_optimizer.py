@@ -40,7 +40,7 @@ SCRIPT_CANDIDATES = [
 
 SECTION_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-COMMAND_PATH_PATTERN = re.compile(r"(?<![\w./\\~<:-])(?:(?:<codex-home>[\\/]skills[\\/]|~[\\/]\.codex[\\/]skills[\\/]|[A-Za-z]:[\\/]|[\\/]{1,2}|\.{1,2}[\\/])(?:[\w.-]+[\\/])*|(?:[\w.-]+[\\/])+)[\w.-]+\.(?:py|sh|applescript)\b")
+COMMAND_PATH_PATTERN = re.compile(r"(?<![\w./\\~<:-])(?:(?:<codex-home>[\\/]skills[\\/]|~[\\/]\.(?:agents|codex)[\\/]skills[\\/]|[A-Za-z]:[\\/]|[\\/]{1,2}|\.{1,2}[\\/])(?:[\w.-]+[\\/])*|(?:[\w.-]+[\\/])+)[\w.-]+\.(?:py|sh|applescript)\b")
 LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
 
 
@@ -182,7 +182,7 @@ def resolve_reference(raw_path: str, skill_dir: Path, repo_root: Path) -> Path |
     _clean_path = raw_path.split("#", 1)[0].strip().replace("\\", "/")
     if not _clean_path or re.match(r"^[a-z]+://", _clean_path):
         return None
-    for _prefix in ("<codex-home>/skills/", "~/.codex/skills/", "skills/"):
+    for _prefix in ("~/.agents/skills/", "<codex-home>/skills/", "~/.codex/skills/", "skills/"):
         if _clean_path.startswith(_prefix):
             _suffix = Path(_clean_path.removeprefix(_prefix))
             for _candidate in (repo_root / _suffix, repo_root / "skills" / _suffix):
@@ -218,7 +218,7 @@ def extract_command_paths(text: str, skill_dir: Path, repo_root: Path) -> tuple[
         _raw_path = _match.group(0)
         _normalized_path = _raw_path.replace("\\", "/")
         _path_parts = [part.casefold() for part in _normalized_path.split("/")]
-        _has_explicit_command_prefix = _normalized_path.startswith(("/", "./", "../", "<codex-home>/skills/", "~/.codex/skills/", "skills/")) or re.match(r"^[A-Za-z]:/", _normalized_path) is not None
+        _has_explicit_command_prefix = _normalized_path.startswith(("/", "./", "../", "~/.agents/skills/", "<codex-home>/skills/", "~/.codex/skills/", "skills/")) or re.match(r"^[A-Za-z]:/", _normalized_path) is not None
         if not _has_explicit_command_prefix and not any(_part in {"bin", "plugins", "scripts", "tools"} for _part in _path_parts):
             continue
         _resolved_path = resolve_reference(_raw_path, skill_dir, repo_root)

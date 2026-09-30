@@ -25,6 +25,8 @@ Preserve unrelated edits, existing private history, and unrelated installed skil
 
 ## Install
 
+Use the official user Skill directory, `~/.agents/skills`, as the single installation root. `CODEX_HOME` (default `~/.codex`) still owns Codex configuration, global `AGENTS.md`, and bundled system resources; it is not the user Skill root. Do not maintain a second user Skill copy or bridge under `CODEX_HOME/skills`. For an authorized migration, preserve unique content and recoverable backups, verify the destination, then retire the old user copies; preserve `.system` and plugin-managed resources.
+
 Use `scripts/sync_global_skills.py deploy --source-dir ROOT --skills-dir TARGET`. The installer materializes managed sources, locks the target, backs up recoverably, replaces exact managed targets, and restores on failure. It preserves user AGENTS files and unrelated skills. The CLI then runs Project Memory setup: it reuses the configured vault or creates one from `qin-llm-wiki`, prints the exact path and backup warning, and reports setup failure as pending without writing to Codex. Existing `task-analyze-skill/local/` files are legacy recovery inputs only. Installation performs recoverable replacement without running verification tasks or a release gate.
 
 Only an explicit global AGENTS update uses `install-global-agents`; it creates a persistent backup with a restore command. Source changes, local installation, and remote publication are distinct outcomes.

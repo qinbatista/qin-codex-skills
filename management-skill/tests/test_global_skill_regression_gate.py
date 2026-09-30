@@ -15,6 +15,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class GlobalSkillRegressionGateTests(unittest.TestCase):
+    def test_cli_defaults_to_the_official_user_skill_root(self):
+        report = {"status": "pass", "summary": {}}
+        argv = ["global_skill_regression_gate.py", "check", "--mode", "source"]
+        with mock.patch.object(GATE.sys, "argv", argv), mock.patch.object(GATE, "run_gate", return_value=report) as runner, mock.patch.object(GATE, "write_report"), mock.patch.object(GATE, "append_history"), mock.patch("builtins.print"):
+            self.assertEqual(GATE.main(), 0)
+        runner.assert_called_once_with(Path.cwd().resolve(), (Path.home() / ".agents" / "skills").resolve(), "source")
+
     def test_catalog_has_unique_capabilities_and_complete_check_mapping(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)
         capability_ids = [capability["id"] for capability in catalog["capabilities"]]

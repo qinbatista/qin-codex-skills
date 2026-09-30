@@ -2,7 +2,7 @@
 
 This repository maintains eight reusable global Codex skills. Projects retain their own domain rules.
 
-Before execution, briefly explain the requested outcome and the main implementation steps. Then follow those steps, keeping the user informed so they can adjust or interrupt the work.
+Briefly explain the outcome and implementation steps before execution, then proceed. Keep the user informed so they can redirect or interrupt.
 
 ## What each skill does
 
@@ -28,13 +28,15 @@ Project knowledge is centralized in one Memory.json index and one Knowledge.md v
 
 Project memories stay isolated. Shared preferences are read only when relevant. Project `AGENTS.md` and Skills own stable operating rules; changing project information and historical outcomes live in Obsidian.
 
-If no memory vault is installed, [Project Memory](project-memory-skill/SKILL.md) connects to [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki), creates a private Obsidian-compatible vault outside Codex and the project, verifies it, and reports its exact location. The default new location is `~/Documents/Obsidian/LLM Memory`; use `CODEX_OBSIDIAN_VAULT` or `--vault` to choose another durable location. Back up the entire vault regularly: it contains all Codex and project memory. The public generator is a template, not a destination for private memory or a backup.
+Without a vault, [Project Memory](project-memory-skill/SKILL.md) uses [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki) to create and verify a private Obsidian vault outside Codex and the project. New vaults default to `~/Documents/Obsidian/LLM Memory`; configure `CODEX_OBSIDIAN_VAULT` or `--vault` to choose another location. Back up the entire vault regularly: it holds all Codex and project memory. The generator is a public template, not a private-memory backup.
 
 macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --project-root .`
 
 Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.py --project-root .`
 
 ## Source and installation
+
+Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Retire duplicate user copies while preserving `.system` and plugins.
 
 Each skill folder owns its `SKILL.md`, references, helpers, and versioned development tests needed by the release gate. Disposable task work belongs in ignored `Cache/temp-*`; retained local evidence belongs in `Cache/remote-*` with an explicit reason and owner.
 
