@@ -99,9 +99,9 @@ def _relative_path(value: Any) -> str:
 def _task_root_path(value: Any) -> str:
     value = _relative_path(value)
     parts = value.split("/")
-    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith("temp-"):
-        _fail("task_root must be one exact Cache/temp-<name> directory")
-    suffix = parts[1][5:]
+    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith(("temp-", "tmp-")):
+        _fail("task_root must be one exact Cache/temp-<name> or Cache/tmp-<name> directory")
+    suffix = parts[1].split("-", 1)[1]
     if not suffix or not IDENTIFIER_RE.fullmatch(suffix):
         _fail("task_root temp name must be non-empty and portable")
     return value
@@ -116,15 +116,12 @@ def _disposable_path(value: Any, task_root: str) -> str:
     return value
 
 
-def _retained_path(value: Any) -> tuple[str, str]:
+def _durable_path(value: Any) -> str:
     value = _relative_path(value)
     parts = PurePosixPath(value).parts
-    if len(parts) < 2 or parts[0] != "Cache":
-        _fail("retained task artifacts must remain below project Cache")
-    category = parts[1]
-    if category.startswith("remote-") and len(category) > len("remote-"):
-        return value, "remote"
-    _fail("retained path must be below Cache/remote-<name>")
+    if parts[0] in {"temp", "tmp"} or (parts[0] == "Cache" and len(parts) > 1 and parts[1].startswith(("temp-", "tmp-"))):
+        _fail("durable owner must be outside temporary task scratch")
+    return value
 
 
 def _canonical_root(project_root: str | Path) -> Path:
@@ -283,6 +280,7 @@ def new_ledger(
         marker_file.write("\n")
         marker_file.flush()
         os.fsync(marker_file.fileno())
+    ledger["binding"]["marker_identity"] = _stat_identity(_safe_lstat(marker, directory=False))
     _audit(ledger, "init", None, "acquired", "exclusive task resource root created")
     return validate_ledger(ledger)
 
@@ -346,6 +344,14 @@ def validate_ledger(ledger: Any) -> dict[str, Any]:
         durable = resource.get("durable_result_digest")
         if durable is not None and not DIGEST_RE.fullmatch(str(durable)):
             _fail("durable result digest is invalid")
+        durable_owner = resource.get("durable_owner")
+        if durable_owner is not None:
+            if not isinstance(durable_owner, dict) or not DIGEST_RE.fullmatch(str(durable_owner.get("sha256", ""))):
+                _fail("durable owner receipt is invalid")
+        for consumer in consumers.values():
+            dependency = consumer.get("durable_owner_digest")
+            if dependency is not None and (durable_owner is None or dependency != _identity_digest(durable_owner)):
+                _fail("consumer durable dependency does not match the exact owner receipt")
         if resource["kind"] == "path":
             _relative_path(resource.get("path"))
             if resource.get("disposable"):
@@ -380,6 +386,8 @@ def _verify_binding(ledger: dict[str, Any], project_root: str | Path) -> Path:
     marker_stat = _safe_lstat(marker, directory=False)
     if not stat.S_ISREG(marker_stat.st_mode) or marker_stat.st_nlink != 1:
         _fail("task ownership marker is not one exact regular file")
+    if ledger["binding"].get("marker_identity") is not None and ledger["binding"]["marker_identity"] != _stat_identity(marker_stat):
+        _fail("task ownership marker identity changed")
     observed_marker = json.loads(marker.read_text(encoding="utf-8"))
     if observed_marker != _marker_payload(ledger):
         _fail("task ownership marker does not match ledger")
@@ -472,6 +480,66 @@ def acquire_path(
     return resource
 
 
+def _verify_durable_owner(project_root: Path, receipt: Any) -> dict[str, Any]:
+    if not isinstance(receipt, dict):
+        _fail("an exact durable owner receipt is required")
+    owner_id = _identifier(receipt.get("owner_id"), "owner_id")
+    owner_kind = receipt.get("owner_kind")
+    if owner_kind not in {"output", "website", "resource", "recovery"}:
+        _fail("owner_kind must name an output, website, resource, or recovery owner")
+    disposition = receipt.get("disposition")
+    purpose = receipt.get("purpose")
+    if (disposition == "delivery" and purpose != "final_output") or (disposition == "recovery" and purpose not in {"resume_input", "resume_state"}) or disposition not in {"delivery", "recovery"}:
+        _fail("durable transfer must deliver final output or minimal recovery input/state")
+    owner_root = _durable_path(receipt.get("owner_root"))
+    path = _durable_path(receipt.get("path"))
+    owner_record = _durable_path(receipt.get("owner_record"))
+    for relative in (path, owner_record):
+        if not PurePosixPath(relative).is_relative_to(PurePosixPath(owner_root)) or relative == owner_root:
+            _fail("durable bytes and owner record must be strictly inside the declared owner_root")
+    verified = {"owner_id": owner_id, "owner_kind": owner_kind, "owner_root": owner_root, "owner_record": owner_record, "path": path, "disposition": disposition, "purpose": purpose}
+    expected_device = int(project_root.stat().st_dev)
+    for relative, digest_key, identity_key in ((owner_record, "owner_record_sha256", "owner_record_identity"), (path, "sha256", "file_identity")):
+        expected_digest = _digest(receipt.get(digest_key), digest_key)
+        current = project_root
+        for part in PurePosixPath(relative).parts:
+            current = current / part
+            observed = _safe_lstat(current)
+            if int(observed.st_dev) != expected_device:
+                _fail("durable owner crosses a filesystem or mount boundary")
+        if not stat.S_ISREG(observed.st_mode) or observed.st_nlink != 1:
+            _fail("durable owner bytes must be one exact regular file")
+        identity = _stat_identity(observed)
+        if receipt.get(identity_key) is not None and receipt[identity_key] != identity:
+            _fail("durable owner file identity changed after readback")
+        digest = hashlib.sha256()
+        with current.open("rb") as source:
+            opened_identity = _stat_identity(os.fstat(source.fileno()))
+            if not _same_object_identity(identity, opened_identity) or opened_identity["size"] != identity["size"]:
+                _fail("durable owner changed while opening readback")
+            if disposition == "recovery" and relative == path:
+                header = source.read(512)
+                source.seek(0)
+                archive_suffixes = {".zip", ".tar", ".tgz", ".gz", ".bz2", ".xz", ".7z", ".rar"}
+                if archive_suffixes.intersection(current.suffixes) or header.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08", b"\x1f\x8b", b"BZh", b"\xfd7zXZ\x00", b"7z\xbc\xaf\x27\x1c", b"Rar!")) or header[257:262] == b"ustar":
+                    _fail("recovery must preserve individual minimum input/state files, never a scratch archive")
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != expected_digest or _stat_identity(_safe_lstat(current, directory=False)) != identity:
+            _fail("durable owner byte readback does not match the exact receipt")
+        verified[digest_key] = expected_digest
+        verified[identity_key] = identity
+    declaration_path = _absolute(project_root, owner_record)
+    if declaration_path.stat().st_size > 256 * 1024:
+        _fail("durable owner record exceeds the bounded declaration limit")
+    declaration = json.loads(declaration_path.read_text(encoding="utf-8"))
+    if not isinstance(declaration, dict) or any(declaration.get(key) != verified[key] for key in ("owner_id", "owner_kind", "owner_root")):
+        _fail("existing durable owner record does not declare the exact owner")
+    if _stat_identity(_safe_lstat(declaration_path, directory=False)) != verified["owner_record_identity"]:
+        _fail("durable owner declaration changed during readback")
+    return verified
+
+
 def record_retained_path(
     ledger: dict[str, Any],
     resource_id: str,
@@ -483,12 +551,19 @@ def record_retained_path(
     authorized_by_user: bool = False,
     authorized_by_contract: bool = False,
     scope: str = "main",
+    project_root: str | Path | None = None,
+    owner_receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    path, category = _retained_path(path)
+    path = _durable_path(path)
     reason = _require_text(reason, "retention reason")
     next_review = _require_text(next_review, "next review")
     if not (authorized_by_user or authorized_by_contract):
-        _fail("remote retention requires explicit user or project-contract authorization")
+        _fail("retention requires explicit user or project-contract authorization")
+    if project_root is None:
+        _fail("retention requires project_root and an exact durable owner receipt")
+    owner = _verify_durable_owner(_verify_binding(ledger, project_root), owner_receipt)
+    if owner["path"] != path:
+        _fail("retained path must match the exact durable owner receipt")
     resource = _new_resource(ledger, resource_id, "path", purpose, scope)
     resource.update(
         {
@@ -499,7 +574,8 @@ def record_retained_path(
             "retained_reason": reason,
             "next_review": next_review,
             "retention_authority": "user" if authorized_by_user else "project_contract",
-            "sync_status": "destination_pending",
+            "durable_owner": owner,
+            "sync_status": "local_bytes_verified",
         }
     )
     _audit(ledger, "record_retained", resource["id"], "retained", reason)
@@ -606,6 +682,23 @@ def record_durable_readback(ledger: dict[str, Any], resource_id: str, result_dig
     _audit(ledger, "durable_readback", resource["id"], resource["state"], "durable result readback recorded")
 
 
+def record_durable_handoff(ledger: dict[str, Any], project_root: str | Path, resource_id: str, receipt: dict[str, Any]) -> None:
+    root = _verify_binding(ledger, project_root)
+    resource = _resource(ledger, resource_id)
+    if resource["state"] != "acquired" or resource["kind"] != "path" or not resource.get("disposable"):
+        _fail("durable handoff belongs to an acquired disposable path, never a runtime")
+    if resource.get("durable_owner") is not None:
+        _fail("durable owner handoff is single-use")
+    owner = _verify_durable_owner(root, receipt)
+    resource["durable_owner"] = owner
+    resource["durable_result_digest"] = owner["sha256"]
+    for consumer in resource["consumers"].values():
+        if consumer["role"] == "downstream" and not consumer.get("readback_digest"):
+            consumer["durable_owner_digest"] = _identity_digest(owner)
+    resource["consumers"][ledger["owner_task_key"]]["readback_digest"] = owner["sha256"]
+    _audit(ledger, "durable_handoff", resource["id"], "acquired", "exact delivered or recovery owner bytes verified; pending dependencies moved out of scratch")
+
+
 def record_consumer_readback(
     ledger: dict[str, Any], resource_id: str, consumer_task_id: str, readback_digest: str
 ) -> None:
@@ -629,7 +722,7 @@ def handoff(
     role: str = "downstream",
 ) -> None:
     resource = _resource(ledger, resource_id)
-    if resource["state"] != "acquired" or (resource["kind"] == "path" and resource.get("identity") is not None):
+    if resource.get("durable_owner") is not None or resource["state"] != "acquired" or (resource["kind"] == "path" and resource.get("identity") is not None):
         _fail("handoff must be explicit before a path is sealed or release begins")
     if role != "downstream":
         _fail("Ending is memory-only and cannot own a resource handoff")
@@ -643,7 +736,7 @@ def handoff(
 def _release_barriers(ledger: dict[str, Any], resource: dict[str, Any]) -> None:
     if not resource.get("durable_result_digest"):
         _fail("release requires durable result readback")
-    incomplete = [consumer for consumer in resource["consumers"].values() if consumer.get("role") != "ending" and not consumer.get("readback_digest")]
+    incomplete = [consumer for consumer in resource["consumers"].values() if consumer.get("role") != "ending" and not consumer.get("readback_digest") and not consumer.get("durable_owner_digest")]
     if incomplete:
         _fail("release requires every explicit consumer readback")
 
@@ -660,7 +753,7 @@ def _enforce_scope_lifo(ledger: dict[str, Any], resource: dict[str, Any]) -> Non
         _fail("active resources in the same scope must release in reverse acquisition order")
 
 
-def prepare_release(ledger: dict[str, Any], resource_id: str) -> bool:
+def prepare_release(ledger: dict[str, Any], resource_id: str, *, project_root: str | Path | None = None) -> bool:
     resource = _resource(ledger, resource_id)
     if resource["state"] in {"released", "released_external"}:
         _audit(ledger, "prepare_release_idempotent", resource["id"], resource["state"], "resource already absent")
@@ -671,6 +764,10 @@ def prepare_release(ledger: dict[str, Any], resource_id: str) -> bool:
         _fail("resource is not ready for release preparation")
     _enforce_scope_lifo(ledger, resource)
     _release_barriers(ledger, resource)
+    if resource.get("durable_owner") is not None:
+        if project_root is None:
+            _fail("durable handoff release requires current project_root byte readback")
+        _verify_durable_owner(_verify_binding(ledger, project_root), resource["durable_owner"])
     if resource["kind"] == "path" and resource.get("identity") is None:
         _fail("path release requires a sealed exact identity")
     resource["state"] = "cleanup_ready"
@@ -770,6 +867,8 @@ def cleanup_path(
         return False
     if resource["state"] not in {"cleanup_ready", "cleanup_in_progress", "cleanup_failed"}:
         _fail("path must pass release preparation before cleanup")
+    if resource.get("durable_owner") is not None:
+        _verify_durable_owner(root, resource["durable_owner"])
     target = _absolute(root, resource["path"])
     quarantine_name = f".codex-resource-{ledger['ledger_id'][:12]}-{hashlib.sha256(resource['id'].encode()).hexdigest()[:12]}"
     quarantine_relative = f"{ledger['task_root']}/{quarantine_name}"
@@ -941,6 +1040,73 @@ def _assert_ledger_location(project_root: str | Path, ledger_path: Path, ledger:
         _fail(f"ledger file must use {LEDGER_NAME} inside its exact task root")
 
 
+def finalize_task_root(ledger: dict[str, Any], project_root: str | Path, ledger_path: str | Path) -> None:
+    """Remove only a closed, identity-bound root containing its exact metadata."""
+    root = _verify_binding(ledger, project_root)
+    ledger_path = Path(ledger_path)
+    _assert_ledger_location(root, ledger_path, ledger)
+    task_root = _absolute(root, ledger["task_root"])
+    if any(resource["state"] not in FINAL_STATES for resource in ledger["resources"]):
+        _fail("task root finalization requires every resource to be closed")
+    for resource in ledger["resources"]:
+        if resource.get("durable_owner") is not None:
+            _verify_durable_owner(root, resource["durable_owner"])
+        elif resource["state"] == "retained":
+            _fail("legacy retained resource has no verified durable owner; finalization is pending")
+    metadata: dict[str, tuple[dict[str, int], bytes]] = {}
+    with ledger_lock(ledger_path):
+        lock_name = f"{LEDGER_NAME}.lock"
+        if {entry.name for entry in task_root.iterdir()} != {MARKER_NAME, LEDGER_NAME, lock_name}:
+            _fail("unknown files remain in the exact task root; finalization is pending")
+        for name in (MARKER_NAME, LEDGER_NAME):
+            path = task_root / name
+            observed = _safe_lstat(path, directory=False)
+            if not stat.S_ISREG(observed.st_mode) or observed.st_nlink != 1:
+                _fail("finalization metadata is not one exact regular file")
+            identity = _stat_identity(observed)
+            contents = path.read_bytes()
+            if _stat_identity(_safe_lstat(path, directory=False)) != identity:
+                _fail("finalization metadata identity changed during readback")
+            metadata[name] = (identity, contents)
+        if json.loads(metadata[LEDGER_NAME][1]) != ledger:
+            _fail("saved ledger does not match the exact finalization ledger")
+        _verify_binding(ledger, root)
+    _verify_binding(ledger, root)
+    if {entry.name for entry in task_root.iterdir()} != set(metadata):
+        _fail("unknown files or a new lock appeared; finalization is pending")
+    quarantine = task_root.with_name(f"temp-finalize-{ledger['ledger_id']}-{uuid.uuid4().hex}")
+    if quarantine.exists() or quarantine.is_symlink():
+        _fail("finalization quarantine already exists")
+    os.rename(task_root, quarantine)
+    try:
+        if _binding_identity(quarantine) != ledger["binding"]["task_root_identity"] or {entry.name for entry in quarantine.iterdir()} != set(metadata):
+            _fail("exact task root changed before finalization")
+        for name, (identity, contents) in metadata.items():
+            path = quarantine / name
+            if _stat_identity(_safe_lstat(path, directory=False)) != identity or path.read_bytes() != contents:
+                _fail("finalization metadata identity changed before removal")
+        for name, (identity, contents) in metadata.items():
+            path = quarantine / name
+            if _stat_identity(_safe_lstat(path, directory=False)) != identity:
+                _fail("finalization metadata identity changed at removal")
+            path.unlink()
+        quarantine.rmdir()
+    except Exception:
+        if quarantine.exists() and _binding_identity(quarantine) == ledger["binding"]["task_root_identity"]:
+            marker = quarantine / MARKER_NAME
+            if not marker.exists() and not marker.is_symlink():
+                with marker.open("xb") as output:
+                    output.write(metadata[MARKER_NAME][1])
+                ledger["binding"]["marker_identity"] = _stat_identity(_safe_lstat(marker, directory=False))
+            saved_ledger = quarantine / LEDGER_NAME
+            if not saved_ledger.exists() and not saved_ledger.is_symlink():
+                with saved_ledger.open("x", encoding="utf-8") as output:
+                    json.dump(ledger, output, indent=2, sort_keys=True)
+            if not task_root.exists() and not task_root.is_symlink():
+                os.rename(quarantine, task_root)
+        raise
+
+
 def _summary(ledger: dict[str, Any]) -> dict[str, Any]:
     state_counts: dict[str, int] = {}
     kind_counts: dict[str, int] = {}
@@ -1004,6 +1170,7 @@ def _build_parser() -> argparse.ArgumentParser:
     retained.add_argument("--authorized-by-user", action="store_true")
     retained.add_argument("--authorized-by-contract", action="store_true")
     retained.add_argument("--scope", default="main")
+    retained.add_argument("--owner-receipt-json", required=True)
 
     preexisting = subparsers.add_parser("record-preexisting")
     preexisting.add_argument("--id", required=True)
@@ -1014,6 +1181,10 @@ def _build_parser() -> argparse.ArgumentParser:
     durable = subparsers.add_parser("durable-readback")
     durable.add_argument("--id", required=True)
     durable.add_argument("--digest", required=True)
+
+    durable_handoff = subparsers.add_parser("durable-handoff")
+    durable_handoff.add_argument("--id", required=True)
+    durable_handoff.add_argument("--receipt-json", required=True)
 
     consumer = subparsers.add_parser("consumer-readback")
     consumer.add_argument("--id", required=True)
@@ -1046,6 +1217,7 @@ def _build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--revalidation-digest", required=True)
 
     subparsers.add_parser("show")
+    subparsers.add_parser("finalize")
     return parser
 
 
@@ -1061,6 +1233,11 @@ def main() -> int:
                 if args.ledger.exists():
                     _fail("ledger already exists")
                 save_ledger(args.ledger, ledger, assume_locked=True)
+        elif args.command == "finalize":
+            ledger = load_ledger(args.ledger)
+            finalize_task_root(ledger, project_root, args.ledger)
+            print(json.dumps({**_summary(ledger), "task_root": ledger["task_root"], "finalized": True}, sort_keys=True))
+            return 0
         else:
             with ledger_lock(args.ledger):
                 ledger = load_ledger(args.ledger)
@@ -1082,17 +1259,21 @@ def main() -> int:
                         authorized_by_user=args.authorized_by_user,
                         authorized_by_contract=args.authorized_by_contract,
                         scope=args.scope,
+                        project_root=project_root,
+                        owner_receipt=_json_argument(args.owner_receipt_json, "owner receipt"),
                     )
                 elif args.command == "record-preexisting":
                     record_preexisting_path(ledger, args.id, args.path, args.purpose, scope=args.scope)
                 elif args.command == "durable-readback":
                     record_durable_readback(ledger, args.id, args.digest)
+                elif args.command == "durable-handoff":
+                    record_durable_handoff(ledger, project_root, args.id, _json_argument(args.receipt_json, "owner receipt"))
                 elif args.command == "consumer-readback":
                     record_consumer_readback(ledger, args.id, args.task_id, args.digest)
                 elif args.command == "handoff":
                     handoff(ledger, args.id, args.task_id, role=args.role)
                 elif args.command == "prepare-release":
-                    prepare_release(ledger, args.id)
+                    prepare_release(ledger, args.id, project_root=project_root)
                 elif args.command == "cleanup-path":
                     cleanup_path(
                         ledger,

@@ -38,7 +38,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
-Each skill folder owns its `SKILL.md`, references, helpers, and versioned development tests needed by the release gate. Disposable task work belongs in ignored `Cache/temp-*`; retained local evidence belongs in `Cache/remote-*` with an explicit reason and owner.
+Each skill folder owns its `SKILL.md`, references, helpers, and versioned development tests needed by the release gate. Disposable task work belongs in ignored `Cache/temp-*` or `Cache/tmp-*` and is removed at task end after verified delivery or minimum recovery handoff to its declared durable owner. Evidence or future review does not justify keeping temp; a `remote-*` name alone is not a retained resource owner.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

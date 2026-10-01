@@ -36,7 +36,7 @@ REQUIRED_POLICY_TEXT = (
     "never place important output there",
     "only when the user or project contract explicitly requires retention",
     "sync destination is pending",
-    "Preserve every `remote-*` folder during automatic cleanup",
+    "Preserve verified retained resources",
     "## Test file placement",
     "Remove obsolete and duplicate cases",
     "only if it still runs there",
@@ -108,18 +108,22 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
         text = GLOBAL_ENTRY_RULE_PATH.read_text()
         self.assertIn("project's task-owned Cache/temp-*", text)
+        self.assertIn("Cache/tmp-*", text)
         self.assertIn("CODEX_HOME/sessions", text)
-        self.assertIn("never auto-clean it", text)
+        self.assertIn("delete exact scratch", text)
+        self.assertIn("minimum recovery inputs/state", text)
+        self.assertIn("renaming temp to remote-* does not establish a durable owner", text)
         self.assertIn("remove obsolete or duplicate tests", text)
-        self.assertIn("Preserve unrelated work", text)
+        self.assertIn("preserve unrelated work", text)
 
 
     @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
     def test_installed_global_agents_has_the_same_contract(self):
         text = GLOBAL_AGENTS_PATH.read_text()
-        self.assertIn("project's task-owned Cache/temp-*", text)
-        self.assertIn("CODEX_HOME/sessions", text)
-        self.assertIn("never auto-clean it", text)
+        self.assertIn("Cache/temp-*", text)
+        self.assertIn("Cache/tmp-*", text)
+        self.assertIn("minimum recovery inputs/state", text)
+        self.assertIn("renaming temp to remote-* does not establish a durable owner", text)
 
 
     def test_resource_policy_limits_automatic_cleanup(self):
@@ -127,9 +131,44 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         self.assertIn("last needed readback", text)
         self.assertIn("`Cache/temp-*` scratch", text)
         self.assertIn("`Cache/remote-*` is retained", text)
-        self.assertIn("pending user review", text)
+        self.assertIn("`Cache/tmp-*` scratch", text)
+        self.assertIn("fresh process or website request", text)
+        self.assertIn("minimum inputs and resumable state", text)
+        self.assertIn("never authorizes indefinite temp retention", text)
+        self.assertIn("renaming a temp directory", text)
+        self.assertIn("bounds-check every deletion target", text)
+        self.assertIn("no unknown files remain", text)
         self.assertIn("Ending records Obsidian memory", text)
         self.assertIn("never controls, interrupts, archives, or deletes another", text)
+
+    def test_task_end_cleanup_has_no_review_or_debug_retention_escape(self):
+        owners = (
+            SKILLS_ROOT / "AGENTS.md",
+            SKILLS_ROOT / "workflow-skill/SKILL.md",
+            SKILLS_ROOT / "verify-skill/SKILL.md",
+            SKILLS_ROOT / "management-skill/SKILL.md",
+            GLOBAL_ENTRY_RULE_PATH,
+            PROJECT_CACHE_POLICY_PATH,
+            SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md",
+        )
+        for path in owners:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path):
+                self.assertIn("owner", text)
+                self.assertIn("recovery", text)
+                self.assertNotIn("unless review or debugging", text)
+                self.assertNotIn("unless the user still needs to review", text)
+                self.assertNotIn("when no review or debugging", text)
+                self.assertNotIn("Reassess them on the next related task", text)
+
+    def test_public_readme_cleanup_rule_comes_from_the_maintained_templates(self):
+        for language_suffix in ("", ".zh"):
+            template = SKILLS_ROOT / "management-skill/assets/readme" / f"github-readme-template{language_suffix}.md"
+            published = SKILLS_ROOT / f"README{language_suffix}.md"
+            template_rule = next(line for line in template.read_text(encoding="utf-8").splitlines() if "Cache/temp-*" in line)
+            with self.subTest(language=language_suffix or "en"):
+                self.assertIn(template_rule, published.read_text(encoding="utf-8"))
+                self.assertIn("Cache/tmp-*", template_rule)
 
 
     def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):

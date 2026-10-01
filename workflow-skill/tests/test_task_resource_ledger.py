@@ -1,6 +1,7 @@
 import ast
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -9,7 +10,9 @@ import sys
 import tempfile
 import unittest
 import uuid
+import zipfile
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
@@ -72,6 +75,16 @@ class TaskResourceLedgerTests(unittest.TestCase):
             LEDGER.record_consumer_readback(
                 self.ledger, resource_id, consumer, HASH
             )
+
+    def _durable_receipt(self, *, disposition="delivery", owner_root="Outputs/current", content=b"final owner bytes"):
+        owner = self.project_root.joinpath(*owner_root.split("/"))
+        owner.mkdir(parents=True, exist_ok=True)
+        declaration = {"owner_id": "current-output", "owner_kind": "output", "owner_root": owner_root}
+        record = owner / "owner.json"
+        record.write_text(json.dumps(declaration), encoding="utf-8")
+        target = owner / "result.bin"
+        target.write_bytes(content)
+        return {**declaration, "owner_record": f"{owner_root}/owner.json", "owner_record_sha256": hashlib.sha256(record.read_bytes()).hexdigest(), "path": f"{owner_root}/result.bin", "sha256": hashlib.sha256(content).hexdigest(), "disposition": disposition, "purpose": "final_output" if disposition == "delivery" else "resume_state"}
 
     def test_exact_disposable_cleanup_is_two_phase_and_idempotent(self):
         target = self._acquire_file("output", "output.txt")
@@ -185,11 +198,11 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertFalse(target.exists())
 
     def test_retained_and_preexisting_resources_are_never_release_candidates(self):
-        with self.assertRaisesRegex(ValueError, "Cache/remote"):
+        with self.assertRaisesRegex(ValueError, "outside temporary"):
             LEDGER.record_retained_path(
                 self.ledger,
                 "dated",
-                "Cache/20260823/report.json",
+                "Cache/tmp-dated/report.json",
                 "short reuse",
                 "inspect tomorrow",
                 "2026-08-24",
@@ -204,14 +217,19 @@ class TaskResourceLedgerTests(unittest.TestCase):
                 "release audit",
                 "next release",
             )
+        with self.assertRaisesRegex(ValueError, "exact durable owner receipt"):
+            LEDGER.record_retained_path(self.ledger, "remote-prefix", "Cache/remote-test/result.json", "review", "debug downstream retry", "later", authorized_by_contract=True, project_root=self.project_root)
+        receipt = self._durable_receipt(owner_root="Cache/remote-actual-resource")
         remote = LEDGER.record_retained_path(
             self.ledger,
             "remote",
-            "Cache/remote-test/result.json",
+            receipt["path"],
             "retained test",
             "release audit",
             "next release",
             authorized_by_contract=True,
+            project_root=self.project_root,
+            owner_receipt=receipt,
         )
         preexisting = LEDGER.record_preexisting_path(
             self.ledger,
@@ -220,11 +238,126 @@ class TaskResourceLedgerTests(unittest.TestCase):
             "Unity-managed cache",
         )
         self.assertEqual(remote["state"], "retained")
-        self.assertEqual(remote["sync_status"], "destination_pending")
+        self.assertEqual(remote["sync_status"], "local_bytes_verified")
         self.assertEqual(preexisting["state"], "preexisting")
         for resource_id in ("remote", "unity-cache"):
             with self.assertRaisesRegex(ValueError, "remains untouched"):
                 LEDGER.prepare_release(self.ledger, resource_id)
+
+    def test_delivery_and_minimal_recovery_handoff_release_pending_scratch_consumers(self):
+        for disposition in ("delivery", "recovery"):
+            with self.subTest(disposition=disposition):
+                resource_id = f"scratch-{disposition}"
+                path = self._path(f"{disposition}.txt")
+                LEDGER.acquire_path(self.ledger, self.project_root, resource_id, path, "disposable", scope=disposition)
+                LEDGER.handoff(self.ledger, resource_id, "pending-downstream")
+                target = self.project_root.joinpath(*path.split("/"))
+                target.write_text("scratch only", encoding="utf-8")
+                LEDGER.seal_path(self.ledger, self.project_root, resource_id)
+                receipt = self._durable_receipt(disposition=disposition, owner_root=f"Outputs/{disposition}")
+                LEDGER.record_durable_handoff(self.ledger, self.project_root, resource_id, receipt)
+                resource = LEDGER._resource(self.ledger, resource_id)
+                consumer = resource["consumers"][LEDGER._task_key("pending-downstream")]
+                self.assertIsNone(consumer["readback_digest"])
+                self.assertEqual(consumer["durable_owner_digest"], LEDGER._identity_digest(resource["durable_owner"]))
+                with self.assertRaisesRegex(ValueError, "current project_root"):
+                    LEDGER.prepare_release(self.ledger, resource_id)
+                self.assertTrue(LEDGER.prepare_release(self.ledger, resource_id, project_root=self.project_root))
+                self.assertTrue(LEDGER.cleanup_path(self.ledger, self.project_root, resource_id))
+                self.assertFalse(target.exists())
+                self.assertEqual(self.project_root.joinpath(*receipt["path"].split("/")).read_bytes(), b"final owner bytes")
+
+    def test_durable_handoff_rejects_prefix_reason_unverified_owner_and_byte_drift(self):
+        target = self._acquire_file("handoff", "handoff.txt")
+        receipt = self._durable_receipt()
+        invalid_receipts = ({**receipt, "disposition": "review"}, {**receipt, "disposition": "recovery", "purpose": "debug"}, {**receipt, "owner_root": self.task_root}, {**receipt, "owner_root": "Cache/tmp-other"}, {**receipt, "owner_id": "unrelated"}, {**receipt, "sha256": HASH}, {**receipt, "owner_record": "Cache/remote-renamed/owner.json"})
+        for invalid in invalid_receipts:
+            with self.subTest(receipt=invalid):
+                with self.assertRaises((ValueError, FileNotFoundError)):
+                    LEDGER.record_durable_handoff(self.ledger, self.project_root, "handoff", invalid)
+                self.assertNotIn("durable_owner", LEDGER._resource(self.ledger, "handoff"))
+        LEDGER.record_durable_handoff(self.ledger, self.project_root, "handoff", receipt)
+        LEDGER.prepare_release(self.ledger, "handoff", project_root=self.project_root)
+        self.project_root.joinpath(*receipt["path"].split("/")).write_bytes(b"changed owner")
+        with self.assertRaisesRegex(ValueError, "identity changed|byte readback"):
+            LEDGER.cleanup_path(self.ledger, self.project_root, "handoff")
+        self.assertTrue(target.exists())
+
+    def test_durable_handoff_cannot_bypass_runtime_owner_receipt(self):
+        runtime = LEDGER.acquire_runtime(self.ledger, "runtime-handoff", "browser_tab", {"tab_id": "tab-owned", "context_id": "iab", "window_id": "owned-window"}, "owned tab")
+        with self.assertRaisesRegex(ValueError, "never a runtime"):
+            LEDGER.record_durable_handoff(self.ledger, self.project_root, runtime["id"], self._durable_receipt())
+
+    def test_recovery_rejects_whole_scratch_archive_even_after_renaming(self):
+        target = self._acquire_file("archive", "archive.txt")
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr(f"{self.task_root}/debug.txt", "whole scratch must not survive")
+        receipt = self._durable_receipt(disposition="recovery", content=archive.getvalue())
+        with self.assertRaisesRegex(ValueError, "never a scratch archive"):
+            LEDGER.record_durable_handoff(self.ledger, self.project_root, "archive", receipt)
+        self.assertTrue(target.exists())
+        self.assertNotIn("durable_owner", LEDGER._resource(self.ledger, "archive"))
+
+    def test_exact_temp_and_tmp_task_roots_finalize_without_touching_durable_or_preexisting_owners(self):
+        for prefix in ("temp", "tmp"):
+            with self.subTest(prefix=prefix):
+                task_root = f"Cache/{prefix}-finalize-{uuid.uuid4().hex}"
+                ledger = LEDGER.new_ledger(self.project_root, "finalize-task", task_root)
+                LEDGER.record_preexisting_path(ledger, "preexisting", "Library/Artifacts", "preexisting owner")
+                receipt = self._durable_receipt(owner_root=f"Outputs/{prefix}")
+                LEDGER.record_retained_path(ledger, "final-output", receipt["path"], "delivered", "requested output", "owner lifetime", authorized_by_user=True, project_root=self.project_root, owner_receipt=receipt)
+                ledger_path = self.project_root.joinpath(*task_root.split("/")) / LEDGER.LEDGER_NAME
+                LEDGER.save_ledger(ledger_path, ledger)
+                LEDGER.finalize_task_root(ledger, self.project_root, ledger_path)
+                self.assertFalse(ledger_path.parent.exists())
+                self.assertTrue(self.project_root.joinpath(*receipt["path"].split("/")).exists())
+
+    def test_finalize_requires_closed_resources_and_rejects_unknown_files_or_ledger_drift(self):
+        target = self._acquire_file("active", "active.txt")
+        ledger_path = target.parent / LEDGER.LEDGER_NAME
+        LEDGER.save_ledger(ledger_path, self.ledger)
+        with self.assertRaisesRegex(ValueError, "every resource to be closed"):
+            LEDGER.finalize_task_root(self.ledger, self.project_root, ledger_path)
+        self._pass_barriers("active")
+        LEDGER.prepare_release(self.ledger, "active")
+        LEDGER.cleanup_path(self.ledger, self.project_root, "active")
+        LEDGER.save_ledger(ledger_path, self.ledger)
+        unknown = target.parent / "user.txt"
+        unknown.write_text("preserve user", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "unknown files"):
+            LEDGER.finalize_task_root(self.ledger, self.project_root, ledger_path)
+        self.assertEqual(unknown.read_text(encoding="utf-8"), "preserve user")
+        unknown.unlink()
+        altered = json.loads(ledger_path.read_text(encoding="utf-8"))
+        altered["owner_role"] = "ending"
+        ledger_path.write_text(json.dumps(altered), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "saved ledger does not match"):
+            LEDGER.finalize_task_root(self.ledger, self.project_root, ledger_path)
+        self.assertTrue(ledger_path.exists())
+
+    def test_finalize_detects_marker_replacement_and_preserves_racing_unknown_file(self):
+        ledger_path = self.project_root.joinpath(*self.task_root.split("/")) / LEDGER.LEDGER_NAME
+        LEDGER.save_ledger(ledger_path, self.ledger)
+        marker = ledger_path.parent / LEDGER.MARKER_NAME
+        marker.write_bytes(marker.read_bytes())
+        with self.assertRaisesRegex(ValueError, "marker identity changed"):
+            LEDGER.finalize_task_root(self.ledger, self.project_root, ledger_path)
+        self.ledger["binding"]["marker_identity"] = LEDGER._stat_identity(marker.stat())
+        LEDGER.save_ledger(ledger_path, self.ledger)
+        original_rename = os.rename
+
+        def inject_after_rename(source, destination):
+            original_rename(source, destination)
+            if Path(source) == ledger_path.parent:
+                (Path(destination) / "racing-user.txt").write_text("keep racing user", encoding="utf-8")
+
+        with mock.patch.object(LEDGER.os, "rename", side_effect=inject_after_rename):
+            with self.assertRaisesRegex(ValueError, "task root changed"):
+                LEDGER.finalize_task_root(self.ledger, self.project_root, ledger_path)
+        self.assertEqual((ledger_path.parent / "racing-user.txt").read_text(encoding="utf-8"), "keep racing user")
+        self.assertTrue(marker.exists())
+        self.assertTrue(ledger_path.exists())
 
     def test_conflict_is_revalidatable_and_identity_drift_is_not_deleted(self):
         target = self._acquire_file("conflict", "conflict.txt")
@@ -437,27 +570,37 @@ class TaskResourceLedgerTests(unittest.TestCase):
             "--purpose",
             "cli fixture",
         )
+        run("handoff", "--id", "artifact", "--task-id", "pending-cli-consumer")
         target = cli_project / cli_task_root / "artifact.txt"
         sentinel = cli_project / cli_task_root / "sentinel.txt"
         target.write_text("delete me", encoding="utf-8")
         sentinel.write_text("keep me", encoding="utf-8")
         run("seal-path", "--id", "artifact")
-        run("durable-readback", "--id", "artifact", "--digest", HASH)
-        run(
-            "consumer-readback",
-            "--id",
-            "artifact",
-            "--task-id",
-            "cli-task",
-            "--digest",
-            HASH,
-        )
+        owner_root = "Outputs/cli"
+        owner = cli_project / "Outputs" / "cli"
+        owner.mkdir(parents=True)
+        declaration = {"owner_id": "cli-output", "owner_kind": "output", "owner_root": owner_root}
+        record = owner / "owner.json"
+        record.write_text(json.dumps(declaration), encoding="utf-8")
+        final_output = owner / "result.txt"
+        final_output.write_text("delivered CLI bytes", encoding="utf-8")
+        receipt = {**declaration, "owner_record": f"{owner_root}/owner.json", "owner_record_sha256": hashlib.sha256(record.read_bytes()).hexdigest(), "path": f"{owner_root}/result.txt", "sha256": hashlib.sha256(final_output.read_bytes()).hexdigest(), "disposition": "delivery", "purpose": "final_output"}
+        run("durable-handoff", "--id", "artifact", "--receipt-json", json.dumps(receipt))
         run("prepare-release", "--id", "artifact")
         output = run("cleanup-path", "--id", "artifact")
         summary = json.loads(output.stdout)
         self.assertEqual(summary["states"], {"released": 1})
         self.assertFalse(target.exists())
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep me")
+        with self.assertRaises(subprocess.CalledProcessError) as blocked:
+            run("finalize")
+        self.assertIn("unknown files", blocked.exception.stderr)
+        self.assertTrue(ledger_path.exists())
+        sentinel.unlink()
+        output = run("finalize")
+        self.assertTrue(json.loads(output.stdout)["finalized"])
+        self.assertFalse(ledger_path.parent.exists())
+        self.assertEqual(final_output.read_text(encoding="utf-8"), "delivered CLI bytes")
 
     def test_implementation_has_no_resource_or_codex_control_primitives(self):
         source = SCRIPT_PATH.read_text(encoding="utf-8")
