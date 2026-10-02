@@ -39,6 +39,8 @@ For Skill creation or revision, apply [Skill authoring rules](../management-skil
 
 Image acceptance distinguishes visible fidelity from file validity: a checkerboard is not alpha, and a downloaded file is not proof of correct structure. Match checks to the actual intended use rather than inserting sprite-specific restrictions into every image prompt.
 
+Actual image jobs follow [image generation and closure](../workflow-skill/references/image-generation.md); keep prompt acceptance separate from native delivery, verified owner synchronization, account deletion/readback, and owned-tab closure.
+
 ## Guardrails
 
 Preserve user authority and the authorized scope. Do not weaken acceptance criteria to make an output pass. Use [project Cache policy](../workflow-skill/references/project-cache-artifact-policy.md) only when creating support artifacts. Keep reusable instructions concise enough that a capable model can apply the goal without a ritual checklist.

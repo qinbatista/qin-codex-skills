@@ -11,6 +11,8 @@ For every UI or visual presentation task, including websites, PDF reports, docum
 
 For any browser-based test, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence.
 
+For image generation, edits, retries, or batches, follow [image generation and closure](references/image-generation.md): use the required browser entry, move native downloads immediately into their exact resource owner, verify synchronization, and finish account cleanup and owned-tab closure before the next job.
+
 ## Execute
 
 1. Identify the result, project, constraints, and useful context. Read relevant skills and exact project/module/file/symbol memory through [Project Memory](../project-memory-skill/SKILL.md), including architecture only when needed. Skip absent entries. Keep cross-project references explicit and separate from authoritative project facts.
