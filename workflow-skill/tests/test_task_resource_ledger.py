@@ -436,18 +436,6 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
 
     def test_marker_alias_symlink_and_nonportable_paths_fail_closed(self):
-        marker = self.project_root.joinpath(*self.task_root.split("/")) / LEDGER.MARKER_NAME
-        alias = marker.with_name("marker-hardlink")
-        os.link(marker, alias)
-        with self.assertRaisesRegex(ValueError, "one exact regular file"):
-            LEDGER.acquire_path(
-                self.ledger,
-                self.project_root,
-                "blocked",
-                self._path("blocked.txt"),
-                "blocked",
-            )
-        alias.unlink()
         invalid_paths = (
             "../outside",
             "/absolute/path",
@@ -483,6 +471,12 @@ class TaskResourceLedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "symlink"):
             LEDGER.seal_path(self.ledger, self.project_root, "link")
         self.assertEqual(external.read_text(encoding="utf-8"), "keep")
+        marker = self.project_root.joinpath(*self.task_root.split("/")) / LEDGER.MARKER_NAME
+        alias = marker.with_name("marker-hardlink")
+        os.link(marker, alias)
+        with self.assertRaisesRegex(ValueError, "one exact regular file"):
+            LEDGER.acquire_path(self.ledger, self.project_root, "blocked", self._path("blocked.txt"), "blocked")
+        alias.unlink()
 
     def test_runtime_requires_typed_identity_and_structured_owner_tool_receipt(self):
         with self.assertRaisesRegex(ValueError, "must never represent"):
