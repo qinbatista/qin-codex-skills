@@ -164,10 +164,12 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     def test_public_readme_cleanup_rule_comes_from_the_maintained_templates(self):
         for language_suffix in ("", ".zh"):
             template = SKILLS_ROOT / "management-skill/assets/readme" / f"github-readme-template{language_suffix}.md"
-            published = SKILLS_ROOT / f"README{language_suffix}.md"
             template_rule = next(line for line in template.read_text(encoding="utf-8").splitlines() if "Cache/temp-*" in line)
             with self.subTest(language=language_suffix or "en"):
-                self.assertIn(template_rule, published.read_text(encoding="utf-8"))
+                with SYNC.temporary_workspace("readme-cleanup-") as workspace:
+                    SYNC.render_source_readmes(workspace, [SKILLS_ROOT / name for name in PRIMARY_SKILLS])
+                    published = workspace / f"README{language_suffix}.md"
+                    self.assertIn(template_rule, published.read_text(encoding="utf-8"))
                 self.assertIn("Cache/tmp-*", template_rule)
 
 

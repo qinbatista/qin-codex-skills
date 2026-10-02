@@ -2,8 +2,6 @@
 
 This repository maintains eight reusable global Codex skills. Projects retain their own domain rules.
 
-Briefly explain the outcome and implementation steps before execution, then proceed. Keep the user informed so they can redirect or interrupt.
-
 ## What each skill does
 
 | Skill | Responsibility |
@@ -24,7 +22,7 @@ Briefly explain the outcome and implementation steps before execution, then proc
 3. Finish with a real behavior check inside the active task. Update existing tests where useful, then clean up disposable resources.
 4. When useful, record durable changes in the configured Obsidian vault through a separate, unpinned projectless Ending task. Ending does not gate, test, or repair the main result. If the vault is unavailable, keep the write pending without a Codex-local fallback.
 
-Project knowledge is centralized in one Memory.json index and one Knowledge.md view per project. Recall matches the exact project, module, file and method; stale entries stay out of current context. Ending consolidates touched entries and periodically refreshes project summaries and explicit reference links.
+Project knowledge uses one Memory.json index and Knowledge.md view per project. Recall matches the exact project, module, file and method; stale entries stay out of current context. Ending consolidates touched entries, project summaries and explicit reference links.
 
 Project memories stay isolated. Shared preferences are read only when relevant. Project `AGENTS.md` and Skills own stable operating rules; changing project information and historical outcomes live in Obsidian.
 
