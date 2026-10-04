@@ -7,6 +7,7 @@ import json
 import os
 import re
 import tempfile
+from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -21,6 +22,8 @@ CURRENT_END = "<!-- END CODEX CURRENT PROJECT KNOWLEDGE -->"
 LEGACY_START = "<!-- BEGIN CODEX CURRENT MODULE MEMORY -->"
 LEGACY_END = "<!-- END CODEX CURRENT MODULE MEMORY -->"
 ENTRY_FIELDS = {"id", "scope", "module", "file", "symbol", "summary", "reason", "result", "decisions", "risks", "verification_status", "verification", "relations", "source_hashes", "status"}
+MAX_PROJECT_ALIASES = 32
+PROJECT_ALIAS_PATTERN = re.compile(r"[a-z0-9][a-z0-9._-]{0,79}-[a-f0-9]{10}")
 
 
 class ProjectIdentityError(ValueError):
@@ -183,19 +186,24 @@ def _timestamp(now=None):
     return instant.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def load_knowledge(project_root, vault):
-    project, paths = _paths(project_root, vault)
-    if not paths["index"].exists():
-        return {"schema_version": SCHEMA_VERSION, "project": project, "entries": [], "synthesis": None, "maintenance": {"writes_since_consolidation": 0, "created_at": None, "last_consolidated_at": None}}
-    state = json.loads(paths["index"].read_text(encoding="utf-8"))
+def _index_project(state):
+    """Validate identity metadata before inspecting any requested-root source."""
     if not isinstance(state, dict) or state.get("schema_version") != SCHEMA_VERSION or not isinstance(state.get("project"), dict):
         raise ValueError("current project index has an unsupported schema")
     stored = state["project"]
-    aliases = memory._registered_owner_project_keys(project["owner"])
-    same_project = stored.get("key") == project["key"] or (stored.get("key") in aliases and project["key"] in aliases)
-    if stored.get("owner") != project["owner"] or not same_project:
-        raise ProjectIdentityError("current memory belongs to a different exact project")
-    if not isinstance(state.get("entries"), list) or not isinstance(state.get("maintenance"), dict):
+    _owner(stored.get("owner"))
+    _text(stored.get("key"), "project key", maximum=160)
+    _text(stored.get("name"), "project name", maximum=160)
+    aliases = stored.get("aliases", [])
+    if not isinstance(aliases, list) or len(aliases) > MAX_PROJECT_ALIASES or any(not isinstance(alias, str) or PROJECT_ALIAS_PATTERN.fullmatch(alias) is None for alias in aliases) or len(set(aliases)) != len(aliases):
+        raise ValueError("project aliases must be bounded unique portable root keys")
+    return stored
+
+
+def _validate_knowledge(project_root, state):
+    """Validate the same complete index before ordinary reads and alias repairs."""
+    _index_project(state)
+    if not isinstance(state.get("entries"), list) or not isinstance(state.get("maintenance"), dict) or "synthesis" not in state:
         raise ValueError("current project index is incomplete")
     identifiers = set()
     for entry in state["entries"]:
@@ -204,11 +212,81 @@ def load_knowledge(project_root, vault):
         normalized = normalize_entries(project_root, [{key: value for key, value in entry.items() if key in ENTRY_FIELDS}])[0]
         if normalized["id"] in identifiers or not entry.get("event_id") or not entry.get("updated_at"):
             raise ValueError("current project index contains duplicate or unbound entries")
+        _text(entry["event_id"], "entry event id", maximum=160)
+        _timestamp(entry["updated_at"])
         identifiers.add(normalized["id"])
     maintenance = state["maintenance"]
-    if not isinstance(maintenance.get("writes_since_consolidation"), int) or maintenance["writes_since_consolidation"] < 0 or not all(field in maintenance for field in ("created_at", "last_consolidated_at")):
+    if type(maintenance.get("writes_since_consolidation")) is not int or maintenance["writes_since_consolidation"] < 0 or not all(field in maintenance for field in ("created_at", "last_consolidated_at")):
         raise ValueError("current project index contains invalid maintenance state")
+    for field in ("created_at", "last_consolidated_at"):
+        if maintenance[field] is not None:
+            _timestamp(maintenance[field])
+    if state["synthesis"] is not None:
+        synthesis = state["synthesis"]
+        if not isinstance(synthesis, dict) or set(synthesis) - {"summary", "relations", "event_id", "updated_at"} or not synthesis.get("event_id") or not synthesis.get("updated_at"):
+            raise ValueError("current project synthesis is incomplete")
+        normalize_consolidation({key: value for key, value in synthesis.items() if key in {"summary", "relations"}})
+        _text(synthesis["event_id"], "synthesis event id", maximum=160)
+        _timestamp(synthesis["updated_at"])
     return state
+
+
+def load_knowledge(project_root, vault):
+    project, paths = _paths(project_root, vault)
+    if not paths["index"].exists():
+        return {"schema_version": SCHEMA_VERSION, "project": project, "entries": [], "synthesis": None, "maintenance": {"writes_since_consolidation": 0, "created_at": None, "last_consolidated_at": None}}
+    state = json.loads(paths["index"].read_text(encoding="utf-8"))
+    stored = _index_project(state)
+    registered = memory._registered_owner_project_keys(project["owner"])
+    explicit = memory._registered_owner(project_root) == project["owner"] and project["key"] in registered and project["key"] in stored.get("aliases", [])
+    same_project = stored.get("key") == project["key"] or (stored.get("key") in registered and project["key"] in registered) or explicit
+    if stored.get("owner") != project["owner"] or not same_project:
+        raise ProjectIdentityError("current memory belongs to a different exact project")
+    return _validate_knowledge(project_root, state)
+
+
+def register_alias(project_root, vault, *, expected_owner, expected_project_key, expected_index_sha256):
+    """Explicitly bind one registered root without changing its existing memory."""
+    root = Path(project_root).expanduser().absolute()
+    _confined(Path(root.anchor), root)
+    vault_path = Path(vault).expanduser().absolute()
+    _confined(Path(vault_path.anchor), vault_path)
+    owner = _owner(expected_owner)
+    expected_key = _text(expected_project_key, "expected project key", maximum=160)
+    if not isinstance(expected_index_sha256, str) or re.fullmatch(r"[a-f0-9]{64}", expected_index_sha256) is None:
+        raise ValueError("expected index SHA must be a lowercase SHA256")
+    project, paths = _paths(root, vault_path)
+    if project["owner"] != owner or memory._registered_owner(root) != owner or project["key"] not in memory._registered_owner_project_keys(owner):
+        raise ProjectIdentityError("alias requires this exact registered project root and owner")
+    if not paths["index"].is_file():
+        raise ValueError("alias requires an existing project memory index")
+    ending_lock = _confined(paths["vault"], paths["vault"] / "AI Memory" / ".ending.lock")
+    with ExitStack() as locks:
+        for path in (ending_lock, paths["lock"]):
+            _confined(paths["vault"], path)
+            handle = locks.enter_context(path.open("a+", encoding="utf-8"))
+            memory._acquire_file_lock(handle)
+        _confined(paths["vault"], paths["index"])
+        original = paths["index"].read_bytes()
+        if hashlib.sha256(original).hexdigest() != expected_index_sha256:
+            raise ValueError("project memory index changed; read its SHA again")
+        state = _validate_knowledge(root, json.loads(original.decode("utf-8")))
+        stored = state["project"]
+        if stored["owner"] != owner or stored["key"] != expected_key:
+            raise ProjectIdentityError("alias expected owner or stored project key differs")
+        aliases = stored.get("aliases", [])
+        status = "duplicate" if project["key"] == stored["key"] or project["key"] in aliases else "written"
+        if status == "written":
+            if len(aliases) == MAX_PROJECT_ALIASES:
+                raise ValueError("project alias capacity reached")
+            stored["aliases"] = sorted([*aliases, project["key"]])
+            _confined(paths["vault"], paths["index"])
+            if paths["index"].read_bytes() != original:
+                raise ValueError("project memory index changed during alias validation")
+            _atomic_text(paths["index"], json.dumps(state, ensure_ascii=False, indent=2) + "\n", paths["vault"])
+        if load_knowledge(root, vault_path) != state:
+            raise RuntimeError("project alias did not read back with unchanged memory")
+        return {"status": status, "project": owner, "project_key": stored["key"], "alias_key": project["key"], "index_document": f"Projects/{owner}/Memory.json", "index_sha256": hashlib.sha256(paths["index"].read_bytes()).hexdigest(), "read_back_verified": True}
 
 
 def _maintenance_due(state, now):
@@ -436,9 +514,15 @@ def main():
     read.add_argument("--symbol", dest="symbols", action="append", default=[])
     read.add_argument("--query", default="")
     read.add_argument("--limit", type=int, default=5)
+    alias = commands.add_parser("register-alias")
+    alias.add_argument("--project-root", type=Path, required=True)
+    alias.add_argument("--vault", type=Path, required=True)
+    alias.add_argument("--expected-owner", required=True)
+    alias.add_argument("--expected-project-key", required=True)
+    alias.add_argument("--expected-index-sha256", required=True)
     arguments = vars(parser.parse_args())
-    arguments.pop("action")
-    print(json.dumps(recall(**arguments), ensure_ascii=False))
+    action = arguments.pop("action")
+    print(json.dumps(register_alias(**arguments) if action == "register-alias" else recall(**arguments), ensure_ascii=False))
 
 
 if __name__ == "__main__":

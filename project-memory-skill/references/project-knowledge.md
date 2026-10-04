@@ -25,6 +25,10 @@ Fresh source and the user's current instructions prevail. Source hashes captured
 
 Relations point to `{project, module, file?, symbol?, relation, reason}` and do not automatically load target content. For a cross-project analogy, explicitly select the source project and relevant reference link or comparison scope. Keep the borrowed material labeled as a reference with its source identity; independently establish whether it applies here. It never becomes this project's current contract merely because names or code resemble each other.
 
+## Registered root aliases
+
+After confirming that a moved or second-machine checkout belongs to the same repository, use `project_knowledge.py register-alias --project-root ROOT --vault VAULT --expected-owner OWNER --expected-project-key STORED_KEY --expected-index-sha256 SHA256`. The root must be registered to that exact owner. Read the stored key and SHA from that owner's current `Memory.json`; a changed index requires a fresh read. The guarded writer retains the primary key, entries, history, maintenance and readable knowledge, adds only the current registered root key, and verifies readback. Repeating an existing alias does not write. Owner conflicts, unregistered roots, malformed aliases and links reject; never relabel an index by name or edit its keys manually.
+
 ## Consolidation in Ending
 
 Every memory Ending reviews touched entries and their direct relationships. Merge the prior scoped entry with established new facts into complete current truth, retain useful decisions and limitations, and remove duplication while preserving history. A raw changelog is not a current entry. A method entry never overwrites its module's unrelated facts. Ending does not collect fresh source hashes or upgrade old claims to verified.

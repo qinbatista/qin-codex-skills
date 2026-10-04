@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -98,11 +99,156 @@ class ProjectKnowledgeTests(unittest.TestCase):
     def test_registered_project_aliases_reuse_the_same_owner(self):
         other = self.root / "renamed-project"
         other.mkdir()
-        identities = {str(self.project): {"key": "registered-old", "name": "Old", "owner": "Registered"}, str(other): {"key": "registered-new", "name": "New", "owner": "Registered"}}
-        with mock.patch.object(knowledge.memory, "_project_identity", side_effect=lambda root: identities[str(root)]), mock.patch.object(knowledge.memory, "_registered_owner_project_keys", return_value={"registered-old", "registered-new"}):
+        with mock.patch.object(knowledge.memory, "_registered_project_owner_paths", return_value=((self.project, "Registered"), (other, "Registered"))):
             self.write([{"scope": "project", "summary": "Retain shared registered owner facts"}])
             result = knowledge.recall(other, self.vault)
         self.assertEqual(result["entries"][0]["summary"], "Retain shared registered owner facts")
+
+    def alias_index(self):
+        self.write([self.method(), {"scope": "module", "module": "unrelated", "summary": "Preserve unrelated project knowledge"}], consolidation={"summary": "Retain the complete project synthesis"})
+        index = self.vault / "Projects/ExampleProject/Memory.json"
+        state = json.loads(index.read_text(encoding="utf-8"))
+        state["project"]["key"] = "exampleproject-0123456789"
+        index.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        (self.vault / "AI Memory").mkdir()
+        (self.vault / "AI Memory/events.jsonl").write_bytes(b"immutable history\r\n")
+        return index, state
+
+    def alias_arguments(self, index, state):
+        return {"expected_owner": state["project"]["owner"], "expected_project_key": state["project"]["key"], "expected_index_sha256": hashlib.sha256(index.read_bytes()).hexdigest()}
+
+    def test_explicit_alias_preserves_primary_facts_history_view_and_lock_order(self):
+        index, before = self.alias_index()
+        preserved = {path: path.read_bytes() for path in (index.with_name("Knowledge.md"), self.vault / "AI Memory/events.jsonl")}
+        acquired = []
+        real_lock = knowledge.memory._acquire_file_lock
+
+        def acquire(handle):
+            acquired.append(Path(handle.name).relative_to(self.vault).as_posix())
+            real_lock(handle)
+
+        with mock.patch.object(knowledge.memory, "_registered_project_owner_paths", return_value=((self.project, "ExampleProject"),)), mock.patch.object(knowledge.memory, "_acquire_file_lock", side_effect=acquire):
+            self.assertEqual(self.read()["reason"], "exact_project_mismatch")
+            result = knowledge.register_alias(self.project, self.vault, **self.alias_arguments(index, before))
+            after = knowledge.load_knowledge(self.project, self.vault)
+            self.assertEqual(self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"])["status"], "ok")
+        self.assertEqual(result["status"], "written")
+        self.assertTrue(result["read_back_verified"])
+        self.assertEqual(after["project"]["aliases"], [knowledge.memory._project_key_for_root(self.project)])
+        del after["project"]["aliases"]
+        self.assertEqual(after, before)
+        self.assertEqual(acquired, ["AI Memory/.ending.lock", "Projects/ExampleProject/.memory.lock"])
+        self.assertTrue(all(path.read_bytes() == content for path, content in preserved.items()))
+
+    def test_alias_repeat_is_byte_preserving_and_stale_cas_is_rejected(self):
+        index, state = self.alias_index()
+        original_arguments = self.alias_arguments(index, state)
+        with mock.patch.object(knowledge.memory, "_registered_project_owner_paths", return_value=((self.project, "ExampleProject"),)):
+            knowledge.register_alias(self.project, self.vault, **original_arguments)
+            saved = index.read_bytes()
+            with self.assertRaisesRegex(ValueError, "changed"):
+                knowledge.register_alias(self.project, self.vault, **original_arguments)
+            result = knowledge.register_alias(self.project, self.vault, **self.alias_arguments(index, state))
+        self.assertEqual(result["status"], "duplicate")
+        self.assertEqual(index.read_bytes(), saved)
+
+    def test_alias_rejects_wrong_owner_key_sha_and_unregistered_same_name_clone(self):
+        index, state = self.alias_index()
+        original = index.read_bytes()
+        arguments = self.alias_arguments(index, state)
+        clone = self.root / "unregistered" / self.project.name
+        clone.mkdir(parents=True)
+        variants = [{**arguments, "expected_owner": "AnotherProject"}, {**arguments, "expected_project_key": "exampleproject-abcdefabcd"}, {**arguments, "expected_index_sha256": "a" * 64}]
+        with mock.patch.object(knowledge.memory, "_registered_project_owner_paths", return_value=((self.project, "ExampleProject"),)):
+            for changed in variants:
+                with self.subTest(arguments=changed), self.assertRaises(ValueError):
+                    knowledge.register_alias(self.project, self.vault, **changed)
+                self.assertEqual(index.read_bytes(), original)
+            with self.assertRaisesRegex(ValueError, "registered"):
+                knowledge.register_alias(clone, self.vault, **arguments)
+            state["project"]["aliases"] = [knowledge.memory._project_key_for_root(clone)]
+            index.write_text(json.dumps(state), encoding="utf-8")
+            self.assertEqual(knowledge.recall(clone, self.vault)["reason"], "exact_project_mismatch")
+        self.assertEqual(json.loads(index.read_text())["project"]["key"], arguments["expected_project_key"])
+
+    def test_alias_validates_all_entries_and_bounded_portable_aliases_before_write(self):
+        index, original = self.alias_index()
+        invalid_aliases = [None, [None], ["../foreign"], ["C:\\foreign"], ["exampleproject-1234567890"] * 2, [f"exampleproject-{number:010x}" for number in range(knowledge.MAX_PROJECT_ALIASES + 1)]]
+        states = []
+        for aliases in invalid_aliases:
+            value = json.loads(json.dumps(original))
+            value["project"]["aliases"] = aliases
+            states.append(value)
+        malformed = json.loads(json.dumps(original))
+        malformed["entries"][0]["event_id"] = ""
+        states.append(malformed)
+        with mock.patch.object(knowledge.memory, "_registered_project_owner_paths", return_value=((self.project, "ExampleProject"),)):
+            for value in states:
+                with self.subTest(state=value):
+                    index.write_text(json.dumps(value), encoding="utf-8")
+                    saved = index.read_bytes()
+                    with self.assertRaises(ValueError):
+                        knowledge.register_alias(self.project, self.vault, **self.alias_arguments(index, original))
+                    self.assertEqual(index.read_bytes(), saved)
+
+    def test_alias_rejects_index_and_lock_symlinks_without_touching_target(self):
+        index, state = self.alias_index()
+        target = self.root / "external-index.json"
+        target.write_bytes(index.read_bytes())
+        target_bytes = target.read_bytes()
+        try:
+            probe = self.root / "link-probe"
+            probe.symlink_to(target)
+            probe.unlink()
+        except OSError as error:
+            self.skipTest(f"Host cannot create symlink fixture: {error}")
+        arguments = self.alias_arguments(index, state)
+        with mock.patch.object(knowledge.memory, "_registered_project_owner_paths", return_value=((self.project, "ExampleProject"),)):
+            for path in (index, self.vault / "AI Memory/.ending.lock"):
+                previous = path.read_bytes() if path.exists() else None
+                path.unlink(missing_ok=True)
+                path.symlink_to(target)
+                with self.subTest(path=path), self.assertRaises(ValueError):
+                    knowledge.register_alias(self.project, self.vault, **arguments)
+                self.assertEqual(target.read_bytes(), target_bytes)
+                path.unlink()
+                if previous is not None:
+                    path.write_bytes(previous)
+
+    def test_wrong_clone_identity_rejects_before_inspecting_its_symlink_sources(self):
+        self.write([self.method()])
+        clone = self.root / "clone" / self.project.name
+        clone.mkdir(parents=True)
+        outside = self.root / "outside"
+        outside.mkdir()
+        try:
+            (clone / "src").symlink_to(outside, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"Host cannot create symlink fixture: {error}")
+        self.assertEqual(knowledge.recall(clone, self.vault)["reason"], "exact_project_mismatch")
+
+    def test_alias_cli_uses_actual_registered_home_root_and_reads_back(self):
+        home = self.root / "registered-home"
+        project = home / "Documents/YofaGames/YoFaAssets"
+        shutil.copytree(self.project, project)
+        with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
+            self.assertEqual(knowledge.memory._registered_owner(project), "YoFaAssets")
+            knowledge.apply_entries(project, self.vault, [self.method()], event_id="same-project-proof", now=self.now)
+        index = self.vault / "Projects/YoFaAssets/Memory.json"
+        state = json.loads(index.read_text())
+        state["project"]["key"] = "yofaassets-0123456789"
+        index.write_text(json.dumps(state), encoding="utf-8")
+        (self.vault / "AI Memory").mkdir()
+        arguments = self.alias_arguments(index, state)
+        command = [sys.executable, "-B", str(SCRIPTS / "project_knowledge.py"), "register-alias", "--project-root", str(project), "--vault", str(self.vault)]
+        for key, value in arguments.items():
+            command.extend(["--" + key.replace("_", "-"), value])
+        environment = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False, env=environment, **hidden_process_options())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["read_back_verified"])
+        with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
+            self.assertEqual(knowledge.recall(project, self.vault, module="engine", files=["src/first.py"], symbols=["Worker.run"])["status"], "ok")
 
     def test_explicit_relationships_remain_pointers_and_context_stays_local(self):
         relation = {"project": "OtherProject", "module": "shared-api", "file": "api.py", "symbol": "Client.send", "relation": "uses", "reason": "Consumes the documented API"}

@@ -19,6 +19,8 @@ Current knowledge lives in `Projects/<owner>/Memory.json`, with a readable `Know
 
 Current user intent and source evidence take precedence over memory. Entries are current or explicitly retired; superseded versions remain history. Recall excludes stale entries and returns methods with absent source hashes separately as unverified pointers, never eligible current context. Current status or a matching source hash does not prove runtime behavior. Refresh consequential claims against current source or actual output. Registered aliases may represent one project, while unregistered clones remain separate.
 
+For a verified move or second-machine checkout, use the explicit `project_knowledge.py register-alias` repair described in [project knowledge](references/project-knowledge.md#registered-root-aliases). It requires the exact registered root, expected owner, stored project key, and current index SHA. Ordinary recall never registers an alias or adopts memory by project name.
+
 ## Ending: memory only
 
 After the main task and real verification finish, record only information likely to help a future task. For the user-authorized Ending lifecycle, create one separate projectless task with the app's defaults. It writes directly to the configured Obsidian vault and reads back the saved result there. Show its task link and status. Leave it as an ordinary unpinned task in Codex's recent tasks; do not pin, move, reorder, open, archive, or duplicate it automatically. Its pending or failed state does not change the completed main task or another active task. Ending never tests, builds, repairs, benchmarks, publishes, or creates further tasks.
