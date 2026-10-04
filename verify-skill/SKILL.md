@@ -5,6 +5,8 @@ description: "Verify consequential changes inside the active task with the small
 
 # Verify
 
+Before any file write for verification, apply the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md). Temporary screenshots, JSON receipts, logs, fixtures, and test output go only in ignored `Cache/temp-*` or `Cache/tmp-*` from their first write. Maintained regression tests keep their source owner. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
+
 Verify before declaring the task complete. Read relevant project facts through Project Memory, skip absent matching records, and never borrow another project's facts.
 
 ## Choose evidence

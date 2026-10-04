@@ -41,6 +41,11 @@ class ObsidianVaultSetupTests(unittest.TestCase):
         package = self.source / "qin_llm_wiki"
         package.mkdir(parents=True)
         (package / "__main__.py").write_text(FAKE_GENERATOR, encoding="utf-8")
+        self.real_location_guard = SETUP._guard_location
+        # Disposable Cache fixtures model external vaults; location safety has its own unmocked check below.
+        location_fixture = mock.patch.object(SETUP, "_guard_location", side_effect=lambda target, project_root: Path(target).resolve())
+        location_fixture.start()
+        self.addCleanup(location_fixture.stop)
 
     def test_creates_vault_outside_codex_and_reuses_it(self):
         vault = self.root / "Obsidian" / "Memory"
@@ -111,14 +116,16 @@ class ObsidianVaultSetupTests(unittest.TestCase):
         self.assertFalse(configured.exists())
 
     def test_refuses_codex_and_project_locations(self):
-        project = self.root / "project"
-        project.mkdir()
-        with mock.patch.dict(os.environ, {"CODEX_HOME": str(self.root / "codex")}, clear=False):
-            codex = SETUP.ensure_vault(vault=self.root / "codex" / "memory", source=self.source)
-            inside_project = SETUP.ensure_vault(vault=project / "Cache" / "vault", project_root=project, source=self.source)
-        self.assertEqual(codex["reason"], "unsafe_vault_location")
-        self.assertEqual(inside_project["reason"], "unsafe_vault_location")
-        self.assertFalse((project / "Cache").exists())
+        logical_root = Path.home() / "Documents" / "vault-location-fixture"
+        project = logical_root / "project"
+        targets = ((logical_root / "codex" / "memory", None), (project / "vault", project), (logical_root / "Cache" / "vault", None))
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(logical_root / "codex")}, clear=False):
+            with mock.patch.object(SETUP, "_guard_location", side_effect=self.real_location_guard):
+                with mock.patch.object(SETUP, "_memory_vault", side_effect=AssertionError("unsafe location must fail before vault access")):
+                    for target, project_root in targets:
+                        with self.subTest(target=target):
+                            result = SETUP.ensure_vault(vault=target, project_root=project_root, source=self.source)
+                            self.assertEqual(result["reason"], "unsafe_vault_location")
 
     def test_preserves_nonempty_directory(self):
         vault = self.root / "other-vault"

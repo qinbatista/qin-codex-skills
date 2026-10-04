@@ -27,15 +27,14 @@ HASH = hashlib.sha256(b"verified-readback").hexdigest()
 
 class TaskResourceLedgerTests(unittest.TestCase):
     def setUp(self):
-        self.scratch_parent = Path.cwd() / "Cache" / "temp-task-resource-units"
+        self.scratch_parent = Path.cwd() / "Cache" / "tmp-ledger"
         self.scratch_parent.mkdir(parents=True, exist_ok=True)
-        self.temporary_directory = tempfile.TemporaryDirectory(
-            prefix="case-", dir=self.scratch_parent
-        )
+        self.temporary_directory = tempfile.TemporaryDirectory(prefix="c-", dir=self.scratch_parent)
         self.project_root = Path(self.temporary_directory.name)
         (self.project_root / "Cache").mkdir()
         self.task_id = "producer-task"
-        self.task_root = f"Cache/temp-case-{uuid.uuid4().hex}"
+        # Each fixture project is already exclusive; short paths leave room for quarantine metadata on Windows.
+        self.task_root = "Cache/temp-case"
         self.ledger = LEDGER.new_ledger(
             self.project_root, self.task_id, self.task_root
         )

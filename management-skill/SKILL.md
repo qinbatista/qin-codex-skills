@@ -5,6 +5,8 @@ description: "Maintain, install, or publish managed global skills, and repair le
 
 # Skill Management
 
+Before any file write, apply the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md). All temporary support belongs only in ignored `Cache/temp-*` or `Cache/tmp-*` from its first write. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git. Source, installed updates, and retained recovery backups keep their declared owners.
+
 Use for requested skill maintenance, installation, or publication. Ensure the Obsidian vault through Project Memory and read related project memory; skip absent matching records and isolate other projects. Briefly explain the intended steps before execution.
 
 ## Maintain

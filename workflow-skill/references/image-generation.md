@@ -2,6 +2,8 @@
 
 Apply to every new image, test, draft, retry, edit, transparency repair, and declared image batch. Identify the visual's role, required content, size, aspect ratio, alpha, references, and project style; keep art direction and concrete implementations with the project. Bind the exact request, resource owner, output ID, source identity, and intended synchronization destination before submission.
 
+Before saving browser evidence or cleanup observations, apply the [Cache policy](project-cache-artifact-policy.md). Temporary screenshots and JSON receipts go directly into the exact ignored task Cache, never a project-root cleanup/evidence directory or Git. Pending account cleanup retains only exact target identities and necessary state in its declared Cache runtime/recovery owner; it does not retain disposable screenshots.
+
 Use the ChatGPT product webpage through Codex's built-in browser. Do not substitute image tools, direct image APIs, local generation or pixel composition, Chrome/CDP, Ego, or another browser. Use supported authenticated sessions without automating login or copying credentials. If this entry is unavailable, keep the same request pending and report the blocker; do not switch providers or issue a duplicate submission.
 
 1. Submit one owned image job or explicitly declared batch, recording its exact conversation URL and newly generated files and uploaded attachments. Reuse its owned tab while that same job needs an edit; never accumulate generation tabs or open the next job before this one closes.

@@ -156,6 +156,21 @@ def copy_required_plugin_contracts(plugin_cache: Path, candidate_cache: Path) ->
             shutil.copytree(source, target)
 
 
+def project_task_cache_root(project_root: Path, cache_root: Path) -> Path:
+    project_root = project_root.expanduser().resolve()
+    cache_root = cache_root.expanduser()
+    if not cache_root.is_absolute():
+        cache_root = project_root / cache_root
+    cache_root = cache_root.resolve()
+    try:
+        relative = cache_root.relative_to(project_root / "Cache")
+    except ValueError as error:
+        raise RuntimeError("Skill gate scratch must stay inside the owning project's Cache") from error
+    if not relative.parts or not relative.parts[0].startswith(("temp-", "tmp-")) or relative.parts[0] in {"temp-", "tmp-"}:
+        raise RuntimeError("Skill gate scratch must use an exact Cache/temp-* or Cache/tmp-* task directory")
+    return cache_root
+
+
 @contextmanager
 def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str]):
     asset = project_root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
@@ -164,9 +179,8 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
     if not text.startswith(directive):
         raise RuntimeError("global AGENTS asset is missing its explicit-install directive")
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
-    temporary_cache_root = tempfile.TemporaryDirectory(prefix="codex-skill-candidates-") if os.name == "nt" and not configured_cache_root else None
     default_cache_root = project_root / "Cache" / "temp-global-skill-regression"
-    cache_root = Path(configured_cache_root).expanduser() if configured_cache_root else Path(temporary_cache_root.name) if temporary_cache_root is not None else default_cache_root
+    cache_root = project_task_cache_root(project_root, Path(configured_cache_root) if configured_cache_root else default_cache_root)
     cache_root.mkdir(parents=True, exist_ok=True)
     structural_agents_path = project_root / "AGENTS.md"
     structural_agents = structural_agents_path.read_text(encoding="utf-8") if structural_agents_path.is_file() else "# qin-codex-skills\n"
@@ -182,9 +196,7 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
             copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
             yield {"source": source_candidate, "deployed": deployed_candidate}
     finally:
-        if temporary_cache_root is not None:
-            temporary_cache_root.cleanup()
-        elif not configured_cache_root:
+        if not configured_cache_root:
             try:
                 cache_root.rmdir()
             except OSError:
@@ -219,17 +231,21 @@ def sanitized_tail(text: str, replacements: dict[str, str]) -> str:
 
 def command_result(check_id: str, target: str, command: list[str], root: Path, timeout_seconds: int, replacements: dict[str, str]) -> dict[str, object]:
     environment = os.environ.copy()
-    temporary_cache = None
     if os.name == "nt":
         environment["PYTHONUTF8"] = "1"
         environment["PYTHONIOENCODING"] = "utf-8"
-        temporary_cache = tempfile.mkdtemp(prefix="codex-skill-gate-")
-        environment["CODEX_PROJECT_CACHE_ROOT"] = temporary_cache
+    cache_root = project_task_cache_root(root, root / "Cache" / "temp-global-skill-checks")
+    cache_root.mkdir(parents=True, exist_ok=True)
     try:
-        completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())
+        with tempfile.TemporaryDirectory(prefix="check-", dir=cache_root) as temporary_cache:
+            for variable in ("CODEX_PROJECT_CACHE_ROOT", "TMP", "TEMP", "TMPDIR"):
+                environment[variable] = temporary_cache
+            completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())
     finally:
-        if temporary_cache is not None:
-            shutil.rmtree(temporary_cache, ignore_errors=True)
+        try:
+            cache_root.rmdir()
+        except OSError:
+            pass
     combined = completed.stdout + "\n" + completed.stderr
     count = parse_test_count(combined)
     passed = completed.returncode == 0 and count > 0
