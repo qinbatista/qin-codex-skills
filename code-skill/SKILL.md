@@ -5,6 +5,8 @@ description: "Use for code creation, repair, refactoring, and code review when w
 
 # Code Skill
 
+Before any file write, apply the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md): temporary files go only in ignored `Cache/temp-*` or `Cache/tmp-*` from their first write. Screenshots, JSON receipts, logs, and test output are temporary support unless explicitly declared final deliverables. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
+
 ## Scope
 
 Apply general code preferences in any language; another domain Skill may own its specific APIs and implementation. These are structure and writing preferences, not feature recipes. A mechanical shell command or temporary execution script with no relevant design preference may remain skill-free.

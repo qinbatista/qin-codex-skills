@@ -32,8 +32,13 @@ REQUIRED_POLICY_TEXT = (
     "intermediate code",
     "`Cache/temp-<name>/`",
     "`Cache/remote-<name>/`",
-    "`CODEX_HOME/sessions/`",
-    "never place important output there",
+    "from its first write",
+    "For projectless work",
+    "never fall back to system Temp",
+    "temporary file regardless of filename or extension",
+    "git check-ignore --no-index",
+    "git ls-files -- <path>",
+    "git diff --cached --name-status",
     "only when the user or project contract explicitly requires retention",
     "sync destination is pending",
     "Preserve verified retained resources",
@@ -109,7 +114,9 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         text = GLOBAL_ENTRY_RULE_PATH.read_text()
         self.assertIn("project's task-owned Cache/temp-*", text)
         self.assertIn("Cache/tmp-*", text)
-        self.assertIn("CODEX_HOME/sessions", text)
+        self.assertIn("current task workspace's Cache", text)
+        self.assertNotIn("CODEX_HOME/sessions", text)
+        self.assertIn("temporary files never enter Git", text)
         self.assertIn("delete exact scratch", text)
         self.assertIn("minimum recovery inputs/state", text)
         self.assertIn("renaming temp to remote-* does not establish a durable owner", text)
@@ -160,6 +167,20 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 self.assertNotIn("unless the user still needs to review", text)
                 self.assertNotIn("when no review or debugging", text)
                 self.assertNotIn("Reassess them on the next related task", text)
+
+    def test_main_entries_require_cache_before_writes_and_git_submission(self):
+        for skill in ("task-analyze-skill", "workflow-skill", "code-skill", "verify-skill", "management-skill"):
+            text = (SKILLS_ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
+            with self.subTest(skill=skill):
+                self.assertIn("Before any file write", text)
+                self.assertIn("Cache/temp-*", text)
+                self.assertIn("Cache/tmp-*", text)
+                self.assertRegex(text, r"from (its|their) first write")
+                self.assertIn("Git index", text)
+                self.assertIn("temporary files never enter Git", text)
+        image_text = (SKILLS_ROOT / "workflow-skill/references/image-generation.md").read_text(encoding="utf-8")
+        self.assertIn("Temporary screenshots and JSON receipts", image_text)
+        self.assertIn("never a project-root", image_text)
 
     def test_public_readme_cleanup_rule_comes_from_the_maintained_templates(self):
         for language_suffix in ("", ".zh"):

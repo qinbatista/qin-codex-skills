@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "personal_memory.py"
@@ -36,7 +37,9 @@ class PersonalMemoryTests(unittest.TestCase):
             blocked = Path(temporary) / "missing-vault"
             blocked.mkdir()
             (blocked / "keep.md").write_text("Keep this note", encoding="utf-8")
-            result = MEMORY.capture([candidate()], vault=blocked)
+            # The nonempty-vault branch is independent of the real Cache location prohibition.
+            with mock.patch("obsidian_vault_setup._guard_location", return_value=blocked):
+                result = MEMORY.capture([candidate()], vault=blocked)
             self.assertFalse(pending.exists())
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["reason"], "target_is_not_an_empty_memory_vault")

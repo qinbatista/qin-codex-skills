@@ -1,6 +1,8 @@
 import importlib.util
 import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -190,20 +192,52 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 plugin_skill = deployed.parent / "plugins" / "cache" / "openai-bundled" / plugin_id / "1.0.0" / "skills" / skill_name / "SKILL.md"
                 plugin_skill.parent.mkdir(parents=True)
                 plugin_skill.write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")
-            with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
-                self.assertTrue((roots["source"].parent / "AGENTS.md").is_file())
-                self.assertTrue((roots["deployed"].parent / "AGENTS.md").is_file())
-                self.assertFalse((roots["deployed"] / "task-analyze-skill" / "local").exists())
-                for root in roots.values():
-                    candidate_cache = root.parent / "plugins" / "cache"
-                    self.assertTrue(any(candidate_cache.glob("*/*/*/skills/control-chrome/SKILL.md")))
-                    self.assertTrue(any(candidate_cache.glob("*/*/*/skills/sites-building/SKILL.md")))
-                    for relative in (
-                        "workflow-skill/references/task-resource-lifecycle.md",
-                        "workflow-skill/scripts/task_resource_ledger.py",
-                        "workflow-skill/tests/test_task_resource_ledger.py",
-                    ):
-                        self.assertTrue((root / relative).is_file(), relative)
+            with mock.patch.dict(os.environ):
+                os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+                with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
+                    workspace = roots["source"].parents[1]
+                    expected_cache = PROJECT_ROOT / "Cache" / "temp-global-skill-regression"
+                    self.assertEqual(workspace.parent, expected_cache)
+                    self.assertTrue((roots["source"].parent / "AGENTS.md").is_file())
+                    self.assertTrue((roots["deployed"].parent / "AGENTS.md").is_file())
+                    self.assertFalse((roots["deployed"] / "task-analyze-skill" / "local").exists())
+                    for root in roots.values():
+                        candidate_cache = root.parent / "plugins" / "cache"
+                        self.assertTrue(any(candidate_cache.glob("*/*/*/skills/control-chrome/SKILL.md")))
+                        self.assertTrue(any(candidate_cache.glob("*/*/*/skills/sites-building/SKILL.md")))
+                        for relative in (
+                            "workflow-skill/references/task-resource-lifecycle.md",
+                            "workflow-skill/scripts/task_resource_ledger.py",
+                            "workflow-skill/tests/test_task_resource_ledger.py",
+                        ):
+                            self.assertTrue((root / relative).is_file(), relative)
+                self.assertFalse(workspace.exists())
+
+    def test_command_cache_and_default_tempfile_stay_in_cache_and_clean_on_timeout(self):
+        code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert p.is_relative_to(Path.cwd() / 'Cache' / 'temp-global-skill-checks'); print('Ran 1 test')"
+        result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], PROJECT_ROOT, 10, {})
+        self.assertEqual(result["status"], "pass", result)
+        observed = []
+
+        def timeout(*args, **kwargs):
+            observed.append(Path(kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"]))
+            self.assertTrue(observed[-1].is_dir())
+            self.assertTrue(observed[-1].is_relative_to(PROJECT_ROOT / "Cache" / "temp-global-skill-checks"))
+            raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+        with mock.patch.object(GATE.subprocess, "run", side_effect=timeout):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                GATE.command_result("timeout", "source", ["test"], PROJECT_ROOT, 1, {})
+        self.assertFalse(observed[0].exists())
+
+    def test_candidate_cache_override_rejects_source_and_outside_project_before_writing(self):
+        for cache_root in (PROJECT_ROOT / "management-skill", PROJECT_ROOT.parent / "Cache" / "temp-other", PROJECT_ROOT / "Cache" / "remote-test"):
+            with self.subTest(cache_root=cache_root):
+                with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(cache_root)}):
+                    with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid cache must fail before writing")):
+                        with self.assertRaisesRegex(RuntimeError, "Skill gate scratch must"):
+                            with GATE.candidate_layouts(PROJECT_ROOT, PROJECT_ROOT, []):
+                                self.fail("invalid cache was accepted")
 
     def test_candidate_layout_uses_ephemeral_contract_fixtures_without_plugin_cache(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)

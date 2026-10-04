@@ -7,6 +7,8 @@ description: "Briefly explain a task's objective and implementation steps before
 
 Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
 
+Before any file write, resolve its owner under the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md). Temporary files belong only in the workspace's ignored `Cache/temp-*` or `Cache/tmp-*` from their first write, including delegated work. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
+
 Before detailed execution, briefly tell the user what you will achieve and the approximate implementation steps. Use one sentence for simple work and a short ordered plan when steps or dependencies matter. Keep the explanation about the work itself; omit complexity scores, model selection, and execution bookkeeping.
 
 Then follow those steps without waiting for routine confirmation. The user can interrupt or adjust the direction. Ask only when a missing decision materially affects the result or an action requires authorization; continue independent work where possible. Explain a material change in approach before carrying it out.
