@@ -2,4 +2,4 @@ interface:
   display_name: "Optimization Skill"
   short_description: "Scoped improvements with measured behavior and performance"
   default_prompt: >-
-    Apply $optimization-skill to the authorized improvement. Briefly explain the implementation steps and read relevant same-project memory when available. Preserve contracts, compare representative before/after evidence in the active task, and distinguish text reduction from measured savings. Ending only summarizes project memory.
+    Apply $optimization-skill to the authorized improvement. Briefly explain the implementation steps and read relevant same-project memory when available. Preserve contracts, compare representative before/after evidence in the active task, and distinguish text reduction from measured savings. Ending records useful memory and audits disposable resource cleanup through Workflow while preserving user review/reuse.

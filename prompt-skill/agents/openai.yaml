@@ -2,4 +2,4 @@ interface:
   display_name: "Prompt Skill"
   short_description: "Concise reusable prompts and durable AI instructions"
   default_prompt: >-
-    Apply $prompt-skill and read relevant same-project memory if available. Define the objective, inputs, necessary constraints, and output contract; remove redundant or conflicting rules. Briefly explain the intended changes before detailed execution. Verify consequential prompt behavior in the active task and report what was tested. Ending only summarizes useful project memory.
+    Apply $prompt-skill and read relevant same-project memory if available. Define the objective, inputs, necessary constraints, and output contract; remove redundant or conflicting rules. Briefly explain the intended changes before detailed execution. Verify consequential prompt behavior in the active task and report what was tested. Ending records useful memory and audits disposable resource cleanup through Workflow while preserving user review/reuse.

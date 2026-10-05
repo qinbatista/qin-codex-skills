@@ -112,14 +112,14 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
 
     def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
         text = GLOBAL_ENTRY_RULE_PATH.read_text()
-        self.assertIn("project's task-owned Cache/temp-*", text)
+        self.assertIn("Cache/temp-*", text)
         self.assertIn("Cache/tmp-*", text)
         self.assertIn("current task workspace's Cache", text)
         self.assertNotIn("CODEX_HOME/sessions", text)
         self.assertIn("temporary files never enter Git", text)
         self.assertIn("delete exact scratch", text)
         self.assertIn("minimum recovery inputs/state", text)
-        self.assertIn("renaming temp to remote-* does not establish a durable owner", text)
+        self.assertIn("renaming temp to remote-* does not establish a durable owner", text.lower())
         self.assertIn("remove obsolete or duplicate tests", text)
         self.assertIn("preserve unrelated work", text)
 
@@ -148,7 +148,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         self.assertIn("Ending records Obsidian memory", text)
         self.assertIn("never controls, interrupts, archives, or deletes another", text)
 
-    def test_task_end_cleanup_has_no_review_or_debug_retention_escape(self):
+    def test_task_end_cleanup_preserves_actual_review_reuse_and_owned_recovery(self):
         owners = (
             SKILLS_ROOT / "AGENTS.md",
             SKILLS_ROOT / "workflow-skill/SKILL.md",
@@ -163,10 +163,9 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn("owner", text)
                 self.assertIn("recovery", text)
-                self.assertNotIn("unless review or debugging", text)
-                self.assertNotIn("unless the user still needs to review", text)
-                self.assertNotIn("when no review or debugging", text)
-                self.assertNotIn("Reassess them on the next related task", text)
+                self.assertRegex(text, r"review.{0,20}reuse")
+                self.assertNotIn("Review or debugging is not a temp-retention exception", text)
+                self.assertNotIn("Evidence, review, debugging", text)
 
     def test_main_entries_require_cache_before_writes_and_git_submission(self):
         for skill in ("task-analyze-skill", "workflow-skill", "code-skill", "verify-skill", "management-skill"):

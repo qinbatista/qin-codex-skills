@@ -9,7 +9,7 @@
 | Skill | 职责 |
 | --- | --- |
 | [Task Analyze](task-analyze-skill/SKILL.md) | 明确任务目标、约束和大概实现步骤，然后执行。 |
-| [Workflow](workflow-skill/SKILL.md) | 为直接执行或委派的工作明确目标、依赖、资源归属和完成条件。 |
+| [Workflow](workflow-skill/SKILL.md) | 协调任务及全局资源清理，保留正在使用和用户审阅/复用所需的资源。 |
 | [Code](code-skill/SKILL.md) | 指导代码结构、清晰实现以及跨平台、安静的执行方式。 |
 | [Prompt](prompt-skill/SKILL.md) | 为可复用提示词明确输入、约束和输出约定。 |
 | [Verify](verify-skill/SKILL.md) | 在当前任务内验证真实行为或输出，并控制测试覆盖范围。 |
@@ -22,7 +22,7 @@
 1. 读取适用的 Skill 和当前项目记忆，再确定目标及所需证据；记忆缺失时直接跳过。
 2. 先简述目标和实现步骤，再按步骤执行；步骤发生重要变化时及时说明。
 3. 在当前任务内用真实行为检查或输出回读完成验证。优先修改有用的现有测试，并在回读后清理一次性任务资源。
-4. 如有值得长期保留的信息，使用独立、未置顶的无项目 Ending 任务写入本地记忆。Ending 不阻碍、测试或修复主任务结果。
+4. 使用一个获授权、未置顶的无项目 Ending 任务，并行整理 Obsidian 本地记忆和[审查已完成任务的资源](workflow-skill/references/ending-resource-audit.md)。先遵循资源所属 Skill 的清理流程，再补充清理遗漏的一次性 Cache、浏览器/预览/终端、进程和网络资源。保留正在使用及用户审阅或复用所需的文件和环境。记忆库不可用不阻碍清理；Ending 不阻碍、测试或修复主任务结果。
 
 项目记忆集中在每个项目的一份 Memory.json 索引和一份 Knowledge.md 总览中。按项目、模块、文件和方法精确读取，过时记录不作为当前事实。Ending 每次整理涉及的条目，并定期更新项目总结与明确的参考关联。
 
@@ -32,7 +32,7 @@
 
 用户 Skill 默认统一安装到官方目录 `~/.agents/skills`，参见 [Codex 官方说明](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)。`CODEX_HOME`（默认 `~/.codex`）仍负责配置、全局 `AGENTS.md` 和系统内置资源。发现旧目录或旧引用时按[自动修复流程](management-skill/references/skill-directory-repair.md)处理；项目 Skill 保持在项目内，迁移保留 `.system`、插件和可恢复备份。
 
-每个 Skill 目录负责自己的 `SKILL.md`、参考规则、工具和发布检查所需的版本化开发测试。所有临时文件，包括截图、JSON 回执和测试输出，从首次写入起只能放在忽略提交的 `Cache/temp-*` 或 `Cache/tmp-*`，不得进入 Git；无项目任务使用当前任务工作目录的 Cache。最终交付或最小恢复状态转入准确持久 owner 并核验后，任务结束就删除临时文件。证据或未来复查不能成为长期保留 temp 的理由，改名为 `remote-*` 也不代表建立了持久资源 owner。
+Skill 目录只保存指令、引用、辅助脚本和版本化发布测试。临时截图、JSON 回执、测试输出从首次写入起只能进入已忽略的 `Cache/temp-*` 或 `Cache/tmp-*`，不得提交到 Git；无项目任务使用其工作区 Cache。交付或最小恢复状态转交并回读后删除一次性文件；保留用户审阅或复用所需文件及其底层资源，待真实所有者和引用验证后再清理。`remote-*` 名称本身不证明保留权。
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

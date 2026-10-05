@@ -2,4 +2,4 @@ interface:
   display_name: "Code Skill"
   short_description: "General code structure, style, and lifecycle preferences"
   default_prompt: >-
-    Apply $code-skill and briefly explain the implementation steps before detailed execution. Read relevant same-project memory when available, code-writing philosophy, and only matched language/UI references. Preserve ownership, direct calls, explicit result ownership, and concise readable formatting. Verify changed behavior in the active task using the smallest real check or output readback. Ending only summarizes project memory.
+    Apply $code-skill and briefly explain the implementation steps before detailed execution. Read relevant same-project memory when available, code-writing philosophy, and only matched language/UI references. Preserve ownership, direct calls, explicit result ownership, and concise readable formatting. Verify changed behavior in the active task using the smallest real check or output readback. Ending records useful memory and audits disposable resource cleanup through Workflow while preserving user review/reuse.

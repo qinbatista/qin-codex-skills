@@ -13,4 +13,4 @@ Before detailed execution, briefly tell the user what you will achieve and the a
 
 Then follow those steps without waiting for routine confirmation. The user can interrupt or adjust the direction. Ask only when a missing decision materially affects the result or an action requires authorization; continue independent work where possible. Explain a material change in approach before carrying it out.
 
-Verify consequential changes in the active task at the smallest relevant boundary, following [Verify](../verify-skill/SKILL.md). Report the result, evidence, and any remaining limits. Use [Project Memory](../project-memory-skill/SKILL.md) only for relevant recall or useful durable updates; Ending is memory-only.
+Verify consequential changes in the active task at the smallest relevant boundary, following [Verify](../verify-skill/SKILL.md). Report the result, evidence, and limits. Use [Project Memory](../project-memory-skill/SKILL.md) for scoped recall and useful durable updates; the authorized Ending runs memory work alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md), preserving active work and user review/reuse.

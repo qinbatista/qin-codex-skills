@@ -25,7 +25,7 @@ For Skill creation or revision, apply [Skill authoring rules](../management-skil
 2. Identify the desired result and replace the weakest ambiguous or conflicting rule with the smallest complete instruction.
 3. Verify within this active task. For consequential output behavior, use representative inputs and inspect semantic correctness as well as format. Read back simple value-only edits. Do not start the whole project or compile it merely to check a prompt unless requested.
 4. Return the artifact and concise evidence. State when a provider trial or stochastic reliability remains untested; one good sample does not prove stability.
-5. Ending only summarizes useful project memory from completed work, consolidating the affected prompt contract and related knowledge in the central project store. It performs no verification or repair and creates no separate note per prompt or task.
+5. Ending's memory branch summarizes useful project knowledge and consolidates the affected prompt contract. It performs no product verification or code repair and creates no separate note per prompt or task. In parallel, [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md) releases disposable completed-task resources and preserves user review/reuse.
 
 ## Output-specific checks
 

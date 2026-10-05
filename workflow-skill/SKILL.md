@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Coordinate tasks with clear goals, relevant skills, safe parallel work, and verification before completion."
+description: "Coordinate tasks, in-task verification, and global resource cleanup; audit completed-task leftovers at Ending while preserving active work, user review and reuse."
 ---
 
 # Workflow
@@ -21,8 +21,8 @@ For image generation, edits, retries, or batches, follow [image generation and c
 2. State a short implementation outline before detailed work. Name the meaningful steps and dependencies, then proceed without a routine approval pause. Explain material changes to the outline as they arise.
 3. Execute in dependency order. If independent work benefits from collaboration, give it a clear goal, relevant context, and disjoint write ownership; integrate the outputs in the active task.
 4. Verify changed code or consequential results using [Verify](../verify-skill/SKILL.md). Use one real check at the smallest relevant boundary; do not start or compile the whole project unless requested.
-5. Verify requested results and their references in the declared durable owner through a fresh reader, then close task-opened surfaces and delete exact task scratch and disposable test/intermediate files, including empty task directories. On pause or failure, transfer only minimum recovery input/state to its real owner before cleanup. Review, debugging, evidence, or a future consumer does not justify keeping temp; preserve unrelated work and verified retained resources. Follow [resource ownership](references/task-resource-lifecycle.md). Report result, cleanup, and any concrete ownership blocker, distinguishing source edits, installation, and publication.
-6. If useful durable information changed, use [Project Memory](../project-memory-skill/SKILL.md) after the main task is complete. Ending consolidates touched central entries and relationships, checks whether project synthesis is due, and reads back the result. It never gates the main result or another task.
+5. Verify requested results and their references in the declared durable owner through a fresh reader, then release exact disposable scratch, test/build intermediates and idle task-opened surfaces. Preserve files and live environments needed for user review or reuse; establish their output/resource owner before clearing backing scratch. On pause or failure, keep minimum recovery state and remove independent disposable work. Follow [resource ownership](references/task-resource-lifecycle.md). Report result, cleanup and concrete ownership/API blockers, distinguishing source edits, installation and publication.
+6. After completion, use the authorized visible Ending for useful [Project Memory](../project-memory-skill/SKILL.md) work and the [resource audit](references/ending-resource-audit.md) in parallel. Workflow owns global resource coordination across the originating and recent completed tasks. Follow specific owners' cleanup first, then finish their missed cleanup through available owner tools. Memory failure never blocks reclamation; Ending never gates or re-verifies the main result.
 
 ## Boundaries
 
@@ -30,6 +30,6 @@ Preserve unrelated work. Perform reversible actions within the request; obtain a
 
 Apply [portable, quiet execution](../code-skill/references/skill-platform-compatibility.md) to all scripts, tests, and background work, including delegated and nested launches. Capture output without visible windows or focus changes; opening a terminal, browser, report, or app requires an explicit request to show it.
 
-Use [resource ownership](references/task-resource-lifecycle.md) and the [Cache policy](references/project-cache-artifact-policy.md) when creating temporary resources. Ordinary work needs no extra ledger.
+Use [resource ownership](references/task-resource-lifecycle.md) and the [Cache policy](references/project-cache-artifact-policy.md) when creating temporary resources. Ordinary work needs no extra ledger; record exact handles/paths when cleanup spans tasks or consumers. Never sweep Codex-managed storage or affect active/shared/user-opened resources.
 
 Ordinary task results update their owning source, outputs, or project memory. They do not trigger Skill edits; use the [authoring rules](../management-skill/SKILL.md#authoring-rules) only for an authorized durable workflow change or reusable defect repair.

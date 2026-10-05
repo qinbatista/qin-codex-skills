@@ -40,11 +40,18 @@ class EndingLaunchTests(unittest.TestCase):
         return {"status": "written", "purpose": "memory_only", "event_id": "event-1", "vault_document": "AI Memory/events.jsonl",
                 "read_back_verified": True, "project": "ExampleProject", "current_memory": {"read_back_verified": True}}
 
-    def test_unavailable_vault_keeps_memory_pending_without_launch(self):
+    def test_unavailable_vault_does_not_block_resource_audit_launch(self):
         with mock.patch("obsidian_vault_setup.ensure_vault", return_value={"status": "pending", "reason": "obsidian_vault_unavailable"}):
             packet = self.prepare(memory_available=False)
         self.assertEqual(packet["status"], "pending")
         self.assertEqual(packet["reason"], "obsidian_vault_unavailable")
+        self.assertIsNotNone(packet["create_thread"])
+        self.assertEqual(packet["memory_status"], "pending")
+        self.assertTrue(packet["resource_audit"])
+
+    def test_unavailable_vault_without_a_resource_audit_remains_pending(self):
+        with mock.patch("obsidian_vault_setup.ensure_vault", return_value={"status": "pending", "reason": "obsidian_vault_unavailable"}):
+            packet = self.prepare(memory_available=False, resource_audit=False)
         self.assertIsNone(packet["create_thread"])
 
     def test_missing_vault_setup_enables_memory_handoff(self):
@@ -54,11 +61,14 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertIsNotNone(packet["create_thread"])
         self.assertEqual(packet["vault_setup"]["status"], "created")
 
-    def test_no_durable_information_skips(self):
+    def test_no_durable_information_skips_memory_only_and_still_audits_resources(self):
         self.completed["outcome"] = {}
         packet = self.prepare()
-        self.assertEqual(packet["status"], "skipped")
-        self.assertIsNone(packet["create_thread"])
+        self.assertEqual(packet["memory_status"], "skipped")
+        self.assertIsNotNone(packet["create_thread"])
+        skipped = self.prepare(resource_audit=False)
+        self.assertEqual(skipped["status"], "skipped")
+        self.assertIsNone(skipped["create_thread"])
 
     def test_handoff_uses_app_defaults_and_scoped_obsidian_prompt(self):
         packet = self.prepare()
@@ -68,6 +78,11 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertEqual(packet["create_thread"]["target"], {"type": "projectless"})
         self.assertIn("without a Codex-local memory or queue", prompt)
         self.assertIn(json.dumps(str(SCRIPT.with_name("ending_memory.py"))), prompt)
+        self.assertIn("ending-resource-audit.md", prompt)
+        self.assertIn("In parallel", prompt)
+        self.assertIn("review or reuse", prompt)
+        self.assertIn("up to ten recent chats", prompt)
+        self.assertIn("unavailable memory vault must not block", prompt)
 
     def test_handoff_keeps_the_installation_that_prepared_it(self):
         installed = self.project / ".agents" / "skills" / "project-memory-skill" / "scripts" / "ending_memory_launch.py"
@@ -87,13 +102,34 @@ class EndingLaunchTests(unittest.TestCase):
 
     def test_completion_requires_vault_event_and_matching_project(self):
         packet = self.acknowledged()
-        result = MODULE.record_completion(packet, self.vault_result())
+        result = MODULE.record_completion(packet, self.vault_result(), self.resource_result())
         self.assertEqual(result["status"], "complete")
         self.assertEqual(result["event_id"], "event-1")
         self.assertEqual(result["memory_sync"], "verified")
         for changed in ({"read_back_verified": False}, {"vault_document": "local/store.jsonl"}, {"project": "OtherProject"}, {"event_id": ""}, {"current_memory": {}}):
             with self.assertRaises(ValueError):
                 MODULE.record_completion(packet, {**self.vault_result(), **changed})
+
+    def resource_result(self, **changes):
+        return {"status": "complete", "origin_task_id": "task-1", "read_back_verified": True, "released": [], "retained": [], "pending": [], **changes}
+
+    def test_memory_success_cannot_hide_pending_cleanup(self):
+        result = MODULE.record_completion(self.acknowledged(), self.vault_result())
+        self.assertEqual(result["status"], "pending")
+        self.assertEqual(result["memory_status"], "complete")
+        self.assertEqual(result["resource_status"], "pending")
+
+    def test_resource_success_survives_pending_or_skipped_memory(self):
+        for memory_result in ({"status": "pending", "reason": "vault unavailable"}, {"status": "skipped", "reason": "no_durable_information"}):
+            with self.subTest(memory_result=memory_result):
+                result = MODULE.record_completion(self.acknowledged(), memory_result, self.resource_result())
+                self.assertEqual(result["resource_status"], "complete")
+                self.assertEqual(result["status"], "pending" if memory_result["status"] == "pending" else "complete")
+
+    def test_resource_completion_requires_originating_task_and_real_readback(self):
+        for changes in ({"origin_task_id": "other"}, {"read_back_verified": False}, {"status": "invented"}):
+            with self.assertRaises(ValueError):
+                MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result(**changes))
 
     def test_handoff_binds_method_evidence_before_ending(self):
         self.completed["outcome"]["symbols"] = ["Worker.read"]

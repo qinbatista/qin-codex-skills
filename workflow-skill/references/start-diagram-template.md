@@ -8,7 +8,7 @@ flowchart LR
   B --> C[Integrate]
   C --> D[Focused in-task verification]
   D --> E[Completed result]
-  E --> F[Useful memory only]
+  E --> F[Memory and resource audit]
 ```
 
 Explain the main steps before detailed execution, then follow the outline and incorporate user corrections. Memory can be skipped when absent or unnecessary.

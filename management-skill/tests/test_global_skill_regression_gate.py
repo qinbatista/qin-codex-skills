@@ -42,10 +42,10 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
 
     def test_catalog_previews_steps_and_keeps_verification_in_task(self):
         policy = GATE.load_catalog(PROJECT_ROOT)["policy"]
-        self.assertEqual(policy["workflow_version"], 3)
+        self.assertEqual(policy["workflow_version"], 4)
         self.assertEqual(policy["execution_preview"], "brief_goal_and_steps_before_execution")
         self.assertEqual(policy["verification_owner"], "active_task")
-        self.assertEqual(policy["ending_purpose"], "memory_only")
+        self.assertEqual(policy["ending_purpose"], "memory_and_resources")
         self.assertEqual(policy["missing_memory"], "bootstrap_vault_then_skip_absent_matching_note")
         self.assertTrue(policy["process_contract_is_not_result_memory"])
 

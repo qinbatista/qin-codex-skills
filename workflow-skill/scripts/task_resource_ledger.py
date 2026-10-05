@@ -725,7 +725,7 @@ def handoff(
     if resource.get("durable_owner") is not None or resource["state"] != "acquired" or (resource["kind"] == "path" and resource.get("identity") is not None):
         _fail("handoff must be explicit before a path is sealed or release begins")
     if role != "downstream":
-        _fail("Ending is memory-only and cannot own a resource handoff")
+        _fail("Ending audits producer resources and cannot become a blocking consumer")
     task_key = _task_key(downstream_task_id)
     if task_key in resource["consumers"]:
         _fail("duplicate consumer handoff is forbidden")

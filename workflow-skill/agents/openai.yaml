@@ -1,4 +1,4 @@
 interface:
   display_name: "workflow-skill"
   short_description: "Goals, safe delegation, and in-task completion"
-  default_prompt: "Briefly explain the requested result and main implementation steps before detailed execution, then follow the outline and incorporate user corrections. Read relevant skills and exact-project memory, verify proportionately in the active task, and summarize only useful memory at Ending."
+  default_prompt: "Briefly explain the result and steps, then execute and verify in the active task. Use Workflow as the global resource coordinator: follow each owner's cleanup first, release disposable completed-task leftovers, and preserve active work and user review/reuse. Ending runs bounded recent-task cleanup alongside useful memory in parallel."

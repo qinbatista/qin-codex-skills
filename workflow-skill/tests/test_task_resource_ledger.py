@@ -176,7 +176,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
             self._path("ending.txt"),
             "legacy Ending fixture",
         )
-        with self.assertRaisesRegex(ValueError, "memory-only"):
+        with self.assertRaisesRegex(ValueError, "blocking consumer"):
             LEDGER.handoff(
                 self.ledger, "ending-output", "ending-task", role="ending"
             )

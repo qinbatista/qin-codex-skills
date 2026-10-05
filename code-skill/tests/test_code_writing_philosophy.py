@@ -23,7 +23,7 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         self.assert_concepts("SKILL.md", ["implementation steps before detailed execution", "every task", "if no memory is available, continue", "another project's", "mechanical shell command"])
 
     def test_checking_stays_in_task_and_memory_closeout_is_separate(self):
-        self.assert_concepts("SKILL.md", ["verify changed code in this active task", "real readback or behavior check", "Ending only summarizes", "does not verify or repair", "Do not start the whole project", "unless the user requests it", "remaining limitations"])
+        self.assert_concepts("SKILL.md", ["verify changed code in this active task", "real readback or behavior check", "Ending's memory branch", "does not verify or repair", "Do not start the whole project", "unless the user requests it", "remaining limitations"])
 
     def test_instructions_no_longer_require_route_or_ending_ritual(self):
         retired = ("Code Gate", "CODE READY", "Spark-xhigh", "ENDING_CHECK_WORKER", "LOCKED_ROUTE_NODE", "detached Ending", "exactly one producer-side Quick Check", "independent Ending PASS")

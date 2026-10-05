@@ -18,7 +18,7 @@ Read relevant project memory on every task through [project memory](../project-m
 3. Choose the smallest useful change. For Skill work, follow the [authoring rules](../management-skill/SKILL.md#authoring-rules): simplify the workflow, reuse local code for deterministic mechanics, and keep per-run data in Cache. Do not replace sound reasoning with brittle automation.
 4. Apply the relevant code or prompt preferences and change only the authorized scope.
 5. Verify during the active task with identical inputs and the smallest real comparison or output readback. For complex or high-risk changes, an independent review can run inside the same task. Do not start or compile the whole project unless requested.
-6. Report the artifact, measured comparison, and remaining limitations. Ending only writes concise project memory; it does not verify, repair, or benchmark.
+6. Report the artifact, measured comparison, and remaining limitations. Ending records useful project memory alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md); it does not re-verify, repair code or benchmark.
 
 For a Skill-root review, the optional `scripts/skill_optimizer.py scan <skills-root>` lists visible Skills; `audit <skill-path>` checks references and duplicate instructions. Use these when they save work, not as required pre-reading ceremony.
 

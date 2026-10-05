@@ -7,7 +7,7 @@ This repository maintains eight reusable global Codex skills. Projects retain th
 | Skill | Responsibility |
 | --- | --- |
 | [Task Analyze](task-analyze-skill/SKILL.md) | Clarifies the goal, constraints, and implementation steps before execution. |
-| [Workflow](workflow-skill/SKILL.md) | Defines goals, dependencies, resource ownership, and completion for direct or delegated work. |
+| [Workflow](workflow-skill/SKILL.md) | Coordinates work and global resource cleanup, preserving active use and user review/reuse. |
 | [Code](code-skill/SKILL.md) | Guides code structure, readable implementation, and portable, quiet execution. |
 | [Prompt](prompt-skill/SKILL.md) | Shapes reusable prompts with clear inputs, constraints, and output contracts. |
 | [Verify](verify-skill/SKILL.md) | Checks real behavior or outputs in the active task and keeps test coverage focused. |
@@ -20,9 +20,9 @@ This repository maintains eight reusable global Codex skills. Projects retain th
 1. Ensure the Obsidian vault, then read the applicable skills and matching project memory. Missing memory for the exact project is a normal read skip after vault setup.
 2. Briefly describe the objective and implementation steps, then proceed. Do not add a confirmation checkpoint unless a necessary decision or authorization is missing.
 3. Finish with a real behavior check inside the active task. Update existing tests where useful, then clean up disposable resources.
-4. When useful, record durable changes in the configured Obsidian vault through a separate, unpinned projectless Ending task. Ending does not gate, test, or repair the main result. If the vault is unavailable, keep the write pending without a Codex-local fallback.
+4. Use one authorized, unpinned projectless Ending to record useful Obsidian memory and [audit resources](workflow-skill/references/ending-resource-audit.md) in parallel. Follow specific owners’ cleanup first, then release unused completed-task resources. Preserve active work and user review/reuse. An unavailable vault leaves memory pending while cleanup continues; Ending never gates, tests or repairs the main result.
 
-Project knowledge uses one Memory.json index and Knowledge.md view per project. Recall matches the exact project, module, file and method; stale entries stay out of current context. Ending consolidates touched entries, project summaries and explicit reference links.
+Each project uses one Memory.json index and Knowledge.md view. Scoped recall excludes stale facts. Ending consolidates touched entries, summaries and links.
 
 Project memories stay isolated. Shared preferences are read only when relevant. Project `AGENTS.md` and Skills own stable operating rules; changing project information and historical outcomes live in Obsidian.
 
@@ -36,7 +36,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
-Skill folders own instructions, references, helpers, and versioned release tests. Temporary screenshots, JSON receipts, and test output go only in ignored `Cache/temp-*` or `Cache/tmp-*` from the first write and never enter Git. Projectless work uses its workspace's Cache. Delete scratch after verified delivery or minimum recovery handoff to its declared durable owner. Evidence, future review, or a `remote-*` name does not justify retention.
+Skill folders own instructions, references, helpers, and versioned release tests. Temporary screenshots, JSON receipts, and test output go only in ignored `Cache/temp-*` or `Cache/tmp-*` from the first write and never enter Git. Projectless work uses its workspace's Cache. Delete disposable scratch after verified delivery or recovery handoff; keep actual user review/reuse files and their backing resources until their owner/references are verified. A `remote-*` name alone does not establish retention.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
