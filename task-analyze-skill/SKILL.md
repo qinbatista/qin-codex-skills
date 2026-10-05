@@ -7,6 +7,12 @@ description: "Briefly explain a task's objective and implementation steps before
 
 Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
 
+## Correct task names
+
+Resolve unambiguous spelling errors in user-supplied function, feature or task names from the owning source or authoritative context before naming the task. Use the verified correct name in titles, plans, progress, labels and results; do not echo the typo or a before/after mapping. Clarify only if the intended name is ambiguous. Preserve literal quotations, data, proper names and exact existing identifiers; show the original spelling only when an exact source reference or diagnostic requires it.
+
+## Carry out the task
+
 Before any file write, resolve its owner under the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md). Temporary files belong only in the workspace's ignored `Cache/temp-<task>/` from their first write, including delegated work. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
 
 Before detailed execution, briefly tell the user what you will achieve and the approximate implementation steps. Use one sentence for simple work and a short ordered plan when steps or dependencies matter. Keep the explanation about the work itself; omit complexity scores, model selection, and execution bookkeeping.

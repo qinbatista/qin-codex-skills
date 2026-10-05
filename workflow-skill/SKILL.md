@@ -7,7 +7,7 @@ description: "Coordinate tasks, in-task verification, and global resource cleanu
 
 Before any file write, apply the [Cache policy](references/project-cache-artifact-policy.md). Every temporary file, including screenshots, JSON receipts, logs, and test output, belongs only in the resolved workspace's ignored `Cache/temp-<task>/`, from its first write. This applies to direct, delegated, browser, and helper work. Before staging or committing, inspect the exact paths and Git index; temporary files never enter Git.
 
-Before detailed execution, briefly explain the requested result and the main implementation steps in plain language. Then follow those steps, incorporating any user correction or interruption. Keep the explanation proportional to the work; a simple task needs only a sentence.
+Apply [correct task names](../task-analyze-skill/SKILL.md#correct-task-names) before naming the task or explaining the work. Before detailed execution, briefly explain the requested result and the main implementation steps in plain language. Then follow those steps, incorporating any user correction or interruption. Keep the explanation proportional to the work; a simple task needs only a sentence.
 
 For every UI or visual presentation task, including websites, PDF reports, documents, and slide presentations, read the [shared readable UI rules](references/readable-ui.md). Apply them even without code changes and when another Skill owns rendering or export.
 

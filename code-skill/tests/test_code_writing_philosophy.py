@@ -36,7 +36,7 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
         self.assert_concepts("references/code-writing-philosophy.md", ["nearest project `AGENTS.md`", "same-project memory", "existing code", "same arguments and return value", "Do not assign or unpack into `_`", "_ = SomeTask()", "case _", "one physical line", "bounded memory use", "resource cleanup", "concurrency/event subscriptions", "long-running behavior"])
 
     def test_naming_preserves_real_contract_boundaries(self):
-        self.assert_concepts("references/code-writing-philosophy.md", ["Correct unambiguous English spelling", "external/public/persisted", "declarations and direct references", "original-to-canonical mapping", "quoted user data", "third-party names"])
+        self.assert_concepts("references/code-writing-philosophy.md", ["Correct unambiguous English spelling", "external/public/persisted", "declarations and direct references", "task-analyze-skill/SKILL.md#correct-task-names", "quoted user data", "third-party names"])
 
     def test_ui_geometry_feedback_accessibility_and_rendered_proof_survive(self):
         self.assert_concepts("references/coding-approach.md", ["../../workflow-skill/references/readable-ui.md", "without code changes", "another project's design"])

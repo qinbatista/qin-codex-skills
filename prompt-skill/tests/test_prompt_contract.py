@@ -33,7 +33,7 @@ class PromptContractTests(unittest.TestCase):
                 self.assertNotIn(retired, document)
 
     def test_spelling_and_input_authority_preserve_external_data(self):
-        for concept in ("unambiguous spelling", "original-to-canonical mapping", "quoted user prose", "external names", "persisted/public contracts", "Current instructions and fresh source"):
+        for concept in ("unambiguous spelling", "task-analyze-skill/SKILL.md#correct-task-names", "quoted user prose", "external names", "persisted/public contracts", "Current instructions and fresh source"):
             self.assertIn(concept, self.skill)
 
     def test_format_semantics_and_code_interpolation_are_separate(self):

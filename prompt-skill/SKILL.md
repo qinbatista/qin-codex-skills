@@ -15,7 +15,7 @@ State the objective, necessary inputs and their roles, requirements, and output 
 
 Keep one authoritative rule per behavior. Merge repeated warnings into a clear rule, resolve contradictions, and remove obvious instructions that add no constraint. Use role, tool order, autonomy limits, verbosity targets, delimiters, or examples only when they change the result. Examples illustrate rules; they do not override them. Do not request private chain-of-thought or force visible planning.
 
-Separate stable policy from per-run data. Ask only for a missing decision that materially changes the result; otherwise proceed with a reasonable stated assumption. Correct unambiguous spelling in new durable instructions and report the original-to-canonical mapping when material. Preserve quoted user prose, user data, external names, and persisted/public contracts.
+Separate stable policy from per-run data. Ask only for a missing decision that materially changes the result; otherwise proceed with a reasonable stated assumption. Correct unambiguous spelling in new durable instructions and follow [correct task names](../task-analyze-skill/SKILL.md#correct-task-names) in task wording. Preserve quoted user prose, user data, external names, and persisted/public contracts.
 
 For Skill creation or revision, apply [Skill authoring rules](../management-skill/SKILL.md#authoring-rules): retain essential rules and choices, move deterministic mechanics to existing local code, and keep changing run data out of durable instructions. Simplify the complete workflow before adding another rule or step.
 
