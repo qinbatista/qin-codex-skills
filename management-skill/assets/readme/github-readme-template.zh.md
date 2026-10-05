@@ -32,7 +32,7 @@
 
 用户 Skill 默认统一安装到官方目录 `~/.agents/skills`，参见 [Codex 官方说明](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)。`CODEX_HOME`（默认 `~/.codex`）仍负责配置、全局 `AGENTS.md` 和系统内置资源。发现旧目录或旧引用时按[自动修复流程](management-skill/references/skill-directory-repair.md)处理；项目 Skill 保持在项目内，迁移保留 `.system`、插件和可恢复备份。
 
-Skill 目录只保存指令、引用、辅助脚本和版本化发布测试。临时截图、JSON 回执、测试输出从首次写入起只能进入已忽略的 `Cache/temp-*` 或 `Cache/tmp-*`，不得提交到 Git；无项目任务使用其工作区 Cache。交付或最小恢复状态转交并回读后删除一次性文件；保留用户审阅或复用所需文件及其底层资源，待真实所有者和引用验证后再清理。`remote-*` 名称本身不证明保留权。
+Skill 目录只保存指令、引用、辅助脚本和版本化发布测试。临时截图、JSON 回执、测试输出从首次写入起只能进入已忽略的 `Cache/temp-<task>/`，不得提交到 Git；无项目任务使用其工作区 Cache。交付或最小恢复状态转交并回读后删除一次性文件；保留用户审阅或复用所需文件及其底层资源，待真实所有者和引用验证后再清理。`remote-*` 名称本身不证明保留权。
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

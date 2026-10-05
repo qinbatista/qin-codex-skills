@@ -321,7 +321,7 @@ def _replace_jsonl(path, records):
         encoding="utf-8",
         dir=path.parent,
         prefix=f".{path.name}.",
-        suffix=".tmp",
+        suffix=".temp",
         delete=False,
     ) as handle:
         replacement = Path(handle.name)

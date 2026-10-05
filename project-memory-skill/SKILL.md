@@ -37,5 +37,5 @@ Shared facts stay under their explicit vault owner. An authorized durable operat
 - Keep project-specific decisions in that project. Only explicitly general preferences belong in shared memory.
 - Save concise facts and project-relative files, not raw prompts, transcripts, reasoning, credentials, absolute host paths, or other projects' content.
 - Do not hand-edit event stores. Read back the saved result from Obsidian before claiming it is saved.
-- Preserve unrelated records and useful history. Put probes in an explicit isolated store under `Cache/temp-*`; never test against production memory.
+- Preserve unrelated records and useful history. Put probes in an explicit isolated store under `Cache/temp-<task>/`; never test against production memory.
 - Never put durable memory, dated project outcomes, pending memory queues, coverage records, or memory location pointers in `CODEX_HOME`, `~/.codex`, project `Cache`, or project `AGENTS.md`/Skill files. Those project files contain stable rules and workflow instructions only.

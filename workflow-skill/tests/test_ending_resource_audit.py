@@ -148,7 +148,7 @@ class EndingResourceAuditTests(unittest.TestCase):
 
     def test_bounded_inspection_preserves_unknown_roots_and_retained_cache(self):
         target = self.file("output")
-        unknown = self.project / "Cache" / "temp-old-unknown"
+        unknown = self.project / "Cache" / "tmp-old-unknown"
         unknown.mkdir()
         retained = self.project / "Cache" / "remote-review"
         retained.mkdir()

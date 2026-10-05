@@ -99,8 +99,8 @@ def _relative_path(value: Any) -> str:
 def _task_root_path(value: Any) -> str:
     value = _relative_path(value)
     parts = value.split("/")
-    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith(("temp-", "tmp-")):
-        _fail("task_root must be one exact Cache/temp-<name> or Cache/tmp-<name> directory")
+    if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith("temp-"):
+        _fail("task_root must be one exact Cache/temp-<task>/ directory")
     suffix = parts[1].split("-", 1)[1]
     if not suffix or not IDENTIFIER_RE.fullmatch(suffix):
         _fail("task_root temp name must be non-empty and portable")
@@ -1003,7 +1003,7 @@ def save_ledger(path: str | Path, ledger: dict[str, Any], *, assume_locked: bool
 
     def write() -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_name(f".{destination.name}.tmp-{os.getpid()}-{uuid.uuid4().hex}")
+        temporary = destination.with_name(f".{destination.name}.temp-{os.getpid()}-{uuid.uuid4().hex}")
         try:
             with temporary.open("x", encoding="utf-8") as output:
                 json.dump(ledger, output, indent=2, sort_keys=True)

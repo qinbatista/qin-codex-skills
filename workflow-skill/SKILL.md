@@ -5,7 +5,7 @@ description: "Coordinate tasks, in-task verification, and global resource cleanu
 
 # Workflow
 
-Before any file write, apply the [Cache policy](references/project-cache-artifact-policy.md). Every temporary file, including screenshots, JSON receipts, logs, and test output, belongs only in the resolved workspace's ignored `Cache/temp-*` or `Cache/tmp-*`, from its first write. This applies to direct, delegated, browser, and helper work. Before staging or committing, inspect the exact paths and Git index; temporary files never enter Git.
+Before any file write, apply the [Cache policy](references/project-cache-artifact-policy.md). Every temporary file, including screenshots, JSON receipts, logs, and test output, belongs only in the resolved workspace's ignored `Cache/temp-<task>/`, from its first write. This applies to direct, delegated, browser, and helper work. Before staging or committing, inspect the exact paths and Git index; temporary files never enter Git.
 
 Before detailed execution, briefly explain the requested result and the main implementation steps in plain language. Then follow those steps, incorporating any user correction or interruption. Keep the explanation proportional to the work; a simple task needs only a sentence.
 

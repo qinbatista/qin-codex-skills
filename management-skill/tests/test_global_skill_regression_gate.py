@@ -231,7 +231,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertFalse(observed[0].exists())
 
     def test_candidate_cache_override_rejects_source_and_outside_project_before_writing(self):
-        for cache_root in (PROJECT_ROOT / "management-skill", PROJECT_ROOT.parent / "Cache" / "temp-other", PROJECT_ROOT / "Cache" / "remote-test"):
+        for cache_root in (PROJECT_ROOT / "management-skill", PROJECT_ROOT.parent / "Cache" / "temp-other", PROJECT_ROOT / "Cache" / "remote-test", PROJECT_ROOT / "Cache" / "tmp-retired"):
             with self.subTest(cache_root=cache_root):
                 with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(cache_root)}):
                     with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid cache must fail before writing")):

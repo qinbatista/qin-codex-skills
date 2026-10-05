@@ -212,6 +212,15 @@ def run_release_gate(source_dir, skills_dir, mode):
 @contextmanager
 def temporary_workspace(prefix):
     cache_root = Path(os.environ.get("CODEX_PROJECT_CACHE_ROOT", DEFAULT_CACHE_ROOT)).expanduser()
+    if not cache_root.is_absolute():
+        cache_root = DEFAULT_PROJECT_ROOT / cache_root
+    cache_root = cache_root.resolve()
+    try:
+        relative = cache_root.relative_to(DEFAULT_PROJECT_ROOT / "Cache")
+    except ValueError as error:
+        raise RuntimeError("Skill scratch must stay inside the owning project's Cache") from error
+    if not relative.parts or not relative.parts[0].startswith("temp-") or relative.parts[0] == "temp-":
+        raise RuntimeError("Skill scratch must use Cache/temp-<task>/")
     cache_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=prefix, dir=cache_root) as workspace:
         yield Path(workspace)
@@ -761,7 +770,7 @@ def load_global_agents_backup(skills_dir, backup_id):
 
 def _write_global_agents_target(target, rendered):
     target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".AGENTS.md.", suffix=".tmp", dir=target.parent)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".AGENTS.md.", suffix=".temp", dir=target.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(rendered)
@@ -904,7 +913,7 @@ def replace_path_entry(source, target):
 def write_atomic_json(path, payload):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".temp", dir=path.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)

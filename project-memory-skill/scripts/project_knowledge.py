@@ -298,7 +298,7 @@ def _maintenance_due(state, now):
 
 def _atomic_text(path, value, vault):
     _confined(vault, path)
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".temp", delete=False) as handle:
         temporary = Path(handle.name)
         handle.write(value)
         handle.flush()

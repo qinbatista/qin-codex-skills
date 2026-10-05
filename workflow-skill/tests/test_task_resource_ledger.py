@@ -27,7 +27,7 @@ HASH = hashlib.sha256(b"verified-readback").hexdigest()
 
 class TaskResourceLedgerTests(unittest.TestCase):
     def setUp(self):
-        self.scratch_parent = Path.cwd() / "Cache" / "tmp-ledger"
+        self.scratch_parent = Path.cwd() / "Cache" / "temp-ledger"
         self.scratch_parent.mkdir(parents=True, exist_ok=True)
         self.temporary_directory = tempfile.TemporaryDirectory(prefix="c-", dir=self.scratch_parent)
         self.project_root = Path(self.temporary_directory.name)
@@ -201,7 +201,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
             LEDGER.record_retained_path(
                 self.ledger,
                 "dated",
-                "Cache/tmp-dated/report.json",
+                "Cache/temp-dated/report.json",
                 "short reuse",
                 "inspect tomorrow",
                 "2026-08-24",
@@ -298,19 +298,21 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertTrue(target.exists())
         self.assertNotIn("durable_owner", LEDGER._resource(self.ledger, "archive"))
 
-    def test_exact_temp_and_tmp_task_roots_finalize_without_touching_durable_or_preexisting_owners(self):
-        for prefix in ("temp", "tmp"):
-            with self.subTest(prefix=prefix):
-                task_root = f"Cache/{prefix}-finalize-{uuid.uuid4().hex}"
-                ledger = LEDGER.new_ledger(self.project_root, "finalize-task", task_root)
-                LEDGER.record_preexisting_path(ledger, "preexisting", "Library/Artifacts", "preexisting owner")
-                receipt = self._durable_receipt(owner_root=f"Outputs/{prefix}")
-                LEDGER.record_retained_path(ledger, "final-output", receipt["path"], "delivered", "requested output", "owner lifetime", authorized_by_user=True, project_root=self.project_root, owner_receipt=receipt)
-                ledger_path = self.project_root.joinpath(*task_root.split("/")) / LEDGER.LEDGER_NAME
-                LEDGER.save_ledger(ledger_path, ledger)
-                LEDGER.finalize_task_root(ledger, self.project_root, ledger_path)
-                self.assertFalse(ledger_path.parent.exists())
-                self.assertTrue(self.project_root.joinpath(*receipt["path"].split("/")).exists())
+    def test_temp_roots_finalize_and_legacy_roots_are_rejected_before_writing(self):
+        task_root = f"Cache/temp-finalize-{uuid.uuid4().hex}"
+        ledger = LEDGER.new_ledger(self.project_root, "finalize-task", task_root)
+        LEDGER.record_preexisting_path(ledger, "preexisting", "Library/Artifacts", "preexisting owner")
+        receipt = self._durable_receipt(owner_root="Outputs/finalized")
+        LEDGER.record_retained_path(ledger, "final-output", receipt["path"], "delivered", "requested output", "owner lifetime", authorized_by_user=True, project_root=self.project_root, owner_receipt=receipt)
+        ledger_path = self.project_root.joinpath(*task_root.split("/")) / LEDGER.LEDGER_NAME
+        LEDGER.save_ledger(ledger_path, ledger)
+        LEDGER.finalize_task_root(ledger, self.project_root, ledger_path)
+        self.assertFalse(ledger_path.parent.exists())
+        self.assertTrue(self.project_root.joinpath(*receipt["path"].split("/")).exists())
+        legacy_root = "Cache/tmp-retired"
+        with self.assertRaisesRegex(ValueError, "Cache/temp-<task>/"):
+            LEDGER.new_ledger(self.project_root, "legacy-task", legacy_root)
+        self.assertFalse((self.project_root / legacy_root).exists())
 
     def test_finalize_requires_closed_resources_and_rejects_unknown_files_or_ledger_drift(self):
         target = self._acquire_file("active", "active.txt")
@@ -439,7 +441,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
             "../outside",
             "/absolute/path",
             "Cache/temp-case/../outside",
-            "Cache\\tmp-case\\file",
+            "Cache\\temp-case\\file",
             "C:/outside/file",
             "//server/share/file",
             "Cache/temp-case/file:stream",

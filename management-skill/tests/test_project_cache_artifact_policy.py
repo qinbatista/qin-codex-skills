@@ -26,14 +26,14 @@ PRIMARY_SKILLS = (
     "management-skill",
 )
 REQUIRED_POLICY_TEXT = (
-    "that project's `Cache/temp-<name>/`",
+    "that project's `Cache/temp-<task>/`",
     "project-support write",
     "ordinary test scratch",
     "intermediate code",
-    "`Cache/temp-<name>/`",
+    "`Cache/temp-<task>/`",
     "`Cache/remote-<name>/`",
-    "from its first write",
-    "For projectless work",
+    "from their first write",
+    "Projectless work",
     "never fall back to system Temp",
     "temporary file regardless of filename or extension",
     "git check-ignore --no-index",
@@ -112,8 +112,8 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
 
     def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
         text = GLOBAL_ENTRY_RULE_PATH.read_text()
-        self.assertIn("Cache/temp-*", text)
-        self.assertIn("Cache/tmp-*", text)
+        self.assertIn("Cache/temp-<task>/", text)
+        self.assertNotIn("Cache/tmp-", text)
         self.assertIn("current task workspace's Cache", text)
         self.assertNotIn("CODEX_HOME/sessions", text)
         self.assertIn("temporary files never enter Git", text)
@@ -127,18 +127,18 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
     def test_installed_global_agents_has_the_same_contract(self):
         text = GLOBAL_AGENTS_PATH.read_text()
-        self.assertIn("Cache/temp-*", text)
-        self.assertIn("Cache/tmp-*", text)
+        self.assertIn("Cache/temp-<task>/", text)
+        self.assertNotIn("Cache/tmp-", text)
         self.assertIn("minimum recovery inputs/state", text)
-        self.assertIn("renaming temp to remote-* does not establish a durable owner", text)
+        self.assertIn("renaming temp to remote-* does not establish a durable owner", text.lower())
 
 
     def test_resource_policy_limits_automatic_cleanup(self):
         text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text()
         self.assertIn("last needed readback", text)
-        self.assertIn("`Cache/temp-*` scratch", text)
+        self.assertIn("`Cache/temp-<task>/` scratch", text)
         self.assertIn("`Cache/remote-*` is retained", text)
-        self.assertIn("`Cache/tmp-*` scratch", text)
+        self.assertNotIn("Cache/tmp-", text)
         self.assertIn("fresh process or website request", text)
         self.assertIn("minimum inputs and resumable state", text)
         self.assertIn("never authorizes indefinite temp retention", text)
@@ -172,8 +172,8 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             text = (SKILLS_ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
             with self.subTest(skill=skill):
                 self.assertIn("Before any file write", text)
-                self.assertIn("Cache/temp-*", text)
-                self.assertIn("Cache/tmp-*", text)
+                self.assertIn("Cache/temp-<task>/", text)
+                self.assertNotIn("Cache/tmp-", text)
                 self.assertRegex(text, r"from (its|their) first write")
                 self.assertIn("Git index", text)
                 self.assertIn("temporary files never enter Git", text)
@@ -184,13 +184,13 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     def test_public_readme_cleanup_rule_comes_from_the_maintained_templates(self):
         for language_suffix in ("", ".zh"):
             template = SKILLS_ROOT / "management-skill/assets/readme" / f"github-readme-template{language_suffix}.md"
-            template_rule = next(line for line in template.read_text(encoding="utf-8").splitlines() if "Cache/temp-*" in line)
+            template_rule = next(line for line in template.read_text(encoding="utf-8").splitlines() if "Cache/temp-<task>/" in line)
             with self.subTest(language=language_suffix or "en"):
                 with SYNC.temporary_workspace("readme-cleanup-") as workspace:
                     SYNC.render_source_readmes(workspace, [SKILLS_ROOT / name for name in PRIMARY_SKILLS])
                     published = workspace / f"README{language_suffix}.md"
                     self.assertIn(template_rule, published.read_text(encoding="utf-8"))
-                self.assertIn("Cache/tmp-*", template_rule)
+                self.assertNotIn("Cache/tmp-", template_rule)
 
 
     def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):
@@ -222,6 +222,13 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     marker.write_text("cache-backed\n", encoding="utf-8")
                     self.assertEqual(workspace.parent, task_root)
                     self.assertTrue(marker.is_file())
+            for invalid in (SKILLS_ROOT / "Cache" / "tmp-retired", SKILLS_ROOT / "Cache" / "remote-test", SKILLS_ROOT / "management-skill"):
+                with self.subTest(invalid=invalid):
+                    with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(invalid)}):
+                        with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid scratch must fail before writing")):
+                            with self.assertRaisesRegex(RuntimeError, "Skill scratch must"):
+                                with SYNC.temporary_workspace("rejected-"):
+                                    self.fail("invalid scratch was accepted")
         finally:
             shutil.rmtree(task_root)
             for directory in (task_root.parent, task_root.parent.parent):

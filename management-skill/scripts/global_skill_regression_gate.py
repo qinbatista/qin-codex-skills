@@ -166,8 +166,8 @@ def project_task_cache_root(project_root: Path, cache_root: Path) -> Path:
         relative = cache_root.relative_to(project_root / "Cache")
     except ValueError as error:
         raise RuntimeError("Skill gate scratch must stay inside the owning project's Cache") from error
-    if not relative.parts or not relative.parts[0].startswith(("temp-", "tmp-")) or relative.parts[0] in {"temp-", "tmp-"}:
-        raise RuntimeError("Skill gate scratch must use an exact Cache/temp-* or Cache/tmp-* task directory")
+    if not relative.parts or not relative.parts[0].startswith("temp-") or relative.parts[0] == "temp-":
+        raise RuntimeError("Skill gate scratch must use an exact Cache/temp-<task>/ directory")
     return cache_root
 
 
