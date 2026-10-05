@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Analyze"
-  short_description: "Explain the implementation steps, then execute"
-  default_prompt: "Use $task-analyze-skill to briefly explain the objective and implementation steps, then complete and verify the work."
+  short_description: "Explain the plan and parallel branches, then execute"
+  default_prompt: "Use $task-analyze-skill to briefly explain the result, qualitative difficulty, known model assignments, parallel branches and real dependencies. Keep ready work moving while external jobs run, then complete and verify the result. Never invent a model ID."

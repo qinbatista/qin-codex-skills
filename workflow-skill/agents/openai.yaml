@@ -1,4 +1,4 @@
 interface:
   display_name: "workflow-skill"
-  short_description: "Goals, safe delegation, and in-task completion"
-  default_prompt: "Briefly explain the result and steps, then execute and verify in the active task. Use Workflow as the global resource coordinator: follow each owner's cleanup first, release disposable completed-task leftovers, and preserve active work and user review/reuse. Ending runs bounded recent-task cleanup alongside useful memory in parallel."
+  short_description: "Parallel tasks, bounded waits, and resource cleanup"
+  default_prompt: "Preview difficulty, known model assignments, parallel branches and real dependencies. Start ready independent work promptly, prepare downstream inputs while jobs run, and bound polling. A confirmed submission unblocks independent work without claiming backend completion. Verify actual results and close unused owned tabs at final cleanup. Preserve active work and review/reuse; Ending runs useful memory and bounded resource audit in parallel."

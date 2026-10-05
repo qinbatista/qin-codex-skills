@@ -1,6 +1,6 @@
 ---
 name: task-analyze-skill
-description: "Briefly explain a task's objective and implementation steps before execution, then carry out the work with focused verification."
+description: "Explain the goal, difficulty, known models and parallel branches, then keep ready work moving with focused verification."
 ---
 
 # Task Analyze
@@ -15,8 +15,8 @@ Resolve unambiguous spelling errors in user-supplied function, feature or task n
 
 Before any file write, resolve its owner under the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md). Temporary files belong only in the workspace's ignored `Cache/temp-<task>/` from their first write, including delegated work. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
 
-Before detailed execution, briefly tell the user what you will achieve and the approximate implementation steps. Use one sentence for simple work and a short ordered plan when steps or dependencies matter. Keep the explanation about the work itself; omit complexity scores, model selection, and execution bookkeeping.
+Before detailed execution, briefly tell the user the result, qualitative difficulty, actual known model assignments, and implementation steps. Say "inherited" or "model ID not exposed" when that is all the available evidence; never invent a model name. Use one sentence for simple work; for multiple branches, name each subtask, its assignee/model, what runs in parallel, and the actual join dependencies. Keep this preview concise and update material changes.
 
-Then follow those steps without waiting for routine confirmation. The user can interrupt or adjust the direction. Ask only when a missing decision materially affects the result or an action requires authorization; continue independent work where possible. Explain a material change in approach before carrying it out.
+Then follow [Workflow's ready-work policy](../workflow-skill/SKILL.md#keep-work-moving): start independent branches promptly and wait only where their outputs are needed. The user can interrupt or adjust the direction. Ask only when a missing decision materially affects the result or an action requires authorization; continue independent work where possible. Explain a material change in approach before carrying it out.
 
 Verify consequential changes in the active task at the smallest relevant boundary, following [Verify](../verify-skill/SKILL.md). Report the result, evidence, and limits. Use [Project Memory](../project-memory-skill/SKILL.md) for scoped recall and useful durable updates; the authorized Ending runs memory work alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md), preserving active work and user review/reuse.
