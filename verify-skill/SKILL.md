@@ -7,7 +7,7 @@ description: "Verify consequential changes inside the active task with the small
 
 Before any file write for verification, apply the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md). Temporary screenshots, JSON receipts, logs, fixtures, and test output go only in ignored `Cache/temp-<task>/` from their first write. Maintained regression tests keep their source owner. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
 
-Verify before declaring the task complete. Read relevant project facts through Project Memory, skip absent matching records, and never borrow another project's facts.
+Verify before declaring the task complete. Follow [Task Analyze's action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests) when checks fail or cannot run. Read relevant project facts through Project Memory, skip absent matching records, and never borrow another project's facts.
 
 ## Choose evidence
 
@@ -16,7 +16,7 @@ Verify before declaring the task complete. Read relevant project facts through P
 - UI and visual presentation: apply the [shared readable UI rules](../workflow-skill/references/readable-ui.md). Inspect web layouts at desktop and narrow widths; render affected PDF/report pages and slides at their intended reading size. Check containment, alignment, typography, and useful density. Exercise interactions only where they exist. Source review alone cannot prove appearance.
 - Data, scripts, APIs, and installation: use a bounded real input, output readback, or state query that proves the promised result.
 
-Use one real verification path: execute the changed behavior or inspect the actual output. A syntax check, mock, or quick smoke test may help diagnose a failure, but cannot replace evidence for the promised behavior. Prefer existing runtimes and focused checks. Do not start the whole application, compile the whole project, launch Unity, run every test, or incur external costs unless requested. If only a broader action resolves uncertainty, report the gap instead of claiming success.
+Use one real verification path: execute the changed behavior or inspect the actual output. A syntax check, mock, or quick smoke test may help diagnose a failure, but cannot replace evidence for the promised behavior. Prefer existing runtimes and focused checks. Do not start the whole application, compile the whole project, launch Unity, run every test, or incur external costs unless requested. If only a broader unauthorized action resolves uncertainty, complete the authorized implementation and available focused checks first, then report the specific verification gap alongside the delivered changes without claiming unverified behavior.
 
 For any browser-based verification, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence.
 

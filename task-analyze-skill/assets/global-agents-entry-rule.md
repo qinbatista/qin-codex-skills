@@ -6,6 +6,8 @@ For device testing, prefer an available authorized physical device. If none is a
 
 Read the request, related skills, and relevant existing project memory. Before detailed execution, briefly explain the result, qualitative difficulty, actual known models, parallel branch roles and real dependencies. Say inherited or model ID not exposed when appropriate; never invent model names. Use one sentence for simple work and a short branch plan when needed.
 
+Follow the action completion rule in `task-analyze-skill/SKILL.md`: carry out requested work, recover from failures while useful authorized routes remain, and lead with delivered changes. Separate verification blockers from implementation; report a concrete evidenced reason when the affected work truly cannot proceed.
+
 Start ready independent work promptly; serialize only real prerequisites, shared mutable owners and required authorization. Prepare downstream work while external jobs run, use bounded checks and keep exact pending recovery state instead of endless waiting. A confirmed submission completes that step without claiming backend completion. Return to unused owned tabs during final cleanup. Follow workflow-skill/SKILL.md for these states. The user can interrupt or adjust direction; ask only for materially missing decisions or required authorization.
 
 For every UI or visual presentation task (websites, tools, PDF reports, documents, or slide presentations), read and apply `workflow-skill/references/readable-ui.md` from the installed Skills root. This baseline applies even without code changes or when another Skill owns rendering/export; carry it into delegated goals.

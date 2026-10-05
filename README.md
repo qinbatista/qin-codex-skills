@@ -6,7 +6,7 @@ This repository maintains eight reusable global Codex skills. Projects retain th
 
 | Skill | Responsibility |
 | --- | --- |
-| [Task Analyze](task-analyze-skill/SKILL.md) | Clarifies the goal, constraints, and implementation steps before execution. |
+| [Task Analyze](task-analyze-skill/SKILL.md) | Sets the goal and requires action delivery and recovery. |
 | [Workflow](workflow-skill/SKILL.md) | Coordinates work and global resource cleanup, preserving active use and user review/reuse. |
 | [Code](code-skill/SKILL.md) | Guides code structure, readable implementation, and portable, quiet execution. |
 | [Prompt](prompt-skill/SKILL.md) | Shapes reusable prompts with clear inputs, constraints, and output contracts. |
@@ -19,7 +19,7 @@ This repository maintains eight reusable global Codex skills. Projects retain th
 
 1. Ensure the Obsidian vault, then read the applicable skills and matching project memory. Missing memory for the exact project is a normal read skip after vault setup.
 2. Briefly describe the objective and implementation steps, then proceed. Do not add a confirmation checkpoint unless a necessary decision or authorization is missing.
-3. Finish with a real behavior check inside the active task. Update existing tests where useful, then clean up disposable resources.
+3. Deliver requested work with a real behavior check inside the active task. Repair failures; separate changes from evidenced blockers. Update tests; clean disposable resources.
 4. Use one authorized, unpinned projectless Ending to record useful Obsidian memory and [audit resources](workflow-skill/references/ending-resource-audit.md) in parallel. Follow specific owners’ cleanup first, then release unused completed-task resources. Preserve active work and user review/reuse. An unavailable vault leaves memory pending while cleanup continues; Ending never gates, tests or repairs the main result.
 
 Each project uses one Memory.json index and Knowledge.md view. Scoped recall excludes stale facts. Ending consolidates touched entries, summaries and links.

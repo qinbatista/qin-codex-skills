@@ -1,11 +1,21 @@
 ---
 name: task-analyze-skill
-description: "Explain the goal, difficulty, known models and parallel branches, then keep ready work moving with focused verification."
+description: "Explain the goal, difficulty, known models and parallel branches, then carry action requests through implementation, recovery and focused verification."
 ---
 
 # Task Analyze
 
 Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
+
+## Complete action requests
+
+Treat an action request as authorization to carry out its intended work within scope. Deliver the requested change or artifact; a plan, diagnosis, list of problems, or "I tried and failed" alone does not fulfill it. Keep working while a useful authorized route remains.
+
+When an attempt fails, inspect the cause, repair what is within scope, retry the affected step, or use a suitable available alternative. Complete independent work while a dependency is blocked. A failed command, test, unavailable verification tool, or polling budget does not by itself justify abandoning implementation. Bound repeated checks against unchanged external state; do not use a fixed retry count as a reason to stop work that can still progress.
+
+Stop the affected work only for a concrete blocker that cannot be resolved through reasonable available actions within scope, such as confirmed missing network access, credentials, required input or authorization, an unavailable required runtime, or an impossible requirement. Establish the blocker through relevant attempts or authoritative evidence, explain its observed cause and what was attempted, and identify the minimum external change needed. Never bypass permissions, weaken acceptance, or invent success to avoid reporting a blocker.
+
+Lead the final response with what was actually delivered and its verification. Distinguish implementation, testing, deployment and publication. A blocked check does not erase completed work: "Updated the function; runtime verification is blocked because the required service is unreachable" accurately reports both states. If no requested result is achievable, give the specific evidenced reason after exhausting useful routes; do not substitute a generic failure reply or a promise to try later.
 
 ## Correct task names
 

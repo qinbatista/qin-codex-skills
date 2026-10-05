@@ -11,7 +11,7 @@ Before any file write, apply the [Cache policy](../workflow-skill/references/pro
 
 Apply general code preferences in any language; another domain Skill may own its specific APIs and implementation. These are structure and writing preferences, not feature recipes. A mechanical shell command or temporary execution script with no relevant design preference may remain skill-free.
 
-Briefly explain the intended change and implementation steps before detailed execution. Define the result and acceptance criteria from the user's request and relevant context.
+Briefly explain the intended change and implementation steps before detailed execution. Define the result and acceptance criteria from the user's request and relevant context. Carry out the change and handle failures under [Task Analyze's action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests).
 
 ## Workflow
 
@@ -38,7 +38,7 @@ Briefly explain the intended change and implementation steps before detailed exe
 
 Use focused function tests, direct-reference checks, or a small real fixture according to the changed behavior. Syntax validation and mocks can support diagnosis but do not prove runtime behavior. For rendered UI, inspect the affected state at relevant desktop and narrow widths; source/CSS alone does not prove alignment. For changed Python/C# style, `scripts/code_rule_guard.py --diff-from HEAD <changed-files>` checks newly added lines without rewriting legacy code. The guard supplements behavior evidence.
 
-Do not start the whole project, run a full build, or compile all of Unity just to check a local change unless the user requests it. If only broader execution could prove a claim, state that limit and deliver the evidence actually obtained. Do not execute expensive, destructive, or external side effects solely for a routine check.
+Do not start the whole project, run a full build, or compile all of Unity just to check a local change unless the user requests it. Complete the authorized change and available focused checks before reporting a limit that requires broader execution; separate implemented behavior from unverified claims. Do not execute expensive, destructive, or external side effects solely for a routine check.
 
 ## Guardrails
 

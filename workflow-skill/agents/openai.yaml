@@ -1,4 +1,4 @@
 interface:
   display_name: "workflow-skill"
   short_description: "Parallel tasks, bounded waits, and resource cleanup"
-  default_prompt: "Preview difficulty, known model assignments, parallel branches and real dependencies. Start ready independent work promptly, prepare downstream inputs while jobs run, and bound polling. A confirmed submission unblocks independent work without claiming backend completion. Verify actual results and close unused owned tabs at final cleanup. Preserve active work and review/reuse; Ending runs useful memory and bounded resource audit in parallel."
+  default_prompt: "Preview difficulty, known model assignments, parallel branches and real dependencies. Follow Task Analyze's action completion rule: deliver requested work and repair recoverable failures. Start ready independent work promptly and bound polling for each step. Separate delivered changes, accepted submissions and verified completion. Close unused owned tabs; preserve active work and review/reuse. Ending runs useful memory and resource audit in parallel."

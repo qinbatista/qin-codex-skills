@@ -23,7 +23,8 @@
     "ending_placement": "visible_unpinned_projectless_recent_task",
     "ending_independent_of_main_result": true,
     "ending_completion": "task_acknowledgement_and_independent_memory_resource_readbacks",
-    "execution_preview": "brief_goal_and_steps_before_execution"
+    "execution_preview": "brief_goal_and_steps_before_execution",
+    "action_request_completion": "execute_recover_deliver_or_evidenced_blocker"
   },
   "managed_skills": [
     "task-analyze-skill",
@@ -273,6 +274,15 @@
     }
   ],
   "capabilities": [
+    {
+      "id": "action-completion",
+      "owner_skill": "task-analyze-skill",
+      "name": "Action delivery and failure recovery",
+      "function": "Carry action requests through implementation and recovery; report delivered changes separately from verification, and stop affected work only for evidenced blockers after useful authorized routes are exhausted.",
+      "checks": [
+        "prompt-units"
+      ]
+    },
     {
       "id": "coordination",
       "owner_skill": "workflow-skill",

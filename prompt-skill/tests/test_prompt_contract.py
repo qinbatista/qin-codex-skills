@@ -49,6 +49,40 @@ class PromptContractTests(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertTrue((SKILL_ROOT / target.split("#", 1)[0]).exists())
 
+    def test_action_requests_require_delivery_and_recovery_before_stopping(self):
+        task_entry = (SKILL_ROOT.parent / "task-analyze-skill/SKILL.md").read_text(encoding="utf-8")
+        policy = task_entry.split("## Complete action requests\n", 1)[1].split("\n## ", 1)[0]
+        for concept in ("carry out its intended work within scope", "Deliver the requested change or artifact", "Keep working while a useful authorized route remains", "inspect the cause", "retry the affected step", "suitable available alternative", "Complete independent work", "does not by itself justify abandoning implementation", "do not use a fixed retry count"):
+            self.assertIn(concept, policy)
+
+    def test_action_blockers_require_evidence_and_preserve_truthful_partial_delivery(self):
+        task_entry = (SKILL_ROOT.parent / "task-analyze-skill/SKILL.md").read_text(encoding="utf-8")
+        policy = task_entry.split("## Complete action requests\n", 1)[1].split("\n## ", 1)[0]
+        for concept in ("concrete blocker", "reasonable available actions within scope", "relevant attempts or authoritative evidence", "observed cause and what was attempted", "minimum external change needed", "Never bypass permissions, weaken acceptance, or invent success", "what was actually delivered", "Distinguish implementation, testing, deployment and publication", "A blocked check does not erase completed work", "If no requested result is achievable", "specific evidenced reason"):
+            self.assertIn(concept, policy)
+
+    def test_execution_entries_share_the_completion_owner_and_retire_premature_gap_exit(self):
+        for relative in ("workflow-skill/SKILL.md", "verify-skill/SKILL.md", "code-skill/SKILL.md", "prompt-skill/SKILL.md"):
+            with self.subTest(relative=relative):
+                text = (SKILL_ROOT.parent / relative).read_text(encoding="utf-8")
+                self.assertIn("../task-analyze-skill/SKILL.md#complete-action-requests", text)
+                self.assertNotIn("report the gap instead of claiming success", text)
+        workflow = (SKILL_ROOT.parent / "workflow-skill/SKILL.md").read_text(encoding="utf-8")
+        verification = (SKILL_ROOT.parent / "verify-skill/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("budget bounds polling for that step", workflow)
+        self.assertIn("does not declare the whole task failed", workflow)
+        self.assertIn("complete the authorized implementation and available focused checks first", verification)
+
+    def test_completion_entry_points_keep_recovery_and_result_states_visible(self):
+        for relative in ("task-analyze-skill/agents/openai.yaml", "workflow-skill/agents/openai.yaml", "verify-skill/agents/openai.yaml"):
+            with self.subTest(relative=relative):
+                metadata = (SKILL_ROOT.parent / relative).read_text(encoding="utf-8")
+                self.assertIn("recoverable failures", metadata)
+                self.assertLess(len(metadata), 750)
+        template = (SKILL_ROOT.parent / "task-analyze-skill/assets/global-agents-entry-rule.md").read_text(encoding="utf-8")
+        self.assertIn("action completion rule in `task-analyze-skill/SKILL.md`", template)
+        self.assertIn("Separate verification blockers from implementation", template)
+
 
 if __name__ == "__main__":
     unittest.main()
