@@ -831,11 +831,12 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             sync_global_skills.run_command(["git", "branch", "-M", "master"], cwd=source_dir)
             sync_global_skills.run_command(["git", "config", "user.name", "Source Publish Test"], cwd=source_dir)
             sync_global_skills.run_command(["git", "config", "user.email", "source-publish@example.invalid"], cwd=source_dir)
+            if sys.platform == "win32":
+                sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=source_dir)
             sync_global_skills.run_command(["git", "add", "-A"], cwd=source_dir)
             sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
             sync_global_skills.run_command(["git", "init", "--bare", str(remote_dir)], cwd=sandbox)
             if sys.platform == "win32":
-                sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=source_dir)
                 sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=remote_dir)
             sync_global_skills.run_command(["git", "remote", "add", "origin", str(remote_dir)], cwd=source_dir)
             sync_global_skills.run_command(["git", "push", "-u", "origin", "master"], cwd=source_dir)
@@ -909,6 +910,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             sync_global_skills.run_command(["git", "branch", "-M", "master"], cwd=source_dir)
             sync_global_skills.run_command(["git", "config", "user.name", "Gate Test"], cwd=source_dir)
             sync_global_skills.run_command(["git", "config", "user.email", "gate@example.invalid"], cwd=source_dir)
+            if sys.platform == "win32":
+                sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=source_dir)
             sync_global_skills.run_command(["git", "add", "-A"], cwd=source_dir)
             sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
             changed = source_dir / "verify-skill" / "SKILL.md"
