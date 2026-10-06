@@ -97,6 +97,39 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
     def primary_skill_paths(self):
         return [SKILLS_DIR / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]
 
+    def windows_acl_state(self, paths):
+        powershell = sync_global_skills.shutil.which("powershell.exe")
+        self.assertIsNotNone(powershell, "Native Windows ACL verification requires PowerShell")
+        command = (
+            "$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [Text.UTF8Encoding]::new(); "
+            "$paths = ConvertFrom-Json ([Console]::In.ReadToEnd()); "
+            "$states = @(foreach ($path in $paths) { "
+            "$acl = if ([IO.Directory]::Exists($path)) { [IO.Directory]::GetAccessControl($path) } "
+            "else { [IO.File]::GetAccessControl($path) }; "
+            "$readRules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | "
+            "Where-Object { $_.IdentityReference.Value -eq 'S-1-5-11' -and $_.IsInherited -and "
+            "$_.AccessControlType -eq 'Allow' -and "
+            "($_.FileSystemRights -band [Security.AccessControl.FileSystemRights]::ReadAndExecute) -eq "
+            "[Security.AccessControl.FileSystemRights]::ReadAndExecute }); "
+            "[pscustomobject]@{ Path = $path; "
+            "Sddl = $acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access); "
+            "Protected = $acl.AreAccessRulesProtected; "
+            "InheritedRead = [bool]$readRules.Count } }); ConvertTo-Json -InputObject $states -Compress"
+        )
+        result = sync_global_skills.subprocess.run(
+            [powershell, "-NoProfile", "-NonInteractive", "-Command", command],
+            input=json.dumps([str(path) for path in paths]), capture_output=True,
+            text=True, encoding="utf-8", check=False, timeout=60,
+            **sync_global_skills.hidden_process_options(),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        return {state["Path"]: state for state in json.loads(result.stdout)}
+
+    def windows_icacls(self, path, *options):
+        executable = sync_global_skills.shutil.which("icacls")
+        self.assertIsNotNone(executable, "Native Windows ACL verification requires icacls")
+        return sync_global_skills.subprocess.run([executable, str(path), *options], capture_output=True, text=True, check=True, timeout=60, **sync_global_skills.hidden_process_options())
+
     def test_default_runtime_state_stays_under_project_cache(self):
         self.assertEqual(sync_global_skills.DEFAULT_PROJECT_ROOT, Path.cwd().resolve())
         self.assertEqual(
@@ -639,6 +672,99 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(global_agents.read_text(encoding="utf-8"), "# stale lifecycle\n")
             self.assertEqual(sync_global_skills.snapshot_hash(self.primary_skill_paths()), sync_global_skills.snapshot_hash([target_dir / name for name in sync_global_skills.PRIMARY_SKILL_ORDER]))
             self.release_gate.assert_not_called()
+
+    @unittest.skipUnless(sys.platform == "win32", "Native Windows destination ACL regression")
+    def test_windows_repeated_deploy_inherits_destination_access_and_preserves_owned_acls(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            source_dir = self.staged_skill_copy(sandbox)
+            target_dir = sandbox / "global-skills"
+            target_dir.mkdir()
+            self.windows_icacls(target_dir, "/grant", "*S-1-5-11:(OI)(CI)RX", "/Q")
+            private_state = target_dir / "task-analyze-skill" / "local" / "events.jsonl"
+            private_state.parent.mkdir(parents=True)
+            private_state.write_bytes(b"private-state\n")
+            unrelated = target_dir / "chronicle" / "SKILL.md"
+            unrelated.parent.mkdir()
+            unrelated.write_bytes(b"unrelated-skill\n")
+            global_agents = target_dir.parent / "AGENTS.md"
+            global_agents.write_bytes(b"user-global-agents\n")
+            for path in (private_state.parent, unrelated.parent, global_agents):
+                self.windows_icacls(path, "/inheritance:d", "/Q")
+            preserved_paths = [private_state.parent, private_state, unrelated.parent, unrelated, global_agents]
+            preserved_acls = self.windows_acl_state(preserved_paths)
+            preserved_bytes = {path: path.read_bytes() for path in (private_state, unrelated, global_agents)}
+            real_create_workspace = sync_global_skills.create_installation_workspace
+            protected_transactions = []
+
+            def create_protected_workspace(skills_dir):
+                transaction = real_create_workspace(skills_dir)
+                # Reproduce the protected staging parent even on older Python versions.
+                self.windows_icacls(transaction, "/inheritance:d", "/Q")
+                protected_transactions.append(self.windows_acl_state([transaction])[str(transaction)]["Protected"])
+                return transaction
+
+            with mock.patch.object(sync_global_skills, "create_installation_workspace", side_effect=create_protected_workspace):
+                for revision in (1, 2):
+                    source_skill = source_dir / "management-skill" / "SKILL.md"
+                    source_skill.write_text(source_skill.read_text(encoding="utf-8") + f"\nrevision-{revision}\n", encoding="utf-8")
+                    changed_names = sync_global_skills.deploy(source_dir, target_dir)
+                    self.assertEqual(changed_names, sync_global_skills.PRIMARY_SKILL_ORDER)
+                    installed_paths = []
+                    for name in changed_names:
+                        installed_skill = target_dir / name
+                        installed_paths.append(installed_skill)
+                        installed_paths.extend(path for path in installed_skill.rglob("*") if "local" not in path.relative_to(installed_skill).parts)
+                    installed_acls = self.windows_acl_state(installed_paths)
+                    for path, acl in installed_acls.items():
+                        self.assertFalse(acl["Protected"], path)
+                        self.assertTrue(acl["InheritedRead"], path)
+                    self.assertEqual((target_dir / "management-skill" / "SKILL.md").read_bytes(), source_skill.read_bytes())
+                    self.assertEqual(self.windows_acl_state(preserved_paths), preserved_acls)
+                    self.assertEqual({path: path.read_bytes() for path in preserved_bytes}, preserved_bytes)
+                    self.assertFalse(list(target_dir.parent.glob(f"{sync_global_skills.INSTALL_TRANSACTION_PREFIX}*")))
+            self.assertEqual(protected_transactions, [True, True])
+
+    def test_permission_reset_failure_restores_previous_installation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sandbox = Path(temp_dir)
+            target_dir = sandbox / "global-skills"
+            for name in sync_global_skills.PRIMARY_SKILL_ORDER:
+                old_skill = target_dir / name / "SKILL.md"
+                old_skill.parent.mkdir(parents=True)
+                old_skill.write_text(f"previous-{name}\n", encoding="utf-8")
+                previous_helper = old_skill.parent / "scripts" / "previous.py"
+                previous_helper.parent.mkdir()
+                previous_helper.write_text(f"# previous-{name}\n", encoding="utf-8")
+            private_state = target_dir / "task-analyze-skill" / "local" / "events.jsonl"
+            private_state.parent.mkdir()
+            private_state.write_bytes(b"private-state\n")
+            unrelated = target_dir / "chronicle" / "SKILL.md"
+            unrelated.parent.mkdir()
+            unrelated.write_bytes(b"unrelated-skill\n")
+            global_agents = target_dir.parent / "AGENTS.md"
+            global_agents.write_bytes(b"user-global-agents\n")
+            previous_paths = [target_dir, *target_dir.rglob("*"), global_agents]
+            previous_bytes = {path: path.read_bytes() for path in previous_paths if path.is_file()}
+            previous_acls = self.windows_acl_state(previous_paths) if sys.platform == "win32" else None
+            real_reset = sync_global_skills.inherit_installed_skill_permissions
+            normalized = []
+
+            def fail_one_permission_reset(skill_dir):
+                normalized.append(Path(skill_dir).name)
+                if Path(skill_dir).name == "code-skill":
+                    raise RuntimeError("injected permission reset failure")
+                return real_reset(skill_dir)
+
+            with mock.patch.object(sync_global_skills, "inherit_installed_skill_permissions", side_effect=fail_one_permission_reset), self.assertRaisesRegex(RuntimeError, "previous installation was restored.*injected permission reset failure"):
+                sync_global_skills.deploy(SKILLS_DIR, target_dir)
+
+            self.assertEqual(normalized, sync_global_skills.PRIMARY_SKILL_ORDER[:4])
+            self.assertEqual({path: path.read_bytes() for path in target_dir.rglob("*") if path.is_file()} | {global_agents: global_agents.read_bytes()}, previous_bytes)
+            if previous_acls is not None:
+                self.assertEqual(self.windows_acl_state(previous_paths), previous_acls)
+            self.assertFalse(list(target_dir.parent.glob(f"{sync_global_skills.INSTALL_TRANSACTION_PREFIX}*")))
+            self.assertFalse((target_dir.parent / sync_global_skills.INSTALL_LOCK_NAME).exists())
 
     def test_deployed_release_gate_bootstraps_from_provisional_installed_copy(self):
         with tempfile.TemporaryDirectory() as temp_dir:

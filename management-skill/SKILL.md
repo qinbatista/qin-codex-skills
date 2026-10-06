@@ -35,6 +35,8 @@ Use `scripts/sync_global_skills.py deploy --source-dir ROOT --skills-dir TARGET`
 
 Only an explicit global AGENTS update uses `install-global-agents`; it creates a persistent backup with a restore command. Source changes, local installation, and remote publication are distinct outcomes.
 
+On Windows, every managed installation inherits the destination Skill root's permissions for the new files before restoring private local state. This prevents private staging permissions from excluding the normal account. Permission failures stop installation and restore the previous targets; preserve private state, unrelated skills, and the destination root's access policy.
+
 ## Publish
 
 Publish only when authorized. The script's `push` command runs the release gate before README generation, staging, commit, or remote mutation. The catalog lists current behaviors and executable checks; retire obsolete workflow tests when the user changes those behaviors. Never invent attestation evidence.

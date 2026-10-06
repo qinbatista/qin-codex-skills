@@ -1163,6 +1163,20 @@ def preserve_private_task_analyze_local(snapshot):
     private_local["moved"] = True
 
 
+def inherit_installed_skill_permissions(skill_dir):
+    if sys.platform != "win32":
+        return
+    executable = shutil.which("icacls")
+    if executable is None:
+        raise RuntimeError("Windows Skill installation requires icacls to inherit destination permissions.")
+    # Python's private staging ACL survives a same-volume move. Reset only new
+    # managed bytes, before preserved private local state joins the installation.
+    completed = subprocess.run([executable, str(skill_dir), "/reset", "/T", "/Q"], text=True, capture_output=True, check=False, timeout=60, **hidden_process_options())
+    if completed.returncode != 0:
+        details = completed.stderr.strip() or completed.stdout.strip() or f"exit status {completed.returncode}"
+        raise RuntimeError(f"Windows Skill permissions could not inherit from the destination for {skill_dir}: {details}")
+
+
 def install_managed_skills(snapshot):
     installed_names = []
     installed_agents = 0
@@ -1171,6 +1185,7 @@ def install_managed_skills(snapshot):
         replace_path_entry(record["staged"], record["target"])
         record["installed"] = True
         if record["kind"] == "skill":
+            inherit_installed_skill_permissions(record["target"])
             installed_names.append(record["target"].name)
         else:
             installed_agents += 1
