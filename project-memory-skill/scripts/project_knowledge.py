@@ -17,11 +17,15 @@ import project_change_memory as memory
 SCHEMA_VERSION = 1
 MAINTENANCE_WRITES = 20
 MAINTENANCE_DAYS = 30
+MAX_SYNTHESIS_ENTRIES = 50
+MAX_SYNTHESIS_SOURCES = 64
 CURRENT_START = "<!-- BEGIN CODEX CURRENT PROJECT KNOWLEDGE -->"
 CURRENT_END = "<!-- END CODEX CURRENT PROJECT KNOWLEDGE -->"
 LEGACY_START = "<!-- BEGIN CODEX CURRENT MODULE MEMORY -->"
 LEGACY_END = "<!-- END CODEX CURRENT MODULE MEMORY -->"
 ENTRY_FIELDS = {"id", "scope", "module", "file", "symbol", "summary", "reason", "result", "decisions", "risks", "verification_status", "verification", "relations", "source_hashes", "status"}
+CONTINUITY_FIELDS = ("summary", "reason", "result", "decisions", "risks", "relations", "status")
+EVIDENCE_FIELDS = ("verification_status", "verification", "source_hashes")
 MAX_PROJECT_ALIASES = 32
 PROJECT_ALIAS_PATTERN = re.compile(r"[a-z0-9][a-z0-9._-]{0,79}-[a-f0-9]{10}")
 
@@ -92,18 +96,27 @@ def _relations(values):
 def normalize_consolidation(consolidation):
     if consolidation is None:
         return None
-    if not isinstance(consolidation, dict) or set(consolidation) - {"summary", "relations"}:
-        raise ValueError("consolidation accepts only summary and relations")
-    return {"summary": _text(consolidation.get("summary"), "consolidation summary"), "relations": _relations(consolidation.get("relations", []))}
+    if not isinstance(consolidation, dict) or set(consolidation) - {"summary", "relations", "entry_ids"}:
+        raise ValueError("consolidation accepts only summary, relations, and entry_ids")
+    normalized = {"summary": _text(consolidation.get("summary"), "consolidation summary"), "relations": _relations(consolidation.get("relations", []))}
+    if "entry_ids" in consolidation:
+        identifiers = consolidation["entry_ids"]
+        if not isinstance(identifiers, list) or len(identifiers) > MAX_SYNTHESIS_ENTRIES or any(not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{24}", value) is None for value in identifiers):
+            raise ValueError("consolidation entry_ids must contain at most 50 exact scope IDs")
+        normalized["entry_ids"] = sorted(set(identifiers))
+    return normalized
 
 
-def normalize_entries(project_root, entries):
+def normalize_entries(project_root, entries, *, existing_entries=None, defaults=None):
+    """Merge only identical scopes; changed claims need newly supplied evidence."""
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
         raise ValueError("project_root must be an existing directory")
     if not isinstance(entries, list) or len(entries) > 128:
         raise ValueError("entries must contain at most 128 current facts")
     normalized = {}
+    existing_by_id = {entry["id"]: entry for entry in existing_entries or []}
+    default_values = defaults or {}
     for value in entries:
         if not isinstance(value, dict) or set(value) - ENTRY_FIELDS:
             raise ValueError("entry contains unsupported fields")
@@ -122,21 +135,32 @@ def normalize_entries(project_root, entries):
         entry_id = _entry_id(scope, module, file, symbol)
         if value.get("id", entry_id) != entry_id:
             raise ValueError("entry id does not match its exact scope")
+        existing = existing_by_id.get(entry_id)
+        supplied_evidence = {field: value[field] if field in value else default_values[field] for field in EVIDENCE_FIELDS if field in value or field in default_values}
+        value = {**default_values, **({field: existing[field] for field in CONTINUITY_FIELDS} if existing else {}), **value}
         entry = {"id": entry_id, "scope": scope, "module": module, "file": file, "symbol": symbol, "summary": _text(value.get("summary"), "summary"), "reason": _text(value.get("reason", ""), "reason", required=False), "result": _text(value.get("result", ""), "result", required=False)}
         if value.get("status", "current") not in {"current", "retired"}:
             raise ValueError("entry status must be current or retired")
         entry["status"] = value.get("status", "current")
-        for field in ("decisions", "risks", "verification"):
+        for field in ("decisions", "risks"):
             values = value.get(field, [])
             if not isinstance(values, list) or len(values) > 32:
                 raise ValueError(f"{field} must contain at most 32 concise statements")
             entry[field] = sorted(set(_text(item, field) for item in values))
-        status = value.get("verification_status", "not-run")
+        entry["relations"] = _relations(value.get("relations", []))
+        changed_claims = existing is not None and any(entry[field] != existing[field] for field in CONTINUITY_FIELDS)
+        evidence = {**({field: existing[field] for field in EVIDENCE_FIELDS} if existing and not changed_claims else {}), **supplied_evidence}
+        verification = evidence.get("verification", [])
+        if not isinstance(verification, list) or len(verification) > 32:
+            raise ValueError("verification must contain at most 32 concise statements")
+        entry["verification"] = sorted(set(_text(item, "verification") for item in verification))
+        status = evidence.get("verification_status", "not-run")
+        if "verification" in supplied_evidence and not verification and "verification_status" not in supplied_evidence:
+            status = "not-run"
         if status not in memory.VERIFICATION_STATUS_VALUES or (status != "not-run" and not entry["verification"]):
             raise ValueError("verification status requires matching evidence")
         entry["verification_status"] = status
-        entry["relations"] = _relations(value.get("relations", []))
-        source_hashes = value.get("source_hashes", {})
+        source_hashes = evidence.get("source_hashes", {})
         if not isinstance(source_hashes, dict) or len(source_hashes) > 64:
             raise ValueError("source_hashes must map at most 64 exact project files")
         hashes = {}
@@ -223,11 +247,13 @@ def _validate_knowledge(project_root, state):
             _timestamp(maintenance[field])
     if state["synthesis"] is not None:
         synthesis = state["synthesis"]
-        if not isinstance(synthesis, dict) or set(synthesis) - {"summary", "relations", "event_id", "updated_at"} or not synthesis.get("event_id") or not synthesis.get("updated_at"):
+        if not isinstance(synthesis, dict) or set(synthesis) - {"summary", "relations", "entry_ids", "event_id", "updated_at"} or not synthesis.get("event_id") or not synthesis.get("updated_at"):
             raise ValueError("current project synthesis is incomplete")
         normalize_consolidation({key: value for key, value in synthesis.items() if key in {"summary", "relations"}})
         _text(synthesis["event_id"], "synthesis event id", maximum=160)
         _timestamp(synthesis["updated_at"])
+        if "entry_ids" in synthesis and (not isinstance(synthesis["entry_ids"], list) or any(not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{24}", value) is None for value in synthesis["entry_ids"]) or len(set(synthesis["entry_ids"])) != len(synthesis["entry_ids"])):
+            raise ValueError("synthesis contributors must be unique exact scope IDs")
     return state
 
 
@@ -289,7 +315,11 @@ def register_alias(project_root, vault, *, expected_owner, expected_project_key,
         return {"status": status, "project": owner, "project_key": stored["key"], "alias_key": project["key"], "index_document": f"Projects/{owner}/Memory.json", "index_sha256": hashlib.sha256(paths["index"].read_bytes()).hexdigest(), "read_back_verified": True}
 
 
-def _maintenance_due(state, now):
+def _maintenance_due(state, now, *, synthesis_status=None):
+    if not any(entry["status"] == "current" for entry in state["entries"]):
+        return False
+    if state["synthesis"] is None or not state["synthesis"].get("entry_ids") or (synthesis_status is not None and synthesis_status["status"] != "ready"):
+        return True
     maintenance = state["maintenance"]
     start = maintenance.get("last_consolidated_at") or maintenance.get("created_at")
     age_due = bool(start and datetime.fromisoformat(now.replace("Z", "+00:00")) - datetime.fromisoformat(start.replace("Z", "+00:00")) >= timedelta(days=MAINTENANCE_DAYS))
@@ -314,23 +344,41 @@ def _markdown(value):
     return str(value).replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]").replace("<", "&lt;").replace(">", "&gt;").replace("`", "\\`")
 
 
-def _relation_link(relation):
+def _relation_link(relation, targets):
     scope = "method" if relation.get("symbol") else "document" if relation.get("file") else "module"
     entry_id = _entry_id(scope, relation["module"], relation.get("file", ""), relation.get("symbol", ""))
-    return f"[[Projects/{relation['project']}/Knowledge#^memory-{entry_id}]]"
+    exists, anchors = targets(relation["project"])
+    if entry_id in anchors:
+        return f"[[Projects/{relation['project']}/Knowledge#^memory-{entry_id}]]"
+    owner = f"[[Projects/{relation['project']}/Knowledge]]" if exists else _markdown(relation["project"])
+    source = " / ".join(_markdown(relation[field]) for field in ("module", "file", "symbol") if relation.get(field))
+    return f"{owner} (source pointer: {source})"
 
 
-def _render(state, previous):
+def _render(state, previous, vault):
     for start, end in ((CURRENT_START, CURRENT_END), (LEGACY_START, LEGACY_END)):
         if previous.count(start) != previous.count(end) or previous.count(start) > 1:
             raise ValueError("Knowledge.md has an incomplete or duplicate managed section")
     if LEGACY_START in previous:
         previous = previous.replace(LEGACY_START, "<!-- BEGIN LEGACY MODULE MEMORY HISTORY -->\n> Migration history only; current facts come from Memory.json.").replace(LEGACY_END, "<!-- END LEGACY MODULE MEMORY HISTORY -->")
+    known_targets = {state["project"]["owner"]: (True, {entry["id"] for entry in state["entries"]})}
+
+    def targets(owner):
+        if owner not in known_targets:
+            path = Path(vault) / "Projects" / owner / "Knowledge.md"
+            try:
+                _confined(vault, path)
+                text = path.read_text(encoding="utf-8")
+                known_targets[owner] = (True, set(re.findall(r"(?m)^\^memory-([a-f0-9]{24})\s*$", text)))
+            except (OSError, ValueError):
+                known_targets[owner] = (False, set())
+        return known_targets[owner]
+
     lines = [CURRENT_START, "## Current project memory", "", "Generated from `Memory.json`. Exact module and method facts are indexed there.", ""]
     if state["synthesis"]:
         lines.extend(["### Project synthesis", "", _markdown(state["synthesis"]["summary"]), ""])
         for relation in state["synthesis"]["relations"]:
-            lines.append(f"- Reference only: {_relation_link(relation)} ({_markdown(relation['relation'])}) — {_markdown(relation['reason'])}")
+            lines.append(f"- Reference only: {_relation_link(relation, targets)} ({_markdown(relation['relation'])}) — {_markdown(relation['reason'])}")
     for entry in state["entries"]:
         title = entry["module"] + (f" / {entry['file']}" if entry["file"] else "") + (f" / {entry['symbol']}" if entry["symbol"] else "")
         lines.extend([f"### {_markdown(entry['scope'])}: {_markdown(title)}", "", f"- {entry['status'].title()}: {_markdown(entry['summary'])}"])
@@ -342,7 +390,7 @@ def _render(state, previous):
                 lines.append(f"- {field.title()}: " + "; ".join(_markdown(value) for value in entry[field]))
         lines.extend([f"- Verification status: {_markdown(entry['verification_status'])}", f"- Event: `{_markdown(entry['event_id'])}`", "", f"^memory-{entry['id']}", ""])
         for relation in entry["relations"]:
-            lines.append(f"- Reference only: {_relation_link(relation)} ({_markdown(relation['relation'])}) — {_markdown(relation['reason'])}")
+            lines.append(f"- Reference only: {_relation_link(relation, targets)} ({_markdown(relation['relation'])}) — {_markdown(relation['reason'])}")
     lines.append(CURRENT_END)
     block = "\n".join(lines)
     if CURRENT_START in previous:
@@ -352,19 +400,41 @@ def _render(state, previous):
     return previous.rstrip() + "\n\n" + block + "\n"
 
 
-def apply_entries(project_root, vault, entries, *, event_id, consolidation=None, now=None):
-    normalized = normalize_entries(project_root, entries)
+def apply_entries(project_root, vault, entries, *, event_id, consolidation=None, now=None, expected_index_sha256=None, _index_lock=None):
+    normalize_entries(project_root, entries, existing_entries=load_knowledge(project_root, vault)["entries"])
     synthesis = normalize_consolidation(consolidation)
     event = _text(event_id, "event_id", maximum=160)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,159}", event):
         raise ValueError("event_id must identify one existing memory event")
     timestamp = _timestamp(now)
+    if expected_index_sha256 is not None and (not isinstance(expected_index_sha256, str) or re.fullmatch(r"[a-f0-9]{64}", expected_index_sha256) is None):
+        raise ValueError("expected index SHA must be a lowercase SHA256")
     project, paths = _paths(project_root, vault)
     paths["directory"].mkdir(parents=True, exist_ok=True)
     _confined(paths["vault"], paths["lock"])
-    with paths["lock"].open("a+", encoding="utf-8") as lock:
-        memory._acquire_file_lock(lock)
+    with ExitStack() as locks:
+        lock = locks.enter_context(paths["lock"].open("a+", encoding="utf-8")) if _index_lock is None else _index_lock
+        if lock.closed or Path(lock.name).resolve() != paths["lock"].resolve():
+            raise ValueError("the held project lock must match this exact index")
+        if _index_lock is None:
+            memory._acquire_file_lock(lock)
+        if expected_index_sha256 is not None and (not paths["index"].is_file() or hashlib.sha256(paths["index"].read_bytes()).hexdigest() != expected_index_sha256):
+            raise ValueError("project memory index changed; read its SHA again")
         state = load_knowledge(project_root, vault)
+        normalized = normalize_entries(project_root, entries, existing_entries=state["entries"])
+        events_path = _confined(paths["vault"], paths["vault"] / "AI Memory" / "events.jsonl")
+        if not events_path.is_file():
+            raise ValueError("event_id must identify an existing memory event for this exact owner")
+        matching_event = None
+        with events_path.open(encoding="utf-8") as events:
+            for line in events:
+                if line.strip():
+                    candidate = json.loads(line)
+                    if candidate.get("event_id") == event:
+                        matching_event = candidate
+                        break
+        if matching_event is None or matching_event.get("project") != project["owner"]:
+            raise ValueError("event_id must identify an existing memory event for this exact owner")
         before = json.dumps(state, sort_keys=True, ensure_ascii=False)
         by_id = {entry["id"]: entry for entry in state["entries"]}
         changed = False
@@ -375,12 +445,18 @@ def apply_entries(project_root, vault, entries, *, event_id, consolidation=None,
             by_id[entry["id"]] = {**entry, "event_id": event, "updated_at": timestamp}
             changed = True
         state["entries"] = sorted(by_id.values(), key=lambda entry: (entry["scope"], entry["module"], entry["file"], entry["symbol"]))
+        if synthesis:
+            context = synthesis_context(project_root, state, entry_ids=synthesis.get("entry_ids"))
+            if context["status"] != "ready":
+                raise ValueError(context["reason"])
+            synthesis["entry_ids"] = context["entry_ids"]
         maintenance = state["maintenance"]
         if changed or synthesis:
             maintenance["created_at"] = maintenance["created_at"] or timestamp
         if changed:
             maintenance["writes_since_consolidation"] += 1
-        if synthesis and (state["synthesis"] is None or state["synthesis"].get("event_id") != event):
+            state["synthesis"] = None
+        if synthesis and (state["synthesis"] is None or {key: state["synthesis"].get(key) for key in synthesis} != synthesis or _maintenance_due(state, timestamp)):
             state["synthesis"] = {**synthesis, "event_id": event, "updated_at": timestamp}
             maintenance["writes_since_consolidation"] = 0
             maintenance["last_consolidated_at"] = timestamp
@@ -389,11 +465,12 @@ def apply_entries(project_root, vault, entries, *, event_id, consolidation=None,
         if serialized != before or not paths["index"].exists():
             _atomic_text(paths["index"], json.dumps(state, ensure_ascii=False, indent=2) + "\n", paths["vault"])
         index_verified = load_knowledge(project_root, vault) == state
-        result = {"status": status, "project": project["owner"], "knowledge_document": f"Projects/{project['owner']}/Knowledge.md", "index_document": f"Projects/{project['owner']}/Memory.json", "index_read_back_verified": index_verified, "read_back_verified": False, "maintenance_due": _maintenance_due(state, timestamp)}
+        synthesis_readback = _synthesis_status(project_root, state)
+        result = {"status": status, "project": project["owner"], "knowledge_document": f"Projects/{project['owner']}/Knowledge.md", "index_document": f"Projects/{project['owner']}/Memory.json", "index_read_back_verified": index_verified, "read_back_verified": False, "maintenance_due": _maintenance_due(state, timestamp, synthesis_status=synthesis_readback), "synthesis_status": synthesis_readback}
         try:
             _confined(paths["vault"], paths["knowledge"])
             previous = paths["knowledge"].read_text(encoding="utf-8") if paths["knowledge"].exists() else f"# {project['owner']} Knowledge\n"
-            rendered = _render(state, previous)
+            rendered = _render(state, previous, paths["vault"])
             if rendered != previous:
                 _atomic_text(paths["knowledge"], rendered, paths["vault"])
             result["read_back_verified"] = index_verified and paths["knowledge"].read_text(encoding="utf-8") == rendered
@@ -402,7 +479,7 @@ def apply_entries(project_root, vault, entries, *, event_id, consolidation=None,
         return result
 
 
-def _freshness(entry, root):
+def _freshness(entry, root, source_cache=None):
     sources = entry.get("source_hashes", {})
     if not sources:
         return "unverified", "source_evidence_absent"
@@ -411,15 +488,71 @@ def _freshness(entry, root):
             path = root / _relative_file(relative, root)
             if not path.is_file():
                 return "stale", "source_missing"
-            digest = hashlib.sha256()
-            with path.open("rb") as source:
-                while chunk := source.read(1024 * 1024):
-                    digest.update(chunk)
-            if expected is None or digest.hexdigest() != expected:
+            actual = source_cache.get(relative) if source_cache is not None else None
+            if actual is None:
+                digest = hashlib.sha256()
+                with path.open("rb") as source:
+                    while chunk := source.read(1024 * 1024):
+                        digest.update(chunk)
+                actual = digest.hexdigest()
+                if source_cache is not None:
+                    source_cache[relative] = actual
+            if expected is None or actual != expected:
                 return "stale", "source_changed"
     except OSError:
         return "unverified", "source_unreadable"
     return "current", "source_hashes_match"
+
+
+def synthesis_context(project_root, state, *, entry_ids=None, source_cache=None):
+    """Select bounded, exact-owner inputs without promoting excluded claims."""
+    root = Path(project_root).resolve()
+    current = {entry["id"]: entry for entry in state["entries"] if entry["status"] == "current"}
+    result = {"status": "ready", "entries": [], "entry_ids": [], "excluded": [], "excluded_count": 0, "limitations": [], "limits": {"entries": MAX_SYNTHESIS_ENTRIES, "sources": MAX_SYNTHESIS_SOURCES}}
+    if not current:
+        return {**result, "status": "skipped", "reason": "no_current_knowledge"}
+    if entry_ids is not None and any(identifier not in current for identifier in entry_ids):
+        return {**result, "status": "pending", "reason": "synthesis_contributor_not_current"}
+    candidates = [current[identifier] for identifier in entry_ids] if entry_ids is not None else list(current.values())
+    for entry in candidates:
+        if entry["scope"] == "method" and not entry["source_hashes"]:
+            result["excluded_count"] += 1
+            if len(result["excluded"]) < 5:
+                result["excluded"].append({"id": entry["id"], "reason": "source_evidence_absent"})
+    candidates = [entry for entry in candidates if entry["scope"] != "method" or entry["source_hashes"]]
+    sources = {relative for entry in candidates for relative in entry["source_hashes"]}
+    if len(candidates) > MAX_SYNTHESIS_ENTRIES or len(sources) > MAX_SYNTHESIS_SOURCES:
+        return {**result, "status": "pending", "reason": "project_synthesis_input_limit", "input_counts": {"entries": len(candidates), "sources": len(sources)}, "limitations": ["Select explicit contributing scope IDs within the synthesis bounds; no inputs were silently truncated."]}
+    cache = source_cache if source_cache is not None else {}
+    for entry in candidates:
+        freshness, reason = _freshness(entry, root, cache)
+        if freshness == "stale" or reason == "source_unreadable":
+            result["excluded_count"] += 1
+            if len(result["excluded"]) < 5:
+                result["excluded"].append({"id": entry["id"], "reason": reason})
+            continue
+        result["entries"].append({**entry, "freshness": freshness})
+        if freshness == "unverified":
+            result["limitations"].append("Some synthesis inputs have no source hash evidence and remain unverified.")
+        if entry["verification_status"] != "passed":
+            result["limitations"].append(f"Some synthesis inputs have {entry['verification_status']} verification; preserve that limit.")
+    result["entry_ids"] = sorted(entry["id"] for entry in result["entries"])
+    result["limitations"] = sorted(set(result["limitations"]))
+    if result["excluded_count"] and entry_ids is not None:
+        return {**result, "status": "pending", "reason": "synthesis_contributor_not_eligible", "entries": [], "entry_ids": []}
+    if not result["entries"]:
+        return {**result, "status": "pending", "reason": "project_synthesis_inputs_unavailable"}
+    return result
+
+
+def _synthesis_status(project_root, state, source_cache=None):
+    synthesis = state["synthesis"]
+    if synthesis is None:
+        return {"status": "missing", "reason": "project_synthesis_absent"}
+    if "entry_ids" not in synthesis:
+        return {"status": "pending", "reason": "synthesis_contributors_unknown"}
+    context = synthesis_context(project_root, state, entry_ids=synthesis["entry_ids"], source_cache=source_cache)
+    return {key: value for key, value in context.items() if key != "entries"}
 
 
 def recall(project_root, vault, *, module="", files=None, symbols=None, query="", limit=5):
@@ -437,7 +570,10 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
         state = load_knowledge(root, vault)
     except ProjectIdentityError:
         return {**result, "status": "skipped", "reason": "exact_project_mismatch"}
-    result["maintenance_due"] = _maintenance_due(state, _timestamp())
+    source_cache = {}
+    synthesis_status = _synthesis_status(root, state, source_cache)
+    result["synthesis_status"] = synthesis_status
+    result["maintenance_due"] = _maintenance_due(state, _timestamp(), synthesis_status=synthesis_status)
     words = re.findall(r"[\w.+-]+", _text(query, "query", required=False).casefold())[:12]
     maximum = max(1, min(int(limit), 5))
     selected = []
@@ -464,7 +600,7 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
             if len(result["retired"]) < maximum:
                 result["retired"].append(pointer)
             continue
-        freshness, reason = _freshness(entry, root)
+        freshness, reason = _freshness(entry, root, source_cache)
         if freshness == "stale":
             if len(result["stale"]) < maximum:
                 result["stale"].append({**pointer, "reason": reason})
@@ -476,6 +612,8 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
         result["entries"].append({**entry, "freshness": freshness})
         if freshness == "unverified":
             result["limitations"].append("Some recalled facts have no source hash evidence.")
+        if entry["verification_status"] != "passed":
+            result["limitations"].append(f"Some recalled facts have {entry['verification_status']} verification; source identity is not behavior proof.")
         for relation in entry["relations"]:
             references[json.dumps(relation, sort_keys=True)] = {**relation, "context_loaded": False, "cross_project": relation["project"] != state["project"]["owner"]}
     modules = {entry["module"] for entry in result["entries"]}
@@ -484,15 +622,18 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
         if entry["id"] in selected_ids or not result["entries"] or entry["status"] == "retired":
             continue
         if entry["scope"] == "project" or (entry["scope"] == "module" and entry["module"] in modules):
-            freshness, reason = _freshness(entry, root)
+            freshness, reason = _freshness(entry, root, source_cache)
             if freshness != "stale" and reason != "source_unreadable":
                 result["parent_context"].append({**entry, "freshness": freshness})
             if len(result["parent_context"]) == 3:
                 break
-    if result["entries"] and state["synthesis"]:
-        result["project_synthesis"] = {**state["synthesis"], "freshness": "unverified", "context_role": "project_synthesis"}
+    if result["entries"] and state["synthesis"] and synthesis_status["status"] == "ready":
+        result["project_synthesis"] = {**state["synthesis"], "freshness": "unverified", "context_role": "navigation_only", "eligible_current_context": False}
         for relation in state["synthesis"]["relations"]:
             references[json.dumps(relation, sort_keys=True)] = {**relation, "context_loaded": False, "cross_project": relation["project"] != state["project"]["owner"]}
+    if state["synthesis"] and synthesis_status["status"] != "ready":
+        result["limitations"].append("Project synthesis was withheld because its contributing evidence is unavailable or stale.")
+        result["limitations"].extend(synthesis_status.get("limitations", []))
     result["references"] = [references[key] for key in sorted(references)][:32]
     result["limitations"] = sorted(set(result["limitations"]))
     if result["entries"]:

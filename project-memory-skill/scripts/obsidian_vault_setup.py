@@ -59,6 +59,8 @@ def _guard_location(target, project_root):
         raise ValueError("memory vault must be outside Cache folders")
     if project_root is not None:
         project = Path(project_root).expanduser().resolve()
+        if resolved == project and _memory_vault(resolved):
+            return resolved
         if resolved == project or resolved.is_relative_to(project):
             raise ValueError("memory vault must be outside the project and its Cache")
     return resolved

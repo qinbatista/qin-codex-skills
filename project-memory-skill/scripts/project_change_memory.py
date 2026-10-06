@@ -51,22 +51,6 @@ SENSITIVE_PATTERNS = (
 )
 
 
-def _coverage_runtime():
-    """Load the sibling coverage runtime without creating an import cycle."""
-    try:
-        import memory_coverage
-
-        return memory_coverage
-    except ModuleNotFoundError:
-        coverage_path = Path(__file__).with_name("memory_coverage.py")
-        coverage_spec = importlib.util.spec_from_file_location("project_memory_coverage", coverage_path)
-        if coverage_spec is None or coverage_spec.loader is None:
-            raise RuntimeError(f"Cannot load memory coverage runtime: {coverage_path}")
-        coverage = importlib.util.module_from_spec(coverage_spec)
-        coverage_spec.loader.exec_module(coverage)
-        return coverage
-
-
 def _normalize_task_name(value, fallback="task"):
     normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
     normalized = re.sub(r"(?:sk-[a-z0-9_-]{8,}|/users/[^ ]+|/home/[^ ]+|[a-z]:\\[^ ]+)", "private", normalized, flags=re.IGNORECASE)
@@ -498,6 +482,7 @@ DOCUMENT_PROJECT_OWNER_ROOTS = (
     ("Muse/MuseAI", "MuseAI"),
     ("Muse/UserExamples", "MuseAI"),
     ("YofaGames/ThisIsMyOregon", "ThisIsMyOregon"),
+    ("YofaGames/SpriteTamer", "ThisIsMyOregon"),
     ("YofaGames/AIAnimation2D", "AIAnimation2D"),
     ("YofaGames/AIShaderGraphic2D", "AIShaderGraphic2D"),
     ("YofaGames/AIVFX2D", "AIVFX2D"),

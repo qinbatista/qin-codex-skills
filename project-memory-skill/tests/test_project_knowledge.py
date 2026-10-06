@@ -21,8 +21,8 @@ from hidden_process import hidden_process_options
 
 class ProjectKnowledgeTests(unittest.TestCase):
     def setUp(self):
-        cache = ROOT / "Cache"
-        cache.mkdir(exist_ok=True)
+        cache = Path(os.environ.get("PROJECT_KNOWLEDGE_TEST_CACHE", ROOT / "Cache" / "temp-project-knowledge-tests"))
+        cache.mkdir(parents=True, exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(prefix="temp-project-knowledge-", dir=cache)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
@@ -41,10 +41,35 @@ class ProjectKnowledgeTests(unittest.TestCase):
         return {**value, **changes}
 
     def write(self, entries, event="event-1", **kwargs):
+        self.record_event(event)
         return knowledge.apply_entries(self.project, self.vault, entries, event_id=event, now=self.now, **kwargs)
+
+    def record_event(self, event, owner=None):
+        path = self.vault / "AI Memory/events.jsonl"
+        path.parent.mkdir(exist_ok=True)
+        events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+        if not any(value["event_id"] == event for value in events):
+            with path.open("a", encoding="utf-8") as handle:
+                identity = knowledge.memory._project_identity(self.project)
+                handle.write(json.dumps({"event_id": event, "project": owner or identity["owner"] or identity["name"]}) + "\n")
 
     def read(self, **kwargs):
         return knowledge.recall(self.project, self.vault, **kwargs)
+
+    def test_guarded_update_rejects_changed_index_without_overwriting_either_view(self):
+        self.write([self.method()])
+        index = self.vault / "Projects/ExampleProject/Memory.json"
+        view = index.with_name("Knowledge.md")
+        expected = hashlib.sha256(index.read_bytes()).hexdigest()
+        self.write([self.method(summary="Preserve the concurrent contract")], event="event-concurrent")
+        index_before, view_before = index.read_bytes(), view.read_bytes()
+        with self.assertRaisesRegex(ValueError, "index changed"):
+            self.write([self.method(summary="Replace the contract")], event="event-review", expected_index_sha256=expected)
+        self.assertEqual((index.read_bytes(), view.read_bytes()), (index_before, view_before))
+        fresh = hashlib.sha256(index_before).hexdigest()
+        result = self.write([self.method(summary="Apply the reviewed contract")], event="event-review", expected_index_sha256=fresh)
+        self.assertTrue(result["read_back_verified"])
+        self.assertEqual(self.read()["entries"][0]["summary"], "Apply the reviewed contract")
 
     def test_exact_method_filters_intersect_and_keep_same_symbols_in_other_files(self):
         first = self.method()
@@ -85,6 +110,123 @@ class ProjectKnowledgeTests(unittest.TestCase):
             self.write([self.method(), self.method(summary="Different contract")])
         self.assertEqual(index.read_bytes(), previous)
 
+    def test_sparse_update_preserves_continuity_and_retirement_without_reusing_proof(self):
+        relation = {"project": "SupportingProject", "module": "protocol", "relation": "uses", "reason": "Preserve the confirmed dependency"}
+        initial = self.method(reason="The user corrected repeated lost settings", result="The verified workaround remains limited", decisions=["Preserve the user correction"], risks=["Pending: verify restoration on the next machine"], relations=[relation], status="retired", verification_status="passed", verification=["Observed the original method result"])
+        self.write([initial])
+        scope = {key: initial[key] for key in ("scope", "module", "file", "symbol")}
+        unchanged = self.write([scope], event="unchanged-sparse")
+        self.assertEqual(unchanged["status"], "duplicate")
+        preserved = knowledge.load_knowledge(self.project, self.vault)["entries"][0]
+        self.assertEqual(preserved["source_hashes"], initial["source_hashes"])
+        self.assertEqual(preserved["verification_status"], "passed")
+        self.write([{**scope, "summary": "Keep the corrected contract pending a fresh check"}], event="corrected-sparse")
+        current = knowledge.load_knowledge(self.project, self.vault)["entries"][0]
+        for field in ("reason", "result", "decisions", "risks", "relations", "status"):
+            self.assertEqual(current[field], initial[field])
+        self.assertEqual(current["verification_status"], "not-run")
+        self.assertEqual(current["verification"], [])
+        self.assertEqual(current["source_hashes"], {})
+        self.assertFalse(self.read(module="engine")["entries"])
+
+    def test_explicit_empty_values_clear_prior_continuity(self):
+        self.write([self.method(reason="Preserve the original cause", result="Preserve the original result", decisions=["Keep the old decision"], risks=["Keep the old pending item"], relations=[{"project": "SupportingProject", "module": "api", "relation": "uses", "reason": "The original reference"}], status="retired")])
+        self.write([self.method(reason="", result="", decisions=[], risks=[], relations=[], status="current")], event="reconciled")
+        current = knowledge.load_knowledge(self.project, self.vault)["entries"][0]
+        self.assertEqual((current["reason"], current["result"]), ("", ""))
+        self.assertEqual([current[field] for field in ("decisions", "risks", "relations")], [[], [], []])
+        self.assertEqual(current["status"], "current")
+
+    def test_new_source_identity_does_not_upgrade_changed_claim_to_passed(self):
+        self.write([self.method(verification_status="passed", verification=["Observed the previous method result"])])
+        revised = self.method(summary="The revised contract still needs behavior verification")
+        self.write([revised], event="new-source-only")
+        current = self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"])["entries"][0]
+        self.assertEqual(current["freshness"], "current")
+        self.assertEqual(current["verification_status"], "not-run")
+        self.assertEqual(current["verification"], [])
+        self.write([{**revised, "verification_status": "passed", "verification": ["Observed the revised method result"]}], event="new-behavior-proof")
+        self.assertEqual(self.read(module="engine")["entries"][0]["verification_status"], "passed")
+
+    def test_explicit_verification_clear_downgrades_the_inherited_label(self):
+        self.write([self.method(verification_status="passed", verification=["Observed the original result"])])
+        self.write([self.method(verification=[])], event="clear-verification")
+        current = self.read(module="engine")["entries"][0]
+        self.assertEqual(current["verification_status"], "not-run")
+        self.assertEqual(current["verification"], [])
+
+    def test_direct_updates_require_an_existing_event_from_the_exact_owner(self):
+        self.write([self.method()])
+        index = self.vault / "Projects/ExampleProject/Memory.json"
+        view = index.with_name("Knowledge.md")
+        original = (index.read_bytes(), view.read_bytes())
+        self.record_event("foreign-event", owner="OtherProject")
+        for event in ("missing-event", "foreign-event"):
+            with self.assertRaisesRegex(ValueError, "existing memory event for this exact owner"):
+                knowledge.apply_entries(self.project, self.vault, [self.method(summary="Refuse a foreign history reference")], event_id=event)
+            self.assertEqual((index.read_bytes(), view.read_bytes()), original)
+
+    def test_changed_entries_invalidate_current_synthesis_and_preserve_history(self):
+        self.write([self.method()], consolidation={"summary": "The original engine contract is established"})
+        self.write([self.method()], event="synthesis-duplicate")
+        self.assertIsNotNone(knowledge.load_knowledge(self.project, self.vault)["synthesis"])
+        history = (self.vault / "AI Memory/events.jsonl").read_text(encoding="utf-8")
+        self.write([self.method(reason="The user corrected the established contract")], event="synthesis-invalidated")
+        state = knowledge.load_knowledge(self.project, self.vault)
+        self.assertIsNone(state["synthesis"])
+        self.assertNotIn("project_synthesis", self.read(module="engine"))
+        self.assertTrue((self.vault / "AI Memory/events.jsonl").read_text(encoding="utf-8").startswith(history))
+        self.assertTrue(self.read(module="engine")["maintenance_due"])
+
+    def test_initial_synthesis_is_due_and_partial_proof_stays_navigation_only(self):
+        self.assertFalse(knowledge._maintenance_due(knowledge.load_knowledge(self.project, self.vault), knowledge._timestamp(self.now)))
+        entry = self.method(verification_status="partial", verification=["Only one supported input was observed"])
+        first = self.write([entry])
+        self.assertTrue(first["maintenance_due"])
+        self.write([], event="partial-synthesis", consolidation={"summary": "The method has one observed input and other cases remain pending"})
+        result = self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"])
+        self.assertEqual(result["entries"][0]["verification_status"], "partial")
+        self.assertFalse(result["project_synthesis"]["eligible_current_context"])
+        self.assertEqual(result["project_synthesis"]["context_role"], "navigation_only")
+        self.assertTrue(any("partial verification" in limit for limit in result["limitations"]))
+        self.write([self.method(status="retired")], event="retire-all")
+        self.assertFalse(self.read(module="engine")["maintenance_due"])
+
+    def test_source_changed_contributor_withholds_synthesis_beside_fresh_selected_entry(self):
+        self.write([self.method(), self.method(file="src/second.py")], consolidation={"summary": "The established methods share a stable execution contract"})
+        (self.project / "src/first.py").write_text("def run():\n    return 2\n", encoding="utf-8")
+        result = self.read(module="engine", files=["src/second.py"], symbols=["Worker.run"])
+        self.assertEqual(len(result["entries"]), 1)
+        self.assertEqual(result["entries"][0]["freshness"], "current")
+        self.assertNotIn("project_synthesis", result)
+        self.assertTrue(result["maintenance_due"])
+        self.assertEqual(result["synthesis_status"]["reason"], "synthesis_contributor_not_eligible")
+
+    def test_legacy_unknown_or_overbound_contributors_are_withheld_without_rewriting(self):
+        self.write([self.method()], consolidation={"summary": "The old engine summary needs explicit provenance"})
+        index = self.vault / "Projects/ExampleProject/Memory.json"
+        state = json.loads(index.read_text(encoding="utf-8"))
+        del state["synthesis"]["entry_ids"]
+        index.write_text(json.dumps(state), encoding="utf-8")
+        before = index.read_bytes()
+        result = self.read(module="engine")
+        self.assertNotIn("project_synthesis", result)
+        self.assertTrue(result["maintenance_due"])
+        self.assertEqual(result["synthesis_status"]["reason"], "synthesis_contributors_unknown")
+        self.assertEqual(index.read_bytes(), before)
+        entries = [self.method(symbol=f"Worker.run{number}") for number in range(knowledge.MAX_SYNTHESIS_ENTRIES + 1)]
+        self.write(entries, event="many-scopes")
+        state = knowledge.load_knowledge(self.project, self.vault)
+        state["synthesis"] = {"summary": "This imported summary exceeds the contributor bound", "relations": [], "entry_ids": [entry["id"] for entry in state["entries"]], "event_id": "many-scopes", "updated_at": knowledge._timestamp(self.now)}
+        index.write_text(json.dumps(state), encoding="utf-8")
+        result = self.read(module="engine", files=["src/first.py"], symbols=["Worker.run0"])
+        self.assertEqual(len(result["entries"]), 1)
+        self.assertNotIn("project_synthesis", result)
+        self.assertEqual(result["synthesis_status"]["reason"], "project_synthesis_input_limit")
+        selected = result["entries"][0]["id"]
+        self.write([], event="selected-synthesis", consolidation={"summary": "Navigation for the explicitly selected execution scope", "entry_ids": [selected]})
+        self.assertFalse(self.read(module="engine", files=["src/first.py"], symbols=["Worker.run0"])["project_synthesis"]["eligible_current_context"])
+
     def test_same_named_unregistered_project_cannot_read_or_overwrite(self):
         self.write([self.method()])
         other = self.root / "clone" / self.project.name
@@ -110,7 +252,7 @@ class ProjectKnowledgeTests(unittest.TestCase):
         state = json.loads(index.read_text(encoding="utf-8"))
         state["project"]["key"] = "exampleproject-0123456789"
         index.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-        (self.vault / "AI Memory").mkdir()
+        (self.vault / "AI Memory").mkdir(exist_ok=True)
         (self.vault / "AI Memory/events.jsonl").write_bytes(b"immutable history\r\n")
         return index, state
 
@@ -233,12 +375,13 @@ class ProjectKnowledgeTests(unittest.TestCase):
         shutil.copytree(self.project, project)
         with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
             self.assertEqual(knowledge.memory._registered_owner(project), "YoFaAssets")
+            self.record_event("same-project-proof", owner="YoFaAssets")
             knowledge.apply_entries(project, self.vault, [self.method()], event_id="same-project-proof", now=self.now)
         index = self.vault / "Projects/YoFaAssets/Memory.json"
         state = json.loads(index.read_text())
         state["project"]["key"] = "yofaassets-0123456789"
         index.write_text(json.dumps(state), encoding="utf-8")
-        (self.vault / "AI Memory").mkdir()
+        (self.vault / "AI Memory").mkdir(exist_ok=True)
         arguments = self.alias_arguments(index, state)
         command = [sys.executable, "-B", str(SCRIPTS / "project_knowledge.py"), "register-alias", "--project-root", str(project), "--vault", str(self.vault)]
         for key, value in arguments.items():
@@ -264,8 +407,14 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertTrue(result["references"][0]["cross_project"])
         target_id = knowledge.normalize_entries(self.project, [{"scope": "method", "module": "shared-api", "file": "api.py", "symbol": "Client.send", "summary": "The external API contract"}])[0]["id"]
         document = (self.vault / "Projects" / "ExampleProject" / "Knowledge.md").read_text(encoding="utf-8")
-        self.assertIn(f"[[Projects/OtherProject/Knowledge#^memory-{target_id}]]", document)
+        self.assertNotIn(f"[[Projects/OtherProject/Knowledge#^memory-{target_id}]]", document)
+        self.assertIn("OtherProject (source pointer: shared-api / api.py / Client.send)", document)
         self.assertIn("^memory-" + result["entries"][0]["id"], document)
+        (foreign / "Knowledge.md").write_text(f"# Other owner\n\n^memory-{target_id}\n", encoding="utf-8")
+        self.write([], event="reference-render")
+        document = (self.vault / "Projects" / "ExampleProject" / "Knowledge.md").read_text(encoding="utf-8")
+        self.assertIn(f"[[Projects/OtherProject/Knowledge#^memory-{target_id}]]", document)
+        self.assertFalse(self.read(module="engine")["references"][0]["context_loaded"])
 
     def test_missing_index_does_not_promote_unindexed_notes(self):
         owner = self.vault / "Projects" / "ExampleProject"
@@ -369,8 +518,10 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertEqual(len(state["entries"]), 1)
         self.assertEqual(state["synthesis"]["summary"], "The stable engine contract is centralized")
         document = (self.vault / "Projects" / "ExampleProject" / "Knowledge.md").read_text(encoding="utf-8")
-        self.assertIn("[[Projects/SupportingProject/Knowledge#^memory-", document)
+        self.assertIn("SupportingProject (source pointer: protocol)", document)
+        self.assertNotIn("[[Projects/SupportingProject/Knowledge#^memory-", document)
         self.assertEqual(self.read(module="engine")["references"][0]["project"], "SupportingProject")
+        self.record_event("age-check")
         aged = knowledge.apply_entries(self.project, self.vault, [], event_id="age-check", now=self.now + timedelta(days=30))
         self.assertTrue(aged["maintenance_due"])
 
@@ -409,7 +560,9 @@ class ProjectKnowledgeTests(unittest.TestCase):
         program = "import sys; sys.path.insert(0, sys.argv[1]); import project_knowledge as knowledge; result=knowledge.apply_entries(sys.argv[2],sys.argv[3],[{'scope':'module','module':sys.argv[4],'summary':'Preserve the module contract'}],event_id=sys.argv[4]); print(result['status'])"
         processes = []
         for module in ("alpha", "beta"):
-            processes.append(subprocess.Popen([sys.executable, "-c", program, str(SCRIPTS), str(self.project), str(self.vault), module], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **hidden_process_options()))
+            self.record_event(module)
+        for module in ("alpha", "beta"):
+            processes.append(subprocess.Popen([sys.executable, "-B", "-c", program, str(SCRIPTS), str(self.project), str(self.vault), module], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **hidden_process_options()))
         for process in processes:
             output, error = process.communicate(timeout=20)
             self.assertEqual(process.returncode, 0, error)
@@ -418,7 +571,7 @@ class ProjectKnowledgeTests(unittest.TestCase):
 
     def test_cli_returns_exact_bounded_current_context(self):
         self.write([self.method()])
-        result = subprocess.run([sys.executable, "-X", "utf8", str(SCRIPTS / "project_knowledge.py"), "recall", "--project-root", str(self.project), "--vault", str(self.vault), "--module", "engine", "--file", "src/first.py", "--symbol", "Worker.run"], capture_output=True, text=True, encoding="utf-8", timeout=20, check=True, **hidden_process_options())
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(SCRIPTS / "project_knowledge.py"), "recall", "--project-root", str(self.project), "--vault", str(self.vault), "--module", "engine", "--file", "src/first.py", "--symbol", "Worker.run"], capture_output=True, text=True, encoding="utf-8", timeout=20, check=True, **hidden_process_options())
         payload = json.loads(result.stdout)
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["entries"][0]["symbol"], "Worker.run")

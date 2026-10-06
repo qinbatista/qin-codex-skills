@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -16,13 +17,19 @@ SPEC.loader.exec_module(MODULE)
 
 class EndingLaunchTests(unittest.TestCase):
     def setUp(self):
-        cache = Path(__file__).resolve().parents[2] / "Cache"
-        cache.mkdir(exist_ok=True)
+        cache = Path(os.environ.get("ENDING_LAUNCH_TEST_CACHE", Path(__file__).resolve().parents[2] / "Cache/temp-ending-launch-tests"))
+        cache.mkdir(parents=True, exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(prefix="temp-ending-launch-", dir=cache)
         self.addCleanup(self.temporary.cleanup)
         self.project = Path(self.temporary.name) / "ExampleProject"
         self.project.mkdir()
         (self.project / "script.py").write_text("value = 1\n")
+        self.vault = Path(self.temporary.name) / "vault"
+        (self.vault / "Projects").mkdir(parents=True)
+        (self.vault / "AI Memory").mkdir()
+        self.vault_patch = mock.patch.object(MODULE.memory, "_resolve_vault", return_value=self.vault)
+        self.vault_patch.start()
+        self.addCleanup(self.vault_patch.stop)
         self.completed = {"status": "complete", "task_id": "task-1", "project_root": str(self.project),
                           "outcome": {"module": "example", "summary": "Saved result", "reason": "Preserve outcome", "result": "Available", "files": ["script.py"]}}
 
@@ -38,7 +45,7 @@ class EndingLaunchTests(unittest.TestCase):
 
     def vault_result(self):
         return {"status": "written", "purpose": "memory_only", "event_id": "event-1", "vault_document": "AI Memory/events.jsonl",
-                "read_back_verified": True, "project": "ExampleProject", "current_memory": {"read_back_verified": True}}
+                "read_back_verified": True, "project": "ExampleProject", "current_memory": {"read_back_verified": True, "maintenance_due": False}}
 
     def test_unavailable_vault_does_not_block_resource_audit_launch(self):
         with mock.patch("obsidian_vault_setup.ensure_vault", return_value={"status": "pending", "reason": "obsidian_vault_unavailable"}):
@@ -124,7 +131,7 @@ class EndingLaunchTests(unittest.TestCase):
             with self.subTest(memory_result=memory_result):
                 result = MODULE.record_completion(self.acknowledged(), memory_result, self.resource_result())
                 self.assertEqual(result["resource_status"], "complete")
-                self.assertEqual(result["status"], "pending" if memory_result["status"] == "pending" else "complete")
+                self.assertEqual(result["status"], "pending")
 
     def test_resource_completion_requires_originating_task_and_real_readback(self):
         for changes in ({"origin_task_id": "other"}, {"read_back_verified": False}, {"status": "invented"}):
@@ -143,11 +150,51 @@ class EndingLaunchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different outcome or project"):
             self.prepare(previous=packet)
 
+    def test_handoff_carries_merged_corrections_and_pending_items(self):
+        scope = {"scope": "module", "module": "example"}
+        established = {**scope, "summary": "Keep the verified original contract", "reason": "The user corrected repeated lost settings", "result": "The original restoration workaround passed", "decisions": ["Preserve the correction"], "risks": ["Pending: verify another machine"], "verification_status": "passed", "verification": ["Observed the original restoration output"]}
+        (self.vault / "AI Memory/events.jsonl").write_text(json.dumps({"event_id": "original-event", "project": "ExampleProject"}) + "\n", encoding="utf-8")
+        MODULE.knowledge.apply_entries(self.project, self.vault, [established], event_id="original-event")
+        self.completed["outcome"]["memories"] = [{**scope, "summary": "Keep the revised restoration contract pending verification"}]
+        packet = self.prepare()
+        data = json.loads(packet["create_thread"]["prompt"].split("Completed outcome data:\n", 1)[1])
+        current = data["outcome"]["memories"][0]
+        for field in ("reason", "result", "decisions", "risks"):
+            self.assertEqual(current[field], established[field])
+        self.assertEqual(current["verification_status"], "not-run")
+        self.assertEqual(current["verification"], [])
+        self.assertEqual(len(current["source_hashes"]["script.py"]), 64)
+        self.assertIn("user corrections", packet["create_thread"]["prompt"])
+
     def test_pending_writer_cannot_be_reported_as_complete(self):
         result = MODULE.record_completion(self.acknowledged(), {"status": "pending", "reason": "obsidian_vault_unavailable"})
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["reason"], "obsidian_vault_unavailable")
 
+    def test_due_synthesis_blocks_completion_while_resource_result_survives(self):
+        memory = {**self.vault_result(), "current_memory": {"read_back_verified": True, "maintenance_due": True}}
+        result = MODULE.record_completion(self.acknowledged(), memory, self.resource_result())
+        self.assertEqual((result["status"], result["memory_status"], result["resource_status"]), ("pending", "pending", "complete"))
+        self.assertEqual(result["reason"], "project_synthesis_due")
+        with self.assertRaisesRegex(ValueError, "explicit synthesis cadence"):
+            MODULE.record_completion(self.acknowledged(), {**memory, "current_memory": {"read_back_verified": True}}, self.resource_result())
+
+    def test_empty_outcome_still_prepares_due_synthesis_without_resource_audit(self):
+        entry = {"scope": "module", "module": "example", "summary": "Preserve the established restoration contract", "verification_status": "partial", "verification": ["Only the original environment was observed"]}
+        (self.vault / "AI Memory/events.jsonl").write_text(json.dumps({"event_id": "original-event", "project": "ExampleProject"}) + "\n", encoding="utf-8")
+        MODULE.knowledge.apply_entries(self.project, self.vault, [entry], event_id="original-event")
+        self.completed["outcome"] = {}
+        packet = self.prepare(resource_audit=False)
+        self.assertTrue(packet["consolidation_required"])
+        self.assertTrue(packet["memory_required"])
+        self.assertEqual(packet["synthesis_context"]["entries"][0]["verification_status"], "partial")
+        self.assertIsNotNone(packet["create_thread"])
+        self.completed["outcome"] = {"consolidation": {"summary": "The original restoration environment was observed, with other environments pending"}}
+        consolidated = self.prepare(resource_audit=False)
+        self.assertIsNotNone(consolidated["create_thread"])
+        data = json.loads(consolidated["create_thread"]["prompt"].split("Completed outcome data:\n", 1)[1])
+        self.assertNotIn("memories", data["outcome"])
+        self.assertNotIn("files", data["outcome"])
 
 if __name__ == "__main__":
     unittest.main()

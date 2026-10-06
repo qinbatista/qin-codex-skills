@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "project-memory-skill" / "scripts"
 sys.path.insert(0, str(ROOT / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
-from test_ending_memory import RUNTIME
+from test_ending_memory import MODULE as ending, RUNTIME
 
 
 BARRIER = '''
@@ -37,6 +37,9 @@ original_record_event = record_event
 def record_event(**fields):
     if os.environ.get("ENDING_FIXTURE_FAIL") == "true":
         raise RuntimeError("injected Ending runtime failure")
+    marker = os.environ.get("ENDING_FIXTURE_RECORD_STARTED")
+    if marker:
+        Path(marker).write_text("recording", encoding="utf-8")
     time.sleep(0.15)
     return original_record_event(**fields)
 '''
@@ -44,8 +47,8 @@ def record_event(**fields):
 
 class EndingMemoryConcurrencyTests(unittest.TestCase):
     def setUp(self):
-        cache = ROOT / "Cache"
-        cache.mkdir(exist_ok=True)
+        cache = Path(os.environ.get("ENDING_CONCURRENCY_TEST_CACHE", ROOT / "Cache/temp-ending-memory-concurrency-tests"))
+        cache.mkdir(parents=True, exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(prefix="temp-ending-concurrency-", dir=cache)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
@@ -70,11 +73,11 @@ class EndingMemoryConcurrencyTests(unittest.TestCase):
             process.kill()
             process.communicate(timeout=5)
 
-    def launch(self, project, symbol, label, *, barrier=False, fail=False):
+    def launch(self, project, symbol, label, *, barrier=False, fail=False, payload=None):
         outcome = self.root / f"{label}.json"
-        outcome.write_text(json.dumps(self.outcome(project, symbol)), encoding="utf-8")
-        environment = {**os.environ, "CODEX_HOME": str(self.root / "codex"), "CODEX_OBSIDIAN_VAULT": str(self.vault), "PYTHONIOENCODING": "utf-8", "ENDING_FIXTURE_FAIL": "true" if fail else "false", "ENDING_FIXTURE_READY": str(self.root / f"{label}.ready") if barrier else "", "ENDING_FIXTURE_START": str(self.root / "start") if barrier else ""}
-        process = subprocess.Popen([sys.executable, "-X", "utf8", str(SCRIPTS / "ending_memory.py"), "--project-root", str(project), "--vault", str(self.vault), "--outcome", str(outcome)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", env=environment, **hidden_process_options())
+        outcome.write_text(json.dumps(self.outcome(project, symbol) if payload is None else payload), encoding="utf-8")
+        environment = {**os.environ, "CODEX_HOME": str(self.root / "codex"), "CODEX_OBSIDIAN_VAULT": str(self.vault), "PYTHONIOENCODING": "utf-8", "ENDING_FIXTURE_FAIL": "true" if fail else "false", "ENDING_FIXTURE_READY": str(self.root / f"{label}.ready") if barrier else "", "ENDING_FIXTURE_START": str(self.root / "start") if barrier else "", "ENDING_FIXTURE_RECORD_STARTED": str(self.root / f"{label}.record")}
+        process = subprocess.Popen([sys.executable, "-B", "-X", "utf8", str(SCRIPTS / "ending_memory.py"), "--project-root", str(project), "--vault", str(self.vault), "--outcome", str(outcome)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", env=environment, **hidden_process_options())
         self.addCleanup(self.stop_process, process)
         return process
 
@@ -100,6 +103,34 @@ class EndingMemoryConcurrencyTests(unittest.TestCase):
     def read_events(self):
         path = self.vault / "AI Memory" / "events.jsonl"
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+    def test_guarded_synthesis_holds_project_lock_across_history_and_index_write(self):
+        original = self.launch(self.first, "Worker.read", "original")
+        output, error = original.communicate(timeout=20)
+        self.assertEqual(original.returncode, 0, error)
+        index = self.vault / "Projects/SharedProject/Memory.json"
+        expected = hashlib.sha256(index.read_bytes()).hexdigest()
+        runtime = ending._vault_runtime(self.vault)
+        event = runtime.record_event(project="SharedProject", module="worker", event_type="general", summary="A direct concurrent update must respect the reviewed index", reason="Check the real shared project lock", result="Direct writes use the same guarded index", verification_status="not-run", files=["worker.py"], verification=[], decisions=[], risks=[], module_change_values=[])
+        synthesis = self.launch(self.first, "Worker.read", "synthesis", payload={"expected_index_sha256": expected, "consolidation": {"summary": "Navigation for the established worker contract"}})
+        marker = self.root / "synthesis.record"
+        deadline = time.monotonic() + 10
+        while not marker.exists():
+            if synthesis.poll() is not None or time.monotonic() >= deadline:
+                self.fail("Synthesis did not reach its protected canonical record boundary")
+            time.sleep(0.01)
+        program = "import sys; sys.path.insert(0,sys.argv[1]); import project_knowledge as knowledge; knowledge.apply_entries(sys.argv[2],sys.argv[3],[{'scope':'module','module':'worker','summary':'This direct update must not replace the reviewed snapshot'}],event_id=sys.argv[4],expected_index_sha256=sys.argv[5])"
+        direct = subprocess.Popen([sys.executable, "-B", "-c", program, str(SCRIPTS), str(self.first), str(self.vault), event["event_id"], expected], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **hidden_process_options())
+        self.addCleanup(self.stop_process, direct)
+        output, error = synthesis.communicate(timeout=20)
+        self.assertEqual(synthesis.returncode, 0, error)
+        self.assertFalse(json.loads(output)["current_memory"]["maintenance_due"])
+        output, error = direct.communicate(timeout=20)
+        self.assertNotEqual(direct.returncode, 0)
+        self.assertIn("index changed", error)
+        saved = json.loads(index.read_text(encoding="utf-8"))
+        self.assertEqual(saved["synthesis"]["summary"], "Navigation for the established worker contract")
+        self.assertEqual(len(saved["entries"]), 1)
 
     def test_same_name_competing_roots_reject_loser_before_history_append(self):
         results = self.run_concurrent([(self.first, "Worker.read", "first"), (self.second, "Worker.write", "second")])

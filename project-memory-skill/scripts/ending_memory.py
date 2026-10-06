@@ -5,13 +5,15 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
+from contextlib import ExitStack
 from pathlib import Path
 
 import project_change_memory as memory
 import project_knowledge as knowledge
 
 
-OUTCOME_FIELDS = {"durable", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "files", "verification", "decisions", "risks", "supersedes", "symbols", "source_hashes", "memories", "consolidation"}
+OUTCOME_FIELDS = {"durable", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "files", "verification", "decisions", "risks", "supersedes", "symbols", "source_hashes", "memories", "consolidation", "expected_index_sha256"}
 
 
 def snapshot_sources(project_root, files):
@@ -33,34 +35,35 @@ def snapshot_sources(project_root, files):
     return snapshots
 
 
-def prepare_entries(payload, project_root, *, capture_sources=False):
+def prepare_entries(payload, project_root, *, capture_sources=False, existing_entries=None):
     """Normalize entity ownership; only the originating task captures evidence."""
     files = memory._normalize_files(project_root, payload["files"])
     hashes = payload.get("source_hashes", {})
-    if capture_sources and not hashes:
+    if capture_sources and "source_hashes" not in payload:
         hashes = snapshot_sources(project_root, files)
     shared = {key: payload[key] for key in ("summary", "reason", "result", "verification_status", "verification", "decisions", "risks") if key in payload}
     if "memories" in payload:
-        entries = [{**shared, **entry} for entry in payload["memories"]]
+        entries = [dict(entry) for entry in payload["memories"]]
+        defaults = shared
     elif payload.get("symbols"):
         if len(files) != 1:
             raise ValueError("symbols spanning multiple files require explicitly scoped memories")
         entries = [{**shared, "scope": "method", "module": payload["module"], "file": files[0], "symbol": symbol} for symbol in payload["symbols"]]
+        defaults = None
     else:
         scope = payload.get("scope", "module")
         if scope in {"file", "document"}:
             entries = [{**shared, "scope": "document", "module": payload["module"], "file": file} for file in files]
         else:
             entries = [{**shared, "scope": scope, "module": payload["module"]}]
+        defaults = None
     for entry in entries:
         relative = entry.get("file")
         if relative and relative not in files:
             raise ValueError("each memory entity file must be among the completed outcome files")
-        if "source_hashes" not in entry:
+        if "source_hashes" not in entry and ("source_hashes" in payload or capture_sources):
             entry["source_hashes"] = dict(hashes)
-        if capture_sources and not entry["source_hashes"]:
-            entry["source_hashes"] = snapshot_sources(project_root, [relative] if relative else files)
-    return knowledge.normalize_entries(project_root, entries)
+    return knowledge.normalize_entries(project_root, entries, existing_entries=existing_entries, defaults=defaults)
 
 
 def history_fields(entries, decisions, consolidation):
@@ -82,6 +85,8 @@ def history_fields(entries, decisions, consolidation):
             history.append(f"Memory {identifier} relation: {json.dumps(relation, ensure_ascii=False, sort_keys=True)}")
     if consolidation:
         history.append("Project consolidation: " + consolidation["summary"])
+        for identifier in consolidation.get("entry_ids", []):
+            history.append("Project consolidation scope: " + identifier)
         for relation in consolidation["relations"]:
             history.append("Project consolidation relation: " + json.dumps(relation, ensure_ascii=False, sort_keys=True))
     payload_hash = hashlib.sha256(json.dumps({"entries": entries, "consolidation": consolidation}, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
@@ -106,6 +111,8 @@ def validate_outcome(payload):
             raise ValueError(f"{field} must be text of at most {maximum} characters")
     if "source_hashes" in payload and not isinstance(payload["source_hashes"], dict):
         raise ValueError("source_hashes must be a mapping of exact project files")
+    if "expected_index_sha256" in payload and (not isinstance(payload["expected_index_sha256"], str) or re.fullmatch(r"[a-f0-9]{64}", payload["expected_index_sha256"]) is None):
+        raise ValueError("expected index SHA must be a lowercase SHA256")
     if "memories" in payload and (not isinstance(payload["memories"], list) or not payload["memories"] or any(not isinstance(entry, dict) for entry in payload["memories"])):
         raise ValueError("memories must be a nonempty list of scoped entries")
 
@@ -128,12 +135,17 @@ def closeout(payload, *, project_root, store=None, vault=None):
     if not root.is_dir():
         raise ValueError("project root must exist")
     validate_outcome(payload)
-    if not payload or payload.get("durable") is False:
-        return {"status": "skipped", "reason": "no_durable_information"}
     if store is not None:
         raise ValueError("Codex-local memory stores are retired; use the configured Obsidian vault")
+    has_facts = payload.get("durable") is not False and bool(set(payload) - {"durable", "consolidation", "expected_index_sha256"})
+    consolidation = knowledge.normalize_consolidation(payload.get("consolidation"))
+    fields = {key: value for key, value in payload.items() if key != "durable"}
+    if has_facts and any(not fields.get(key) for key in ("module", "summary", "reason", "result", "files")):
+        raise ValueError("memory outcome requires module, summary, reason, result, and files")
     resolved_vault = memory._resolve_vault(vault, root)
     if resolved_vault is None or not (resolved_vault / "AI Memory" / "ai_memory.py").is_file():
+        if not has_facts and consolidation is None:
+            return {"status": "pending", "reason": "obsidian_maintenance_unavailable", "written": False}
         from obsidian_vault_setup import ensure_vault
 
         setup = ensure_vault(vault=vault, project_root=root)
@@ -143,29 +155,58 @@ def closeout(payload, *, project_root, store=None, vault=None):
         resolved_vault = Path(setup["vault"])
     project = memory._project_identity(root)
     owner = project.get("owner") or root.name
-    fields = {key: value for key, value in payload.items() if key != "durable"}
-    required = ("module", "summary", "reason", "result", "files")
-    if any(not fields.get(key) for key in required):
-        raise ValueError("memory outcome requires module, summary, reason, result, and files")
-    files = memory._normalize_files(root, fields["files"])
+    state = knowledge.load_knowledge(root, resolved_vault)
+    if not has_facts:
+        if not any(entry["status"] == "current" for entry in state["entries"]):
+            return {"status": "skipped", "reason": "no_durable_information", "maintenance_due": False}
+        cache = {}
+        synthesis_status = knowledge._synthesis_status(root, state, cache)
+        due = knowledge._maintenance_due(state, knowledge._timestamp(), synthesis_status=synthesis_status)
+        if consolidation is None and not due:
+            return {"status": "skipped", "reason": "no_durable_information", "maintenance_due": False}
+        context = knowledge.synthesis_context(root, state, entry_ids=consolidation.get("entry_ids") if consolidation else None, source_cache=cache)
+        if consolidation is None or context["status"] != "ready":
+            return {"status": "pending", "reason": "project_synthesis_due" if context["status"] == "ready" else context["reason"], "written": False, "project": owner, "vault": str(resolved_vault), "maintenance_due": True, "synthesis_context": context}
+        fields = {"module": "project-wide", "summary": consolidation["summary"], "reason": "Refresh navigation from the project's established current knowledge", "result": "Project synthesis saved; original facts retain their verification limits", "files": []}
+    files = memory._normalize_files(root, fields["files"]) if has_facts else []
     verification_status = fields.get("verification_status", "not-run")
     verification = fields.get("verification") or []
     if verification_status != "not-run" and not verification:
         raise ValueError("verified memory outcomes require verification evidence")
-    entries = prepare_entries(fields, root)
-    consolidation = knowledge.normalize_consolidation(fields.get("consolidation"))
-    module_changes, decisions = history_fields(entries, fields.get("decisions") or [], consolidation)
     runtime = _vault_runtime(resolved_vault)
     lock_path = knowledge._confined(resolved_vault.resolve(), resolved_vault / "AI Memory" / ".ending.lock")
-    with lock_path.open("a+", encoding="utf-8") as lock:
+    with ExitStack() as locks:
+        lock = locks.enter_context(lock_path.open("a+", encoding="utf-8"))
         memory._acquire_file_lock(lock)
-        knowledge.load_knowledge(root, resolved_vault)
+        state = knowledge.load_knowledge(root, resolved_vault)
+        entries = prepare_entries(fields, root, existing_entries=state["entries"]) if has_facts else []
         if not (resolved_vault / "Projects" / owner).is_dir():
             if not callable(getattr(runtime, "add_project", None)):
                 return {"status": "pending", "reason": "obsidian_project_unregistered", "written": False, "vault": str(resolved_vault)}
             runtime.add_project(owner, vault_root=resolved_vault)
+        paths = knowledge._paths(root, resolved_vault)[1]
+        project_lock = locks.enter_context(paths["lock"].open("a+", encoding="utf-8"))
+        memory._acquire_file_lock(project_lock)
+        expected = payload.get("expected_index_sha256")
+        if expected is not None and (not paths["index"].is_file() or hashlib.sha256(paths["index"].read_bytes()).hexdigest() != expected):
+            return {"status": "pending", "reason": "project_memory_index_changed", "written": False, "project": owner}
+        state = knowledge.load_knowledge(root, resolved_vault)
+        entries = prepare_entries(fields, root, existing_entries=state["entries"]) if has_facts else []
+        synthesis_pending = None
+        if consolidation:
+            merged = {entry["id"]: entry for entry in state["entries"]}
+            merged.update({entry["id"]: entry for entry in entries})
+            context = knowledge.synthesis_context(root, {**state, "entries": list(merged.values())}, entry_ids=consolidation.get("entry_ids"))
+            if context["status"] != "ready":
+                if not has_facts:
+                    return {"status": "pending", "reason": context["reason"], "written": False, "project": owner, "maintenance_due": True, "synthesis_context": context}
+                synthesis_pending = context
+                consolidation = None
+            else:
+                consolidation = {**consolidation, "entry_ids": context["entry_ids"]}
+        module_changes, decisions = history_fields(entries, fields.get("decisions") or [], consolidation)
         result = runtime.record_event(
-            project=owner, module=fields["module"], event_type="general",
+            project=owner, module=fields["module"], event_type="general" if has_facts else "documentation",
             summary=fields["summary"], reason=fields["reason"], result=fields["result"],
             verification_status=verification_status, files=files, verification=verification,
             module_change_values=module_changes, decisions=decisions, risks=fields.get("risks") or [],
@@ -177,10 +218,16 @@ def closeout(payload, *, project_root, store=None, vault=None):
             raise RuntimeError("memory write did not read back from the same Obsidian project")
         if readback.get("decisions") != decisions:
             raise RuntimeError("memory history did not preserve the exact entity scope and source evidence")
-        current = knowledge.apply_entries(root, resolved_vault, entries, event_id=event_id, consolidation=consolidation)
+        try:
+            current = knowledge.apply_entries(root, resolved_vault, entries, event_id=event_id, consolidation=consolidation, expected_index_sha256=expected, _index_lock=project_lock)
+        except ValueError as error:
+            return {"status": "pending", "reason": "current_knowledge_update_pending", "detail": str(error), "event_id": event_id, "project": owner, "written": True}
         if current["read_back_verified"] is not True:
             return {"status": "pending", "reason": "current_knowledge_projection_pending", "event_id": event_id, "project": owner, "current_memory": current}
-        runtime.render_views()
+        if result["status"] != "duplicate" or current["status"] != "duplicate":
+            runtime.render_views()
+        if synthesis_pending is not None:
+            return {"status": "pending", "reason": synthesis_pending["reason"], "event_id": event_id, "project": owner, "written": True, "current_memory": current, "synthesis_context": synthesis_pending}
         return {"status": result["status"], "event_id": event_id, "project": owner,
                 "vault": str(resolved_vault), "vault_document": "AI Memory/events.jsonl", "read_back_verified": True,
                 "verification_owner": "active_task", "purpose": "memory_only", "current_memory": current}

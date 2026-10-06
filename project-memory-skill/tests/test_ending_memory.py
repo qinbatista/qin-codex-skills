@@ -1,5 +1,7 @@
 import importlib.util
+import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -8,6 +10,7 @@ from unittest import mock
 
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SUPPORTED_RUNTIME = Path(os.environ.get("PROJECT_MEMORY_TEST_RUNTIME", SCRIPTS.parents[2] / "qin-llm-wiki/qin_llm_wiki/templates/vault/AI Memory/ai_memory.py"))
 sys.path.insert(0, str(SCRIPTS))
 SPEC = importlib.util.spec_from_file_location("ending_memory", SCRIPTS / "ending_memory.py")
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -40,8 +43,8 @@ def render_views():
 
 class EndingMemoryTests(unittest.TestCase):
     def setUp(self):
-        cache = Path(__file__).resolve().parents[2] / "Cache"
-        cache.mkdir(exist_ok=True)
+        cache = Path(os.environ.get("ENDING_MEMORY_TEST_CACHE", Path(__file__).resolve().parents[2] / "Cache/temp-ending-memory-tests"))
+        cache.mkdir(parents=True, exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(prefix="temp-ending-memory-", dir=cache)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
@@ -56,7 +59,7 @@ class EndingMemoryTests(unittest.TestCase):
         self.outcome = {"module": "example", "summary": "Saved one result", "reason": "Preserve the outcome", "result": "Result available", "files": ["script.py"], "verification_status": "passed", "verification": ["Observed real output"]}
 
     def closeout(self, payload=None, **changes):
-        args = {"project_root": self.project}
+        args = {"project_root": self.project, "vault": self.vault}
         args.update(changes)
         return MODULE.closeout(self.outcome if payload is None else payload, **args)
 
@@ -157,6 +160,114 @@ class EndingMemoryTests(unittest.TestCase):
                 self.assertIn(evidence, history)
         current = MODULE.knowledge.load_knowledge(self.project, self.vault)["entries"][0]
         self.assertEqual(current["decisions"], ["Use the revised structure"])
+
+    def test_sparse_memory_update_records_the_complete_merged_entry(self):
+        scope = {"scope": "module", "module": "example"}
+        entry = {**scope, "summary": "Keep the original restoration workaround", "reason": "The user corrected repeated lost settings", "result": "The restoration workaround was verified", "decisions": ["Preserve the user correction"], "risks": ["Unresolved: verify restoration on another machine"], "status": "retired"}
+        self.closeout({**self.outcome, "memories": [entry]}, vault=self.vault)
+        updated = {**self.outcome, "verification_status": "not-run", "verification": [], "memories": [{**scope, "summary": "Keep the revised restoration contract pending verification"}]}
+        result = self.closeout(updated, vault=self.vault)
+        current = MODULE.knowledge.load_knowledge(self.project, self.vault)["entries"][0]
+        for field in ("reason", "result", "decisions", "risks", "status"):
+            self.assertEqual(current[field], entry[field])
+        self.assertEqual(current["verification_status"], "not-run")
+        events = json.loads((self.vault / "AI Memory/events.jsonl").read_text().splitlines()[-1])
+        self.assertEqual(events["event_id"], result["event_id"])
+        history = "\n".join(events["decisions"])
+        for fact in (entry["reason"], entry["result"], *entry["decisions"], *entry["risks"], "status: retired", "verification_status: not-run"):
+            self.assertIn(fact, history)
+
+    def test_explicit_empty_source_evidence_is_not_recaptured(self):
+        entries = MODULE.prepare_entries({**self.outcome, "symbols": ["Worker.read"], "source_hashes": {}}, self.project, capture_sources=True)
+        self.assertEqual(entries[0]["source_hashes"], {})
+
+    def test_noop_checks_due_then_consolidation_only_preserves_entry_proof(self):
+        first = self.closeout()
+        before = MODULE.knowledge.load_knowledge(self.project, self.vault)
+        self.assertTrue(first["current_memory"]["maintenance_due"])
+        pending = self.closeout({})
+        self.assertEqual(pending["reason"], "project_synthesis_due")
+        self.assertFalse(pending["written"])
+        completed = self.closeout({"consolidation": {"summary": "The original verified result has a bounded restoration contract"}})
+        self.assertFalse(completed["current_memory"]["maintenance_due"])
+        after = MODULE.knowledge.load_knowledge(self.project, self.vault)
+        self.assertEqual(after["entries"], before["entries"])
+        self.assertEqual(after["synthesis"]["entry_ids"], [before["entries"][0]["id"]])
+        event = json.loads((self.vault / "AI Memory/events.jsonl").read_text().splitlines()[-1])
+        self.assertEqual((event["event_type"], event["verification_status"], event["files"], event["verification"]), ("documentation", "not-run", [], []))
+        self.assertIn("Project consolidation scope: " + before["entries"][0]["id"], event["decisions"])
+        snapshot = {path: path.read_bytes() for path in self.vault.rglob("*") if path.is_file()}
+        skipped = self.closeout({})
+        self.assertEqual(skipped["status"], "skipped")
+        self.assertEqual({path: path.read_bytes() for path in self.vault.rglob("*") if path.is_file()}, snapshot)
+
+    def test_stale_synthesis_preimage_refuses_history_and_index_writes(self):
+        self.closeout()
+        index = self.vault / "Projects/ExampleProject/Memory.json"
+        expected = hashlib.sha256(index.read_bytes()).hexdigest()
+        self.closeout({**self.outcome, "summary": "Preserve the concurrent revised result"})
+        snapshot = {path: path.read_bytes() for path in self.vault.rglob("*") if path.is_file()}
+        result = self.closeout({"expected_index_sha256": expected, "consolidation": {"summary": "This obsolete draft must not overwrite current knowledge"}})
+        self.assertEqual(result["reason"], "project_memory_index_changed")
+        self.assertFalse(result["written"])
+        self.assertEqual({path: path.read_bytes() for path in self.vault.rglob("*") if path.is_file()}, snapshot)
+        fresh = hashlib.sha256(index.read_bytes()).hexdigest()
+        saved = self.closeout({"expected_index_sha256": fresh, "consolidation": {"summary": "The concurrent revised result remains bounded to its established scope"}})
+        self.assertFalse(saved["current_memory"]["maintenance_due"])
+
+    def test_consolidation_refuses_stale_method_inputs(self):
+        entries = MODULE.prepare_entries({**self.outcome, "symbols": ["Worker.read"]}, self.project, capture_sources=True)
+        self.closeout({**self.outcome, "memories": entries})
+        identifier = entries[0]["id"]
+        (self.project / "script.py").write_text("value = 2\n")
+        original_events = (self.vault / "AI Memory/events.jsonl").read_bytes()
+        result = self.closeout({"consolidation": {"summary": "The old method claim cannot become new proof", "entry_ids": [identifier]}})
+        self.assertEqual(result["reason"], "synthesis_contributor_not_eligible")
+        self.assertFalse(result["written"])
+        self.assertEqual((self.vault / "AI Memory/events.jsonl").read_bytes(), original_events)
+
+    @unittest.skipUnless(SUPPORTED_RUNTIME.is_file(), "set PROJECT_MEMORY_TEST_RUNTIME to the supported qin-llm-wiki writer")
+    def test_supported_vault_runtime_saves_and_recalls_corrections_and_pending_work(self):
+        runtime_path = self.vault / "AI Memory/ai_memory.py"
+        runtime_path.write_bytes(SUPPORTED_RUNTIME.read_bytes())
+        classifier = SUPPORTED_RUNTIME.with_name("auto_classify.py")
+        if classifier.is_file():
+            runtime_path.with_name("auto_classify.py").write_bytes(classifier.read_bytes())
+        scope = {"scope": "module", "module": "example"}
+        established = {**scope, "summary": "Preserve the verified restoration workaround", "reason": "The user struggled with repeated lost settings", "result": "The settings restore works within the verified environment", "decisions": ["User correction: preserve the established settings"], "risks": ["Next step: verify the recovered settings", "Unresolved: restore on another machine"]}
+        original = MODULE.prepare_entries({**self.outcome, "memories": [established]}, self.project, capture_sources=True)
+        first = self.closeout({**self.outcome, "memories": original, "consolidation": {"summary": "The original restoration workaround was verified"}}, vault=self.vault)
+        runtime = MODULE._vault_runtime(self.vault)
+        original_event = next(event for event in runtime._read_events(runtime.EVENTS_PATH) if event["event_id"] == first["event_id"])
+        updated = {"module": "example", "summary": "The revised restoration contract needs verification", "reason": "Record the new explanation", "result": "The new explanation is awaiting verification", "files": ["script.py"], "memories": [{**scope, "summary": "Preserve restoration continuity pending a fresh check"}]}
+        second = self.closeout(updated, vault=self.vault)
+        recalled = MODULE.knowledge.recall(self.project, self.vault, module="example")
+        self.assertEqual(recalled["status"], "ok")
+        current = recalled["entries"][0]
+        for field in ("reason", "result", "decisions", "risks"):
+            self.assertEqual(current[field], established[field])
+        self.assertEqual(current["verification_status"], "not-run")
+        self.assertEqual(current["source_hashes"], {})
+        self.assertEqual(current["freshness"], "unverified")
+        self.assertNotIn("project_synthesis", recalled)
+        events = runtime._read_events(runtime.EVENTS_PATH)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(next(event for event in events if event["event_id"] == first["event_id"]), original_event)
+        self.assertEqual(original_event["verification_status"], "passed")
+        self.assertTrue(any("Project consolidation:" in decision for decision in original_event["decisions"]))
+        saved = next(event for event in events if event["event_id"] == second["event_id"])
+        for fact in (established["reason"], established["result"], *established["decisions"], *established["risks"], "verification_status: not-run"):
+            self.assertIn(fact, "\n".join(saved["decisions"]))
+        self.assertTrue(first["read_back_verified"] and second["read_back_verified"])
+        pending = self.closeout({})
+        self.assertEqual(pending["reason"], "project_synthesis_due")
+        before_refresh = MODULE.knowledge.load_knowledge(self.project, self.vault)["entries"]
+        synthesis = self.closeout({"consolidation": {"summary": "Restoration retains the original workaround and correction while another-machine verification remains pending"}})
+        navigation = MODULE.knowledge.recall(self.project, self.vault, module="example")["project_synthesis"]
+        self.assertFalse(navigation["eligible_current_context"])
+        self.assertEqual(navigation["context_role"], "navigation_only")
+        self.assertFalse(synthesis["current_memory"]["maintenance_due"])
+        self.assertEqual(MODULE.knowledge.load_knowledge(self.project, self.vault)["entries"], before_refresh)
 
 
 if __name__ == "__main__":

@@ -127,6 +127,16 @@ class ObsidianVaultSetupTests(unittest.TestCase):
                             result = SETUP.ensure_vault(vault=target, project_root=project_root, source=self.source)
                             self.assertEqual(result["reason"], "unsafe_vault_location")
 
+    def test_existing_vault_can_be_its_own_workspace_but_a_project_cannot_create_one_in_place(self):
+        logical = Path.home() / "Documents" / "existing-memory-vault-fixture"
+        with mock.patch.object(SETUP, "_guard_location", side_effect=self.real_location_guard):
+            with mock.patch.object(SETUP, "_memory_vault", return_value=True), mock.patch.object(SETUP, "_run", side_effect=AssertionError("existing vault must not run a generator")):
+                result = SETUP.ensure_vault(vault=logical, project_root=logical)
+                self.assertEqual((result["status"], result["created"]), ("ready", False))
+            with mock.patch.object(SETUP, "_memory_vault", return_value=False):
+                result = SETUP.ensure_vault(vault=logical, project_root=logical, source=self.source)
+                self.assertEqual((result["reason"], result["created"]), ("unsafe_vault_location", False))
+
     def test_preserves_nonempty_directory(self):
         vault = self.root / "other-vault"
         vault.mkdir()

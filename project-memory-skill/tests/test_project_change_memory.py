@@ -14,8 +14,21 @@ SPEC.loader.exec_module(MEMORY)
 
 
 class RetiredCodexMemoryTests(unittest.TestCase):
+    def setUp(self):
+        default = Path(__file__).resolve().parents[2] / "Cache" / "temp-project-change-memory-tests"
+        self.cache = Path(os.environ.get("PROJECT_CHANGE_MEMORY_TEST_CACHE", default))
+        self.cache.mkdir(parents=True, exist_ok=True)
+
+    def test_sprite_tamer_root_uses_declared_owner_without_matching_unregistered_clones(self):
+        with mock.patch.object(MEMORY.Path, "home", return_value=Path.cwd()):
+            home = Path.cwd()
+            self.assertEqual(MEMORY._registered_owner(home / "Documents/YofaGames/SpriteTamer"), "ThisIsMyOregon")
+            self.assertEqual(MEMORY._registered_owner(home / "Documents/YofaGames/SpriteTamer/Assets"), "ThisIsMyOregon")
+            self.assertIsNone(MEMORY._registered_owner(home / "Documents/Clones/SpriteTamer"))
+            self.assertIsNone(MEMORY._registered_owner(home / "Documents/YofaGames/SpriteTamer/Cache/temp-fixture"))
+
     def test_official_skill_owner_preserves_legacy_history_without_matching_other_roots(self):
-        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(MEMORY.Path, "home", return_value=Path(temporary)):
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary, mock.patch.object(MEMORY.Path, "home", return_value=Path(temporary)):
             home = Path(temporary)
             for directory in (".agents/skills/project-memory-skill", ".codex/skills/project-memory-skill", "Documents/AIProject/qin-codex-skills"):
                 self.assertEqual(MEMORY._registered_owner(home / directory), "Global Codex Skills")
@@ -23,9 +36,7 @@ class RetiredCodexMemoryTests(unittest.TestCase):
                 self.assertIsNone(MEMORY._registered_owner(home / directory))
 
     def test_legacy_scoped_record_remains_readable_without_rewriting_history(self):
-        cache = Path(__file__).resolve().parents[2] / "Cache"
-        cache.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="temp-legacy-memory-", dir=cache) as temporary:
+        with tempfile.TemporaryDirectory(prefix="temp-legacy-memory-", dir=self.cache) as temporary:
             project = Path(temporary) / "project"
             project.mkdir()
             store = Path(temporary) / "legacy"
@@ -41,7 +52,7 @@ class RetiredCodexMemoryTests(unittest.TestCase):
             self.assertEqual(index.read_bytes(), before)
 
     def test_legacy_writers_refuse_to_create_codex_local_memory(self):
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary:
             project = Path(temporary) / "project"
             project.mkdir()
             store = Path(temporary) / "memory"
@@ -54,7 +65,7 @@ class RetiredCodexMemoryTests(unittest.TestCase):
             self.assertFalse(store.exists())
 
     def test_explicit_existing_vault_is_resolved_without_local_write(self):
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary:
             vault = Path(temporary) / "vault"
             (vault / "AI Memory").mkdir(parents=True)
             (vault / "Projects").mkdir()
@@ -63,7 +74,7 @@ class RetiredCodexMemoryTests(unittest.TestCase):
             self.assertFalse((vault / "events.jsonl").exists())
 
     def test_legacy_search_is_read_only(self):
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary:
             project = Path(temporary) / "project"
             project.mkdir()
             store = Path(temporary) / "missing-store"
