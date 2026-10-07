@@ -25,6 +25,8 @@ A site's authoritative success receipt or acknowledgement completes the submissi
 
 ## Execute
 
+For every Git-managed merge or restore task, inspect the current branch and its configured upstream, preserve unrelated dirty work, then fetch and merge upstream before scoped changes. After necessary verification, immediately commit all task-owned merged or restored changes; do not defer the commit or leave them only local. Fetch again, rebase only unpublished local commits onto that upstream, make the authorized normal push, and verify the remote hash. The user's standing request to merge or restore work and leave no task changes local authorizes their normal push. Never guess a missing upstream, force-push, rewrite published history, or publish outside the request. Restore and verify every temporary integration stash in the same task, then drop only that consumed stash; never leave accumulating stashes. Preserve unrelated existing stashes.
+
 1. Identify the result, project, constraints, and useful context. Read relevant skills and exact project/module/file/symbol memory through [Project Memory](../project-memory-skill/SKILL.md), including architecture only when needed. Skip absent entries. Keep cross-project references explicit and separate from authoritative project facts.
 2. Preview the branches, qualitative difficulty, known models and real dependencies through Task Analyze, then proceed without a routine approval pause.
 3. Apply the ready-work policy above. Start independent branches together, prepare downstream work during external waits, and integrate outputs only at their actual join points.
