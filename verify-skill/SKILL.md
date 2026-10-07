@@ -9,6 +9,12 @@ Before any file write for verification, apply the [Cache policy](../workflow-ski
 
 Verify before declaring the task complete. Follow [Task Analyze's action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests) when checks fail or cannot run. Read relevant project facts through Project Memory, skip absent matching records, and never borrow another project's facts.
 
+## Project testing Skill and test levels
+
+For an identifiable project, before creating a maintained Python test file or starting an extended test campaign, inspect the project's `.agents/skills` and existing test owners for an applicable testing Skill. Read and follow it when present; if none covers the project, create `.agents/skills/testing-skill` before adding maintained tests. Give that Skill a concise, stable map of each test purpose and goal, test level, project-relative script path, runner, and required file owner. Refresh the map when tests change. Prefer its non-runtime `tests/` for new maintained scripts. Keep tests that a toolchain or release gate requires elsewhere, such as Unity tests or a Skill's own clean-clone tests, at their required paths and track them in the map. Do not duplicate them in the testing Skill.
+
+Select the smallest level that can prove the claim: level 1 checks a focused function and syntax/code errors; level 2 exercises the affected case in its real runtime and is the default; level 3 exercises all related code when a structural change can affect multiple paths; level 4 is full-system or release validation only when explicitly requested or required by the actual release contract. Level 1 alone does not establish consequential behavior. Audit the map and existing cases by *purpose* before adding a script or widening a run: update or combine useful cases, remove obsolete exact duplicates after updating references, and retain distinct compatibility or release-gate coverage. Keep outcomes and temporary fixtures in task-owned Cache, not in the stable testing Skill.
+
 ## Choose evidence
 
 - Simple code edits: read back the changed value and exercise the affected consumer when one exists.

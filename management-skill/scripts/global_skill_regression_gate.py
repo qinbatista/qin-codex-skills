@@ -21,6 +21,7 @@ from hidden_process import hidden_process_options
 
 
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
+PROJECT_TESTING_SKILL_RELATIVE_PATH = Path(".agents/skills/testing-skill")
 DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/latest.json")
 DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
@@ -191,6 +192,11 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
             deployed_candidate = workspace / "deployed" / "skills"
             copy_candidate(project_root, source_candidate, managed_skills, text[len(directive):], structural_agents)
             copy_candidate(deployed_root, deployed_candidate, managed_skills, text[len(directive):], structural_agents)
+            source_testing_skill = project_root / PROJECT_TESTING_SKILL_RELATIVE_PATH
+            if source_testing_skill.is_dir():
+                target = source_candidate / PROJECT_TESTING_SKILL_RELATIVE_PATH
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(source_testing_skill, target, ignore=shutil.ignore_patterns(*EXCLUDED_PARTS, "*.pyc", "*.pyo", "*.log"))
             plugin_cache = deployed_root.resolve().parent / "plugins" / "cache"
             copy_required_plugin_contracts(plugin_cache, source_candidate.parent / "plugins" / "cache")
             copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
@@ -565,8 +571,16 @@ def main() -> int:
         print(json.dumps(create_attestation(project_root, args.check_id), ensure_ascii=False, indent=2))
         return 0
     report = run_gate(project_root, args.skills_dir.expanduser().resolve(), args.mode)
-    output = args.output.expanduser().resolve() if args.output else project_root / DEFAULT_REPORT_RELATIVE_PATH
-    history = args.history.expanduser().resolve() if args.history else project_root / DEFAULT_HISTORY_RELATIVE_PATH
+    configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    if configured_cache_root:
+        task_cache = project_task_cache_root(project_root, Path(configured_cache_root))
+        default_output = task_cache / "global-skill-regression" / "latest.json"
+        default_history = task_cache / "global-skill-regression" / "history.jsonl"
+    else:
+        default_output = project_root / DEFAULT_REPORT_RELATIVE_PATH
+        default_history = project_root / DEFAULT_HISTORY_RELATIVE_PATH
+    output = args.output.expanduser().resolve() if args.output else default_output
+    history = args.history.expanduser().resolve() if args.history else default_history
     write_report(output, report)
     append_history(history, report)
     print(json.dumps({"status": report["status"], **report["summary"], "report": str(output)}, ensure_ascii=False))

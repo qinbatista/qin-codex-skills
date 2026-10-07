@@ -270,7 +270,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(readme, expected)
         self.assertLess(len(template.split()), 600)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
-        for concept in ("This repository maintains eight reusable global Codex skills", "## What each skill does", "implementation steps", "Missing memory", "inside the active task", "real behavior check", "unpinned", "Project memories stay isolated"):
+        for concept in ("This repository maintains eight global Codex skills", "## What each skill does", "implementation steps", "Missing memory", "in the active task", "project testing Skills", "real affected-case checks", "unpinned", "Project memories stay isolated"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
@@ -282,7 +282,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         expected = template
         self.assertEqual(readme, expected)
         self.assertLess(len(template.splitlines()), 80)
-        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "先简述任务目标", "记忆缺失时直接跳过", "在当前任务内", "真实行为检查", "本地记忆", "项目记忆互相隔离"):
+        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "先简述任务目标", "记忆缺失时直接跳过", "在当前任务内", "项目测试 Skill", "真实受影响场景", "本地记忆", "项目记忆互相隔离"):
             self.assertIn(concept, readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
@@ -449,7 +449,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(private_state.read_text(encoding="utf-8"), "private\n")
             self.assertEqual(unrelated.read_text(encoding="utf-8"), "unrelated\n")
             self.assertFalse((target_dir.parent / "AGENTS.md").exists())
-            state_writer.assert_called_once_with(sync_global_skills.DEFAULT_STATE_FILE, "owner/repository", "published-head", "", "")
+            state_writer.assert_called_once_with(sync_global_skills.sync_state_file(), "owner/repository", "published-head", "", "")
             for forbidden in (platform, public_safety, parity, differ, hasher, self.release_gate):
                 forbidden.assert_not_called()
 
@@ -933,6 +933,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
     def test_publishable_source_paths_exclude_unrelated_or_private_content(self):
         self.assertTrue(sync_global_skills.publishable_source_path(Path("verify-skill/SKILL.md")))
+        self.assertTrue(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/SKILL.md")))
+        self.assertTrue(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/tests/test_catalog.py")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path("AGENTS.md")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path(".gitignore")))
         self.assertTrue(sync_global_skills.publishable_source_path(Path("README.zh.md")))
@@ -942,6 +944,10 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".github/workflows/other.yml")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("task-analyze-skill/local/private.json")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path("verify-skill/auth.json")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/other-skill/SKILL.md")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/../other-skill/SKILL.md")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/local/private.json")))
+        self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/auth.json")))
 
     def test_push_commits_the_source_repository_and_verifies_remote_head(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -968,12 +974,16 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             sync_global_skills.run_command(["git", "push", "-u", "origin", "master"], cwd=source_dir)
             skill_path = source_dir / "verify-skill" / "SKILL.md"
             skill_path.write_text(skill_path.read_text(encoding="utf-8") + "\nSource-first publish smoke.\n", encoding="utf-8")
+            testing_skill_path = source_dir / sync_global_skills.PROJECT_TESTING_SKILL / "SKILL.md"
+            testing_skill_path.parent.mkdir(parents=True)
+            testing_skill_path.write_text("---\nname: testing-skill\ndescription: Project test inventory.\n---\n", encoding="utf-8")
             local_map.write_text("Keep this local project map update.\n", encoding="utf-8")
             local_note = source_dir / "local note with spaces.md"
             local_note.write_text("Keep this unrelated note.\n", encoding="utf-8")
             previous_head = sync_global_skills.repository_head(source_dir)
-            state_file = sandbox / "state.json"
-            with mock.patch.object(sync_global_skills, "DEFAULT_STATE_FILE", state_file), mock.patch("builtins.print") as printer:
+            task_cache_root = source_dir / "Cache" / "temp-push-state"
+            state_file = task_cache_root / "state" / "management-skill-sync.json"
+            with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}), mock.patch("builtins.print") as printer:
                 sync_global_skills.push("fixture/repository", source_dir, "Publish source change", False)
             current_head = sync_global_skills.repository_head(source_dir)
             remote_head = sync_global_skills.remote_branch_head(source_dir, "master")
@@ -986,6 +996,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             published_names = sync_global_skills.run_command(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"], cwd=source_dir).stdout.splitlines()
             self.assertNotIn("Knowledge.md", published_names)
             self.assertNotIn(local_note.name, published_names)
+            self.assertIn(testing_skill_path.relative_to(source_dir).as_posix(), published_names)
+            self.assertEqual(sync_global_skills.run_command(["git", "show", "HEAD:.agents/skills/testing-skill/SKILL.md"], cwd=source_dir).stdout, testing_skill_path.read_text(encoding="utf-8"))
             printer.assert_any_call("Preserved excluded local changes:")
             self.assertTrue(state_file.is_file())
             real_remote_head = sync_global_skills.remote_branch_head
@@ -995,11 +1007,19 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 skill_path.write_text(skill_path.read_text(encoding="utf-8") + "\nNew unpublished change.\n", encoding="utf-8")
                 return observed
 
-            with mock.patch.object(sync_global_skills, "DEFAULT_STATE_FILE", state_file), mock.patch.object(sync_global_skills, "remote_branch_head", side_effect=modify_source_after_remote_readback):
+            with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}), mock.patch.object(sync_global_skills, "remote_branch_head", side_effect=modify_source_after_remote_readback):
                 with self.assertRaisesRegex(RuntimeError, "publishable source changes remain"):
                     sync_global_skills.push("fixture/repository", source_dir, "No new change yet", False)
             self.assertEqual(real_remote_head(source_dir, "master"), current_head)
             self.assertIn(Path("verify-skill/SKILL.md"), sync_global_skills.source_worktree_paths(source_dir))
+            unrelated_skill_path = source_dir / ".agents" / "skills" / "other-skill" / "SKILL.md"
+            unrelated_skill_path.parent.mkdir(parents=True)
+            unrelated_skill_path.write_text("---\nname: other-skill\ndescription: Unrelated.\n---\n", encoding="utf-8")
+            sync_global_skills.run_command(["git", "add", "--", str(unrelated_skill_path.relative_to(source_dir))], cwd=source_dir)
+            with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}):
+                with self.assertRaisesRegex(RuntimeError, "non-public or unrelated staged paths"):
+                    sync_global_skills.push("fixture/repository", source_dir, "must not publish unrelated skill", False)
+            self.assertEqual(real_remote_head(source_dir, "master"), current_head)
 
     def test_source_worktree_paths_preserves_unusual_names_and_rename_sources(self):
         output = ' M Knowledge.md\0?? local "quoted"\nnotes.md\0R  notes.md\0verify-skill/SKILL.md\0'
@@ -1013,7 +1033,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             source_dir.mkdir()
             sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
             sync_global_skills.run_command(["git", "init"], cwd=source_dir)
-            unsafe = source_dir / "task-analyze-skill" / "tests" / "fixtures" / "benchmark-public.json"
+            unsafe = source_dir / sync_global_skills.PROJECT_TESTING_SKILL / "tests" / "fixtures" / "benchmark-public.json"
             unsafe.parent.mkdir(parents=True, exist_ok=True)
             unsafe.write_text(json.dumps({"sample": "sk-" + "a" * 24}), encoding="utf-8")
             before_readmes = [(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")]

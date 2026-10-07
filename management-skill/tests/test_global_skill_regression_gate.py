@@ -24,6 +24,15 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             self.assertEqual(GATE.main(), 0)
         runner.assert_called_once_with(Path.cwd().resolve(), (Path.home() / ".agents" / "skills").resolve(), "source")
 
+    def test_cli_defaults_reports_to_the_configured_task_cache(self):
+        report = {"status": "pass", "summary": {}}
+        task_cache = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+        argv = ["global_skill_regression_gate.py", "check", "--project-root", str(PROJECT_ROOT), "--mode", "source"]
+        with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache)}), mock.patch.object(GATE.sys, "argv", argv), mock.patch.object(GATE, "run_gate", return_value=report), mock.patch.object(GATE, "write_report") as write_report, mock.patch.object(GATE, "append_history") as append_history, mock.patch("builtins.print"):
+            self.assertEqual(GATE.main(), 0)
+        write_report.assert_called_once_with(task_cache / "global-skill-regression" / "latest.json", report)
+        append_history.assert_called_once_with(task_cache / "global-skill-regression" / "history.jsonl", report)
+
     def test_catalog_has_unique_capabilities_and_complete_check_mapping(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)
         capability_ids = [capability["id"] for capability in catalog["capabilities"]]
@@ -39,6 +48,10 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertFalse(any(check["kind"] == "attestation" for check in catalog["checks"]))
         self.assertNotIn("lifecycle-trigger-matrix", check_ids)
         self.assertNotIn("model-capability-sync", check_ids)
+        self.assertNotIn("cache-layout-units", check_ids)
+        project_testing = next(check for check in catalog["checks"] if check["id"] == "project-testing-units")
+        self.assertEqual(project_testing["targets"], ["source"])
+        self.assertIn("project-testing-units", next(capability for capability in catalog["capabilities"] if capability["id"] == "verification")["checks"])
 
     def test_catalog_previews_steps_and_keeps_verification_in_task(self):
         policy = GATE.load_catalog(PROJECT_ROOT)["policy"]
@@ -194,14 +207,16 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 plugin_skill = deployed.parent / "plugins" / "cache" / "openai-bundled" / plugin_id / "1.0.0" / "skills" / skill_name / "SKILL.md"
                 plugin_skill.parent.mkdir(parents=True)
                 plugin_skill.write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")
-            with mock.patch.dict(os.environ):
-                os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+            expected_cache = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+            with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(expected_cache)}):
                 with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
                     workspace = roots["source"].parents[1]
-                    expected_cache = PROJECT_ROOT / "Cache" / "temp-global-skill-regression"
                     self.assertEqual(workspace.parent, expected_cache)
                     self.assertTrue((roots["source"].parent / "AGENTS.md").is_file())
                     self.assertTrue((roots["deployed"].parent / "AGENTS.md").is_file())
+                    source_testing_skill = PROJECT_ROOT / ".agents" / "skills" / "testing-skill" / "SKILL.md"
+                    self.assertEqual((roots["source"] / ".agents" / "skills" / "testing-skill" / "SKILL.md").is_file(), source_testing_skill.is_file())
+                    self.assertFalse((roots["deployed"] / ".agents" / "skills" / "testing-skill").exists())
                     self.assertFalse((roots["deployed"] / "task-analyze-skill" / "local").exists())
                     for root in roots.values():
                         candidate_cache = root.parent / "plugins" / "cache"
@@ -215,22 +230,40 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                             self.assertTrue((root / relative).is_file(), relative)
                 self.assertFalse(workspace.exists())
 
+    @unittest.skipUnless((PROJECT_ROOT / ".agents" / "skills" / "testing-skill" / "SKILL.md").is_file(), "project testing Skill is source-only")
+    def test_source_candidate_registry_check_accepts_inventory_and_rejects_missing_registry(self):
+        catalog = GATE.load_catalog(PROJECT_ROOT)
+        check = next(item for item in catalog["checks"] if item["id"] == "project-testing-units")
+        cache_root = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+        with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(cache_root)}):
+            with GATE.candidate_layouts(PROJECT_ROOT, PROJECT_ROOT, catalog["managed_skills"]) as roots:
+                healthy = GATE.run_check(check, "source", PROJECT_ROOT, PROJECT_ROOT, roots, catalog["managed_skills"])
+                self.assertEqual(healthy["status"], "pass", healthy)
+                registry = roots["source"] / ".agents" / "skills" / "testing-skill" / "references" / "test-registry.json"
+                registry.unlink()
+                invalid = GATE.run_check(check, "source", PROJECT_ROOT, PROJECT_ROOT, roots, catalog["managed_skills"])
+                self.assertEqual(invalid["status"], "fail", invalid)
+
     def test_command_cache_and_default_tempfile_stay_in_cache_and_clean_on_timeout(self):
-        code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert p.is_relative_to(Path.cwd() / 'Cache' / 'temp-global-skill-checks'); print('Ran 1 test')"
-        result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], PROJECT_ROOT, 10, {})
-        self.assertEqual(result["status"], "pass", result)
-        observed = []
+        task_cache = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+        task_cache.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="gate-check-", dir=task_cache) as project_dir:
+            project_root = Path(project_dir)
+            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert p.is_relative_to(Path.cwd() / 'Cache' / 'temp-global-skill-checks'); print('Ran 1 test')"
+            result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
+            self.assertEqual(result["status"], "pass", result)
+            observed = []
 
-        def timeout(*args, **kwargs):
-            observed.append(Path(kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"]))
-            self.assertTrue(observed[-1].is_dir())
-            self.assertTrue(observed[-1].is_relative_to(PROJECT_ROOT / "Cache" / "temp-global-skill-checks"))
-            raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+            def timeout(*args, **kwargs):
+                observed.append(Path(kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"]))
+                self.assertTrue(observed[-1].is_dir())
+                self.assertTrue(observed[-1].is_relative_to(project_root / "Cache" / "temp-global-skill-checks"))
+                raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
 
-        with mock.patch.object(GATE.subprocess, "run", side_effect=timeout):
-            with self.assertRaises(subprocess.TimeoutExpired):
-                GATE.command_result("timeout", "source", ["test"], PROJECT_ROOT, 1, {})
-        self.assertFalse(observed[0].exists())
+            with mock.patch.object(GATE.subprocess, "run", side_effect=timeout):
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    GATE.command_result("timeout", "source", ["test"], project_root, 1, {})
+            self.assertFalse(observed[0].exists())
 
     def test_candidate_cache_override_rejects_source_and_outside_project_before_writing(self):
         for cache_root in (PROJECT_ROOT / "management-skill", PROJECT_ROOT.parent / "Cache" / "temp-other", PROJECT_ROOT / "Cache" / "remote-test", PROJECT_ROOT / "Cache" / "tmp-retired"):

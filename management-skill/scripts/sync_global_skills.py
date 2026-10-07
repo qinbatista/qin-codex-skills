@@ -136,6 +136,7 @@ CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verificatio
 PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "project-memory-skill", "verify-skill", "optimization-skill", "management-skill"]
 APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
+PROJECT_TESTING_SKILL = Path(".agents") / "skills" / "testing-skill"
 GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
 GLOBAL_AGENTS_DIRECTIVE = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
 LEGACY_GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
@@ -209,18 +210,23 @@ def run_release_gate(source_dir, skills_dir, mode):
     return completed
 
 
-@contextmanager
-def temporary_workspace(prefix):
+def project_cache_root():
     cache_root = Path(os.environ.get("CODEX_PROJECT_CACHE_ROOT", DEFAULT_CACHE_ROOT)).expanduser()
     if not cache_root.is_absolute():
         cache_root = DEFAULT_PROJECT_ROOT / cache_root
     cache_root = cache_root.resolve()
     try:
-        relative = cache_root.relative_to(DEFAULT_PROJECT_ROOT / "Cache")
+        relative = cache_root.relative_to((DEFAULT_PROJECT_ROOT / "Cache").resolve())
     except ValueError as error:
         raise RuntimeError("Skill scratch must stay inside the owning project's Cache") from error
     if not relative.parts or not relative.parts[0].startswith("temp-") or relative.parts[0] == "temp-":
         raise RuntimeError("Skill scratch must use Cache/temp-<task>/")
+    return cache_root
+
+
+@contextmanager
+def temporary_workspace(prefix):
+    cache_root = project_cache_root()
     cache_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=prefix, dir=cache_root) as workspace:
         yield Path(workspace)
@@ -416,6 +422,12 @@ def read_sync_state(state_file):
     if not state_file.exists():
         return {}
     return json.loads(state_file.read_text())
+
+
+def sync_state_file():
+    if "CODEX_PROJECT_CACHE_ROOT" in os.environ:
+        return project_cache_root() / "state" / "management-skill-sync.json"
+    return DEFAULT_STATE_FILE
 
 
 def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
@@ -1385,7 +1397,7 @@ def preuse(repository, skills_dir):
 
 def record_pull_state(repository, repository_dir, skills_dir):
     try:
-        write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), "", "")
+        write_sync_state(sync_state_file(), repository, repository_head(repository_dir), "", "")
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"Installation complete; sync state could not be recorded ({error.__class__.__name__}).")
         return False
@@ -1438,7 +1450,7 @@ def push_global_snapshot(repository, skills_dir, message, dry_run):
             print(status_text or "No local-to-remote differences.")
             return
         if not status_text:
-            write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
+            write_sync_state(sync_state_file(), repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
             print("No global skill changes to push.")
             return
         run_command(["git", "add", "-A"], cwd=repository_dir)
@@ -1446,7 +1458,7 @@ def push_global_snapshot(repository, skills_dir, message, dry_run):
         run_command(["git", "checkout", "-B", branch_name], cwd=repository_dir)
         run_command(["git", "commit", "-m", message], cwd=repository_dir)
         run_command(["git", "push", "origin", f"HEAD:{branch_name}"], cwd=repository_dir)
-        write_sync_state(DEFAULT_STATE_FILE, repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
+        write_sync_state(sync_state_file(), repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
         print(f"Pushed global skills to {repository}.")
 
 
@@ -1468,13 +1480,17 @@ def publishable_source_path(relative_path):
     relative_path = Path(relative_path)
     if relative_path.as_posix() in {".gitignore", "AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml"}:
         return True
-    if not relative_path.parts or relative_path.parts[0] not in APPROVED_GLOBAL_SKILL_NAMES:
+    if relative_path.parts[:3] == PROJECT_TESTING_SKILL.parts:
+        skill_relative = Path(*relative_path.parts[3:])
+    elif relative_path.parts and relative_path.parts[0] in APPROVED_GLOBAL_SKILL_NAMES:
+        skill_relative = Path(*relative_path.parts[1:])
+    else:
         return False
-    skill_relative = Path(*relative_path.parts[1:])
     if not skill_relative.parts:
         return True
     return (
-        not any(part in EXCLUDED_PARTS for part in skill_relative.parts)
+        ".." not in skill_relative.parts
+        and not any(part in EXCLUDED_PARTS for part in skill_relative.parts)
         and not skill_relative.name.endswith(EXCLUDED_SUFFIXES)
         and not sensitive_name(skill_relative)
     )
@@ -1541,7 +1557,8 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
         run_release_gate(source_dir, skills_dir or OFFICIAL_USER_SKILLS_DIRECTORY, "release")
     skill_paths = skill_directories(source_dir)
     if not dry_run:
-        assert_public_safe(skill_paths)
+        project_testing_skill = source_dir / PROJECT_TESTING_SKILL
+        assert_public_safe([*skill_paths, project_testing_skill] if project_testing_skill.exists() or project_testing_skill.is_symlink() else skill_paths)
     readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=dry_run)
     branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
     if not branch_name:
@@ -1560,6 +1577,8 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
     if readme_changes:
         print_lines("Rendered source README files:", readme_changes)
     publication_paths = [".gitignore", "AGENTS.md", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER]
+    if (source_dir / PROJECT_TESTING_SKILL).exists():
+        publication_paths.append(str(PROJECT_TESTING_SKILL))
     if (source_dir / ".github" / "workflows" / "ci.yml").is_file():
         publication_paths.insert(3, ".github/workflows/ci.yml")
     run_command(["git", "add", "--", *publication_paths], cwd=source_dir)
@@ -1574,7 +1593,7 @@ def push(repository, source_dir, message, dry_run, skills_dir=None):
         raise RuntimeError(
             f"Remote verification failed after push: local {local_head}, remote {observed_remote_head or 'missing'}"
         )
-    write_sync_state(DEFAULT_STATE_FILE, repository, local_head, snapshot_hash(skill_paths), snapshot_hash(skill_paths))
+    write_sync_state(sync_state_file(), repository, local_head, snapshot_hash(skill_paths), snapshot_hash(skill_paths))
     remaining = source_worktree_paths(source_dir)
     unpublished = [path for path in remaining if publishable_source_path(path)]
     if unpublished:

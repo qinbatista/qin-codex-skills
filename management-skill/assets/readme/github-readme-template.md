@@ -1,6 +1,6 @@
 # qin-codex-skills
 
-This repository maintains eight reusable global Codex skills. Projects retain their own domain rules.
+This repository maintains eight global Codex skills. Projects retain domain rules.
 
 ## What each skill does
 
@@ -19,7 +19,7 @@ This repository maintains eight reusable global Codex skills. Projects retain th
 
 1. At startup or resume, show planned Skill names and purposes before tools. Ensure the Obsidian vault, then read applicable skills and exact-project memory. Missing memory is skipped.
 2. Briefly describe the objective and implementation steps, then proceed. Do not add a confirmation checkpoint unless a necessary decision or authorization is missing.
-3. Deliver requested work with a real behavior check inside the active task. Repair failures; separate changes from evidenced blockers. Update tests; clean disposable resources.
+3. Create or read project testing Skills before adding maintained test scripts; consolidate duplicate purposes and default to real affected-case checks. Deliver work with real evidence; repair failures and clean disposable resources.
 4. One authorized, unpinned projectless Ending records Obsidian memory and [audits resources](workflow-skill/references/ending-resource-audit.md) in parallel. Follow owners’ cleanup first; release disposable completed-task resources and preserve active work and user review/reuse. Unavailable memory stays pending; Ending never gates, tests or repairs the result.
 
 Every progress update and phase transition repeats Skill names and purposes, including branches. Announce new selections before use; distinguish planned and applied Skills. Finals list actual use and purposes. Report none, missing or unused honestly; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).

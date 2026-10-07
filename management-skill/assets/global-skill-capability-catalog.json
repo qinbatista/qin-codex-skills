@@ -48,6 +48,24 @@
       "timeout_seconds": 30
     },
     {
+      "id": "project-testing-units",
+      "kind": "command",
+      "targets": [
+        "source"
+      ],
+      "timeout_seconds": 120,
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        ".agents/skills/testing-skill/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
       "id": "prompt-units",
       "kind": "command",
       "targets": [
@@ -226,25 +244,6 @@
       ]
     },
     {
-      "id": "cache-layout-units",
-      "kind": "command",
-      "targets": [
-        "source",
-        "deployed"
-      ],
-      "timeout_seconds": 300,
-      "command": [
-        "{python}",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "management-skill/tests",
-        "-p",
-        "test_cache_layout.py"
-      ]
-    },
-    {
       "id": "git-diff-check",
       "kind": "command",
       "targets": [
@@ -312,7 +311,8 @@
       "function": "Use focused real behavior evidence or output readback for changed code and consequential results; require user scope for whole-project runs.",
       "checks": [
         "verify-units",
-        "workflow-validator"
+        "workflow-validator",
+        "project-testing-units"
       ]
     },
     {
@@ -382,6 +382,7 @@
       "checks": [
         "management-units",
         "public-skill-set",
+        "project-testing-units",
         "deployment-parity",
         "git-diff-check"
       ]
@@ -414,7 +415,7 @@
       "checks": [
         "workflow-units",
         "project-memory-units",
-        "cache-layout-units"
+        "management-units"
       ]
     },
     {
