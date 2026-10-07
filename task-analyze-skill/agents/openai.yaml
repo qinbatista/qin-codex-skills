@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Analyze"
-  short_description: "Carry action requests through execution and recovery"
-  default_prompt: "Use $task-analyze-skill to briefly explain the result, qualitative difficulty, known model assignments, parallel branches and real dependencies. Deliver the requested work, repair recoverable failures, and stop only for evidenced blockers after useful available routes are exhausted. Lead with delivered changes and separate verification limits. Never invent success or a model ID."
+  short_description: "Report Skill use and deliver action requests"
+  default_prompt: "Use $task-analyze-skill. Report exact Skill names and short purposes before tools at startup, in every progress update and phase transition, and in the final actual-use list, including branches. Announce new Skills before use; distinguish planned and applied use. Preview result, difficulty, known models, branches and dependencies. Deliver requested work, repair recoverable failures, and stop only for evidenced blockers. Lead with delivered changes and separate verification limits. Never invent success or a model ID."

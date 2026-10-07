@@ -31,7 +31,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         referenced = {check_id for capability in catalog["capabilities"] for check_id in capability["checks"]}
         self.assertEqual(len(capability_ids), len(set(capability_ids)))
         self.assertEqual(check_ids, referenced)
-        self.assertTrue({"action-completion", "coordination", "verification", "ending-memory", "project-isolation", "concise-code", "installation", "source-publication"}.issubset(capability_ids))
+        self.assertTrue({"skill-usage-visibility", "action-completion", "coordination", "verification", "ending-memory", "project-isolation", "concise-code", "installation", "source-publication"}.issubset(capability_ids))
         for capability in catalog["capabilities"]:
             self.assertIn(capability["owner_skill"], catalog["managed_skills"])
             self.assertTrue(capability["function"].strip())
@@ -45,6 +45,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertEqual(policy["workflow_version"], 4)
         self.assertEqual(policy["execution_preview"], "brief_goal_and_steps_before_execution")
         self.assertEqual(policy["action_request_completion"], "execute_recover_deliver_or_evidenced_blocker")
+        self.assertEqual(policy["skill_usage_reporting"], "mandatory_startup_progress_transitions_and_final_actual_use")
         self.assertEqual(policy["verification_owner"], "active_task")
         self.assertEqual(policy["ending_purpose"], "memory_and_resources")
         self.assertEqual(policy["missing_memory"], "bootstrap_vault_then_skip_absent_matching_note")

@@ -24,7 +24,8 @@
     "ending_independent_of_main_result": true,
     "ending_completion": "task_acknowledgement_and_independent_memory_resource_readbacks",
     "execution_preview": "brief_goal_and_steps_before_execution",
-    "action_request_completion": "execute_recover_deliver_or_evidenced_blocker"
+    "action_request_completion": "execute_recover_deliver_or_evidenced_blocker",
+    "skill_usage_reporting": "mandatory_startup_progress_transitions_and_final_actual_use"
   },
   "managed_skills": [
     "task-analyze-skill",
@@ -274,6 +275,17 @@
     }
   ],
   "capabilities": [
+    {
+      "id": "skill-usage-visibility",
+      "owner_skill": "task-analyze-skill",
+      "name": "Mandatory visible Skill use",
+      "function": "Show exact Skill names and short purposes before tools at startup, in every progress update and phase transition, and at completion; distinguish planned and applied use, announce new selections, and include delegated actual use.",
+      "checks": [
+        "prompt-units",
+        "management-units",
+        "global-agents-parity"
+      ]
+    },
     {
       "id": "action-completion",
       "owner_skill": "task-analyze-skill",

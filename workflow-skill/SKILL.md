@@ -9,6 +9,8 @@ Before any file write, apply the [Cache policy](references/project-cache-artifac
 
 Apply [Task Analyze](../task-analyze-skill/SKILL.md) for correct names and the opening brief: result, qualitative difficulty, known models, branch roles and dependencies. Keep it proportional to the work; a simple task needs only a sentence. Follow its [action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests) through execution, recovery and the final response.
 
+Enforce [mandatory visible Skill reporting](../task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting) at startup, every progress update and phase transition, delegation and final response. Include exact Skill names and short purposes even when unchanged; gather each branch's actual use for the parent-visible final list.
+
 For every UI or visual presentation task, including websites, PDF reports, documents, and slide presentations, read the [shared readable UI rules](references/readable-ui.md). Apply them even without code changes and when another Skill owns rendering or export.
 
 For any browser-based test, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence.

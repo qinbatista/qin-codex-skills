@@ -83,6 +83,35 @@ class PromptContractTests(unittest.TestCase):
         self.assertIn("action completion rule in `task-analyze-skill/SKILL.md`", template)
         self.assertIn("Separate verification blockers from implementation", template)
 
+    def test_skill_reporting_covers_startup_transitions_and_new_selection(self):
+        task_entry = (SKILL_ROOT.parent / "task-analyze-skill/SKILL.md").read_text(encoding="utf-8")
+        policy = task_entry.split("## Mandatory visible Skill reporting\n", 1)[1].split("\n## ", 1)[0]
+        for concept in ("every task startup and resumed turn", "before the first tool call", "exact Skill names", "one short purpose", "before reading or applying", "actually read and follow", "Every user-facing progress update", "analysis", "task decomposition", "pre-execution", "execution", "verification", "deployment", "cleanup", "even when the selection is unchanged"):
+            with self.subTest(concept=concept):
+                self.assertIn(concept, policy)
+
+    def test_skill_reporting_preserves_truth_and_delegated_actual_use(self):
+        task_entry = (SKILL_ROOT.parent / "task-analyze-skill/SKILL.md").read_text(encoding="utf-8")
+        policy = task_entry.split("## Mandatory visible Skill reporting\n", 1)[1].split("\n## ", 1)[0]
+        for concept in ("planned versus already applied", "does not prove a Skill was applied", "never private chain-of-thought", "delegated goals", "Internal messages alone do not fulfill", "Every final response", "partial, failed or paused", "all Skills actually used", "planned but unused, missing or unreadable", "Skills: none", "correct it before the next action or completion", "never waive"):
+            with self.subTest(concept=concept):
+                self.assertIn(concept, policy)
+
+    def test_skill_reporting_is_reachable_from_always_loaded_and_skill_entries(self):
+        for relative in ("workflow-skill/SKILL.md", "task-analyze-skill/assets/global-agents-entry-rule.md"):
+            with self.subTest(relative=relative):
+                entry = (SKILL_ROOT.parent / relative).read_text(encoding="utf-8")
+                self.assertIn("task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting", entry)
+        template = (SKILL_ROOT.parent / "task-analyze-skill/assets/global-agents-entry-rule.md").read_text(encoding="utf-8")
+        for concept in ("before the first tool call", "Every user-facing progress update", "Every final response", "exact Skill names", "briefly explain what each did", "even when unchanged", "unused, missing or unreadable", "Skills: none"):
+            self.assertIn(concept, template)
+        for relative in ("task-analyze-skill/agents/openai.yaml", "workflow-skill/agents/openai.yaml"):
+            with self.subTest(relative=relative):
+                metadata = (SKILL_ROOT.parent / relative).read_text(encoding="utf-8")
+                for concept in ("startup", "before tools", "every progress update and phase transition", "final actual-use list", "branches"):
+                    self.assertIn(concept, metadata)
+                self.assertLess(len(metadata), 750)
+
 
 if __name__ == "__main__":
     unittest.main()

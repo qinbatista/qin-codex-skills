@@ -1,11 +1,21 @@
 ---
 name: task-analyze-skill
-description: "Explain the goal, difficulty, known models and parallel branches, then carry action requests through implementation, recovery and focused verification."
+description: "Report exact Skill names and purposes at startup, throughout work and completion; explain goals and branches, then deliver action requests with recovery and verification."
 ---
 
 # Task Analyze
 
 Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
+
+## Mandatory visible Skill reporting
+
+At every task startup and resumed turn, before the first tool call, tell the user the exact Skill names you plan to use and one short purpose for each. This applies even to simple tasks. Announce a newly selected Skill before reading or applying it; then actually read and follow its instructions.
+
+Every user-facing progress update must include the exact names and short purposes of the Skills preparing or doing that work. Repeat this at analysis, task decomposition, pre-execution, execution, verification, deployment and cleanup transitions, even when the selection is unchanged. Use a compact line in the user's language, such as `Skills in use: workflow-skill — coordinate branches; verify-skill — check the output`. State planned versus already applied use accurately; a catalog listing, intention or name alone does not prove a Skill was applied. Report only outward actions and results, never private chain-of-thought.
+
+Carry this rule into delegated goals. Each branch reports its own selection and actual use; the parent includes branch Skill names and purposes in visible updates and collects actual use for the final response. Internal messages alone do not fulfill visible reporting.
+
+Every final response, including partial, failed or paused outcomes, must list all Skills actually used across the task and its branches, with a short description of what each did. Identify planned but unused, missing or unreadable Skills separately without claiming activation. If no Skill is applicable, explicitly say `Skills: none` with a short reason. If a disclosure was omitted, correct it before the next action or completion. Brevity and unchanged selection never waive this mandatory reporting.
 
 ## Complete action requests
 
