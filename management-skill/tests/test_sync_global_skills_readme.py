@@ -270,8 +270,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(readme, expected)
         self.assertLess(len(template.split()), 600)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
-        for concept in ("This repository maintains eight global Codex skills", "## What each skill does", "implementation steps", "Missing memory", "in the active task", "project testing Skills", "real affected-case checks", "unpinned", "Project memories stay isolated"):
+        for concept in ("This repository maintains eight global Codex skills", "## What each skill does", "implementation steps", "skip missing memory", "in the active task", "project testing Skills", "real affected-case checks", "unpinned", "Project memories stay isolated", "At completion, summarize actual Skill names, steps and reasons once"):
             self.assertIn(concept, readme)
+        self.assertNotIn("Every progress update and phase transition repeats Skill names", readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
@@ -282,8 +283,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         expected = template
         self.assertEqual(readme, expected)
         self.assertLess(len(template.splitlines()), 80)
-        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "先简述任务目标", "记忆缺失时直接跳过", "在当前任务内", "项目测试 Skill", "真实受影响场景", "本地记忆", "项目记忆互相隔离"):
+        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "先简述目标", "缺少匹配记忆时直接跳过", "在当前任务内", "项目测试 Skill", "真实受影响场景", "本地记忆", "项目记忆互相隔离", "结尾一次性汇总实际使用的 Skill"):
             self.assertIn(concept, readme)
+        self.assertNotIn("每条进度更新和阶段切换都必须重复列出 Skill", readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 

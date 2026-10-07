@@ -6,7 +6,7 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 
 | Skill | Responsibility |
 | --- | --- |
-| [Task Analyze](task-analyze-skill/SKILL.md) | Reports Skill use throughout work; requires action delivery and recovery. |
+| [Task Analyze](task-analyze-skill/SKILL.md) | Tracks Skill use for a final summary; requires action delivery and recovery. |
 | [Workflow](workflow-skill/SKILL.md) | Coordinates work and global resource cleanup, preserving active use and user review/reuse. |
 | [Code](code-skill/SKILL.md) | Guides code structure, readable implementation, and portable, quiet execution. |
 | [Prompt](prompt-skill/SKILL.md) | Shapes reusable prompts with clear inputs, constraints, and output contracts. |
@@ -17,12 +17,12 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 
 ## Task flow
 
-1. At startup or resume, show planned Skill names and purposes before tools. Ensure the Obsidian vault, then read applicable skills and exact-project memory. Missing memory is skipped.
+1. At startup or resume, ensure the Obsidian vault, then read applicable skills and exact-project memory. Track Skill use, steps and reasons internally; skip missing memory.
 2. Briefly describe the objective and implementation steps, then proceed. Do not add a confirmation checkpoint unless a necessary decision or authorization is missing.
 3. Create or read project testing Skills before adding maintained test scripts; consolidate duplicate purposes and default to real affected-case checks. Deliver work with real evidence; repair failures and clean disposable resources.
 4. One authorized, unpinned projectless Ending records Obsidian memory and [audits resources](workflow-skill/references/ending-resource-audit.md) in parallel. Follow owners’ cleanup first; release disposable completed-task resources and preserve active work and user review/reuse. Unavailable memory stays pending; Ending never gates, tests or repairs the result.
 
-Every progress update and phase transition repeats Skill names and purposes, including branches. Announce new selections before use; distinguish planned and applied Skills. Finals list actual use and purposes. Report none, missing or unused honestly; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
+Progress updates report results without repeated Skill lists. At completion, summarize actual Skill names, steps and reasons once, including branch use. Distinguish unused, missing or unreadable Skills, and explain when none applies; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
 
 One Memory.json and Knowledge.md serve each project. Recall excludes stale facts; Ending consolidates touched entries and links.
 

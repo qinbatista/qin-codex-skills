@@ -8,7 +8,7 @@
 
 | Skill | 职责 |
 | --- | --- |
-| [Task Analyze](task-analyze-skill/SKILL.md) | 全程显示 Skill 名称与用途，明确目标、完成工作并处理可恢复的失败。 |
+| [Task Analyze](task-analyze-skill/SKILL.md) | 记录 Skill 用途并在结尾汇总，明确目标、完成工作并处理可恢复的失败。 |
 | [Workflow](workflow-skill/SKILL.md) | 协调任务及全局资源清理，保留正在使用和用户审阅/复用所需的资源。 |
 | [Code](code-skill/SKILL.md) | 指导代码结构、清晰实现以及跨平台、安静的执行方式。 |
 | [Prompt](prompt-skill/SKILL.md) | 为可复用提示词明确输入、约束和输出约定。 |
@@ -19,12 +19,12 @@
 
 ## 任务流程
 
-1. 每次启动或恢复任务时，首次调用工具前先列出准备使用的 Skill 准确名称与简短用途，再读取适用的 Skill 和当前项目记忆，确定目标及所需证据；记忆缺失时直接跳过。
+1. 每次启动或恢复任务时，确保 Obsidian 记忆库可用，再读取适用的 Skill 和当前项目记忆；内部记录选用的 Skill、对应步骤和原因，缺少匹配记忆时直接跳过。
 2. 先简述目标和实现步骤，再按步骤执行；步骤发生重要变化时及时说明。
 3. 新增需维护的测试脚本前，先创建或读取项目测试 Skill，合并重复目的的测试，默认验证真实受影响场景。完成修改并在当前任务内取得真实证据；修复可恢复的失败，清理一次性任务资源。
 4. 使用一个获授权、未置顶的无项目 Ending 任务，并行整理 Obsidian 本地记忆和[审查已完成任务的资源](workflow-skill/references/ending-resource-audit.md)。先遵循资源所属 Skill 的清理流程，再补充清理遗漏的一次性 Cache、浏览器/预览/终端、进程和网络资源。保留正在使用及用户审阅或复用所需的文件和环境。记忆库不可用不阻碍清理；Ending 不阻碍、测试或修复主任务结果。
 
-每条进度更新和阶段切换都必须重复列出 Skill 准确名称与简短用途，包括并行分支。新增 Skill 先声明再使用，区分准备使用和实际应用；结束时列出全部实际用过的 Skill 及各自完成的工作。没有适用 Skill、缺失或未使用也要如实说明，不能因简短而省略[强制报告](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting)。
+进度更新只报告工作进展，无需重复列出 Skill。结尾一次性汇总实际使用的 Skill 准确名称、对应步骤和原因，包括并行分支；未使用、缺失或不可读的 Skill 另行如实说明，没有适用 Skill 时说明原因。参见[强制报告规则](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting)。
 
 项目记忆集中在每个项目的一份 Memory.json 索引和一份 Knowledge.md 总览中。按项目、模块、文件和方法精确读取，过时记录不作为当前事实。Ending 每次整理涉及的条目，并定期更新项目总结与明确的参考关联。
 

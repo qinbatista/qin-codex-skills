@@ -58,7 +58,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertEqual(policy["workflow_version"], 4)
         self.assertEqual(policy["execution_preview"], "brief_goal_and_steps_before_execution")
         self.assertEqual(policy["action_request_completion"], "execute_recover_deliver_or_evidenced_blocker")
-        self.assertEqual(policy["skill_usage_reporting"], "mandatory_startup_progress_transitions_and_final_actual_use")
+        self.assertEqual(policy["skill_usage_reporting"], "final_only_actual_use_steps_and_reasons")
         self.assertEqual(policy["verification_owner"], "active_task")
         self.assertEqual(policy["ending_purpose"], "memory_and_resources")
         self.assertEqual(policy["missing_memory"], "bootstrap_vault_then_skip_absent_matching_note")

@@ -25,7 +25,7 @@
     "ending_completion": "task_acknowledgement_and_independent_memory_resource_readbacks",
     "execution_preview": "brief_goal_and_steps_before_execution",
     "action_request_completion": "execute_recover_deliver_or_evidenced_blocker",
-    "skill_usage_reporting": "mandatory_startup_progress_transitions_and_final_actual_use"
+    "skill_usage_reporting": "final_only_actual_use_steps_and_reasons"
   },
   "managed_skills": [
     "task-analyze-skill",
@@ -277,8 +277,8 @@
     {
       "id": "skill-usage-visibility",
       "owner_skill": "task-analyze-skill",
-      "name": "Mandatory visible Skill use",
-      "function": "Show exact Skill names and short purposes before tools at startup, in every progress update and phase transition, and at completion; distinguish planned and applied use, announce new selections, and include delegated actual use.",
+      "name": "Final Skill use summary",
+      "function": "Record each actually used Skill's exact name, applied step or action, and reason during the task, including delegated use; report one truthful summary in the final response without repeating Skill lists at startup or in progress updates.",
       "checks": [
         "prompt-units",
         "management-units",
