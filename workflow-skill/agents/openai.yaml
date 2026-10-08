@@ -1,4 +1,4 @@
 interface:
   display_name: "workflow-skill"
-  short_description: "Parallel tasks, bounded waits, and resource cleanup"
-  default_prompt: "Follow Task Analyze's final Skill report: internally record exact Skills actually used, each step or action and reason, including branches; summarize them once in the final response, without routine progress lists. Preview difficulty, known models, branches and dependencies. Deliver requested work and repair recoverable failures. Start ready work promptly; bound polling. Separate submission and completion. Close unused owned tabs; preserve active work and review/reuse. Ending runs memory and resource audit in parallel."
+  short_description: "Parallel work, scoped monitoring, and resource cleanup"
+  default_prompt: "Use $workflow-skill to coordinate scoped branches and Monitor Mode, verify and deliver the requested result, repair recoverable failures, clean owned resources, and summarize exact Skills actually used with steps and reasons in one final response."

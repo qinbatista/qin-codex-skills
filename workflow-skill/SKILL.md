@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Coordinate parallel tasks, bounded waits, in-task verification and resource cleanup while preserving active work, user review and reuse."
+description: "Coordinate parallel work, Monitor Mode for long tasks or other chats, bounded verification and resource cleanup while preserving scope, active work and user review."
 ---
 
 # Workflow
@@ -24,6 +24,12 @@ Start every ready independent branch promptly through concurrent tools or subage
 Prefer events or completion notifications to polling. Give external jobs a time budget; use bounded checks with backoff while doing other ready work. If the budget expires or a client stays stale, record the exact job/target, last authoritative state and recovery action as pending, then continue independent work. The budget bounds polling for that step; it does not declare the whole task failed or excuse skipping useful implementation or recovery. Never duplicate a possibly accepted submission just because its UI is slow.
 
 A site's authoritative success receipt or acknowledgement completes the submission step and unblocks independent work. Submission accepted, backend completion verified, tab closed and scratch removed remain separate states. Make at most one immediate readback and one bounded final readback for an acknowledged action; stale UI or unavailable APIs leave verification pending instead of triggering an endless loop. Return to exact owned tabs during final cleanup and close those no longer needed. Actual output acceptance, byte verification and irreversible-action authorization still govern their real dependents.
+
+## Monitor Mode
+
+Use [Monitor Mode](references/monitor-mode.md) when the user asks to monitor another chat, or a long task needs continuing supervision and repeated verification to establish its final result. Keep the current chat as monitor and create authorized worker chats for independently owned modules in the same project. Work on the same module, function or shared mutable owner stays in this chat with subagents and coordinated writes. Duration alone does not justify a separate chat.
+
+Check every five minutes, with earlier attention for completion or actionable failures. Compare progress with the user's scope, owning Skills, exact-project memory and current evidence. Stay quiet while work is on course; send brief steering only for a concrete deviation or blocker. Stop confirmed out-of-scope work through a supported control, or request a pause and verify acknowledgement when only messaging is available. Verify the agreed final result before closing supervision.
 
 ## Execute
 
