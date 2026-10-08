@@ -124,6 +124,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         "Return resource_result with status complete, skipped or pending, origin_task_id, read_back_verified, and concise released/retained/pending details. "
         "Only actual owning-tool absence readbacks prove release. An unavailable memory vault must not block this branch. "
     ) if resource_audit else ""
+    ending_title = f"Ending Task | {root.name}"
     prompt = (
         "This is the separate Ending task for a completed result. It owns useful durable memory and the requested resource audit as independent branches. "
         + resource_prompt +
@@ -144,9 +145,9 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         "This path belongs to the same Skill installation that prepared this handoff; use it directly from the projectless task. "
         "Write memory only to the configured Obsidian vault and require same-project vault readback; resource audit scratch follows Workflow Cache policy. "
         "Return the resulting JSON with memory_result and its readback status, plus resource_result when requested. Report the branches separately. "
-        "Leave this as an ordinary unpinned task. Do not pin, move, reorder, or open it automatically; do not archive or delete it.\n\nCompleted outcome data:\n" + data
+        f"Keep the exact title {json.dumps(ending_title, ensure_ascii=False)}. Leave this as an ordinary unpinned task in recents. Never pin it; do not move, reorder, open, archive, delete or duplicate it automatically.\n\nCompleted outcome data:\n" + data
     )
-    packet["create_thread"] = {"target": {"type": "projectless"}, "title": f"Ending — {root.name} memory and cleanup" if resource_audit else f"Ending — {root.name} memory update", "prompt": prompt}
+    packet["create_thread"] = {"target": {"type": "projectless"}, "title": ending_title, "prompt": prompt}
     return packet
 
 

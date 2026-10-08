@@ -90,6 +90,12 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertIn("review or reuse", prompt)
         self.assertIn("up to ten recent chats", prompt)
         self.assertIn("unavailable memory vault must not block", prompt)
+        for resource_audit in (True, False):
+            with self.subTest(resource_audit=resource_audit):
+                handoff = self.prepare(resource_audit=resource_audit)["create_thread"]
+                self.assertEqual(handoff["title"], "Ending Task | ExampleProject")
+                self.assertEqual(set(handoff), {"target", "title", "prompt"})
+                self.assertEqual(handoff["target"], {"type": "projectless"})
 
     def test_handoff_keeps_the_installation_that_prepared_it(self):
         installed = self.project / ".agents" / "skills" / "project-memory-skill" / "scripts" / "ending_memory_launch.py"

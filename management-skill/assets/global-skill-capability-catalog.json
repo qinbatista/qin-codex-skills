@@ -319,7 +319,7 @@
       "id": "ending-memory",
       "owner_skill": "project-memory-skill",
       "name": "Ending memory branch",
-      "function": "Consolidate scoped central Obsidian knowledge and due synthesis independently of parallel resource cleanup.",
+      "function": "Launch Ending Task | <project> in ordinary recents, never pin or automatically organize it, and consolidate scoped central Obsidian knowledge and due synthesis independently of parallel resource cleanup.",
       "checks": [
         "project-memory-units",
         "verify-units"
