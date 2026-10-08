@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Analyze"
-  short_description: "Report Skill use and deliver action requests"
-  default_prompt: "Use $task-analyze-skill. Keep an internal record of exact Skills actually used, each task step or action and reason, including branches. Do not repeat Skill lists in routine progress. In the final response once, summarize actual names, steps and reasons; distinguish planned but unused or missing Skills. Preview result, difficulty, known models, branches and dependencies. Deliver requested work, repair recoverable failures, and stop only for evidenced blockers. Lead with delivered changes and separate verification limits. Never invent success or a model ID."
+  short_description: "Name tasks concisely and deliver action requests"
+  default_prompt: "Use $task-analyze-skill to name this chat for its module, system or file, deliver and verify the requested work, repair recoverable failures, and report actual Skill names, steps and reasons across branches once in the final response."

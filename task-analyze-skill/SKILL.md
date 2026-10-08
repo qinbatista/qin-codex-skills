@@ -1,6 +1,6 @@
 ---
 name: task-analyze-skill
-description: "Track Skill use during work and summarize exact names, steps and reasons once at completion; explain goals and deliver action requests with recovery and verification."
+description: "Use concise Codex task names, track Skill use for one final report, and deliver action requests with recovery and verification."
 ---
 
 # Task Analyze
@@ -26,6 +26,10 @@ Stop the affected work only for a concrete blocker that cannot be resolved throu
 Lead the final response with what was actually delivered and its verification. Distinguish implementation, testing, deployment and publication. A blocked check does not erase completed work: "Updated the function; runtime verification is blocked because the required service is unreachable" accurately reports both states. If no requested result is achievable, give the specific evidenced reason after exhausting useful routes; do not substitute a generic failure reply or a promise to try later.
 
 ## Correct task names
+
+Name Codex tasks/chats for the main module, system, component or file being worked on, using the shortest clear noun phrase, usually one to four words. Prefer the authoritative identifier when available: `WeatherManager`, `Pantone Helper`, `BOM System`. Omit action verbs, status, implementation steps and request descriptions: updating Pantone code is `Pantone Helper`, not `Pantone Helper update` or `Fix get_pantone_info parameters on the develop server`. Add a short qualifier only when needed to distinguish the target; preserve exact identifiers even when longer.
+
+Once the target is clear, set the current chat title with the available title tool and use the same rule for titles supplied when creating chats. Keep the title stable through testing, deployment and cleanup; revise it only when the main target changes. Respect an explicitly requested title. Renaming other existing chats requires the user's request; if title control is unavailable, report that limitation without claiming a rename.
 
 Resolve unambiguous spelling errors in user-supplied function, feature or task names from the owning source or authoritative context before naming the task. Use the verified correct name in titles, plans, progress, labels and results; do not echo the typo or a before/after mapping. Clarify only if the intended name is ambiguous. Preserve literal quotations, data, proper names and exact existing identifiers; show the original spelling only when an exact source reference or diagnostic requires it.
 
