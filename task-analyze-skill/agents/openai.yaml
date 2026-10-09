@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Analyze"
-  short_description: "Name tasks concisely and deliver action requests"
-  default_prompt: "Use $task-analyze-skill to name this chat for its module, system or file, deliver and verify the requested work, repair recoverable failures, and report actual Skill names, steps and reasons across branches once in the final response."
+  short_description: "Name chats once and deliver action requests"
+  default_prompt: "Use $task-analyze-skill to name this chat only if its first naming is pending, preserve established titles, deliver and verify the requested work, repair recoverable failures, and report actual Skill names, steps and reasons across branches once in the final response."

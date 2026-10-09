@@ -298,7 +298,7 @@
       "id": "coordination",
       "owner_skill": "workflow-skill",
       "name": "Scoped parallel work and Monitor Mode",
-      "function": "Coordinate independent modules through authorized worker chats and shared modules/functions through same-chat subagents; Monitor Mode checks every five minutes, stays quiet on correct progress, briefly corrects drift and verifies agreed final evidence.",
+      "function": "Preserve each chat's title after its first confirmed naming; coordinate independent modules through authorized worker chats and shared modules/functions through same-chat subagents. Monitor Mode checks every five minutes, stays quiet on correct progress, briefly corrects drift and verifies agreed final evidence.",
       "checks": [
         "workflow-units",
         "workflow-validator"

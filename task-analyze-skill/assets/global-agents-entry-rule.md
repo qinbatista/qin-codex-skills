@@ -8,7 +8,7 @@ For device testing, prefer an available authorized physical device. If none is a
 
 Read the request, related skills, and relevant existing project memory. Before detailed execution, briefly explain the result, qualitative difficulty, actual known models, parallel branch roles and real dependencies. Say inherited or model ID not exposed when appropriate; never invent model names. Use one sentence for simple work and a short branch plan when needed.
 
-Use a concise module, system, component or file name for the Codex chat title, such as `Pantone Helper`, `WeatherManager` or `BOM System`; omit action and status descriptions. Set the current title once its target is clear and keep it stable unless that target changes, respecting explicit user titles. Follow `task-analyze-skill/SKILL.md#correct-task-names`.
+Automatically name each Chat at most once, using a concise module, system, component or file name such as `Pantone Helper`, `WeatherManager` or `BOM System`. A creation-supplied or user-chosen title counts; retain the first confirmed naming record only in that Chat's own history. Later turns, resume and target changes preserve the current title; uncertain history skips automatic renaming. Only an explicit later human rename request overrides the lock without replacing the first record. Follow `task-analyze-skill/SKILL.md#correct-task-names`.
 
 Follow the action completion rule in `task-analyze-skill/SKILL.md`: carry out requested work, recover from failures while useful authorized routes remain, and lead with delivered changes. Separate verification blockers from implementation; report a concrete evidenced reason when the affected work truly cannot proceed.
 

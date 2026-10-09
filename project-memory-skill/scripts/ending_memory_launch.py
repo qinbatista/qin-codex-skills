@@ -145,7 +145,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         "This path belongs to the same Skill installation that prepared this handoff; use it directly from the projectless task. "
         "Write memory only to the configured Obsidian vault and require same-project vault readback; resource audit scratch follows Workflow Cache policy. "
         "Return the resulting JSON with memory_result and its readback status, plus resource_result when requested. Report the branches separately. "
-        f"Keep the exact title {json.dumps(ending_title, ensure_ascii=False)}. Leave this as an ordinary unpinned task in recents. Never pin it; do not move, reorder, open, archive, delete or duplicate it automatically.\n\nCompleted outcome data:\n" + data
+        f"The creation title {json.dumps(ending_title, ensure_ascii=False)} is this chat's first name. Preserve it without calling the title setter on startup or later turns, following Task Analyze's one-time naming rule. Leave this as an ordinary unpinned task in recents. Never pin it; do not move, reorder, open, archive, delete or duplicate it automatically.\n\nCompleted outcome data:\n" + data
     )
     packet["create_thread"] = {"target": {"type": "projectless"}, "title": ending_title, "prompt": prompt}
     return packet
