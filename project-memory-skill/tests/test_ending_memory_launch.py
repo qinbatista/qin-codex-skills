@@ -155,6 +155,9 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertEqual(result["conversation_cleanup"]["status"], "archived")
         self.assertEqual(result["conversation_cleanup"]["local_deletion_status"], "pending")
         self.assertEqual(result["conversation_cleanup"]["reason"], "archive_retains_local_records")
+        deleted = MODULE.record_conversation_cleanup(result, {**archive, "status": "deleted", "local_record_absent": True})
+        self.assertEqual(deleted["conversation_cleanup"]["local_deletion_status"], "complete")
+        self.assertNotIn("reason", deleted["conversation_cleanup"])
         for change in ({"thread_id": "other"}, {"host_id": "other"}, {"read_back_verified": False}, {"source": ""}, {"local_record_absent": True}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 MODULE.record_conversation_cleanup(completed, {**archive, **change})

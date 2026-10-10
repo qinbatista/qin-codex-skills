@@ -229,6 +229,7 @@ def record_conversation_cleanup(packet, removal_result):
     if status == "archived" and removal_result.get("local_record_absent") is True:
         raise ValueError("archival retains local records and cannot prove local deletion")
     updated = {**cleanup, "status": status, "local_deletion_status": "complete" if status == "deleted" else "pending"}
+    updated.pop("reason", None)
     if status != "deleted":
         updated["reason"] = "archive_retains_local_records" if status == "archived" else removal_result.get("reason") or "native_deletion_unavailable"
     return {**packet, "conversation_cleanup": updated, "removal_result": removal_result}
