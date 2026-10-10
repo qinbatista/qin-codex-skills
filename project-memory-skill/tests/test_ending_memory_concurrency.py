@@ -9,6 +9,11 @@ import unittest
 from pathlib import Path
 
 
+ARTIFACT_PROJECT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ARTIFACT_PROJECT / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
+
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "project-memory-skill" / "scripts"
 sys.path.insert(0, str(ROOT / "code-skill" / "scripts"))
@@ -47,8 +52,11 @@ def record_event(**fields):
 
 class EndingMemoryConcurrencyTests(unittest.TestCase):
     def setUp(self):
-        cache = Path(os.environ.get("ENDING_CONCURRENCY_TEST_CACHE", ROOT / "Cache/temp-ending-memory-concurrency-tests"))
+        override = os.environ.get("ENDING_CONCURRENCY_TEST_CACHE")
+        cache = validate_external_directory(override, ARTIFACT_PROJECT) if override is not None else resolve_task_artifact_root(ARTIFACT_PROJECT, "ending-memory-concurrency-tests", create=True)
         cache.mkdir(parents=True, exist_ok=True)
+        if override is None:
+            self.addCleanup(cache.rmdir)
         self.temporary = tempfile.TemporaryDirectory(prefix="temp-ending-concurrency-", dir=cache)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)

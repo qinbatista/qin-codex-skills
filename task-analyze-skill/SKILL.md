@@ -43,7 +43,7 @@ Resolve unambiguous spelling errors in user-supplied function, feature or task n
 
 ## Carry out the task
 
-Before any file write, resolve its owner under the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md). Temporary files belong only in the workspace's ignored `Cache/temp-<task>/` from their first write, including delegated work. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
+Before any file write, resolve its owner under the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Task support stays outside project directories and Codex storage from its first write, including delegated output and tool caches. Maintained source and final deliverables retain their owners; inspect exact paths and the Git index before committing.
 
 Before detailed execution, briefly tell the user the result, qualitative difficulty, actual known model assignments, and implementation steps. Say "inherited" or "model ID not exposed" when that is all the available evidence; never invent a model name. Use one sentence for simple work; for multiple branches, name each subtask, its assignee/model, what runs in parallel, and the actual join dependencies. Keep this preview concise and update material changes.
 

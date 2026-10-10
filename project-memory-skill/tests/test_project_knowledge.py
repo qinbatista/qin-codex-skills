@@ -11,6 +11,11 @@ from pathlib import Path
 from unittest import mock
 
 
+ARTIFACT_PROJECT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ARTIFACT_PROJECT / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
+
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "project-memory-skill" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -21,8 +26,11 @@ from hidden_process import hidden_process_options
 
 class ProjectKnowledgeTests(unittest.TestCase):
     def setUp(self):
-        cache = Path(os.environ.get("PROJECT_KNOWLEDGE_TEST_CACHE", ROOT / "Cache" / "temp-project-knowledge-tests"))
+        override = os.environ.get("PROJECT_KNOWLEDGE_TEST_CACHE")
+        cache = validate_external_directory(override, ARTIFACT_PROJECT) if override is not None else resolve_task_artifact_root(ARTIFACT_PROJECT, "project-knowledge-tests", create=True)
         cache.mkdir(parents=True, exist_ok=True)
+        if override is None:
+            self.addCleanup(cache.rmdir)
         self.temporary = tempfile.TemporaryDirectory(prefix="temp-project-knowledge-", dir=cache)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)

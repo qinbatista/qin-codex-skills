@@ -8,6 +8,11 @@ from pathlib import Path
 from unittest import mock
 
 
+ARTIFACT_PROJECT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ARTIFACT_PROJECT / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
+
+
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ending_memory_launch.py"
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("ending_memory_launch", SCRIPT)
@@ -17,8 +22,11 @@ SPEC.loader.exec_module(MODULE)
 
 class EndingLaunchTests(unittest.TestCase):
     def setUp(self):
-        cache = Path(os.environ.get("ENDING_LAUNCH_TEST_CACHE", Path(__file__).resolve().parents[2] / "Cache/temp-ending-launch-tests"))
+        override = os.environ.get("ENDING_LAUNCH_TEST_CACHE")
+        cache = validate_external_directory(override, ARTIFACT_PROJECT) if override is not None else resolve_task_artifact_root(ARTIFACT_PROJECT, "ending-launch-tests", create=True)
         cache.mkdir(parents=True, exist_ok=True)
+        if override is None:
+            self.addCleanup(cache.rmdir)
         self.temporary = tempfile.TemporaryDirectory(prefix="temp-ending-launch-", dir=cache)
         self.addCleanup(self.temporary.cleanup)
         self.project = Path(self.temporary.name) / "ExampleProject"

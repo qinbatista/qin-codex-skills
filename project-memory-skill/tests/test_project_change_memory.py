@@ -1,10 +1,16 @@
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+
+ARTIFACT_PROJECT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ARTIFACT_PROJECT / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "project_change_memory.py"
@@ -15,9 +21,11 @@ SPEC.loader.exec_module(MEMORY)
 
 class RetiredCodexMemoryTests(unittest.TestCase):
     def setUp(self):
-        default = Path(__file__).resolve().parents[2] / "Cache" / "temp-project-change-memory-tests"
-        self.cache = Path(os.environ.get("PROJECT_CHANGE_MEMORY_TEST_CACHE", default))
+        override = os.environ.get("PROJECT_CHANGE_MEMORY_TEST_CACHE")
+        self.cache = validate_external_directory(override, ARTIFACT_PROJECT) if override is not None else resolve_task_artifact_root(ARTIFACT_PROJECT, "project-change-memory-tests", create=True)
         self.cache.mkdir(parents=True, exist_ok=True)
+        if override is None:
+            self.addCleanup(self.cache.rmdir)
 
     def test_sprite_tamer_root_uses_declared_owner_without_matching_unregistered_clones(self):
         with mock.patch.object(MEMORY.Path, "home", return_value=Path.cwd()):

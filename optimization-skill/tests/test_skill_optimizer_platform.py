@@ -9,6 +9,11 @@ from pathlib import Path
 from unittest import mock
 
 
+ARTIFACT_PROJECT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ARTIFACT_PROJECT / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root
+
+
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "skill_optimizer.py"
 SPECIFICATION = importlib.util.spec_from_file_location("skill_optimizer_platform_test", SCRIPT_PATH)
 OPTIMIZER = importlib.util.module_from_spec(SPECIFICATION)
@@ -17,8 +22,12 @@ SPECIFICATION.loader.exec_module(OPTIMIZER)
 
 
 class SkillOptimizerPlatformTests(unittest.TestCase):
+    def setUp(self):
+        self.cache = resolve_task_artifact_root(ARTIFACT_PROJECT, "skill-optimizer-platform-tests", create=True)
+        self.addCleanup(self.cache.rmdir)
+
     def test_collect_skills_reads_only_direct_visible_skill_children(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary_directory:
             skills_root = Path(temporary_directory)
             for directory, name in ((skills_root, "active-skill"), (skills_root / "Cache", "cached-skill"), (skills_root / ".scratch", "hidden-skill"), (skills_root / "fixtures", "nested-skill")):
                 skill_dir = directory / name
@@ -30,7 +39,7 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
         self.assertEqual(["active-skill"], [skill.name for skill in skills])
 
     def test_command_paths_resolve_source_relative_global_skill_prefixes(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary_directory:
             repo_root = Path(temporary_directory)
             skill_dir = repo_root / "optimization-skill"
             skill_dir.mkdir()
@@ -46,7 +55,7 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
                     self.assertEqual([], errors)
 
     def test_command_paths_preserve_explicit_relative_and_absolute_paths(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary_directory:
             repo_root = Path(temporary_directory)
             skill_dir = repo_root / "sample-skill"
             skill_dir.mkdir()
@@ -71,10 +80,8 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
         self.assertIn("duplicate", warnings[0])
 
     def test_audit_cli_operation_hints_do_not_require_skill_changes(self):
-        cache = SCRIPT_PATH.parents[2] / "Cache"
-        cache.mkdir(exist_ok=True)
         cases = [("operation-only", "Open the browser and check the result file.\n", 0, False), ("duplicate-policy", "- Preserve source ownership during updates.\n- Preserve source ownership during updates.\n", 0, True), ("broken-reference", "Read [required context](missing.md).\n", 1, False)]
-        with tempfile.TemporaryDirectory(prefix="temp-authoring-audit-", dir=cache) as directory:
+        with tempfile.TemporaryDirectory(prefix="temp-authoring-audit-", dir=self.cache) as directory:
             for name, body, exit_code, recommended in cases:
                 with self.subTest(name=name):
                     skill = Path(directory) / name
@@ -101,7 +108,7 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
         self.assertIn("long description", verbose_output.getvalue())
 
     def test_applescript_returns_clear_unsupported_error_off_macos(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary_directory:
             script_path = Path(temporary_directory) / "sample.applescript"
             script_path.write_text("return 1\n", encoding="utf-8")
             with mock.patch.object(OPTIMIZER.sys, "platform", "win32"), mock.patch.object(OPTIMIZER.subprocess, "run") as run:
@@ -110,7 +117,7 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_shell_validation_resolves_bash_before_launch(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary_directory:
             script_path = Path(temporary_directory) / "sample.sh"
             script_path.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
             completed = subprocess.CompletedProcess([], 0, "", "")

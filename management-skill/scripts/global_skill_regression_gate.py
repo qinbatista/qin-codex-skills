@@ -18,12 +18,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
 
 
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
 PROJECT_TESTING_SKILL_RELATIVE_PATH = Path(".agents/skills/testing-skill")
-DEFAULT_REPORT_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/latest.json")
-DEFAULT_HISTORY_RELATIVE_PATH = Path("Cache/remote-test/global-skill-regression/history.jsonl")
+DEFAULT_REPORT_RELATIVE_PATH = Path("global-skill-regression/latest.json")
+DEFAULT_HISTORY_RELATIVE_PATH = Path("global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
 CHECKOUT_NEUTRAL_TEXT_SUFFIXES = {".json", ".md", ".py", ".svg", ".yaml", ".yml"}
@@ -158,18 +160,7 @@ def copy_required_plugin_contracts(plugin_cache: Path, candidate_cache: Path) ->
 
 
 def project_task_cache_root(project_root: Path, cache_root: Path) -> Path:
-    project_root = project_root.expanduser().resolve()
-    cache_root = cache_root.expanduser()
-    if not cache_root.is_absolute():
-        cache_root = project_root / cache_root
-    cache_root = cache_root.resolve()
-    try:
-        relative = cache_root.relative_to(project_root / "Cache")
-    except ValueError as error:
-        raise RuntimeError("Skill gate scratch must stay inside the owning project's Cache") from error
-    if not relative.parts or not relative.parts[0].startswith("temp-") or relative.parts[0] == "temp-":
-        raise RuntimeError("Skill gate scratch must use an exact Cache/temp-<task>/ directory")
-    return cache_root
+    return validate_external_directory(cache_root, project_root)
 
 
 @contextmanager
@@ -180,7 +171,7 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
     if not text.startswith(directive):
         raise RuntimeError("global AGENTS asset is missing its explicit-install directive")
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
-    default_cache_root = project_root / "Cache" / "temp-global-skill-regression"
+    default_cache_root = resolve_task_artifact_root(project_root, "global-skill-regression-candidates")
     cache_root = project_task_cache_root(project_root, Path(configured_cache_root) if configured_cache_root else default_cache_root)
     cache_root.mkdir(parents=True, exist_ok=True)
     structural_agents_path = project_root / "AGENTS.md"
@@ -237,14 +228,17 @@ def sanitized_tail(text: str, replacements: dict[str, str]) -> str:
 
 def command_result(check_id: str, target: str, command: list[str], root: Path, timeout_seconds: int, replacements: dict[str, str]) -> dict[str, object]:
     environment = os.environ.copy()
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     if os.name == "nt":
         environment["PYTHONUTF8"] = "1"
         environment["PYTHONIOENCODING"] = "utf-8"
-    cache_root = project_task_cache_root(root, root / "Cache" / "temp-global-skill-checks")
+    cache_root = resolve_task_artifact_root(root, f"global-skill-check:{target}:{check_id}")
     cache_root.mkdir(parents=True, exist_ok=True)
     try:
         with tempfile.TemporaryDirectory(prefix="check-", dir=cache_root) as temporary_cache:
             for variable in ("CODEX_PROJECT_CACHE_ROOT", "TMP", "TEMP", "TMPDIR"):
+                environment[variable] = temporary_cache
+            for variable in ("ENDING_MEMORY_TEST_CACHE", "ENDING_CONCURRENCY_TEST_CACHE", "ENDING_LAUNCH_TEST_CACHE", "PROJECT_CHANGE_MEMORY_TEST_CACHE", "PROJECT_KNOWLEDGE_TEST_CACHE", "TASK_RESOURCE_LEDGER_TEST_CACHE", "ENDING_RESOURCE_AUDIT_TEST_CACHE"):
                 environment[variable] = temporary_cache
             completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())
     finally:
@@ -577,10 +571,13 @@ def main() -> int:
         default_output = task_cache / "global-skill-regression" / "latest.json"
         default_history = task_cache / "global-skill-regression" / "history.jsonl"
     else:
-        default_output = project_root / DEFAULT_REPORT_RELATIVE_PATH
-        default_history = project_root / DEFAULT_HISTORY_RELATIVE_PATH
-    output = args.output.expanduser().resolve() if args.output else default_output
-    history = args.history.expanduser().resolve() if args.history else default_history
+        task_cache = resolve_task_artifact_root(project_root, "global-skill-regression-reports")
+        default_output = task_cache / DEFAULT_REPORT_RELATIVE_PATH
+        default_history = task_cache / DEFAULT_HISTORY_RELATIVE_PATH
+    output = args.output if args.output else default_output
+    history = args.history if args.history else default_history
+    validate_external_directory(output.parent, project_root)
+    validate_external_directory(history.parent, project_root)
     write_report(output, report)
     append_history(history, report)
     print(json.dumps({"status": report["status"], **report["summary"], "report": str(output)}, ensure_ascii=False))

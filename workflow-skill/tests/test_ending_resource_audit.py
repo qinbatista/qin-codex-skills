@@ -1,4 +1,6 @@
 import sys
+import copy
+import json
 import tempfile
 import time
 import unittest
@@ -7,6 +9,7 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
+import task_artifact_paths as ARTIFACTS
 import ending_resource_audit as AUDIT
 import task_resource_ledger as LEDGER
 
@@ -16,16 +19,26 @@ HASH = "a" * 64
 
 class EndingResourceAuditTests(unittest.TestCase):
     def setUp(self):
-        cache = SCRIPTS.parents[1] / "Cache"
-        cache.mkdir(exist_ok=True)
-        self.temporary = tempfile.TemporaryDirectory(prefix="temp-ending-resource-tests-", dir=cache)
+        self.scratch_parent = ARTIFACTS.resolve_task_artifact_root(SCRIPTS.parents[1], "ending-audit-tests", create=True)
+        self.temporary = tempfile.TemporaryDirectory(prefix="c-", dir=self.scratch_parent)
         self.addCleanup(self.temporary.cleanup)
-        self.project = Path(self.temporary.name)
+        fixture = Path(self.temporary.name)
+        self.project = fixture / "p"
+        self.project.mkdir()
+        self.artifact_base = fixture / "a"
         self.task_id = "finished-task"
-        self.task_root = "Cache/temp-owned-test"
+        self.task_root = ARTIFACTS.resolve_task_artifact_root(self.project, self.task_id, artifact_root=self.artifact_base).as_posix()
         self.ledger = LEDGER.new_ledger(self.project, self.task_id, self.task_root)
         self.ledger_path = self.project / self.task_root / LEDGER.LEDGER_NAME
         self.readback = {"task_id": self.task_id, "state": "complete", "purpose": "Completed website and package test", "observed_at": time.time(), "source": "owning-chat final outcome and current readback"}
+
+    def tearDown(self):
+        self.temporary.cleanup()
+        try:
+            self.scratch_parent.rmdir()
+            self.scratch_parent.parent.rmdir()
+        except OSError:
+            pass
 
     def file(self, resource_id, *, scope="main"):
         path = f"{self.task_root}/{resource_id}.txt"
@@ -149,27 +162,56 @@ class EndingResourceAuditTests(unittest.TestCase):
     def test_bounded_inspection_preserves_unknown_roots_and_retained_cache(self):
         target = self.file("output")
         unknown = self.project / "Cache" / "tmp-old-unknown"
-        unknown.mkdir()
+        unknown.mkdir(parents=True)
         retained = self.project / "Cache" / "remote-review"
         retained.mkdir()
         (retained / "image.png").write_bytes(b"user image")
-        result = AUDIT.inspect_cache(self.project)
+        result = AUDIT.inspect_cache(self.project, artifact_root=self.artifact_base)
         self.assertEqual(len(result["roots"]), 2)
         self.assertTrue(any(item.get("action") == "preserve_unknown" for item in result["roots"]))
         self.assertTrue(target.exists())
         self.assertTrue((retained / "image.png").exists())
-        self.assertTrue(AUDIT.inspect_cache(self.project, limit=1)["limit_reached"])
+        self.assertTrue(AUDIT.inspect_cache(self.project, artifact_root=self.artifact_base, limit=1)["limit_reached"])
         with self.assertRaises(ValueError):
-            AUDIT.inspect_cache(self.project, limit=65)
+            AUDIT.inspect_cache(self.project, artifact_root=self.artifact_base, limit=65)
+
+    def test_legacy_cache_ledgers_are_readable_but_apply_preserves_all_bytes(self):
+        legacy = copy.deepcopy(self.ledger)
+        legacy["schema_version"] = LEDGER.LEGACY_SCHEMA_VERSION
+        legacy["task_root"] = "Cache/temp-legacy"
+        legacy_root = self.project / legacy["task_root"]
+        legacy_root.mkdir(parents=True)
+        legacy["binding"] = {"project_fingerprint": LEDGER._fingerprint(self.project.resolve()), "cache_root_identity": LEDGER._binding_identity(self.project / "Cache"), "task_root_identity": LEDGER._binding_identity(legacy_root)}
+        marker = legacy_root / LEDGER.MARKER_NAME
+        marker.write_text(json.dumps(LEDGER._marker_payload(legacy)), encoding="utf-8")
+        legacy["binding"]["marker_identity"] = LEDGER._stat_identity(marker.lstat())
+        ledger_path = legacy_root / LEDGER.LEDGER_NAME
+        ledger_path.write_text(json.dumps(legacy), encoding="utf-8")
+        retained = legacy_root / "recoverable-input.bin"
+        retained.write_bytes(b"legacy bytes stay with original owner")
+        before = ledger_path.read_bytes()
+        LEDGER.load_ledger(ledger_path)
+        inspected = AUDIT.inspect_cache(self.project, artifact_root=self.artifact_base)
+        self.assertTrue(any(item.get("read_only") and item["task_root"] == legacy["task_root"] for item in inspected["roots"]))
+        result = AUDIT.audit_ledger(self.project, legacy["task_root"], self.readback, [], apply=True)
+        self.assertEqual(result["status"], "pending")
+        self.assertFalse(result["applied"])
+        self.assertIn("original owner", result["finalization_reason"])
+        self.assertEqual(ledger_path.read_bytes(), before)
+        self.assertEqual(retained.read_bytes(), b"legacy bytes stay with original owner")
+        self.assertFalse(ledger_path.with_name(f"{LEDGER.LEDGER_NAME}.lock").exists())
+        with self.assertRaisesRegex(ValueError, "read-only"):
+            LEDGER.save_ledger(ledger_path, legacy)
 
     def test_inspection_and_release_never_traverse_symlink_roots(self):
         target = self.file("output")
         linked = self.project / "Cache" / "temp-linked"
+        linked.parent.mkdir()
         try:
             linked.symlink_to(self.ledger_path.parent, target_is_directory=True)
         except OSError:
             self.skipTest("directory symlinks unavailable")
-        result = AUDIT.inspect_cache(self.project)
+        result = AUDIT.inspect_cache(self.project, artifact_root=self.artifact_base)
         self.assertTrue(any(item.get("action") == "preserve_unknown" and item["task_root"] == "Cache/temp-linked" for item in result["roots"]))
         with self.assertRaises(ValueError):
             AUDIT.audit_ledger(self.project, "Cache/temp-linked", self.readback, [self.decision("output")], apply=True)

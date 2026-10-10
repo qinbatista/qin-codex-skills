@@ -20,8 +20,16 @@ import uuid
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterator
 
+from task_artifact_paths import (
+    _absolute_path,
+    _check_ancestors,
+    project_artifact_directory,
+    resolve_task_artifact_root,
+    validate_external_directory,
+)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+LEGACY_SCHEMA_VERSION = 2
 MARKER_NAME = ".codex-task-resource-owner.json"
 LEDGER_NAME = ".codex-task-resource-ledger.json"
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -97,6 +105,10 @@ def _relative_path(value: Any) -> str:
 
 
 def _task_root_path(value: Any) -> str:
+    if isinstance(value, str) and Path(value).is_absolute():
+        path = _absolute_path(value, "task_root")
+        _check_ancestors(path)
+        return path.resolve(strict=False).as_posix()
     value = _relative_path(value)
     parts = value.split("/")
     if len(parts) != 2 or parts[0] != "Cache" or not parts[1].startswith("temp-"):
@@ -108,6 +120,13 @@ def _task_root_path(value: Any) -> str:
 
 
 def _disposable_path(value: Any, task_root: str) -> str:
+    if Path(task_root).is_absolute():
+        value = _require_text(value, "path")
+        path = _absolute_path(value, "disposable path")
+        task = Path(task_root)
+        if path == task or task not in path.parents:
+            _fail("disposable path must be strictly below this ledger's exact task_root")
+        return path.as_posix()
     value = _relative_path(value)
     root_parts = PurePosixPath(task_root).parts
     value_parts = PurePosixPath(value).parts
@@ -204,6 +223,8 @@ def _same_object_identity(expected: dict[str, Any], observed: dict[str, Any]) ->
 
 
 def _absolute(root: Path, relative_path: str) -> Path:
+    if Path(relative_path).is_absolute():
+        return Path(relative_path)
     return root.joinpath(*PurePosixPath(relative_path).parts)
 
 
@@ -233,7 +254,7 @@ def _binding_identity(path: Path) -> dict[str, int]:
 
 def _marker_payload(ledger: dict[str, Any]) -> dict[str, Any]:
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": ledger["schema_version"],
         "ledger_id": ledger["ledger_id"],
         "owner_task_key": ledger["owner_task_key"],
         "task_root_identity": ledger["binding"]["task_root_identity"],
@@ -243,22 +264,29 @@ def _marker_payload(ledger: dict[str, Any]) -> dict[str, Any]:
 def new_ledger(
     project_root: str | Path,
     task_id: str,
-    task_root: str,
+    task_root: str | None = None,
     *,
     role: str = "producer",
+    artifact_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Create an exclusive task root and return its bound in-memory ledger."""
     if role != "producer":
         _fail("new task resource ledgers belong to the active producer")
-    task_root = _task_root_path(task_root)
     root = _canonical_root(project_root)
-    cache_root = root / "Cache"
-    if cache_root.exists() or cache_root.is_symlink():
-        _safe_lstat(cache_root, directory=True)
-    else:
-        cache_root.mkdir()
-    task_root_absolute = _absolute(root, task_root)
+    if task_root is not None:
+        task_root = _task_root_path(task_root)
+        if not Path(task_root).is_absolute():
+            _fail("new task roots must be external absolute directories; legacy Cache roots are read-only")
+        if artifact_root is None:
+            artifact_root = Path(task_root).parent.parent
+    expected = resolve_task_artifact_root(root, task_id, artifact_root=artifact_root)
+    if task_root is not None and Path(task_root) != expected:
+        _fail("task_root must match the resolved external project and task identity")
+    project_artifact_directory(root, artifact_root=expected.parent.parent, create=True)
+    task_root_absolute = expected
+    task_root = expected.as_posix()
     task_root_absolute.mkdir(exist_ok=False)
+    validate_external_directory(task_root_absolute, root)
     ledger = {
         "schema_version": SCHEMA_VERSION,
         "ledger_id": uuid.uuid4().hex,
@@ -267,7 +295,9 @@ def new_ledger(
         "task_root": task_root,
         "binding": {
             "project_fingerprint": _fingerprint(root),
-            "cache_root_identity": _binding_identity(cache_root),
+            "artifact_base": expected.parent.parent.as_posix(),
+            "artifact_base_identity": _binding_identity(expected.parent.parent),
+            "project_artifact_identity": _binding_identity(expected.parent),
             "task_root_identity": _binding_identity(task_root_absolute),
         },
         "next_sequence": 1,
@@ -286,7 +316,7 @@ def new_ledger(
 
 
 def validate_ledger(ledger: Any) -> dict[str, Any]:
-    if not isinstance(ledger, dict) or ledger.get("schema_version") != SCHEMA_VERSION:
+    if not isinstance(ledger, dict) or ledger.get("schema_version") not in {SCHEMA_VERSION, LEGACY_SCHEMA_VERSION}:
         _fail("unsupported task resource ledger")
     if not isinstance(ledger.get("ledger_id"), str) or not re.fullmatch(r"[0-9a-f]{32}", ledger["ledger_id"]):
         _fail("ledger_id is invalid")
@@ -294,11 +324,16 @@ def validate_ledger(ledger: Any) -> dict[str, Any]:
         _fail("owner_task_key is invalid")
     if ledger.get("owner_role") not in {"producer", "ending"}:
         _fail("owner_role is invalid")
-    _task_root_path(ledger.get("task_root"))
+    task_root = _task_root_path(ledger.get("task_root"))
+    if (ledger["schema_version"] == SCHEMA_VERSION) != Path(task_root).is_absolute():
+        _fail("ledger schema and task_root location disagree")
     binding = ledger.get("binding")
     if not isinstance(binding, dict) or not DIGEST_RE.fullmatch(str(binding.get("project_fingerprint", ""))):
         _fail("project binding is invalid")
-    for identity_name in ("cache_root_identity", "task_root_identity"):
+    identity_names = ("cache_root_identity", "task_root_identity") if ledger["schema_version"] == LEGACY_SCHEMA_VERSION else ("artifact_base_identity", "project_artifact_identity", "task_root_identity")
+    if ledger["schema_version"] == SCHEMA_VERSION:
+        _absolute_path(binding.get("artifact_base", ""), "artifact_base")
+    for identity_name in identity_names:
         identity = binding.get(identity_name)
         if not isinstance(identity, dict) or not {"device", "inode", "mode"}.issubset(identity):
             _fail(f"{identity_name} is invalid")
@@ -353,12 +388,13 @@ def validate_ledger(ledger: Any) -> dict[str, Any]:
             if dependency is not None and (durable_owner is None or dependency != _identity_digest(durable_owner)):
                 _fail("consumer durable dependency does not match the exact owner receipt")
         if resource["kind"] == "path":
-            _relative_path(resource.get("path"))
             if resource.get("disposable"):
                 _disposable_path(resource["path"], ledger["task_root"])
                 manifest_digest = resource.get("manifest_digest")
                 if manifest_digest is not None and not DIGEST_RE.fullmatch(str(manifest_digest)):
                     _fail("path manifest digest is invalid")
+            else:
+                _relative_path(resource.get("path"))
         else:
             _validate_runtime_identity(resource["kind"], resource.get("identity"), ledger["owner_task_key"])
             release_token = resource.get("release_token")
@@ -371,15 +407,33 @@ def validate_ledger(ledger: Any) -> dict[str, Any]:
     return ledger
 
 
-def _verify_binding(ledger: dict[str, Any], project_root: str | Path) -> Path:
+def _require_writable(ledger: dict[str, Any]) -> None:
+    if ledger["schema_version"] != SCHEMA_VERSION:
+        _fail("legacy Cache ledgers are read-only; exact migration by the original owner is required")
+
+
+def _verify_binding(ledger: dict[str, Any], project_root: str | Path, *, read_only: bool = False) -> Path:
     validate_ledger(ledger)
+    if not read_only:
+        _require_writable(ledger)
     root = _canonical_root(project_root)
     if _fingerprint(root) != ledger["binding"]["project_fingerprint"]:
         _fail("ledger is bound to a different project root")
-    cache_root = root / "Cache"
     task_root = _absolute(root, ledger["task_root"])
-    if not _same_identity(ledger["binding"]["cache_root_identity"], _binding_identity(cache_root)):
-        _fail("Cache root identity changed")
+    if ledger["schema_version"] == LEGACY_SCHEMA_VERSION:
+        cache_root = root / "Cache"
+        if not _same_identity(ledger["binding"]["cache_root_identity"], _binding_identity(cache_root)):
+            _fail("Cache root identity changed")
+    else:
+        base = ledger["binding"]["artifact_base"]
+        project_directory = project_artifact_directory(root, artifact_root=base)
+        expected = project_directory / f"t-{ledger['owner_task_key']}"
+        if task_root != expected:
+            _fail("external task root does not match the bound project and task identity")
+        validate_external_directory(task_root, root)
+        for name, directory in (("artifact_base_identity", Path(base)), ("project_artifact_identity", project_directory)):
+            if not _same_identity(ledger["binding"][name], _binding_identity(directory)):
+                _fail("external artifact owner directory identity changed")
     if not _same_identity(ledger["binding"]["task_root_identity"], _binding_identity(task_root)):
         _fail("task root identity changed")
     marker = task_root / MARKER_NAME
@@ -395,6 +449,7 @@ def _verify_binding(ledger: dict[str, Any], project_root: str | Path) -> Path:
 
 
 def _resource(ledger: dict[str, Any], resource_id: str) -> dict[str, Any]:
+    _require_writable(ledger)
     resource_id = _identifier(resource_id, "resource id")
     for resource in validate_ledger(ledger)["resources"]:
         if resource["id"] == resource_id:
@@ -405,6 +460,7 @@ def _resource(ledger: dict[str, Any], resource_id: str) -> dict[str, Any]:
 def _new_resource(
     ledger: dict[str, Any], resource_id: str, kind: str, purpose: str, scope: str
 ) -> dict[str, Any]:
+    _require_writable(ledger)
     validate_ledger(ledger)
     resource_id = _identifier(resource_id, "resource id")
     scope = _identifier(scope, "scope")
@@ -999,7 +1055,13 @@ def load_ledger(path: str | Path) -> dict[str, Any]:
 
 def save_ledger(path: str | Path, ledger: dict[str, Any], *, assume_locked: bool = False) -> None:
     ledger = validate_ledger(ledger)
+    _require_writable(ledger)
     destination = Path(path)
+    if destination.resolve(strict=False) != Path(ledger["task_root"]) / LEDGER_NAME:
+        _fail("ledger must be written only inside its exact external task_root")
+    _check_ancestors(destination.parent)
+    if not _same_identity(ledger["binding"]["task_root_identity"], _binding_identity(destination.parent)):
+        _fail("task root identity changed before ledger write")
 
     def write() -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1033,8 +1095,8 @@ def save_ledger(path: str | Path, ledger: dict[str, Any], *, assume_locked: bool
             write()
 
 
-def _assert_ledger_location(project_root: str | Path, ledger_path: Path, ledger: dict[str, Any]) -> None:
-    root = _verify_binding(ledger, project_root)
+def _assert_ledger_location(project_root: str | Path, ledger_path: Path, ledger: dict[str, Any], *, read_only: bool = False) -> None:
+    root = _verify_binding(ledger, project_root, read_only=read_only)
     expected = _absolute(root, ledger["task_root"]) / LEDGER_NAME
     if ledger_path.expanduser().resolve(strict=False) != expected:
         _fail(f"ledger file must use {LEDGER_NAME} inside its exact task root")

@@ -5,6 +5,8 @@ description: "Maintain centralized Obsidian project knowledge, recall exact proj
 
 # Project Memory
 
+Before support/probe writes, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Isolate them outside projects and Codex storage from the first write; durable memory keeps its configured Obsidian owner.
+
 Memory reduces repeated explanations. Preserve project problems and user struggles/corrections, attempted solutions, last verified state and date, actual results and evidence, unresolved items and next steps, alongside architecture, ownership, contracts, decisions and preferences in one project knowledge store. Capture useful established outcomes at completion, failure or pause; retain the actual blocker, partial or failed result and next step without inventing proof. Use the existing reason, result, decisions, verification and risks fields; do not invent whole-project status from a passing check. Read [project knowledge](references/project-knowledge.md) for scoped recall, addressable entries, and consolidation.
 
 ## Recall before work
@@ -41,5 +43,5 @@ Shared facts stay under their explicit vault owner. An authorized durable operat
 - Keep project-specific decisions in that project. Only explicitly general preferences belong in shared memory.
 - Save concise facts and project-relative files, not raw prompts, transcripts, reasoning, credentials, absolute host paths, or other projects' content.
 - Do not hand-edit event stores. Read back the saved result from Obsidian before claiming it is saved.
-- Preserve unrelated records and useful history. Put probes in an explicit isolated store under `Cache/temp-<task>/`; never test against production memory.
+- Preserve unrelated records and useful history. Put probes in an isolated external task store under the [artifact policy](../workflow-skill/references/project-cache-artifact-policy.md); never test against production memory.
 - Never put durable memory, dated project outcomes, pending memory queues, coverage records, or memory location pointers in `CODEX_HOME`, `~/.codex`, project `Cache`, or project `AGENTS.md`/Skill files. Those project files contain stable rules and workflow instructions only.

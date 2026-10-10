@@ -26,7 +26,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
 
     def test_cli_defaults_reports_to_the_configured_task_cache(self):
         report = {"status": "pass", "summary": {}}
-        task_cache = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+        task_cache = GATE.resolve_task_artifact_root(PROJECT_ROOT, "testing-skill")
         argv = ["global_skill_regression_gate.py", "check", "--project-root", str(PROJECT_ROOT), "--mode", "source"]
         with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache)}), mock.patch.object(GATE.sys, "argv", argv), mock.patch.object(GATE, "run_gate", return_value=report), mock.patch.object(GATE, "write_report") as write_report, mock.patch.object(GATE, "append_history") as append_history, mock.patch("builtins.print"):
             self.assertEqual(GATE.main(), 0)
@@ -207,7 +207,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 plugin_skill = deployed.parent / "plugins" / "cache" / "openai-bundled" / plugin_id / "1.0.0" / "skills" / skill_name / "SKILL.md"
                 plugin_skill.parent.mkdir(parents=True)
                 plugin_skill.write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")
-            expected_cache = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+            expected_cache = Path(temp_dir) / "external-candidates"
             with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(expected_cache)}):
                 with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
                     workspace = roots["source"].parents[1]
@@ -234,7 +234,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
     def test_source_candidate_registry_check_accepts_inventory_and_rejects_missing_registry(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)
         check = next(item for item in catalog["checks"] if item["id"] == "project-testing-units")
-        cache_root = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+        cache_root = GATE.resolve_task_artifact_root(PROJECT_ROOT, "testing-skill")
         with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(cache_root)}):
             with GATE.candidate_layouts(PROJECT_ROOT, PROJECT_ROOT, catalog["managed_skills"]) as roots:
                 healthy = GATE.run_check(check, "source", PROJECT_ROOT, PROJECT_ROOT, roots, catalog["managed_skills"])
@@ -244,12 +244,12 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 invalid = GATE.run_check(check, "source", PROJECT_ROOT, PROJECT_ROOT, roots, catalog["managed_skills"])
                 self.assertEqual(invalid["status"], "fail", invalid)
 
-    def test_command_cache_and_default_tempfile_stay_in_cache_and_clean_on_timeout(self):
-        task_cache = PROJECT_ROOT / "Cache" / "temp-testing-skill"
+    def test_command_tempfile_stays_external_and_cleans_on_timeout(self):
+        task_cache = GATE.resolve_task_artifact_root(PROJECT_ROOT, "testing-skill")
         task_cache.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="gate-check-", dir=task_cache) as project_dir:
             project_root = Path(project_dir)
-            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert p.is_relative_to(Path.cwd() / 'Cache' / 'temp-global-skill-checks'); print('Ran 1 test')"
+            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert not p.is_relative_to(Path.cwd()); print('Ran 1 test')"
             result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
             self.assertEqual(result["status"], "pass", result)
             observed = []
@@ -257,7 +257,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             def timeout(*args, **kwargs):
                 observed.append(Path(kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"]))
                 self.assertTrue(observed[-1].is_dir())
-                self.assertTrue(observed[-1].is_relative_to(project_root / "Cache" / "temp-global-skill-checks"))
+                self.assertFalse(observed[-1].is_relative_to(project_root))
                 raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
 
             with mock.patch.object(GATE.subprocess, "run", side_effect=timeout):
@@ -265,12 +265,12 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                     GATE.command_result("timeout", "source", ["test"], project_root, 1, {})
             self.assertFalse(observed[0].exists())
 
-    def test_candidate_cache_override_rejects_source_and_outside_project_before_writing(self):
-        for cache_root in (PROJECT_ROOT / "management-skill", PROJECT_ROOT.parent / "Cache" / "temp-other", PROJECT_ROOT / "Cache" / "remote-test", PROJECT_ROOT / "Cache" / "tmp-retired"):
+    def test_candidate_cache_override_rejects_project_codex_and_tokens_before_writing(self):
+        for cache_root in (PROJECT_ROOT / "management-skill", Path.home() / ".codex" / "scratch", PROJECT_ROOT / "Cache" / "remote-test", Path("%SystemDrive%/tmp")):
             with self.subTest(cache_root=cache_root):
                 with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(cache_root)}):
                     with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid cache must fail before writing")):
-                        with self.assertRaisesRegex(RuntimeError, "Skill gate scratch must"):
+                        with self.assertRaises(ValueError):
                             with GATE.candidate_layouts(PROJECT_ROOT, PROJECT_ROOT, []):
                                 self.fail("invalid cache was accepted")
 

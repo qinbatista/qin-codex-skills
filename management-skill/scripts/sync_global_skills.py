@@ -16,6 +16,9 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
+
 
 # Kept self-contained because this installer also runs before skills are downloaded.
 def hidden_process_options(*, creationflags=0, startupinfo=None):
@@ -53,7 +56,7 @@ def load_skill_platform_checker(skills_dir):
 DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
 DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_PROJECT_ROOT = Path.cwd().resolve()
-DEFAULT_CACHE_ROOT = DEFAULT_PROJECT_ROOT / "Cache" / "temp-management-skill-sync"
+DEFAULT_CACHE_ROOT = resolve_task_artifact_root(DEFAULT_PROJECT_ROOT, "management-skill-sync")
 DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
@@ -211,17 +214,8 @@ def run_release_gate(source_dir, skills_dir, mode):
 
 
 def project_cache_root():
-    cache_root = Path(os.environ.get("CODEX_PROJECT_CACHE_ROOT", DEFAULT_CACHE_ROOT)).expanduser()
-    if not cache_root.is_absolute():
-        cache_root = DEFAULT_PROJECT_ROOT / cache_root
-    cache_root = cache_root.resolve()
-    try:
-        relative = cache_root.relative_to((DEFAULT_PROJECT_ROOT / "Cache").resolve())
-    except ValueError as error:
-        raise RuntimeError("Skill scratch must stay inside the owning project's Cache") from error
-    if not relative.parts or not relative.parts[0].startswith("temp-") or relative.parts[0] == "temp-":
-        raise RuntimeError("Skill scratch must use Cache/temp-<task>/")
-    return cache_root
+    configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    return validate_external_directory(configured, DEFAULT_PROJECT_ROOT) if configured else resolve_task_artifact_root(DEFAULT_PROJECT_ROOT, "management-skill-sync")
 
 
 @contextmanager
@@ -425,12 +419,11 @@ def read_sync_state(state_file):
 
 
 def sync_state_file():
-    if "CODEX_PROJECT_CACHE_ROOT" in os.environ:
-        return project_cache_root() / "state" / "management-skill-sync.json"
-    return DEFAULT_STATE_FILE
+    return project_cache_root() / "state" / "management-skill-sync.json"
 
 
 def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
+    validate_external_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(json.dumps({
         "repository": repository,

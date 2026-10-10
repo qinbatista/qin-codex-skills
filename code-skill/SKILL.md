@@ -5,7 +5,7 @@ description: "Use for code creation, repair, refactoring, and code review when w
 
 # Code Skill
 
-Before any file write, apply the [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md): temporary files go only in ignored `Cache/temp-<task>/` from their first write. Screenshots, JSON receipts, logs, and test output are temporary support unless explicitly declared final deliverables. Inspect exact paths and the Git index before staging or committing; temporary files never enter Git.
+Before any file write, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve task support outside project directories and Codex storage from its first write, including child-tool caches and test output. Maintained source and final deliverables keep their actual owners; inspect exact paths and the Git index before committing.
 
 ## Scope
 

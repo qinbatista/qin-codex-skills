@@ -5,6 +5,8 @@ description: "Use for requested optimization or an authorized reusable workflow 
 
 # Optimization Skill
 
+Before writing benchmarks, fixtures, reports or other task support, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve the isolated external owner before the first write, including tool caches.
+
 ## Scope
 
 Optimize only the requested code, prompt, Skill, or process. Briefly explain the intended improvement and implementation steps before detailed execution.
@@ -15,7 +17,7 @@ Read relevant project memory on every task through [project memory](../project-m
 
 1. Identify the owning path, expected output, and behavior that must remain: order, side effects, cancellation, failure semantics, and public contracts.
 2. Capture a representative baseline when claiming performance or behavior preservation.
-3. Choose the smallest useful change. For Skill work, follow the [authoring rules](../management-skill/SKILL.md#authoring-rules): simplify the workflow, reuse local code for deterministic mechanics, and keep per-run data in Cache. Do not replace sound reasoning with brittle automation.
+3. Choose the smallest useful change. For Skill work, follow the [authoring rules](../management-skill/SKILL.md#authoring-rules): simplify the workflow, reuse local code for deterministic mechanics, and keep per-run data in the external task owner. Do not replace sound reasoning with brittle automation.
 4. Apply the relevant code or prompt preferences and change only the authorized scope.
 5. Verify during the active task with identical inputs and the smallest real comparison or output readback. For complex or high-risk changes, an independent review can run inside the same task. Do not start or compile the whole project unless requested.
 6. Report the artifact, measured comparison, and remaining limitations. Ending records useful project memory alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md); it does not re-verify, repair code or benchmark.
@@ -38,4 +40,4 @@ If independent verification was not performed, do not call the work independentl
 
 ## Guardrails
 
-Preserve behavior unless the user changes the goal. Do not broaden another task to implement an optimization discovered along the way. Keep support artifacts under the [project Cache policy](../workflow-skill/references/project-cache-artifact-policy.md), and publish only when authorized.
+Preserve behavior unless the user changes the goal. Do not broaden another task to implement an optimization discovered along the way. Keep support artifacts under the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md), and publish only when authorized.

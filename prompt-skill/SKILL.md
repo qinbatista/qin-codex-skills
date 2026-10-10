@@ -5,6 +5,8 @@ description: "Use to create, review, edit, or test reusable prompts and durable 
 
 # Prompt Skill
 
+Before writing task support, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve its external owner before the first write; maintained prompts keep their source owner.
+
 ## Scope
 
 Read the relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md); skip it when unavailable. Recall the exact project and relevant prompt/module/file/symbol context rather than the whole history. Keep project facts scoped to that project, and explicit global preferences separate. Cross-project examples remain labeled references whose applicability must be established here. Current instructions and fresh source override stale memory.

@@ -130,13 +130,23 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIsNotNone(executable, "Native Windows ACL verification requires icacls")
         return sync_global_skills.subprocess.run([executable, str(path), *options], capture_output=True, text=True, check=True, timeout=60, **sync_global_skills.hidden_process_options())
 
-    def test_default_runtime_state_stays_under_project_cache(self):
+    def test_default_runtime_state_stays_outside_project_and_codex(self):
         self.assertEqual(sync_global_skills.DEFAULT_PROJECT_ROOT, Path.cwd().resolve())
         self.assertEqual(
             sync_global_skills.DEFAULT_STATE_FILE,
             sync_global_skills.DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json",
         )
-        self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT.parent.parent, sync_global_skills.DEFAULT_PROJECT_ROOT)
+        self.assertFalse(sync_global_skills.DEFAULT_CACHE_ROOT.is_relative_to(sync_global_skills.DEFAULT_PROJECT_ROOT))
+        self.assertFalse(sync_global_skills.DEFAULT_CACHE_ROOT.is_relative_to(Path.home() / ".codex"))
+        self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT, sync_global_skills.resolve_task_artifact_root(sync_global_skills.DEFAULT_PROJECT_ROOT, "management-skill-sync"))
+
+    def test_scratch_override_rejects_project_and_unexpanded_tokens_before_write(self):
+        for configured in (str(sync_global_skills.DEFAULT_PROJECT_ROOT / "Cache" / "temp-test"), "%SystemDrive%/scratch"):
+            with self.subTest(configured=configured), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": configured}):
+                with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid scratch must not write")):
+                    with self.assertRaises(ValueError):
+                        with sync_global_skills.temporary_workspace("test-"):
+                            self.fail("invalid scratch was accepted")
 
     def test_repository_git_url_falls_back_when_gh_lookup_fails(self):
         failure = sync_global_skills.subprocess.CalledProcessError(1, ["gh", "repo", "view"])
@@ -983,7 +993,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             local_note = source_dir / "local note with spaces.md"
             local_note.write_text("Keep this unrelated note.\n", encoding="utf-8")
             previous_head = sync_global_skills.repository_head(source_dir)
-            task_cache_root = source_dir / "Cache" / "temp-push-state"
+            task_cache_root = Path(temp_dir) / "external-push-state"
             state_file = task_cache_root / "state" / "management-skill-sync.json"
             with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}), mock.patch("builtins.print") as printer:
                 sync_global_skills.push("fixture/repository", source_dir, "Publish source change", False)

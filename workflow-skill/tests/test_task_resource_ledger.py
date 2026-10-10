@@ -19,6 +19,8 @@ from hidden_process import hidden_process_options
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "task_resource_ledger.py"
+sys.path.insert(0, str(SCRIPT_PATH.parent))
+import task_artifact_paths as ARTIFACTS
 SPEC = importlib.util.spec_from_file_location("task_resource_ledger", SCRIPT_PATH)
 LEDGER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LEDGER)
@@ -27,17 +29,15 @@ HASH = hashlib.sha256(b"verified-readback").hexdigest()
 
 class TaskResourceLedgerTests(unittest.TestCase):
     def setUp(self):
-        self.scratch_parent = Path.cwd() / "Cache" / "temp-ledger"
-        self.scratch_parent.mkdir(parents=True, exist_ok=True)
+        self.scratch_parent = ARTIFACTS.resolve_task_artifact_root(SCRIPT_PATH.parents[2], "ledger-tests", create=True)
         self.temporary_directory = tempfile.TemporaryDirectory(prefix="c-", dir=self.scratch_parent)
-        self.project_root = Path(self.temporary_directory.name)
-        (self.project_root / "Cache").mkdir()
+        fixture = Path(self.temporary_directory.name)
+        self.project_root = fixture / "p"
+        self.project_root.mkdir()
+        self.artifact_base = fixture / "a"
         self.task_id = "producer-task"
-        # Each fixture project is already exclusive; short paths leave room for quarantine metadata on Windows.
-        self.task_root = "Cache/temp-case"
-        self.ledger = LEDGER.new_ledger(
-            self.project_root, self.task_id, self.task_root
-        )
+        self.task_root = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, artifact_root=self.artifact_base).as_posix()
+        self.ledger = LEDGER.new_ledger(self.project_root, self.task_id, self.task_root)
 
     def tearDown(self):
         self.temporary_directory.cleanup()
@@ -50,6 +50,47 @@ class TaskResourceLedgerTests(unittest.TestCase):
     def _path(self, name):
         return f"{self.task_root}/{name}"
 
+    def test_external_resolver_is_deterministic_and_configures_real_child_temp(self):
+        resolved = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, artifact_root=self.artifact_base)
+        self.assertEqual(resolved, Path(self.task_root))
+        self.assertFalse(resolved.is_relative_to(self.project_root))
+        self.assertNotEqual(resolved, ARTIFACTS.resolve_task_artifact_root(self.project_root, "other-task", artifact_root=self.artifact_base))
+        environment = ARTIFACTS.task_artifact_environment(resolved, create=True)
+        result = subprocess.run([sys.executable, "-c", "import tempfile; print(tempfile.gettempdir())"], env=environment, capture_output=True, text=True, check=True, **hidden_process_options())
+        self.assertEqual(Path(result.stdout.strip()), resolved / "tmp")
+        self.assertTrue(all(environment[name] == str(resolved / "tmp") for name in ("TMP", "TEMP", "TMPDIR")))
+
+    def test_external_resolver_rejects_projects_codex_tokens_and_link_escapes(self):
+        codex = Path(self.temporary_directory.name) / "codex-owner"
+        for invalid in ("relative", "%SystemDrive%/cache", "$env:TEMP/cache", "~/cache", self.project_root / "scratch", codex / "scratch"):
+            with self.subTest(path=invalid), self.assertRaises(ValueError):
+                ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=invalid, environ={"CODEX_HOME": str(codex)})
+        other_project = Path(self.temporary_directory.name) / "other-git"
+        (other_project / ".git").mkdir(parents=True)
+        with self.assertRaisesRegex(ValueError, "Git project"):
+            ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=other_project / "scratch")
+        packaged = Path(self.temporary_directory.name) / "Packages" / "OpenAI.Codex_test" / "LocalCache" / "scratch"
+        with self.assertRaisesRegex(ValueError, "Codex"):
+            ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=packaged)
+        linked = Path(self.temporary_directory.name) / "linked"
+        try:
+            linked.symlink_to(self.artifact_base, target_is_directory=True)
+        except OSError:
+            return
+        with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+            ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=linked / "scratch")
+
+    def test_new_cache_ledger_cannot_be_created(self):
+        with self.assertRaisesRegex(ValueError, "external absolute"):
+            LEDGER.new_ledger(self.project_root, "old-layout", "Cache/temp-old-layout")
+        self.assertFalse((self.project_root / "Cache").exists())
+
+    def test_native_default_remains_outside_packaged_codex_storage(self):
+        root = ARTIFACTS.resolve_artifact_base(self.project_root, environ={})
+        if os.name == "nt":
+            self.assertEqual(root, Path.home() / "YoFaAI" / "TaskArtifacts")
+        self.assertFalse(ARTIFACTS._codex_component(root))
+
     def _acquire_file(self, resource_id, name, *, scope="main", content="owned"):
         relative_path = self._path(name)
         LEDGER.acquire_path(
@@ -60,7 +101,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
             "unit fixture",
             scope=scope,
         )
-        target = self.project_root.joinpath(*relative_path.split("/"))
+        target = LEDGER._absolute(self.project_root, relative_path)
         target.write_text(content, encoding="utf-8")
         LEDGER.seal_path(self.ledger, self.project_root, resource_id)
         return target
@@ -125,7 +166,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
         LEDGER.handoff(self.ledger, "shared", "consumer-b")
         with self.assertRaisesRegex(ValueError, "duplicate consumer"):
             LEDGER.handoff(self.ledger, "shared", "consumer-a")
-        target = self.project_root.joinpath(*self._path("shared.txt").split("/"))
+        target = LEDGER._absolute(self.project_root, self._path("shared.txt"))
         target.write_text("shared", encoding="utf-8")
         LEDGER.seal_path(self.ledger, self.project_root, "shared")
         LEDGER.record_durable_readback(self.ledger, "shared", HASH)
@@ -188,7 +229,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
         }
         self.ledger["ending_evidence"] = {}
         LEDGER.validate_ledger(self.ledger)
-        target = self.project_root.joinpath(*self._path("ending.txt").split("/"))
+        target = LEDGER._absolute(self.project_root, self._path("ending.txt"))
         target.write_text("released by main task", encoding="utf-8")
         LEDGER.seal_path(self.ledger, self.project_root, "ending-output")
         self._pass_barriers("ending-output")
@@ -250,7 +291,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
                 path = self._path(f"{disposition}.txt")
                 LEDGER.acquire_path(self.ledger, self.project_root, resource_id, path, "disposable", scope=disposition)
                 LEDGER.handoff(self.ledger, resource_id, "pending-downstream")
-                target = self.project_root.joinpath(*path.split("/"))
+                target = LEDGER._absolute(self.project_root, path)
                 target.write_text("scratch only", encoding="utf-8")
                 LEDGER.seal_path(self.ledger, self.project_root, resource_id)
                 receipt = self._durable_receipt(disposition=disposition, owner_root=f"Outputs/{disposition}")
@@ -299,12 +340,12 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertNotIn("durable_owner", LEDGER._resource(self.ledger, "archive"))
 
     def test_temp_roots_finalize_and_legacy_roots_are_rejected_before_writing(self):
-        task_root = f"Cache/temp-finalize-{uuid.uuid4().hex}"
+        task_root = ARTIFACTS.resolve_task_artifact_root(self.project_root, "finalize-task", artifact_root=self.artifact_base).as_posix()
         ledger = LEDGER.new_ledger(self.project_root, "finalize-task", task_root)
         LEDGER.record_preexisting_path(ledger, "preexisting", "Library/Artifacts", "preexisting owner")
         receipt = self._durable_receipt(owner_root="Outputs/finalized")
         LEDGER.record_retained_path(ledger, "final-output", receipt["path"], "delivered", "requested output", "owner lifetime", authorized_by_user=True, project_root=self.project_root, owner_receipt=receipt)
-        ledger_path = self.project_root.joinpath(*task_root.split("/")) / LEDGER.LEDGER_NAME
+        ledger_path = LEDGER._absolute(self.project_root, task_root) / LEDGER.LEDGER_NAME
         LEDGER.save_ledger(ledger_path, ledger)
         LEDGER.finalize_task_root(ledger, self.project_root, ledger_path)
         self.assertFalse(ledger_path.parent.exists())
@@ -338,7 +379,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertTrue(ledger_path.exists())
 
     def test_finalize_detects_marker_replacement_and_preserves_racing_unknown_file(self):
-        ledger_path = self.project_root.joinpath(*self.task_root.split("/")) / LEDGER.LEDGER_NAME
+        ledger_path = LEDGER._absolute(self.project_root, self.task_root) / LEDGER.LEDGER_NAME
         LEDGER.save_ledger(ledger_path, self.ledger)
         marker = ledger_path.parent / LEDGER.MARKER_NAME
         marker.write_bytes(marker.read_bytes())
@@ -400,7 +441,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
                 f"{relative_directory}/nested.txt",
                 "overlap",
             )
-        target = self.project_root.joinpath(*relative_directory.split("/"))
+        target = LEDGER._absolute(self.project_root, relative_directory)
         target.mkdir()
         nested = target / "nested.txt"
         nested.write_text("sealed", encoding="utf-8")
@@ -426,13 +467,13 @@ class TaskResourceLedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different project root"):
             LEDGER.cleanup_path(self.ledger, other_root, "bound")
         self.assertTrue(target.exists())
-        occupied = self.project_root / "Cache" / "temp-occupied"
+        occupied = ARTIFACTS.resolve_task_artifact_root(self.project_root, "other-task", artifact_root=self.artifact_base)
         occupied.mkdir()
         sentinel = occupied / "user.txt"
         sentinel.write_text("keep", encoding="utf-8")
         with self.assertRaises(FileExistsError):
             LEDGER.new_ledger(
-                self.project_root, "other-task", "Cache/temp-occupied"
+                self.project_root, "other-task", occupied.as_posix()
             )
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
 
@@ -460,7 +501,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
                     )
         external = self.project_root / "external.txt"
         external.write_text("keep", encoding="utf-8")
-        link_path = self.project_root.joinpath(*self._path("link.txt").split("/"))
+        link_path = LEDGER._absolute(self.project_root, self._path("link.txt"))
         LEDGER.acquire_path(
             self.ledger,
             self.project_root,
@@ -472,7 +513,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "symlink"):
             LEDGER.seal_path(self.ledger, self.project_root, "link")
         self.assertEqual(external.read_text(encoding="utf-8"), "keep")
-        marker = self.project_root.joinpath(*self.task_root.split("/")) / LEDGER.MARKER_NAME
+        marker = LEDGER._absolute(self.project_root, self.task_root) / LEDGER.MARKER_NAME
         alias = marker.with_name("marker-hardlink")
         os.link(marker, alias)
         with self.assertRaisesRegex(ValueError, "one exact regular file"):
@@ -523,7 +564,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
         )
 
     def test_lock_failure_preserves_previous_valid_ledger(self):
-        ledger_path = self.project_root.joinpath(*self.task_root.split("/")) / LEDGER.LEDGER_NAME
+        ledger_path = LEDGER._absolute(self.project_root, self.task_root) / LEDGER.LEDGER_NAME
         LEDGER.save_ledger(ledger_path, self.ledger)
         before = ledger_path.read_bytes()
         lock_path = ledger_path.with_name(f"{ledger_path.name}.lock")
@@ -538,8 +579,8 @@ class TaskResourceLedgerTests(unittest.TestCase):
 
     def test_cli_round_trip_removes_only_the_registered_path(self):
         cli_project = self.project_root / "cli-project"
-        (cli_project / "Cache").mkdir(parents=True)
-        cli_task_root = "Cache/temp-cli-roundtrip"
+        cli_project.mkdir()
+        cli_task_root = ARTIFACTS.resolve_task_artifact_root(cli_project, "cli-task", artifact_root=self.artifact_base).as_posix()
         ledger_path = cli_project / cli_task_root / LEDGER.LEDGER_NAME
 
         def run(*arguments):

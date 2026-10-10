@@ -3,7 +3,7 @@
 For scripts, tests, and background commands, use portable host APIs and keep execution invisible. Preserve working Windows, macOS, and Linux branches when platform behavior differs; do not replace them with a one-platform shortcut. Project code follows its declared runtime and supported platforms, including fixed containers or managed runtimes.
 
 - Prefer one Python entry point over new shell/PowerShell wrappers. Preserve necessary existing platform implementations. Declare supported platforms and fail clearly on unsupported ones.
-- Use `pathlib`, environment/config discovery, and `tempfile` for paths. Keep local machine paths out of source.
+- Use `pathlib` and environment/config discovery; keep local machine paths out of source. Apply the [external artifact policy](../../workflow-skill/references/project-cache-artifact-policy.md) before task-support writes. Use `tempfile` only with `dir` inside the resolved external task owner, bind child temporary/output/cache paths before launch, and suppress project-local bytecode/test caches. Native project runtime/asset owners keep their required boundaries.
 - Resolve external tools through PATH-aware discovery before launching. Use `sys.executable` for child Python and subprocess argument arrays instead of `shell=True`.
 - Guard OS-specific imports, APIs, and subprocess options such as `fcntl`, `msvcrt`, `os.killpg`, `os.startfile`, `start_new_session`, and Windows `creationflags`.
 - A wrapper forwards arguments and exit status; it does not duplicate business logic.

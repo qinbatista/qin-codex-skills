@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect bounded Cache roots and release purpose-reviewed completed-task resources.
+"""Inspect external task roots and release purpose-reviewed completed resources.
 
 Task liveness and purpose decisions come from fresh owning-tool readbacks. This
 helper reuses the producer ledger's identity, consumer, lock and deletion rules;
@@ -17,39 +17,49 @@ from pathlib import Path
 from typing import Any
 
 import task_resource_ledger as resources
+from task_artifact_paths import project_artifact_directory
 
 
 MAX_ROOTS = 64
 MAX_READBACK_AGE_SECONDS = 120
 
 
-def inspect_cache(project_root: str | Path, *, limit: int = MAX_ROOTS) -> dict[str, Any]:
-    """Read one Cache level only; unknown roots are observations, never targets."""
+def inspect_cache(project_root: str | Path, *, limit: int = MAX_ROOTS, artifact_root: str | Path | None = None) -> dict[str, Any]:
+    """Inspect bounded external roots and legacy Cache; never create a directory."""
     if not isinstance(limit, int) or not 1 <= limit <= MAX_ROOTS:
-        raise ValueError("Cache inspection limit must be between 1 and 64")
+        raise ValueError("artifact inspection limit must be between 1 and 64")
     root = resources._canonical_root(project_root)
-    cache = root / "Cache"
-    if not cache.exists() and not cache.is_symlink():
-        return {"status": "complete", "roots": [], "limit_reached": False}
-    resources._safe_lstat(cache, directory=True)
-    with os.scandir(cache) as entries:
-        observed = list(itertools.islice(entries, limit + 1))
     roots = []
-    for entry in observed[:limit]:
-        if not entry.name.startswith(("temp-", "tmp-")):
+    count = 0
+    reached = False
+    owners = ((project_artifact_directory(root, artifact_root=artifact_root), "external"), (root / "Cache", "legacy_cache"))
+    for directory, location in owners:
+        if not directory.exists() and not directory.is_symlink():
             continue
-        relative = f"Cache/{entry.name}"
-        try:
-            resources._task_root_path(relative)
-            resources._safe_lstat(Path(entry.path), directory=True)
-            ledger_path = Path(entry.path) / resources.LEDGER_NAME
-            resources._safe_lstat(ledger_path, directory=False)
-            ledger = resources.load_ledger(ledger_path)
-            resources._assert_ledger_location(root, ledger_path, ledger)
-            roots.append({"task_root": relative, "owner_task_key": ledger["owner_task_key"], "ledger_id": ledger["ledger_id"], "resources": [{key: item[key] for key in ("id", "kind", "purpose", "state")} for item in ledger["resources"]]})
-        except (OSError, ValueError) as error:
-            roots.append({"task_root": relative, "status": "pending", "reason": str(error), "action": "preserve_unknown"})
-    return {"status": "complete", "roots": roots, "limit_reached": len(observed) > limit}
+        resources._safe_lstat(directory, directory=True)
+        with os.scandir(directory) as entries:
+            observed = list(itertools.islice(entries, limit - count + 1))
+        for entry in observed:
+            count += 1
+            if count > limit:
+                reached = True
+                break
+            if location == "legacy_cache" and not entry.name.startswith(("temp-", "tmp-")):
+                continue
+            task_root = f"Cache/{entry.name}" if location == "legacy_cache" else Path(entry.path).as_posix()
+            try:
+                resources._task_root_path(task_root)
+                resources._safe_lstat(Path(entry.path), directory=True)
+                ledger_path = Path(entry.path) / resources.LEDGER_NAME
+                resources._safe_lstat(ledger_path, directory=False)
+                ledger = resources.load_ledger(ledger_path)
+                resources._assert_ledger_location(root, ledger_path, ledger, read_only=True)
+                roots.append({"task_root": task_root, "location": location, "read_only": location == "legacy_cache", "owner_task_key": ledger["owner_task_key"], "ledger_id": ledger["ledger_id"], "resources": [{key: item[key] for key in ("id", "kind", "purpose", "state")} for item in ledger["resources"]]})
+            except (OSError, ValueError) as error:
+                roots.append({"task_root": task_root, "location": location, "status": "pending", "reason": str(error), "action": "preserve_unknown"})
+        if reached:
+            break
+    return {"status": "complete", "roots": roots, "limit_reached": reached}
 
 
 def validate_task_readback(readback: Any, owner_task_key: str) -> dict[str, Any]:
@@ -100,13 +110,18 @@ def audit_ledger(project_root: str | Path, task_root: str, task_readback: dict[s
     """Release exact paths; request owner actions for runtime and network handles."""
     root = resources._canonical_root(project_root)
     task_root = resources._task_root_path(task_root)
-    path = root.joinpath(*task_root.split("/")) / resources.LEDGER_NAME
-    resources._safe_lstat(root / "Cache", directory=True)
+    path = resources._absolute(root, task_root) / resources.LEDGER_NAME
     resources._safe_lstat(path.parent, directory=True)
     resources._safe_lstat(path, directory=False)
     receipts = runtime_receipts if runtime_receipts is not None else {}
     if not isinstance(receipts, dict):
         raise ValueError("runtime receipts must be an object")
+    initial = resources.load_ledger(path)
+    resources._assert_ledger_location(root, path, initial, read_only=True)
+    if initial["schema_version"] == resources.LEGACY_SCHEMA_VERSION:
+        readback = validate_task_readback(task_readback, initial["owner_task_key"])
+        validate_decisions(decisions, initial)
+        return {"status": "pending", "task_root": task_root, "task_id": readback["task_id"], "applied": False, "resources": [], "bytes_removed": 0, "root_removed": False, "finalization_reason": "legacy Cache ledger is read-only; exact migration or cleanup belongs to its original owner"}
     results = []
     released_bytes = 0
     with resources.ledger_lock(path):
@@ -141,7 +156,7 @@ def audit_ledger(project_root: str | Path, task_root: str, task_readback: dict[s
                     resources._release_barriers(ledger, item)
                 resources.save_ledger(path, ledger, assume_locked=True)
                 if item["kind"] == "path":
-                    target = root.joinpath(*item["path"].split("/"))
+                    target = resources._absolute(root, item["path"])
                     bytes_before = 0
                     if target.exists() and not target.is_symlink():
                         bytes_before = sum(entry.get("size", 0) for entry in resources._tree_manifest(target, ledger["binding"]["task_root_identity"]["device"]))
@@ -179,6 +194,7 @@ def main() -> int:
     inspect = commands.add_parser("inspect")
     inspect.add_argument("--project-root", type=Path, required=True)
     inspect.add_argument("--limit", type=int, default=MAX_ROOTS)
+    inspect.add_argument("--artifact-root", type=Path)
     audit = commands.add_parser("audit")
     audit.add_argument("--project-root", type=Path, required=True)
     audit.add_argument("--task-root", required=True)

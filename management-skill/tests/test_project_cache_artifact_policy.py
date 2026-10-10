@@ -1,20 +1,24 @@
 import importlib.util
-import json
 import os
-import shutil
+import tempfile
 import unittest
-from unittest import mock
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
-GLOBAL_AGENTS_PATH = Path.home() / ".codex" / "AGENTS.md"
 GLOBAL_ENTRY_RULE_PATH = SKILLS_ROOT / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
 PROJECT_CACHE_POLICY_PATH = SKILLS_ROOT / "workflow-skill" / "references" / "project-cache-artifact-policy.md"
 SYNC_SCRIPT_PATH = SKILLS_ROOT / "management-skill" / "scripts" / "sync_global_skills.py"
 SYNC_SPEC = importlib.util.spec_from_file_location("sync_global_skills", SYNC_SCRIPT_PATH)
 SYNC = importlib.util.module_from_spec(SYNC_SPEC)
 SYNC_SPEC.loader.exec_module(SYNC)
+ARTIFACT_SCRIPT_PATH = SKILLS_ROOT / "workflow-skill" / "scripts" / "task_artifact_paths.py"
+ARTIFACT_SPEC = importlib.util.spec_from_file_location("policy_task_artifact_paths", ARTIFACT_SCRIPT_PATH)
+ARTIFACTS = importlib.util.module_from_spec(ARTIFACT_SPEC)
+ARTIFACT_SPEC.loader.exec_module(ARTIFACTS)
 PRIMARY_SKILLS = (
     "task-analyze-skill",
     "workflow-skill",
@@ -25,130 +29,106 @@ PRIMARY_SKILLS = (
     "optimization-skill",
     "management-skill",
 )
-REQUIRED_POLICY_TEXT = (
-    "that project's `Cache/temp-<task>/`",
-    "project-support write",
-    "ordinary test scratch",
-    "intermediate code",
-    "`Cache/temp-<task>/`",
-    "`Cache/remote-<name>/`",
-    "from their first write",
-    "Projectless work",
-    "never fall back to system Temp",
-    "temporary file regardless of filename or extension",
-    "git check-ignore --no-index",
-    "git ls-files -- <path>",
-    "git diff --cached --name-status",
-    "only when the user or project contract explicitly requires retention",
-    "sync destination is pending",
-    "Preserve verified retained resources",
-    "## Test file placement",
-    "Remove obsolete and duplicate cases",
-    "only if it still runs there",
-    "versioned, non-runtime development area",
-    "execute the affected test from its final location",
-    "top-level `tmp/`, `tests/`, or `work/`",
-    "legacy top-level directory",
-    "`~/.codex/cache`",
-    "`~/.codex/tmp`",
-    "Project-root `AGENTS.md`",
-    "owner/source of truth",
-    "Important retained Cache",
-    "explicit authorization",
-    "local-machine path",
-    "not only Cache paths",
-    "project-root-relative",
-    "runtime",
-    "native APIs",
-    "compact structural contract",
-    "not a project notebook",
-    "ownership boundaries",
-    "critical entry points",
-    "hard constraints",
-    "Do not put implementation details",
-    "task history",
-    "test results",
-    "generated data",
-    "troubleshooting",
-    "Cache/remote-ai-paths/registry.json",
-    "AI-only",
-    "external-path registry",
-    "bounded",
-    "Obsidian",
-)
-REQUIRED_DETAILED_PATH_TEXT = (
-    "POSIX home absolute path",
-    "Windows drive-letter absolute path",
-)
-REQUIRED_DETAILED_AGENTS_TEXT = (
-    "project use, retention reason",
-    "sync status",
-    "one concise `AGENTS.md` registry entry",
-    "owning source, project documentation, or a README",
-    "Update `AGENTS.md` only when",
-)
-REQUIRED_DETAILED_REGISTRY_TEXT = (
-    "schema_version",
-    "scope",
-    "ai_only",
-    "`file|directory|application`",
-    "package scripts",
-    "credentials",
-    "replace the registry atomically",
-    "CODEX_OBSIDIAN_VAULT",
-)
+
+
+@contextmanager
+def external_fixture():
+    task_root = ARTIFACTS.resolve_task_artifact_root(
+        SKILLS_ROOT, f"external-policy-test-{uuid.uuid4().hex}", create=True
+    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="policy-", dir=task_root) as directory:
+            yield Path(directory)
+    finally:
+        task_root.rmdir()
+
+
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
-    def test_canonical_project_cache_contract_retains_every_required_rule(self):
-        policy_text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
-        for required_text in (*REQUIRED_POLICY_TEXT, *REQUIRED_DETAILED_PATH_TEXT, *REQUIRED_DETAILED_AGENTS_TEXT, *REQUIRED_DETAILED_REGISTRY_TEXT):
-            self.assertIn(required_text, policy_text, f"{PROJECT_CACHE_POLICY_PATH}: {required_text}")
+    def test_canonical_policy_requires_external_first_write_and_real_owner_preservation(self):
+        text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
+        required_rules = (
+            "outside every project directory and Codex-managed storage from its first write",
+            "YOFA_TASK_ARTIFACT_ROOT",
+            "Discovered home joined with",
+            "XDG_CACHE_HOME",
+            "task_artifact_paths.py",
+            "resolve_task_artifact_root",
+            "task_artifact_environment",
+            "Missing, invalid or unavailable",
+            "Reject links/reparse points",
+            "`tempfile` only with an explicit directory",
+            "Disable project-local bytecode, pytest, coverage",
+            "canonical asset originals/history",
+            "versioned non-runtime tests",
+            "requested final deliverables",
+            "Do not blanket move a project's Cache",
+            "creation history, file identity and current consumer checks",
+            "preserve bytes/hashes",
+            "never a way to bypass a rejected deletion",
+            "git diff --cached --name-status",
+            "Temporary files never enter Git",
+            "configured Obsidian vault",
+        )
+        for required in required_rules:
+            with self.subTest(rule=required):
+                self.assertIn(required, text)
+        self.assertNotIn("Use only the resolved workspace's ignored", text)
 
-    def test_workflow_links_the_single_cache_policy(self):
-        text = (SKILLS_ROOT / "workflow-skill/SKILL.md").read_text()
-        self.assertIn("references/project-cache-artifact-policy.md", text)
-        self.assertIn("references/task-resource-lifecycle.md", text)
-        self.assertIn("Cache and test placement policy", (SKILLS_ROOT / "verify-skill/SKILL.md").read_text())
+    def test_all_managed_entries_link_the_single_external_policy_before_support_writes(self):
+        for skill in PRIMARY_SKILLS:
+            text = (SKILLS_ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
+            with self.subTest(skill=skill):
+                self.assertIn("project-cache-artifact-policy.md", text)
+                self.assertIn("first write", text)
+                self.assertIn("external", text)
+                self.assertNotIn("`Cache/temp-<task>/`", text)
 
+    def test_installable_entry_preserves_global_agents_and_forbids_project_scratch(self):
+        text = GLOBAL_ENTRY_RULE_PATH.read_text(encoding="utf-8")
+        for required in (
+            "deploy, pull, and sync preserve user AGENTS.md files",
+            "outside every project directory and Codex-managed storage",
+            "from its first write",
+            "YOFA_TASK_ARTIFACT_ROOT",
+            "exact project identity and task ID",
+            "child TMP/TEMP/TMPDIR before launch",
+            "real runtime/asset Cache owners",
+            "moving is never a bypass for rejected deletion",
+            "temporary files never enter Git",
+            "minimum recovery inputs/state",
+            "preserve unrelated work",
+        ):
+            with self.subTest(rule=required):
+                self.assertIn(required, text)
+        self.assertNotIn("current task workspace's Cache", text)
+        self.assertNotIn("Cache/temp-<task>/", text)
 
-    def test_installable_entry_keeps_scoped_scratch_and_preservation(self):
-        text = GLOBAL_ENTRY_RULE_PATH.read_text()
-        self.assertIn("Cache/temp-<task>/", text)
-        self.assertNotIn("Cache/tmp-", text)
-        self.assertIn("current task workspace's Cache", text)
-        self.assertNotIn("CODEX_HOME/sessions", text)
-        self.assertIn("temporary files never enter Git", text)
-        self.assertIn("delete exact scratch", text)
-        self.assertIn("minimum recovery inputs/state", text)
-        self.assertIn("renaming temp to remote-* does not establish a durable owner", text.lower())
-        self.assertIn("remove obsolete or duplicate tests", text)
-        self.assertIn("preserve unrelated work", text)
+    @unittest.skipUnless(
+        os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1",
+        "installed Skill policy is checked after deployment; user AGENTS is preserved",
+    )
+    def test_installed_skill_entries_have_the_same_external_contract(self):
+        installed_root = Path.home() / ".agents" / "skills"
+        for skill in PRIMARY_SKILLS:
+            expected = (SKILLS_ROOT / skill / "SKILL.md").read_bytes()
+            actual = (installed_root / skill / "SKILL.md").read_bytes()
+            with self.subTest(skill=skill):
+                self.assertEqual(actual, expected)
 
-
-    @unittest.skipUnless(os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1", "installed-global parity is checked after deployment")
-    def test_installed_global_agents_has_the_same_contract(self):
-        text = GLOBAL_AGENTS_PATH.read_text()
-        self.assertIn("Cache/temp-<task>/", text)
-        self.assertNotIn("Cache/tmp-", text)
-        self.assertIn("minimum recovery inputs/state", text)
-        self.assertIn("renaming temp to remote-* does not establish a durable owner", text.lower())
-
-
-    def test_resource_policy_limits_automatic_cleanup(self):
-        text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text()
-        self.assertIn("last needed readback", text)
-        self.assertIn("`Cache/temp-<task>/` scratch", text)
-        self.assertIn("`Cache/remote-*` is retained", text)
-        self.assertNotIn("Cache/tmp-", text)
-        self.assertIn("fresh process or website request", text)
-        self.assertIn("minimum inputs and resumable state", text)
-        self.assertIn("never authorizes indefinite temp retention", text)
-        self.assertIn("renaming a temp directory", text)
-        self.assertIn("bounds-check every deletion target", text)
-        self.assertIn("no unknown files remain", text)
-        self.assertIn("Ending records Obsidian memory", text)
-        self.assertIn("never controls, interrupts, archives, or deletes another", text)
-
-    def test_task_end_cleanup_preserves_actual_review_reuse_and_owned_recovery(self):
+    def test_resource_cleanup_is_exact_and_preserves_review_recovery_and_other_tasks(self):
+        text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text(encoding="utf-8")
+        for required in (
+            "external artifact policy",
+            "Legacy project-Cache ledgers stay read-only",
+            "fresh process or website request",
+            "minimum inputs and resumable state",
+            "never authorizes indefinite temp retention",
+            "bounds-check every deletion target",
+            "no unknown files remain",
+            "never controls, interrupts, archives, or deletes another",
+        ):
+            self.assertIn(required, text)
+        self.assertNotIn("`Cache/temp-<task>/` scratch", text)
         owners = (
             SKILLS_ROOT / "AGENTS.md",
             SKILLS_ROOT / "workflow-skill/SKILL.md",
@@ -156,7 +136,6 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             SKILLS_ROOT / "management-skill/SKILL.md",
             GLOBAL_ENTRY_RULE_PATH,
             PROJECT_CACHE_POLICY_PATH,
-            SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md",
         )
         for path in owners:
             text = path.read_text(encoding="utf-8")
@@ -164,164 +143,102 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 self.assertIn("owner", text)
                 self.assertIn("recovery", text)
                 self.assertRegex(text, r"review.{0,20}reuse")
-                self.assertNotIn("Review or debugging is not a temp-retention exception", text)
-                self.assertNotIn("Evidence, review, debugging", text)
 
-    def test_main_entries_require_cache_before_writes_and_git_submission(self):
-        for skill in ("task-analyze-skill", "workflow-skill", "code-skill", "verify-skill", "management-skill"):
-            text = (SKILLS_ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
-            with self.subTest(skill=skill):
-                self.assertIn("Before any file write", text)
-                self.assertIn("Cache/temp-<task>/", text)
-                self.assertNotIn("Cache/tmp-", text)
-                self.assertRegex(text, r"from (its|their) first write")
-                self.assertIn("Git index", text)
-                self.assertIn("temporary files never enter Git", text)
-        image_text = (SKILLS_ROOT / "workflow-skill/references/image-generation.md").read_text(encoding="utf-8")
-        self.assertIn("Temporary screenshots and JSON receipts", image_text)
-        self.assertIn("never a project-root", image_text)
+    def test_test_and_private_fixture_registry_placement_keeps_source_independent(self):
+        text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
+        for required in (
+            "Remove obsolete and duplicate cases",
+            "versioned, non-runtime development area",
+            "execute the affected test from its final location",
+            "private non-memory registry in a declared external AI resource owner",
+            '"schema_version": 2',
+            '"scope": "ai_only"',
+            "Project source, runtime, tests, package scripts, build, CI, and shipped configuration must never read this registry",
+            "compact structural contract, not a project notebook",
+        ):
+            self.assertIn(required, text)
+        self.assertNotIn("Cache/remote-ai-paths/registry.json", text)
 
-    def test_public_readme_cleanup_rule_comes_from_the_maintained_templates(self):
-        for language_suffix in ("", ".zh"):
-            template = SKILLS_ROOT / "management-skill/assets/readme" / f"github-readme-template{language_suffix}.md"
-            template_rule = next(line for line in template.read_text(encoding="utf-8").splitlines() if "Cache/temp-<task>/" in line)
-            with self.subTest(language=language_suffix or "en"):
-                with SYNC.temporary_workspace("readme-cleanup-") as workspace:
+    def test_public_readmes_inherit_the_maintained_external_policy(self):
+        with external_fixture() as fixture:
+            with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(fixture)}):
+                with SYNC.temporary_workspace("readme-policy-") as workspace:
                     SYNC.render_source_readmes(workspace, [SKILLS_ROOT / name for name in PRIMARY_SKILLS])
-                    published = workspace / f"README{language_suffix}.md"
-                    self.assertIn(template_rule, published.read_text(encoding="utf-8"))
-                self.assertNotIn("Cache/tmp-", template_rule)
+                    for suffix in ("", ".zh"):
+                        template = SKILLS_ROOT / "management-skill/assets/readme" / f"github-readme-template{suffix}.md"
+                        rule = next(
+                            line for line in template.read_text(encoding="utf-8").splitlines()
+                            if "YoFaAI/TaskArtifacts" in line
+                        )
+                        with self.subTest(language=suffix or "en"):
+                            published = (workspace / f"README{suffix}.md").read_text(encoding="utf-8")
+                            self.assertIn(rule, published)
+                            self.assertNotIn("Cache/temp-<task>/", rule)
+                self.assertFalse(workspace.exists())
 
+    def test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache(self):
+        with external_fixture() as fixture:
+            project_one = fixture / "one" / "game"
+            project_two = fixture / "two" / "game"
+            project_one.mkdir(parents=True)
+            project_two.mkdir(parents=True)
+            original = project_one / "Cache" / "remote-assets" / "original.bin"
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"canonical asset bytes")
+            base = fixture / "task-artifacts"
+            roots = (
+                ARTIFACTS.resolve_task_artifact_root(project_one, "same-task", artifact_root=base, create=True),
+                ARTIFACTS.resolve_task_artifact_root(project_two, "same-task", artifact_root=base, create=True),
+                ARTIFACTS.resolve_task_artifact_root(project_one, "other-task", artifact_root=base, create=True),
+            )
+            self.assertEqual(len(set(roots)), 3)
+            for root in roots:
+                self.assertTrue(root.is_relative_to(base))
+                self.assertFalse(root.is_relative_to(project_one))
+                self.assertFalse(root.is_relative_to(project_two))
+            environment = ARTIFACTS.task_artifact_environment(roots[0], create=True)
+            for name in ("TMP", "TEMP", "TMPDIR"):
+                self.assertEqual(Path(environment[name]), roots[0] / "tmp")
+            self.assertEqual(original.read_bytes(), b"canonical asset bytes")
+            self.assertEqual(list(project_one.iterdir()), [project_one / "Cache"])
 
-    def test_existing_cache_category_is_reused_and_task_cleanup_is_scoped(self):
-        task_root = SKILLS_ROOT / "Cache" / "temp-cache-artifact-policy-smoke"
-        project_root = task_root / "fixture-project"
-        cache_root = project_root / "Cache"
-        existing_category = cache_root / "remote-test"
-        artifact = existing_category / "inspection.json"
-        try:
-            existing_category.mkdir(parents=True, exist_ok=True)
-            artifact.write_text('{"status":"placed-in-existing-category"}\n', encoding="utf-8")
-            self.assertTrue(artifact.is_file())
-            self.assertEqual(artifact.parent, existing_category)
-            self.assertEqual(existing_category.parent, cache_root)
-            self.assertNotIn("tmp", artifact.parts)
-            self.assertNotIn("work", artifact.parts)
-        finally:
-            shutil.rmtree(task_root)
-            for directory in (task_root.parent, task_root.parent.parent):
-                if directory.is_dir() and not any(directory.iterdir()):
-                    directory.rmdir()
-
-    def test_management_sync_uses_the_configured_project_cache(self):
-        task_root = SKILLS_ROOT / "Cache" / "temp-cache-artifact-policy-sync-smoke"
-        try:
-            with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_root)}):
+    def test_management_workspace_cleanup_is_scoped_and_keeps_adjacent_resources(self):
+        with external_fixture() as fixture:
+            retained = fixture / "retained.bin"
+            retained.write_bytes(b"keep for user review")
+            with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(fixture)}):
                 with SYNC.temporary_workspace("mirror-") as workspace:
                     marker = workspace / "marker.txt"
-                    marker.write_text("cache-backed\n", encoding="utf-8")
-                    self.assertEqual(workspace.parent, task_root)
-                    self.assertTrue(marker.is_file())
-            for invalid in (SKILLS_ROOT / "Cache" / "tmp-retired", SKILLS_ROOT / "Cache" / "remote-test", SKILLS_ROOT / "management-skill"):
-                with self.subTest(invalid=invalid):
-                    with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(invalid)}):
-                        with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid scratch must fail before writing")):
-                            with self.assertRaisesRegex(RuntimeError, "Skill scratch must"):
-                                with SYNC.temporary_workspace("rejected-"):
-                                    self.fail("invalid scratch was accepted")
-        finally:
-            shutil.rmtree(task_root)
-            for directory in (task_root.parent, task_root.parent.parent):
-                if directory.is_dir() and not any(directory.iterdir()):
-                    directory.rmdir()
+                    marker.write_text("external support\n", encoding="utf-8")
+                    self.assertEqual(workspace.parent, fixture)
+                    self.assertFalse(workspace.is_relative_to(SKILLS_ROOT))
+                    self.assertEqual(marker.read_text(encoding="utf-8"), "external support\n")
+                self.assertFalse(workspace.exists())
+                self.assertEqual(retained.read_bytes(), b"keep for user review")
 
-    def test_management_sync_default_paths_are_derived_from_the_project(self):
-        expected_project_root = SYNC_SCRIPT_PATH.resolve().parents[2]
-        expected_cache_root = expected_project_root / "Cache" / "temp-management-skill-sync"
-        self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, expected_project_root)
-        self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, expected_project_root)
-        self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_cache_root)
-        self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_cache_root / "state" / "management-skill-sync.json")
+    def test_invalid_management_paths_fail_before_any_scratch_write(self):
+        invalid_paths = (
+            SKILLS_ROOT / "Cache" / "temp-retired",
+            SKILLS_ROOT / "management-skill",
+            Path.home() / ".codex" / "policy-test",
+            Path("relative-scratch"),
+            Path("%SystemDrive%") / "policy-test",
+        )
+        for invalid in invalid_paths:
+            with self.subTest(invalid=invalid):
+                with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(invalid)}):
+                    with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid scratch must fail before writing")):
+                        with self.assertRaises(ValueError):
+                            with SYNC.temporary_workspace("rejected-"):
+                                self.fail("invalid scratch was accepted")
 
-    def test_important_cache_content_is_registered_in_project_agents(self):
-        task_root = SKILLS_ROOT / "Cache" / "temp-cache-agents-registration-smoke"
-        project_root = task_root / "fixture-project"
-        important_path = project_root / "Cache" / "remote-test" / "logic-regression" / "run_check.py"
-        details_path = important_path.parent / "README.md"
-        agents_path = project_root / "AGENTS.md"
-        try:
-            important_path.parent.mkdir(parents=True, exist_ok=True)
-            important_path.write_text("print('project logic regression')\n", encoding="utf-8")
-            details_path.write_text("Run with the project Python runtime. Dependencies: standard library.\n", encoding="utf-8")
-            agents_path.write_text(
-                "# Project structure\n\n"
-                "- `Cache/remote-test/logic-regression/` — retained, source-controlled regression entry point; owner: project test policy; details: `Cache/remote-test/logic-regression/README.md`.\n",
-                encoding="utf-8",
-            )
-            agents_text = agents_path.read_text(encoding="utf-8")
-            self.assertTrue(important_path.is_relative_to(project_root / "Cache"))
-            for expected in ("Cache/remote-test/logic-regression/", "regression entry point", "owner:", "retained", "source-controlled", "README.md"):
-                self.assertIn(expected, agents_text)
-            for forbidden in ("Dependencies:", "Run/use/regenerate:", "test result", "troubleshooting"):
-                self.assertNotIn(forbidden, agents_text)
-            self.assertIn("Dependencies:", details_path.read_text(encoding="utf-8"))
-        finally:
-            shutil.rmtree(task_root)
-            for directory in (task_root.parent, task_root.parent.parent):
-                if directory.is_dir() and not any(directory.iterdir()):
-                    directory.rmdir()
-
-    def test_relative_path_registry_is_ai_only_and_project_code_does_not_depend_on_it(self):
-        task_root = SKILLS_ROOT / "Cache" / "temp-cache-path-registry-smoke"
-        project_root = task_root / "fixture-project"
-        registry_path = project_root / "Cache" / "remote-ai-paths" / "registry.json"
-        external_target = project_root / "external" / "test-fixture"
-        project_source = project_root / "src" / "app.py"
-        try:
-            external_target.mkdir(parents=True, exist_ok=True)
-            registry_path.parent.mkdir(parents=True, exist_ok=True)
-            registry_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 2,
-                        "scope": "ai_only",
-                        "paths": {
-                            "test_fixture": {
-                                "base": "project",
-                                "path": "external/test-fixture",
-                                "kind": "directory",
-                                "purpose": "AI-only test fixture access",
-                            }
-                        },
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            project_source.parent.mkdir(parents=True, exist_ok=True)
-            project_source.write_text("def run():\n    return 'project-runtime-independent'\n", encoding="utf-8")
-
-            registry = json.loads(registry_path.read_text(encoding="utf-8"))
-            entry = registry["paths"]["test_fixture"]
-            self.assertEqual(registry["schema_version"], 2)
-            self.assertEqual(registry["scope"], "ai_only")
-            self.assertFalse(Path(entry["path"]).is_absolute())
-            self.assertTrue((project_root / entry["path"]).is_dir())
-            self.assertTrue(registry_path.is_relative_to(project_root / "Cache"))
-            self.assertNotIn("obsidian_vault", registry["paths"])
-            self.assertNotIn("registry.json", project_source.read_text(encoding="utf-8"))
-        finally:
-            shutil.rmtree(task_root)
-            for directory in (task_root.parent, task_root.parent.parent):
-                if directory.is_dir() and not any(directory.iterdir()):
-                    directory.rmdir()
-
-    def test_portable_paths_have_one_canonical_owner(self):
-        text = PROJECT_CACHE_POLICY_PATH.read_text()
-        self.assertIn("project-root-relative paths", text)
-        self.assertIn("native APIs", text)
-        self.assertIn("AI-only", text)
-
+    def test_management_default_state_and_support_are_external(self):
+        self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, SYNC_SCRIPT_PATH.resolve().parents[2])
+        self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, Path.cwd().resolve())
+        expected_root = ARTIFACTS.resolve_task_artifact_root(SYNC.DEFAULT_PROJECT_ROOT, "management-skill-sync")
+        self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_root)
+        self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_root / "state" / "management-skill-sync.json")
+        self.assertFalse(expected_root.is_relative_to(SYNC.DEFAULT_PROJECT_ROOT))
 
 
 if __name__ == "__main__":

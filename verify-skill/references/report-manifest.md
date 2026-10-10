@@ -148,7 +148,7 @@ Recommended values:
 - `audit_review`: document, prompt, configuration, or structured-data audits
 - `custom`: user supplied or case-specific format that does not fit the generic renderer cleanly
 
-When `layout_style` is not `default_compact`, choose the page structure that best shows the evidence. Use the generic generator only when it can express the selected layout clearly; otherwise build a custom PDF from the same manifest/evidence and keep the usual cache and verification rules.
+When `layout_style` is not `default_compact`, choose the page structure that best shows the evidence. Use the generic generator only when it can express the selected layout clearly; otherwise build a custom PDF from the same manifest/evidence. Keep manifests, rendering intermediates and trial output in the [external task owner](../../workflow-skill/references/project-cache-artifact-policy.md); final requested reports retain their declared owner and verification rules.
 
 Optional page planning fields:
 
