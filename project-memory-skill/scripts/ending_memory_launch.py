@@ -119,7 +119,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         "and close unused task-created browser/preview/terminal handles, servers, workers and connections. "
         "Keep files, backing resources and live environments needed for user review or reuse, including images, documents, data, memories, test projects and mobile simulations. "
         "Recheck liveness immediately before release. Preserve active/shared/user-opened resources, unsaved work and uncertain ownership. "
-        "Do not interrupt or delete chats, purge Codex-managed storage, quit shared applications, or change foreground/focus. "
+        "This resource branch must not interrupt, archive or delete chats, purge Codex-managed storage, quit shared applications, or change foreground/focus. "
         "Use bounded parallel tool calls or at most two subagents with disjoint write ownership; collect both branches and release this Ending's own temporary resources. "
         "Return resource_result with status complete, skipped or pending, origin_task_id, read_back_verified, and concise released/retained/pending details. "
         "Only actual owning-tool absence readbacks prove release. An unavailable memory vault must not block this branch. "
@@ -145,7 +145,12 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         "This path belongs to the same Skill installation that prepared this handoff; use it directly from the projectless task. "
         "Write memory only to the configured Obsidian vault and require same-project vault readback; resource audit scratch follows Workflow Cache policy. "
         "Return the resulting JSON with memory_result and its readback status, plus resource_result when requested. Report the branches separately. "
-        f"The creation title {json.dumps(ending_title, ensure_ascii=False)} is this chat's first name. Preserve it without calling the title setter on startup or later turns, following Task Analyze's one-time naming rule. Leave this as an ordinary unpinned task in recents. Never pin it; do not move, reorder, open, archive, delete or duplicate it automatically.\n\nCompleted outcome data:\n" + data
+        f"The creation title {json.dumps(ending_title, ensure_ascii=False)} is this chat's first name. Preserve it without calling the title setter on startup or later turns, following Task Analyze's one-time naming rule. Keep it unpinned while running; do not move, reorder, open or duplicate it automatically. "
+        "After both branches are complete or explicitly skipped and their required records are read back, remove only this exact Ending conversation as the final step, following Project Memory's Ending conversation cleanup. "
+        "Use a supported native delete action and verify conversation absence plus local-record deletion. Never directly edit or purge Codex session files or databases. "
+        "If native deletion is unavailable, call set_thread_archived for this Ending only, verify its archived state, and report conversation archived with local deletion pending because local records remain. "
+        "Return a removal_result containing this exact thread_id and host_id, status deleted/archived/pending, read_back_verified, source identifying the native receipt/readback, and local_record_absent only when a native local deletion readback proves it. "
+        "Do not remove an unfinished Ending or any other chat. If self-removal is unavailable, leave that step to the originating task after it observes completion; do not create a cleanup task or automation.\n\nCompleted outcome data:\n" + data
     )
     packet["create_thread"] = {"target": {"type": "projectless"}, "title": ending_title, "prompt": prompt}
     return packet
@@ -203,7 +208,30 @@ def record_completion(packet, memory_result, resource_result=None):
             result.update(resource_status=resource_result["status"], resource_result=resource_result)
     statuses = {result["memory_status"], result["resource_status"]}
     result["status"] = "pending" if "pending" in statuses else ("skipped" if statuses == {"skipped"} else "complete")
+    result["conversation_cleanup"] = {"status": "waiting" if result["status"] == "pending" else "ready", "thread_id": packet["thread_id"], "host_id": packet["host_id"], "local_deletion_status": "pending"}
     return result
+
+
+def record_conversation_cleanup(packet, removal_result):
+    """Record native removal separately; an archive never proves local deletion."""
+    cleanup = packet.get("conversation_cleanup", {})
+    if packet.get("status") not in {"complete", "skipped"} or cleanup.get("status") not in {"ready", "archived", "pending"} or packet.get("memory_status") not in {"complete", "skipped"} or packet.get("resource_status") not in {"complete", "skipped"}:
+        raise ValueError("Ending branch completion and record readbacks are required before conversation cleanup")
+    if removal_result.get("thread_id") != packet["thread_id"] or removal_result.get("host_id") != packet["host_id"]:
+        raise ValueError("native removal must identify this exact Ending thread and host")
+    status = removal_result.get("status")
+    if status not in {"deleted", "archived", "pending"}:
+        raise ValueError("native removal status must be deleted, archived or pending")
+    if status in {"deleted", "archived"} and (removal_result.get("read_back_verified") is not True or not isinstance(removal_result.get("source"), str) or not removal_result["source"].strip()):
+        raise ValueError("native removal requires an actual receipt and absence or archive readback")
+    if status == "deleted" and removal_result.get("local_record_absent") is not True:
+        raise ValueError("conversation deletion requires native local-record absence readback")
+    if status == "archived" and removal_result.get("local_record_absent") is True:
+        raise ValueError("archival retains local records and cannot prove local deletion")
+    updated = {**cleanup, "status": status, "local_deletion_status": "complete" if status == "deleted" else "pending"}
+    if status != "deleted":
+        updated["reason"] = "archive_retains_local_records" if status == "archived" else removal_result.get("reason") or "native_deletion_unavailable"
+    return {**packet, "conversation_cleanup": updated, "removal_result": removal_result}
 
 
 def main():
@@ -223,16 +251,19 @@ def main():
     complete.add_argument("--packet", type=Path, required=True)
     complete.add_argument("--memory-result", type=Path, required=True)
     complete.add_argument("--resource-result", type=Path)
+    cleanup = commands.add_parser("cleanup")
+    cleanup.add_argument("--packet", type=Path, required=True)
+    cleanup.add_argument("--removal-result", type=Path, required=True)
     args = vars(parser.parse_args())
     action = args.pop("action")
-    for name in ("outcome", "previous", "packet", "app_ack", "thread_readback", "memory_result", "resource_result"):
+    for name in ("outcome", "previous", "packet", "app_ack", "thread_readback", "memory_result", "resource_result", "removal_result"):
         if args.get(name):
             args[name] = json.loads(args[name].read_text(encoding="utf-8"))
     if action == "prepare":
         args["completed"] = args.pop("outcome")
         args["memory_available"] = args["memory_available"] == "true"
         args["resource_audit"] = not args.pop("skip_resource_audit")
-    result = {"prepare": prepare_launch, "acknowledge": acknowledge_launch, "complete": record_completion}[action](**args)
+    result = {"prepare": prepare_launch, "acknowledge": acknowledge_launch, "complete": record_completion, "cleanup": record_conversation_cleanup}[action](**args)
     print(json.dumps(result, ensure_ascii=False))
 
 
