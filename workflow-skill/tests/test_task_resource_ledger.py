@@ -50,15 +50,42 @@ class TaskResourceLedgerTests(unittest.TestCase):
     def _path(self, name):
         return f"{self.task_root}/{name}"
 
-    def test_external_resolver_is_deterministic_and_configures_real_child_temp(self):
-        resolved = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, artifact_root=self.artifact_base)
+    def test_new_executions_are_independent_and_configure_real_child_temp(self):
+        resolved = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, run_id=self.ledger["run_id"], artifact_root=self.artifact_base)
         self.assertEqual(resolved, Path(self.task_root))
         self.assertFalse(resolved.is_relative_to(self.project_root))
         self.assertNotEqual(resolved, ARTIFACTS.resolve_task_artifact_root(self.project_root, "other-task", artifact_root=self.artifact_base))
+        following = LEDGER.new_ledger(self.project_root, self.task_id, artifact_root=self.artifact_base)
+        self.assertNotEqual(resolved, Path(following["task_root"]))
+        self.assertNotEqual(self.ledger["run_id"], following["run_id"])
+        with self.assertRaises(FileExistsError):
+            ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, run_id=self.ledger["run_id"], artifact_root=self.artifact_base, create=True)
         environment = ARTIFACTS.task_artifact_environment(resolved, create=True)
         result = subprocess.run([sys.executable, "-c", "import tempfile; print(tempfile.gettempdir())"], env=environment, capture_output=True, text=True, check=True, **hidden_process_options())
         self.assertEqual(Path(result.stdout.strip()), resolved / "tmp")
         self.assertTrue(all(environment[name] == str(resolved / "tmp") for name in ("TMP", "TEMP", "TMPDIR")))
+
+    def test_old_chat_directory_cannot_be_reopened_for_new_writes(self):
+        legacy = Path(self.task_root).parent / f"t-{self.ledger['owner_task_key']}"
+        legacy.mkdir()
+        with self.assertRaisesRegex(ValueError, "independent temp"):
+            ARTIFACTS.task_artifact_environment(legacy, create=True)
+        self.assertFalse((legacy / "tmp").exists())
+        with self.assertRaisesRegex(ValueError, "independent temp"):
+            LEDGER.new_ledger(self.project_root, self.task_id, legacy.as_posix())
+        old_ledger = json.loads(json.dumps(self.ledger))
+        del old_ledger["run_id"]
+        old_ledger["task_root"] = legacy.as_posix()
+        old_ledger["binding"]["task_root_identity"] = LEDGER._binding_identity(legacy)
+        LEDGER.validate_ledger(old_ledger)
+        with self.assertRaisesRegex(ValueError, "cleanup only"):
+            LEDGER.acquire_runtime(old_ledger, "new-runtime", "browser_tab", {"tab_id": "tab-new", "context_id": "iab", "window_id": "window-new"}, "new output must use fresh root")
+
+    def test_run_identity_is_bound_to_root_and_owner_marker(self):
+        changed = json.loads(json.dumps(self.ledger))
+        changed["run_id"] = uuid.uuid4().hex
+        with self.assertRaisesRegex(ValueError, "run_id disagrees"):
+            LEDGER.validate_ledger(changed)
 
     def test_external_resolver_rejects_projects_codex_tokens_and_link_escapes(self):
         codex = Path(self.temporary_directory.name) / "codex-owner"

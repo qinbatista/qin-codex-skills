@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import atexit
 import copy
 import fnmatch
 import hashlib
@@ -58,6 +59,8 @@ DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_PROJECT_ROOT = Path.cwd().resolve()
 DEFAULT_CACHE_ROOT = resolve_task_artifact_root(DEFAULT_PROJECT_ROOT, "management-skill-sync")
 DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
+SYNC_STATE_RECEIPTS = {}
+SYNC_STATE_DIRECTORIES = set()
 GITIGNORE_TEXT = """.DS_Store
 __pycache__/
 *.pyc
@@ -220,10 +223,18 @@ def project_cache_root():
 
 @contextmanager
 def temporary_workspace(prefix):
+    configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
     cache_root = project_cache_root()
-    cache_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=prefix, dir=cache_root) as workspace:
-        yield Path(workspace)
+    cache_root.mkdir(parents=True, exist_ok=bool(configured))
+    try:
+        with tempfile.TemporaryDirectory(prefix=prefix if prefix.startswith("temp-") else f"temp-{prefix}", dir=cache_root) as workspace:
+            yield Path(workspace)
+    finally:
+        if not configured:
+            try:
+                cache_root.rmdir()
+            except OSError as error:
+                print(f"Temporary workspace cleanup pending: {cache_root} ({error.__class__.__name__}).")
 
 
 def repository_git_url(repository, read_only=False):
@@ -419,19 +430,47 @@ def read_sync_state(state_file):
 
 
 def sync_state_file():
-    return project_cache_root() / "state" / "management-skill-sync.json"
+    configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    return validate_external_directory(configured, DEFAULT_PROJECT_ROOT) / DEFAULT_CACHE_ROOT.name / "state" / "management-skill-sync.json" if configured else DEFAULT_STATE_FILE
 
 
 def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
     validate_external_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
+    if state_file in SYNC_STATE_RECEIPTS and (state_file.is_symlink() or state_file.read_bytes() != SYNC_STATE_RECEIPTS[state_file]):
+        raise RuntimeError("Sync receipt changed after this runtime wrote it")
+    directories = [state_file.parent, state_file.parent.parent] if state_file.parent.parent.name == DEFAULT_CACHE_ROOT.name else [state_file.parent]
+    SYNC_STATE_DIRECTORIES.update(directory for directory in directories if not directory.exists())
     state_file.parent.mkdir(parents=True, exist_ok=True)
-    state_file.write_text(json.dumps({
-        "repository": repository,
-        "remote_head": remote_head,
-        "local_hash": local_hash,
-        "remote_hash": remote_hash,
-        "synced_at": int(time.time())
-    }, indent=2) + "\n")
+    receipt = json.dumps({"repository": repository, "remote_head": remote_head, "local_hash": local_hash, "remote_hash": remote_hash, "synced_at": int(time.time())}, indent=2) + "\n"
+    with state_file.open("w" if state_file in SYNC_STATE_RECEIPTS else "x", encoding="utf-8") as stream:
+        stream.write(receipt)
+    SYNC_STATE_RECEIPTS[state_file] = receipt.encode("utf-8")
+
+
+def cleanup_sync_state():
+    for state_file, receipt in list(SYNC_STATE_RECEIPTS.items()):
+        try:
+            validate_external_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
+            if state_file.is_symlink():
+                raise ValueError("Sync receipt became a symbolic link")
+            if state_file.exists():
+                if state_file.read_bytes() != receipt:
+                    raise RuntimeError("Sync receipt changed after this runtime wrote it")
+                state_file.unlink()
+            del SYNC_STATE_RECEIPTS[state_file]
+        except (OSError, ValueError, RuntimeError) as error:
+            print(f"Sync receipt cleanup pending: {state_file} ({error.__class__.__name__}).")
+    for directory in sorted(SYNC_STATE_DIRECTORIES, key=lambda path: len(path.parts), reverse=True):
+        try:
+            validate_external_directory(directory, DEFAULT_PROJECT_ROOT)
+            if directory.exists():
+                directory.rmdir()
+            SYNC_STATE_DIRECTORIES.remove(directory)
+        except (OSError, ValueError, RuntimeError) as error:
+            print(f"Sync receipt directory cleanup pending: {directory} ({error.__class__.__name__}).")
+
+
+atexit.register(cleanup_sync_state)
 
 
 def read_skill_metadata(skill_dir):

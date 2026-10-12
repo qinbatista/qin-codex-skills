@@ -10,8 +10,13 @@ import os
 import re
 import stat
 import sys
+import shutil
+import uuid
 from pathlib import Path
 from typing import Mapping
+
+
+RUN_NAME_RE = re.compile(r"temp-(?P<task_key>[0-9a-f]{24})-(?P<run_id>[0-9a-f]{32})")
 
 
 def _absolute_path(value: str | Path, label: str) -> Path:
@@ -121,19 +126,98 @@ def resolve_task_artifact_root(
     project_root: str | Path,
     task_id: str,
     *,
+    run_id: str | None = None,
     artifact_root: str | Path | None = None,
     environ: Mapping[str, str] | None = None,
     create: bool = False,
 ) -> Path:
+    """Allocate a fresh execution path; only an explicit run ID resolves it again."""
     if not isinstance(task_id, str) or not task_id.strip() or any(ord(char) < 32 for char in task_id):
         raise ValueError("task_id must be a non-empty identifier without control characters")
     task_key = hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:24]
-    path = project_artifact_directory(project_root, artifact_root=artifact_root, environ=environ, create=create) / f"t-{task_key}"
+    if run_id is None:
+        run_id = uuid.uuid4().hex
+    if not isinstance(run_id, str) or not re.fullmatch(r"[0-9a-f]{32}", run_id):
+        raise ValueError("run_id must be a lowercase 32-character UUID hex value")
+    path = project_artifact_directory(project_root, artifact_root=artifact_root, environ=environ, create=create) / f"temp-{task_key}-{run_id}"
     validate_external_directory(path, project_root, environ=environ)
     if create:
-        path.mkdir(exist_ok=True)
+        path.mkdir(exist_ok=False)
         validate_external_directory(path, project_root, environ=environ)
     return path
+
+
+def task_artifact_run_id(task_root: str | Path) -> str:
+    match = RUN_NAME_RE.fullmatch(Path(task_root).name)
+    if match is None:
+        raise ValueError("task_root must identify one independent temp execution directory")
+    return match["run_id"]
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as reader:
+        for chunk in iter(lambda: reader.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def copy_run_inputs(project_root: str | Path, source_root: str | Path, destination_root: str | Path, relative_paths: list[str]) -> list[dict[str, str]]:
+    """Copy only selected files into a new run, with independent byte readback."""
+    source = validate_external_directory(source_root, project_root)
+    destination = validate_external_directory(destination_root, project_root)
+    if source == destination or source.parent != destination.parent:
+        raise ValueError("continuation requires different execution directories for the same project")
+    expected_parent = project_artifact_directory(project_root, artifact_root=destination.parent.parent)
+    if source.parent != expected_parent or not source.is_dir() or not destination.is_dir():
+        raise ValueError("continuation roots must belong to the exact existing project artifact owner")
+    task_artifact_run_id(destination)
+    if RUN_NAME_RE.fullmatch(source.name) is None and re.fullmatch(r"t-[0-9a-f]{24}", source.name) is None:
+        raise ValueError("source must be an exact current or legacy execution directory")
+    if not relative_paths or len(relative_paths) != len(set(relative_paths)):
+        raise ValueError("select a non-empty unique list of useful input files")
+    selected = []
+    for relative in relative_paths:
+        if not isinstance(relative, str) or relative != relative.strip() or "\\" in relative or ":" in relative or any(ord(char) < 32 for char in relative) or relative.startswith("/") or any(part in {"", ".", ".."} for part in relative.split("/")):
+            raise ValueError("input paths must be normalized relative file paths")
+        original = source.joinpath(*relative.split("/"))
+        target = destination.joinpath(*relative.split("/"))
+        _check_ancestors(original.parent)
+        _check_ancestors(target.parent)
+        observed = original.lstat()
+        if not stat.S_ISREG(observed.st_mode) or observed.st_nlink != 1 or getattr(observed, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0):
+            raise ValueError("continuation inputs must be regular files without links or reparse points")
+        if target.exists() or target.is_symlink():
+            raise ValueError("continuation must not overwrite files in the new run")
+        selected.append((relative, original, target, observed))
+    receipts = []
+    created = []
+    created_directories = set()
+    try:
+        for relative, original, target, observed in selected:
+            created_directories.update(directory for directory in (target.parent, *target.parent.parents) if directory != destination and destination in directory.parents and not directory.exists())
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with original.open("rb") as reader, target.open("xb") as writer:
+                identity = os.fstat(writer.fileno())
+                created.append((target, identity.st_dev, identity.st_ino))
+                shutil.copyfileobj(reader, writer)
+            source_digest = _file_sha256(original)
+            copied_digest = _file_sha256(target)
+            current = original.lstat()
+            if (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns, current.st_ctime_ns) != (observed.st_dev, observed.st_ino, observed.st_size, observed.st_mtime_ns, observed.st_ctime_ns) or source_digest != copied_digest:
+                raise ValueError("continuation input changed or copied bytes failed verification; source preserved")
+            receipts.append({"path": relative, "sha256": copied_digest})
+    except (OSError, ValueError):
+        for target, device, inode in reversed(created):
+            if target.exists() and not target.is_symlink():
+                observed = target.lstat()
+                if (observed.st_dev, observed.st_ino) == (device, inode):
+                    target.unlink()
+        for directory in sorted(created_directories, key=lambda value: len(value.parts), reverse=True):
+            if directory.is_dir() and not directory.is_symlink() and not any(directory.iterdir()):
+                directory.rmdir()
+        raise
+    return receipts
 
 
 def task_artifact_environment(
@@ -147,7 +231,8 @@ def task_artifact_environment(
     _check_ancestors(root)
     root = root.resolve(strict=False)
     environment = dict(os.environ if environ is None else environ)
-    if not re.fullmatch(r"t-[0-9a-f]{24}", root.name) or not re.fullmatch(r"p-[0-9a-f]{16}", root.parent.name):
+    task_artifact_run_id(root)
+    if not root.is_dir() or not re.fullmatch(r"p-[0-9a-f]{16}", root.parent.name):
         raise ValueError("temporary environment requires a resolved external project/task root")
     codex_value = environment.get("CODEX_HOME")
     codex = _absolute_path(codex_value, "CODEX_HOME") if codex_value else Path.home() / ".codex"
@@ -170,16 +255,33 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--task-id", required=True)
+    parser.add_argument("--run-id", help="Resolve one already allocated run; omit for a new execution")
     parser.add_argument("--artifact-root", type=Path)
     parser.add_argument("--create", action="store_true")
+    parser.add_argument("--copy-from", type=Path)
+    parser.add_argument("--input", action="append", default=[], help="Selected useful relative input file; repeat as needed")
     arguments = parser.parse_args()
+    root = None
+    created_root = None
     try:
-        root = resolve_task_artifact_root(arguments.project_root, arguments.task_id, artifact_root=arguments.artifact_root, create=arguments.create)
+        if bool(arguments.copy_from) != bool(arguments.input) or (arguments.copy_from and not arguments.create):
+            raise ValueError("--copy-from and --input require a newly created execution directory")
+        root = resolve_task_artifact_root(arguments.project_root, arguments.task_id, run_id=arguments.run_id, artifact_root=arguments.artifact_root, create=arguments.create)
+        created_root = root if arguments.create else None
+        copied = copy_run_inputs(arguments.project_root, arguments.copy_from, root, arguments.input) if arguments.copy_from else []
         environment = task_artifact_environment(root, create=True) if arguments.create else None
-        print(json.dumps({"status": "complete", "task_root": str(root), "temporary_environment": {name: environment[name] for name in ("TMP", "TEMP", "TMPDIR")} if environment else None}, sort_keys=True))
+        print(json.dumps({"status": "complete", "task_root": str(root), "run_id": task_artifact_run_id(root), "copied_inputs": copied, "temporary_environment": {name: environment[name] for name in ("TMP", "TEMP", "TMPDIR")} if environment else None}, sort_keys=True))
         return 0
     except (OSError, ValueError) as error:
-        print(json.dumps({"status": "error", "reason": str(error)}, sort_keys=True), file=sys.stderr)
+        cleanup = "not_created"
+        if created_root is not None:
+            try:
+                validate_external_directory(created_root, arguments.project_root)
+                created_root.rmdir()
+                cleanup = "removed"
+            except (OSError, ValueError):
+                cleanup = "pending"
+        print(json.dumps({"status": "error", "reason": str(error), "task_root": str(root) if root is not None else None, "run_id": task_artifact_run_id(root) if root is not None else None, "cleanup": cleanup}, sort_keys=True), file=sys.stderr)
         return 2
 
 

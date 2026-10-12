@@ -30,7 +30,7 @@ class EndingResourceAuditTests(unittest.TestCase):
         self.task_root = ARTIFACTS.resolve_task_artifact_root(self.project, self.task_id, artifact_root=self.artifact_base).as_posix()
         self.ledger = LEDGER.new_ledger(self.project, self.task_id, self.task_root)
         self.ledger_path = self.project / self.task_root / LEDGER.LEDGER_NAME
-        self.readback = {"task_id": self.task_id, "state": "complete", "purpose": "Completed website and package test", "observed_at": time.time(), "source": "owning-chat final outcome and current readback"}
+        self.readback = {"task_id": self.task_id, "run_id": self.ledger["run_id"], "state": "complete", "purpose": "Completed website and package test", "observed_at": time.time(), "source": "owning-chat final outcome and current execution readback"}
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -70,6 +70,49 @@ class EndingResourceAuditTests(unittest.TestCase):
         self.assertTrue(all(item["read_back_verified"] for item in result["resources"]))
         self.assertTrue(result["root_removed"])
         self.assertFalse((self.project / self.task_root).exists())
+
+    def test_finished_run_is_removed_while_next_run_in_same_chat_remains_active(self):
+        useful = self.file("useful-input")
+        self.file("build-intermediate")
+        following = LEDGER.new_ledger(self.project, self.task_id, artifact_root=self.artifact_base)
+        following_root = Path(following["task_root"])
+        LEDGER.acquire_path(following, self.project, "useful-input", str(following_root / useful.name), "selected continuation fixture", scope="inputs")
+        copied = ARTIFACTS.copy_run_inputs(self.project, self.task_root, following_root, [useful.name])
+        LEDGER.seal_path(following, self.project, "useful-input")
+        self.assertEqual(copied[0]["sha256"], ARTIFACTS._file_sha256(useful))
+        self.assertEqual((following_root / useful.name).read_bytes(), useful.read_bytes())
+        self.assertFalse((following_root / "build-intermediate.txt").exists())
+        result = self.audit([self.decision("useful-input"), self.decision("build-intermediate")], apply=True)
+        self.assertTrue(result["root_removed"])
+        self.assertFalse(Path(self.task_root).exists())
+        self.assertEqual((following_root / useful.name).read_text(), "completed test output")
+        following_path = following_root / LEDGER.LEDGER_NAME
+        LEDGER.acquire_path(following, self.project, "live", str(following_root / "live.txt"), "active follow-up test")
+        (following_root / "live.txt").write_text("test still running")
+        LEDGER.seal_path(following, self.project, "live")
+        LEDGER.save_ledger(following_path, following)
+        active_readback = {**self.readback, "run_id": following["run_id"], "state": "active"}
+        protected = AUDIT.audit_ledger(self.project, str(following_root), active_readback, [self.decision("live")], apply=True)
+        self.assertEqual(protected["resources"][0]["action"], "keep")
+        self.assertEqual((following_root / "live.txt").read_text(), "test still running")
+        for resource in following["resources"]:
+            digest = ARTIFACTS._file_sha256(Path(resource["path"]))
+            LEDGER.record_durable_readback(following, resource["id"], digest)
+            LEDGER.record_consumer_readback(following, resource["id"], self.task_id, digest)
+        LEDGER.save_ledger(following_path, following)
+        completed = {**active_readback, "state": "complete", "observed_at": time.time()}
+        final = AUDIT.audit_ledger(self.project, str(following_root), completed, [self.decision("useful-input"), self.decision("live")], apply=True)
+        self.assertTrue(final["root_removed"])
+        self.assertFalse(following_root.exists())
+
+    def test_same_chat_other_run_or_missing_run_readback_cannot_delete_active_run(self):
+        target = self.file("live")
+        wrong_run = {**self.readback, "run_id": "b" * 32}
+        missing_run = {key: value for key, value in self.readback.items() if key != "run_id"}
+        for readback in (wrong_run, missing_run):
+            with self.subTest(readback=readback), self.assertRaises(ValueError):
+                AUDIT.audit_ledger(self.project, self.task_root, readback, [self.decision("live")], apply=True)
+            self.assertTrue(target.exists())
 
     def test_review_reuse_and_live_user_files_survive_beside_disposable_work(self):
         disposable = self.file("disposable", scope="disposable")

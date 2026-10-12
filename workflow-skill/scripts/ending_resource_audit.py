@@ -54,7 +54,7 @@ def inspect_cache(project_root: str | Path, *, limit: int = MAX_ROOTS, artifact_
                 resources._safe_lstat(ledger_path, directory=False)
                 ledger = resources.load_ledger(ledger_path)
                 resources._assert_ledger_location(root, ledger_path, ledger, read_only=True)
-                roots.append({"task_root": task_root, "location": location, "read_only": location == "legacy_cache", "owner_task_key": ledger["owner_task_key"], "ledger_id": ledger["ledger_id"], "resources": [{key: item[key] for key in ("id", "kind", "purpose", "state")} for item in ledger["resources"]]})
+                roots.append({"task_root": task_root, "location": location, "read_only": location == "legacy_cache", "owner_task_key": ledger["owner_task_key"], "run_id": ledger.get("run_id"), "ledger_id": ledger["ledger_id"], "resources": [{key: item[key] for key in ("id", "kind", "purpose", "state")} for item in ledger["resources"]]})
             except (OSError, ValueError) as error:
                 roots.append({"task_root": task_root, "location": location, "status": "pending", "reason": str(error), "action": "preserve_unknown"})
         if reached:
@@ -62,17 +62,21 @@ def inspect_cache(project_root: str | Path, *, limit: int = MAX_ROOTS, artifact_
     return {"status": "complete", "roots": roots, "limit_reached": reached}
 
 
-def validate_task_readback(readback: Any, owner_task_key: str) -> dict[str, Any]:
+def validate_task_readback(readback: Any, owner_task_key: str, run_id: str | None = None) -> dict[str, Any]:
     """Reject stale liveness evidence and same-name or unrelated-task matches."""
     if not isinstance(readback, dict):
         raise ValueError("task readback must be an object")
     required = {"task_id", "state", "purpose", "observed_at", "source"}
+    if run_id is not None:
+        required.add("run_id")
     if set(readback) != required:
         raise ValueError("task readback requires task_id, state, purpose, observed_at and source")
     for field in ("task_id", "purpose", "source"):
         resources._require_text(readback[field], field)
     if resources._task_key(readback["task_id"]) != owner_task_key:
         raise ValueError("task readback belongs to a different resource owner")
+    if run_id is not None and readback["run_id"] != run_id:
+        raise ValueError("task readback belongs to a different execution run")
     if readback["state"] not in {"complete", "active", "review", "paused", "failed", "unknown"}:
         raise ValueError("task readback state is invalid; idle alone does not prove completion")
     observed = readback["observed_at"]
@@ -119,7 +123,7 @@ def audit_ledger(project_root: str | Path, task_root: str, task_readback: dict[s
     initial = resources.load_ledger(path)
     resources._assert_ledger_location(root, path, initial, read_only=True)
     if initial["schema_version"] == resources.LEGACY_SCHEMA_VERSION:
-        readback = validate_task_readback(task_readback, initial["owner_task_key"])
+        readback = validate_task_readback(task_readback, initial["owner_task_key"], initial.get("run_id"))
         validate_decisions(decisions, initial)
         return {"status": "pending", "task_root": task_root, "task_id": readback["task_id"], "applied": False, "resources": [], "bytes_removed": 0, "root_removed": False, "finalization_reason": "legacy Cache ledger is read-only; exact migration or cleanup belongs to its original owner"}
     results = []
@@ -127,7 +131,7 @@ def audit_ledger(project_root: str | Path, task_root: str, task_readback: dict[s
     with resources.ledger_lock(path):
         ledger = resources.load_ledger(path)
         resources._assert_ledger_location(root, path, ledger)
-        readback = validate_task_readback(task_readback, ledger["owner_task_key"])
+        readback = validate_task_readback(task_readback, ledger["owner_task_key"], ledger.get("run_id"))
         indexed = validate_decisions(decisions, ledger)
         runtime_ids = {item["id"] for item in ledger["resources"] if item["kind"] in resources.RUNTIME_KINDS}
         if set(receipts) - runtime_ids:
@@ -148,7 +152,7 @@ def audit_ledger(project_root: str | Path, task_root: str, task_readback: dict[s
                 results.append({**result, "action": "release_candidate", "reason": decision["reason"]})
                 continue
             try:
-                validate_task_readback(task_readback, ledger["owner_task_key"])
+                validate_task_readback(task_readback, ledger["owner_task_key"], ledger.get("run_id"))
                 if item["state"] not in {"cleanup_in_progress", "cleanup_ready"}:
                     resources.prepare_release(ledger, item["id"], project_root=root)
                 else:
@@ -179,7 +183,7 @@ def audit_ledger(project_root: str | Path, task_root: str, task_readback: dict[s
     finalization_reason = None
     if apply and readback["state"] == "complete" and all(item["state"] in resources.FINAL_STATES for item in ledger["resources"]):
         try:
-            validate_task_readback(task_readback, ledger["owner_task_key"])
+            validate_task_readback(task_readback, ledger["owner_task_key"], ledger.get("run_id"))
             resources.finalize_task_root(ledger, root, path)
             finalized = not path.parent.exists()
         except (OSError, ValueError) as error:

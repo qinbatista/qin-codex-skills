@@ -1,11 +1,17 @@
 import importlib.util
+import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
 
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
@@ -90,10 +96,10 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             "outside every project directory and Codex-managed storage",
             "from its first write",
             "YOFA_TASK_ARTIFACT_ROOT",
-            "exact project identity and task ID",
+            "Each request or newly started test/build/package/deploy unit",
             "child TMP/TEMP/TMPDIR before launch",
             "real runtime/asset Cache owners",
-            "moving is never a bypass for rejected deletion",
+            "moving never bypasses rejected deletion",
             "temporary files never enter Git",
             "minimum recovery inputs/state",
             "preserve unrelated work",
@@ -119,7 +125,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text(encoding="utf-8")
         for required in (
             "external artifact policy",
-            "Legacy project-Cache ledgers stay read-only",
+            "project-Cache ledgers remain read-only",
             "fresh process or website request",
             "minimum inputs and resumable state",
             "never authorizes indefinite temp retention",
@@ -190,8 +196,9 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 ARTIFACTS.resolve_task_artifact_root(project_one, "same-task", artifact_root=base, create=True),
                 ARTIFACTS.resolve_task_artifact_root(project_two, "same-task", artifact_root=base, create=True),
                 ARTIFACTS.resolve_task_artifact_root(project_one, "other-task", artifact_root=base, create=True),
+                ARTIFACTS.resolve_task_artifact_root(project_one, "same-task", artifact_root=base, create=True),
             )
-            self.assertEqual(len(set(roots)), 3)
+            self.assertEqual(len(set(roots)), 4)
             for root in roots:
                 self.assertTrue(root.is_relative_to(base))
                 self.assertFalse(root.is_relative_to(project_one))
@@ -201,6 +208,81 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 self.assertEqual(Path(environment[name]), roots[0] / "tmp")
             self.assertEqual(original.read_bytes(), b"canonical asset bytes")
             self.assertEqual(list(project_one.iterdir()), [project_one / "Cache"])
+
+    def test_continuation_copies_selected_bytes_without_links_overwrites_or_old_builds(self):
+        with external_fixture() as fixture:
+            project = fixture / "project"
+            project.mkdir()
+            base = fixture / "artifacts"
+            previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=base, create=True)
+            following = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=base, create=True)
+            (previous / "input.bin").write_bytes(b"useful input")
+            (previous / "build.bin").write_bytes(b"discard build output")
+            receipts = ARTIFACTS.copy_run_inputs(project, previous, following, ["input.bin"])
+            self.assertEqual((following / "input.bin").read_bytes(), b"useful input")
+            self.assertEqual(receipts, [{"path": "input.bin", "sha256": ARTIFACTS._file_sha256(previous / "input.bin")}])
+            self.assertFalse((following / "build.bin").exists())
+            for selection in (["../build.bin"], ["input.bin"], ["input.bin", "input.bin"]):
+                with self.subTest(selection=selection), self.assertRaises(ValueError):
+                    ARTIFACTS.copy_run_inputs(project, previous, following, selection)
+            with self.assertRaises(ValueError):
+                ARTIFACTS.copy_run_inputs(project, previous, previous, ["input.bin"])
+            link = previous / "linked.bin"
+            try:
+                link.symlink_to(previous / "build.bin")
+            except OSError:
+                return
+            with self.assertRaises(ValueError):
+                ARTIFACTS.copy_run_inputs(project, previous, following, ["linked.bin"])
+            self.assertFalse((following / "linked.bin").exists())
+
+    def test_cli_continuation_allocates_fresh_run_for_same_chat(self):
+        with external_fixture() as fixture:
+            project = fixture / "project"
+            project.mkdir()
+            command = [sys.executable, "-B", str(ARTIFACT_SCRIPT_PATH), "--project-root", str(project), "--artifact-root", str(fixture / "artifacts"), "--task-id", "same-chat", "--create"]
+            previous = json.loads(subprocess.run(command, capture_output=True, text=True, check=True, **hidden_process_options()).stdout)
+            source = Path(previous["task_root"])
+            (source / "fixture.bin").write_bytes(b"continued test input")
+            following = json.loads(subprocess.run([*command, "--copy-from", str(source), "--input", "fixture.bin"], capture_output=True, text=True, check=True, **hidden_process_options()).stdout)
+            destination = Path(following["task_root"])
+            self.assertNotEqual(source, destination)
+            self.assertNotEqual(previous["run_id"], following["run_id"])
+            self.assertEqual((destination / "fixture.bin").read_bytes(), b"continued test input")
+            self.assertEqual(following["temporary_environment"]["TMPDIR"], str(destination / "tmp"))
+
+    def test_failed_cli_copy_removes_new_run_and_keeps_original_inputs(self):
+        with external_fixture() as fixture:
+            project = fixture / "project"
+            project.mkdir()
+            previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=fixture / "artifacts", create=True)
+            (previous / "input.bin").write_bytes(b"keep original input")
+            command = [sys.executable, "-B", str(ARTIFACT_SCRIPT_PATH), "--project-root", str(project), "--artifact-root", str(fixture / "artifacts"), "--task-id", "chat", "--create", "--copy-from", str(previous), "--input", "missing.bin"]
+            result = subprocess.run(command, capture_output=True, text=True, check=False, **hidden_process_options())
+            self.assertEqual(result.returncode, 2)
+            failure = json.loads(result.stderr)
+            self.assertEqual(failure["cleanup"], "removed")
+            self.assertFalse(Path(failure["task_root"]).exists())
+            self.assertNotEqual(Path(failure["task_root"]), previous)
+            self.assertEqual((previous / "input.bin").read_bytes(), b"keep original input")
+
+    def test_partial_copy_error_rolls_back_only_newly_created_files(self):
+        with external_fixture() as fixture:
+            project = fixture / "project"
+            project.mkdir()
+            previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=fixture / "artifacts", create=True)
+            following = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=fixture / "artifacts", create=True)
+            (previous / "input.bin").write_bytes(b"keep original")
+            sentinel = following / "other.bin"
+            sentinel.write_bytes(b"keep unrelated destination")
+            def partial_failure(reader, writer):
+                writer.write(reader.read(4))
+                raise OSError("injected write failure")
+            with mock.patch.object(ARTIFACTS.shutil, "copyfileobj", side_effect=partial_failure), self.assertRaises(OSError):
+                ARTIFACTS.copy_run_inputs(project, previous, following, ["input.bin"])
+            self.assertEqual(list(following.iterdir()), [sentinel])
+            self.assertEqual(sentinel.read_bytes(), b"keep unrelated destination")
+            self.assertEqual((previous / "input.bin").read_bytes(), b"keep original")
 
     def test_management_workspace_cleanup_is_scoped_and_keeps_adjacent_resources(self):
         with external_fixture() as fixture:
@@ -235,7 +317,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     def test_management_default_state_and_support_are_external(self):
         self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, SYNC_SCRIPT_PATH.resolve().parents[2])
         self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, Path.cwd().resolve())
-        expected_root = ARTIFACTS.resolve_task_artifact_root(SYNC.DEFAULT_PROJECT_ROOT, "management-skill-sync")
+        expected_root = ARTIFACTS.resolve_task_artifact_root(SYNC.DEFAULT_PROJECT_ROOT, "management-skill-sync", run_id=ARTIFACTS.task_artifact_run_id(SYNC.DEFAULT_CACHE_ROOT))
         self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_root)
         self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_root / "state" / "management-skill-sync.json")
         self.assertFalse(expected_root.is_relative_to(SYNC.DEFAULT_PROJECT_ROOT))

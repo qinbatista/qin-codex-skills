@@ -55,14 +55,15 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
                     self.assertEqual([], errors)
 
     def test_command_paths_preserve_explicit_relative_and_absolute_paths(self):
-        with tempfile.TemporaryDirectory(dir=self.cache) as temporary_directory:
+        with tempfile.TemporaryDirectory(prefix="command paths-", dir=self.cache) as temporary_directory:
             repo_root = Path(temporary_directory)
             skill_dir = repo_root / "sample-skill"
             skill_dir.mkdir()
             paths = [skill_dir / "check.py", repo_root / "parent-check.py", repo_root / "absolute-check.py"]
             for path in paths:
                 path.write_text("pass\n", encoding="utf-8")
-            texts = [f"`./check.py` `../parent-check.py` `{paths[2]}`", f"`./check.py` `../parent-check.py` `{paths[2].as_posix()}`", f"`.\\check.py` `..\\parent-check.py` `{paths[2]}`"]
+            windows_absolute_path = str(paths[2]).replace("/", "\\")
+            texts = [f"`./check.py` `../parent-check.py` `{paths[2]}`", f"`./check.py` `../parent-check.py` `{paths[2].as_posix()}`", f"`.\\check.py` `..\\parent-check.py` `{paths[2]}`", f'python3 "./check.py" "../parent-check.py" "{paths[2]}"', f"python3 './check.py' '../parent-check.py' '{paths[2]}'", f'py -3 ".\\check.py" "..\\parent-check.py" "{windows_absolute_path}"', f'`python3 ./check.py ../parent-check.py "{paths[2]}"`']
             for command_text in texts:
                 with self.subTest(command_text=command_text):
                     resolved, errors = OPTIMIZER.extract_command_paths(command_text + " and the external data file `AI Memory/ai_memory.py`", skill_dir, repo_root)

@@ -40,7 +40,10 @@ SCRIPT_CANDIDATES = [
 
 SECTION_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-COMMAND_PATH_PATTERN = re.compile(r"(?<![\w./\\~<:-])(?:(?:<codex-home>[\\/]skills[\\/]|~[\\/]\.(?:agents|codex)[\\/]skills[\\/]|[A-Za-z]:[\\/]|[\\/]{1,2}|\.{1,2}[\\/])(?:[\w.-]+[\\/])*|(?:[\w.-]+[\\/])+)[\w.-]+\.(?:py|sh|applescript)\b")
+COMMAND_PATH_PATTERN = re.compile(
+    r"(?P<quote>[`\"'])(?P<quoted_path>(?:<codex-home>[\\/]skills[\\/]|~[\\/]\.(?:agents|codex)[\\/]skills[\\/]|[A-Za-z]:[\\/]|[\\/]{1,2}|\.{1,2}[\\/]|[\w.-]+[\\/])(?:(?!(?P=quote))[^\r\n])*\.(?:py|sh|applescript))(?P=quote)"
+    r"|(?<![\w./\\~<:-])(?:(?:<codex-home>[\\/]skills[\\/]|~[\\/]\.(?:agents|codex)[\\/]skills[\\/]|[A-Za-z]:[\\/]|[\\/]{1,2}|\.{1,2}[\\/])(?:[\w.-]+[\\/])*|(?:[\w.-]+[\\/])+)[\w.-]+\.(?:py|sh|applescript)\b"
+)
 LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
 
 
@@ -215,7 +218,7 @@ def extract_command_paths(text: str, skill_dir: Path, repo_root: Path) -> tuple[
     _paths = []
     _errors = []
     for _match in COMMAND_PATH_PATTERN.finditer(text):
-        _raw_path = _match.group(0)
+        _raw_path = _match.group("quoted_path") or _match.group(0)
         _normalized_path = _raw_path.replace("\\", "/")
         _path_parts = [part.casefold() for part in _normalized_path.split("/")]
         _has_explicit_command_prefix = _normalized_path.startswith(("/", "./", "../", "~/.agents/skills/", "<codex-home>/skills/", "~/.codex/skills/", "skills/")) or re.match(r"^[A-Za-z]:/", _normalized_path) is not None
@@ -226,7 +229,7 @@ def extract_command_paths(text: str, skill_dir: Path, repo_root: Path) -> tuple[
             continue
         _paths.append(_resolved_path)
         if not _resolved_path.exists():
-            _errors.append(f"Missing command path: {_match.group(0)}")
+            _errors.append(f"Missing command path: {_raw_path}")
     return dedupe_paths(_paths), _errors
 
 

@@ -6,7 +6,9 @@ Read this reference before any task-selected file write, including browser evide
 
 All AI task support belongs outside every project directory and Codex-managed storage from its first write. This includes screenshots, JSON receipts, logs, probes, snapshots, generated candidates, comparisons, one-off code, test fixtures/results, tool caches and duplicate downloads. Ignoring a path in Git does not make project-local scratch acceptable. Never use project `Cache/temp-*`, root `output/`, `Outputs/`, `tmp/` or `work/` for these files.
 
-Use `workflow-skill/scripts/task_artifact_paths.py` to resolve the external base, exact project identity and task ID. `resolve_task_artifact_root(project_root, task_id, create=True)` returns the isolated task directory; `task_artifact_environment(task_root, create=True)` binds child `TMP`, `TEMP` and `TMPDIR` to its `tmp` directory. Resolve paths with native APIs, share the same resolved owner with delegates, and assign separate branch subdirectories when writers run in parallel.
+Use `workflow-skill/scripts/task_artifact_paths.py` to resolve the external base and exact project identity. `task_id` identifies the logical chat/task; each distinct execution gets a fresh unpredictable `run_id` and `TaskArtifacts/p-<project-key>/temp-<task-key>-<run-id>/`. `resolve_task_artifact_root(project_root, task_id, run_id=None, create=False)` returns a new candidate on every call without `run_id`; `create=True` creates it atomically and refuses any existing root. Reopen an allocated run with its exact `run_id` and `create=False`, or use the already returned path; do not call the allocator again to locate earlier output. Legacy deterministic `t-<task-key>/` roots support readback, selective input copy and original-owner cleanup only; never write new output into them.
+
+`task_artifact_environment(task_root, create=True)` binds child `TMP`, `TEMP` and `TMPDIR` to that run's `tmp` directory. Resolve paths with native APIs and retain the returned root for dependent calls. Tools and delegates working in the same bounded unit share that exact root with disjoint branch subdirectories; independent units allocate separate roots.
 
 | Selection | External base |
 | --- | --- |
@@ -19,15 +21,33 @@ Projectless work uses the same external resolver with its exact workspace/task i
 
 Configure each tool's output, working directory and cache options before launch, together with the child temporary environment. Use `tempfile` only with an explicit directory inside that external task root. Disable project-local bytecode, pytest, coverage and equivalent test caches or bind them externally. Capture output in the current tool session when no file is needed. A tool that cannot honor this boundary leaves that check pending; it does not authorize writing scratch into the project.
 
+## Separate executions and continuation
+
+A new request, resumed execution or newly started test, build, package or deployment unit allocates a new run, even in the same window, chat or logical task. Never append later output to an earlier run or keep one growing directory for the chat's lifetime. An exact active run remains available to its own consumers; this does not protect completed sibling runs.
+
+For continuation, allocate the new run first and inspect the earlier run's purpose, exact identity and current consumers. Copy only genuinely useful inputs, fixtures or minimum resumable state; do not copy its whole scratch tree, logs or build caches merely because they exist. Verify copied bytes and update consuming paths through a fresh reader. Delete the confirmed disposable old run once no live or recovery consumer still needs it, or immediately when no input is needed. Preserve uncertain, shared and review/reuse resources through their real owner; an open or running chat alone is not a retention reason.
+
+Use `copy_run_inputs(project_root, source_root, destination_root, relative_paths)` for an explicit file whitelist; it verifies independent copied bytes/hashes and rejects overwrite, links and traversal. The resolver CLI can allocate and copy in one invocation:
+
+```text
+python workflow-skill/scripts/task_artifact_paths.py --project-root ROOT --task-id CHAT --create --copy-from PREVIOUS_ROOT --input fixtures/file.json --input images/input.png
+```
+
+Use the returned root and file hashes for readback. Omit copy options when no prior input is needed; never replace the whitelist with a directory clone.
+
+Release disposable stage files, child activity and worktrees as soon as that unit's result is verified in its real owner under [Task Resource Lifecycle](task-resource-lifecycle.md). Do not wait for the whole chat or Ending to finish. Final deliverables and reusable environments leave scratch through verified delivery or owner handoff.
+
 ## Preserve real owners
 
 - Maintained source/configuration, versioned non-runtime tests and requested final deliverables keep their declared owners. Required native runtime/build caches, canonical asset originals/history, project services and their real resource/recovery Cache owners are not ordinary AI scratch. Do not blanket move a project's Cache or reclassify task evidence as a runtime resource merely to retain it.
-- Keep changing run inputs, parameters, execution state and one-off adapters in the external task directory; pass them as data to stable tools. Durable project knowledge stays only in the configured Obsidian vault. Skill folders and project `AGENTS.md` hold stable instructions, not run inventories or task logs.
+- Keep changing run inputs, parameters, execution state and one-off adapters in that execution's external run directory; pass them as data to stable tools. Durable project knowledge stays only in the configured Obsidian vault. Skill folders and project `AGENTS.md` hold stable instructions, not run inventories or task logs.
 - Image generation still follows the [image workflow](image-generation.md). Bind native downloads to the exact job and SHA, move unchanged accepted files into their actual asset/deliverable owner, then release external staging and transport duplicates after the required acceptance/sync readback. Set download paths externally where the tool supports it; an unavoidable tool-owned staging copy is transferred and cleaned promptly, never adopted as permanent Downloads storage.
 - A retained review/test environment or nonshipping harness needs an explicit external resource owner and working consumer references. Final assets and packages belong in their final owner. Renaming scratch to `remote-*`, or putting metadata beside it, does not establish retention or remote synchronization.
 - Before cleanup, verify final bytes and consuming references through a fresh reader. On pause/failure, preserve minimum recovery inputs/state in the declared recovery owner and remove independent disposable support. Keep active, shared, user-opened and useful review/reuse resources until their owners and references are verified; missing metadata never authorizes deletion.
 
 ## Migrate existing misplaced scratch
+
+For an explicit request to clean one project's Cache, all Codex projects, or the whole computer, use [Cache cleanup](cache-cleanup.md). That request authorizes direct deletion of confirmed disposable legacy `Cache/temp-*` within its selected scope after checking exact run identity and consumers. Preserve only resources with actual active, recovery, shared or review/reuse needs; activity elsewhere in the project or chat does not protect old runs. Migration is not a prerequisite for authorized deletion. Ordinary task/Ending cleanup keeps its bounded ownership rules below.
 
 Select exact paths through creation history, file identity and current consumer checks. Preserve canonical resources, source, maintained tests, final deliverables, unrelated work and uncertain files. Stop only confirmed owned disposable activity before moving its backing files. Move authorized legacy scratch to its isolated external owner, preserve bytes/hashes, update every affected consumer/reference and verify with a fresh reader before retiring the old location.
 

@@ -98,6 +98,10 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertIn("review or reuse", prompt)
         self.assertIn("up to ten recent chats", prompt)
         self.assertIn("unavailable memory vault must not block", prompt)
+        self.assertIn("remove only this exact Ending conversation as the final step", prompt)
+        self.assertIn("call set_thread_archived for this Ending only", prompt)
+        self.assertIn("local deletion pending because local records remain", prompt)
+        self.assertNotIn("do not move, reorder, open, archive, delete", prompt)
         for resource_audit in (True, False):
             with self.subTest(resource_audit=resource_audit):
                 handoff = self.prepare(resource_audit=resource_audit)["create_thread"]
@@ -127,6 +131,8 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertEqual(result["status"], "complete")
         self.assertEqual(result["event_id"], "event-1")
         self.assertEqual(result["memory_sync"], "verified")
+        self.assertEqual(result["conversation_cleanup"]["status"], "ready")
+        self.assertEqual(result["conversation_cleanup"]["thread_id"], "thread-1")
         for changed in ({"read_back_verified": False}, {"vault_document": "local/store.jsonl"}, {"project": "OtherProject"}, {"event_id": ""}, {"current_memory": {}}):
             with self.assertRaises(ValueError):
                 MODULE.record_completion(packet, {**self.vault_result(), **changed})
@@ -139,6 +145,37 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["memory_status"], "complete")
         self.assertEqual(result["resource_status"], "pending")
+        self.assertEqual(result["conversation_cleanup"]["status"], "waiting")
+
+    def test_native_archive_is_separate_from_local_deletion(self):
+        completed = MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result())
+        archive = {"thread_id": "thread-1", "host_id": "local", "status": "archived", "read_back_verified": True, "source": "native archive receipt and archived-thread readback"}
+        result = MODULE.record_conversation_cleanup(completed, archive)
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["conversation_cleanup"]["status"], "archived")
+        self.assertEqual(result["conversation_cleanup"]["local_deletion_status"], "pending")
+        self.assertEqual(result["conversation_cleanup"]["reason"], "archive_retains_local_records")
+        deleted = MODULE.record_conversation_cleanup(result, {**archive, "status": "deleted", "local_record_absent": True})
+        self.assertEqual(deleted["conversation_cleanup"]["local_deletion_status"], "complete")
+        self.assertNotIn("reason", deleted["conversation_cleanup"])
+        for change in ({"thread_id": "other"}, {"host_id": "other"}, {"read_back_verified": False}, {"source": ""}, {"local_record_absent": True}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                MODULE.record_conversation_cleanup(completed, {**archive, **change})
+
+    def test_cleanup_waits_for_both_branches_and_native_local_absence(self):
+        receipt = {"thread_id": "thread-1", "host_id": "local", "status": "deleted", "read_back_verified": True, "source": "native deletion receipt and local-record absence readback", "local_record_absent": True}
+        for memory_result, resource_result in (({"status": "pending", "reason": "vault unavailable"}, self.resource_result()), (self.vault_result(), self.resource_result(status="pending"))):
+            packet = MODULE.record_completion(self.acknowledged(), memory_result, resource_result)
+            with self.assertRaisesRegex(ValueError, "branch completion"):
+                MODULE.record_conversation_cleanup(packet, receipt)
+        completed = MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result())
+        with self.assertRaisesRegex(ValueError, "local-record absence"):
+            MODULE.record_conversation_cleanup(completed, {**receipt, "local_record_absent": False})
+        deleted = MODULE.record_conversation_cleanup(completed, receipt)
+        self.assertEqual(deleted["conversation_cleanup"]["local_deletion_status"], "complete")
+        pending = MODULE.record_conversation_cleanup(completed, {"thread_id": "thread-1", "host_id": "local", "status": "pending", "reason": "native action unavailable"})
+        self.assertEqual(pending["status"], "complete")
+        self.assertEqual(pending["conversation_cleanup"]["local_deletion_status"], "pending")
 
     def test_resource_success_survives_pending_or_skipped_memory(self):
         for memory_result in ({"status": "pending", "reason": "vault unavailable"}, {"status": "skipped", "reason": "no_durable_information"}):

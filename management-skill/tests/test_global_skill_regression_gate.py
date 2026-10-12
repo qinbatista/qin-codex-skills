@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
@@ -235,6 +236,8 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         catalog = GATE.load_catalog(PROJECT_ROOT)
         check = next(item for item in catalog["checks"] if item["id"] == "project-testing-units")
         cache_root = GATE.resolve_task_artifact_root(PROJECT_ROOT, "testing-skill")
+        cache_root.mkdir(parents=True)
+        self.addCleanup(cache_root.rmdir)
         with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(cache_root)}):
             with GATE.candidate_layouts(PROJECT_ROOT, PROJECT_ROOT, catalog["managed_skills"]) as roots:
                 healthy = GATE.run_check(check, "source", PROJECT_ROOT, PROJECT_ROOT, roots, catalog["managed_skills"])
@@ -247,11 +250,16 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
     def test_command_tempfile_stays_external_and_cleans_on_timeout(self):
         task_cache = GATE.resolve_task_artifact_root(PROJECT_ROOT, "testing-skill")
         task_cache.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(task_cache.rmdir)
         with tempfile.TemporaryDirectory(prefix="gate-check-", dir=task_cache) as project_dir:
             project_root = Path(project_dir)
             code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert not p.is_relative_to(Path.cwd()); print('Ran 1 test')"
-            result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
+            with mock.patch.object(GATE.subprocess, "run", wraps=GATE.subprocess.run) as runner:
+                result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
             self.assertEqual(result["status"], "pass", result)
+            completed_cache = Path(runner.call_args.kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"])
+            self.assertFalse(completed_cache.exists())
+            self.assertFalse(completed_cache.parent.exists())
             observed = []
 
             def timeout(*args, **kwargs):
@@ -264,6 +272,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     GATE.command_result("timeout", "source", ["test"], project_root, 1, {})
             self.assertFalse(observed[0].exists())
+            self.assertFalse(observed[0].parent.exists())
 
     def test_candidate_cache_override_rejects_project_codex_and_tokens_before_writing(self):
         for cache_root in (PROJECT_ROOT / "management-skill", Path.home() / ".codex" / "scratch", PROJECT_ROOT / "Cache" / "remote-test", Path("%SystemDrive%/tmp")):
@@ -276,18 +285,40 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
 
     def test_candidate_layout_uses_ephemeral_contract_fixtures_without_plugin_cache(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)
+        inherited_owner = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+        configurations = (inherited_owner, None) if inherited_owner else (None,)
         with tempfile.TemporaryDirectory() as temp_dir:
             deployed = Path(temp_dir) / "deployed"
             deployed.mkdir()
             for skill_name in catalog["managed_skills"]:
                 GATE.shutil.copytree(PROJECT_ROOT / skill_name, deployed / skill_name)
-            with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
-                for root in roots.values():
-                    candidate_cache = root.parent / "plugins" / "cache"
-                    for plugin_id, skill_name in GATE.REQUIRED_PLUGIN_CONTRACTS:
-                        fixture = candidate_cache / "ci-contract-fixture" / plugin_id / "0.0.0" / "skills" / skill_name / "SKILL.md"
-                        self.assertTrue(fixture.is_file())
-                        self.assertIn("Candidate-only contract fixture", fixture.read_text(encoding="utf-8"))
+            for configured_owner in configurations:
+                with self.subTest(configured_owner=configured_owner), mock.patch.dict(os.environ), ExitStack() as siblings:
+                    if configured_owner:
+                        os.environ["CODEX_PROJECT_CACHE_ROOT"] = configured_owner
+                    else:
+                        os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+                    with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
+                        selected_owner = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+                        workspace = roots["source"].parents[1]
+                        run_root = workspace.parent
+                        if selected_owner:
+                            self.assertEqual(run_root, GATE.project_task_cache_root(PROJECT_ROOT, Path(selected_owner)))
+                            sibling = Path(siblings.enter_context(tempfile.TemporaryDirectory(prefix="retained-sibling-", dir=run_root)))
+                            retained = sibling / "resource.bin"
+                            retained.write_bytes(b"keep active sibling")
+                        for root in roots.values():
+                            candidate_cache = root.parent / "plugins" / "cache"
+                            for plugin_id, skill_name in GATE.REQUIRED_PLUGIN_CONTRACTS:
+                                fixture = candidate_cache / "ci-contract-fixture" / plugin_id / "0.0.0" / "skills" / skill_name / "SKILL.md"
+                                self.assertTrue(fixture.is_file())
+                                self.assertIn("Candidate-only contract fixture", fixture.read_text(encoding="utf-8"))
+                    self.assertFalse(workspace.exists())
+                    if selected_owner:
+                        self.assertTrue(run_root.is_dir())
+                        self.assertEqual(retained.read_bytes(), b"keep active sibling")
+                    else:
+                        self.assertFalse(run_root.exists())
 
     def test_runner_uses_argument_arrays_without_shell_execution(self):
         text = MODULE_PATH.read_text(encoding="utf-8")
