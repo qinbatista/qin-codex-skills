@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
@@ -284,22 +285,40 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
 
     def test_candidate_layout_uses_ephemeral_contract_fixtures_without_plugin_cache(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)
+        inherited_owner = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+        configurations = (inherited_owner, None) if inherited_owner else (None,)
         with tempfile.TemporaryDirectory() as temp_dir:
             deployed = Path(temp_dir) / "deployed"
             deployed.mkdir()
             for skill_name in catalog["managed_skills"]:
                 GATE.shutil.copytree(PROJECT_ROOT / skill_name, deployed / skill_name)
-            with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
-                workspace = roots["source"].parents[1]
-                run_root = workspace.parent
-                for root in roots.values():
-                    candidate_cache = root.parent / "plugins" / "cache"
-                    for plugin_id, skill_name in GATE.REQUIRED_PLUGIN_CONTRACTS:
-                        fixture = candidate_cache / "ci-contract-fixture" / plugin_id / "0.0.0" / "skills" / skill_name / "SKILL.md"
-                        self.assertTrue(fixture.is_file())
-                        self.assertIn("Candidate-only contract fixture", fixture.read_text(encoding="utf-8"))
-            self.assertFalse(workspace.exists())
-            self.assertFalse(run_root.exists())
+            for configured_owner in configurations:
+                with self.subTest(configured_owner=configured_owner), mock.patch.dict(os.environ), ExitStack() as siblings:
+                    if configured_owner:
+                        os.environ["CODEX_PROJECT_CACHE_ROOT"] = configured_owner
+                    else:
+                        os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+                    with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
+                        selected_owner = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+                        workspace = roots["source"].parents[1]
+                        run_root = workspace.parent
+                        if selected_owner:
+                            self.assertEqual(run_root, GATE.project_task_cache_root(PROJECT_ROOT, Path(selected_owner)))
+                            sibling = Path(siblings.enter_context(tempfile.TemporaryDirectory(prefix="retained-sibling-", dir=run_root)))
+                            retained = sibling / "resource.bin"
+                            retained.write_bytes(b"keep active sibling")
+                        for root in roots.values():
+                            candidate_cache = root.parent / "plugins" / "cache"
+                            for plugin_id, skill_name in GATE.REQUIRED_PLUGIN_CONTRACTS:
+                                fixture = candidate_cache / "ci-contract-fixture" / plugin_id / "0.0.0" / "skills" / skill_name / "SKILL.md"
+                                self.assertTrue(fixture.is_file())
+                                self.assertIn("Candidate-only contract fixture", fixture.read_text(encoding="utf-8"))
+                    self.assertFalse(workspace.exists())
+                    if selected_owner:
+                        self.assertTrue(run_root.is_dir())
+                        self.assertEqual(retained.read_bytes(), b"keep active sibling")
+                    else:
+                        self.assertFalse(run_root.exists())
 
     def test_runner_uses_argument_arrays_without_shell_execution(self):
         text = MODULE_PATH.read_text(encoding="utf-8")
