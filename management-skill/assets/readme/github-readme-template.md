@@ -38,7 +38,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
-Skills own instructions, references, helpers and release tests. Follow the [external artifact policy](workflow-skill/references/project-cache-artifact-policy.md): AI support, test output and tool caches start outside projects and Codex storage in the resolved `YoFaAI/TaskArtifacts` project/task owner. Source, final deliverables and canonical runtime/assets retain their owners. Migrate legacy scratch with verified identity, consumers and bytes. Clean disposable support after verified handoff; preserve review/reuse resources.
+Skills own instructions, helpers and release tests. The [external artifact policy](workflow-skill/references/project-cache-artifact-policy.md) places AI support outside projects and Codex under `YoFaAI/TaskArtifacts`. Every request, test, build, package or deployment gets a fresh `temp-*`, even in one chat. Copy selected continuation inputs, verify bytes, then release completed directories and disposable worktrees. Preserve source, deliverables, canonical assets and active/review/reuse resources.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

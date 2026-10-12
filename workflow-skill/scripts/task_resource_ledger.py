@@ -25,6 +25,7 @@ from task_artifact_paths import (
     _check_ancestors,
     project_artifact_directory,
     resolve_task_artifact_root,
+    task_artifact_run_id,
     validate_external_directory,
 )
 
@@ -258,6 +259,7 @@ def _marker_payload(ledger: dict[str, Any]) -> dict[str, Any]:
         "ledger_id": ledger["ledger_id"],
         "owner_task_key": ledger["owner_task_key"],
         "task_root_identity": ledger["binding"]["task_root_identity"],
+        **({"run_id": ledger["run_id"]} if "run_id" in ledger else {}),
     }
 
 
@@ -279,7 +281,8 @@ def new_ledger(
             _fail("new task roots must be external absolute directories; legacy Cache roots are read-only")
         if artifact_root is None:
             artifact_root = Path(task_root).parent.parent
-    expected = resolve_task_artifact_root(root, task_id, artifact_root=artifact_root)
+    run_id = task_artifact_run_id(task_root) if task_root is not None else None
+    expected = resolve_task_artifact_root(root, task_id, run_id=run_id, artifact_root=artifact_root)
     if task_root is not None and Path(task_root) != expected:
         _fail("task_root must match the resolved external project and task identity")
     project_artifact_directory(root, artifact_root=expected.parent.parent, create=True)
@@ -291,6 +294,7 @@ def new_ledger(
         "schema_version": SCHEMA_VERSION,
         "ledger_id": uuid.uuid4().hex,
         "owner_task_key": _task_key(task_id),
+        "run_id": task_artifact_run_id(expected),
         "owner_role": role,
         "task_root": task_root,
         "binding": {
@@ -325,6 +329,13 @@ def validate_ledger(ledger: Any) -> dict[str, Any]:
     if ledger.get("owner_role") not in {"producer", "ending"}:
         _fail("owner_role is invalid")
     task_root = _task_root_path(ledger.get("task_root"))
+    if "run_id" in ledger:
+        if not isinstance(ledger["run_id"], str) or not re.fullmatch(r"[0-9a-f]{32}", ledger["run_id"]):
+            _fail("run_id is invalid")
+        if ledger["schema_version"] == SCHEMA_VERSION and task_artifact_run_id(task_root) != ledger["run_id"]:
+            _fail("run_id disagrees with task_root")
+    elif ledger["schema_version"] == SCHEMA_VERSION and not re.fullmatch(r"t-[0-9a-f]{24}", Path(task_root).name):
+        _fail("independent execution ledger requires run_id")
     if (ledger["schema_version"] == SCHEMA_VERSION) != Path(task_root).is_absolute():
         _fail("ledger schema and task_root location disagree")
     binding = ledger.get("binding")
@@ -427,7 +438,8 @@ def _verify_binding(ledger: dict[str, Any], project_root: str | Path, *, read_on
     else:
         base = ledger["binding"]["artifact_base"]
         project_directory = project_artifact_directory(root, artifact_root=base)
-        expected = project_directory / f"t-{ledger['owner_task_key']}"
+        expected_name = f"temp-{ledger['owner_task_key']}-{ledger['run_id']}" if "run_id" in ledger else f"t-{ledger['owner_task_key']}"
+        expected = project_directory / expected_name
         if task_root != expected:
             _fail("external task root does not match the bound project and task identity")
         validate_external_directory(task_root, root)
@@ -462,6 +474,8 @@ def _new_resource(
 ) -> dict[str, Any]:
     _require_writable(ledger)
     validate_ledger(ledger)
+    if "run_id" not in ledger:
+        _fail("legacy deterministic roots support cleanup only; allocate a new execution")
     resource_id = _identifier(resource_id, "resource id")
     scope = _identifier(scope, "scope")
     purpose = _require_text(purpose, "purpose")

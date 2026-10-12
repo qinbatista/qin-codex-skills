@@ -17,11 +17,48 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Allocate an independent validation run
+        id: artifacts
+        run: |
+          python -B - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "workflow-skill" / "scripts"))
+          from task_artifact_paths import resolve_task_artifact_root, task_artifact_environment
+          root = resolve_task_artifact_root(Path.cwd(), "github-validation", create=True)
+          environment = task_artifact_environment(root, create=True)
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:
+              for name in ("TMP", "TEMP", "TMPDIR"):
+                  output.write(f"{name}={environment[name]}\n")
+              output.write(f"CODEX_PROJECT_CACHE_ROOT={root}\nPYTHONDONTWRITEBYTECODE=1\n")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"artifact_root={root}\n")
+          PY
       - name: Skill structure and retained-capability validation
         run: |
-          python -B management-skill/scripts/global_skill_regression_gate.py check --project-root . --skills-dir . --mode source --output Cache/temp-ci/global-skill-gate.json
+          python -B management-skill/scripts/global_skill_regression_gate.py check --project-root . --skills-dir . --mode source
       - name: Upload validation evidence
+        if: always() && steps.artifacts.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: skill-validation-${{ matrix.python-version }}
-          path: Cache/temp-ci/
+          path: ${{ steps.artifacts.outputs.artifact_root }}/global-skill-regression/
+      - name: Release validation scratch
+        if: always() && steps.artifacts.outcome == 'success'
+        run: |
+          python -B - <<'PY'
+          import os
+          import shutil
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "workflow-skill" / "scripts"))
+          from task_artifact_paths import validate_external_directory, task_artifact_run_id
+          from task_resource_ledger import _tree_manifest
+          root = validate_external_directory(os.environ["CODEX_PROJECT_CACHE_ROOT"], Path.cwd())
+          task_artifact_run_id(root)
+          _tree_manifest(root, root.stat().st_dev)
+          shutil.rmtree(root)
+          if root.exists():
+              raise RuntimeError("Validation scratch remains")
+          PY

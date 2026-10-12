@@ -1,11 +1,11 @@
 ---
 name: workflow-skill
-description: "Coordinate parallel work, Monitor Mode for long tasks or other chats, bounded verification and resource cleanup while preserving scope, active work and user review."
+description: "Coordinate parallel work, Monitor Mode, bounded verification and resource cleanup. Use for requested Cache/temp-* cleanup of one project, all Codex projects or the whole computer; preserve exact active resources and user review/reuse."
 ---
 
 # Workflow
 
-Before any file write, apply the [external artifact policy](references/project-cache-artifact-policy.md). Resolve task support outside project directories and Codex storage from its first write, including browser/helper output and child-tool caches. Share the resolved project/task owner with delegates. Maintained source, final deliverables and real runtime/assets keep their owners; inspect exact paths and the Git index before committing.
+Before any file write, apply the [external artifact policy](references/project-cache-artifact-policy.md). Allocate a fresh external `temp-<task-key>-<run-id>/` from its first write for each request or test/build/package/deploy work unit, including continued work in the same chat. Share its exact run owner with dependent tools and delegates. Maintained source, final deliverables and real runtime/assets keep their owners; inspect exact paths and the Git index before committing.
 
 Apply [Task Analyze](../task-analyze-skill/SKILL.md) for correct names and the opening brief: result, qualitative difficulty, known models, branch roles and dependencies. Keep it proportional to the work; a simple task needs only a sentence. Follow its [action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests) through execution, recovery and the final response.
 
@@ -31,6 +31,10 @@ Use [Monitor Mode](references/monitor-mode.md) when the user asks to monitor ano
 
 Check every five minutes, with earlier attention for completion or actionable failures. Compare progress with the user's scope, owning Skills, exact-project memory and current evidence. Stay quiet while work is on course; send brief steering only for a concrete deviation or blocker. Stop confirmed out-of-scope work through a supported control, or request a pause and verify acknowledgement when only messaging is available. Verify the agreed final result before closing supervision.
 
+## Requested Cache cleanup
+
+When the user asks to clean Cache, `temp-*`, all Codex projects, or the whole computer, follow [Cache cleanup](references/cache-cleanup.md). Match the requested scope, enumerate exact runs and consumers, then delete only confirmed disposable Skill-generated support. A running project or chat protects only resources it still uses; completed earlier runs may be cleaned immediately. An explicit cleanup request covers eligible legacy `Cache/temp-*` directly; no migration or routine confirmation is required.
+
 ## Git branch ownership
 
 - Before Git work, inspect the actual current local branch, its configured upstream, worktrees, index and dirty files. Unless the user explicitly selects another target, all task edits and commits must stay on that current local branch. When the user omits a branch, tell them its actual name and proceed there without a routine confirmation. Generic requests to fix, commit, sync, deliver or merge do not select `master` or other branches.
@@ -47,7 +51,7 @@ For every Git-managed merge or restore task, apply [Git branch ownership](#git-b
 2. Preview the branches, qualitative difficulty, known models and real dependencies through Task Analyze, then proceed without a routine approval pause.
 3. Apply the ready-work policy above. Start independent branches together, prepare downstream work during external waits, and integrate outputs only at their actual join points.
 4. Verify changed code or consequential results using [Verify](../verify-skill/SKILL.md). Use one real check at the smallest relevant boundary; do not start or compile the whole project unless requested.
-5. Verify requested results and their references in the declared durable owner through a fresh reader, then release exact disposable scratch, test/build intermediates and idle task-opened surfaces. Preserve files and live environments needed for user review or reuse; establish their output/resource owner before clearing backing scratch. On pause or failure, keep minimum recovery state and remove independent disposable work. Follow [resource ownership](references/task-resource-lifecycle.md). Report result, cleanup and concrete ownership/API blockers, distinguishing source edits, installation and publication.
+5. At each work unit's verified delivery, release its exact disposable scratch, test/build intermediates, idle surfaces and owned worktrees through [resource ownership](references/task-resource-lifecycle.md). A long-running chat or later work unit does not delay this cleanup. For continuation, allocate a fresh run and verify selective copies of useful inputs before retiring the old run. Preserve files and live environments needed for review, reuse or minimum recovery in their actual owner. Report result, cleanup and concrete ownership/API blockers, distinguishing source edits, installation and publication.
 6. After completion, use the authorized visible Ending for useful [Project Memory](../project-memory-skill/SKILL.md) work and the [resource audit](references/ending-resource-audit.md) in parallel. Workflow owns global resource coordination across the originating and recent completed tasks. Follow specific owners' cleanup first, then finish their missed cleanup through available owner tools. After the branch records are read back, remove only that completed Ending's own conversation under [Project Memory's cleanup rule](../project-memory-skill/SKILL.md#ending-conversation-cleanup); distinguish archival from local deletion. Memory failure never blocks reclamation; Ending never gates or re-verifies the main result.
 
 ## Boundaries

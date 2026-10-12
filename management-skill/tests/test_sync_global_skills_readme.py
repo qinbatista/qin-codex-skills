@@ -8,6 +8,7 @@ import time
 import unittest
 import unicodedata
 import xml.etree.ElementTree as ElementTree
+from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
@@ -138,7 +139,128 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         )
         self.assertFalse(sync_global_skills.DEFAULT_CACHE_ROOT.is_relative_to(sync_global_skills.DEFAULT_PROJECT_ROOT))
         self.assertFalse(sync_global_skills.DEFAULT_CACHE_ROOT.is_relative_to(Path.home() / ".codex"))
-        self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT, sync_global_skills.resolve_task_artifact_root(sync_global_skills.DEFAULT_PROJECT_ROOT, "management-skill-sync"))
+        run_id = sync_global_skills.DEFAULT_CACHE_ROOT.name.rsplit("-", 1)[1]
+        self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT, sync_global_skills.resolve_task_artifact_root(sync_global_skills.DEFAULT_PROJECT_ROOT, "management-skill-sync", run_id=run_id))
+        self.assertNotEqual(sync_global_skills.DEFAULT_CACHE_ROOT, sync_global_skills.resolve_task_artifact_root(sync_global_skills.DEFAULT_PROJECT_ROOT, "management-skill-sync"))
+        with mock.patch.dict(sync_global_skills.os.environ):
+            sync_global_skills.os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+            self.assertEqual(sync_global_skills.sync_state_file(), sync_global_skills.DEFAULT_STATE_FILE)
+            self.assertEqual(sync_global_skills.sync_state_file(), sync_global_skills.sync_state_file())
+
+    def test_completed_workspace_run_is_removed_while_next_run_is_active(self):
+        artifact_base = Path(self.codex_sandbox.name) / "external-runs"
+        with mock.patch.dict(sync_global_skills.os.environ, {"YOFA_TASK_ARTIFACT_ROOT": str(artifact_base)}):
+            sync_global_skills.os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+            with ExitStack() as first_run, ExitStack() as second_run:
+                first = first_run.enter_context(sync_global_skills.temporary_workspace("installer-"))
+                second = second_run.enter_context(sync_global_skills.temporary_workspace("installer-"))
+                second_marker = second / "active.bin"
+                second_marker.write_bytes(b"second run remains active")
+                self.assertNotEqual(first.parent, second.parent)
+                self.assertEqual(first.parent.parent, second.parent.parent)
+                self.assertRegex(first.parent.name, r"^temp-[0-9a-f]{24}-[0-9a-f]{32}$")
+                self.assertRegex(second.parent.name, r"^temp-[0-9a-f]{24}-[0-9a-f]{32}$")
+                first_run.close()
+                self.assertFalse(first.exists())
+                self.assertFalse(first.parent.exists())
+                self.assertEqual(second_marker.read_bytes(), b"second run remains active")
+            self.assertFalse(second.exists())
+            self.assertFalse(second.parent.exists())
+            self.assertEqual(list(second.parent.parent.iterdir()), [])
+
+    def test_workspace_error_removes_its_owned_run(self):
+        artifact_base = Path(self.codex_sandbox.name) / "failed-run"
+        with mock.patch.dict(sync_global_skills.os.environ, {"YOFA_TASK_ARTIFACT_ROOT": str(artifact_base)}):
+            sync_global_skills.os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+            with self.assertRaisesRegex(RuntimeError, "expected installer failure"):
+                with sync_global_skills.temporary_workspace("installer-") as workspace:
+                    (workspace / "partial.bin").write_bytes(b"discard failed support")
+                    raise RuntimeError("expected installer failure")
+            self.assertFalse(workspace.exists())
+            self.assertFalse(workspace.parent.exists())
+
+    def test_configured_workspace_owner_and_active_sibling_are_preserved(self):
+        owner = Path(self.codex_sandbox.name) / "configured-owner"
+        owner.mkdir()
+        retained = owner / "retained.bin"
+        retained.write_bytes(b"retain useful resources")
+        with mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(owner)}):
+            with ExitStack() as first_run, ExitStack() as second_run:
+                first = first_run.enter_context(sync_global_skills.temporary_workspace("installer-"))
+                second = second_run.enter_context(sync_global_skills.temporary_workspace("installer-"))
+                self.assertEqual(first.parent, owner)
+                self.assertEqual(second.parent, owner)
+                self.assertNotEqual(first, second)
+                self.assertTrue(first.name.startswith("temp-"))
+                (second / "active.bin").write_bytes(b"active sibling")
+                first_run.close()
+                self.assertFalse(first.exists())
+                self.assertEqual((second / "active.bin").read_bytes(), b"active sibling")
+                with self.assertRaisesRegex(RuntimeError, "expected configured failure"):
+                    with sync_global_skills.temporary_workspace("failed-") as failed:
+                        (failed / "partial.bin").write_bytes(b"discard failed support")
+                        raise RuntimeError("expected configured failure")
+                self.assertFalse(failed.exists())
+                self.assertEqual((second / "active.bin").read_bytes(), b"active sibling")
+            self.assertFalse(second.exists())
+        self.assertEqual(list(owner.iterdir()), [retained])
+        self.assertEqual(retained.read_bytes(), b"retain useful resources")
+
+    def test_runtime_exit_removes_only_its_sync_receipt(self):
+        artifact_base = Path(self.codex_sandbox.name) / "runtime-receipts"
+        artifact_base.mkdir()
+        retained = artifact_base / "retained.bin"
+        retained.write_bytes(b"retain adjacent resources")
+        environment = dict(sync_global_skills.os.environ, YOFA_TASK_ARTIFACT_ROOT=str(artifact_base))
+        environment.pop("CODEX_PROJECT_CACHE_ROOT", None)
+        command = (
+            "import importlib.util,json,sys; from pathlib import Path; "
+            "spec=importlib.util.spec_from_file_location('receipt_runtime',sys.argv[1]); "
+            "module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); "
+            "receipt=module.sync_state_file(); assert receipt==module.sync_state_file(); "
+            "module.write_sync_state(receipt,'owner/repository','published-head','',''); "
+            "assert json.loads(receipt.read_text(encoding='utf-8'))['remote_head']=='published-head'; "
+            "print(json.dumps({'receipt':str(receipt),'run':str(module.DEFAULT_CACHE_ROOT)}))"
+        )
+        completed = sync_global_skills.subprocess.run([sys.executable, "-B", "-c", command, str(MODULE_PATH)], env=environment, capture_output=True, text=True, check=True, timeout=30, **sync_global_skills.hidden_process_options())
+        readback = json.loads(completed.stdout)
+        self.assertFalse(Path(readback["receipt"]).exists())
+        self.assertFalse(Path(readback["run"]).exists())
+        self.assertEqual(retained.read_bytes(), b"retain adjacent resources")
+
+    def test_sync_receipt_cleanup_preserves_changed_bytes_and_other_files(self):
+        owner = Path(self.codex_sandbox.name) / "receipt-owner"
+        owner.mkdir()
+        retained = owner / "retained.bin"
+        retained.write_bytes(b"retain owner resources")
+        with mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(owner)}), mock.patch.dict(sync_global_skills.SYNC_STATE_RECEIPTS, clear=True), mock.patch.object(sync_global_skills, "SYNC_STATE_DIRECTORIES", set()):
+            state_file = sync_global_skills.sync_state_file()
+            sync_global_skills.write_sync_state(state_file, "owner/repository", "published-head", "", "")
+            state_file.write_bytes(b"changed by another consumer")
+            with self.assertRaisesRegex(RuntimeError, "changed after this runtime"):
+                sync_global_skills.write_sync_state(state_file, "owner/repository", "unexpected-overwrite", "", "")
+            with mock.patch("builtins.print") as printer:
+                sync_global_skills.cleanup_sync_state()
+            self.assertEqual(state_file.read_bytes(), b"changed by another consumer")
+            self.assertEqual(retained.read_bytes(), b"retain owner resources")
+            self.assertTrue(printer.call_count)
+
+    def test_sync_receipt_keeps_preexisting_configured_state_and_rejects_collision(self):
+        owner = Path(self.codex_sandbox.name) / "existing-state-owner"
+        legacy_state = owner / "state" / "management-skill-sync.json"
+        legacy_state.parent.mkdir(parents=True)
+        legacy_state.write_bytes(b"preexisting configured state")
+        with mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(owner)}), mock.patch.dict(sync_global_skills.SYNC_STATE_RECEIPTS, clear=True), mock.patch.object(sync_global_skills, "SYNC_STATE_DIRECTORIES", set()):
+            state_file = sync_global_skills.sync_state_file()
+            self.assertNotEqual(state_file, legacy_state)
+            self.assertEqual(state_file, sync_global_skills.sync_state_file())
+            sync_global_skills.write_sync_state(state_file, "owner/repository", "published-head", "", "")
+            self.assertEqual(json.loads(state_file.read_text(encoding="utf-8"))["remote_head"], "published-head")
+            with self.assertRaises(FileExistsError):
+                sync_global_skills.write_sync_state(legacy_state, "owner/repository", "unexpected-overwrite", "", "")
+            sync_global_skills.cleanup_sync_state()
+            self.assertFalse(state_file.parent.parent.exists())
+            self.assertEqual(legacy_state.read_bytes(), b"preexisting configured state")
 
     def test_scratch_override_rejects_project_and_unexpanded_tokens_before_write(self):
         for configured in (str(sync_global_skills.DEFAULT_PROJECT_ROOT / "Cache" / "temp-test"), "%SystemDrive%/scratch"):
@@ -994,8 +1116,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             local_note.write_text("Keep this unrelated note.\n", encoding="utf-8")
             previous_head = sync_global_skills.repository_head(source_dir)
             task_cache_root = Path(temp_dir) / "external-push-state"
-            state_file = task_cache_root / "state" / "management-skill-sync.json"
             with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}), mock.patch("builtins.print") as printer:
+                state_file = sync_global_skills.sync_state_file()
                 sync_global_skills.push("fixture/repository", source_dir, "Publish source change", False)
             current_head = sync_global_skills.repository_head(source_dir)
             remote_head = sync_global_skills.remote_branch_head(source_dir, "master")
