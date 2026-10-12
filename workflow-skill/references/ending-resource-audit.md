@@ -12,6 +12,8 @@ Read the originating chat and up to ten recent chats using the app's `list_threa
 
 ## Reclaim through the owner
 
+Apply [Workflow's standing cleanup authorization](../SKILL.md#boundaries) directly to eligible local Cache/scratch and task-generated cloud files. Ownership and liveness checks decide eligibility; they are not a reason to ask for permission again. Only a higher-priority irreversible-action confirmation requirement remains a confirmation gate.
+
 Inspect only exact project/task owners selected from those chats. `scripts/ending_resource_audit.py inspect --project-root ROOT [--artifact-root ABS]` inspects bounded external project task directories and reports legacy project Cache observations read-only, without following links. It lists producer ledgers and flags unknown ownership. Do not recursively sweep a home, all projects, Downloads or Codex storage. Older files require exact creation history, identity and consumer checks through their owner; never invent producer receipts or adopt an existing directory as newly created. Legacy scratch requires separately authorized migration under the [external artifact policy](project-cache-artifact-policy.md); real runtime/assets are preserved. Unproved ownership stays pending.
 
 For an external producer ledger, use `audit --project-root ROOT --task-root TASK_ROOT --task-readback READBACK --decisions DECISIONS`, with the exact resolved absolute external task root. Add `--apply` after a fresh owning-tool check. Legacy project-Cache ledger application remains migration pending. Supply JSON in Ending's own isolated external task directory from the first write:
