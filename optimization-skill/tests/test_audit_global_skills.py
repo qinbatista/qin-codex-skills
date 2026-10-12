@@ -2,6 +2,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "audit_global_skills.py"
@@ -47,6 +48,31 @@ class AuditGlobalSkillsTest(unittest.TestCase):
             audit_result = audit_global_skills.audit_skill(checked_skill, skills_root)
 
         self.assertIn("missing command/reference path: verify-skill/scripts/missing_ending_ledger.py", audit_result["errors"])
+
+    def test_clean_host_audit_does_not_require_documented_installation_directories(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            skills_root = Path(temporary_directory)
+            home = skills_root / "empty-home"
+            home.mkdir()
+            checked_skill = self.write_skill(skills_root, "checked-skill", "Install in `~/.agents/skills` or `~/.agents/skills/`; configuration lives in `~/.codex`. Read [installation root](~/.agents/skills) and [rules](references/rules.md).")
+            reference = checked_skill / "references" / "rules.md"
+            reference.parent.mkdir()
+            reference.write_text("Keep declared owners.\n", encoding="utf-8")
+            with mock.patch.object(Path, "expanduser", autospec=True, side_effect=lambda path: home.joinpath(*path.parts[1:]) if path.parts[:1] == ("~",) else path):
+                audit_result = audit_global_skills.audit_skill(checked_skill, skills_root)
+            self.assertEqual([], audit_result["errors"])
+            self.assertEqual([], list(home.iterdir()))
+
+    def test_missing_helpers_below_documented_install_roots_are_still_reported(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            skills_root = Path(temporary_directory)
+            home = skills_root / "empty-home"
+            home.mkdir()
+            checked_skill = self.write_skill(skills_root, "checked-skill", "Run `~/.agents/skills/check.py` and `~/.codex/setup.py` after installation.")
+            with mock.patch.object(Path, "expanduser", autospec=True, side_effect=lambda path: home.joinpath(*path.parts[1:]) if path.parts[:1] == ("~",) else path):
+                audit_result = audit_global_skills.audit_skill(checked_skill, skills_root)
+            self.assertEqual(["missing command/reference path: ~/.agents/skills/check.py", "missing command/reference path: ~/.codex/setup.py"], audit_result["errors"])
+            self.assertEqual([], list(home.iterdir()))
 
     def test_markdown_link_followed_by_punctuation_is_a_real_reference(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

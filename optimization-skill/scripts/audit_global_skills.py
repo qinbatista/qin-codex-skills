@@ -91,6 +91,8 @@ def resolve_reference(raw_path, skill_dir, skills_root):
     clean_path = raw_path.split("#", 1)[0].strip()
     if not clean_path or clean_path.startswith("//") or re.match(r"^[a-z]+://", clean_path):
         return None
+    if clean_path.rstrip("/") in {"~/.agents/skills", "~/.codex"}:
+        return None
     path = Path(clean_path).expanduser()
     if path.is_absolute():
         return path
