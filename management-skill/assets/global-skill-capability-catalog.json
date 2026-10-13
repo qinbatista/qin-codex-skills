@@ -308,7 +308,7 @@
       "id": "verification",
       "owner_skill": "verify-skill",
       "name": "Verification inside the task",
-      "function": "Use focused real behavior evidence or output readback for changed code and consequential results; require user scope for whole-project runs.",
+      "function": "Use focused real behavior evidence or output readback bound to the actual source, artifact, consumer, configuration, runtime and provider; keep submission, backend and provider outcomes distinct and require user scope for whole-project runs.",
       "checks": [
         "verify-units",
         "workflow-validator",
@@ -338,7 +338,7 @@
       "id": "concise-code",
       "owner_skill": "code-skill",
       "name": "Reusable code and visual presentation preferences",
-      "function": "Preserve explicit code ownership and readable structure; every UI, PDF report, document and slide layout applies the shared readable UI baseline, including work without code changes.",
+      "function": "Preserve explicit code ownership, current async-result identity, guarded concurrent writes, configuration/cache identity and idempotent effects; every UI, PDF report, document and slide layout applies the shared readable UI baseline.",
       "checks": [
         "code-units",
         "prompt-units",
@@ -378,7 +378,7 @@
       "id": "source-publication",
       "owner_skill": "management-skill",
       "name": "Source, installation and publication",
-      "function": "Source owns maintained behavior; local installation and authorized remote publication remain separate; publication runs current release checks first.",
+      "function": "Source owns maintained behavior; recoverable installation and authorized publication remain separate. Publish only selected task-owned files to the branch's configured upstream, merge fresh remote changes, preserve unrelated work/index, run release checks and read back the exact delivered ref.",
       "checks": [
         "management-units",
         "public-skill-set",

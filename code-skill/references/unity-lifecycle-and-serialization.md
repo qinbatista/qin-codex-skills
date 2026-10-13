@@ -12,6 +12,8 @@ Load this category only when the Unity C# task materially touches MonoBehaviour 
 
 ## Async and main-thread safety
 
+Apply [current-operation and lifetime ownership](state-and-side-effects.md#let-only-the-current-operation-publish), including pooled reuse and late callbacks. The following rules add Unity-specific constraints.
+
 - Do not write `_ = SomeTask()` or use `async void` for background ownership. Unity event callbacks are the narrow `async void` exception; catch and surface their failures at that boundary.
 - Await work when the caller owns completion. Otherwise store the `Task` in a named field, attach cancellation to the owning object's lifetime, and observe completion and exceptions.
 - Resume Unity-object access on the Unity main thread. After an await, confirm the owning lifecycle is still active before touching destroyed objects or scene state.

@@ -42,11 +42,13 @@ python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
 
 Windows 使用 `py -3 -B`。安装以锁、备份和恢复机制替换八个托管 Skill，保留其他 Skill、用户 AGENTS 和已有私人历史。明确更新全局 AGENTS 时使用 `install-global-agents --source-dir .`，并生成可恢复备份。
 
-源代码修改、本地安装和 GitHub 发布是不同结果。发布命令 `push` 在暂存或远端写入前运行当前发布检查。
+源代码修改、本地安装和 GitHub 发布是不同结果。发布命令 `push` 用重复的 `--include-path` 明确选择本任务文件；已有的本任务本地提交用 `--include-commit` 完整哈希选择。发布通过当前分支已有上游完成合并、发布检查、正常推送和远端回读，并保留未选择的工作区及索引修改。
 
 ## 代码规则归属
 
 - [Code philosophy](code-skill/references/code-writing-philosophy.md)
+- [状态、异步结果与副作用](code-skill/references/state-and-side-effects.md)
+- [实际运行对象与验收范围](verify-skill/SKILL.md#bind-evidence-to-the-actual-target)
 - [Python](code-skill/references/python-rules.md)
 - [Unity C#](code-skill/references/unity-csharp-rules.md)
 - [Portable quiet execution](code-skill/references/skill-platform-compatibility.md)

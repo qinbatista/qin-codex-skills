@@ -45,4 +45,4 @@ Actual image jobs follow [image generation and closure](../workflow-skill/refere
 
 ## Guardrails
 
-Preserve user authority and the authorized scope. Do not weaken acceptance criteria to make an output pass. Use [project Cache policy](../workflow-skill/references/project-cache-artifact-policy.md) only when creating support artifacts. Keep reusable instructions concise enough that a capable model can apply the goal without a ritual checklist.
+Preserve user authority and the authorized scope. Do not weaken acceptance criteria to make an output pass. Use the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md) when creating support artifacts. Keep reusable instructions concise enough that a capable model can apply the goal without a ritual checklist.

@@ -180,8 +180,10 @@ SKILL_CONTENTS = {'task-analyze-skill': [('Purpose', 'Explain the objective and 
 CHINESE_SKILL_CONTENTS = {'task-analyze-skill': [('职责', '先简述目标和实现步骤，再按步骤执行。')], 'workflow-skill': [('职责', '明确目标和依赖，安全并行，在当前任务整合并验证。')], 'prompt-skill': [('职责', '编写简洁的可复用指令，明确目标、约束和输出。')], 'code-skill': [('职责', '直接清晰的代码、明确职责、语言规范和一致 UI。')], 'project-memory-skill': [('职责', '集中保存架构与方法知识，精确读取项目记忆并整理关联。')], 'optimization-skill': [('职责', '按需简化重复工作，以实测支持结果。')], 'verify-skill': [('职责', '在当前任务内验证受影响行为；Ending 只更新记忆。')], 'management-skill': [('职责', '维护源码、可恢复安装、仅按授权发布。')]}
 
 
-def run_command(command, cwd=None):
-    return subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True, **hidden_process_options())
+def run_command(command, cwd=None, env=None):
+    if os.name == "nt" and command and command[0] == "git":
+        command = ["git", "-c", "core.longpaths=true", *command[1:]]
+    return subprocess.run(command, cwd=cwd, env=env, check=True, text=True, encoding="utf-8", capture_output=True, **hidden_process_options())
 
 
 def lexical_absolute_path(path):
@@ -207,7 +209,7 @@ def run_release_gate(source_dir, skills_dir, mode):
         "--mode",
         mode,
     ]
-    completed = subprocess.run(command, cwd=source_dir, text=True, capture_output=True, check=False, timeout=3600, **hidden_process_options())
+    completed = subprocess.run(command, cwd=source_dir, text=True, encoding="utf-8", capture_output=True, check=False, timeout=3600, **hidden_process_options())
     if completed.stdout.strip():
         print(completed.stdout.strip())
     if completed.returncode != 0:
@@ -441,10 +443,10 @@ def write_sync_state(state_file, repository, remote_head, local_hash, remote_has
     directories = [state_file.parent, state_file.parent.parent] if state_file.parent.parent.name == DEFAULT_CACHE_ROOT.name else [state_file.parent]
     SYNC_STATE_DIRECTORIES.update(directory for directory in directories if not directory.exists())
     state_file.parent.mkdir(parents=True, exist_ok=True)
-    receipt = json.dumps({"repository": repository, "remote_head": remote_head, "local_hash": local_hash, "remote_hash": remote_hash, "synced_at": int(time.time())}, indent=2) + "\n"
-    with state_file.open("w" if state_file in SYNC_STATE_RECEIPTS else "x", encoding="utf-8") as stream:
+    receipt = (json.dumps({"repository": repository, "remote_head": remote_head, "local_hash": local_hash, "remote_hash": remote_hash, "synced_at": int(time.time())}, indent=2) + "\n").encode("utf-8")
+    with state_file.open("wb" if state_file in SYNC_STATE_RECEIPTS else "xb") as stream:
         stream.write(receipt)
-    SYNC_STATE_RECEIPTS[state_file] = receipt.encode("utf-8")
+    SYNC_STATE_RECEIPTS[state_file] = receipt
 
 
 def cleanup_sync_state():
@@ -500,8 +502,10 @@ def read_skill_metadata(skill_dir):
 
 
 
-def build_readme(skill_paths, language="en"):
+def build_readme(skill_paths, language="en", source_dir=None):
     template_path = CHINESE_README_TEMPLATE if language == "zh" else ENGLISH_README_TEMPLATE
+    if source_dir is not None:
+        template_path = Path(source_dir) / "management-skill" / "assets" / "readme" / template_path.name
     template = template_path.read_text(encoding="utf-8").rstrip() + "\n"
     return template
 
@@ -1477,21 +1481,8 @@ def push_global_snapshot(repository, skills_dir, message, dry_run):
         repository_dir = clone_repository(repository, sandbox, read_only=True)
         copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
         status_text = run_command(["git", "status", "--short"], cwd=repository_dir).stdout.strip()
-        if dry_run:
-            print_lines("Local skills selected for mirror:", copied_names)
-            print(status_text or "No local-to-remote differences.")
-            return
-        if not status_text:
-            write_sync_state(sync_state_file(), repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
-            print("No global skill changes to push.")
-            return
-        run_command(["git", "add", "-A"], cwd=repository_dir)
-        branch_name = run_command(["git", "branch", "--show-current"], cwd=repository_dir).stdout.strip() or "main"
-        run_command(["git", "checkout", "-B", branch_name], cwd=repository_dir)
-        run_command(["git", "commit", "-m", message], cwd=repository_dir)
-        run_command(["git", "push", "origin", f"HEAD:{branch_name}"], cwd=repository_dir)
-        write_sync_state(sync_state_file(), repository, repository_head(repository_dir), snapshot_hash(skill_directories(skills_dir)), snapshot_hash(skill_directories(skills_dir)))
-        print(f"Pushed global skills to {repository}.")
+        print_lines("Local skills selected for mirror:", copied_names)
+        print(status_text or "No local-to-remote differences.")
 
 
 def source_repository_root(source_dir):
@@ -1529,8 +1520,8 @@ def publishable_source_path(relative_path):
 
 
 def staged_source_paths(source_dir):
-    output = run_command(["git", "diff", "--cached", "--name-only", "--diff-filter=ACDMRTUXB"], cwd=source_dir).stdout
-    return [Path(line) for line in output.splitlines() if line.strip()]
+    output = run_command(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACDMRTUXB"], cwd=source_dir).stdout
+    return [Path(path) for path in output.split("\0") if path]
 
 
 def assert_publishable_staged_paths(source_dir):
@@ -1565,75 +1556,289 @@ def assert_publishable_worktree_paths(source_dir):
 
 
 def render_source_readmes(source_dir, skill_paths, dry_run=False):
+    template_source = next((path.parent for path in skill_paths if path.name == "management-skill"), source_dir)
     expected = {
-        source_dir / "README.md": build_readme(skill_paths, language="en"),
-        source_dir / "README.zh.md": build_readme(skill_paths, language="zh"),
+        source_dir / "README.md": build_readme(skill_paths, language="en", source_dir=template_source),
+        source_dir / "README.zh.md": build_readme(skill_paths, language="zh", source_dir=template_source),
     }
     changed = []
     for path, rendered in expected.items():
         if not path.is_file() or path.read_text(encoding="utf-8") != rendered:
             changed.append(path.name)
             if not dry_run:
-                path.write_text(rendered, encoding="utf-8")
+                path.write_bytes(rendered.encode("utf-8"))
     return changed
 
 
-def remote_branch_head(source_dir, branch_name):
-    output = run_command(["git", "ls-remote", "origin", f"refs/heads/{branch_name}"], cwd=source_dir).stdout.strip()
+def publication_upstream(source_dir):
+    branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
+    if not branch_name:
+        raise RuntimeError("Publication pending: detached source HEAD has no selected delivery branch")
+    configuration = run_command(["git", "config", "--null", "--list"], cwd=source_dir).stdout
+    values = {}
+    for record in configuration.split("\0"):
+        if record:
+            key, separator, value = record.partition("\n")
+            values.setdefault(key, []).append(value)
+    remotes = values.get(f"branch.{branch_name}.remote", [])
+    references = values.get(f"branch.{branch_name}.merge", [])
+    if len(remotes) != 1 or remotes[0] == "." or len(references) != 1 or not references[0].startswith("refs/heads/"):
+        raise RuntimeError(f"Publication pending: {branch_name} has no single configured remote upstream; configure its intended upstream before retrying. Local HEAD: {repository_head(source_dir)}")
+    push_urls = run_command(["git", "remote", "get-url", "--push", "--all", remotes[0]], cwd=source_dir).stdout.splitlines()
+    if len(push_urls) != 1:
+        raise RuntimeError(f"Publication pending: upstream remote {remotes[0]} has multiple push destinations; select one configured destination before retrying")
+    return {"branch": branch_name, "remote": remotes[0], "reference": references[0], "push_url": push_urls[0]}
+
+
+def selected_publication_paths(source_dir, include_paths):
+    paths = []
+    for value in include_paths or []:
+        path = Path(value)
+        if path.is_absolute() or not path.parts or ".." in path.parts or not publishable_source_path(path):
+            raise RuntimeError(f"Refusing non-public or unscoped publication path: {value}")
+        target = source_dir / path
+        if target.is_dir() or target.is_symlink():
+            raise RuntimeError(f"--include-path requires an exact source file, not a directory or symlink: {value}")
+        if not target.resolve().is_relative_to(source_dir):
+            raise RuntimeError(f"Publication path escapes the source owner: {value}")
+        tracked = run_command(["git", "--literal-pathspecs", "ls-files", "-z", "--", path.as_posix()], cwd=source_dir).stdout or run_command(["git", "--literal-pathspecs", "ls-tree", "-z", "HEAD", "--", path.as_posix()], cwd=source_dir).stdout
+        if not target.is_file() and not tracked:
+            raise RuntimeError(f"Publication path is neither a source file nor a tracked deletion: {value}")
+        paths.append(path)
+    return list(dict.fromkeys(paths))
+
+
+def active_git_operation(source_dir):
+    git_directory = Path(run_command(["git", "rev-parse", "--absolute-git-dir"], cwd=source_dir).stdout.strip())
+    return next((name for name in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "sequencer") if (git_directory / name).exists()), "")
+
+
+def dirty_source_signature(source_dir):
+    untracked = run_command(["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=source_dir).stdout.split("\0")
+    files = {name: hashlib.sha256((source_dir / name).read_bytes()).hexdigest() for name in untracked if name and (source_dir / name).is_file()}
+    return {"staged": run_command(["git", "diff", "--cached", "--binary", "--full-index"], cwd=source_dir).stdout, "unstaged": run_command(["git", "diff", "--binary", "--full-index"], cwd=source_dir).stdout, "untracked": files}
+
+
+@contextmanager
+def preserved_source_changes(source_dir):
+    if not source_worktree_paths(source_dir):
+        yield
+        return
+    original_head = repository_head(source_dir)
+    original_branch = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
+    original_signature = dirty_source_signature(source_dir)
+    run_command(["git", "stash", "push", "--include-untracked", "--message", f"managed-publication-{time.time_ns()}"], cwd=source_dir)
+    stash_head = run_command(["git", "rev-parse", "refs/stash"], cwd=source_dir).stdout.strip()
+    try:
+        yield
+    finally:
+        operation = active_git_operation(source_dir)
+        current_branch = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
+        if operation or current_branch != original_branch:
+            print(f"Recovery preserved: stash {stash_head}; return to {original_branch} and finish or abort {operation or 'the branch change'}, then git stash apply --index {stash_head}. The stash was not dropped.")
+            if not operation:
+                raise RuntimeError(f"Publication recovery pending: branch changed; restore stash {stash_head} only on its original branch {original_branch}")
+        else:
+            try:
+                run_command(["git", "stash", "apply", "--index", stash_head], cwd=source_dir)
+                restored_signature = dirty_source_signature(source_dir)
+                if repository_head(source_dir) == original_head and restored_signature != original_signature:
+                    raise RuntimeError("restored worktree/index differs from its saved state")
+                conflicts = run_command(["git", "diff", "--name-only", "--diff-filter=U"], cwd=source_dir).stdout.strip()
+                if conflicts:
+                    raise RuntimeError(f"restored changes contain conflicts: {conflicts}")
+                stash_records = run_command(["git", "stash", "list", "--format=%H %gd"], cwd=source_dir).stdout.splitlines()
+                selector = next((line.split(" ", 1)[1] for line in stash_records if line.split(" ", 1)[0] == stash_head), None)
+                if selector is None:
+                    raise RuntimeError("the saved stash identity no longer has a matching stash reference")
+                run_command(["git", "stash", "drop", selector], cwd=source_dir)
+                print(f"Restored and verified temporary integration stash {stash_head}; preserved other stash entries.")
+            except (OSError, subprocess.CalledProcessError, RuntimeError) as error:
+                details = error.stderr.strip() if isinstance(error, subprocess.CalledProcessError) and error.stderr else str(error)
+                raise RuntimeError(f"Publication recovery pending: restore stash {stash_head} with its index after resolving the current worktree. The saved stash remains available. {details}") from error
+
+
+def merge_publication_upstream(source_dir, upstream, include_commits=None):
+    if publication_upstream(source_dir) != upstream:
+        raise RuntimeError("Publication pending: the selected branch or configured upstream changed during delivery")
+    previous_head = repository_head(source_dir)
+    run_command(["git", "fetch", "--no-tags", upstream["remote"], upstream["reference"]], cwd=source_dir)
+    fetched_head = run_command(["git", "rev-parse", "FETCH_HEAD"], cwd=source_dir).stdout.strip()
+    if include_commits is not None:
+        if any(not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit) for commit in include_commits):
+            raise RuntimeError("--include-commit requires an exact full lowercase commit hash")
+        ahead_commits = run_command(["git", "rev-list", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.splitlines()
+        unselected_commits = [commit for commit in ahead_commits if commit not in include_commits]
+        if unselected_commits:
+            raise RuntimeError(f"Publication pending: preexisting local commits need explicit --include-commit selection before delivery: {', '.join(unselected_commits)}")
+    ancestors = run_command(["git", "rev-list", f"{previous_head}..{fetched_head}"], cwd=source_dir).stdout.strip()
+    if not ancestors:
+        return False
+    with preserved_source_changes(source_dir):
+        try:
+            run_command(["git", "merge", "--no-edit", fetched_head], cwd=source_dir)
+        except subprocess.CalledProcessError as error:
+            details = error.stderr.strip() or error.stdout.strip()
+            raise RuntimeError(f"Upstream integration pending on {upstream['branch']} from {upstream['remote']}:{upstream['reference']}; resolve the merge and retry. Local HEAD: {repository_head(source_dir)}. {details}") from error
+    return repository_head(source_dir) != previous_head
+
+
+def remote_branch_head(source_dir, upstream):
+    output = run_command(["git", "ls-remote", upstream["push_url"], upstream["reference"]], cwd=source_dir).stdout.strip()
     return output.split()[0] if output else ""
 
 
-def push(repository, source_dir, message, dry_run, skills_dir=None):
-    source_dir = source_repository_root(source_dir)
-    if not dry_run:
-        run_release_gate(source_dir, skills_dir or OFFICIAL_USER_SKILLS_DIRECTORY, "release")
-    skill_paths = skill_directories(source_dir)
-    if not dry_run:
-        project_testing_skill = source_dir / PROJECT_TESTING_SKILL
+@contextmanager
+def validated_publication_candidate(source_dir, selected_paths, prepare_readmes=True):
+    original_head = repository_head(source_dir)
+    selected_bytes = {path: (source_dir / path).read_bytes() if (source_dir / path).is_file() else None for path in selected_paths}
+    selected_modes = {path: stat.S_IMODE((source_dir / path).stat().st_mode) for path in selected_paths if (source_dir / path).is_file()}
+    filemode = run_command(["git", "config", "--default", "true", "--type=bool", "--get", "core.filemode"], cwd=source_dir).stdout.strip()
+    staged_mode_output = run_command(["git", "--literal-pathspecs", "ls-files", "--stage", "-z", "--", *[path.as_posix() for path in selected_paths]], cwd=source_dir).stdout if selected_paths else ""
+    staged_modes = {Path(record.split("\t", 1)[1]): record.split(" ", 1)[0] for record in staged_mode_output.split("\0") if record}
+    with temporary_workspace("publication-candidate-") as sandbox:
+        candidate = sandbox / "source"
+        run_command(["git", "clone", "--no-hardlinks", "--no-checkout", str(source_dir), str(candidate)])
+        run_command(["git", "config", "core.filemode", filemode], cwd=candidate)
+        for key, default in (("core.autocrlf", "false"), ("core.eol", "native"), ("core.safecrlf", "false")):
+            value = run_command(["git", "config", "--default", default, "--get", key], cwd=source_dir).stdout.strip()
+            run_command(["git", "config", key, value], cwd=candidate)
+        run_command(["git", "checkout", "--detach", original_head], cwd=candidate)
+        for path, content in selected_bytes.items():
+            target = candidate / path
+            if content is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_dir / path, target)
+        skill_paths = skill_directories(candidate)
+        project_testing_skill = candidate / PROJECT_TESTING_SKILL
         assert_public_safe([*skill_paths, project_testing_skill] if project_testing_skill.exists() or project_testing_skill.is_symlink() else skill_paths)
-    readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=dry_run)
-    branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
-    if not branch_name:
-        raise RuntimeError("Refusing to publish from a detached source HEAD")
+        readme_changes = render_source_readmes(candidate, skill_paths, dry_run=True) if prepare_readmes else []
+        unselected_readmes = [name for name in readme_changes if Path(name) not in selected_paths]
+        if unselected_readmes:
+            raise RuntimeError(f"Generated README changes require explicit --include-path selection: {', '.join(unselected_readmes)}")
+        if readme_changes:
+            render_source_readmes(candidate, skill_paths)
+        run_command(["git", "add", "--all"], cwd=candidate)
+        if filemode == "false":
+            for path in selected_modes:
+                executable = staged_modes.get(path, "100644") == "100755"
+                run_command(["git", "--literal-pathspecs", "update-index", "--chmod=+x" if executable else "--chmod=-x", "--", path.as_posix()], cwd=candidate)
+        run_command(["git", "diff", "--cached", "--check"], cwd=candidate)
+        candidate_tree = run_command(["git", "write-tree"], cwd=candidate).stdout.strip()
+        isolated_skills = sandbox / "installed-skills"
+        deploy(candidate, isolated_skills)
+        run_release_gate(candidate, isolated_skills, "release")
+        current_bytes = {path: (source_dir / path).read_bytes() if (source_dir / path).is_file() else None for path in selected_paths}
+        current_modes = {path: stat.S_IMODE((source_dir / path).stat().st_mode) for path in selected_paths if (source_dir / path).is_file()}
+        current_staged_modes = run_command(["git", "--literal-pathspecs", "ls-files", "--stage", "-z", "--", *[path.as_posix() for path in selected_paths]], cwd=source_dir).stdout if selected_paths else ""
+        if repository_head(source_dir) != original_head or current_bytes != selected_bytes or current_modes != selected_modes or current_staged_modes != staged_mode_output:
+            raise RuntimeError("Publication pending: selected source changed while its isolated candidate was validated; retry the current source")
+        yield candidate, readme_changes, candidate_tree
+
+
+def commit_publication_paths(source_dir, selected_paths, validated_tree, message):
+    path_arguments = [path.as_posix() for path in selected_paths]
+    staged_output = run_command(["git", "--literal-pathspecs", "ls-files", "--stage", "-z", "--", *path_arguments], cwd=source_dir).stdout
+    staged_modes = {Path(record.split("\t", 1)[1]): record.split(" ", 1)[0] for record in staged_output.split("\0") if record}
+    filemode = run_command(["git", "config", "--default", "true", "--type=bool", "--get", "core.filemode"], cwd=source_dir).stdout.strip()
+    with temporary_workspace("publication-index-") as sandbox:
+        environment = dict(os.environ, GIT_INDEX_FILE=str(sandbox / "selected.index"))
+        run_command(["git", "read-tree", "HEAD"], cwd=source_dir, env=environment)
+        run_command(["git", "--literal-pathspecs", "add", "--all", "--", *path_arguments], cwd=source_dir, env=environment)
+        if filemode == "false":
+            for path in selected_paths:
+                if (source_dir / path).is_file():
+                    executable = staged_modes.get(path, "100644") == "100755"
+                    run_command(["git", "--literal-pathspecs", "update-index", "--chmod=+x" if executable else "--chmod=-x", "--", path.as_posix()], cwd=source_dir, env=environment)
+        selected_tree = run_command(["git", "write-tree"], cwd=source_dir, env=environment).stdout.strip()
+        if selected_tree != validated_tree:
+            raise RuntimeError("Publication pending: selected bytes or file modes changed after candidate validation; no source commit was created")
+        if run_command(["git", "rev-parse", "HEAD^{tree}"], cwd=source_dir).stdout.strip() != validated_tree:
+            run_command(["git", "commit", "-m", message], cwd=source_dir, env=environment)
+            print(f"Committed selected maintained source: {repository_head(source_dir)}")
+        run_command(["git", "--literal-pathspecs", "reset", "--quiet", "HEAD", "--", *path_arguments], cwd=source_dir)
+
+
+def push(repository, source_dir, message, dry_run, skills_dir=None, include_paths=None, include_commits=None):
+    source_dir = source_repository_root(source_dir)
+    upstream = publication_upstream(source_dir)
+    operation = active_git_operation(source_dir)
+    if operation:
+        raise RuntimeError(f"Publication pending: finish or abort the existing {operation} before retrying; local HEAD {repository_head(source_dir)}")
+    selected_paths = selected_publication_paths(source_dir, include_paths)
+    skill_paths = skill_directories(source_dir)
     if dry_run:
         status_text = run_command(["git", "status", "--short", "--branch"], cwd=source_dir).stdout.strip()
         local_head = repository_head(source_dir)
-        remote_head = remote_branch_head(source_dir, branch_name)
+        remote_head = remote_branch_head(source_dir, upstream)
+        readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=True)
         print_lines("Repository source skills selected for publication:", [path.name for path in skill_paths])
         if readme_changes:
             print_lines("Generated README changes required:", readme_changes)
         print(status_text or "Source worktree is clean.")
         print(f"Source HEAD: {local_head}")
-        print(f"Remote {branch_name}: {remote_head or 'missing'}")
+        print(f"Configured upstream {upstream['remote']}:{upstream['reference']}: {remote_head or 'missing'}")
         return
-    if readme_changes:
-        print_lines("Rendered source README files:", readme_changes)
-    publication_paths = [".gitignore", "AGENTS.md", "README.md", "README.zh.md", *PRIMARY_SKILL_ORDER]
-    if (source_dir / PROJECT_TESTING_SKILL).exists():
-        publication_paths.append(str(PROJECT_TESTING_SKILL))
-    if (source_dir / ".github" / "workflows" / "ci.yml").is_file():
-        publication_paths.insert(3, ".github/workflows/ci.yml")
-    run_command(["git", "add", "--", *publication_paths], cwd=source_dir)
-    staged_paths = assert_publishable_staged_paths(source_dir)
-    if staged_paths:
-        run_command(["git", "commit", "-m", message], cwd=source_dir)
-        print(f"Committed maintained source: {repository_head(source_dir)}")
-    local_head = repository_head(source_dir)
-    run_command(["git", "push", "origin", f"HEAD:{branch_name}"], cwd=source_dir)
-    observed_remote_head = remote_branch_head(source_dir, branch_name)
-    if observed_remote_head != local_head:
-        raise RuntimeError(
-            f"Remote verification failed after push: local {local_head}, remote {observed_remote_head or 'missing'}"
-        )
-    write_sync_state(sync_state_file(), repository, local_head, snapshot_hash(skill_paths), snapshot_hash(skill_paths))
+    merge_publication_upstream(source_dir, upstream, include_commits=include_commits or [])
+    with validated_publication_candidate(source_dir, selected_paths) as (candidate, readme_changes, validated_tree):
+        if publication_upstream(source_dir) != upstream:
+            raise RuntimeError("Publication pending: selected branch or upstream changed while its candidate was validated")
+        for name in readme_changes:
+            shutil.copy2(candidate / name, source_dir / name)
+        if readme_changes:
+            print_lines("Rendered selected source README files:", readme_changes)
+        if selected_paths:
+            commit_publication_paths(source_dir, selected_paths, validated_tree, message)
+        if run_command(["git", "rev-parse", "HEAD^{tree}"], cwd=source_dir).stdout.strip() != validated_tree:
+            raise RuntimeError(f"Publication pending: committed tree differs from the validated selected candidate; inspect local commit {repository_head(source_dir)} before retrying")
+    last_rejected_remote = ""
+    with preserved_source_changes(source_dir):
+        while True:
+            merge_publication_upstream(source_dir, upstream)
+            integrated_remote_head = run_command(["git", "rev-parse", "FETCH_HEAD"], cwd=source_dir).stdout.strip()
+            if run_command(["git", "rev-parse", "HEAD^{tree}"], cwd=source_dir).stdout.strip() != validated_tree:
+                with validated_publication_candidate(source_dir, [], prepare_readmes=False) as (candidate, readme_changes, validated_tree):
+                    if readme_changes:
+                        raise RuntimeError("Unexpected README generation while validating committed upstream integration")
+            local_head = repository_head(source_dir)
+            if run_command(["git", "rev-parse", f"{local_head}^{{tree}}"], cwd=source_dir).stdout.strip() != validated_tree:
+                raise RuntimeError(f"Publication pending: local commit {local_head} differs from the validated tree; retry the current source through validation")
+            if source_worktree_paths(source_dir):
+                raise RuntimeError(f"Publication pending: source changed during release validation; local commit {local_head} remains unpushed")
+            if publication_upstream(source_dir) != upstream or repository_head(source_dir) != local_head:
+                raise RuntimeError("Publication pending: branch, upstream or HEAD changed after validation; retry the new source through validation")
+            try:
+                run_command(["git", "push", upstream["remote"], f"{local_head}:{upstream['reference']}"], cwd=source_dir)
+            except subprocess.CalledProcessError as error:
+                observed_after_rejection = remote_branch_head(source_dir, upstream)
+                if observed_after_rejection and observed_after_rejection not in (integrated_remote_head, last_rejected_remote):
+                    last_rejected_remote = observed_after_rejection
+                    print("Configured upstream advanced during push; fetching, merging and validating the integrated source before retrying.")
+                    continue
+                details = error.stderr.strip() or error.stdout.strip()
+                raise RuntimeError(f"Remote delivery pending for local commit {local_head} to {upstream['remote']}:{upstream['reference']}; repair the reported Git access or server failure and retry: {details}") from error
+            if publication_upstream(source_dir) != upstream or repository_head(source_dir) != local_head:
+                raise RuntimeError(f"Remote received only validated commit {local_head}; local branch, upstream or HEAD changed during delivery and needs a new validation")
+            observed_remote_head = remote_branch_head(source_dir, upstream)
+            if observed_remote_head == local_head:
+                published_hash = snapshot_hash(skill_paths)
+                break
+            if observed_remote_head and observed_remote_head != last_rejected_remote:
+                last_rejected_remote = observed_remote_head
+                print("Configured upstream advanced before final readback; integrating the observed remote work before retrying.")
+                continue
+            raise RuntimeError(f"Remote verification pending for local commit {local_head}: configured upstream ref is missing or unchanged after another integration attempt")
     remaining = source_worktree_paths(source_dir)
-    unpublished = [path for path in remaining if publishable_source_path(path)]
+    unpublished = [path for path in remaining if path in selected_paths]
     if unpublished:
         details = "\n".join(f"- {path.as_posix()}" for path in unpublished)
-        raise RuntimeError(f"Publication reached the remote but publishable source changes remain:\n{details}")
+        raise RuntimeError(f"Publication reached the remote but selected source changes remain:\n{details}")
+    write_sync_state(sync_state_file(), repository, local_head, snapshot_hash(skill_paths), published_hash)
     if remaining:
-        print_lines("Preserved excluded local changes:", [path.as_posix() for path in remaining])
-    print(f"Pushed maintained source {local_head} to {repository}:{branch_name} and verified the remote hash.")
+        print_lines("Preserved unselected local changes and index entries:", [path.as_posix() for path in remaining])
+    print(f"Pushed maintained source {local_head} from {upstream['branch']} to configured upstream {upstream['remote']}:{upstream['reference']} and verified the remote hash. Repository label: {repository}.")
 
 
 def sync(repository, skills_dir, message):
@@ -1671,6 +1876,8 @@ def main():
     push_parser = subparsers.add_parser("push")
     push_parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
     push_parser.add_argument("--message", default="Update global Codex skills")
+    push_parser.add_argument("--include-path", action="append", default=[], help="Exact task-owned source file to commit; repeat for each file, including generated README changes. Existing commits may be pushed without selecting files.")
+    push_parser.add_argument("--include-commit", action="append", default=[], help="Exact full hash of a preexisting task-owned local commit authorized for delivery; repeat for each unpushed commit.")
     args = parser.parse_args()
     if args.command == "sync":
         sync(args.repo, args.skills_dir, args.message)
@@ -1720,7 +1927,7 @@ def main():
         args.output.expanduser().resolve().write_text(build_readme(skill_paths, language=readme_language_for_output(args.output)), encoding="utf-8")
         print(f"Rendered public README: {args.output.expanduser().resolve()}")
     elif args.command == "push":
-        push(args.repo, args.source_dir, args.message, False, args.skills_dir)
+        push(args.repo, args.source_dir, args.message, False, args.skills_dir, args.include_path, args.include_commit)
 
 
 if __name__ == "__main__":

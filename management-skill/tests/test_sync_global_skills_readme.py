@@ -255,7 +255,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertNotEqual(state_file, legacy_state)
             self.assertEqual(state_file, sync_global_skills.sync_state_file())
             sync_global_skills.write_sync_state(state_file, "owner/repository", "published-head", "", "")
-            self.assertEqual(json.loads(state_file.read_text(encoding="utf-8"))["remote_head"], "published-head")
+            self.assertEqual(state_file.read_bytes(), sync_global_skills.SYNC_STATE_RECEIPTS[state_file])
+            sync_global_skills.write_sync_state(state_file, "owner/repository", "updated-head", "", "")
+            self.assertEqual(json.loads(state_file.read_text(encoding="utf-8"))["remote_head"], "updated-head")
             with self.assertRaises(FileExistsError):
                 sync_global_skills.write_sync_state(legacy_state, "owner/repository", "unexpected-overwrite", "", "")
             sync_global_skills.cleanup_sync_state()
@@ -423,7 +425,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
 
     def test_readme_documents_installation_preservation_and_portable_entry(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
-        for concept in ("deploy --source-dir .", "py -3 -B", "locking, backup, and recovery", "preserves unrelated skills, user AGENTS, and existing private history", "install-global-agents --source-dir .", "restorable backup", "before staging or remote writes"):
+        for concept in ("deploy --source-dir .", "py -3 -B", "locking, backup, and recovery", "preserves unrelated skills, user AGENTS, and existing private history", "install-global-agents --source-dir .", "restorable backup", "--include-path", "--include-commit", "configured upstream", "unselected worktree and index changes"):
             self.assertIn(concept, readme)
         self.assertNotIn("/Users/", readme)
         self.assertNotIn("shell=True", readme)
@@ -1054,7 +1056,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(sync_global_skills.global_agents_targets(Path("unrelated-skills")), [expected / "AGENTS.md"])
 
     def test_push_cli_defaults_to_the_maintained_repository_source(self):
-        argv = ["sync_global_skills.py", "push", "--message", "source-first smoke"]
+        argv = ["sync_global_skills.py", "push", "--message", "source-first smoke", "--include-path", "verify-skill/SKILL.md", "--include-path", "README.md"]
         with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "push") as publisher:
             sync_global_skills.main()
         publisher.assert_called_once_with(
@@ -1063,6 +1065,8 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             "source-first smoke",
             False,
             Path.home() / ".agents" / "skills",
+            ["verify-skill/SKILL.md", "README.md"],
+            [],
         )
 
     def test_publishable_source_paths_exclude_unrelated_or_private_content(self):
@@ -1083,77 +1087,181 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/local/private.json")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/auth.json")))
 
-    def test_push_commits_the_source_repository_and_verifies_remote_head(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            sandbox = Path(temp_dir)
-            source_dir = sandbox / "source"
-            remote_dir = sandbox / "remote.git"
-            source_dir.mkdir()
-            sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
-            (source_dir / "AGENTS.md").write_text((SKILLS_DIR / "AGENTS.md").read_text(encoding="utf-8"), encoding="utf-8")
-            local_map = source_dir / "Knowledge.md"
-            local_map.write_text("Original project map.\n", encoding="utf-8")
-            sync_global_skills.run_command(["git", "init"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "branch", "-M", "master"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "config", "user.name", "Source Publish Test"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "config", "user.email", "source-publish@example.invalid"], cwd=source_dir)
-            if sys.platform == "win32":
-                sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "add", "-A"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "init", "--bare", str(remote_dir)], cwd=sandbox)
-            if sys.platform == "win32":
-                sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=remote_dir)
-            sync_global_skills.run_command(["git", "remote", "add", "origin", str(remote_dir)], cwd=source_dir)
-            sync_global_skills.run_command(["git", "push", "-u", "origin", "master"], cwd=source_dir)
-            skill_path = source_dir / "verify-skill" / "SKILL.md"
-            skill_path.write_text(skill_path.read_text(encoding="utf-8") + "\nSource-first publish smoke.\n", encoding="utf-8")
-            testing_skill_path = source_dir / sync_global_skills.PROJECT_TESTING_SKILL / "SKILL.md"
-            testing_skill_path.parent.mkdir(parents=True)
-            testing_skill_path.write_text("---\nname: testing-skill\ndescription: Project test inventory.\n---\n", encoding="utf-8")
-            local_map.write_text("Keep this local project map update.\n", encoding="utf-8")
-            local_note = source_dir / "local note with spaces.md"
-            local_note.write_text("Keep this unrelated note.\n", encoding="utf-8")
-            previous_head = sync_global_skills.repository_head(source_dir)
-            task_cache_root = Path(temp_dir) / "external-push-state"
-            with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}), mock.patch("builtins.print") as printer:
-                state_file = sync_global_skills.sync_state_file()
-                sync_global_skills.push("fixture/repository", source_dir, "Publish source change", False)
-            current_head = sync_global_skills.repository_head(source_dir)
-            remote_head = sync_global_skills.remote_branch_head(source_dir, "master")
-            self.assertNotEqual(previous_head, current_head)
-            self.assertEqual(current_head, remote_head)
-            self.assertEqual(set(sync_global_skills.source_worktree_paths(source_dir)), {Path("Knowledge.md"), Path(local_note.name)})
-            self.assertEqual(local_map.read_text(encoding="utf-8"), "Keep this local project map update.\n")
-            self.assertEqual(local_note.read_text(encoding="utf-8"), "Keep this unrelated note.\n")
-            self.assertEqual(sync_global_skills.run_command(["git", "show", "HEAD:Knowledge.md"], cwd=source_dir).stdout, "Original project map.\n")
-            published_names = sync_global_skills.run_command(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"], cwd=source_dir).stdout.splitlines()
-            self.assertNotIn("Knowledge.md", published_names)
-            self.assertNotIn(local_note.name, published_names)
-            self.assertIn(testing_skill_path.relative_to(source_dir).as_posix(), published_names)
-            self.assertEqual(sync_global_skills.run_command(["git", "show", "HEAD:.agents/skills/testing-skill/SKILL.md"], cwd=source_dir).stdout, testing_skill_path.read_text(encoding="utf-8"))
-            printer.assert_any_call("Preserved excluded local changes:")
-            self.assertTrue(state_file.is_file())
-            real_remote_head = sync_global_skills.remote_branch_head
+    def publication_repository(self, configured_upstream=True, suffix=""):
+        sandbox = Path(self.codex_sandbox.name)
+        source_dir = sandbox / f"publication-source{suffix}"
+        remote_dir = sandbox / f"remote{suffix}.git"
+        source_dir.mkdir()
+        sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
+        (source_dir / "AGENTS.md").write_text("# Publication fixture\n", encoding="utf-8")
+        sync_global_skills.run_command(["git", "init"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "branch", "-M", "delivery-local"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "config", "user.name", "Source Publish Test"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "config", "user.email", "source-publish@example.invalid"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "config", "core.autocrlf", "false"], cwd=source_dir)
+        if sys.platform == "win32":
+            sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "add", "--all"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "init", "--bare", str(remote_dir)], cwd=sandbox)
+        sync_global_skills.run_command(["git", "remote", "add", "publication", str(remote_dir)], cwd=source_dir)
+        command = ["git", "push", "publication", "HEAD:refs/heads/release-target"]
+        if configured_upstream:
+            command.insert(2, "--set-upstream")
+        sync_global_skills.run_command(command, cwd=source_dir)
+        environment = mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(sandbox / "publication-artifacts")})
+        environment.start()
+        self.addCleanup(environment.stop)
+        return source_dir, remote_dir
 
-            def modify_source_after_remote_readback(repository_dir, branch_name):
-                observed = real_remote_head(repository_dir, branch_name)
-                skill_path.write_text(skill_path.read_text(encoding="utf-8") + "\nNew unpublished change.\n", encoding="utf-8")
-                return observed
+    def advance_publication_remote(self, remote_dir, relative_path, text):
+        editor = remote_dir.parent / f"remote-editor-{time.time_ns()}"
+        sync_global_skills.run_command(["git", "clone", "--branch", "release-target", str(remote_dir), str(editor)])
+        sync_global_skills.run_command(["git", "config", "user.name", "Remote Fixture"], cwd=editor)
+        sync_global_skills.run_command(["git", "config", "user.email", "remote@example.invalid"], cwd=editor)
+        target = editor / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        sync_global_skills.run_command(["git", "add", "--", relative_path], cwd=editor)
+        sync_global_skills.run_command(["git", "commit", "-m", "Remote advance"], cwd=editor)
+        sync_global_skills.run_command(["git", "push", "origin", "HEAD:refs/heads/release-target"], cwd=editor)
+        return sync_global_skills.repository_head(editor)
 
-            with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}), mock.patch.object(sync_global_skills, "remote_branch_head", side_effect=modify_source_after_remote_readback):
-                with self.assertRaisesRegex(RuntimeError, "publishable source changes remain"):
-                    sync_global_skills.push("fixture/repository", source_dir, "No new change yet", False)
-            self.assertEqual(real_remote_head(source_dir, "master"), current_head)
-            self.assertIn(Path("verify-skill/SKILL.md"), sync_global_skills.source_worktree_paths(source_dir))
-            unrelated_skill_path = source_dir / ".agents" / "skills" / "other-skill" / "SKILL.md"
-            unrelated_skill_path.parent.mkdir(parents=True)
-            unrelated_skill_path.write_text("---\nname: other-skill\ndescription: Unrelated.\n---\n", encoding="utf-8")
-            sync_global_skills.run_command(["git", "add", "--", str(unrelated_skill_path.relative_to(source_dir))], cwd=source_dir)
-            with mock.patch.object(sync_global_skills, "DEFAULT_PROJECT_ROOT", source_dir), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(task_cache_root)}):
-                with self.assertRaisesRegex(RuntimeError, "non-public or unrelated staged paths"):
-                    sync_global_skills.push("fixture/repository", source_dir, "must not publish unrelated skill", False)
-            self.assertEqual(real_remote_head(source_dir, "master"), current_head)
+    def test_push_selects_exact_paths_and_preserves_other_index_work_and_stashes(self):
+        source_dir, remote_dir = self.publication_repository()
+        artifact_owner = Path(sync_global_skills.os.environ["CODEX_PROJECT_CACHE_ROOT"])
+        if sys.platform == "win32":
+            # Cross MAX_PATH for Git objects without exceeding Git's repository-discovery boundary.
+            while len(str(artifact_owner)) < 180:
+                artifact_owner /= "nested-owner"
+        selected = source_dir / "verify-skill" / "SKILL.md"
+        unrelated = source_dir / "workflow-skill" / "SKILL.md"
+        original_unrelated = unrelated.read_bytes()
+        (source_dir / "old-recovery.txt").write_text("existing recovery\n", encoding="utf-8")
+        sync_global_skills.run_command(["git", "stash", "push", "--include-untracked", "-m", "preexisting recovery"], cwd=source_dir)
+        previous_stash = sync_global_skills.run_command(["git", "rev-parse", "refs/stash"], cwd=source_dir).stdout.strip()
+        unrelated.write_bytes(original_unrelated + b"\nUnrelated staged change.\n")
+        sync_global_skills.run_command(["git", "add", "--", "workflow-skill/SKILL.md"], cwd=source_dir)
+        staged_unrelated = sync_global_skills.run_command(["git", "show", ":workflow-skill/SKILL.md"], cwd=source_dir).stdout
+        unrelated.write_bytes(unrelated.read_bytes() + b"Unrelated unstaged change.\n")
+        expected_unrelated = unrelated.read_bytes()
+        untracked = source_dir / "code-skill" / "unrelated-note.md"
+        untracked.write_text("preserve untracked content\n", encoding="utf-8")
+        selected.write_bytes(selected.read_bytes() + b"\nSelected source change.\n")
+        added = source_dir / "code-skill" / "selected-example.md"
+        added.write_bytes(b"Selected addition.\n")
+        candidate_roots = []
+
+        def inspect_real_candidate(candidate, installed, mode):
+            candidate_roots.append(candidate)
+            if sys.platform == "win32":
+                self.assertGreater(max(len(str(path)) for path in (candidate / ".git/objects").rglob("*") if path.is_file()), 260)
+            self.assertNotEqual(candidate, source_dir)
+            self.assertEqual((candidate / "workflow-skill/SKILL.md").read_bytes(), original_unrelated)
+            self.assertEqual((installed / "workflow-skill/SKILL.md").read_bytes(), original_unrelated)
+            self.assertFalse((candidate / "code-skill/unrelated-note.md").exists())
+            self.assertEqual((candidate / "verify-skill/SKILL.md").read_bytes(), selected.read_bytes())
+            self.assertEqual((installed / "verify-skill/SKILL.md").read_bytes(), selected.read_bytes())
+
+        self.release_gate.side_effect = inspect_real_candidate
+        with mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(artifact_owner)}), mock.patch("builtins.print"):
+            sync_global_skills.push("label/must-not-select-a-remote", source_dir, "Publish selected files", False, include_paths=["verify-skill/SKILL.md", "code-skill/selected-example.md"])
+        upstream = sync_global_skills.publication_upstream(source_dir)
+        self.assertEqual(upstream["remote"], "publication")
+        self.assertEqual(upstream["reference"], "refs/heads/release-target")
+        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, upstream), sync_global_skills.repository_head(source_dir))
+        self.assertEqual(sync_global_skills.run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip(), "delivery-local")
+        self.assertEqual(unrelated.read_bytes(), expected_unrelated)
+        self.assertEqual(sync_global_skills.run_command(["git", "show", ":workflow-skill/SKILL.md"], cwd=source_dir).stdout, staged_unrelated)
+        self.assertEqual(sync_global_skills.staged_source_paths(source_dir), [Path("workflow-skill/SKILL.md")])
+        self.assertEqual(untracked.read_text(encoding="utf-8"), "preserve untracked content\n")
+        self.assertEqual(sync_global_skills.run_command(["git", "rev-parse", "refs/stash"], cwd=source_dir).stdout.strip(), previous_stash)
+        published = sync_global_skills.run_command(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"], cwd=source_dir).stdout.splitlines()
+        self.assertEqual(set(published), {"verify-skill/SKILL.md", "code-skill/selected-example.md"})
+        self.assertEqual(self.release_gate.call_count, 1)
+        self.assertTrue(all(not root.exists() for root in candidate_roots))
+        self.assertEqual(sync_global_skills.run_command(["git", "ls-remote", str(remote_dir), "refs/heads/delivery-local"], cwd=source_dir).stdout, "")
+
+    def test_push_fetches_before_commit_and_retries_a_real_remote_advance(self):
+        source_dir, remote_dir = self.publication_repository()
+        selected = source_dir / "verify-skill/SKILL.md"
+        selected.write_bytes(selected.read_bytes() + b"\nLocal selected change.\n")
+        first_remote = self.advance_publication_remote(remote_dir, "code-skill/upstream-before.md", "before commit\n")
+        real_run = sync_global_skills.run_command
+        pushed_commands = []
+        advanced_heads = []
+
+        def advance_once(command, cwd=None, env=None):
+            if command[:3] == ["git", "push", "publication"]:
+                pushed_commands.append(command)
+                if len(pushed_commands) == 1:
+                    advanced_heads.append(self.advance_publication_remote(remote_dir, "code-skill/upstream-during.md", "during push\n"))
+            return real_run(command, cwd=cwd, env=env)
+
+        with mock.patch.object(sync_global_skills, "run_command", side_effect=advance_once), mock.patch("builtins.print"):
+            sync_global_skills.push("label/only", source_dir, "Publish with integration", False, include_paths=["verify-skill/SKILL.md"])
+        head = sync_global_skills.repository_head(source_dir)
+        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, sync_global_skills.publication_upstream(source_dir)), head)
+        self.assertEqual(len(pushed_commands), 2)
+        self.assertEqual(self.release_gate.call_count, 2)
+        history = real_run(["git", "rev-list", "HEAD"], cwd=source_dir).stdout.splitlines()
+        self.assertIn(first_remote, history)
+        self.assertIn(advanced_heads[0], history)
+        self.assertEqual((source_dir / "code-skill/upstream-before.md").read_text(), "before commit\n")
+        self.assertEqual((source_dir / "code-skill/upstream-during.md").read_text(), "during push\n")
+        self.assertEqual(sync_global_skills.source_worktree_paths(source_dir), [])
+        self.assertEqual(real_run(["git", "stash", "list"], cwd=source_dir).stdout, "")
+
+    def test_push_missing_upstream_preserves_head_work_and_index(self):
+        source_dir, remote_dir = self.publication_repository(configured_upstream=False)
+        selected = source_dir / "verify-skill/SKILL.md"
+        selected.write_bytes(selected.read_bytes() + b"\nKeep staged work.\n")
+        sync_global_skills.run_command(["git", "add", "--", "verify-skill/SKILL.md"], cwd=source_dir)
+        original_head = sync_global_skills.repository_head(source_dir)
+        original_state = sync_global_skills.dirty_source_signature(source_dir)
+        with self.assertRaisesRegex(RuntimeError, "no single configured remote upstream"):
+            sync_global_skills.push("not/an-upstream", source_dir, "Must not publish", False, include_paths=["verify-skill/SKILL.md"])
+        self.assertEqual(sync_global_skills.repository_head(source_dir), original_head)
+        self.assertEqual(sync_global_skills.dirty_source_signature(source_dir), original_state)
+        self.release_gate.assert_not_called()
+
+    def test_push_merge_conflict_retains_local_commit_and_exact_recovery_stash(self):
+        source_dir, remote_dir = self.publication_repository()
+        selected = source_dir / "verify-skill/SKILL.md"
+        selected.write_text("Local conflicting content.\n", encoding="utf-8")
+        sync_global_skills.run_command(["git", "add", "--", "verify-skill/SKILL.md"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "commit", "-m", "Keep local commit"], cwd=source_dir)
+        local_head = sync_global_skills.repository_head(source_dir)
+        unrelated = source_dir / "recover-me.txt"
+        unrelated.write_text("minimum recovery content\n", encoding="utf-8")
+        remote_head = self.advance_publication_remote(remote_dir, "verify-skill/SKILL.md", "Remote conflicting content.\n")
+        with mock.patch("builtins.print") as printer, self.assertRaisesRegex(RuntimeError, "Upstream integration pending"):
+            sync_global_skills.push("label/only", source_dir, "Must preserve conflict", False, include_commits=[local_head])
+        self.assertEqual(sync_global_skills.repository_head(source_dir), local_head)
+        self.assertEqual(sync_global_skills.active_git_operation(source_dir), "MERGE_HEAD")
+        stash_head = sync_global_skills.run_command(["git", "rev-parse", "refs/stash"], cwd=source_dir).stdout.strip()
+        self.assertEqual(sync_global_skills.run_command(["git", "show", f"{stash_head}^3:recover-me.txt"], cwd=source_dir).stdout, "minimum recovery content\n")
+        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, sync_global_skills.publication_upstream(source_dir)), remote_head)
+        self.assertTrue(any(stash_head in str(call) and "not dropped" in str(call) for call in printer.call_args_list))
+        self.release_gate.assert_not_called()
+        sync_global_skills.run_command(["git", "merge", "--abort"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "stash", "apply", "--index", stash_head], cwd=source_dir)
+        self.assertEqual(unrelated.read_text(), "minimum recovery content\n")
+
+    def test_push_readme_generation_requires_explicit_file_ownership(self):
+        source_dir, remote_dir = self.publication_repository()
+        readme = source_dir / "README.md"
+        template = source_dir / "management-skill/assets/readme/github-readme-template.md"
+        template.write_bytes(template.read_bytes() + b"\nSelected template change.\n")
+        readme.write_text("# Deliberate stale input\n", encoding="utf-8")
+        with mock.patch("builtins.print"), self.assertRaisesRegex(RuntimeError, "README changes require explicit"):
+            sync_global_skills.push("label/only", source_dir, "No implicit README owner", False, include_paths=["management-skill/assets/readme/github-readme-template.md"])
+        self.assertEqual(readme.read_text(), "# Deliberate stale input\n")
+        self.assertEqual(sync_global_skills.staged_source_paths(source_dir), [])
+        with mock.patch("builtins.print"):
+            sync_global_skills.push("label/only", source_dir, "Regenerate owned README", False, include_paths=["management-skill/assets/readme/github-readme-template.md", "README.md"])
+        self.assertEqual(readme.read_text(encoding="utf-8"), sync_global_skills.build_readme([], source_dir=source_dir))
+        self.assertEqual(sync_global_skills.source_worktree_paths(source_dir), [])
 
     def test_source_worktree_paths_preserves_unusual_names_and_rename_sources(self):
         output = ' M Knowledge.md\0?? local "quoted"\nnotes.md\0R  notes.md\0verify-skill/SKILL.md\0'
@@ -1162,48 +1270,121 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertEqual(paths, [Path("Knowledge.md"), Path('local "quoted"\nnotes.md'), Path("notes.md"), Path("verify-skill/SKILL.md")])
 
     def test_push_safety_scan_rejects_new_fixture_before_publication_mutations(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_dir = Path(temp_dir) / "source"
-            source_dir.mkdir()
-            sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
-            sync_global_skills.run_command(["git", "init"], cwd=source_dir)
-            unsafe = source_dir / sync_global_skills.PROJECT_TESTING_SKILL / "tests" / "fixtures" / "benchmark-public.json"
-            unsafe.parent.mkdir(parents=True, exist_ok=True)
-            unsafe.write_text(json.dumps({"sample": "sk-" + "a" * 24}), encoding="utf-8")
-            before_readmes = [(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")]
-            with mock.patch.object(sync_global_skills, "render_source_readmes", wraps=sync_global_skills.render_source_readmes) as renderer, mock.patch.object(sync_global_skills, "run_command", wraps=sync_global_skills.run_command) as runner:
-                with self.assertRaisesRegex(RuntimeError, "benchmark-public.json: secret-like content"):
-                    sync_global_skills.push("fixture/repository", source_dir, "must not publish", False)
-            self.release_gate.assert_called_once()
-            renderer.assert_not_called()
-            self.assertEqual([(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")], before_readmes)
-            self.assertEqual(sync_global_skills.staged_source_paths(source_dir), [])
-            self.assertEqual([call.args[0][1] for call in runner.call_args_list], ["rev-parse"])
+        source_dir, remote_dir = self.publication_repository()
+        unsafe = source_dir / sync_global_skills.PROJECT_TESTING_SKILL / "tests" / "fixtures" / "benchmark-public.json"
+        unsafe.parent.mkdir(parents=True, exist_ok=True)
+        unsafe.write_text(json.dumps({"sample": "sk-" + "a" * 24}), encoding="utf-8")
+        original_head = sync_global_skills.repository_head(source_dir)
+        before_readmes = [(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")]
+        with mock.patch("builtins.print"), self.assertRaisesRegex(RuntimeError, "benchmark-public.json: secret-like content"):
+            sync_global_skills.push("fixture/repository", source_dir, "must not publish", False, include_paths=[unsafe.relative_to(source_dir).as_posix()])
+        self.release_gate.assert_not_called()
+        self.assertEqual([(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")], before_readmes)
+        self.assertEqual(sync_global_skills.staged_source_paths(source_dir), [])
+        self.assertEqual(sync_global_skills.repository_head(source_dir), original_head)
 
     def test_push_gate_failure_precedes_readme_index_commit_and_remote_mutation(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_dir = Path(temp_dir) / "source"
-            source_dir.mkdir()
-            sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
-            (source_dir / "AGENTS.md").write_text((SKILLS_DIR / "AGENTS.md").read_text(encoding="utf-8"), encoding="utf-8")
-            sync_global_skills.run_command(["git", "init"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "branch", "-M", "master"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "config", "user.name", "Gate Test"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "config", "user.email", "gate@example.invalid"], cwd=source_dir)
-            if sys.platform == "win32":
-                sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "add", "-A"], cwd=source_dir)
-            sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
-            changed = source_dir / "verify-skill" / "SKILL.md"
-            changed.write_text(changed.read_text(encoding="utf-8") + "\nGate candidate.\n", encoding="utf-8")
-            before_readmes = [(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")]
-            before_head = sync_global_skills.repository_head(source_dir)
-            self.release_gate.side_effect = RuntimeError("full regression failed")
-            with self.assertRaisesRegex(RuntimeError, "full regression failed"):
-                sync_global_skills.push("fixture/repository", source_dir, "must not publish", False, Path(temp_dir) / "deployed")
-            self.assertEqual([(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")], before_readmes)
-            self.assertEqual(sync_global_skills.repository_head(source_dir), before_head)
-            self.assertEqual(sync_global_skills.staged_source_paths(source_dir), [])
+        source_dir, remote_dir = self.publication_repository()
+        changed = source_dir / "verify-skill" / "SKILL.md"
+        changed.write_bytes(changed.read_bytes() + b"\nGate candidate.\n")
+        before_readmes = [(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")]
+        before_head = sync_global_skills.repository_head(source_dir)
+        self.release_gate.side_effect = RuntimeError("full regression failed")
+        with mock.patch("builtins.print"), self.assertRaisesRegex(RuntimeError, "full regression failed"):
+            sync_global_skills.push("fixture/repository", source_dir, "must not publish", False, include_paths=["verify-skill/SKILL.md"])
+        self.assertEqual([(source_dir / name).read_bytes() for name in ("README.md", "README.zh.md")], before_readmes)
+        self.assertEqual(sync_global_skills.repository_head(source_dir), before_head)
+        self.assertEqual(sync_global_skills.staged_source_paths(source_dir), [])
+
+    def test_push_requires_explicit_preexisting_commit_selection(self):
+        source_dir, remote_dir = self.publication_repository()
+        changed = source_dir / "verify-skill/SKILL.md"
+        changed.write_bytes(changed.read_bytes() + b"\nExisting local commit.\n")
+        sync_global_skills.run_command(["git", "add", "--", "verify-skill/SKILL.md"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "commit", "-m", "Existing local work"], cwd=source_dir)
+        local_head = sync_global_skills.repository_head(source_dir)
+        with self.assertRaisesRegex(RuntimeError, f"include-commit.*{local_head}"):
+            sync_global_skills.push("label/only", source_dir, "Do not infer ownership", False)
+        self.release_gate.assert_not_called()
+        with mock.patch("builtins.print"):
+            sync_global_skills.push("label/only", source_dir, "Deliver selected commit", False, include_commits=[local_head])
+        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, sync_global_skills.publication_upstream(source_dir)), local_head)
+
+    def test_push_uses_validated_commit_even_if_local_head_changes_during_push(self):
+        real_run = sync_global_skills.run_command
+        for trigger in ("head-capture", "push"):
+            with self.subTest(trigger=trigger):
+                source_dir, remote_dir = self.publication_repository(suffix=f"-{trigger}")
+                original_head = sync_global_skills.repository_head(source_dir)
+                changed = source_dir / "verify-skill/SKILL.md"
+                changed.write_bytes(changed.read_bytes() + b"\nValidated change.\n")
+                frozen_heads = []
+                fetch_count = 0
+
+                def create_concurrent_commit():
+                    (source_dir / "code-skill/late-commit.md").write_text("Unvalidated concurrent commit.\n", encoding="utf-8")
+                    real_run(["git", "add", "--", "code-skill/late-commit.md"], cwd=source_dir)
+                    real_run(["git", "commit", "-m", "Concurrent work"], cwd=source_dir)
+
+                def commit_after_validation(command, cwd=None, env=None):
+                    nonlocal fetch_count
+                    if cwd == source_dir and command[:2] == ["git", "fetch"]:
+                        fetch_count += 1
+                    if command[:3] == ["git", "push", "publication"]:
+                        frozen_heads.append(command[3].split(":", 1)[0])
+                        if trigger == "push":
+                            create_concurrent_commit()
+                    result = real_run(command, cwd=cwd, env=env)
+                    if trigger == "head-capture" and cwd == source_dir and fetch_count == 2 and command == ["git", "rev-parse", "HEAD^{tree}"]:
+                        create_concurrent_commit()
+                    return result
+
+                expected_error = "differs from the validated tree" if trigger == "head-capture" else "Remote received only validated commit"
+                with mock.patch.object(sync_global_skills, "run_command", side_effect=commit_after_validation), mock.patch("builtins.print"), self.assertRaisesRegex(RuntimeError, expected_error):
+                    sync_global_skills.push("label/only", source_dir, "Freeze validated commit", False, include_paths=["verify-skill/SKILL.md"])
+                remote_head = sync_global_skills.remote_branch_head(source_dir, sync_global_skills.publication_upstream(source_dir))
+                if trigger == "head-capture":
+                    self.assertEqual(frozen_heads, [])
+                    self.assertEqual(remote_head, original_head)
+                else:
+                    self.assertEqual(len(frozen_heads), 1)
+                    self.assertRegex(frozen_heads[0], r"^[0-9a-f]{40}$")
+                    self.assertEqual(remote_head, frozen_heads[0])
+                self.assertNotEqual(sync_global_skills.repository_head(source_dir), remote_head)
+
+    def test_push_accepts_staged_deletion_and_both_rename_paths(self):
+        source_dir, remote_dir = self.publication_repository()
+        removed = "code-skill/references/coding-approach.md"
+        old_name = "code-skill/references/parallelization.md"
+        new_name = "code-skill/references/concurrency.md"
+        sync_global_skills.run_command(["git", "rm", "--", removed], cwd=source_dir)
+        sync_global_skills.run_command(["git", "mv", old_name, new_name], cwd=source_dir)
+        with mock.patch("builtins.print"):
+            sync_global_skills.push("label/only", source_dir, "Selected deletion and rename", False, include_paths=[removed, old_name, new_name])
+        self.assertFalse((source_dir / removed).exists())
+        self.assertFalse((source_dir / old_name).exists())
+        self.assertTrue((source_dir / new_name).is_file())
+        self.assertEqual(sync_global_skills.source_worktree_paths(source_dir), [])
+
+    @unittest.skipIf(sys.platform == "win32", "requires a native POSIX executable-bit filesystem")
+    def test_push_candidate_preserves_native_executable_mode(self):
+        source_dir, remote_dir = self.publication_repository()
+        added = source_dir / "code-skill/scripts/executable-example.py"
+        added.write_text("print('mode fixture')\n", encoding="utf-8")
+        added.chmod(0o755)
+        sync_global_skills.run_command(["git", "config", "core.filemode", "true"], cwd=source_dir)
+        with mock.patch("builtins.print"):
+            sync_global_skills.push("label/only", source_dir, "Native executable mode", False, include_paths=[added.relative_to(source_dir).as_posix()])
+        self.assertTrue(sync_global_skills.run_command(["git", "ls-tree", "HEAD", "--", added.relative_to(source_dir).as_posix()], cwd=source_dir).stdout.startswith("100755"))
+
+    def test_push_candidate_preserves_explicit_index_mode_when_filemode_is_false(self):
+        source_dir, remote_dir = self.publication_repository()
+        relative_path = "code-skill/scripts/code_rule_guard.py"
+        sync_global_skills.run_command(["git", "config", "core.filemode", "false"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "update-index", "--chmod=+x", "--", relative_path], cwd=source_dir)
+        with mock.patch("builtins.print"):
+            sync_global_skills.push("label/only", source_dir, "Explicit index mode", False, include_paths=[relative_path])
+        self.assertTrue(sync_global_skills.run_command(["git", "ls-tree", "HEAD", "--", relative_path], cwd=source_dir).stdout.startswith("100755"))
 
     def test_installed_snapshot_cannot_bypass_source_first_publication(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -25,6 +25,14 @@ Ordinary task completion, a new result, or a one-off exception does not trigger 
 
 Preserve unrelated edits, existing private history, and unrelated installed skills. Execute real checks of changed behavior in the active task and fix failures there. Ending runs useful memory alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md); it cannot gate publication or repair code.
 
+### Promote rules without multiplying owners
+
+For an authorized cross-project audit, distinguish a reusable failure mechanism from a project-specific recipe. Use concrete evidence from distinct consumers, or an explicit global user preference, before promoting a rule. Keep product identifiers, gameplay values, provider configuration, dated incidents, and acceptance records in their project owners.
+
+Extend the existing Skill or one focused reference before adding another global Skill. Code owns state, lifecycle, and side-effect contracts; Verify owns evidence and acceptance boundaries; Workflow owns orchestration, Git delivery, browser surfaces, and resource policy; Project Memory owns durable knowledge. Other entries and project instructions link to the owner and add only local constraints; retire copied global procedures when consolidating their owner. Source and installed copies are deployment states, not independent definitions; a project adapter is justified only by its actual domain contract.
+
+Check the rule's executable consumer as well as its prose. Consolidation is incomplete when a helper, installer, validator, or test still enforces the superseded behavior. Preserve distinct compatibility tests, update existing cases by purpose, and verify the affected real operation before claiming a recurring bug is prevented.
+
 ## Install
 
 Use the official user Skill directory, `~/.agents/skills`, as the single installation root. `CODEX_HOME` (default `~/.codex`) still owns Codex configuration, global `AGENTS.md`, and bundled system resources; it is not the user Skill root. Do not maintain a second user Skill copy or bridge under `CODEX_HOME/skills`. For an authorized migration, preserve unique content and recoverable backups, verify the destination, then retire the old user copies; preserve `.system` and plugin-managed resources.
@@ -39,6 +47,8 @@ On Windows, every managed installation inherits the destination Skill root's per
 
 ## Publish
 
-Publish only when authorized. The script's `push` command runs the release gate before README generation, staging, commit, or remote mutation. The catalog lists current behaviors and executable checks; retire obsolete workflow tests when the user changes those behaviors. Never invent attestation evidence.
+Publish only when authorized. The script's `push` command validates the exact selected candidate and its isolated installation before maintained-source writes, staging, commit, or push. The catalog lists current behaviors and executable checks; retire obsolete workflow tests when the user changes those behaviors. Never invent attestation evidence.
+
+Select each task-owned source file with a repeated `--include-path`; include generated README files when their templates change. Select already-local task commits explicitly with repeated `--include-commit` full hashes, including recovery after a failed delivery. The publisher uses the selected branch's existing configured upstream, integrates with merge, preserves unselected working files and index entries, and reads back that exact remote ref. Missing upstream or unresolved integration remains pending with its local commit and recovery state; `--repo` is not a substitute for the source branch's configured destination. Never pass a directory to include unrelated edits or authorize unknown ahead commits merely because they are present.
 
 Keep source portable and free of private history, machine paths and secrets. After exact source, installation or release readback, remove disposable external support and intermediates under the [resource lifecycle](../workflow-skill/references/task-resource-lifecycle.md). Put requested deliverables or minimum recovery state in their actual owner first; preserve review/reuse files and environments until their references are safely rebound. Clean-clone release tests stay in each Skill's non-runtime `tests/`; remove duplicate or retired cases. Other harnesses follow the [test placement policy](../workflow-skill/references/project-cache-artifact-policy.md).

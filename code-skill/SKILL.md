@@ -32,6 +32,7 @@ Briefly explain the intended change and implementation steps before detailed exe
 | Unity services or optional SDKs | [Service integration](references/unity-service-integration.md) |
 | Embedded prompts | [Prompt Skill](../prompt-skill/SKILL.md), then [prompt strings](references/prompt-generation.md) |
 | Authorized parallel implementation | [Parallelization](references/parallelization.md) |
+| Async results, pooled reuse, caches, configuration handoffs, or external retries | [State and side effects](references/state-and-side-effects.md) |
 | Host helpers, scripts, subprocesses, or tests | [Portable, quiet execution](references/skill-platform-compatibility.md) |
 
 ## Verification
@@ -42,4 +43,4 @@ Do not start the whole project, run a full build, or compile all of Unity just t
 
 ## Guardrails
 
-Preserve public contracts, serialization, execution order, exceptions, cancellation, and Unity main-thread rules unless the request changes them. Publish only when authorized. Put temporary project support artifacts under the project's [Cache policy](../workflow-skill/references/project-cache-artifact-policy.md).
+Preserve public contracts, serialization, execution order, exceptions, cancellation, and Unity main-thread rules unless the request changes them. Publish only when authorized. Put temporary support in the owner resolved by the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md).

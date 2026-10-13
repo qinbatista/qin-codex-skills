@@ -11,7 +11,9 @@ Load this category only when the Unity C# task touches Unity Gaming Services, cl
 
 ## Optional provider and proof boundary
 
+Use [state and side-effect ownership](state-and-side-effects.md) for configuration handoff, operation identity, duplicate callbacks, and uncertain retries; keep those semantics in the actual service owner.
+
 - The optional SDK assembly may be absent. Keep compile-time provider selection and runtime availability explicit; do not scatter conditional SDK branches through gameplay callers.
 - Preserve cancellation, exception, offline, and retry semantics at the provider boundary. Do not add silent fallback providers or report a successful cloud/device operation from local source inspection alone.
 - Use a thin test UI only to exercise the public facade. It must not become a second service owner or bypass the neutral interface.
-- Claim editor, device, cloud, sandbox, production, or general-availability support only when that exact surface has fresh evidence.
+- Claim editor, device, cloud, sandbox, production, or general-availability support only when that exact surface has fresh evidence under [Verify's target-bound evidence](../../verify-skill/SKILL.md#bind-evidence-to-the-actual-target).

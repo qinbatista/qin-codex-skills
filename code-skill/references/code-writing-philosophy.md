@@ -17,4 +17,4 @@ Read the nearest project `AGENTS.md`, relevant same-project memory, existing cod
 
 ## Check what changed
 
-Consider bounded memory use, CPU/repeated work, disk retention, resource cleanup, concurrency/event subscriptions, and long-running behavior where relevant. Verify the changed path in the active task; record what was observed and what remains unproven. Ending distills durable project facts and preferences from this evidence, not task history or speculative architecture.
+Consider bounded memory use, CPU/repeated work, disk retention, resource cleanup, concurrency/event subscriptions, and long-running behavior where relevant. For async results, object reuse, cached/derived state, configuration handoffs, or retries with side effects, apply [state and side-effect ownership](state-and-side-effects.md). Verify the changed path in the active task; record what was observed and what remains unproven. Ending distills durable project facts and preferences from this evidence, not task history or speculative architecture.

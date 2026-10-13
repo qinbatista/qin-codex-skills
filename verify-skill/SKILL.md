@@ -24,9 +24,22 @@ Select the smallest level that can prove the claim: level 1 checks a focused fun
 
 Use one real verification path: execute the changed behavior or inspect the actual output. A syntax check, mock, or quick smoke test may help diagnose a failure, but cannot replace evidence for the promised behavior. Prefer existing runtimes and focused checks. Do not start the whole application, compile the whole project, launch Unity, run every test, or incur external costs unless requested. If only a broader unauthorized action resolves uncertainty, complete the authorized implementation and available focused checks first, then report the specific verification gap alongside the delivered changes without claiming unverified behavior.
 
-For any browser-based verification, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence.
+For browser-based verification, read and apply [Workflow's browser testing policy](../workflow-skill/SKILL.md#browser-testing).
 
 Use [portable, quiet execution](../code-skill/references/skill-platform-compatibility.md): hide every test subprocess, use native headless rendering, and capture output without opening or activating windows. Preserve supported platform branches and report which were actually tested.
+
+## Bind evidence to the actual target
+
+Before a consequential check, identify the actual consumer and the result being claimed. Bind evidence to the relevant source revision or content hash, served process or installed artifact, effective configuration, runtime/ABI, and provider/environment. Record only the identifiers material to the claim; do not expose secrets or build a new reporting system. Confirm which workspace and version a running service actually loaded before treating a successful response as proof of the edited source.
+
+Keep these boundaries explicit:
+
+- Source review or a matching hash establishes source identity. A passing mock or synthetic fixture establishes only the modeled contract; runtime behavior needs the real affected consumer.
+- A browser, Editor, desktop Player, emulator, Simulator, physical device, store package, and provider backend are distinct surfaces. Run the supported available checks and report remaining surfaces separately; never promote one to evidence for another.
+- Build/export success, local installation, submission accepted, backend completion, and provider acceptance are separate outcomes. A dispatched callback or HTTP request does not prove the remote side effect completed. Read the authoritative resulting state when that completion is the claim.
+- For configuration or artifact changes, read the effective values and delivered bytes through the final consumer. An old log, cached preview, receipt from another build, or filename alone cannot identify this result.
+
+Choose a relevant failure or ordering boundary when it can invalidate the fix, following [state and side effects](../code-skill/references/state-and-side-effects.md). Report observed results and pending limits separately; do not rerun unrelated systems or upgrade historical evidence merely to fill a checklist.
 
 ## Finish
 

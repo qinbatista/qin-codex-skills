@@ -1,19 +1,16 @@
 # Python Rules
 
-Use [code-writing philosophy](code-writing-philosophy.md) for general ownership, direct calls, result ownership, spelling, and surgical scope. Preserve behavior unless the user requests a change.
+Use [code-writing philosophy](code-writing-philosophy.md) for general ownership, direct calls, result ownership, formatting, naming, input contracts, and surgical scope. The rules below add Python-specific constraints.
 
 ## Style
 
-- Prefer one physical line for clear signatures, calls, constructors, literals, and comprehensions. Introduce meaningful intermediate values when needed; wrap for genuine clarity or tooling constraints.
 - Preserve manual formatting. Do not run `ruff format`, `black`, or another formatter unless requested.
 - Keep imports at the top. Add no demos, TODOs, placeholders, or unnecessary `__main__` guards.
-- Use specific full-word names. Inline single-use values when readable; retain variables that clarify meaning.
-- Avoid one-off tiny helpers, nested wrappers, and extra classes. Put the steps in the actual owning function; extract only for reuse or a meaningful reduction in complexity.
 - For host scripts, subprocesses, and tests, follow [portable, quiet execution](skill-platform-compatibility.md). Use `sys.executable`, argument arrays, native paths, and hidden child launches; preserve valid platform-specific code and the caller's output/error/lifecycle handling.
 
 ## Contracts
 
-Read established JSON keys and return values directly. Do not search speculative aliases, repeat type checks at every call site, or add fallback values without a real contract. Validate untrusted inputs at their boundary and fix owned producers instead of repairing their output in each caller.
+Apply the shared input contract to untrusted inputs at the external boundary; Python callers consume the producer's established types and keys directly.
 
 When an AI helper guarantees parsed JSON with `json_root="object"` or `json_root="array"`, use that object directly; do not parse it again. Keep semantic extraction/naming/review rules in the prompt and local code focused on the schema and integration.
 
