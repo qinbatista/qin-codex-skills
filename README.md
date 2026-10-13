@@ -20,7 +20,7 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 1. At startup or resume, ensure the Obsidian vault, then read applicable skills and exact-project memory. Track Skill use, steps and reasons; skip missing memory.
 2. Preview the objective and implementation steps, then execute. Ask only for necessary decisions or authorization.
 3. Before adding maintained tests, consult project testing Skills and consolidate duplicate purposes. Default to real affected-case checks; deliver evidence, repair failures and clean disposable resources.
-4. One authorized, unpinned projectless Ending records Obsidian memory and [audits resources](workflow-skill/references/ending-resource-audit.md) in parallel. Follow owners’ cleanup first; release disposable completed-task resources and preserve active work and user review/reuse. Unavailable memory stays pending; Ending never gates, tests or repairs the result.
+4. Launch one authorized, unpinned projectless Ending, show its acknowledged link and immediately finish the main turn. The parent never waits for Ending. Ending reads its source chat when needed, records Obsidian memory and [audits resources](workflow-skill/references/ending-resource-audit.md) in parallel, and owns recovery and mandatory native self-deletion. Preserve active work and user review/reuse; archival remains deletion pending.
 
 At completion, summarize actual Skill names, steps and reasons once, including branch use; distinguish unused, missing or unreadable Skills. Progress updates need no repeated lists; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
 

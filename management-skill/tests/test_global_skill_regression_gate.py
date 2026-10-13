@@ -56,7 +56,11 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
 
     def test_catalog_previews_steps_and_keeps_verification_in_task(self):
         policy = GATE.load_catalog(PROJECT_ROOT)["policy"]
-        self.assertEqual(policy["workflow_version"], 4)
+        self.assertEqual(policy["workflow_version"], 5)
+        self.assertFalse(policy["ending_parent_wait_allowed"])
+        self.assertEqual(policy["ending_launch_completion"], "app_creation_acknowledgement")
+        self.assertEqual(policy["ending_recovery_owner"], "ending")
+        self.assertEqual(policy["ending_completion"], "ending_owned_branch_readbacks_and_verified_native_self_deletion")
         self.assertEqual(policy["execution_preview"], "brief_goal_and_steps_before_execution")
         self.assertEqual(policy["action_request_completion"], "execute_recover_deliver_or_evidenced_blocker")
         self.assertEqual(policy["skill_usage_reporting"], "final_only_actual_use_steps_and_reasons")

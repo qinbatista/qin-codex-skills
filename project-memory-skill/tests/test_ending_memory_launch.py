@@ -59,31 +59,34 @@ class EndingLaunchTests(unittest.TestCase):
         with mock.patch("obsidian_vault_setup.ensure_vault", return_value={"status": "pending", "reason": "obsidian_vault_unavailable"}):
             packet = self.prepare(memory_available=False)
         self.assertEqual(packet["status"], "pending")
-        self.assertEqual(packet["reason"], "obsidian_vault_unavailable")
+        self.assertEqual(packet["reason"], "obsidian_maintenance_unavailable")
         self.assertIsNotNone(packet["create_thread"])
         self.assertEqual(packet["memory_status"], "pending")
         self.assertTrue(packet["resource_audit"])
 
-    def test_unavailable_vault_without_a_resource_audit_remains_pending(self):
+    def test_unavailable_vault_still_launches_independent_memory_work(self):
         with mock.patch("obsidian_vault_setup.ensure_vault", return_value={"status": "pending", "reason": "obsidian_vault_unavailable"}):
             packet = self.prepare(memory_available=False, resource_audit=False)
-        self.assertIsNone(packet["create_thread"])
-
-    def test_missing_vault_setup_enables_memory_handoff(self):
-        with mock.patch("obsidian_vault_setup.ensure_vault", return_value={"status": "created", "vault": "/vault"}):
-            packet = self.prepare(memory_available=False)
-        self.assertEqual(packet["status"], "pending")
         self.assertIsNotNone(packet["create_thread"])
-        self.assertEqual(packet["vault_setup"]["status"], "created")
+        self.assertFalse(packet["parent_wait_required"])
 
-    def test_no_durable_information_skips_memory_only_and_still_audits_resources(self):
+    def test_parent_never_runs_vault_setup_recall_or_synthesis(self):
+        with mock.patch("obsidian_vault_setup.ensure_vault", side_effect=AssertionError("parent vault setup")), mock.patch.object(MODULE.memory, "_resolve_vault", side_effect=AssertionError("parent vault resolution")), mock.patch.object(MODULE.knowledge, "load_knowledge", side_effect=AssertionError("parent recall")), mock.patch.object(MODULE.knowledge, "synthesis_context", side_effect=AssertionError("parent synthesis")):
+            for memory_available in (True, False):
+                for resource_audit in (True, False):
+                    packet = self.prepare(memory_available=memory_available, resource_audit=resource_audit)
+                    self.assertIsNotNone(packet["create_thread"])
+                    self.assertTrue(packet["maintenance_check_required"])
+                    self.assertFalse(packet["parent_wait_required"])
+
+    def test_no_durable_information_defers_cadence_decision_to_ending(self):
         self.completed["outcome"] = {}
         packet = self.prepare()
-        self.assertEqual(packet["memory_status"], "skipped")
+        self.assertEqual(packet["memory_status"], "pending")
         self.assertIsNotNone(packet["create_thread"])
-        skipped = self.prepare(resource_audit=False)
-        self.assertEqual(skipped["status"], "skipped")
-        self.assertIsNone(skipped["create_thread"])
+        memory_only = self.prepare(resource_audit=False)
+        self.assertTrue(memory_only["maintenance_check_required"])
+        self.assertIsNotNone(memory_only["create_thread"])
 
     def test_handoff_uses_app_defaults_and_scoped_obsidian_prompt(self):
         packet = self.prepare()
@@ -109,6 +112,33 @@ class EndingLaunchTests(unittest.TestCase):
                 self.assertEqual(set(handoff), {"target", "title", "prompt"})
                 self.assertEqual(handoff["target"], {"type": "projectless"})
 
+    def test_app_acknowledgement_releases_parent_without_ending_readback(self):
+        packet = MODULE.acknowledge_launch(self.prepare(), {"threadId": "thread-1", "hostId": "local"})
+        self.assertEqual(packet["status"], "launched")
+        self.assertTrue(packet["parent_may_finish"])
+        self.assertFalse(packet["parent_wait_required"])
+        self.assertEqual(packet["completion_owner"], "ending")
+        self.assertIsNone(packet["create_thread"])
+        with self.assertRaisesRegex(ValueError, "projectless"):
+            MODULE.acknowledge_launch(self.prepare(), {"threadId": "thread-1", "hostId": "local"}, {"threadId": "other", "projectId": None})
+
+    def test_handoff_binds_origin_and_keeps_recovery_in_ending(self):
+        self.completed["host_id"] = "remote-ssh-discovered:mypi"
+        packet = self.prepare()
+        prompt = packet["create_thread"]["prompt"]
+        data = json.loads(prompt.split("Completed outcome data:\n", 1)[1])
+        self.assertEqual(data["origin_thread"], {"threadId": "task-1", "hostId": "remote-ssh-discovered:mypi"})
+        self.assertEqual(packet["origin_thread"], data["origin_thread"])
+        self.assertTrue(packet["deletion_required"])
+        self.assertIn("read_thread with the exact origin_thread", prompt)
+        self.assertIn("must never wait for Ending at any stage", prompt)
+        self.assertIn("Do not message, wake or wait for the origin thread", prompt)
+        self.assertIn("Deletion of this Ending is mandatory", prompt)
+        self.assertNotIn("leave that step to the originating task", prompt)
+        self.assertNotIn("wait_threads", prompt)
+        with self.assertRaisesRegex(ValueError, "different outcome or project"):
+            self.prepare(previous={**packet, "outcome_fingerprint": "other"})
+
     def test_handoff_keeps_the_installation_that_prepared_it(self):
         installed = self.project / ".agents" / "skills" / "project-memory-skill" / "scripts" / "ending_memory_launch.py"
         with mock.patch.object(MODULE, "__file__", str(installed)):
@@ -128,7 +158,8 @@ class EndingLaunchTests(unittest.TestCase):
     def test_completion_requires_vault_event_and_matching_project(self):
         packet = self.acknowledged()
         result = MODULE.record_completion(packet, self.vault_result(), self.resource_result())
-        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["status"], "pending")
+        self.assertEqual(result["branch_status"], "complete")
         self.assertEqual(result["event_id"], "event-1")
         self.assertEqual(result["memory_sync"], "verified")
         self.assertEqual(result["conversation_cleanup"]["status"], "ready")
@@ -151,11 +182,13 @@ class EndingLaunchTests(unittest.TestCase):
         completed = MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result())
         archive = {"thread_id": "thread-1", "host_id": "local", "status": "archived", "read_back_verified": True, "source": "native archive receipt and archived-thread readback"}
         result = MODULE.record_conversation_cleanup(completed, archive)
-        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["status"], "pending")
+        self.assertEqual(result["branch_status"], "complete")
         self.assertEqual(result["conversation_cleanup"]["status"], "archived")
         self.assertEqual(result["conversation_cleanup"]["local_deletion_status"], "pending")
         self.assertEqual(result["conversation_cleanup"]["reason"], "archive_retains_local_records")
         deleted = MODULE.record_conversation_cleanup(result, {**archive, "status": "deleted", "local_record_absent": True})
+        self.assertEqual(deleted["status"], "complete")
         self.assertEqual(deleted["conversation_cleanup"]["local_deletion_status"], "complete")
         self.assertNotIn("reason", deleted["conversation_cleanup"])
         for change in ({"thread_id": "other"}, {"host_id": "other"}, {"read_back_verified": False}, {"source": ""}, {"local_record_absent": True}):
@@ -174,7 +207,7 @@ class EndingLaunchTests(unittest.TestCase):
         deleted = MODULE.record_conversation_cleanup(completed, receipt)
         self.assertEqual(deleted["conversation_cleanup"]["local_deletion_status"], "complete")
         pending = MODULE.record_conversation_cleanup(completed, {"thread_id": "thread-1", "host_id": "local", "status": "pending", "reason": "native action unavailable"})
-        self.assertEqual(pending["status"], "complete")
+        self.assertEqual(pending["status"], "pending")
         self.assertEqual(pending["conversation_cleanup"]["local_deletion_status"], "pending")
 
     def test_resource_success_survives_pending_or_skipped_memory(self):
@@ -201,7 +234,7 @@ class EndingLaunchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different outcome or project"):
             self.prepare(previous=packet)
 
-    def test_handoff_carries_merged_corrections_and_pending_items(self):
+    def test_handoff_leaves_existing_knowledge_merge_to_ending(self):
         scope = {"scope": "module", "module": "example"}
         established = {**scope, "summary": "Keep the verified original contract", "reason": "The user corrected repeated lost settings", "result": "The original restoration workaround passed", "decisions": ["Preserve the correction"], "risks": ["Pending: verify another machine"], "verification_status": "passed", "verification": ["Observed the original restoration output"]}
         (self.vault / "AI Memory/events.jsonl").write_text(json.dumps({"event_id": "original-event", "project": "ExampleProject"}) + "\n", encoding="utf-8")
@@ -210,10 +243,14 @@ class EndingLaunchTests(unittest.TestCase):
         packet = self.prepare()
         data = json.loads(packet["create_thread"]["prompt"].split("Completed outcome data:\n", 1)[1])
         current = data["outcome"]["memories"][0]
+        self.assertEqual(current["summary"], "Keep the revised restoration contract pending verification")
+        self.assertNotIn("risks", current)
+        existing = MODULE.knowledge.load_knowledge(self.project, self.vault)["entries"]
+        merged = MODULE.prepare_entries(data["outcome"], self.project, existing_entries=existing)[0]
         for field in ("reason", "result", "decisions", "risks"):
-            self.assertEqual(current[field], established[field])
-        self.assertEqual(current["verification_status"], "not-run")
-        self.assertEqual(current["verification"], [])
+            self.assertEqual(merged[field], established[field])
+        self.assertEqual(merged["verification_status"], "not-run")
+        self.assertEqual(merged["verification"], [])
         self.assertEqual(len(current["source_hashes"]["script.py"]), 64)
         self.assertIn("user corrections", packet["create_thread"]["prompt"])
 
@@ -236,9 +273,10 @@ class EndingLaunchTests(unittest.TestCase):
         MODULE.knowledge.apply_entries(self.project, self.vault, [entry], event_id="original-event")
         self.completed["outcome"] = {}
         packet = self.prepare(resource_audit=False)
-        self.assertTrue(packet["consolidation_required"])
+        self.assertTrue(packet["maintenance_check_required"])
+        self.assertFalse(packet["consolidation_required"])
         self.assertTrue(packet["memory_required"])
-        self.assertEqual(packet["synthesis_context"]["entries"][0]["verification_status"], "partial")
+        self.assertNotIn("synthesis_context", packet)
         self.assertIsNotNone(packet["create_thread"])
         self.completed["outcome"] = {"consolidation": {"summary": "The original restoration environment was observed, with other environments pending"}}
         consolidated = self.prepare(resource_audit=False)
