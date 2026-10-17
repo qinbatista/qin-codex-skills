@@ -137,7 +137,10 @@ def _bound_path(path, project, base):
         return "external"
     registry = _registry(base, project)
     project_record = _read(registry / "projects" / (_key(project) + ".json"))
-    if any(Path(root) in path.parents and path != Path(root) for root in project_record["cache_roots"]):
+    roots = [artifacts._absolute_path(root, "registered Cache") for root in project_record["cache_roots"]]
+    if project_record["project_root"] != str(project) or any(project not in root.parents or root.name.lower() != "cache" for root in roots):
+        raise ValueError("registered Cache ownership is inconsistent")
+    if any(root in path.parents and path != root for root in roots):
         if any((ancestor / ".git").exists() for ancestor in (project, *project.parents)):
             git = shutil.which("git")
             if not git:
