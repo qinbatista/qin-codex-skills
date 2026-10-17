@@ -1,6 +1,6 @@
 # Readable UI and visual presentation
 
-Apply these shared preferences to every UI or visual presentation task: websites, dashboards, tools, PDF reports, documents, and slide presentations. They apply even when no code changes and another Skill owns the renderer or export. Read relevant project memory first; absent matching notes are a normal skip. Keep project-specific content and style with its project.
+Apply these shared preferences to every UI or visual presentation task: games, native apps, websites, dashboards, tools, PDF reports, documents, and slide presentations. They apply even when no code changes and another Skill owns the renderer or export. Read relevant project memory first; absent matching notes are a normal skip. Keep project-specific content and style with its project.
 
 ## Twelve basic principles
 
@@ -24,6 +24,12 @@ Reserve or contain loading, status, error, and optional-content space so control
 Readability, accessibility, localization, and content meaning take priority over compression. Keep headers in one row through a compact navigation design; elsewhere, reflow at a genuine narrow breakpoint when content cannot fit readably. Preserve alignment and all essential information after reflow. Do not force fit through tiny type, clipping, overlap, or hidden essential content.
 
 ## Focused rendered checks
+
+For every UI creation, modification, or visual review, enumerate the product's actual supported languages and affected screens, states, and display sizes before acceptance. Use its real translation resources and font/fallback configuration; do not invent translations or silently replace a missing language with the default. Check every supported language in the affected UI, including long labels, multiline content, large numbers, loading/errors, and applicable right-to-left or mixed-direction text. Preserve text meaning, reading order, glyph coverage, and readable minimum type size. A pseudo-localized stress case may expose expansion bugs but does not replace real-language checks.
+
+Fix text that escapes its owner, overlaps another element, clips glyphs or essential content, collides with controls, or becomes unreadably small. Adjust the owning container, reflow, spacing, constraints, scrolling, or deliberate text treatment; do not hide required information or delete translations merely to make a screenshot fit. Verify locale changes and resizing in the running UI when supported. Shared typography or layout changes require rechecking all affected languages and states, including previously passing cases.
+
+Capture and open fresh rendered screenshots or page/slide images for each affected language and layout case after the fix; inspect the actual text and composition before passing it. Bind each result to the language, state, actual display size, and current source/configuration. Bounds assertions, successful translation loading, compile success, or another worker's completion claim cannot replace this visual review. Continue the correction-and-review loop until the affected cases pass; unavailable language resources or rendering leave those exact cases unverified. Read-only reviews report defects without mutating the product. API/client/release workflow checks alone retain their explicit scope under [Verify](../../verify-skill/SKILL.md#choose-evidence).
 
 - **Web/UI:** inspect the affected desktop and narrow viewports, including long labels and relevant loading/error states. Check the header remains one contained row, controls remain within their owners, and the page does not overflow. Measure disputed alignment and inspect actual interactions.
 - **PDF/documents/slides:** render affected pages or slides at the intended reading size. Inspect balanced type, aligned content, readable tables, useful density, labels within owners, page bounds, and page breaks; avoid orphaned headings or clipped rows. Interaction checks apply only to interactive content.
