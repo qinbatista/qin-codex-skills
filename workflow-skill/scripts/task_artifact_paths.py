@@ -15,6 +15,9 @@ import uuid
 from pathlib import Path
 from typing import Mapping
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import task_cache_cleanup
+
 
 RUN_NAME_RE = re.compile(r"temp-(?P<task_key>[0-9a-f]{24})-(?P<run_id>[0-9a-f]{32})")
 
@@ -142,8 +145,20 @@ def resolve_task_artifact_root(
     path = project_artifact_directory(project_root, artifact_root=artifact_root, environ=environ, create=create) / f"temp-{task_key}-{run_id}"
     validate_external_directory(path, project_root, environ=environ)
     if create:
-        path.mkdir(exist_ok=False)
+        try:
+            checkpoint = task_cache_cleanup.checkpoint(project_root, task_id, artifact_root=path.parent.parent, phase="start", current_run=path, apply=True, budget_seconds=5)
+        except (OSError, ValueError) as error:
+            checkpoint = {"bytes_deleted": 0, "results": [{"action": "pending", "reason": str(error)}]}
+        actionable = [item for item in checkpoint["results"] if item["action"] in {"deleted", "pending"}]
+        if actionable:
+            print(json.dumps({"event": "task_cache_checkpoint", "bytes_deleted": checkpoint["bytes_deleted"], "results": actionable}, sort_keys=True), file=sys.stderr)
+        path.mkdir(parents=True, exist_ok=False)
         validate_external_directory(path, project_root, environ=environ)
+        try:
+            task_cache_cleanup.register_run(project_root, task_id, path, artifact_root=path.parent.parent)
+        except (OSError, ValueError):
+            path.rmdir()
+            raise
     return path
 
 

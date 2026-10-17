@@ -416,7 +416,7 @@
       "id": "resources",
       "owner_skill": "workflow-skill",
       "name": "Global resource coordination and Ending audit",
-      "function": "Follow specific owner cleanup first, then audit recent completed tasks and release confirmed disposable Cache, UI, process and network resources; preserve active work and user review/reuse.",
+      "function": "Execute indexed cleanup at task start, transition and finish: release own completed or obsolete disposable runs immediately and registered foreign disposable runs inactive at least 24 hours after fresh consumer checks. Detect project Cache naming violations, repair their producers and release obsolete material. Follow native owners for ledgers, worktrees, UI, process and network resources; preserve active, recovery and actual review/reuse needs.",
       "checks": [
         "workflow-units",
         "project-memory-units",

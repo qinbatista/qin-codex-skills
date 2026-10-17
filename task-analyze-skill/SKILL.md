@@ -43,7 +43,7 @@ Resolve unambiguous spelling errors in user-supplied function, feature or task n
 
 ## Carry out the task
 
-Before starting a new request or work unit, including an unrelated request in this same chat, execute [Workflow's task-transition cleanup checkpoint](../workflow-skill/references/task-resource-lifecycle.md#task-transition-cleanup-checkpoint). Check the preceding work's exact resources and remove confirmed unused support now; a new task must not silently inherit an accumulating old scratch tree. No separate cleanup request or Ending is required.
+Before starting a new request or work unit, including an unrelated request in this same chat, execute [Workflow's task-transition cleanup checkpoint](../workflow-skill/references/task-resource-lifecycle.md#task-transition-cleanup-checkpoint). Use its local helper to remove own completed/obsolete support immediately and check registered disposable runs from other tasks inactive at least 24 hours. Check project Cache naming violations and repair their producers. A new task must not silently inherit an accumulating old scratch tree. Repeat at verification/delivery and finish; no separate cleanup request or Ending is required.
 
 Before any file write, resolve its owner under the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Task support stays outside project directories and Codex storage from its first write, including delegated output and tool caches. Maintained source and final deliverables retain their owners; inspect exact paths and the Git index before committing.
 
