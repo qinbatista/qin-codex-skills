@@ -1,6 +1,8 @@
 # Requested Cache cleanup
 
-Use this workflow when the user requests Cache or `temp-*` cleanup. The request authorizes deletion of eligible temporary support within the selected scope. Complete independent safe cleanup without asking again; preserve exact active, recovery, shared and review/reuse resources.
+Use this workflow when the user requests Cache or `temp-*` cleanup, or for exact predecessor runs selected by the [automatic task-transition checkpoint](task-resource-lifecycle.md#task-transition-cleanup-checkpoint). The request authorizes deletion of eligible temporary support within the selected scope. Complete independent safe cleanup without asking again; preserve exact active, recovery, shared and review/reuse resources.
+
+Automatic transition cleanup uses only the checkpoint's bounded predecessor scope and standing authorization; the broader discovery choices below require the corresponding user request.
 
 ## Select the requested scope
 

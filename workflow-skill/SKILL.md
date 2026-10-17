@@ -35,6 +35,10 @@ Use [Monitor Mode](references/monitor-mode.md) when the user asks to monitor ano
 
 Check every five minutes, with earlier attention for completion or actionable failures. Compare progress with the user's scope, owning Skills, exact-project memory and current evidence. Stay quiet while work is on course; send brief steering only for a concrete deviation or blocker. Stop confirmed out-of-scope work through a supported control, or request a pause and verify acknowledgement when only messaging is available. Verify the agreed final result before closing supervision.
 
+## Cleanup at every task transition
+
+At the start of every new user request or distinct work unit, including unrelated work in the same chat, apply the [task-transition cleanup checkpoint](references/task-resource-lifecycle.md#task-transition-cleanup-checkpoint) before producing new scratch or starting another build/package/test. Reclaim completed predecessors' confirmed unused support immediately; do not wait for chat closure, Ending, a separate cleanup request, a disk-space threshold or a time-to-live. This is standing authorization, not an optional suggestion. Cleanup failure blocks only the affected resource, not independent new work.
+
 ## Requested Cache cleanup
 
 When the user asks to clean Cache, `temp-*`, all Codex projects, or the whole computer, follow [Cache cleanup](references/cache-cleanup.md). Match the requested scope, enumerate exact runs and consumers, then delete only confirmed disposable Skill-generated support. A running project or chat protects only resources it still uses; completed earlier runs may be cleaned immediately. An explicit cleanup request covers eligible legacy `Cache/temp-*` directly; no migration or routine confirmation is required.

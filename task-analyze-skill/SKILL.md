@@ -43,6 +43,8 @@ Resolve unambiguous spelling errors in user-supplied function, feature or task n
 
 ## Carry out the task
 
+Before starting a new request or work unit, including an unrelated request in this same chat, execute [Workflow's task-transition cleanup checkpoint](../workflow-skill/references/task-resource-lifecycle.md#task-transition-cleanup-checkpoint). Check the preceding work's exact resources and remove confirmed unused support now; a new task must not silently inherit an accumulating old scratch tree. No separate cleanup request or Ending is required.
+
 Before any file write, resolve its owner under the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Task support stays outside project directories and Codex storage from its first write, including delegated output and tool caches. Maintained source and final deliverables retain their owners; inspect exact paths and the Git index before committing.
 
 Before Git edits, read and apply [Workflow's branch ownership](../workflow-skill/SKILL.md#git-branch-ownership) and [complete delivery transaction](../workflow-skill/SKILL.md#execute). Announce the actual selected branch and existing upstream. Workflow owns integration, scoped commits, normal push, recovery, and remote readback; a local commit is an intermediate state unless the user explicitly requests local-only or no push.

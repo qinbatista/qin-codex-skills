@@ -25,6 +25,8 @@ Configure each tool's output, working directory and cache options before launch,
 
 A new request, resumed execution or newly started test, build, package or deployment unit allocates a new run, even in the same window, chat or logical task. Never append later output to an earlier run or keep one growing directory for the chat's lifetime. An exact active run remains available to its own consumers; this does not protect completed sibling runs.
 
+Before allocating the next run, execute the [task-transition cleanup checkpoint](task-resource-lifecycle.md#task-transition-cleanup-checkpoint). Unrelated work triggers cleanup too: delete confirmed unused predecessor support without copying it into the new run. Fresh allocation alone does not discharge old-run cleanup.
+
 For continuation, allocate the new run first and inspect the earlier run's purpose, exact identity and current consumers. Copy only genuinely useful inputs, fixtures or minimum resumable state; do not copy its whole scratch tree, logs or build caches merely because they exist. Verify copied bytes and update consuming paths through a fresh reader. Delete the confirmed disposable old run once no live or recovery consumer still needs it, or immediately when no input is needed. Preserve uncertain, shared and review/reuse resources through their real owner; an open or running chat alone is not a retention reason.
 
 Use `copy_run_inputs(project_root, source_root, destination_root, relative_paths)` for an explicit file whitelist; it verifies independent copied bytes/hashes and rejects overwrite, links and traversal. The resolver CLI can allocate and copy in one invocation:
@@ -47,7 +49,7 @@ Release disposable stage files, child activity and worktrees as soon as that uni
 
 ## Migrate existing misplaced scratch
 
-For an explicit request to clean one project's Cache, all Codex projects, or the whole computer, use [Cache cleanup](cache-cleanup.md). That request authorizes direct deletion of confirmed disposable legacy `Cache/temp-*` within its selected scope after checking exact run identity and consumers. Preserve only resources with actual active, recovery, shared or review/reuse needs; activity elsewhere in the project or chat does not protect old runs. Migration is not a prerequisite for authorized deletion. Ordinary task/Ending cleanup keeps its bounded ownership rules below.
+For an explicit request to clean one project's Cache, all Codex projects, or the whole computer, use [Cache cleanup](cache-cleanup.md). That request authorizes direct deletion of confirmed disposable legacy `Cache/temp-*` within its selected scope after checking exact run identity and consumers. Preserve only resources with actual active, recovery, shared or review/reuse needs; activity elsewhere in the project or chat does not protect old runs. Migration is not a prerequisite for authorized deletion. The task-transition checkpoint also authorizes exact confirmed disposable predecessor runs, including legacy `Cache/temp-*`, within its bounded scope; it does not authorize a whole-computer sweep.
 
 Select exact paths through creation history, file identity and current consumer checks. Preserve canonical resources, source, maintained tests, final deliverables, unrelated work and uncertain files. Stop only confirmed owned disposable activity before moving its backing files. Move authorized legacy scratch to its isolated external owner, preserve bytes/hashes, update every affected consumer/reference and verify with a fresh reader before retiring the old location.
 
