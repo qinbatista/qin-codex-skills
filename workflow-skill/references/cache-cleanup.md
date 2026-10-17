@@ -20,6 +20,8 @@ Use resolved absolute project/run paths. Omit `--current-run` when no run has be
 
 Discovery reports Cache directories and naming violations without granting deletion eligibility. For legacy support, first establish actual purpose and consumers, then use `register --project-root PROJECT --task-id THREAD --run-root EXACT --reason EVIDENCE --state complete`. Unknown entries remain review candidates, not permanent exemptions: inspect their source/receipts, clean confirmed disposable contents and register eligible runs. Use the original owner for existing ledgers and Git worktrees. Missing/failed activity probes, changed identities, links and concrete retention/recovery needs block only the affected candidate.
 
+On macOS, the native consumer probe records a `can't stat()` warning as `scope_warnings` only when the current mount table proves the warned SMB filesystem is a nonlocal mount outside the exact local target and its descendants. Native open-file and process checks still run. Target or nested mounts, other filesystems, unknown warnings, incomplete mount inventory, errors and timeouts remain blocking; never suppress stderr or infer an empty consumer list from a failed probe.
+
 Other tasks' 24-hour inactivity is measured from the newest heartbeat and recursive file/directory changes, not just the top folder date. A live producer or open consumer protects its exact resources; a chat that remains open does not protect unused siblings. Checkpoints apply the same fresh identity, boundary and consumer checks immediately before deletion and read back absence. Keep unrelated siblings intact. Windows without a supported consumer probe must report pending, never silently treat that as no activity.
 
 ## Project Cache naming and producer repair

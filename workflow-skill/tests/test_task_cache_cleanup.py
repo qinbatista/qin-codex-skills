@@ -260,16 +260,54 @@ class TaskCacheCleanupTests(unittest.TestCase):
         run = self.run_root()
         payload = run / "open.bin"
         payload.write_bytes(b"keep")
-        command = "import sys,time; stream=open(sys.argv[1], 'rb'); print('ready',flush=True); time.sleep(30)"
-        process = subprocess.Popen([sys.executable, "-c", command, str(payload)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **hidden_process_options())
+        # Keep the path out of argv/cwd so ps cannot mask a missing native handle.
+        command = "import sys; stream=open(sys.stdin.readline().strip(), 'rb'); print('ready',flush=True); sys.stdin.readline(); stream.close(); print('closed',flush=True); sys.stdin.readline()"
+        process = subprocess.Popen([sys.executable, "-c", command], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=self.root, **hidden_process_options())
         try:
+            process.stdin.write(str(payload) + "\n")
+            process.stdin.flush()
             self.assertEqual(process.stdout.readline().strip(), "ready")
+            active = cleanup.probe_activity(run)
+            self.assertFalse(active["safe"], active)
+            self.assertEqual(active["reason"], "active open files or working directory", active)
             result = self.sweep(phase="finish", current_run=run)
             self.assertEqual(result["results"][0]["action"], "keep", result)
             self.assertTrue(payload.exists())
+            process.stdin.write("close\n")
+            process.stdin.flush()
+            self.assertEqual(process.stdout.readline().strip(), "closed")
+            inactive = cleanup.probe_activity(run)
+            self.assertTrue(inactive["safe"], inactive)
         finally:
             process.terminate()
             process.communicate(timeout=10)
+
+    @unittest.skipIf(sys.platform == "win32", "macOS mount syntax requires POSIX paths")
+    def test_only_verified_disjoint_macos_mount_warnings_are_scoped(self):
+        run = self.run_root()
+        outside = self.root / "other-mount"
+        warning = f"lsof: WARNING: can't stat() smbfs file system {outside}\n      Output information may be incomplete.\n      assuming \"dev=36000040\" from mount table\n"
+        inventory = subprocess.CompletedProcess([], 0, f"disk on / (apfs, local)\nnetwork on {outside} (smbfs, nobrowse)\n", "")
+        def native(arguments, **kwargs):
+            if Path(arguments[0]).name == "lsof":
+                return subprocess.CompletedProcess(arguments, 1, "", warning)
+            if Path(arguments[0]).name == "mount":
+                return inventory
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native):
+            clear = cleanup.probe_activity(run)
+            self.assertTrue(clear["safe"], clear)
+            self.assertEqual(clear["scope_warnings"], [warning.rstrip()])
+            for rejected in (warning + "lsof: unexpected warning\n", warning.replace(str(outside), str(run)), warning.replace(str(outside), str(run / "nested-mount")), warning.replace(str(outside), "/"), warning.replace("smbfs", "nfs")):
+                with mock.patch.object(cleanup, "_run_command", side_effect=lambda arguments, **kwargs: subprocess.CompletedProcess(arguments, 1, "", rejected) if Path(arguments[0]).name == "lsof" else inventory):
+                    result = cleanup.probe_activity(run)
+                    self.assertFalse(result["safe"], result)
+                    self.assertTrue(result["pending"], result)
+            # Target/child mounts must fail even when present in the native table.
+            for location in (run, run / "nested-mount"):
+                inventory.stdout = f"disk on / (apfs, local)\nnetwork on {location} (smbfs, nobrowse)\n"
+                warning = f"lsof: WARNING: can't stat() smbfs file system {location}\n      Output information may be incomplete.\n"
+                self.assertFalse(cleanup.probe_activity(run)["safe"])
 
     def test_cli_scan_reads_actual_registry(self):
         run = self.run_root()

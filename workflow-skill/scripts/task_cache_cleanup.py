@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -255,6 +256,51 @@ def _process_identity(pid, deadline=None):
         return "unverified"
 
 
+def _outside_mount_warnings(path, stderr, *, deadline=None):
+    """Classify only macOS stat warnings for verified, disjoint mounts."""
+    if sys.platform != "darwin":
+        return None
+    mount = shutil.which("mount")
+    if not mount:
+        return None
+    inventory = _run_command([mount], timeout=_remaining(deadline))
+    if inventory.returncode or inventory.stderr.strip():
+        return None
+    mounts = {}
+    for line in inventory.stdout.splitlines():
+        match = re.fullmatch(r".+ on (/.*) \(([^, )]+)(?:, (.*))?\)", line)
+        if not match:
+            return None
+        location, filesystem, flags = match.groups()
+        if location != os.path.normpath(location) or location in mounts:
+            return None
+        mounts[location] = (filesystem, set((flags or "").split(", ")))
+    target = Path(path).resolve(strict=True)
+    ancestors = [location for location in mounts if target.is_relative_to(location)]
+    if not ancestors or "local" not in mounts[max(ancestors, key=len)][1]:
+        return None
+    lines = stderr.strip().splitlines()
+    warnings = []
+    index = 0
+    while index < len(lines):
+        match = re.fullmatch(r"lsof: WARNING: can't stat\(\) ([^ ]+) file system (/.*)", lines[index])
+        if not match or index + 1 >= len(lines) or lines[index + 1].strip() != "Output information may be incomplete.":
+            return None
+        filesystem, location = match.groups()
+        if filesystem != "smbfs" or location not in mounts or mounts[location][0] != filesystem or "local" in mounts[location][1]:
+            return None
+        warned = Path(location)
+        if target.is_relative_to(warned) or warned.is_relative_to(target):
+            return None
+        block = lines[index:index + 2]
+        index += 2
+        if index < len(lines) and re.fullmatch(r'\s+assuming "dev=[0-9a-fA-Fx]+" from mount table', lines[index]):
+            block.append(lines[index])
+            index += 1
+        warnings.append("\n".join(block))
+    return warnings or None
+
+
 def probe_activity(path, *, deadline=None):
     """Fresh native consumers; unsupported/inaccessible probes fail closed."""
     if sys.platform == "darwin" or sys.platform.startswith("linux"):
@@ -263,18 +309,20 @@ def probe_activity(path, *, deadline=None):
         if not lsof or not ps:
             return {"safe": False, "pending": True, "reason": "lsof/ps unavailable; consumer probe pending"}
         opened = _run_command([lsof, "-nP", "+D", str(path), "-Fpn"], timeout=_remaining(deadline))
-        if opened.returncode not in {0, 1} or opened.stderr.strip():
+        warnings = _outside_mount_warnings(path, opened.stderr, deadline=deadline) if opened.stderr.strip() and opened.returncode in {0, 1} else []
+        if opened.returncode not in {0, 1} or warnings is None:
             return {"safe": False, "pending": True, "reason": "open-file probe incomplete: " + opened.stderr.strip()[:300]}
+        context = {"scope_warnings": warnings} if warnings else {}
         if opened.stdout.strip():
-            return {"safe": False, "reason": "active open files or working directory"}
+            return {**context, "safe": False, "reason": "active open files or working directory"}
         processes = _run_command([ps, "-axo", "pid=,command="], timeout=_remaining(deadline))
         if processes.returncode or processes.stderr.strip():
-            return {"safe": False, "pending": True, "reason": "process probe incomplete"}
+            return {**context, "safe": False, "pending": True, "reason": "process probe incomplete"}
         for line in processes.stdout.splitlines():
             parts = line.strip().split(None, 1)
             if len(parts) == 2 and parts[0] != str(os.getpid()) and str(path) in parts[1]:
-                return {"safe": False, "reason": "active process references exact run", "pid": parts[0]}
-        return {"safe": True, "reason": "native open-file and process probes clear"}
+                return {**context, "safe": False, "reason": "active process references exact run", "pid": parts[0]}
+        return {**context, "safe": True, "reason": "native open-file and process probes clear"}
     elif sys.platform == "win32":
         return {"safe": False, "pending": True, "reason": "Windows native handle probe unavailable; owner-native cleanup required"}
     else:
@@ -334,6 +382,8 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             if creator is not None and creator == record["creator_identity"]:
                 return {**result, "action": "keep", "reason": "original producer process remains alive"}
         activity = probe_activity(path, deadline=deadline)
+        if activity.get("scope_warnings"):
+            result["scope_warnings"] = activity["scope_warnings"]
         if not activity["safe"]:
             return {**result, "action": "pending" if activity.get("pending") else "keep", "reason": activity["reason"]}
         if not apply:
@@ -344,6 +394,8 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
         if fresh != snapshot:
             raise ValueError("run changed after inspection")
         activity = probe_activity(path, deadline=deadline)
+        if activity.get("scope_warnings"):
+            result["scope_warnings"] = list(dict.fromkeys(result.get("scope_warnings", []) + activity["scope_warnings"]))
         if not activity["safe"]:
             return {**result, "action": "pending" if activity.get("pending") else "keep", "reason": activity["reason"]}
         if _snapshot(path, deadline) != snapshot:
