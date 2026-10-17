@@ -27,6 +27,7 @@
     "action_request_completion": "execute_recover_deliver_or_evidenced_blocker",
     "skill_usage_reporting": "final_only_actual_use_steps_and_reasons",
     "ending_parent_wait_allowed": false,
+    "ending_creation_requires_native_delete_route": true,
     "ending_launch_completion": "app_creation_acknowledgement",
     "ending_recovery_owner": "ending",
     "ending_origin_recovery": "read_exact_origin_thread_without_waking_parent"
@@ -323,7 +324,7 @@
       "id": "ending-memory",
       "owner_skill": "project-memory-skill",
       "name": "Ending memory branch",
-      "function": "Launch Ending Task | <project> in ordinary recents and immediately finish the parent after app acknowledgement. Ending alone reads its exact source chat, consolidates scoped Obsidian knowledge and due synthesis alongside resource cleanup, owns recovery, and must verify native self-deletion; archival stays deletion pending.",
+      "function": "Verify native deletion on the creating service or close out in the current chat without a new conversation. With a verified route, launch Ending Task | <project> in ordinary recents and immediately finish the parent after app acknowledgement. Ending alone reads its exact source chat, consolidates scoped Obsidian knowledge and due synthesis alongside resource cleanup, owns recovery, and must execute native self-deletion through the exposed tool or ending_conversation.py and verify all-provider list and rollout absence; archival stays deletion pending.",
       "checks": [
         "project-memory-units",
         "verify-units"

@@ -42,9 +42,18 @@ class EndingLaunchTests(unittest.TestCase):
                           "outcome": {"module": "example", "summary": "Saved result", "reason": "Preserve outcome", "result": "Available", "files": ["script.py"]}}
 
     def prepare(self, **changes):
-        args = {"project_root": self.project, "memory_available": True}
+        args = {"project_root": self.project, "memory_available": True, "native_delete_available": True}
         args.update(changes)
         return MODULE.prepare_launch(self.completed, **args)
+
+    def test_missing_deletion_route_never_creates_a_saved_ending(self):
+        packet = self.prepare(native_delete_available=False)
+        self.assertEqual(packet["status"], "inline_required")
+        self.assertIsNone(packet["create_thread"])
+        self.assertFalse(packet["visible"])
+        self.assertEqual(packet["closeout_owner"], "current_chat")
+        with self.assertRaises(ValueError):
+            self.prepare(native_delete_available="yes")
 
     def acknowledged(self):
         packet = self.prepare()
@@ -102,8 +111,10 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertIn("up to ten recent chats", prompt)
         self.assertIn("unavailable memory vault must not block", prompt)
         self.assertIn("remove only this exact Ending conversation as the final step", prompt)
-        self.assertIn("call set_thread_archived for this Ending only", prompt)
-        self.assertIn("local deletion pending because local records remain", prompt)
+        self.assertIn("ending_conversation.py", prompt)
+        self.assertIn("native thread/delete API", prompt)
+        self.assertIn("Do not substitute set_thread_archived for deletion", prompt)
+        self.assertIn("stop immediately without further messages", prompt)
         self.assertNotIn("do not move, reorder, open, archive, delete", prompt)
         for resource_audit in (True, False):
             with self.subTest(resource_audit=resource_audit):

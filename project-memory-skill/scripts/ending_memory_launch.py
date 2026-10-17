@@ -9,7 +9,7 @@ from pathlib import Path, PureWindowsPath
 from ending_memory import knowledge, memory, prepare_entries, validate_outcome
 
 
-def prepare_launch(completed, *, project_root, memory_available, previous=None, resource_audit=True):
+def prepare_launch(completed, *, project_root, memory_available, previous=None, resource_audit=True, native_delete_available=False):
     """Return app arguments; preparation is pending, not proof of a visible task."""
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
@@ -26,6 +26,8 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
     validate_outcome(outcome)
     if not isinstance(memory_available, bool):
         raise ValueError("the supplied memory availability hint must be a boolean")
+    if not isinstance(native_delete_available, bool):
+        raise ValueError("native deletion availability must be a verified boolean")
     if not isinstance(resource_audit, bool):
         raise ValueError("resource audit selection must be a boolean")
     durable = outcome.get("durable") is not False and bool(set(outcome) - {"durable", "consolidation", "expected_index_sha256"})
@@ -71,6 +73,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
     data = json.dumps({"project_root": str(root), "origin_task_id": completed["task_id"], "origin_thread": origin_thread, "outcome": outcome, "memory_required": True, "memory_available_hint": memory_available, "maintenance_check_required": True, "resource_audit": resource_audit}, ensure_ascii=False, indent=2)
     writer = Path(__file__).resolve().with_name("ending_memory.py")
     reader = writer.with_name("project_knowledge.py")
+    deletion_helper = writer.with_name("ending_conversation.py")
     resource_rules = writer.parents[2] / "workflow-skill" / "references" / "ending-resource-audit.md"
     resource_prompt = (
         "In parallel with useful memory work, audit the originating and up to ten recent chats for unused completed-task resources. "
@@ -113,10 +116,17 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         "After both branches are complete or explicitly skipped and their required records are read back, remove only this exact Ending conversation as the final step, following Project Memory's Ending conversation cleanup. "
         "Deletion of this Ending is mandatory for lifecycle completion. Use a supported native delete action and verify conversation absence plus local-record deletion. Never directly edit or purge Codex session files or databases. "
         "Self-removal may end this turn, so record the branch readbacks and any minimum recovery state before submission. "
-        "If native deletion is unavailable, preserve the exact deletion blocker and obligation in the established recovery owner, then call set_thread_archived for this Ending only and report conversation archived with local deletion pending because local records remain. Archival never completes the deletion obligation. "
+        f"If no desktop delete tool is exposed, use {json.dumps(str(deletion_helper), ensure_ascii=False)} with the host's Python interpreter: delete --thread-id YOUR_EXACT_ENDING_ID --expected-title YOUR_EXACT_TITLE --origin-thread-id {completed['task_id']} --apply. "
+        "This helper connects to the running local daemon through its native WebSocket proxy (or uses stdio when no daemon runs), calls the supported native thread/delete API and reads back all-provider active/archived list absence and native rollout path absence. It never edits Codex storage directly. "
+        "Native deletion cascades to spawned descendants: finish and release your workers, inspect their exact IDs and supply each reviewed ID using --descendant. Preserve the origin and unrelated chats. "
+        "A missing desktop delete tool is not proof that native deletion is unavailable. Do not use Computer Use to operate Codex. Do not substitute set_thread_archived for deletion. "
+        "If the native API or CLI actually fails, preserve the exact attempted route, error and deletion obligation in the established recovery owner; report pending, never completed. "
+        "After successful native deletion, stop immediately without further messages or writes that could recreate this conversation. "
         "Return a removal_result containing this exact thread_id and host_id, status deleted/archived/pending, read_back_verified, source identifying the native receipt/readback, and local_record_absent only when a native local deletion readback proves it. "
         "Do not remove an unfinished Ending or any other chat. Removal and recovery remain Ending-owned even when the native action is unavailable; never return this work to the parent or create a cleanup task or automation.\n\nCompleted outcome data:\n" + data
     )
+    if not native_delete_available:
+        return {**packet, "status": "inline_required", "reason": "native_self_deletion_unavailable", "closeout_owner": "current_chat"}
     packet["create_thread"] = {"target": {"type": "projectless"}, "title": ending_title, "prompt": prompt}
     return packet
 
@@ -209,6 +219,7 @@ def main():
     prepare.add_argument("--project-root", type=Path, required=True)
     prepare.add_argument("--memory-available", choices=("true", "false"), required=True)
     prepare.add_argument("--previous", type=Path)
+    prepare.add_argument("--native-delete-available", action="store_true", help="Only after the creating service has a verified native deletion route")
     prepare.add_argument("--skip-resource-audit", action="store_true", help="Use only when a resource audit is explicitly unnecessary")
     acknowledge = commands.add_parser("acknowledge")
     acknowledge.add_argument("--packet", type=Path, required=True)

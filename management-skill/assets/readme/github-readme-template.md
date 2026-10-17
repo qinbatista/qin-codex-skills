@@ -20,7 +20,7 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 1. At startup or resume, ensure the Obsidian vault, then read applicable skills and exact-project memory. Track Skill use, steps and reasons; skip missing memory.
 2. Preview the objective and implementation steps, then execute. Ask only for necessary decisions or authorization.
 3. Before adding maintained tests, consult project testing Skills and consolidate duplicate purposes. Default to real affected-case checks; deliver evidence, repair failures and clean disposable resources.
-4. Launch one authorized, unpinned projectless Ending, show its acknowledged link and immediately finish the main turn. The parent never waits for Ending. Ending reads its source chat when needed, records Obsidian memory and [audits resources](workflow-skill/references/ending-resource-audit.md) in parallel, and owns recovery and mandatory native self-deletion. Preserve active work and user review/reuse; archival remains deletion pending.
+4. Check native deletion before creating an unpinned projectless Ending; otherwise close out in the current chat. Show its creation link and finish immediately; the parent never waits. Ending owns memory, [resource cleanup](workflow-skill/references/ending-resource-audit.md), recovery and verified native self-deletion. Preserve active/review resources. Archival is not deletion.
 
 At completion, summarize actual Skill names, steps and reasons once, including branch use; distinguish unused, missing or unreadable Skills. Progress updates need no repeated lists; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
 
@@ -28,7 +28,7 @@ One Memory.json and Knowledge.md serve each project. Recall excludes stale facts
 
 Project memories stay isolated. Read relevant shared preferences only. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
 
-Without a vault, [Project Memory](project-memory-skill/SKILL.md) creates and verifies one outside Codex and the project using [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki). Default: `~/Documents/Obsidian/LLM Memory`; override with `CODEX_OBSIDIAN_VAULT` or `--vault`. Back up the entire vault regularly: it holds all Codex and project memory. The generator is a public template, not a private-memory backup.
+Without a vault, [Project Memory](project-memory-skill/SKILL.md) creates and verifies one outside Codex and the project using [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki). Back up the entire vault regularly: it holds all Codex and project memory. The generator is a public template, not a private-memory backup.
 
 macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --project-root .`
 
@@ -38,7 +38,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
-Skills own instructions, helpers and release tests. The [external artifact policy](workflow-skill/references/project-cache-artifact-policy.md) places AI support outside projects and Codex under `YoFaAI/TaskArtifacts`. Each execution gets a fresh `temp-*`: request, test, build, package or deployment. Copy selected continuation inputs, verify bytes, then release completed directories and disposable worktrees. Preserve source, deliverables, canonical assets and active/review/reuse resources.
+Skills own instructions, helpers and release tests. The [external artifact policy](workflow-skill/references/project-cache-artifact-policy.md) places AI support outside projects and Codex under `YoFaAI/TaskArtifacts`. Each execution gets a fresh `temp-*`. Copy selected continuation inputs, verify bytes, then release completed directories and disposable worktrees. Preserve source, deliverables, canonical assets and active/review/reuse resources.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
