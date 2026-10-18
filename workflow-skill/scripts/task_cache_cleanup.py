@@ -203,6 +203,43 @@ def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="wor
     return record
 
 
+def release_retention(project_root, task_id, run_root, *, run_id, expected_identity, reason,
+                      artifact_root=None, budget_seconds=30):
+    """Release only an actual owner's explicitly retired retention/recovery run."""
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("retention release requires the owner's nonempty reason")
+    if not 0 < budget_seconds <= 300:
+        raise ValueError("release budget must be between 0 and 300 seconds")
+    deadline = time.monotonic() + budget_seconds
+    project = Path(project_root).resolve(strict=True)
+    base = artifacts.resolve_artifact_base(project, artifact_root=artifact_root)
+    path = artifacts._absolute_path(run_root, "run_root")
+    record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
+    with _lock(record_path):
+        record = _read(record_path)
+        if (record["task_id"] != task_id or record["project_root"] != str(project)
+                or record["path"] != str(path) or record["run_id"] != run_id):
+            raise ValueError("retention release does not own this exact project/task/run")
+        if record["state"] not in {"retained", "recovery"}:
+            raise ValueError("only retained/recovery runs permit explicit owner release")
+        if list(expected_identity) != record["identity"]:
+            raise ValueError("retention release identity does not match registered run")
+        _bound_path(path, project, base)
+        snapshot = _snapshot(path, deadline)
+        if snapshot["identity"] != record["identity"]:
+            raise ValueError("retained run identity changed")
+        activity = probe_activity(path, deadline=deadline)
+        if not activity["safe"]:
+            raise ValueError("retention release consumer check: " + activity["reason"])
+        if _snapshot(path, deadline) != snapshot:
+            raise ValueError("retained run changed during consumer readback")
+        record["retention_release"] = {"previous_state": record["state"], "reason": reason.strip(),
+                                       "released_at": time.time(), "consumer_probe": activity}
+        record.update(state="complete", heartbeat=time.time())
+        _write(record_path, record)
+    return record
+
+
 def _snapshot(path, deadline=None):
     artifacts._check_ancestors(path)
     root = _safe_stat(path)
@@ -525,11 +562,13 @@ def discover(search_roots, *, project_root, artifact_root=None, apply=False, lim
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("discover", "scan", "register", "touch", "checkpoint"))
+    parser.add_argument("command", choices=("discover", "scan", "register", "touch", "release-retention", "checkpoint"))
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--artifact-root", type=Path)
     parser.add_argument("--task-id")
     parser.add_argument("--run-root", type=Path)
+    parser.add_argument("--run-id", help="Registered run ID required for explicit retention release")
+    parser.add_argument("--identity", type=int, nargs=2, metavar=("DEVICE", "INODE"), help="Registered directory identity required for retention release")
     parser.add_argument("--state", choices=sorted(STATES), default="working")
     parser.add_argument("--reason", help="Exact audited evidence that an existing run is disposable")
     parser.add_argument("--phase", choices=("start", "transition", "finish"), default="start")
@@ -540,9 +579,9 @@ def main():
     parser.add_argument("--budget-seconds", type=float, default=30)
     args = parser.parse_args()
     try:
-        if args.command in {"register", "touch", "checkpoint"} and not args.task_id:
+        if args.command in {"register", "touch", "release-retention", "checkpoint"} and not args.task_id:
             raise ValueError("this command requires --task-id")
-        if args.command in {"register", "touch"} and args.run_root is None:
+        if args.command in {"register", "touch", "release-retention"} and args.run_root is None:
             raise ValueError("this command requires --run-root")
         if args.command == "discover":
             if not args.search_root:
@@ -554,6 +593,12 @@ def main():
             result = register_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, legacy_reason=args.reason, state=args.state)
         elif args.command == "touch":
             result = touch_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, state=args.state)
+        elif args.command == "release-retention":
+            if not args.run_id or args.identity is None:
+                raise ValueError("retention release requires --run-id and --identity")
+            result = release_retention(args.project_root, args.task_id, args.run_root, run_id=args.run_id,
+                                       expected_identity=args.identity, reason=args.reason,
+                                       artifact_root=args.artifact_root, budget_seconds=args.budget_seconds)
         else:
             result = checkpoint(args.project_root, args.task_id, artifact_root=args.artifact_root, phase=args.phase, current_run=args.current_run, obsolete_runs=args.obsolete_run, apply=args.apply, budget_seconds=args.budget_seconds)
         print(json.dumps(result, sort_keys=True))

@@ -149,6 +149,58 @@ class TaskCacheCleanupTests(unittest.TestCase):
             self.sweep()
         self.assertFalse(legacy.exists())
 
+    @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX activity check")
+    def test_explicit_owner_release_rejects_open_consumer_then_finishes(self):
+        if not shutil.which("lsof") or not shutil.which("ps"):
+            self.skipTest("native probes unavailable")
+        run = self.run_root()
+        payload = run / "input.bin"
+        payload.write_bytes(b"retired recovery")
+        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="recovery")
+        arguments = dict(artifact_root=self.base, run_id=record["run_id"],
+                         expected_identity=record["identity"], reason="Actual owner retired this recovery input")
+        child = subprocess.Popen([sys.executable, "-c",
+                                  "import sys; f=open(sys.argv[1], 'rb'); print('ready', flush=True); sys.stdin.read(1)",
+                                  str(payload)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                                 **hidden_process_options())
+        try:
+            self.assertEqual(child.stdout.readline().strip(), "ready")
+            with self.assertRaisesRegex(ValueError, "consumer check"):
+                cleanup.release_retention(self.project, "mine", run, **arguments)
+            self.assertEqual(cleanup._read(self.record_path(run))["state"], "recovery")
+        finally:
+            child.communicate("x", timeout=10)
+        released = cleanup.release_retention(self.project, "mine", run, **arguments)
+        self.assertEqual(released["state"], "complete")
+        self.assertEqual(released["retention_release"]["previous_state"], "recovery")
+        self.assertTrue(run.is_dir(), "release marks completion; checkpoint owns deletion")
+        result = self.sweep()
+        self.assertFalse(run.exists(), result)
+        self.assertFalse(self.record_path(run).exists())
+
+    def test_explicit_owner_release_rejects_wrong_identity_owner_and_blocked(self):
+        run = self.run_root()
+        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="retained")
+        arguments = dict(artifact_root=self.base, run_id=record["run_id"],
+                         expected_identity=record["identity"], reason="Actual owner release")
+        for changes in ({"expected_identity": [0, 0]}, {"run_id": "wrong"}, {"reason": " "}):
+            with self.assertRaises(ValueError):
+                cleanup.release_retention(self.project, "mine", run, **(arguments | changes))
+        with self.assertRaises(ValueError):
+            cleanup.release_retention(self.project, "other", run, **arguments)
+        other_project = self.root / "other-project"
+        other_project.mkdir()
+        with self.assertRaises(ValueError):
+            cleanup.release_retention(other_project, "mine", run, **arguments)
+        with self.assertRaisesRegex(ValueError, "finish cannot erase"):
+            cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="complete")
+        self.assertEqual(cleanup._read(self.record_path(run))["state"], "retained")
+        record["state"] = "blocked"
+        cleanup._write(self.record_path(run), record)
+        with self.assertRaisesRegex(ValueError, "only retained/recovery"):
+            cleanup.release_retention(self.project, "mine", run, **arguments)
+        self.assertEqual(cleanup._read(self.record_path(run))["state"], "blocked")
+
     def test_path_replacement_and_wrong_task_cannot_be_adopted_or_deleted(self):
         run = self.run_root()
         with self.assertRaises(ValueError):
