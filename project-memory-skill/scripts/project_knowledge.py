@@ -655,8 +655,14 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
 
 def scopes(project_root, vault, *, query="", files=None, limit=5):
     """Locate exact-owner scope identifiers without returning memory claims."""
+    def searchable_text(value):
+        return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", value).casefold()
+
+    def contains(value, term):
+        return bool(re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", value)) if term.isascii() else term in value
+
     root = Path(project_root).expanduser().resolve()
-    terms = re.findall(r"[\w.+-]+", re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", _text(query, "query", required=False)).casefold())[:12]
+    terms = re.findall(r"[\w.+-]+", searchable_text(_text(query, "query", required=False)))[:12]
     selected_files = sorted(set(_relative_file(value, root) for value in (files or [])))
     result = {"status": "no-matches", "scopes": [], "facts_returned": False, "history_loaded": False, "source_freshness_checked": False}
     project, paths = _paths(root, vault)
@@ -675,13 +681,13 @@ def scopes(project_root, vault, *, query="", files=None, limit=5):
             continue
         if selected_files and not any(file == entry["file"] or file in entry["source_hashes"] for file in selected_files):
             continue
-        identifiers = " ".join([entry["module"], entry["file"], entry["symbol"]]).casefold()
-        summary = entry["summary"].casefold()
-        continuity = " ".join([entry["reason"], entry["result"], *entry["decisions"], *entry["risks"]]).casefold()
-        searchable = " ".join([identifiers, summary, continuity, *entry["source_hashes"]]).casefold()
-        if not all(term in searchable for term in terms):
+        identifiers = searchable_text(" ".join([entry["module"], entry["file"], entry["symbol"]]))
+        summary = searchable_text(entry["summary"])
+        continuity = searchable_text(" ".join([entry["reason"], entry["result"], *entry["decisions"], *entry["risks"]]))
+        searchable = " ".join([identifiers, summary, continuity, searchable_text(" ".join(entry["source_hashes"]))])
+        if not all(contains(searchable, term) for term in terms):
             continue
-        score = (100 if entry["file"] in selected_files else 0) + sum(20 if term in identifiers else 10 if term in summary else 3 if term in continuity else 1 for term in terms)
+        score = (100 if entry["file"] in selected_files else 0) + sum(20 if contains(identifiers, term) else 10 if contains(summary, term) else 3 if contains(continuity, term) else 1 for term in terms)
         matches.append((score, entry["id"], entry))
     for score, identifier, entry in sorted(matches, key=lambda value: (-value[0], value[1]))[:max(1, min(int(limit), 5))]:
         pointer = {key: entry[key] for key in ("id", "scope", "module", "file", "symbol", "event_id", "updated_at")}
