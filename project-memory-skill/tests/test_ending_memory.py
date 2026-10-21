@@ -271,7 +271,8 @@ class EndingMemoryTests(unittest.TestCase):
         self.assertEqual(pending["reason"], "project_synthesis_due")
         before_refresh = MODULE.knowledge.load_knowledge(self.project, self.vault)["entries"]
         synthesis = self.closeout({"consolidation": {"summary": "Restoration retains the original workaround and correction while another-machine verification remains pending"}})
-        navigation = MODULE.knowledge.recall(self.project, self.vault, module="example")["project_synthesis"]
+        self.assertNotIn("project_synthesis", MODULE.knowledge.recall(self.project, self.vault, module="example"))
+        navigation = MODULE.knowledge.recall(self.project, self.vault, module="example", include_project_context=True)["project_synthesis"]
         self.assertFalse(navigation["eligible_current_context"])
         self.assertEqual(navigation["context_role"], "navigation_only")
         self.assertFalse(synthesis["current_memory"]["maintenance_due"])
