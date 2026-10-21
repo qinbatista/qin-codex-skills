@@ -169,6 +169,43 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.assertIn("missing document link", result["reason"])
         self.assertFalse((self.project / "AGENTS.md").exists())
 
+    def test_linked_subdocuments_are_checked_and_hashed_without_following_source_docs(self):
+        self.bootstrap()
+        detail = f"{INDEX.INDEX_DIRECTORY}/modules/request-details.md"
+        self.write(detail, "# Request details\nSee [API](api.md) and [source](../../../../src/AGENTS.md).\n")
+        self.write(f"{INDEX.INDEX_DIRECTORY}/modules/api.md", "# API\nRead [request details](request-details.md).\n")
+        self.write("src/AGENTS.md", "Scoped source guide with [a source-only link](not-indexed.md).\n")
+        checked = self.cli("inspect", "--phase", "end")
+        self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["guidance_hashes"][detail], INDEX.file_hash(self.project / detail))
+        self.write(detail, "# Request details\nSee [missing](absent.md).\n")
+        checked = self.cli("check")
+        self.assertEqual(checked.returncode, 2)
+        self.assertIn("missing document link", checked.stdout)
+
+    def test_machine_local_links_cannot_enter_an_existing_project_index(self):
+        self.bootstrap()
+        original = (self.project / INDEX.INDEX_DIRECTORY / "modules/api.md").read_bytes()
+        asset = self.project / "assets/original.txt"
+        for link in (asset.as_uri(), asset.as_posix(), "C:/another-checkout/source.txt"):
+            with self.subTest(link=link):
+                plan = self.plan()
+                next(record for record in plan["files"] if record["path"].endswith("/modules/api.md"))["content"] = f"# API\nRead [source](<{link}>).\n"
+                result = INDEX.apply_plan(self.project, plan, self.work)
+                self.assertEqual(result["status"], "pending", result)
+                self.assertIn("project-relative", result["reason"])
+                self.assertEqual((self.project / INDEX.INDEX_DIRECTORY / "modules/api.md").read_bytes(), original)
+
+    def test_every_proposed_guidance_document_is_validated_before_bootstrap(self):
+        plan = self.plan()
+        extra = f"{INDEX.INDEX_DIRECTORY}/modules/extra.md"
+        plan["files"].append({"path": extra, "expected_sha256": None, "content": "# Extra\nRead [missing](absent.md).\n"})
+        result = INDEX.apply_plan(self.project, plan, self.work)
+        self.assertEqual(result["status"], "pending", result)
+        self.assertIn("missing document link", result["reason"])
+        self.assertFalse((self.project / "AGENTS.md").exists())
+        self.assertFalse((self.project / extra).exists())
+
     def test_skill_requires_a_real_description_before_creation(self):
         plan = self.plan()
         skill = next(record for record in plan["files"] if record["path"] == INDEX.SKILL_PATH)

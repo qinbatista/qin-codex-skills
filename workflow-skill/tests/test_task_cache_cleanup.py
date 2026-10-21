@@ -46,8 +46,11 @@ class TaskCacheCleanupTests(unittest.TestCase):
         deadline = time.monotonic() + 5
         for attempt in range(10):
             result = finish()
-            entries = result.get("results", [])
-            waiting = len(entries) == 1 and entries[0].get("path") == str(run) and entries[0].get("action") == "keep" and entries[0].get("reason") == "active open files or working directory"
+            if "safe" in result:
+                waiting = result["safe"] is False and result.get("reason") == "active open files or working directory"
+            else:
+                entries = result.get("results", [])
+                waiting = len(entries) == 1 and entries[0].get("path") == str(run) and entries[0].get("action") == "keep" and entries[0].get("reason") == "active open files or working directory"
             if not waiting or attempt == 9 or time.monotonic() >= deadline:
                 return result
             self.assertTrue(run.exists(), result)
@@ -272,13 +275,24 @@ class TaskCacheCleanupTests(unittest.TestCase):
         run = self.run_root()
         payload = run / "open.bin"
         payload.write_bytes(b"keep")
-        command = "import sys,time; stream=open(sys.argv[1], 'rb'); print('ready',flush=True); time.sleep(30)"
-        process = subprocess.Popen([sys.executable, "-c", command, str(payload)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **hidden_process_options())
+        # Keep the path out of argv/cwd so ps cannot mask a missing native handle.
+        command = "import sys; stream=open(sys.stdin.readline().strip(), 'rb'); print('ready',flush=True); sys.stdin.readline(); stream.close(); print('closed',flush=True); sys.stdin.readline()"
+        process = subprocess.Popen([sys.executable, "-c", command], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=self.root, **hidden_process_options())
         try:
+            process.stdin.write(str(payload) + "\n")
+            process.stdin.flush()
             self.assertEqual(process.stdout.readline().strip(), "ready")
+            active = cleanup.probe_activity(run)
+            self.assertFalse(active["safe"], active)
+            self.assertEqual(active["reason"], "active open files or working directory", active)
             result = self.sweep(phase="finish", current_run=run)
             self.assertEqual(result["results"][0]["action"], "keep", result)
             self.assertTrue(payload.exists())
+            process.stdin.write("close\n")
+            process.stdin.flush()
+            self.assertEqual(process.stdout.readline().strip(), "closed")
+            inactive = self.finish_when_native_readers_close(run, lambda: cleanup.probe_activity(run))
+            self.assertTrue(inactive["safe"], inactive)
         finally:
             process.terminate()
             process.communicate(timeout=10)
