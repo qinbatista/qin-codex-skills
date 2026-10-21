@@ -61,7 +61,7 @@ class ProjectAIIndexTests(unittest.TestCase):
     def plan(self):
         prefix = INDEX.INDEX_DIRECTORY
         contents = {"AGENTS.md": "# Project\nKeep original assets. Read [AI index](.agents/skills/ai-index/SKILL.md).\n", INDEX.SKILL_PATH: "---\nname: ai-index\ndescription: Route project work to its owning instructions.\n---\nRead [the index](index.json), then the selected module only.\n", INDEX.MANIFEST_PATH: json.dumps(self.manifest(), indent=2), f"{prefix}/rules/repository.md": "# Repository and assets\nPreserve unrelated changes and canonical assets.\n", f"{prefix}/rules/structure.md": "# Structure\nRequests belong in src; originals belong in assets.\n", f"{prefix}/rules/verification.md": "# Verification\nExercise the affected request and read its actual result.\n", f"{prefix}/modules/api.md": "# API\nRequest handler: src/api.py::request.\n", f"{prefix}/modules/assets.md": "# Assets\nUNRELATED_ASSET_DETAIL is scoped to asset tasks.\n"}
-        return {"schema_version": 1, "project_root": str(self.project), "evidence": {"src/api.py": INDEX.file_hash(self.project / "src/api.py")}, "files": [{"path": relative, "expected_sha256": INDEX.file_hash(self.project / relative), "content": content} for relative, content in contents.items()]}
+        return {"schema_version": 1, "project_root": str(self.project), "bootstrap_approved": True, "evidence": {"src/api.py": INDEX.file_hash(self.project / "src/api.py")}, "files": [{"path": relative, "expected_sha256": INDEX.file_hash(self.project / relative), "content": content} for relative, content in contents.items()]}
 
     def bootstrap(self):
         result = INDEX.apply_plan(self.project, self.plan(), self.work)
@@ -73,6 +73,8 @@ class ProjectAIIndexTests(unittest.TestCase):
 
     def test_real_cli_bootstrap_repeat_and_selected_route(self):
         first = self.cli("inspect", "--phase", "start")
+        self.assertEqual(json.loads(first.stdout)["status"], "approval_required")
+        first = self.cli("inspect", "--phase", "start", "--allow-bootstrap")
         before = json.loads(first.stdout)
         self.assertEqual(first.returncode, 2)
         self.assertEqual(before["status"], "missing")
@@ -99,6 +101,36 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.assertEqual((self.project / "src/AGENTS.md").read_text(), "Scoped source instructions must survive.\n")
         self.assertEqual((self.project / "unrelated.txt").read_text(), "uncommitted user work\n")
         self.assertFalse(list(self.work.glob("ai-index-recovery-*")))
+
+    def test_missing_or_partial_index_repeats_approval_without_project_content_reads(self):
+        for partial in (False, True):
+            with self.subTest(partial=partial):
+                if partial:
+                    self.write(INDEX.SKILL_PATH, "Unfinished index.\n")
+                with mock.patch.object(INDEX, "validate_index", side_effect=AssertionError("content read before consent")), mock.patch.object(INDEX, "bootstrap_inventory", side_effect=AssertionError("tree discovery before consent")), mock.patch.object(INDEX, "shallow_structure", side_effect=AssertionError("directory listing before consent")):
+                    for phase in ("start", "end", "start"):
+                        result = INDEX.check_project(self.project, phase)
+                        self.assertEqual(result["status"], "approval_required")
+                        self.assertEqual(result["index_state"], "incomplete" if partial else "missing")
+                        self.assertEqual(result["read_scope"], "index_entry_presence_only")
+                        self.assertNotIn("discovery", result)
+                        self.assertNotIn("structure", result)
+                self.assertFalse((self.project / "AGENTS.md").exists())
+                self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
+
+    def test_bootstrap_cannot_apply_without_explicit_approval_and_existing_index_needs_no_new_approval(self):
+        plan = self.plan()
+        plan.pop("bootstrap_approved")
+        denied = INDEX.apply_plan(self.project, plan, self.work)
+        self.assertEqual(denied["status"], "pending")
+        self.assertIn("explicit user approval", denied["reason"])
+        self.assertFalse((self.project / INDEX.SKILL_PATH).exists())
+        plan["bootstrap_approved"] = True
+        self.assertEqual(INDEX.apply_plan(self.project, plan, self.work)["status"], "complete")
+        plan = self.plan()
+        plan.pop("bootstrap_approved")
+        self.assertEqual(INDEX.apply_plan(self.project, plan, self.work)["status"], "unchanged")
+        self.assertEqual(INDEX.check_project(self.project)["status"], "ready")
 
     def test_existing_index_does_not_discover_the_whole_project(self):
         self.bootstrap()
@@ -322,7 +354,7 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.write("vendor/package/AGENTS.md", "not project guidance")
         self.write("nested/.git/HEAD", "ref: refs/heads/main")
         self.write("nested/AGENTS.md", "independent project")
-        result = INDEX.check_project(self.project)
+        result = INDEX.check_project(self.project, bootstrap_approved=True)
         self.assertEqual(result["discovery"]["agents_files"], ["src/AGENTS.md"])
         self.assertNotIn("data/", result["structure"])
 
@@ -330,7 +362,8 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.write("AGENTS.md", "Keep current project guidance.\n")
         self.write(INDEX.SKILL_PATH, "Existing custom index without machine manifest.\n")
         before = (self.project / INDEX.SKILL_PATH).read_bytes()
-        result = INDEX.check_project(self.project)
+        self.assertEqual(INDEX.check_project(self.project)["status"], "approval_required")
+        result = INDEX.check_project(self.project, bootstrap_approved=True)
         self.assertEqual(result["status"], "needs_review")
         self.assertNotIn("discovery", result)
         self.assertEqual((self.project / INDEX.SKILL_PATH).read_bytes(), before)

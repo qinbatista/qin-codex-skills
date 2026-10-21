@@ -1,6 +1,6 @@
 # Automatic project AI index
 
-This global function maintains each project's navigation and stable rules. Run it at project task start or resume, when the user changes project intent or source ownership, and before task completion. It is part of the agent's workflow, not an OS watcher or scheduled job. Do not wait for another request to maintain the index.
+This global function maintains each project's navigation and stable rules. Run it at project task start or resume, when the user changes project intent or source ownership, and before task completion. It is part of the agent's workflow, not an OS watcher or scheduled job. Existing indexes receive automatic maintenance; first creation requires the startup consent below.
 
 ## One project owner
 
@@ -18,12 +18,12 @@ Repository/asset rules cover Git and publication boundaries, canonical inputs/as
 
 ## Start, change and finish
 
-1. Read root guidance, then run `project_ai_index.py inspect --project-root ROOT --phase start`. Pass known task/Git changed files with repeated `--changed-path PATH`. Read the small route map and select only the relevant rule/module documents. The helper returns paths and hashes, not whole source files.
-2. If missing, use the bounded guidance/path inventory to review existing `AGENTS.md` files and discover actual source entry points. Build and apply a concise root contract and useful project index in that actual editable project, then verify them through a fresh helper readback. A test-only bootstrap or empty scaffold is incomplete. If an index exists, reuse it: select the affected module/subdocument, check its ownership against entry source, and repair only established stale or missing routes. Reconcile legacy/incomplete formats without blindly replacing authored content. A valid unchanged index needs no write.
+1. Before broad project reading, run `project_ai_index.py inspect --project-root ROOT --phase start`. If the index entry or manifest is absent, this returns `approval_required` after presence checks only: no root document content, directory inventory or source reads. Immediately ask whether the user agrees to read the necessary rules and create this project's AI index. Wait for that answer before discovery or creation; a project task alone is not bootstrap consent. Explicit read-only boundaries still apply. Already injected context cannot be unread, but does not justify additional scanning.
+2. If the user agrees, rerun with `--allow-bootstrap`, use the bounded guidance/path inventory, and review existing `AGENTS.md` scopes and actual source entry points. Build and apply a concise root contract and useful project index in the actual editable project, then verify through a fresh helper readback. A test-only bootstrap or empty scaffold is incomplete. If declined, deferred or unanswered, leave creation pending and do not scan merely to prepare it. Ask again at each later project start/resume until complete; do not repeatedly interrupt the same interaction or create background reminders. Reuse explicit approval for the same continuing bootstrap, never another project. Keep approval in current task context/plan, not a persistent acceptance/decline marker. When the index exists, reuse it without another bootstrap question: select focused routes, check source ownership, and repair established stale or missing routes automatically. Review legacy/incomplete authored formats after consent instead of replacing them blindly. A valid unchanged index needs no write.
 3. Compare current user intent and the affected source structure with those instructions. Accepted enduring project ideas, changed responsibilities, moved/removed entry points, new modules and corrected constraints trigger a scoped update automatically. An idea still under discussion stays a proposal; do not write it as implemented behavior. A successful run, error log or one-off workaround alone does not create a rule.
 4. On a route miss, first search names/symbols in the likely owner, then expand one justified dependency at a time. Repair the verified route. For a cross-module task, load each necessary owner explicitly. Never recursively read every linked document or scan all code because the index exists.
 5. Before final verification and authorized Git delivery, run the same inspection with `--phase end` and the task's changed paths. Reconcile the root and index, validate links/contracts and read the resulting documents in their actual owner. Report local source changes, installation and publication separately; successful tests in another folder cannot imply target delivery. An unchanged project produces a no-op; do not rewrite files or add timestamps merely to mark a check. Include task-owned guidance changes in the same scoped delivery.
-6. Ending performs a residual check through this same owner, including when memory has no new facts. It may update only root `AGENTS.md` and the project index from established intent and fresh scoped evidence. It never changes product code, global/plugin Skills, runs product tests/builds, or publishes. Preserve concurrent edits. Record any residual changes as local guidance changes, with delivery pending unless separately authorized; the parent never waits or resumes. If Ending is unavailable, finish this step inline.
+6. Ending performs a residual check through this same owner, including when memory has no new facts. It may update only root `AGENTS.md` and the project index from established intent and fresh scoped evidence. Missing bootstrap consent stays pending; Ending cannot infer it from maintenance authority or bypass the startup question. It never changes product code, global/plugin Skills, runs product tests/builds, or publishes. Preserve concurrent edits. Record any residual changes as local guidance changes, with delivery pending unless separately authorized; the parent never waits or resumes. If Ending is unavailable, finish this step inline.
 
 Structural validity is not semantic acceptance: a valid map can still describe the wrong owner. Compare the relevant route with actual source and user intent. Keep unknown contracts explicit. Source evidence must support the claim; a fresh hash is not proof of runtime correctness.
 
@@ -39,6 +39,7 @@ Checks follow linked Markdown only inside the project index, including focused s
 
 ```text
 project_ai_index.py inspect --project-root ROOT --phase start --changed-path src/feature.py
+project_ai_index.py inspect --project-root ROOT --phase start --allow-bootstrap
 project_ai_index.py route --project-root ROOT --module feature
 project_ai_index.py check --project-root ROOT
 project_ai_index.py apply --project-root ROOT --plan PLAN_JSON --work-dir EXTERNAL_RUN
@@ -51,6 +52,7 @@ The agent authors a reviewed plan in the current [external task run](../../workf
 {
   "schema_version": 1,
   "project_root": "<resolved project root>",
+  "bootstrap_approved": true,
   "evidence": {"src/feature.py": "<sha256>"},
   "files": [
     {"path": "AGENTS.md", "expected_sha256": "<sha256>", "content": "<reviewed complete document>"},
@@ -59,6 +61,6 @@ The agent authors a reviewed plan in the current [external task run](../../workf
 }
 ```
 
-Include the manifest and required module/rule documents in a bootstrap plan. `expected_sha256: null` means the target must not exist; `content: null` removes only an obsolete index document after its references are reconciled. Existing files require their exact inspected hashes. Evidence binds the source files supporting a change, including non-target guidance used during consolidation. Do not store this plan, hashes, receipts or run state in the maintained index.
+Include the manifest and required module/rule documents in a bootstrap plan. Set `bootstrap_approved: true` only after explicit user agreement; the helper refuses initial creation without it. Existing complete indexes need no new approval field for updates. `expected_sha256: null` means the target must not exist; `content: null` removes only an obsolete index document after its references are reconciled. Existing files require their exact inspected hashes. Evidence binds the source files supporting a change, including non-target guidance used during consolidation. Do not store this plan, hashes, receipts or run state in the maintained index.
 
 On stale evidence or concurrent changes, reread only the affected scope and rebuild the plan if its meaning is still established. Otherwise leave that update pending with the concrete cause. Preserve recoverable state under its external owner; do not overwrite a newer writer or manufacture a successful check. Reread the final root and selected module documents to verify preserved constraints, useful routing and absence of unrelated context. Routine index maintenance does not reinstall or publish global Skills.
