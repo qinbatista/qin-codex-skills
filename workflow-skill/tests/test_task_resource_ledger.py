@@ -50,6 +50,12 @@ class TaskResourceLedgerTests(unittest.TestCase):
     def _path(self, name):
         return f"{self.task_root}/{name}"
 
+    def test_literal_tilde_in_absolute_directory_is_not_a_home_token(self):
+        path = self.artifact_base / "iCloud~md~obsidian"
+        self.assertEqual(ARTIFACTS.validate_external_directory(path, self.project_root), path)
+        with self.assertRaises(ValueError):
+            ARTIFACTS._absolute_path("~/unfinished", "directory")
+
     def test_new_executions_are_independent_and_configure_real_child_temp(self):
         resolved = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, run_id=self.ledger["run_id"], artifact_root=self.artifact_base)
         self.assertEqual(resolved, Path(self.task_root))
