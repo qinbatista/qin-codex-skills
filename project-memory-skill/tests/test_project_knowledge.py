@@ -111,6 +111,22 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertEqual(self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"], query="separate")["entries"], [])
         self.assertEqual(len({entry["id"] for entry in knowledge.load_knowledge(self.project, self.vault)["entries"]}), 3)
 
+    def test_scope_discovery_locates_names_without_loading_facts_or_bypassing_freshness(self):
+        self.write([self.method(module="stored.engine", summary="Gold reveal owns the private display contract"), self.method(module="unrelated", summary="Unrelated inventory contract")])
+        result = knowledge.scopes(self.project, self.vault, query="GoldReveal")
+        self.assertEqual([pointer["module"] for pointer in result["scopes"]], ["stored.engine"])
+        self.assertFalse(result["facts_returned"])
+        self.assertFalse(result["history_loaded"])
+        self.assertNotIn("private display contract", json.dumps(result))
+        pointer = result["scopes"][0]
+        self.assertFalse(pointer["eligible_current_context"])
+        selected = self.read(module=pointer["module"], files=[pointer["file"]], symbols=[pointer["symbol"]])
+        self.assertEqual(len(selected["entries"]), 1)
+        (self.project / "src/first.py").write_text("changed source", encoding="utf-8")
+        self.assertEqual(len(knowledge.scopes(self.project, self.vault, files=["src/first.py"])["scopes"]), 2)
+        self.assertEqual(self.read(module=pointer["module"])["entries"], [])
+        self.assertEqual(knowledge.scopes(self.project, self.vault)["reason"], "task_scope_required")
+
     def test_ambiguous_method_query_skips_without_loose_fallback(self):
         self.write([self.method(), self.method(file="src/second.py")])
         for filters in ({"symbols": ["Worker.run"]}, {"module": "engine", "symbols": ["Worker.run"]}, {"module": "engine", "files": ["src/first.py", "src/second.py"], "symbols": ["Worker.run"]}):

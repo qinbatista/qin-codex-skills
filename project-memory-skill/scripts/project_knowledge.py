@@ -653,6 +653,42 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
     return result
 
 
+def scopes(project_root, vault, *, query="", files=None, limit=5):
+    """Locate exact-owner scope identifiers without returning memory claims."""
+    root = Path(project_root).expanduser().resolve()
+    terms = re.findall(r"[\w.+-]+", re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", _text(query, "query", required=False)).casefold())[:12]
+    selected_files = sorted(set(_relative_file(value, root) for value in (files or [])))
+    result = {"status": "no-matches", "scopes": [], "facts_returned": False, "history_loaded": False, "source_freshness_checked": False}
+    project, paths = _paths(root, vault)
+    if not paths["index"].exists():
+        return {**result, "status": "skipped", "reason": "current_index_missing"}
+    try:
+        state = load_knowledge(root, vault)
+    except ProjectIdentityError:
+        return {**result, "status": "skipped", "reason": "exact_project_mismatch"}
+    result["project"] = state["project"]["owner"]
+    if not terms and not selected_files:
+        return {**result, "status": "skipped", "reason": "task_scope_required"}
+    matches = []
+    for entry in state["entries"]:
+        if entry["status"] != "current":
+            continue
+        if selected_files and not any(file == entry["file"] or file in entry["source_hashes"] for file in selected_files):
+            continue
+        identifiers = " ".join([entry["module"], entry["file"], entry["symbol"], *entry["source_hashes"]]).casefold()
+        searchable = " ".join([identifiers, entry["summary"], entry["reason"], entry["result"], *entry["decisions"], *entry["risks"]]).casefold()
+        if not all(term in searchable for term in terms):
+            continue
+        score = sum(10 if term in identifiers else 1 for term in terms)
+        matches.append((score, entry["id"], entry))
+    for score, identifier, entry in sorted(matches, key=lambda value: (-value[0], value[1]))[:max(1, min(int(limit), 5))]:
+        pointer = {key: entry[key] for key in ("id", "scope", "module", "file", "symbol", "event_id", "updated_at")}
+        result["scopes"].append({**pointer, "context_role": "scope_pointer", "eligible_current_context": False})
+    if result["scopes"]:
+        result["status"] = "ok"
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
@@ -665,6 +701,12 @@ def main():
     read.add_argument("--query", default="")
     read.add_argument("--limit", type=int, default=5)
     read.add_argument("--include-project-context", action="store_true", help="Explicitly include project-wide parent facts and navigation synthesis")
+    locate = commands.add_parser("scopes", help="Locate bounded scope identifiers without returning facts")
+    locate.add_argument("--project-root", type=Path, required=True)
+    locate.add_argument("--vault", type=Path, required=True)
+    locate.add_argument("--query", default="")
+    locate.add_argument("--file", dest="files", action="append", default=[])
+    locate.add_argument("--limit", type=int, default=5)
     alias = commands.add_parser("register-alias")
     alias.add_argument("--project-root", type=Path, required=True)
     alias.add_argument("--vault", type=Path, required=True)
@@ -673,7 +715,8 @@ def main():
     alias.add_argument("--expected-index-sha256", required=True)
     arguments = vars(parser.parse_args())
     action = arguments.pop("action")
-    print(json.dumps(register_alias(**arguments) if action == "register-alias" else recall(**arguments), ensure_ascii=False))
+    handlers = {"register-alias": register_alias, "recall": recall, "scopes": scopes}
+    print(json.dumps(handlers[action](**arguments), ensure_ascii=False))
 
 
 if __name__ == "__main__":
