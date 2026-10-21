@@ -17,6 +17,8 @@ Each skill's source directory is its owner. Global skills describe reusable conc
 
 Use [the project AI-index function](references/project-ai-index.md) at project start/resume, on established intent/structure changes, and at finish. First check presence; a missing or unfinished index requires the user's agreement before project discovery or creation, with a new reminder at later starts until complete. Existing indexes receive automatic focused maintenance within editable scope. Its portable `scripts/project_ai_index.py` validates routes and applies reviewed, source-bound updates to root `AGENTS.md` and `.agents/skills/ai-index`. The project index is never installed globally or inside a plugin. Task Analyze, Workflow and Ending invoke this same owner and consent boundary.
 
+For every local code edit, including tests, use [code navigation](references/project-ai-index.md#code-navigation): module, exact file, reviewed method/key-line target, scoped memory and only necessary relationships. Maintain touched stable targets against current source; return bounded excerpts on selection and keep implementation history in Project Memory. Code owns cohesive method boundaries and deliberate extraction.
+
 ### Authoring rules
 
 Keep Skills focused on stable rules, decision criteria, essential workflow, and acceptance. On every authorized creation or revision, seek the simplest complete route: reuse existing capabilities, remove unnecessary steps, merge duplicate rules, and retire obsolete instructions. Keep optional detail in linked references. Preserve required behavior, evidence, permissions, and failure handling; fewer words or steps alone do not prove an improvement.

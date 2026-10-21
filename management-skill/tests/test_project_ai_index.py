@@ -90,6 +90,7 @@ class ProjectAIIndexTests(unittest.TestCase):
         routed = self.cli("route", "--module", "api")
         route = json.loads(routed.stdout)
         self.assertEqual(route["sources"], ["src/api.py"])
+        self.assertEqual(route["code_targets"], [])
         self.assertEqual(route["dependencies"][0]["module"], "assets")
         self.assertNotIn("UNRELATED_ASSET_DETAIL", routed.stdout)
         self.assertNotIn("content", route)
@@ -127,7 +128,7 @@ class ProjectAIIndexTests(unittest.TestCase):
                     self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
 
     def test_all_unapproved_cli_entrypoints_keep_the_question_visible(self):
-        for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end")), ("check", ()), ("route", ("--module", "api"))):
+        for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end")), ("check", ()), ("route", ("--module", "api")), ("route", ("--module", "api", "--target", "request"))):
             with self.subTest(command=command, arguments=arguments):
                 result = self.cli(command, *arguments)
                 payload = json.loads(result.stdout)
@@ -138,6 +139,101 @@ class ProjectAIIndexTests(unittest.TestCase):
                 self.assertNotIn("discovery", payload)
                 self.assertNotIn("structure", payload)
         self.assertFalse((self.project / "AGENTS.md").exists())
+
+    def test_code_target_cli_menu_selected_excerpt_and_moved_anchor(self):
+        self.bootstrap()
+        manifest = self.manifest()
+        manifest["modules"][0]["code_targets"] = [{"id": "request", "file": "src/api.py", "symbol": "request", "anchor": "def request():", "summary": "Accept a request.", "related": [{"module": "assets", "target": "original", "reason": "Read the original only when changing asset handling."}]}]
+        manifest["modules"][1]["code_targets"] = [{"id": "original", "file": "assets/original.txt", "symbol": "original", "anchor": "source asset", "summary": "Canonical request asset."}]
+        self.write(INDEX.MANIFEST_PATH, json.dumps(manifest))
+        (self.project / "src/api.py").write_bytes(b"\xff")
+        (self.project / "assets/original.txt").write_bytes(b"\xff")
+        menu = self.cli("route", "--module", "api")
+        self.assertEqual(menu.returncode, 0, menu.stdout + menu.stderr)
+        self.assertEqual(json.loads(menu.stdout)["code_targets"][0]["symbol"], "request")
+        self.assertNotIn("excerpt", json.loads(menu.stdout))
+        source = "# preceding context\n" * 50 + "def request():\n    return 'accepted'\n" + "# following context\n" * 50
+        self.write("src/api.py", source)
+        selected = self.cli("route", "--module", "api", "--target", "request", "--context-lines", "40")
+        payload = json.loads(selected.stdout)
+        self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
+        self.assertEqual(payload["location"], {"line": 51, "start_line": 11, "end_line": 91})
+        self.assertEqual(len(payload["excerpt"].splitlines()), 81)
+        self.assertIn("return 'accepted'", payload["excerpt"])
+        self.assertEqual(payload["source_sha256"], INDEX.file_hash(self.project / "src/api.py"))
+        self.assertFalse(payload["structural_check_only"])
+        self.assertEqual(payload["related"], [{"module": "assets", "target": "original", "reason": "Read the original only when changing asset handling.", "file": "assets/original.txt", "symbol": "original"}])
+        self.write("src/api.py", "# inserted later\n" + source)
+        moved = self.cli("route", "--module", "api", "--target", "request", "--context-lines", "0")
+        current = json.loads(moved.stdout)
+        self.assertEqual(moved.returncode, 0, moved.stdout + moved.stderr)
+        self.assertEqual(current["location"], {"line": 52, "start_line": 52, "end_line": 52})
+        self.assertEqual(current["excerpt"], "def request():")
+        self.assertNotEqual(current["source_sha256"], payload["source_sha256"])
+
+    def test_code_target_cli_stale_unknown_and_bounded_failures(self):
+        self.bootstrap()
+        manifest = self.manifest()
+        manifest["modules"][0]["code_targets"] = [{"id": "request", "file": "src/api.py", "symbol": "request", "anchor": "def request():", "summary": "Accept a request."}]
+        self.write(INDEX.MANIFEST_PATH, json.dumps(manifest))
+        oversized_excerpt = "def request():\n" + "x" * (INDEX.MAX_EXCERPT_BYTES + 1)
+        for source in ("def renamed():\n    return 'accepted'\n", "def request():\n    pass\ndef request():\n    pass\n", "x" * (INDEX.MAX_SOURCE_BYTES + 1), oversized_excerpt):
+            with self.subTest(source_length=len(source)):
+                self.write("src/api.py", source)
+                result = self.cli("route", "--module", "api", "--target", "request")
+                payload = json.loads(result.stdout)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(payload["status"], "needs_review")
+                self.assertNotIn("excerpt", payload)
+                self.assertTrue(payload["issues"])
+                if source == oversized_excerpt:
+                    self.assertIn("16 KiB", payload["issues"][0])
+                    reduced = self.cli("route", "--module", "api", "--target", "request", "--context-lines", "0")
+                    self.assertEqual(reduced.returncode, 0, reduced.stdout + reduced.stderr)
+                    self.assertEqual(json.loads(reduced.stdout)["excerpt"], "def request():")
+        (self.project / "src/api.py").write_bytes(b"\xff")
+        undecodable = self.cli("route", "--module", "api", "--target", "request")
+        self.assertEqual(undecodable.returncode, 2)
+        self.assertEqual(json.loads(undecodable.stdout)["status"], "pending")
+        self.assertIn("utf-8", json.loads(undecodable.stdout)["reason"])
+        self.assertNotIn("Traceback", undecodable.stderr)
+        missing = self.cli("route", "--module", "api", "--target", "unknown")
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("unknown code target", json.loads(missing.stdout)["issues"][0])
+        for context in ("-1", "41"):
+            with self.subTest(context=context):
+                result = self.cli("route", "--module", "api", "--target", "request", "--context-lines", context)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("between 0 and 40", json.loads(result.stdout)["reason"])
+
+    def test_code_target_metadata_rejects_unsafe_ownership_and_relations(self):
+        self.bootstrap()
+        entry = {"id": "request", "file": "src/api.py", "symbol": "request", "anchor": "def request():", "summary": "Accept a request."}
+        relation = {"module": "assets", "target": "original", "reason": "Relevant asset contract."}
+        cases = [("../outside.py", None), (str(self.project / "src/api.py"), None), ("assets/original.txt", None), ("src/missing.py", None), (None, [{"module": "assets", "target": "missing", "reason": "Unknown target."}]), (None, [relation, relation]), (None, [{"module": "api", "target": "request", "reason": "Self reference."}]), (None, [{"module": "assets", "target": "original", "reason": ""}])]
+        for file, related in cases:
+            with self.subTest(file=file, related=related):
+                manifest = self.manifest()
+                target = dict(entry)
+                if file is not None:
+                    target["file"] = file
+                if related is not None:
+                    target["related"] = related
+                manifest["modules"][0]["code_targets"] = [target]
+                manifest["modules"][1]["code_targets"] = [{"id": "original", "file": "assets/original.txt", "symbol": "original", "anchor": "source asset", "summary": "Canonical asset."}]
+                self.write(INDEX.MANIFEST_PATH, json.dumps(manifest))
+                result = self.cli("check")
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(json.loads(result.stdout)["status"], "needs_review")
+                self.assertTrue(json.loads(result.stdout)["issues"])
+        for invalid in ([entry, entry], [{**entry, "anchor": "def request():\n    pass"}], [{**entry, "line": 1}]):
+            with self.subTest(invalid=invalid):
+                manifest = self.manifest()
+                manifest["modules"][0]["code_targets"] = invalid
+                self.write(INDEX.MANIFEST_PATH, json.dumps(manifest))
+                result = self.cli("check")
+                self.assertEqual(result.returncode, 2)
+                self.assertTrue(json.loads(result.stdout)["issues"])
 
     def test_bootstrap_cannot_apply_without_explicit_approval_and_existing_index_needs_no_new_approval(self):
         plan = self.plan()

@@ -27,6 +27,8 @@ MAX_GUIDANCE_BYTES = 262144
 MAX_INDEX_DOCUMENTS = 256
 MAX_DISCOVERY_ENTRIES = 2000
 MAX_DISCOVERY_DEPTH = 6
+MAX_SOURCE_BYTES = 1048576
+MAX_EXCERPT_BYTES = 16384
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
@@ -198,6 +200,7 @@ def validate_index(root, overlay=None):
             for dependency in module.get("dependencies", []):
                 if dependency.get("module") not in identifiers or dependency["module"] == module["id"]:
                     issues.append(f"unknown or self dependency: {module['id']} -> {dependency.get('module')}")
+        validate_code_targets(root, modules, overlay)
         for relative in [*rules.values(), *(module.get("document") for module in modules)]:
             if not isinstance(relative, str) or not relative.startswith(INDEX_DIRECTORY + "/") or not relative.endswith(".md"):
                 raise ValueError("rule and module documents must be Markdown inside the project ai-index")
@@ -212,6 +215,43 @@ def validate_index(root, overlay=None):
     except (OSError, ValueError, TypeError, KeyError) as error:
         issues.append(str(error))
     return {"status": "needs_review" if issues else "ready", "structural_check_only": True, "issues": issues, "advisories": advisories, "documents": sorted(documents), "manifest": manifest}
+
+
+def validate_code_targets(root, modules, overlay):
+    targets = {}
+    for module in modules:
+        entries = module.get("code_targets", [])
+        if not isinstance(entries, list) or len(entries) > 128:
+            raise ValueError(f"code_targets must be a list of at most 128 focused entries: {module['id']}")
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) - {"id", "file", "symbol", "anchor", "summary", "related"}:
+                raise ValueError("code target requires only id, file, symbol, anchor, summary and optional related")
+            if any(not isinstance(entry.get(key), str) or not entry[key].strip() or len(entry[key]) > 500 for key in ("id", "file", "symbol", "anchor", "summary")):
+                raise ValueError("code target requires bounded nonempty id, file, symbol, anchor and summary")
+            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", entry["id"]) or entry["anchor"] != entry["anchor"].strip() or "\n" in entry["anchor"] or "\r" in entry["anchor"]:
+                raise ValueError("code target ID must be lowercase hyphenated; anchor must be one trimmed source line")
+            identity = (module["id"], entry["id"])
+            if identity in targets:
+                raise ValueError(f"duplicate code target: {identity}")
+            path = contained_path(root, entry["file"])
+            if not any(entry["file"] == source or entry["file"].startswith(source + "/") for source in module["sources"]):
+                raise ValueError(f"code target file is outside module sources: {identity}")
+            exists = overlay[entry["file"]] is not None if entry["file"] in overlay else path.is_file()
+            if not exists:
+                raise ValueError(f"missing code target file: {entry['file']}")
+            related = entry.get("related", [])
+            if not isinstance(related, list) or len(related) > 32:
+                raise ValueError(f"code target related must be a bounded list: {identity}")
+            targets[identity] = entry
+    for identity, entry in targets.items():
+        seen = set()
+        for relation in entry.get("related", []):
+            if not isinstance(relation, dict) or set(relation) != {"module", "target", "reason"} or any(not isinstance(value, str) or not value.strip() or len(value) > 500 for value in relation.values()):
+                raise ValueError(f"code target relation requires module, target and reason: {identity}")
+            destination = (relation["module"], relation["target"])
+            if destination not in targets or destination == identity or destination in seen:
+                raise ValueError(f"unknown, self or duplicate code target relation: {identity} -> {destination}")
+            seen.add(destination)
 
 
 def shallow_structure(root):
@@ -296,7 +336,7 @@ def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved
     return result
 
 
-def route_module(root, identifier):
+def route_module(root, identifier, target=None, context_lines=12):
     root = project_root(root)
     if bootstrap_state(root):
         return check_project(root)
@@ -309,7 +349,38 @@ def route_module(root, identifier):
         return {"status": "needs_review", "structural_check_only": True, "issues": [f"unknown module: {identifier}"]}
     module = modules[identifier]
     dependencies = [{"module": dependency["module"], "reason": dependency["reason"], "document": modules[dependency["module"]]["document"]} for dependency in module.get("dependencies", [])]
-    return {"status": "ready", "structural_check_only": True, "module": identifier, "summary": module["summary"], "document": module["document"], "sources": module["sources"], "dependencies": dependencies}
+    result = {"status": "ready", "structural_check_only": True, "module": identifier, "summary": module["summary"], "document": module["document"], "sources": module["sources"], "dependencies": dependencies}
+    entries = module.get("code_targets", [])
+    if target is None:
+        result["code_targets"] = [{key: entry[key] for key in ("id", "file", "symbol", "summary")} for entry in entries]
+        return result
+    if isinstance(context_lines, bool) or not isinstance(context_lines, int) or not 0 <= context_lines <= 40:
+        raise ValueError("context_lines must be between 0 and 40")
+    selected = next((entry for entry in entries if entry["id"] == target), None)
+    if selected is None:
+        return {**result, "status": "needs_review", "issues": [f"unknown code target: {identifier}/{target}; search only the likely module and repair the route"]}
+    path = contained_path(root, selected["file"])
+    if path.stat().st_size > MAX_SOURCE_BYTES:
+        return {**result, "status": "needs_review", "issues": ["selected source exceeds bounded read; use a scoped symbol tool"], "target": selected}
+    with path.open("rb") as stream:
+        content = stream.read(MAX_SOURCE_BYTES + 1)
+    if len(content) > MAX_SOURCE_BYTES:
+        raise ValueError("selected source grew beyond bounded read")
+    lines = content.decode("utf-8").splitlines()
+    matches = [number for number, line in enumerate(lines) if line.strip() == selected["anchor"]]
+    if len(matches) != 1:
+        return {**result, "status": "needs_review", "issues": ["code anchor missing or ambiguous; repair this target from scoped source before editing"], "target": selected}
+    line = matches[0]
+    start, end = max(0, line - context_lines), min(len(lines), line + context_lines + 1)
+    excerpt = "\n".join(lines[start:end])
+    if len(excerpt.encode("utf-8")) > MAX_EXCERPT_BYTES:
+        return {**result, "status": "needs_review", "issues": ["selected excerpt exceeds 16 KiB; reduce context_lines or use a scoped symbol tool"], "target": selected}
+    related = []
+    for relation in selected.get("related", []):
+        destination = next(entry for entry in modules[relation["module"]].get("code_targets", []) if entry["id"] == relation["target"])
+        related.append({**relation, "file": destination["file"], "symbol": destination["symbol"]})
+    result.update({"structural_check_only": False, "target": {key: selected[key] for key in ("id", "file", "symbol", "summary")}, "location": {"line": line + 1, "start_line": start + 1, "end_line": end}, "source_sha256": hashlib.sha256(content).hexdigest(), "excerpt": excerpt, "excerpt_scope": "bounded context, not a complete method or proof of behavior", "related": related})
+    return result
 
 
 def prepare_plan(root, plan):
@@ -449,6 +520,8 @@ def main():
             command.add_argument("--allow-bootstrap", action="store_true", help="Read bootstrap context only after explicit user approval")
         if name == "route":
             command.add_argument("--module", required=True)
+            command.add_argument("--target", help="Read one indexed method or key-line anchor; related sources remain unopened")
+            command.add_argument("--context-lines", type=int, default=12, help="Lines around the unique anchor, from 0 to 40")
         elif name == "apply":
             command.add_argument("--plan", required=True, type=Path)
             command.add_argument("--work-dir", required=True, type=Path)
@@ -461,7 +534,7 @@ def main():
             case "check":
                 result = check_project(root, bootstrap_approved=args.allow_bootstrap)
             case "route":
-                result = route_module(root, args.module)
+                result = route_module(root, args.module, args.target, args.context_lines)
             case "apply":
                 validate_external_directory(args.plan.parent, root)
                 reject_links(args.plan)

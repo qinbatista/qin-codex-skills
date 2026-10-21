@@ -4,6 +4,7 @@ This repository owns eight public global Skills: Task Analyze, Workflow, Code, V
 
 Read the [project AI index](.agents/skills/ai-index/SKILL.md) at task start/resume and finish. Select the affected owner and only the rules needed for the action. Automatically reconcile this root contract and the project index when established intent or structure changes, before authorized delivery. Preserve useful scoped guidance; other Skill changes require their existing authorization.
 
+- All local code changes, including tests, use the index’s module/file/method anchors, scoped memory and necessary dependency reads. Refresh touched stable routes after edits; Code owns cohesive method boundaries and justified extraction.
 - Keep source instructions portable, concise and stable. Instructions and the index are not task history, results, generated data or memory stores.
 - Before any file write, apply Workflow's external artifact policy and classify ownership. Allocate a fresh external task run through Workflow for each request or execution unit, including continuations. Preserve maintained source, final deliverables and real runtime/asset owners. Never put task scratch in project Cache, Codex storage or generic output folders.
 - Use Task Analyze for the opening result/difficulty/model/dependency preview, concise chat names, action completion and one final report of actual Skill use across all branches. Workflow owns ready work, Git delivery, bounded waits and exact resource cleanup.

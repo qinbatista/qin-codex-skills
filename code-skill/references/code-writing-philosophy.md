@@ -1,10 +1,20 @@
 # Code-Writing Philosophy
 
-Apply these preferences before and during code changes in any language. Domain references add only their specific rules.
+Apply these preferences before and during every local code change in any language, including tests and scripts. Domain references add only their specific rules.
 
 ## Understand the owner
 
-Read the nearest project `AGENTS.md`, relevant same-project memory, existing code, and focused tests. Establish the real input/output contract and the module that owns it. Reuse that owner instead of scattering one responsibility across wrappers, adapters, or fallback branches. Keep `AGENTS.md` limited to stable structure, ownership, entry points, constraints, and definition of done; update it only when those facts change or are missing and useful to the task.
+After the project startup gate, follow [AI-index code navigation](../../management-skill/references/project-ai-index.md#code-navigation): module → file → method or stable anchor → necessary dependencies. Recall the corresponding same-project memory, then confirm the current implementation. Start with the affected method or bounded block and expand only far enough to understand inputs, outputs, state, side effects, error handling and the relevant caller/test contract. A fragment without its controlling conditions is not enough; reading every neighboring method is not the default. Reuse already-read unchanged context within the task. On a missing or stale route, perform a bounded symbol search in the selected owner and repair its verified route instead of rereading the repository.
+
+Keep each responsibility in its owning module with explicit entry points and narrow dependencies. Reuse that owner instead of scattering one operation across wrappers, adapters, or fallback branches. Maintain touched stable methods/anchors, contracts and justified logic-chain links in the project index so later tasks can repeat this targeted read. Store historical decisions and source-bound outcomes in project memory; do not duplicate source bodies, line-number-only locations or changing evidence in the index. Keep root `AGENTS.md` limited to stable structure, ownership, entry points, constraints, and definition of done.
+
+## Choose method boundaries deliberately
+
+Prefer completing one cohesive operation in one method. Opening a player and reading its content can be one operation with one resource lifecycle; a one-use image conversion step alone is not a reason to extract a helper. For variants with the same flow, such as opening different browsers, prefer meaningful parameters to near-identical methods. Preserve genuinely different platform/provider contracts rather than hiding them behind speculative flags.
+
+Create a method when it has a distinct responsibility with little overlap, meaningful reuse by real callers, or a necessary validation, compatibility, transaction, lifecycle or provider boundary. Its name and contract should explain why it can be understood and changed independently. Do not extract merely to shorten a method, name a single expression, or add a forwarding layer. Equally, do not merge unrelated operations into an oversized method or force independent contracts into one parameter-heavy function. Optimize for the smallest code and context needed to understand the complete operation, not a method-count or line-count target.
+
+When existing code obstructs this workflow, identify the concrete coupling, duplicated flow or fragmented operation and its affected files/methods. Propose the new ownership and method boundaries, explain how they reduce reads and preserve behavior, and specify a real before/after acceptance check. Ask whether to perform a structural refactor unless that exact refactor is already authorized; continue the scoped requested work where possible. After approval, verify the affected behavior and failure/resource boundaries, update the navigation links, and report the actual result. File length alone is not a defect, and index maintenance alone does not authorize a refactor.
 
 ## Write the minimum coherent change
 

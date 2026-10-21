@@ -56,6 +56,29 @@
           "module": "workflow",
           "reason": "Test/tool output and process resources need external ownership and cleanup."
         }
+      ],
+      "code_targets": [
+        {
+          "id": "code-navigation-contract-test",
+          "file": "code-skill/tests/test_code_writing_philosophy.py",
+          "symbol": "CodeWritingPhilosophyTests.test_code_work_explains_steps_and_uses_optional_scoped_memory",
+          "anchor": "def test_code_work_explains_steps_and_uses_optional_scoped_memory(self):",
+          "summary": "Protect all-local-code scope, startup routing, exact memory selectors, missing-memory continuation and current-source precedence.",
+          "related": [
+            {
+              "module": "code",
+              "target": "method-philosophy-contract-test",
+              "reason": "Companion contract checks cover cohesive method boundaries and refactor authorization."
+            }
+          ]
+        },
+        {
+          "id": "method-philosophy-contract-test",
+          "file": "code-skill/tests/test_code_writing_philosophy.py",
+          "symbol": "CodeWritingPhilosophyTests.test_direct_code_and_lifecycle_preferences_survive",
+          "anchor": "def test_direct_code_and_lifecycle_preferences_survive(self):",
+          "summary": "Protect bounded navigation, cohesive operations, parameterized variants, justified extraction and authorized verified refactoring alongside direct-code and lifecycle rules."
+        }
       ]
     },
     {
@@ -147,6 +170,93 @@
         {
           "module": "workflow",
           "reason": "Candidate output, quiet subprocesses and Git/resource delivery obey their common owner."
+        }
+      ],
+      "code_targets": [
+        {
+          "id": "index-route",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "route_module",
+          "anchor": "def route_module(root, identifier, target=None, context_lines=12):",
+          "summary": "Select a module menu or resolve one unique code anchor from bounded current source; return necessary relationship pointers without loading them.",
+          "related": [
+            {
+              "module": "management",
+              "target": "index-validation",
+              "reason": "Routing validates the manifest before selecting any source."
+            },
+            {
+              "module": "management",
+              "target": "target-cli-test",
+              "reason": "Exercises actual selected routing, read boundaries and line relocation."
+            }
+          ]
+        },
+        {
+          "id": "index-validation",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "validate_index",
+          "anchor": "def validate_index(root, overlay=None):",
+          "summary": "Validate existing or proposed guidance and paths without reading source bodies.",
+          "related": [
+            {
+              "module": "management",
+              "target": "target-validation",
+              "reason": "Validate optional code target ownership, anchors and relationships."
+            }
+          ]
+        },
+        {
+          "id": "target-validation",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "validate_code_targets",
+          "anchor": "def validate_code_targets(root, modules, overlay):",
+          "summary": "Validate bounded method navigation metadata, file ownership and explicit relationship targets; source anchor resolution belongs to route_module.",
+          "related": []
+        },
+        {
+          "id": "index-plan",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "prepare_plan",
+          "anchor": "def prepare_plan(root, plan):",
+          "summary": "Bind a reviewed guidance plan to the project, source evidence and document preimages before guarded writes.",
+          "related": [
+            {
+              "module": "management",
+              "target": "index-validation",
+              "reason": "Validate the entire proposed guidance overlay before applying it."
+            }
+          ]
+        },
+        {
+          "id": "target-cli-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_code_target_cli_menu_selected_excerpt_and_moved_anchor",
+          "anchor": "def test_code_target_cli_menu_selected_excerpt_and_moved_anchor(self):",
+          "summary": "Exercise the real CLI menu, bounded excerpt, unopened related source and source relocation.",
+          "related": [
+            {
+              "module": "management",
+              "target": "target-failure-test",
+              "reason": "Companion failure cases protect against stale or ambiguous navigation."
+            }
+          ]
+        },
+        {
+          "id": "target-failure-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_code_target_cli_stale_unknown_and_bounded_failures",
+          "anchor": "def test_code_target_cli_stale_unknown_and_bounded_failures(self):",
+          "summary": "Require bounded failures for stale, ambiguous or oversized source, unknown targets and invalid context sizes.",
+          "related": []
+        },
+        {
+          "id": "target-metadata-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_code_target_metadata_rejects_unsafe_ownership_and_relations",
+          "anchor": "def test_code_target_metadata_rejects_unsafe_ownership_and_relations(self):",
+          "summary": "Reject unsafe paths, wrong owners and invalid code target relationships.",
+          "related": []
         }
       ]
     },

@@ -47,9 +47,18 @@
     {
       "id": "project-ai-index-check",
       "kind": "command",
-      "targets": ["source"],
+      "targets": [
+        "source"
+      ],
       "timeout_seconds": 30,
-      "command": ["{python}", "-B", "management-skill/scripts/project_ai_index.py", "check", "--project-root", "{root}"]
+      "command": [
+        "{python}",
+        "-B",
+        "management-skill/scripts/project_ai_index.py",
+        "check",
+        "--project-root",
+        "{root}"
+      ]
     },
     {
       "id": "public-skill-set",
@@ -445,7 +454,7 @@
       "id": "project-ai-index",
       "owner_skill": "management-skill",
       "name": "Automatic project AI index",
-      "function": "At project start, request consent before missing-index discovery or creation and repeat at later starts until complete; automatically maintain existing focused routes and concise root guidance, guard source/preimage updates and require Ending readback without inferred publication.",
+      "function": "At project start, request consent before missing-index discovery or creation and repeat at later starts until complete; automatically maintain existing focused routes and concise root guidance, guard source/preimage updates and require Ending readback without inferred publication. Route all local code edits, including tests, through reviewed module/file/method anchors with bounded current-source excerpts and explicit related pointers; maintain touched routes without copying source or memory history.",
       "checks": [
         "project-ai-index-check",
         "management-units",

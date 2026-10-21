@@ -4,6 +4,8 @@ Each global Skill folder owns one reusable responsibility. Read its selected mod
 
 Apply [Management's authoring rules](../../../../management-skill/SKILL.md#authoring-rules): preserve intent and authorization, reuse the existing owner, keep deterministic mechanics in reusable code, and remove superseded or duplicate procedures. Link authoritative policies rather than copying whole Skills. Keep concise module/system/component/file names for chats under [Task Analyze](../../../../task-analyze-skill/SKILL.md#correct-task-names).
 
+All local code edits, including tests, use reviewed module/file/method targets and necessary logic-chain links under [code navigation](../../../../management-skill/references/project-ai-index.md#code-navigation). Keep stable contracts and routes in the index, current source as implementation authority, and dated results in memory. Refresh only touched routes; never persist source copies or line-only locations.
+
 Root AGENTS holds the project contract; `.agents/skills/ai-index` holds focused routing and stable rules. Automatically maintain both through [the global AI-index owner](../../../../management-skill/references/project-ai-index.md) when accepted intent, ownership or structure changes. Preserve nested scopes and tool-required guidance rather than adding more AGENTS files for navigation. Other Skill edits retain their existing authorization requirements.
 
 Task Analyze owns goals, previews and action completion; Workflow owns coordination and cleanup; Verify owns active-task evidence; Project Memory owns scoped knowledge and Ending. Keep history, results, pending queues, coverage records and memory locations out of project instructions and Skills. Follow [memory ownership](memory.md) for durable knowledge.

@@ -24,11 +24,11 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 
 At completion, summarize actual Skill names, steps and reasons once, including branch use; distinguish unused, missing or unreadable Skills. Progress updates need no repeated lists; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
 
-One Memory.json and Knowledge.md serve each project. Recall excludes stale facts; Ending consolidates touched entries and links.
+Project memories stay isolated in Memory.json and Knowledge.md. Recall excludes stale facts. Ending consolidates touched entries and shared preferences remain scoped. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
 
-Project memories stay isolated. Read relevant shared preferences only. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
+Each project owns its AI index. The helper validates routes and source/document hashes within the task, without a background watcher.
 
-Each project owns its AI index, without global or plugin copies. The helper validates routes and applies reviewed updates against source and document hashes. This runs within the task workflow, not as a background watcher.
+All code edits, including tests, follow module → file → method/anchor → necessary relationships plus scoped memory. Selected routes return bounded current excerpts; edits refresh touched routes. Prefer cohesive methods, parameterized variants and deliberate extraction.
 
 Without a vault, [Project Memory](project-memory-skill/SKILL.md) creates and verifies one outside Codex and the project using [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki). Back up the entire vault regularly: it holds all Codex and project memory. The generator is a public template, not a private-memory backup.
 
@@ -40,7 +40,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
-Skills own instructions, helpers and release tests. Keep support in a fresh external `YoFaAI/TaskArtifacts/temp-*` run under [the artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Verify selected continuation inputs, then release disposable directories and worktrees. Preserve source, deliverables, assets and active/review/reuse resources.
+Keep task support in a fresh external `YoFaAI/TaskArtifacts/temp-*` run under [the artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Verify continuation inputs; release disposable directories/worktrees. Preserve source, deliverables, assets and active/review/reuse resources.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

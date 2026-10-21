@@ -20,7 +20,7 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
                 self.assertIn(concept.casefold(), document)
 
     def test_code_work_explains_steps_and_uses_optional_scoped_memory(self):
-        self.assert_concepts("SKILL.md", ["implementation steps before detailed execution", "every task", "if no memory is available, continue", "another project's", "mechanical shell command"])
+        self.assert_concepts("SKILL.md", ["implementation steps before detailed execution", "every local code change", "including tests, scripts and temporary code", "project AI-index startup gate", "project/module/file/symbol selectors", "missing memory is a normal skip", "fresh source and current user instructions take precedence", "Running an unchanged command", "exact read-only lookup"])
 
     def test_checking_stays_in_task_and_memory_closeout_is_separate(self):
         self.assert_concepts("SKILL.md", ["verify changed code in this active task", "real readback or behavior check", "Ending's memory branch", "does not verify or repair", "Do not start the whole project", "unless the user requests it", "remaining limitations"])
@@ -33,7 +33,7 @@ class CodeWritingPhilosophyTests(unittest.TestCase):
                     self.assertNotIn(phrase, content)
 
     def test_direct_code_and_lifecycle_preferences_survive(self):
-        self.assert_concepts("references/code-writing-philosophy.md", ["nearest project `AGENTS.md`", "same-project memory", "existing code", "same arguments and return value", "Do not assign or unpack into `_`", "_ = SomeTask()", "case _", "one physical line", "bounded memory use", "resource cleanup", "concurrency/event subscriptions", "long-running behavior"])
+        self.assert_concepts("references/code-writing-philosophy.md", ["project startup gate", "module → file → method or stable anchor → necessary dependencies", "same-project memory", "confirm the current implementation", "Reuse already-read unchanged context", "bounded symbol search", "one cohesive operation in one method", "meaningful parameters to near-identical methods", "distinct responsibility with little overlap", "Do not extract merely to shorten a method", "do not merge unrelated operations", "Ask whether to perform a structural refactor unless that exact refactor is already authorized", "verify the affected behavior", "same arguments and return value", "Do not assign or unpack into `_`", "_ = SomeTask()", "case _", "one physical line", "bounded memory use", "resource cleanup", "concurrency/event subscriptions", "long-running behavior"])
 
     def test_naming_preserves_real_contract_boundaries(self):
         self.assert_concepts("references/code-writing-philosophy.md", ["Correct unambiguous English spelling", "external/public/persisted", "declarations and direct references", "task-analyze-skill/SKILL.md#correct-task-names", "quoted user data", "third-party names"])

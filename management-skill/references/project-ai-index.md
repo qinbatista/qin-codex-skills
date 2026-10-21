@@ -13,7 +13,7 @@ Keep root `AGENTS.md` a concise project contract: purpose, overall structure, cr
 The project index contains:
 
 - `SKILL.md`: frontmatter `name: ai-index`, when/how to select a route, and a link to `index.json`.
-- `index.json`: the single route map, with project-relative paths. `rules` declares `repository`, `structure` and `verification` documents. `modules` declares each `id`, short `summary`, `document`, `sources`, and `dependencies` with a module ID and reason.
+- `index.json`: the single route map, with project-relative paths. `rules` declares `repository`, `structure` and `verification` documents. `modules` declares each `id`, short `summary`, `document`, `sources`, and `dependencies` with a module ID and reason. Optional `code_targets` locate reviewed methods and key-line anchors under that module.
 - Focused Markdown documents for repository/asset ownership, code placement, verification, and each meaningful module. Use a folder/sub-index only when a module needs it; do not create a document for every function.
 
 Repository/asset rules cover Git and publication boundaries, canonical inputs/assets, runtime data, generated artifacts, secrets and disposable support. Structure rules state responsibilities and where new code belongs. Each module document names its entry files/symbols, contracts, exclusions, justified dependencies and relevant test owner. Link existing rules instead of copying whole Skills, prompts or source files. Store task history, failures, results and changing inventories in their existing memory/resource owners, not these instructions.
@@ -30,9 +30,34 @@ Repository/asset rules cover Git and publication boundaries, canonical inputs/as
 
 Structural validity is not semantic acceptance: a valid map can still describe the wrong owner. Compare the relevant route with actual source and user intent. Keep unknown contracts explicit. Source evidence must support the claim; a fresh hash is not proof of runtime correctness.
 
+## Code navigation
+
+For every local code change in every language, including tests, tools and temporary scripts, use module → file → method or key-line anchor → necessary relationships. Apply [Code's writing philosophy](../../code-skill/references/code-writing-philosophy.md) to the actual method boundary. Select the relevant target, recall exact project/module/file/symbol memory, then inspect current source. A missing memory entry is a normal skip. A target is a starting point, not permission to edit without understanding the affected operation's inputs, state transitions, outputs, failure handling and direct callers or callees that constrain the change.
+
+Read the smallest sufficient method or fragment first. Expand only for a named unresolved contract, one necessary caller, callee, shared state owner or test at a time. A bounded excerpt may omit the rest of a method: inspect that remainder when the change depends on it. Reuse already-read unchanged context in the same task; reread a relevant changed region after another writer or a source edit. Never load a whole module, file or project merely because a route is incomplete. Search symbols/anchors inside the likely owner first, record what is missing, and expand the scope only with a concrete dependency reason.
+
+Maintain a compact `code_targets` list in the module's manifest entry for the code actually touched or needed as a stable entry. Each target has `id` (unique lowercase hyphenated within its module), `file` (exact project-relative source file owned by `sources`), `symbol` (qualified method/function name, or a descriptive key-block name), `anchor` (one unique trimmed source line), `summary` (responsibility and essential input/output or state contract), and optional `related` entries with `module`, `target` and a concrete `reason`. Use relationships for necessary callers/callees, state owners and affected tests; test methods are ordinary targets. Give overloads or repeated signatures an actually unique local anchor rather than guessing from a symbol name. No language parser or automatic call-graph inference is assumed.
+
+```json
+"code_targets": [{
+  "id": "read-content",
+  "file": "src/player.py",
+  "symbol": "Player.read_content",
+  "anchor": "def read_content(self, location, browser):",
+  "summary": "Open the selected browser, read content and release the owned session; return content or propagate failure.",
+  "related": [{"module": "player-tests", "target": "read-content-failure", "reason": "Checks session release when content reading fails."}]
+}]
+```
+
+Register only targets that exist; referenced related targets must also be declared in their owners. Keep one module document for explanatory logic, not a document per method. Do not copy source bodies, persistent line ranges, source hashes, task outcomes or execution traces into the index. Stable navigation and contracts belong here; dated decisions, failures and source-bound verification remain in [Project Memory](../../project-memory-skill/SKILL.md). Temporary code follows the same reading/writing discipline but its disposable paths never become maintained routes; index its maintained producer or test owner when useful.
+
+`route --module ID` lists target summaries without reading source content. `route --module ID --target TARGET` opens only the chosen file (at most 1 MiB), resolves its unique exact-line anchor against current bytes, and returns the current line, source hash and bounded excerpt (12 lines each side by default; `--context-lines 0..40`, at most 16 KiB of excerpt text). The hash and line numbers are transient read evidence, not runtime acceptance. Related entries are pointers only and do not recursively load source. Missing/ambiguous anchors, unknown targets and oversized sources stay `needs_review`; use a bounded symbol lookup and repair the verified route before editing. `inspect`/`check` validate metadata and paths without reading source bodies, so structural success alone cannot prove that anchors remain current.
+
+After changing code, reconcile touched targets, contracts, anchors and necessary relationships from the actual final source before delivery. Remove old targets/references for renamed, moved or deleted code, and verify each changed target through a fresh selected route. Use guarded `apply` with evidence for the selected source files. Existing indexes without targets remain valid; enrich the touched scope incrementally, never pre-index every function or rescan unrelated code. Instructions and navigation must match the delivered source; memory cannot excuse a stale route.
+
 ## Unrelated context and redesign
 
-When a route repeatedly pulls unrelated responsibilities, identify the exact files/rules, explain the unnecessary dependency, and propose a concrete module split to the user. Continue independent work, but obtain the user's direction before a structural code refactor. An explicit decision to retain the current structure permits bounded work without repeating the same warning. Legitimate cross-module dependencies and file length alone do not establish a design defect. The index update itself does not authorize source restructuring.
+When code forces broad reading through mixed responsibilities, duplicated variants or trivial forwarding chains, identify the exact methods and dependency cost. Propose the resulting module/method structure, what stays together, what becomes a parameter or an independent responsibility, how this reduces repeated reading, and the behavior checks that will verify it. Ask whether to refactor before an otherwise unauthorized structural change; continue independent requested work. An explicit decision to retain the current structure permits bounded work without repeated warnings. Legitimate dependencies and method/file length alone do not prove a defect. After an authorized refactor, verify preserved behavior and demonstrate that the new routes reach the affected code and tests. The index update itself never authorizes source restructuring.
 
 ## Portable helper
 
@@ -44,6 +69,7 @@ Checks follow linked Markdown only inside the project index, including focused s
 project_ai_index.py inspect --project-root ROOT --phase start --changed-path src/feature.py
 project_ai_index.py inspect --project-root ROOT --phase start --allow-bootstrap
 project_ai_index.py route --project-root ROOT --module feature
+project_ai_index.py route --project-root ROOT --module feature --target read-content --context-lines 12
 project_ai_index.py check --project-root ROOT
 project_ai_index.py apply --project-root ROOT --plan PLAN_JSON --work-dir EXTERNAL_RUN
 project_ai_index.py inspect --project-root ROOT --phase end --changed-path src/feature.py

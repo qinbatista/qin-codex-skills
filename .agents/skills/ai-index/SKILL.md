@@ -5,7 +5,7 @@ description: Route qin-codex-skills work to its eight global Skill owners, proje
 
 # qin-codex-skills AI index
 
-Read [index.json](index.json), select the relevant module, then read its document and actual entry source. The source directories contain the public global Skills; this index is project-only and must never be installed globally or bundled as a plugin Skill.
+Read [index.json](index.json), select the relevant module and its code target, then read the current method or bounded key-line fragment. For every local code edit, including tests, use [code navigation](../../../management-skill/references/project-ai-index.md#code-navigation), exact-scope memory and only necessary related contracts. Reuse unchanged context and refresh touched targets after edits. The source directories contain the public global Skills; this index is project-only and must never be installed globally or bundled as a plugin Skill.
 
 Choose shared rules by the action:
 
