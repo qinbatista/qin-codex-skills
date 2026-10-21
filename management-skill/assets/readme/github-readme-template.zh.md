@@ -44,6 +44,8 @@ python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
 
 Windows 使用 `py -3 -B`。安装以锁、备份和恢复机制替换八个托管 Skill，保留其他 Skill、用户 AGENTS 和已有私人历史。明确更新全局 AGENTS 时使用 `install-global-agents --source-dir .`，并生成可恢复备份。
 
+强制 AI-index 启动提问需要始终加载的全局入口，单独安装 Skill 不会自动触发。获得授权后，用同一安装器执行 `install-global-agents --source-dir . --startup-only`，只更新启动区块并保留个人规则。普通部署会提示入口缺失、过期或被全局 override 遮蔽，不会擅自覆盖。请用新的 Codex 会话验证；已运行的会话可能仍保留旧指令。
+
 源代码修改、本地安装和 GitHub 发布是不同结果。发布命令 `push` 用重复的 `--include-path` 明确选择本任务文件；已有的本任务本地提交用 `--include-commit` 完整哈希选择。发布通过当前分支已有上游完成合并、发布检查、正常推送和远端回读，并保留未选择的工作区及索引修改。
 
 ## 代码规则归属

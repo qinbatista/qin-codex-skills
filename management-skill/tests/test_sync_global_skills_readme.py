@@ -1055,6 +1055,72 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(sync_global_skills.codex_home(), expected)
             self.assertEqual(sync_global_skills.global_agents_targets(Path("unrelated-skills")), [expected / "AGENTS.md"])
 
+    def test_startup_only_install_preserves_other_guidance_and_is_idempotent(self):
+        target = self.codex_root / "AGENTS.md"
+        target.parent.mkdir(parents=True)
+        personal = "# Personal rules\nPreserve my exact instructions.\n"
+        target.write_text(personal, encoding="utf-8")
+        skills = self.codex_root.parent / "skills"
+        rule = sync_global_skills.ai_index_startup_rule(SKILLS_DIR)
+        first = sync_global_skills.install_global_agents(SKILLS_DIR, skills, startup_only=True)
+        self.assertEqual(target.read_text(encoding="utf-8"), rule + "\n\n" + personal)
+        self.assertTrue(first["changed"])
+        second = sync_global_skills.install_global_agents(SKILLS_DIR, skills, startup_only=True)
+        self.assertFalse(second["changed"])
+        self.assertIsNone(second["backup_id"])
+        restoration = sync_global_skills.restore_global_agents_backup(skills, first["backup_id"])
+        self.assertTrue(restoration["changed"])
+        self.assertEqual(target.read_text(encoding="utf-8"), personal)
+
+    def test_startup_only_updates_exact_block_and_rejects_ambiguous_markers(self):
+        target = self.codex_root / "AGENTS.md"
+        target.parent.mkdir(parents=True)
+        skills = self.codex_root.parent / "skills"
+        rule = sync_global_skills.ai_index_startup_rule(SKILLS_DIR)
+        stale = sync_global_skills.AI_INDEX_STARTUP_START + "\nOld managed rule.\n" + sync_global_skills.AI_INDEX_STARTUP_END
+        target.write_text("Personal prefix\n\n" + stale + "\n\nPersonal suffix\n", encoding="utf-8")
+        sync_global_skills.install_global_agents(SKILLS_DIR, skills, startup_only=True)
+        self.assertEqual(target.read_text(encoding="utf-8"), "Personal prefix\n\n" + rule + "\n\nPersonal suffix\n")
+        malformed = "Keep this.\n" + sync_global_skills.AI_INDEX_STARTUP_START
+        target.write_text(malformed, encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "ambiguous"):
+            sync_global_skills.install_global_agents(SKILLS_DIR, skills, startup_only=True)
+        self.assertEqual(target.read_text(encoding="utf-8"), malformed)
+
+    def test_startup_activation_detects_missing_entry_and_shadowing_override(self):
+        self.assertEqual(sync_global_skills.ai_index_startup_status(SKILLS_DIR), "missing_global_entry")
+        target = self.codex_root / "AGENTS.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("# Legacy global rules\n", encoding="utf-8")
+        self.assertEqual(sync_global_skills.ai_index_startup_status(SKILLS_DIR), "startup_rule_missing_or_stale")
+        sync_global_skills.install_global_agents(SKILLS_DIR, self.codex_root.parent / "skills", startup_only=True)
+        self.assertEqual(sync_global_skills.ai_index_startup_status(SKILLS_DIR), "ready")
+        override = self.codex_root / "AGENTS.override.md"
+        override.write_text("# Active override\n", encoding="utf-8")
+        self.assertEqual(sync_global_skills.ai_index_startup_status(SKILLS_DIR), "shadowed_by_global_override")
+        override.write_text("\n", encoding="utf-8")
+        self.assertEqual(sync_global_skills.ai_index_startup_status(SKILLS_DIR), "ready")
+
+    def test_official_deploy_reports_pending_startup_without_replacing_personal_rules(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skills = Path(temp_dir) / "skills"
+            target = self.codex_root / "AGENTS.md"
+            target.parent.mkdir(parents=True)
+            personal = "# Personal global guidance\n"
+            target.write_text(personal, encoding="utf-8")
+            with mock.patch.object(sync_global_skills, "OFFICIAL_USER_SKILLS_DIRECTORY", skills), mock.patch.object(sync_global_skills, "repair_legacy_user_skills"), mock.patch("builtins.print") as messages:
+                sync_global_skills.deploy(SKILLS_DIR, skills)
+            output = "\n".join(str(call.args[0]) for call in messages.call_args_list if call.args)
+            self.assertIn("startup_rule_missing_or_stale", output)
+            self.assertIn("--startup-only", output)
+            self.assertEqual(target.read_text(encoding="utf-8"), personal)
+
+    def test_startup_only_cli_uses_preserving_installer(self):
+        argv = ["sync_global_skills.py", "install-global-agents", "--source-dir", str(SKILLS_DIR), "--startup-only"]
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "install_global_agents", return_value={"changed": False, "target": self.codex_root / "AGENTS.md"}) as installer:
+            sync_global_skills.main()
+        installer.assert_called_once_with(SKILLS_DIR, sync_global_skills.OFFICIAL_USER_SKILLS_DIRECTORY, startup_only=True)
+
     def test_push_cli_defaults_to_the_maintained_repository_source(self):
         argv = ["sync_global_skills.py", "push", "--message", "source-first smoke", "--include-path", "verify-skill/SKILL.md", "--include-path", "README.md"]
         with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "push") as publisher:
