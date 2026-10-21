@@ -675,15 +675,18 @@ def scopes(project_root, vault, *, query="", files=None, limit=5):
             continue
         if selected_files and not any(file == entry["file"] or file in entry["source_hashes"] for file in selected_files):
             continue
-        identifiers = " ".join([entry["module"], entry["file"], entry["symbol"], *entry["source_hashes"]]).casefold()
-        searchable = " ".join([identifiers, entry["summary"], entry["reason"], entry["result"], *entry["decisions"], *entry["risks"]]).casefold()
+        identifiers = " ".join([entry["module"], entry["file"], entry["symbol"]]).casefold()
+        summary = entry["summary"].casefold()
+        continuity = " ".join([entry["reason"], entry["result"], *entry["decisions"], *entry["risks"]]).casefold()
+        searchable = " ".join([identifiers, summary, continuity, *entry["source_hashes"]]).casefold()
         if not all(term in searchable for term in terms):
             continue
-        score = sum(10 if term in identifiers else 1 for term in terms)
+        score = (100 if entry["file"] in selected_files else 0) + sum(20 if term in identifiers else 10 if term in summary else 3 if term in continuity else 1 for term in terms)
         matches.append((score, entry["id"], entry))
     for score, identifier, entry in sorted(matches, key=lambda value: (-value[0], value[1]))[:max(1, min(int(limit), 5))]:
         pointer = {key: entry[key] for key in ("id", "scope", "module", "file", "symbol", "event_id", "updated_at")}
-        result["scopes"].append({**pointer, "context_role": "scope_pointer", "eligible_current_context": False})
+        match_basis = "declared_file" if entry["file"] in selected_files else "supporting_source" if selected_files else "task_terms"
+        result["scopes"].append({**pointer, "match_basis": match_basis, "context_role": "scope_pointer", "eligible_current_context": False})
     if result["scopes"]:
         result["status"] = "ok"
     return result

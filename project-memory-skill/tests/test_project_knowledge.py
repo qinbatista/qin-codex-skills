@@ -112,9 +112,11 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertEqual(len({entry["id"] for entry in knowledge.load_knowledge(self.project, self.vault)["entries"]}), 3)
 
     def test_scope_discovery_locates_names_without_loading_facts_or_bypassing_freshness(self):
-        self.write([self.method(module="stored.engine", summary="Gold reveal owns the private display contract"), self.method(module="unrelated", summary="Unrelated inventory contract")])
+        unrelated = self.method(module="unrelated", summary="Unrelated inventory contract")
+        unrelated["source_hashes"]["docs/GoldReveal.py"] = None
+        self.write([self.method(module="stored.engine", summary="Gold reveal owns the private display contract"), unrelated])
         result = knowledge.scopes(self.project, self.vault, query="GoldReveal")
-        self.assertEqual([pointer["module"] for pointer in result["scopes"]], ["stored.engine"])
+        self.assertEqual([pointer["module"] for pointer in result["scopes"]], ["stored.engine", "unrelated"])
         self.assertFalse(result["facts_returned"])
         self.assertFalse(result["history_loaded"])
         self.assertNotIn("private display contract", json.dumps(result))
