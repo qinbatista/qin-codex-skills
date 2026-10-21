@@ -216,7 +216,9 @@ def _stat_identity(result: os.stat_result) -> dict[str, int]:
 
 
 def _same_identity(expected: dict[str, Any], observed: dict[str, Any]) -> bool:
-    return all(observed.get(key) == value for key, value in expected.items())
+    # ctime is also changed by metadata-only filesystem updates. Object identity,
+    # mtime and size guard writes; payload/digest checks below guard the bytes.
+    return all(observed.get(key) == value for key, value in expected.items() if key != "ctime_ns")
 
 
 def _same_object_identity(expected: dict[str, Any], observed: dict[str, Any]) -> bool:
@@ -452,7 +454,8 @@ def _verify_binding(ledger: dict[str, Any], project_root: str | Path, *, read_on
     marker_stat = _safe_lstat(marker, directory=False)
     if not stat.S_ISREG(marker_stat.st_mode) or marker_stat.st_nlink != 1:
         _fail("task ownership marker is not one exact regular file")
-    if ledger["binding"].get("marker_identity") is not None and ledger["binding"]["marker_identity"] != _stat_identity(marker_stat):
+    marker_identity = ledger["binding"].get("marker_identity")
+    if marker_identity is not None and not _same_identity(marker_identity, _stat_identity(marker_stat)):
         _fail("task ownership marker identity changed")
     observed_marker = json.loads(marker.read_text(encoding="utf-8"))
     if observed_marker != _marker_payload(ledger):
@@ -580,7 +583,7 @@ def _verify_durable_owner(project_root: Path, receipt: Any) -> dict[str, Any]:
         if not stat.S_ISREG(observed.st_mode) or observed.st_nlink != 1:
             _fail("durable owner bytes must be one exact regular file")
         identity = _stat_identity(observed)
-        if receipt.get(identity_key) is not None and receipt[identity_key] != identity:
+        if receipt.get(identity_key) is not None and not _same_identity(receipt[identity_key], identity):
             _fail("durable owner file identity changed after readback")
         digest = hashlib.sha256()
         with current.open("rb") as source:
@@ -595,7 +598,7 @@ def _verify_durable_owner(project_root: Path, receipt: Any) -> dict[str, Any]:
                     _fail("recovery must preserve individual minimum input/state files, never a scratch archive")
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
                 digest.update(chunk)
-        if digest.hexdigest() != expected_digest or _stat_identity(_safe_lstat(current, directory=False)) != identity:
+        if digest.hexdigest() != expected_digest or not _same_identity(identity, _stat_identity(_safe_lstat(current, directory=False))):
             _fail("durable owner byte readback does not match the exact receipt")
         verified[digest_key] = expected_digest
         verified[identity_key] = identity
@@ -605,7 +608,7 @@ def _verify_durable_owner(project_root: Path, receipt: Any) -> dict[str, Any]:
     declaration = json.loads(declaration_path.read_text(encoding="utf-8"))
     if not isinstance(declaration, dict) or any(declaration.get(key) != verified[key] for key in ("owner_id", "owner_kind", "owner_root")):
         _fail("existing durable owner record does not declare the exact owner")
-    if _stat_identity(_safe_lstat(declaration_path, directory=False)) != verified["owner_record_identity"]:
+    if not _same_identity(verified["owner_record_identity"], _stat_identity(_safe_lstat(declaration_path, directory=False))):
         _fail("durable owner declaration changed during readback")
     return verified
 
@@ -1141,7 +1144,7 @@ def finalize_task_root(ledger: dict[str, Any], project_root: str | Path, ledger_
                 _fail("finalization metadata is not one exact regular file")
             identity = _stat_identity(observed)
             contents = path.read_bytes()
-            if _stat_identity(_safe_lstat(path, directory=False)) != identity:
+            if not _same_identity(identity, _stat_identity(_safe_lstat(path, directory=False))):
                 _fail("finalization metadata identity changed during readback")
             metadata[name] = (identity, contents)
         if json.loads(metadata[LEDGER_NAME][1]) != ledger:
@@ -1159,11 +1162,11 @@ def finalize_task_root(ledger: dict[str, Any], project_root: str | Path, ledger_
             _fail("exact task root changed before finalization")
         for name, (identity, contents) in metadata.items():
             path = quarantine / name
-            if _stat_identity(_safe_lstat(path, directory=False)) != identity or path.read_bytes() != contents:
+            if not _same_identity(identity, _stat_identity(_safe_lstat(path, directory=False))) or path.read_bytes() != contents:
                 _fail("finalization metadata identity changed before removal")
         for name, (identity, contents) in metadata.items():
             path = quarantine / name
-            if _stat_identity(_safe_lstat(path, directory=False)) != identity:
+            if not _same_identity(identity, _stat_identity(_safe_lstat(path, directory=False))):
                 _fail("finalization metadata identity changed at removal")
             path.unlink()
         quarantine.rmdir()

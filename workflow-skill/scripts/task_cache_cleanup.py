@@ -220,7 +220,9 @@ def _snapshot(path, deadline=None):
             raise ValueError("Git, retention or native resource-ledger barrier")
         latest = max(latest, observed.st_mtime_ns, observed.st_ctime_ns)
         relative = str(current.relative_to(path))
-        entries[relative] = (observed.st_dev, observed.st_ino, observed.st_mode, observed.st_size, observed.st_mtime_ns, observed.st_ctime_ns)
+        # ctime tracks provider metadata too; retain it for inactivity age above,
+        # but bind deletion to object, permissions, size and content-write time.
+        entries[relative] = (observed.st_dev, observed.st_ino, observed.st_mode, observed.st_size, observed.st_mtime_ns)
         if len(entries) > MAX_ENTRIES:
             raise ValueError("run exceeds bounded inspection limit")
         if stat.S_ISDIR(observed.st_mode):
@@ -294,7 +296,7 @@ def _remove_snapshot(path, snapshot):
         if stat.S_ISDIR(observed.st_mode):
             current.rmdir()
         else:
-            if (observed.st_size, observed.st_mtime_ns, observed.st_ctime_ns) != expected[3:]:
+            if (observed.st_size, observed.st_mtime_ns) != expected[3:]:
                 raise ValueError("file changed during deletion")
             current.unlink()
 
@@ -341,12 +343,12 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
         # The scan output is never a deletion plan. Re-read the actual tree and
         # consumers under the registry lock immediately before touching payload.
         fresh = _snapshot(path, deadline)
-        if fresh != snapshot:
+        if fresh["entries"] != snapshot["entries"]:
             raise ValueError("run changed after inspection")
         activity = probe_activity(path, deadline=deadline)
         if not activity["safe"]:
             return {**result, "action": "pending" if activity.get("pending") else "keep", "reason": activity["reason"]}
-        if _snapshot(path, deadline) != snapshot:
+        if _snapshot(path, deadline)["entries"] != snapshot["entries"]:
             raise ValueError("run changed during consumer readback")
         record["state"] = "blocked"
         record["block_reason"] = "deletion started; any interruption requires owner review"

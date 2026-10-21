@@ -434,6 +434,21 @@ class TaskResourceLedgerTests(unittest.TestCase):
         self.assertTrue(marker.exists())
         self.assertTrue(ledger_path.exists())
 
+    def test_metadata_only_changes_preserve_marker_and_durable_byte_readbacks(self):
+        target = self._acquire_file("metadata", "metadata.txt")
+        receipt = self._durable_receipt()
+        LEDGER.record_durable_handoff(self.ledger, self.project_root, "metadata", receipt)
+        marker = Path(self.task_root) / LEDGER.MARKER_NAME
+        final_output = self.project_root / receipt["path"]
+        for path in (marker, target, final_output):
+            before = path.stat()
+            os.chmod(path, before.st_mode)
+            after = path.stat()
+            self.assertEqual((before.st_ino, before.st_size, before.st_mtime_ns), (after.st_ino, after.st_size, after.st_mtime_ns))
+        self.assertTrue(LEDGER.prepare_release(self.ledger, "metadata", project_root=self.project_root))
+        self.assertTrue(LEDGER.cleanup_path(self.ledger, self.project_root, "metadata"))
+        self.assertEqual(final_output.read_bytes(), b"final owner bytes")
+
     def test_conflict_is_revalidatable_and_identity_drift_is_not_deleted(self):
         target = self._acquire_file("conflict", "conflict.txt")
         LEDGER.defer_conflict(

@@ -193,6 +193,22 @@ class TaskCacheCleanupTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["action"], "pending")
         self.assertEqual(payload.read_bytes(), b"second")
 
+    def test_metadata_only_changes_during_native_probes_keep_exact_cleanup_valid(self):
+        if not shutil.which("lsof") or not shutil.which("ps"):
+            self.skipTest("native probes unavailable")
+        run = self.run_root()
+        payload = run / "payload"
+        payload.write_bytes(b"unchanged")
+        native_probe = cleanup.probe_activity
+        def update_metadata(path, **kwargs):
+            result = native_probe(path, **kwargs)
+            os.chmod(payload, payload.stat().st_mode)
+            return result
+        with mock.patch.object(cleanup, "probe_activity", side_effect=update_metadata):
+            result = self.finish_when_native_readers_close(run, lambda: self.sweep(phase="finish", current_run=run))
+        self.assertEqual(result["results"][0]["action"], "deleted", result)
+        self.assertFalse(run.exists())
+
     def test_interrupted_deletion_blocks_automatic_retry(self):
         run = self.run_root()
         (run / "payload").write_bytes(b"first")
