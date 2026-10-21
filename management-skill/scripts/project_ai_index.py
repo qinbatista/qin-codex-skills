@@ -24,6 +24,7 @@ MANIFEST_PATH = f"{INDEX_DIRECTORY}/index.json"
 REQUIRED_RULES = {"repository", "structure", "verification"}
 PRUNED_DIRECTORIES = {".git", ".codex", ".venv", "venv", "env", "node_modules", "vendor", "Cache", "data", "dist", "build", "__pycache__", ".pytest_cache"}
 MAX_GUIDANCE_BYTES = 262144
+MAX_INDEX_DOCUMENTS = 256
 MAX_DISCOVERY_ENTRIES = 2000
 MAX_DISCOVERY_DEPTH = 6
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -108,7 +109,7 @@ def document_text(root, relative, overlay):
     return content.decode("utf-8")
 
 
-def validate_document(root, relative, overlay, issues, advisories):
+def validate_document(root, relative, overlay, issues, advisories, documents):
     guidance_target(root, relative)
     text = document_text(root, relative, overlay)
     if not text.strip():
@@ -119,9 +120,16 @@ def validate_document(root, relative, overlay, issues, advisories):
     for raw in re.findall(r"\]\(([^)]+)\)", text):
         target = raw.strip().strip("<>").split(' "', 1)[0]
         parsed = urlsplit(target)
+        if parsed.scheme.lower() == "file" or re.match(r"^[A-Za-z]:", unquote(target)):
+            issues.append(f"local document links must be project-relative: {relative} -> {target}")
+            continue
         if parsed.scheme or parsed.netloc or not parsed.path:
             continue
-        candidate = root.joinpath(*PurePosixPath(relative).parent.parts, unquote(parsed.path))
+        local_target = unquote(parsed.path)
+        if local_target.startswith(("/", "~")) or "\\" in local_target:
+            issues.append(f"local document links must be project-relative with forward slashes: {relative} -> {target}")
+            continue
+        candidate = root.joinpath(*PurePosixPath(relative).parent.parts, local_target)
         candidate = Path(os.path.abspath(candidate))
         if candidate != root and root not in candidate.parents:
             issues.append(f"local document link escapes project: {relative} -> {target}")
@@ -131,6 +139,8 @@ def validate_document(root, relative, overlay, issues, advisories):
         exists = overlay[local] is not None if local in overlay else candidate.exists()
         if not exists:
             issues.append(f"missing document link: {relative} -> {target}")
+        elif local.startswith(INDEX_DIRECTORY + "/") and local.endswith(".md"):
+            documents.add(local)
     return text
 
 
@@ -138,12 +148,13 @@ def validate_index(root, overlay=None):
     overlay = {} if overlay is None else overlay
     issues, advisories = [], []
     documents = {"AGENTS.md", SKILL_PATH, MANIFEST_PATH}
+    documents.update(relative for relative, content in overlay.items() if content is not None and relative.endswith(".md"))
     manifest = None
     try:
-        agents = validate_document(root, "AGENTS.md", overlay, issues, advisories)
+        agents = validate_document(root, "AGENTS.md", overlay, issues, advisories, documents)
         if SKILL_PATH not in agents:
             issues.append("root AGENTS.md must point to .agents/skills/ai-index/SKILL.md")
-        skill = validate_document(root, SKILL_PATH, overlay, issues, advisories)
+        skill = validate_document(root, SKILL_PATH, overlay, issues, advisories, documents)
         frontmatter = re.match(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|$)", skill, re.DOTALL)
         if not frontmatter or not re.search(r"(?m)^name:\s*['\"]?ai-index['\"]?\s*$", frontmatter[1]):
             issues.append("project SKILL.md must have frontmatter name: ai-index")
@@ -191,8 +202,13 @@ def validate_index(root, overlay=None):
             if not isinstance(relative, str) or not relative.startswith(INDEX_DIRECTORY + "/") or not relative.endswith(".md"):
                 raise ValueError("rule and module documents must be Markdown inside the project ai-index")
             documents.add(relative)
-        for relative in sorted(documents - {"AGENTS.md", SKILL_PATH, MANIFEST_PATH}):
-            validate_document(root, relative, overlay, issues, advisories)
+        checked = {"AGENTS.md", SKILL_PATH, MANIFEST_PATH}
+        while remaining := sorted(documents - checked):
+            if len(documents) > MAX_INDEX_DOCUMENTS:
+                raise ValueError(f"project index exceeds {MAX_INDEX_DOCUMENTS} guidance documents")
+            relative = remaining[0]
+            validate_document(root, relative, overlay, issues, advisories, documents)
+            checked.add(relative)
     except (OSError, ValueError, TypeError, KeyError) as error:
         issues.append(str(error))
     return {"status": "needs_review" if issues else "ready", "structural_check_only": True, "issues": issues, "advisories": advisories, "documents": sorted(documents), "manifest": manifest}

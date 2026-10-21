@@ -46,8 +46,11 @@ class TaskCacheCleanupTests(unittest.TestCase):
         deadline = time.monotonic() + 5
         for attempt in range(10):
             result = finish()
-            entries = result.get("results", [])
-            waiting = len(entries) == 1 and entries[0].get("path") == str(run) and entries[0].get("action") == "keep" and entries[0].get("reason") == "active open files or working directory"
+            if "safe" in result:
+                waiting = result["safe"] is False and result.get("reason") == "active open files or working directory"
+            else:
+                entries = result.get("results", [])
+                waiting = len(entries) == 1 and entries[0].get("path") == str(run) and entries[0].get("action") == "keep" and entries[0].get("reason") == "active open files or working directory"
             if not waiting or attempt == 9 or time.monotonic() >= deadline:
                 return result
             self.assertTrue(run.exists(), result)
@@ -340,7 +343,7 @@ class TaskCacheCleanupTests(unittest.TestCase):
             process.stdin.write("close\n")
             process.stdin.flush()
             self.assertEqual(process.stdout.readline().strip(), "closed")
-            inactive = cleanup.probe_activity(run)
+            inactive = self.finish_when_native_readers_close(run, lambda: cleanup.probe_activity(run))
             self.assertTrue(inactive["safe"], inactive)
         finally:
             process.terminate()
