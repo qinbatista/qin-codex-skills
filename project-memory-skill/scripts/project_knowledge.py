@@ -555,7 +555,7 @@ def _synthesis_status(project_root, state, source_cache=None):
     return {key: value for key, value in context.items() if key != "entries"}
 
 
-def recall(project_root, vault, *, module="", files=None, symbols=None, query="", limit=5):
+def recall(project_root, vault, *, module="", files=None, symbols=None, query="", limit=5, include_project_context=False):
     root = Path(project_root).expanduser().resolve()
     module = _text(module, "module", required=False, maximum=160)
     selected_files = sorted(set(_relative_file(value, root) for value in (files or [])))
@@ -595,7 +595,7 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
         if position == 50:
             result["limitations"].append("Source inspection stopped after 50 matching entries; narrow the scope to continue.")
             break
-        pointer = {key: entry[key] for key in ("id", "scope", "module", "file", "symbol", "event_id")}
+        pointer = {key: entry[key] for key in ("id", "scope", "module", "file", "symbol", "event_id", "updated_at", "verification_status")}
         if entry["status"] == "retired":
             if len(result["retired"]) < maximum:
                 result["retired"].append(pointer)
@@ -621,19 +621,22 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
     for entry in state["entries"]:
         if entry["id"] in selected_ids or not result["entries"] or entry["status"] == "retired":
             continue
-        if entry["scope"] == "project" or (entry["scope"] == "module" and entry["module"] in modules):
+        if (include_project_context and entry["scope"] == "project") or (entry["scope"] == "module" and entry["module"] in modules):
             freshness, reason = _freshness(entry, root, source_cache)
             if freshness != "stale" and reason != "source_unreadable":
                 result["parent_context"].append({**entry, "freshness": freshness})
             if len(result["parent_context"]) == 3:
                 break
-    if result["entries"] and state["synthesis"] and synthesis_status["status"] == "ready":
+    if include_project_context and result["entries"] and state["synthesis"] and synthesis_status["status"] == "ready":
         result["project_synthesis"] = {**state["synthesis"], "freshness": "unverified", "context_role": "navigation_only", "eligible_current_context": False}
         for relation in state["synthesis"]["relations"]:
             references[json.dumps(relation, sort_keys=True)] = {**relation, "context_loaded": False, "cross_project": relation["project"] != state["project"]["owner"]}
     if state["synthesis"] and synthesis_status["status"] != "ready":
         result["limitations"].append("Project synthesis was withheld because its contributing evidence is unavailable or stale.")
         result["limitations"].extend(synthesis_status.get("limitations", []))
+    result["recall_scope"] = {"project": state["project"]["owner"], "module": module, "files": selected_files, "symbols": selected_symbols, "query": query, "project_context_requested": include_project_context, "history_loaded": False}
+    if not result["entries"]:
+        result["limitations"].append("No eligible scoped fact was found. Inspect the owning source; do not substitute whole Knowledge.md, another project, or default history.")
     result["references"] = [references[key] for key in sorted(references)][:32]
     result["limitations"] = sorted(set(result["limitations"]))
     if result["entries"]:
@@ -655,6 +658,7 @@ def main():
     read.add_argument("--symbol", dest="symbols", action="append", default=[])
     read.add_argument("--query", default="")
     read.add_argument("--limit", type=int, default=5)
+    read.add_argument("--include-project-context", action="store_true", help="Explicitly include project-wide parent facts and navigation synthesis")
     alias = commands.add_parser("register-alias")
     alias.add_argument("--project-root", type=Path, required=True)
     alias.add_argument("--vault", type=Path, required=True)

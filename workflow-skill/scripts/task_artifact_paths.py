@@ -26,7 +26,7 @@ def _absolute_path(value: str | Path, label: str) -> Path:
     text = os.fspath(value)
     if not text or text != text.strip() or any(ord(char) < 32 for char in text):
         raise ValueError(f"{label} must be a non-empty absolute path")
-    if any(token in text for token in ("%", "$", "~")):
+    if text.startswith("~") or any(token in text for token in ("%", "$")):
         raise ValueError(f"{label} contains an unexpanded environment or home token")
     path = Path(text)
     if not path.is_absolute() or any(part in {".", ".."} for part in text.replace("\\", "/").split("/")):

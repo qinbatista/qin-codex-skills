@@ -194,6 +194,8 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.write([], event="partial-synthesis", consolidation={"summary": "The method has one observed input and other cases remain pending"})
         result = self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"])
         self.assertEqual(result["entries"][0]["verification_status"], "partial")
+        self.assertNotIn("project_synthesis", result)
+        result = self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"], include_project_context=True)
         self.assertFalse(result["project_synthesis"]["eligible_current_context"])
         self.assertEqual(result["project_synthesis"]["context_role"], "navigation_only")
         self.assertTrue(any("partial verification" in limit for limit in result["limitations"]))
@@ -233,7 +235,7 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertEqual(result["synthesis_status"]["reason"], "project_synthesis_input_limit")
         selected = result["entries"][0]["id"]
         self.write([], event="selected-synthesis", consolidation={"summary": "Navigation for the explicitly selected execution scope", "entry_ids": [selected]})
-        self.assertFalse(self.read(module="engine", files=["src/first.py"], symbols=["Worker.run0"])["project_synthesis"]["eligible_current_context"])
+        self.assertFalse(self.read(module="engine", files=["src/first.py"], symbols=["Worker.run0"], include_project_context=True)["project_synthesis"]["eligible_current_context"])
 
     def test_same_named_unregistered_project_cannot_read_or_overwrite(self):
         self.write([self.method()])
@@ -401,6 +403,15 @@ class ProjectKnowledgeTests(unittest.TestCase):
         with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
             self.assertEqual(knowledge.recall(project, self.vault, module="engine", files=["src/first.py"], symbols=["Worker.run"])["status"], "ok")
 
+    def test_registered_current_game_roots_have_exact_owners(self):
+        home = self.root / "home"
+        with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
+            for relative, owner in (("YofaGames/YoFaPublisher", "YoFaPublisher"), ("Mokozoo/Unity-淘金热", "Unity-淘金热")):
+                root = home / "Documents" / relative
+                self.assertEqual(knowledge.memory._registered_owner(root), owner)
+                self.assertIn(knowledge.memory._project_key_for_root(root), knowledge.memory._registered_owner_project_keys(owner))
+                self.assertIsNone(knowledge.memory._registered_owner(root / "Cache" / "copy"))
+
     def test_explicit_relationships_remain_pointers_and_context_stays_local(self):
         relation = {"project": "OtherProject", "module": "shared-api", "file": "api.py", "symbol": "Client.send", "relation": "uses", "reason": "Consumes the documented API"}
         self.write([{"scope": "project", "summary": "Project ownership remains local"}, {"scope": "module", "module": "engine", "summary": "The engine owns execution"}, self.method(relations=[relation, relation])])
@@ -409,7 +420,11 @@ class ProjectKnowledgeTests(unittest.TestCase):
         (foreign / "Memory.json").write_text("invalid external content must never load", encoding="utf-8")
         result = self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"])
         self.assertEqual(len(result["entries"]), 1)
-        self.assertEqual({entry["scope"] for entry in result["parent_context"]}, {"project", "module"})
+        self.assertEqual({entry["scope"] for entry in result["parent_context"]}, {"module"})
+        self.assertFalse(result["recall_scope"]["project_context_requested"])
+        self.assertFalse(result["recall_scope"]["history_loaded"])
+        expanded = self.read(module="engine", files=["src/first.py"], symbols=["Worker.run"], include_project_context=True)
+        self.assertEqual({entry["scope"] for entry in expanded["parent_context"]}, {"project", "module"})
         self.assertEqual(len(result["references"]), 1)
         self.assertFalse(result["references"][0]["context_loaded"])
         self.assertTrue(result["references"][0]["cross_project"])
@@ -528,7 +543,8 @@ class ProjectKnowledgeTests(unittest.TestCase):
         document = (self.vault / "Projects" / "ExampleProject" / "Knowledge.md").read_text(encoding="utf-8")
         self.assertIn("SupportingProject (source pointer: protocol)", document)
         self.assertNotIn("[[Projects/SupportingProject/Knowledge#^memory-", document)
-        self.assertEqual(self.read(module="engine")["references"][0]["project"], "SupportingProject")
+        self.assertEqual(self.read(module="engine")["references"], [])
+        self.assertEqual(self.read(module="engine", include_project_context=True)["references"][0]["project"], "SupportingProject")
         self.record_event("age-check")
         aged = knowledge.apply_entries(self.project, self.vault, [], event_id="age-check", now=self.now + timedelta(days=30))
         self.assertTrue(aged["maintenance_due"])
