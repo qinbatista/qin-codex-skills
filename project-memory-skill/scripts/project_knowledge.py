@@ -594,6 +594,14 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
         if words and not all(word in searchable for word in words):
             continue
         selected.append(entry)
+    routes = []
+    for entry in selected[:50]:
+        relations = [relation for relation in entry["relations"] if _logic_target(relation)]
+        if entry["status"] == "current" and relations:
+            pointer = {key: entry[key] for key in ("id", "scope", "module", "file", "symbol", "event_id", "updated_at", "verification_status")}
+            routes.append({**pointer, "logic_relations": relations, "context_role": "logic_route_pointer", "source_freshness_checked": False, "eligible_current_context": False})
+    result["logic_routes"] = routes if len(selected) <= 50 and len(routes) <= 5 else []
+    result["logic_route_status"] = "ready" if len(selected) <= 50 and len(routes) <= 5 else "narrow_task_scope"
     references = {}
     for position, entry in enumerate(selected):
         if len(result["entries"]) == maximum:
@@ -755,12 +763,15 @@ def logic(project_root, vault, *, module="", files=None, symbols=None, query="",
     """Follow project -> selected task -> declared logic; return reference pointers."""
     local = recall(project_root, vault, module=module, files=files, symbols=symbols, query=query)
     excluded = [*local["stale"], *local["unverified"]]
-    result = {"status": "no-matches", "task_scope": local.get("recall_scope", {}), "task_entry_ids": [entry["id"] for entry in [*local["entries"], *excluded]], "task_reference_pointers": excluded, "principles": [], "related_scopes": [], "facts_returned": False, "history_loaded": False, "source_freshness_checked": False, "limitations": []}
+    routes = local.get("logic_routes", [])
+    result = {"status": "no-matches", "task_scope": local.get("recall_scope", {}), "task_entry_ids": sorted({entry["id"] for entry in [*local["entries"], *excluded, *routes]}), "task_reference_pointers": excluded, "task_logic_routes": routes, "principles": [], "related_scopes": [], "facts_returned": False, "history_loaded": False, "source_freshness_checked": False, "limitations": []}
     if local.get("reason") in {"current_index_missing", "exact_project_mismatch", "task_scope_required", "method_context_requires_module_exact_file_and_symbol"}:
         return {**result, "status": "skipped", "reason": local["reason"]}
     if bool(principle_owner) != bool(principle):
         raise ValueError("explicit logic selection requires both principle_owner and principle")
-    targets = {target for entry in [*local["entries"], *local["parent_context"], *excluded] for relation in entry.get("relations", entry.get("logic_relations", [])) if (target := _logic_target(relation))}
+    if not principle and local.get("logic_route_status") == "narrow_task_scope":
+        return {**result, "status": "skipped", "reason": "narrow_task_logic_scope", "limitations": ["Select at most 50 matching task scopes and five declared logic routes; no partial route set was returned."]}
+    targets = {target for entry in [*local["entries"], *local["parent_context"], *routes] for relation in entry.get("relations", entry.get("logic_relations", [])) if (target := _logic_target(relation))}
     if principle:
         target = _logic_target({"project": principle_owner, "module": principle, "relation": "applies-logic"})
         if target is None:
