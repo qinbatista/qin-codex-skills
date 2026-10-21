@@ -249,14 +249,23 @@ def bootstrap_inventory(root):
 
 def bootstrap_state(root):
     present = [contained_path(root, relative).is_file() for relative in (SKILL_PATH, MANIFEST_PATH)]
-    return None if all(present) else "incomplete" if any(present) or contained_path(root, INDEX_DIRECTORY).exists() else "missing"
+    if not all(present):
+        return "incomplete" if any(present) or contained_path(root, INDEX_DIRECTORY).exists() else "missing"
+    if contained_path(root, SKILL_PATH).stat().st_size == 0:
+        return "incomplete"
+    try:
+        manifest = json.loads(document_text(root, MANIFEST_PATH, {}))
+    except (ValueError, UnicodeError):
+        return "incomplete"
+    ready = isinstance(manifest, dict) and manifest.get("schema_version") == 1 and isinstance(manifest.get("rules"), dict) and REQUIRED_RULES.issubset(manifest["rules"]) and isinstance(manifest.get("modules"), list) and bool(manifest["modules"])
+    return None if ready else "incomplete"
 
 
 def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved=False):
     root = project_root(root)
     state = bootstrap_state(root)
     if state and not bootstrap_approved:
-        return {"status": "approval_required", "project_root": str(root), "phase": phase, "index_state": state, "read_scope": "index_entry_presence_only", "question": "This project has no complete AI index. May I read the necessary project guidance and create it?"}
+        return {"status": "approval_required", "project_root": str(root), "phase": phase, "index_state": state, "read_scope": "index_bootstrap_readiness_only", "question": "This project has no complete AI index. May I read the necessary project guidance and create it?"}
     result = validate_index(root)
     manifest = result.pop("manifest")
     result.update({"project_root": str(root), "phase": phase, "structure": shallow_structure(root), "guidance_hashes": {}, "affected_modules": [], "unmapped_paths": []})
