@@ -478,6 +478,78 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertIn(f"[[Projects/OtherProject/Knowledge#^memory-{target_id}]]", document)
         self.assertFalse(self.read(module="engine")["references"][0]["context_loaded"])
 
+    def write_logic_owner(self, name, entries):
+        root = self.root / name
+        root.mkdir(exist_ok=True)
+        event = "logic-" + name
+        self.record_event(event, owner=name)
+        knowledge.apply_entries(root, self.vault, entries, event_id=event, now=self.now)
+        return root
+
+    def test_logic_chain_keeps_foreign_implementations_out_of_task_facts(self):
+        link = {"project": "SharedPrinciples", "module": "logic.performance.bounded-parallelism", "relation": "applies-logic", "reason": "Independent work may overlap within a resource budget"}
+        self.write([self.method(relations=[link], summary="Batch local image requests")])
+        self.write_logic_owner("SharedPrinciples", [{"scope": "module", "module": link["module"], "summary": "Overlap independent work; serialize shared mutable owners"}])
+        foreign = self.write_logic_owner("OtherProject", [{"scope": "module", "module": "upload", "summary": "Foreign upload implementation uses a different resource limit", "relations": [link]}])
+        result = knowledge.logic(self.project, self.vault, module="engine")
+        self.assertEqual(result["task_entry_ids"], [self.read(module="engine")["entries"][0]["id"]])
+        self.assertEqual([pointer["project"] for pointer in result["related_scopes"]], ["OtherProject"])
+        self.assertEqual(result["related_scopes"][0]["shared_principles"], [{"project": link["project"], "module": link["module"]}])
+        self.assertFalse(result["facts_returned"])
+        self.assertFalse(result["history_loaded"])
+        self.assertFalse(result["source_freshness_checked"])
+        self.assertNotIn("Foreign upload implementation", json.dumps(result))
+        self.assertFalse(result["related_scopes"][0]["context_loaded"])
+        self.assertFalse(result["related_scopes"][0]["eligible_current_context"])
+        self.assertNotIn("Foreign upload implementation", json.dumps(self.read(module="engine")))
+        selected = knowledge.recall(foreign, self.vault, module="upload")
+        self.assertIn("different resource limit", selected["entries"][0]["summary"])
+
+    def test_logic_does_not_equate_same_keywords_with_same_principle(self):
+        link = {"project": "SharedPrinciples", "module": "logic.performance.bounded-parallelism", "relation": "applies-logic", "reason": "Independent work may overlap"}
+        self.write([self.method(relations=[link])])
+        self.write_logic_owner("SharedPrinciples", [{"scope": "module", "module": link["module"], "summary": "Bound independent tasks"}])
+        self.write_logic_owner("NoiseProject", [{"scope": "module", "module": "parallel-owners", "summary": "parallel cache owners", "relations": [{**link, "module": "logic.ownership.single-writer"}]}])
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine")["related_scopes"], [])
+        self.write_logic_owner("OtherProject", [{"scope": "module", "module": "parallel", "summary": "Same word without any declared relationship"}])
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine")["related_scopes"], [])
+        self.write_logic_owner("SharedPrinciples", [{"scope": "module", "module": link["module"], "summary": "Retired principle", "status": "retired"}])
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine")["principles"], [])
+
+    def test_logic_explicit_selection_still_requires_project_and_task_scope(self):
+        key = "logic.performance.bounded-parallelism"
+        self.write([self.method()])
+        self.write_logic_owner("SharedPrinciples", [{"scope": "module", "module": key, "summary": "Bound independent tasks"}])
+        filters = {"principle_owner": "SharedPrinciples", "principle": key}
+        self.assertEqual(knowledge.logic(self.project, self.vault, **filters)["reason"], "task_scope_required")
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine")["reason"], "no_task_logic_links")
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="new-work", **filters)["status"], "ok")
+        with self.assertRaisesRegex(ValueError, "both"):
+            knowledge.logic(self.project, self.vault, module="engine", principle=key)
+        state_path = self.vault / "Projects/ExampleProject/Memory.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state["project"]["key"] = "different-root-1234567890"
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine", **filters)["reason"], "exact_project_mismatch")
+
+    def test_logic_catalog_is_bounded_and_unavailable_owners_do_not_load(self):
+        key = "logic.performance.bounded-parallelism"
+        link = {"project": "SharedPrinciples", "module": key, "relation": "applies-logic", "reason": "Independent work may overlap"}
+        self.write([self.method(relations=[link])])
+        self.write_logic_owner("SharedPrinciples", [{"scope": "module", "module": key, "summary": "Bound independent tasks"}])
+        self.write_logic_owner("OtherProject", [{"scope": "module", "module": "upload", "summary": "Original dated upload result", "relations": [link]}])
+        path = self.vault / "Projects/OtherProject/Memory.json"
+        state = json.loads(path.read_text(encoding="utf-8"))
+        state["project"]["owner"] = "DifferentOwner"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        result = knowledge.logic(self.project, self.vault, module="engine")
+        self.assertEqual(result["related_scopes"], [])
+        self.assertIn("OtherProject", " ".join(result["limitations"]))
+        with mock.patch.object(Path, "glob", return_value=[path] * 129):
+            self.assertEqual(knowledge.logic(self.project, self.vault, module="engine")["principles"], [])
+        result = subprocess.run([sys.executable, "-B", str(SCRIPTS / "project_knowledge.py"), "logic", "--project-root", str(self.project), "--vault", str(self.vault), "--module", "engine"], capture_output=True, text=True, encoding="utf-8", timeout=20, check=True, **hidden_process_options())
+        self.assertEqual(json.loads(result.stdout)["status"], "ok")
+
     def test_missing_index_does_not_promote_unindexed_notes(self):
         owner = self.vault / "Projects" / "ExampleProject"
         owner.mkdir()

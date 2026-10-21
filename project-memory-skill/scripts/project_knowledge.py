@@ -698,6 +698,102 @@ def scopes(project_root, vault, *, query="", files=None, limit=5):
     return result
 
 
+def _logic_target(relation):
+    if relation.get("relation") == "applies-logic" and re.fullmatch(r"logic\.[a-z0-9]+(?:[.-][a-z0-9]+)*", relation.get("module", "")):
+        return (_owner(relation["project"]), relation["module"])
+    return None
+
+
+def _logic_catalog(vault, targets):
+    """Read bounded relationship metadata, never foreign claims or source files."""
+    base = Path(vault).expanduser().resolve()
+    paths = sorted((base / "Projects").glob("*/Memory.json"))
+    if len(paths) > 128:
+        return [], ["Logic catalog exceeds 128 owners; narrow the vault before continuing."]
+    pointers, limitations, size = [], [], 0
+    for path in paths:
+        try:
+            _confined(base, path)
+            with path.open("rb") as handle:
+                data = handle.read(4 * 1024 * 1024 + 1)
+            size += len(data)
+            if len(data) > 4 * 1024 * 1024 or size > 32 * 1024 * 1024:
+                return [], ["Logic catalog exceeds its byte bound; no partial candidate set returned."]
+            state = json.loads(data)
+            project = _index_project(state)
+            if project["owner"] != path.parent.name or not isinstance(state.get("entries"), list) or len(state["entries"]) > 4096:
+                raise ValueError("invalid owner or entries")
+            owner_pointers = []
+            for entry in state["entries"]:
+                if not isinstance(entry, dict):
+                    raise ValueError("invalid entry")
+                if entry.get("status") != "current":
+                    continue
+                scope, module = entry["scope"], _text(entry["module"], "module", maximum=160)
+                file = _relative_file(entry["file"]) if entry.get("file") else ""
+                symbol = _symbol(entry["symbol"]) if entry.get("symbol") else ""
+                if scope not in {"project", "module", "document", "method"} or entry["id"] != _entry_id(scope, module, file, symbol):
+                    raise ValueError("invalid scope identity")
+                if entry["verification_status"] not in {"not-run", "passed", "partial", "failed"}:
+                    raise ValueError("invalid verification status")
+                _text(entry["event_id"], "event id", maximum=160)
+                _timestamp(entry["updated_at"])
+                links = sorted({target for relation in _relations(entry.get("relations", [])) if (target := _logic_target(relation))})
+                if (project["owner"], module) not in targets and not targets.intersection(links):
+                    continue
+                pointer = {key: entry[key] for key in ("id", "scope", "module", "file", "symbol", "event_id", "updated_at", "verification_status")}
+                owner_pointers.append({**pointer, "project": project["owner"], "project_key": project["key"], "logic_links": links})
+            pointers.extend(owner_pointers)
+        except (OSError, ValueError, KeyError, TypeError):
+            limitations.append(f"Unavailable or invalid logic metadata: {path.parent.name}.")
+    return pointers, limitations
+
+
+def logic(project_root, vault, *, module="", files=None, symbols=None, query="", principle_owner="", principle="", limit=5):
+    """Follow project -> selected task -> declared logic; return reference pointers."""
+    local = recall(project_root, vault, module=module, files=files, symbols=symbols, query=query)
+    result = {"status": "no-matches", "task_scope": local.get("recall_scope", {}), "task_entry_ids": [entry["id"] for entry in local["entries"]], "principles": [], "related_scopes": [], "facts_returned": False, "history_loaded": False, "source_freshness_checked": False, "limitations": []}
+    if local.get("reason") in {"current_index_missing", "exact_project_mismatch", "task_scope_required", "method_context_requires_module_exact_file_and_symbol"}:
+        return {**result, "status": "skipped", "reason": local["reason"]}
+    if bool(principle_owner) != bool(principle):
+        raise ValueError("explicit logic selection requires both principle_owner and principle")
+    targets = {target for entry in [*local["entries"], *local["parent_context"]] for relation in entry["relations"] if (target := _logic_target(relation))}
+    if principle:
+        target = _logic_target({"project": principle_owner, "module": principle, "relation": "applies-logic"})
+        if target is None:
+            raise ValueError("principle must be an exact logic.* module")
+        targets = {target}
+    if not targets:
+        return {**result, "reason": "no_task_logic_links"}
+    if len(targets) > 3:
+        return {**result, "status": "skipped", "reason": "narrow_logic_selection"}
+    catalog, result["limitations"] = _logic_catalog(vault, targets)
+    selected = {(local["recall_scope"]["project"], identifier) for identifier in result["task_entry_ids"]}
+    owner = local["recall_scope"]["project"]
+    def reference(pointer):
+        return {**{key: value for key, value in pointer.items() if key != "logic_links"}, "cross_project": pointer["project"] != owner, "context_role": "logic_reference_pointer", "context_loaded": False, "eligible_current_context": False}
+    for pointer in catalog:
+        if (pointer["project"], pointer["module"]) in targets:
+            result["principles"].append(reference(pointer))
+    available = {(pointer["project"], pointer["module"]) for pointer in result["principles"]}
+    if available != targets:
+        result["limitations"].append("Some declared principles are missing or retired; their cases were withheld.")
+    counts = {}
+    for pointer in sorted(catalog, key=lambda value: (value["project"] != owner, value["project"], value["module"], value["id"])):
+        shared = available.intersection(pointer["logic_links"])
+        if not shared or (pointer["project"], pointer["id"]) in selected or counts.get(pointer["project"], 0) == 2:
+            continue
+        result["related_scopes"].append({**reference(pointer), "shared_principles": [{"project": project, "module": module} for project, module in sorted(shared)]})
+        counts[pointer["project"]] = counts.get(pointer["project"], 0) + 1
+        if len(result["related_scopes"]) == max(1, min(int(limit), 5)):
+            break
+    result["principles"] = result["principles"][:5]
+    if result["principles"]:
+        result["status"] = "ok"
+    result["limitations"].append("Select a reference explicitly, then recall its exact registered project/scope. Compare applicability and implementation differences; pointers and old outcomes are not local or current proof.")
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
@@ -716,6 +812,16 @@ def main():
     locate.add_argument("--query", default="")
     locate.add_argument("--file", dest="files", action="append", default=[])
     locate.add_argument("--limit", type=int, default=5)
+    related = commands.add_parser("logic", help="Locate related cases through explicit shared principles, without loading claims")
+    related.add_argument("--project-root", type=Path, required=True)
+    related.add_argument("--vault", type=Path, required=True)
+    related.add_argument("--module", default="")
+    related.add_argument("--file", dest="files", action="append", default=[])
+    related.add_argument("--symbol", dest="symbols", action="append", default=[])
+    related.add_argument("--query", default="")
+    related.add_argument("--principle-owner", default="")
+    related.add_argument("--principle", default="")
+    related.add_argument("--limit", type=int, default=5)
     alias = commands.add_parser("register-alias")
     alias.add_argument("--project-root", type=Path, required=True)
     alias.add_argument("--vault", type=Path, required=True)
@@ -724,7 +830,7 @@ def main():
     alias.add_argument("--expected-index-sha256", required=True)
     arguments = vars(parser.parse_args())
     action = arguments.pop("action")
-    handlers = {"register-alias": register_alias, "recall": recall, "scopes": scopes}
+    handlers = {"register-alias": register_alias, "recall": recall, "scopes": scopes, "logic": logic}
     print(json.dumps(handlers[action](**arguments), ensure_ascii=False))
 
 

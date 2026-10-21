@@ -36,6 +36,21 @@ Capture minimal per-entry source files and dependencies supporting that claim. S
 
 Relations point to `{project, module, file?, symbol?, relation, reason}` and do not automatically load target content. For a cross-project analogy, explicitly select the source project and relevant reference link or comparison scope. Keep the borrowed material labeled as a reference with its source identity; independently establish whether it applies here. It never becomes this project's current contract merely because names or code resemble each other.
 
+## Project, task and underlying logic
+
+The retrieval chain is project → relevant task memory → underlying logic. Isolation prevents unrelated context; it must not prevent useful transfer between projects with the same causal principle. First identify the current problem, constraints and exact task scope. Then follow an established principle, not a shared word or project name.
+
+Reuse the existing relationship schema: a task entry links to an explicitly shared principle with `{project: SHARED_OWNER, module: logic.performance.bounded-parallelism, relation: applies-logic, reason: applicability}`. The principle is an ordinary scoped entry under its declared owner, with transferable rule, applies/avoid conditions and evidence limits; concrete implementations and dated attempts remain with their original project. Record implementation differences in the case's existing decisions/risks. No duplicate logic database or per-task file is needed.
+
+```text
+project_knowledge.py logic --project-root ROOT --vault VAULT --module TASK_MODULE
+project_knowledge.py logic --project-root ROOT --vault VAULT --module TASK_MODULE --principle-owner SHARED_OWNER --principle logic.performance.bounded-parallelism
+```
+
+The command requires exact project identity and task selectors. It derives up to three principles from selected current task entries/parents, or uses one explicitly selected principle when the task has no saved match. It reads bounded relationship metadata across owners and returns at most five reference pointers, at most two per owner, without foreign claims, source reads or history. Ordinary recall remains local. Missing/retired principles do not select cases; invalid owners and bounds are explicit limitations. Keyword discovery may suggest candidates but never writes a same-logic relationship automatically.
+
+Select a relevant principle and case pointer, resolve its exact registered project, and apply that project's AI-index gate before source inspection. Use scoped recall for current reference facts. If stale, retain the pointer; an explicit provenance question may read its exact dated event as historical evidence, never as a current implementation or new benchmark. Compare **common principle → applies/avoid conditions → implementation differences → source dates and proof limits** before adaptation. For parallelism, independent I/O may overlap while shared commits stay ordered; worker counts, APIs, lifetimes and measured speedups do not transfer automatically. No-match never authorizes unrelated project facts or whole pages.
+
 The readable view links an exact memory anchor only when that anchor exists. Otherwise it shows the source scope beside the existing owner page, or as plain text when the owner page is absent; it never invents a target entry.
 
 ## Registered root aliases
