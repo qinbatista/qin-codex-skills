@@ -53,6 +53,9 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         project_testing = next(check for check in catalog["checks"] if check["id"] == "project-testing-units")
         self.assertEqual(project_testing["targets"], ["source"])
         self.assertIn("project-testing-units", next(capability for capability in catalog["capabilities"] if capability["id"] == "verification")["checks"])
+        project_index = next(check for check in catalog["checks"] if check["id"] == "project-ai-index-check")
+        self.assertEqual(project_index["targets"], ["source"])
+        self.assertIn("project-ai-index-check", next(capability for capability in catalog["capabilities"] if capability["id"] == "project-ai-index")["checks"])
 
     def test_catalog_previews_steps_and_keeps_verification_in_task(self):
         policy = GATE.load_catalog(PROJECT_ROOT)["policy"]
@@ -65,7 +68,8 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.assertEqual(policy["action_request_completion"], "execute_recover_deliver_or_evidenced_blocker")
         self.assertEqual(policy["skill_usage_reporting"], "final_only_actual_use_steps_and_reasons")
         self.assertEqual(policy["verification_owner"], "active_task")
-        self.assertEqual(policy["ending_purpose"], "memory_and_resources")
+        self.assertEqual(policy["ending_purpose"], "memory_resources_and_project_index")
+        self.assertEqual(policy["project_index_lifecycle"], "start_resume_intent_structure_finish")
         self.assertEqual(policy["missing_memory"], "bootstrap_vault_then_skip_absent_matching_note")
         self.assertTrue(policy["process_contract_is_not_result_memory"])
 
@@ -222,6 +226,15 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                     source_testing_skill = PROJECT_ROOT / ".agents" / "skills" / "testing-skill" / "SKILL.md"
                     self.assertEqual((roots["source"] / ".agents" / "skills" / "testing-skill" / "SKILL.md").is_file(), source_testing_skill.is_file())
                     self.assertFalse((roots["deployed"] / ".agents" / "skills" / "testing-skill").exists())
+                    index_path = GATE.PROJECT_AI_INDEX_SKILL_RELATIVE_PATH / "index.json"
+                    self.assertEqual((roots["source"] / index_path).is_file(), (PROJECT_ROOT / index_path).is_file())
+                    if (PROJECT_ROOT / index_path).is_file():
+                        self.assertEqual((roots["source"] / index_path).read_bytes(), (PROJECT_ROOT / index_path).read_bytes())
+                    self.assertFalse((roots["deployed"] / GATE.PROJECT_AI_INDEX_SKILL_RELATIVE_PATH).exists())
+                    for name in ("README.md", "README.zh.md"):
+                        if (PROJECT_ROOT / name).is_file():
+                            self.assertEqual((roots["source"] / name).read_bytes(), (PROJECT_ROOT / name).read_bytes())
+                        self.assertFalse((roots["deployed"] / name).exists())
                     self.assertFalse((roots["deployed"] / "task-analyze-skill" / "local").exists())
                     for root in roots.values():
                         candidate_cache = root.parent / "plugins" / "cache"
@@ -257,7 +270,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.addCleanup(task_cache.rmdir)
         with tempfile.TemporaryDirectory(prefix="gate-check-", dir=task_cache) as project_dir:
             project_root = Path(project_dir)
-            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert not p.is_relative_to(Path.cwd()); print('Ran 1 test')"
+            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert Path(os.environ['YOFA_TASK_ARTIFACT_ROOT']) == p / 'artifacts'; assert not p.is_relative_to(Path.cwd()); print('Ran 1 test')"
             with mock.patch.object(GATE.subprocess, "run", wraps=GATE.subprocess.run) as runner:
                 result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
             self.assertEqual(result["status"], "pass", result)

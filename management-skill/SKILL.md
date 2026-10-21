@@ -1,17 +1,21 @@
 ---
 name: management-skill
-description: "Maintain, install, or publish managed global skills, and repair legacy user or project Skill directories and references when encountered."
+description: "Automatically maintain project AI indexes and concise root guidance; maintain, install or publish global skills, and repair legacy Skill directories and references."
 ---
 
 # Skill Management
 
 Before any file write, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). All task support belongs outside project directories and Codex storage from its first write. Source, installed updates and retained recovery backups keep their declared owners; inspect exact paths and the Git index before committing.
 
-Use for requested skill maintenance, installation, or publication. Ensure the Obsidian vault through Project Memory and read related project memory; skip absent matching records and isolate other projects. Briefly explain the intended steps before execution.
+Use for automatic project AI-index maintenance and requested global Skill maintenance, installation or publication. Ensure the Obsidian vault through Project Memory and read related project memory; skip absent matching records and isolate other projects. Briefly explain the intended steps before execution.
 
 ## Maintain
 
 Each skill's source directory is its owner. Global skills describe reusable concepts and preferences; project skills own concrete domain implementations. Apply the authoring rules below when creating or updating either kind.
+
+### Automatic project AI index
+
+Use [the project AI-index function](references/project-ai-index.md) at project start/resume, on established intent/structure changes, and at finish. Its portable `scripts/project_ai_index.py` inspects and validates focused routes and applies reviewed, source-bound updates to root `AGENTS.md` and `.agents/skills/ai-index`. This is standing maintenance authorization within editable project scope; no repeated user request is needed. The project index is never installed globally or inside a plugin. Task Analyze, Workflow and Ending invoke this same owner.
 
 ### Authoring rules
 
@@ -21,7 +25,7 @@ Prefer existing local tools or small scripts for deterministic transformations, 
 
 Keep per-run inputs, parameters, intermediate code, logs, receipts and changing execution state in the [external task directory](../workflow-skill/references/project-cache-artifact-policy.md), passed to stable tools as data. Durable project knowledge belongs in project memory; maintained source, configuration and requested deliverables retain their declared owners. Skill folders are not task notebooks or runtime output directories.
 
-Ordinary task completion, a new result, or a one-off exception does not trigger a Skill update. Revise a Skill only for an explicitly requested durable rule change or an authorized repair to a demonstrated reusable instruction/tool defect. Make the narrow correction in its existing owner, remove superseded guidance, and verify that change. Do not add a global rule or mandatory step for every observed case, or automatically rewrite, reinstall, or publish Skills after each task.
+Ordinary task completion, a new result, or a one-off exception does not trigger a global/domain Skill update. Project AI-index maintenance is the scoped exception: automatically reconcile root guidance and the project index when established intent, ownership or structure changes. Other Skill revisions require an explicitly requested durable rule change or an authorized reusable defect repair. Make the narrow correction in its owner, remove superseded guidance and verify it. Do not add a global rule for each observed case or automatically reinstall or publish Skills after tasks.
 
 Preserve unrelated edits, existing private history, and unrelated installed skills. Execute real checks of changed behavior in the active task and fix failures there. Ending runs useful memory alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md); it cannot gate publication or repair code.
 

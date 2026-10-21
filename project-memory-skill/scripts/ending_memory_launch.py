@@ -1,15 +1,46 @@
 #!/usr/bin/env python3
-"""Launch an independent Ending; it owns memory, resources, recovery and deletion."""
+"""Launch an independent Ending for project guidance, memory and resources."""
 
 import argparse
 import hashlib
+import importlib.util
 import json
 from pathlib import Path, PureWindowsPath
 
 from ending_memory import knowledge, memory, prepare_entries, validate_outcome
 
 
-def prepare_launch(completed, *, project_root, memory_available, previous=None, resource_audit=True, native_delete_available=False):
+def prepare_project_index(project_index, root, origin_task_id):
+    """Bind optional guidance data separately from the memory writer's outcome."""
+    if project_index is None:
+        project_index = {}
+    if not isinstance(project_index, dict) or set(project_index) - {"project_root", "origin_task_id", "plan", "skip_reason"}:
+        raise ValueError("project index handoff accepts only project_root, origin_task_id, plan, and skip_reason")
+    if "project_root" in project_index and (not isinstance(project_index["project_root"], str) or not Path(project_index["project_root"]).is_absolute() or Path(project_index["project_root"]).resolve() != root):
+        raise ValueError("project index handoff must belong to this exact project")
+    if project_index.get("origin_task_id", origin_task_id) != origin_task_id:
+        raise ValueError("project index handoff must identify this originating task")
+    skip_reason = project_index.get("skip_reason")
+    if skip_reason is not None and skip_reason not in {"no_project", "read_only"}:
+        raise ValueError("project index skip requires no_project or read_only")
+    plan = project_index.get("plan")
+    if plan is not None:
+        if skip_reason is not None:
+            raise ValueError("a skipped project index handoff cannot contain an update plan")
+        project_index_helper().prepare_plan(root, plan)
+    return {"project_root": str(root), "origin_task_id": origin_task_id, "phase": "end", "plan": plan, "skip_reason": skip_reason}
+
+
+def project_index_helper():
+    """Resolve the shared guidance owner from this same Skill installation."""
+    helper = Path(__file__).resolve().parents[2] / "management-skill" / "scripts" / "project_ai_index.py"
+    spec = importlib.util.spec_from_file_location("ending_project_ai_index", helper)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def prepare_launch(completed, *, project_root, memory_available, previous=None, resource_audit=True, native_delete_available=False, project_index=None):
     """Return app arguments; preparation is pending, not proof of a visible task."""
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
@@ -30,6 +61,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         raise ValueError("native deletion availability must be a verified boolean")
     if not isinstance(resource_audit, bool):
         raise ValueError("resource audit selection must be a boolean")
+    index_handoff = prepare_project_index(project_index, root, completed["task_id"])
     durable = outcome.get("durable") is not False and bool(set(outcome) - {"durable", "consolidation", "expected_index_sha256"})
     consolidation = knowledge.normalize_consolidation(outcome.get("consolidation"))
     if durable:
@@ -43,12 +75,13 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
     if "host_id" in completed:
         origin_thread["hostId"] = completed["host_id"]
     key = hashlib.sha256(f"{root}\n{completed['task_id']}".encode()).hexdigest()
-    fingerprint = hashlib.sha256(json.dumps({"outcome": outcome, "resource_audit": resource_audit, "origin_thread": origin_thread}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    fingerprint = hashlib.sha256(json.dumps({"outcome": outcome, "resource_audit": resource_audit, "origin_thread": origin_thread, "project_index": index_handoff}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     identity = memory._project_identity(root)
     packet = {"status": "pending", "visible": False, "launch_key": key, "outcome_fingerprint": fingerprint,
-              "purpose": "memory_and_resources" if resource_audit else "memory_only", "origin_task_id": completed["task_id"], "origin_thread": origin_thread,
+              "purpose": "guidance_memory_and_resources" if resource_audit else "guidance_and_memory", "origin_task_id": completed["task_id"], "origin_thread": origin_thread,
               "parent_wait_required": False, "completion_owner": "ending", "deletion_required": True,
               "resource_audit": resource_audit, "memory_status": "pending", "resource_status": "pending" if resource_audit else "skipped", "memory_required": True, "consolidation_required": consolidation is not None, "maintenance_check_required": True,
+              "index_required": True, "index_status": "pending", "project_index": index_handoff,
               "project_key": identity["key"], "project_owner": identity.get("owner") or root.name,
               "create_thread": None}
     if previous is not None:
@@ -70,11 +103,24 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         portable = PureWindowsPath(value)
         if portable.anchor or ".." in portable.parts or not root.joinpath(*portable.parts).resolve().is_relative_to(root):
             raise ValueError("outcome files must stay inside this project")
-    data = json.dumps({"project_root": str(root), "origin_task_id": completed["task_id"], "origin_thread": origin_thread, "outcome": outcome, "memory_required": True, "memory_available_hint": memory_available, "maintenance_check_required": True, "resource_audit": resource_audit}, ensure_ascii=False, indent=2)
+    data = json.dumps({"project_root": str(root), "origin_task_id": completed["task_id"], "origin_thread": origin_thread, "outcome": outcome, "project_index": index_handoff, "memory_required": True, "memory_available_hint": memory_available, "maintenance_check_required": True, "resource_audit": resource_audit}, ensure_ascii=False, indent=2)
     writer = Path(__file__).resolve().with_name("ending_memory.py")
     reader = writer.with_name("project_knowledge.py")
     deletion_helper = writer.with_name("ending_conversation.py")
     resource_rules = writer.parents[2] / "workflow-skill" / "references" / "ending-resource-audit.md"
+    index_helper = writer.parents[2] / "management-skill" / "scripts" / "project_ai_index.py"
+    index_rules = writer.parents[2] / "management-skill" / "references" / "project-ai-index.md"
+    index_prompt = (
+        f"Reconcile project guidance using {json.dumps(str(index_rules), ensure_ascii=False)} and the installed helper {json.dumps(str(index_helper), ensure_ascii=False)}. "
+        "Always run inspect --project-root ROOT --phase end, including when memory outcome is empty or no update plan was supplied. Pass affected project-relative files with repeated --changed-path when known. "
+        "Keep this project_index handoff separate from the Obsidian outcome; never pass it to the memory writer. Use the originating user's established intent and current scoped source to curate necessary updates automatically. "
+        "Only root AGENTS.md and .agents/skills/ai-index guidance may change; preserve unrelated edits, existing scoped constraints and read-only boundaries. Do not create additional AGENTS.md files or modify plugins, global Skills or product code. "
+        "A supplied plan is optional data, not permission to bypass source hashes or expected document preimages. Use apply --project-root ROOT --plan JSON --work-dir EXTERNAL_RUN, then check --project-root ROOT and read back the actual guidance. "
+        "When source or preimages changed, read only affected guidance/source and the exact origin thread, then rebuild a plan only when the current facts support it; otherwise record index pending. Before applying a rebuilt plan, use ending_memory_launch.py refresh-index --packet JSON --project-index JSON to replace the handoff plan after current source/preimage validation, preserving exact project/origin identity. Refresh cannot clear read_only or no_project boundaries; explicit originating reauthorization must use normal prepare. Completion reads back every planned postimage/deletion and unchanged evidence source; a structurally valid old index does not prove the plan was applied. Never recalculate old memory evidence to make it current. "
+        "Finish reconciliation before the main task's delivery when possible. Any residual Ending edits remain local-only unless separate explicit delivery authorization exists; do not publish by inference. "
+        "Return index_result bound to project_root and origin_task_id, with status complete, skipped or pending, actual helper check/readback evidence, and changed_files. "
+        "An unchanged valid index, read-only project or no-project task uses an explicit skipped reason; a missing or stale index is pending, never an unchanged skip. An originating read_only/no_project boundary accepts only its matching skip without changed files or a pending result. Guidance work and unavailable memory must not block independent resource cleanup. "
+    )
     resource_prompt = (
         "In parallel with useful memory work, audit the originating and up to ten recent chats for unused completed-task resources. "
         f"Use Workflow as the global cleanup coordinator and read {json.dumps(str(resource_rules), ensure_ascii=False)} first. "
@@ -93,7 +139,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         "This is a fully independent Ending thread for a completed result. The originating thread ends immediately after app creation acknowledgement and must never wait for Ending at any stage. "
         "Own all branch joins, readbacks, failures, recovery and mandatory self-deletion here. Never ask the parent to wait, collect results, resume or remove this Ending. "
         "When context is missing or inconsistent, use read_thread with the exact origin_thread threadId and hostId when supplied below, including older turns as needed. Do not message, wake or wait for the origin thread. "
-        + resource_prompt +
+        + resource_prompt + index_prompt +
         "Task verification is already owned by the originating task. Do not run tests, verify the product, repair code, benchmark, or create further tasks. "
         f"Read current memory using {json.dumps(str(reader), ensure_ascii=False)} recall --project-root with the exact project root below and its configured vault. "
         "Filter the affected module, file and qualified symbol; do not substitute a same-name project, neighboring method or lexical history match. "
@@ -111,9 +157,9 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         f"Run the memory writer at {json.dumps(str(writer), ensure_ascii=False)} using a portable Python interpreter. "
         "This path belongs to the same Skill installation that prepared this handoff; use it directly from the projectless task. "
         "Write memory only to the configured Obsidian vault and require same-project vault readback; resource audit scratch follows Workflow Cache policy. "
-        "Record memory_result and resource_result with their readbacks here and preserve useful results in their real owners before removal. The parent never collects these records. "
+        "Record index_result, memory_result and resource_result with their readbacks here and preserve useful results in their real owners before removal. The parent never collects these records. "
         f"The creation title {json.dumps(ending_title, ensure_ascii=False)} is this chat's first name. Preserve it without calling the title setter on startup or later turns, following Task Analyze's one-time naming rule. Keep it unpinned while running; do not move, reorder, open or duplicate it automatically. "
-        "After both branches are complete or explicitly skipped and their required records are read back, remove only this exact Ending conversation as the final step, following Project Memory's Ending conversation cleanup. "
+        "After guidance, memory and resource work are complete or explicitly skipped and their required records are read back, remove only this exact Ending conversation as the final step, following Project Memory's Ending conversation cleanup. "
         "Deletion of this Ending is mandatory for lifecycle completion. Use a supported native delete action and verify conversation absence plus local-record deletion. Never directly edit or purge Codex session files or databases. "
         "Self-removal may end this turn, so record the branch readbacks and any minimum recovery state before submission. "
         f"If no desktop delete tool is exposed, use {json.dumps(str(deletion_helper), ensure_ascii=False)} with the host's Python interpreter: delete --thread-id YOUR_EXACT_ENDING_ID --expected-title YOUR_EXACT_TITLE --origin-thread-id {completed['task_id']} --apply. "
@@ -146,7 +192,104 @@ def acknowledge_launch(packet, app_ack, thread_readback=None):
     return {**packet, "status": "launched", "visible": True, "thread_id": thread_id, "host_id": host_id, "parent_may_finish": True, "create_thread": None}
 
 
-def record_completion(packet, memory_result, resource_result=None):
+def refresh_index_plan(packet, project_index):
+    """Replace a stale guidance plan without relaunching or changing its owner."""
+    if not packet.get("index_required") or not packet.get("visible") or not packet.get("thread_id") or packet.get("status") not in {"launched", "pending"}:
+        raise ValueError("index plan refresh requires an active acknowledged Ending")
+    if packet["project_index"].get("skip_reason") in {"read_only", "no_project"}:
+        raise ValueError("index plan refresh cannot clear an originating handoff boundary; explicit reauthorization requires normal prepare")
+    if not isinstance(project_index, dict) or project_index.get("plan") is None:
+        raise ValueError("index plan refresh requires a new reviewed plan")
+    root = Path(packet["project_index"]["project_root"])
+    handoff = prepare_project_index(project_index, root, packet["origin_task_id"])
+    result = {**packet, "project_index": handoff, "index_status": "pending", "index_result": None, "branch_status": "pending"}
+    if result.get("conversation_cleanup"):
+        result["conversation_cleanup"] = {**result["conversation_cleanup"], "status": "waiting"}
+    if str(result.get("reason", "")).startswith("project_index"):
+        result.pop("reason")
+    return result
+
+
+def read_index_plan(root, plan, helper):
+    """Check intended postimages, never the preimages consumed by apply."""
+    if plan["project_root"] != str(root):
+        raise ValueError("project index plan must belong to this exact project")
+    issues, postimages, evidence, changed_files, targets = [], {}, {}, [], set()
+    for change in plan["files"]:
+        relative = change["path"]
+        target = helper.guidance_target(root, relative)
+        targets.add(target)
+        expected = None if change["content"] is None else hashlib.sha256(change["content"].encode("utf-8")).hexdigest()
+        actual = helper.file_hash(target)
+        postimages[relative] = {"expected": expected, "actual": actual}
+        if actual != expected:
+            issues.append(f"planned guidance postimage is missing or changed: {relative}")
+        if expected != change["expected_sha256"]:
+            changed_files.append(relative)
+    for relative, expected in plan["evidence"].items():
+        source = helper.contained_path(root, relative)
+        if source in targets:
+            continue
+        actual = helper.file_hash(source)
+        evidence[relative] = {"expected": expected, "actual": actual}
+        if actual != expected:
+            issues.append(f"source evidence changed after plan review: {relative}")
+    return {"status": "pending" if issues else "ready", "issues": issues, "postimages": postimages, "evidence": evidence, "changed_files": changed_files}
+
+
+def record_index_result(packet, index_result):
+    """Require exact guidance ownership and a fresh check before closure."""
+    if not packet.get("index_required"):
+        return {"index_status": "skipped"}
+    if index_result is None:
+        return {"index_status": "pending", "index_result": None}
+    root = Path(packet["project_index"]["project_root"])
+    if not isinstance(index_result, dict) or index_result.get("origin_task_id") != packet["origin_task_id"] or not isinstance(index_result.get("project_root"), str) or not Path(index_result["project_root"]).is_absolute() or Path(index_result["project_root"]).resolve() != root:
+        raise ValueError("project index result must identify this exact project and originating task")
+    status = index_result.get("status")
+    if status not in {"complete", "skipped", "pending"}:
+        raise ValueError("project index result requires complete, skipped, or pending status")
+    changed_files = index_result.get("changed_files", [])
+    if not isinstance(changed_files, list):
+        raise ValueError("project index changed_files must be a list")
+    for relative in changed_files:
+        project_index_helper().guidance_target(root, relative)
+    if status == "pending":
+        if not isinstance(index_result.get("reason"), str) or not index_result["reason"].strip():
+            raise ValueError("pending project index result requires its concrete reason")
+        return {"index_status": "pending", "index_result": index_result}
+    boundary = packet["project_index"].get("skip_reason")
+    if boundary in {"read_only", "no_project"} and (status != "skipped" or index_result.get("reason") != boundary or changed_files):
+        return {"index_status": "pending", "index_result": {**index_result, "status": "pending", "reason": "project_index_boundary_requires_skip", "boundary": boundary}}
+    if index_result.get("read_back_verified") is not True or not isinstance(index_result.get("source"), str) or not index_result["source"].strip():
+        raise ValueError("project index completion requires actual helper/readback evidence")
+    if status == "skipped":
+        reason = index_result.get("reason")
+        if reason not in {"unchanged", "read_only", "no_project"} or changed_files:
+            raise ValueError("project index skip requires an unchanged index, read-only project, or no project")
+        if reason in {"read_only", "no_project"}:
+            if packet["project_index"].get("skip_reason") != reason:
+                raise ValueError("project index boundary skip must match the originating handoff")
+            return {"index_status": "skipped", "index_result": index_result}
+    try:
+        helper = project_index_helper()
+        checked = helper.check_project(root, phase="end")
+        plan = packet["project_index"].get("plan")
+        plan_readback = read_index_plan(root, plan, helper) if plan is not None else None
+    except (OSError, ImportError, ValueError) as error:
+        return {"index_status": "pending", "index_result": {**index_result, "status": "pending", "reason": "project_index_check_unavailable", "detail": str(error)}}
+    if checked.get("status") != "ready":
+        return {"index_status": "pending", "index_result": {**index_result, "status": "pending", "reason": "project_index_check_failed", "check": checked}}
+    if plan_readback is not None:
+        if plan_readback["status"] != "ready":
+            return {"index_status": "pending", "index_result": {**index_result, "status": "pending", "reason": "project_index_plan_readback_failed", "check": checked, "plan_readback": plan_readback}}
+        changed_files = sorted(set(changed_files + plan_readback["changed_files"]))
+        if status == "skipped" and changed_files:
+            raise ValueError("a planned guidance update cannot be reported as unchanged")
+    return {"index_status": status, "index_result": {**index_result, "check": checked, "plan_readback": plan_readback, "changed_files": changed_files, "delivery": "local_only" if changed_files else "unchanged"}}
+
+
+def record_completion(packet, memory_result, resource_result=None, index_result=None):
     if not packet.get("visible") or not packet.get("thread_id"):
         raise ValueError("an acknowledged visible Ending is required")
     result = {**packet, "memory_result": memory_result}
@@ -181,7 +324,10 @@ def record_completion(packet, memory_result, resource_result=None):
             if resource_result["status"] in {"complete", "skipped"} and resource_result.get("read_back_verified") is not True:
                 raise ValueError("resource completion requires actual owning-tool readbacks")
             result.update(resource_status=resource_result["status"], resource_result=resource_result)
-    statuses = {result["memory_status"], result["resource_status"]}
+    result.update(record_index_result(packet, index_result))
+    if result["index_status"] == "pending":
+        result.setdefault("reason", "project_index_pending")
+    statuses = {result["memory_status"], result["resource_status"], result["index_status"]}
     result["branch_status"] = "pending" if "pending" in statuses else ("skipped" if statuses == {"skipped"} else "complete")
     result["status"] = "pending"
     result["conversation_cleanup"] = {"status": "waiting" if result["branch_status"] == "pending" else "ready", "owner": "ending", "thread_id": packet["thread_id"], "host_id": packet["host_id"], "local_deletion_status": "pending"}
@@ -191,7 +337,7 @@ def record_completion(packet, memory_result, resource_result=None):
 def record_conversation_cleanup(packet, removal_result):
     """Record native removal separately; an archive never proves local deletion."""
     cleanup = packet.get("conversation_cleanup", {})
-    if packet.get("status") not in {"complete", "skipped", "pending"} or cleanup.get("status") not in {"ready", "archived", "pending"} or packet.get("memory_status") not in {"complete", "skipped"} or packet.get("resource_status") not in {"complete", "skipped"}:
+    if packet.get("status") not in {"complete", "skipped", "pending"} or cleanup.get("status") not in {"ready", "archived", "pending"} or packet.get("memory_status") not in {"complete", "skipped"} or packet.get("resource_status") not in {"complete", "skipped"} or packet.get("index_status", "skipped") not in {"complete", "skipped"}:
         raise ValueError("Ending branch completion and record readbacks are required before conversation cleanup")
     if removal_result.get("thread_id") != packet["thread_id"] or removal_result.get("host_id") != packet["host_id"]:
         raise ValueError("native removal must identify this exact Ending thread and host")
@@ -219,6 +365,7 @@ def main():
     prepare.add_argument("--project-root", type=Path, required=True)
     prepare.add_argument("--memory-available", choices=("true", "false"), required=True)
     prepare.add_argument("--previous", type=Path)
+    prepare.add_argument("--project-index", type=Path, help="Optional exact-project guidance handoff; residual inspection is always required")
     prepare.add_argument("--native-delete-available", action="store_true", help="Only after the creating service has a verified native deletion route")
     prepare.add_argument("--skip-resource-audit", action="store_true", help="Use only when a resource audit is explicitly unnecessary")
     acknowledge = commands.add_parser("acknowledge")
@@ -229,19 +376,23 @@ def main():
     complete.add_argument("--packet", type=Path, required=True)
     complete.add_argument("--memory-result", type=Path, required=True)
     complete.add_argument("--resource-result", type=Path)
+    complete.add_argument("--index-result", type=Path)
+    refresh = commands.add_parser("refresh-index")
+    refresh.add_argument("--packet", type=Path, required=True)
+    refresh.add_argument("--project-index", type=Path, required=True)
     cleanup = commands.add_parser("cleanup")
     cleanup.add_argument("--packet", type=Path, required=True)
     cleanup.add_argument("--removal-result", type=Path, required=True)
     args = vars(parser.parse_args())
     action = args.pop("action")
-    for name in ("outcome", "previous", "packet", "app_ack", "thread_readback", "memory_result", "resource_result", "removal_result"):
+    for name in ("outcome", "previous", "project_index", "packet", "app_ack", "thread_readback", "memory_result", "resource_result", "index_result", "removal_result"):
         if args.get(name):
             args[name] = json.loads(args[name].read_text(encoding="utf-8"))
     if action == "prepare":
         args["completed"] = args.pop("outcome")
         args["memory_available"] = args["memory_available"] == "true"
         args["resource_audit"] = not args.pop("skip_resource_audit")
-    result = {"prepare": prepare_launch, "acknowledge": acknowledge_launch, "complete": record_completion, "cleanup": record_conversation_cleanup}[action](**args)
+    result = {"prepare": prepare_launch, "acknowledge": acknowledge_launch, "complete": record_completion, "refresh-index": refresh_index_plan, "cleanup": record_conversation_cleanup}[action](**args)
     print(json.dumps(result, ensure_ascii=False))
 
 

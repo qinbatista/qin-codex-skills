@@ -1,11 +1,13 @@
 ---
 name: task-analyze-skill
-description: "Name Codex chats once and preserve their titles, track Skill use for one final report, and deliver action requests with recovery and verification."
+description: "Start and finish project work with automatic AI-index maintenance, preserve chat names, track Skill use for one final report, and deliver action requests with recovery and verification."
 ---
 
 # Task Analyze
 
 Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
+
+At every project start/resume and finish, apply [automatic project AI index](../management-skill/references/project-ai-index.md). Reuse or create the project's `.agents/skills/ai-index`, keep root `AGENTS.md` concise, and read only the relevant routes. Automatically reconcile both when accepted user intent, module ownership or source structure changes; do not wait for another request. Finish reconciliation before authorized delivery and pass its evidence to Ending for the residual check.
 
 ## Mandatory visible Skill reporting
 

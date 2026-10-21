@@ -1086,6 +1086,45 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/../other-skill/SKILL.md")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/local/private.json")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/auth.json")))
+        index_root = sync_global_skills.PROJECT_AI_INDEX_SKILL
+        for name in ("SKILL.md", "index.json", "rules/repository.md", "modules/publisher.md", "modules/publisher/validation.md"):
+            with self.subTest(index_path=name):
+                self.assertTrue(sync_global_skills.publishable_source_path(index_root / name))
+        for name in (".", "plan.json", "state.json", "rules/index.json", "plan.md", "plans/update.md", "logs/run.md", "output.log", "local/rules.md", "auth.json", "scripts/update.py", "../other-skill/SKILL.md"):
+            with self.subTest(index_path=name):
+                self.assertFalse(sync_global_skills.publishable_source_path(index_root / name))
+
+    def test_project_ai_index_publication_stays_local_and_checks_private_content(self):
+        source_dir = self.publication_repository()[0]
+        index_root = sync_global_skills.PROJECT_AI_INDEX_SKILL
+        rule_paths = {name: (index_root / "rules" / f"{name}.md").as_posix() for name in ("repository", "structure", "verification")}
+        module_path = index_root / "modules" / "publisher.md"
+        manifest = {"schema_version": 1, "rules": rule_paths, "modules": [{"id": "publisher", "summary": "Scoped skill publication", "document": module_path.as_posix(), "sources": ["management-skill/scripts/sync_global_skills.py"], "dependencies": []}]}
+        contents = {
+            index_root / "SKILL.md": "---\nname: ai-index\ndescription: Route project publication work.\n---\nRead [the route map](index.json).\n",
+            index_root / "index.json": json.dumps(manifest, indent=2) + "\n",
+            module_path: "# Publisher\nKeep project guidance scoped to its source repository.\n",
+            **{Path(path): f"# {name.title()}\nPreserve project ownership.\n" for name, path in rule_paths.items()},
+        }
+        for path, content in contents.items():
+            target = source_dir / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+        selected = sync_global_skills.selected_publication_paths(source_dir, [path.as_posix() for path in contents])
+        self.assertEqual(selected, list(contents))
+        self.assertNotIn("ai-index", sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES)
+        with mock.patch("builtins.print"), sync_global_skills.validated_publication_candidate(source_dir, selected) as publication:
+            candidate = publication[0]
+            for path, content in contents.items():
+                self.assertEqual((candidate / path).read_text(encoding="utf-8"), content)
+            installed = candidate.parent / "installed-skills"
+            self.assertEqual([path.name for path in sync_global_skills.skill_directories(installed)], sync_global_skills.PRIMARY_SKILL_ORDER)
+            self.assertFalse((installed / "ai-index").exists())
+            self.assertFalse((installed / ".agents").exists())
+        (source_dir / module_path).write_text('"api_key": "' + "x" * 24 + '"\n', encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "ai-index/modules/publisher.md: secret-like content"):
+            with sync_global_skills.validated_publication_candidate(source_dir, selected):
+                self.fail("Private project index content must not enter a publication candidate")
 
     def publication_repository(self, configured_upstream=True, suffix=""):
         sandbox = Path(self.codex_sandbox.name)

@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "rules": {
+    "repository": ".agents/skills/ai-index/rules/repository.md",
+    "structure": ".agents/skills/ai-index/rules/structure.md",
+    "verification": ".agents/skills/ai-index/rules/verification.md",
+    "execution": ".agents/skills/ai-index/rules/execution.md",
+    "memory": ".agents/skills/ai-index/rules/memory.md"
+  },
+  "modules": [
+    {
+      "id": "task-analyze",
+      "summary": "Task goals, chat naming, action completion and final Skill reporting",
+      "document": ".agents/skills/ai-index/modules/task-analyze.md",
+      "sources": [
+        "task-analyze-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "management",
+          "reason": "Project start/finish needs the shared AI-index inspection and guarded update helper."
+        }
+      ]
+    },
+    {
+      "id": "workflow",
+      "summary": "Ready-work coordination, Git delivery and exact external resource ownership",
+      "document": ".agents/skills/ai-index/modules/workflow.md",
+      "sources": [
+        "workflow-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "code",
+          "reason": "Subprocess or platform changes use the shared hidden-process and compatibility contract."
+        },
+        {
+          "module": "project-memory",
+          "reason": "Ending handoff and native self-deletion belong to Project Memory."
+        }
+      ]
+    },
+    {
+      "id": "code",
+      "summary": "Code ownership, state/side-effect design and portable helper checks",
+      "document": ".agents/skills/ai-index/modules/code.md",
+      "sources": [
+        "code-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "verify",
+          "reason": "Consequential code changes require active-task evidence at the affected boundary."
+        },
+        {
+          "module": "workflow",
+          "reason": "Test/tool output and process resources need external ownership and cleanup."
+        }
+      ]
+    },
+    {
+      "id": "verify",
+      "summary": "Active-task evidence planning and consequential-result acceptance",
+      "document": ".agents/skills/ai-index/modules/verify.md",
+      "sources": [
+        "verify-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "testing-release",
+          "reason": "Test purpose, runner, level and release placement are registered by the project testing owner."
+        },
+        {
+          "module": "workflow",
+          "reason": "Evidence files and tool surfaces use external resource ownership."
+        }
+      ]
+    },
+    {
+      "id": "prompt",
+      "summary": "Reusable prompt and durable AI-instruction contracts",
+      "document": ".agents/skills/ai-index/modules/prompt.md",
+      "sources": [
+        "prompt-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "management",
+          "reason": "Skill prompt changes must preserve global/project ownership and authoring boundaries."
+        },
+        {
+          "module": "verify",
+          "reason": "Prompt behavior claims need evidence appropriate to the actual change."
+        }
+      ]
+    },
+    {
+      "id": "optimization",
+      "summary": "Requested Skill/code/workflow optimization with preserved behavior",
+      "document": ".agents/skills/ai-index/modules/optimization.md",
+      "sources": [
+        "optimization-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "management",
+          "reason": "Skill consolidation and reusable-tool changes follow the existing authoring owner."
+        },
+        {
+          "module": "verify",
+          "reason": "Measured improvement and behavior preservation need real comparable evidence."
+        }
+      ]
+    },
+    {
+      "id": "project-memory",
+      "summary": "Exact-project Obsidian knowledge and independent Ending closure",
+      "document": ".agents/skills/ai-index/modules/project-memory.md",
+      "sources": [
+        "project-memory-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "workflow",
+          "reason": "Ending runs the resource audit through Workflow without taking over product verification."
+        },
+        {
+          "module": "management",
+          "reason": "Ending uses the same guarded project-only AI-index helper for residual guidance."
+        }
+      ]
+    },
+    {
+      "id": "management",
+      "summary": "Skill authoring, automatic project indexes and recoverable delivery",
+      "document": ".agents/skills/ai-index/modules/management.md",
+      "sources": [
+        "management-skill",
+        "README.md",
+        "README.zh.md"
+      ],
+      "dependencies": [
+        {
+          "module": "testing-release",
+          "reason": "Publication needs the clean-clone gate and exact retained test/capability map."
+        },
+        {
+          "module": "workflow",
+          "reason": "Candidate output, quiet subprocesses and Git/resource delivery obey their common owner."
+        }
+      ]
+    },
+    {
+      "id": "testing-release",
+      "summary": "Project test registry and global Skill clean-clone release coverage",
+      "document": ".agents/skills/ai-index/modules/testing-release.md",
+      "sources": [
+        ".agents/skills/testing-skill"
+      ],
+      "dependencies": [
+        {
+          "module": "management",
+          "reason": "The capability catalog, candidate assembly and release gate have one maintained publisher owner."
+        },
+        {
+          "module": "verify",
+          "reason": "The selected test level must actually support the acceptance claim."
+        }
+      ]
+    }
+  ]
+}

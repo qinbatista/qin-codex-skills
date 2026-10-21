@@ -18,7 +18,7 @@
     "process_contract_is_not_result_memory": true,
     "workflow_version": 5,
     "verification_owner": "active_task",
-    "ending_purpose": "memory_and_resources",
+    "ending_purpose": "memory_resources_and_project_index",
     "missing_memory": "bootstrap_vault_then_skip_absent_matching_note",
     "ending_placement": "visible_unpinned_projectless_recent_task",
     "ending_independent_of_main_result": true,
@@ -30,7 +30,8 @@
     "ending_creation_requires_native_delete_route": true,
     "ending_launch_completion": "app_creation_acknowledgement",
     "ending_recovery_owner": "ending",
-    "ending_origin_recovery": "read_exact_origin_thread_without_waking_parent"
+    "ending_origin_recovery": "read_exact_origin_thread_without_waking_parent",
+    "project_index_lifecycle": "start_resume_intent_structure_finish"
   },
   "managed_skills": [
     "task-analyze-skill",
@@ -43,6 +44,13 @@
     "management-skill"
   ],
   "checks": [
+    {
+      "id": "project-ai-index-check",
+      "kind": "command",
+      "targets": ["source"],
+      "timeout_seconds": 30,
+      "command": ["{python}", "-B", "management-skill/scripts/project_ai_index.py", "check", "--project-root", "{root}"]
+    },
     {
       "id": "public-skill-set",
       "kind": "builtin",
@@ -431,6 +439,17 @@
       "checks": [
         "workflow-validator",
         "management-units"
+      ]
+    },
+    {
+      "id": "project-ai-index",
+      "owner_skill": "management-skill",
+      "name": "Automatic project AI index",
+      "function": "At project start, intent/structure changes and finish, maintain concise root guidance and a project-local index; route focused context, guard source/preimage updates and require Ending readback without product changes or inferred publication.",
+      "checks": [
+        "project-ai-index-check",
+        "management-units",
+        "project-memory-units"
       ]
     }
   ],
