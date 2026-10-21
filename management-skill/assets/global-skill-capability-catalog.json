@@ -445,7 +445,7 @@
       "id": "project-ai-index",
       "owner_skill": "management-skill",
       "name": "Automatic project AI index",
-      "function": "At project start, intent/structure changes and finish, maintain concise root guidance and a project-local index; route focused context, guard source/preimage updates and require Ending readback without product changes or inferred publication.",
+      "function": "At project start, request consent before missing-index discovery or creation and repeat at later starts until complete; automatically maintain existing focused routes and concise root guidance, guard source/preimage updates and require Ending readback without inferred publication.",
       "checks": [
         "project-ai-index-check",
         "management-units",
