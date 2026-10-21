@@ -532,6 +532,28 @@ class ProjectKnowledgeTests(unittest.TestCase):
         state_path.write_text(json.dumps(state), encoding="utf-8")
         self.assertEqual(knowledge.logic(self.project, self.vault, module="engine", **filters)["reason"], "exact_project_mismatch")
 
+    def test_logic_retains_reviewed_routes_when_task_claims_are_excluded(self):
+        link = {"project": "SharedPrinciples", "module": "logic.performance.bounded-parallelism", "relation": "applies-logic", "reason": "Independent requests share a bounded resource budget"}
+        task_entries = [self.method(relations=[link], summary="Old task implementation must remain excluded"), self.method(file="src/second.py", symbol="Worker.missing", relations=[link]), self.method(symbol="Worker.unverified", source_hashes={}, relations=[link])]
+        self.write([*task_entries, self.method(module="unrelated", symbol="Worker.noise", relations=[{**link, "module": "logic.unrelated.topic"}])])
+        self.write_logic_owner("SharedPrinciples", [{"scope": "module", "module": link["module"], "summary": "Bound independent work"}])
+        self.write_logic_owner("OtherProject", [{"scope": "module", "module": "upload", "summary": "Foreign implementation must remain unloaded", "relations": [link]}])
+        (self.project / "src/first.py").write_text("changed source", encoding="utf-8")
+        (self.project / "src/second.py").unlink()
+        local = self.read(module="engine")
+        self.assertEqual(local["entries"], [])
+        self.assertEqual({pointer["reason"] for pointer in [*local["stale"], *local["unverified"]]}, {"source_changed", "source_missing", "source_evidence_absent"})
+        result = knowledge.logic(self.project, self.vault, module="engine")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(len(result["task_entry_ids"]), 3)
+        self.assertEqual([pointer["project"] for pointer in result["related_scopes"]], ["OtherProject"])
+        self.assertTrue(all(not pointer["eligible_current_context"] for pointer in result["task_reference_pointers"]))
+        self.assertNotIn("summary", json.dumps(result))
+        self.assertFalse(result["history_loaded"])
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine", files=["docs/contract.md"])["reason"], "no_task_logic_links")
+        self.write([{**entry, "status": "retired"} for entry in task_entries], event="event-retired-routes")
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine")["reason"], "no_task_logic_links")
+
     def test_logic_catalog_is_bounded_and_unavailable_owners_do_not_load(self):
         key = "logic.performance.bounded-parallelism"
         link = {"project": "SharedPrinciples", "module": key, "relation": "applies-logic", "reason": "Independent work may overlap"}
