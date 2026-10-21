@@ -17,7 +17,7 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 
 ## Task flow
 
-1. At startup/resume, [check the project AI index](management-skill/references/project-ai-index.md): ask before initial discovery/creation, remind until complete, otherwise reuse focused routes. Ensure Obsidian memory, skip absent entries, and track Skill use.
+1. At startup/resume, [check the project AI index](management-skill/references/project-ai-index.md): ask before initial discovery/creation, remind until complete, otherwise reuse focused routes. Ensure Obsidian memory, skip missing memory, and track Skill use.
 2. Preview the objective and implementation steps, then execute. Ask only for necessary decisions or authorization.
 3. Update concise root `AGENTS.md` and `.agents/skills/ai-index` automatically when accepted intent or structure changes and before delivery. Consult project testing Skills; run real affected-case checks and clean disposable resources.
 4. Before creating an unpinned projectless Ending, check native deletion; otherwise close out inline. Show its link and finish without waiting. Ending reconciles the index, consolidates memory, [cleans resources](workflow-skill/references/ending-resource-audit.md), and deletes itself. Preserve active/review resources; archival is not deletion.
