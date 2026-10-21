@@ -572,6 +572,27 @@ class ProjectKnowledgeTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-B", str(SCRIPTS / "project_knowledge.py"), "logic", "--project-root", str(self.project), "--vault", str(self.vault), "--module", "engine"], capture_output=True, text=True, encoding="utf-8", timeout=20, check=True, **hidden_process_options())
         self.assertEqual(json.loads(result.stdout)["status"], "ok")
 
+    def test_logic_routes_have_an_independent_bound_from_returned_facts_and_stale_pointers(self):
+        link = {"project": "SharedPrinciples", "module": "logic.verification.semantic-oracle", "relation": "applies-logic", "reason": "Use an independent content oracle"}
+        documents = [{"scope": "document", "module": "engine", "file": f"docs/noise{number}.md", "summary": "Earlier excluded task document", "source_hashes": {f"docs/noise{number}.md": None}} for number in range(8)]
+        self.write([*documents, {"scope": "module", "module": "engine", "summary": "Later reviewed task case", "relations": [link], "source_hashes": {"docs/old.md": None}}])
+        self.write_logic_owner("SharedPrinciples", [{"scope": "module", "module": link["module"], "summary": "Judge the requested content against original evidence"}])
+        self.write_logic_owner("OtherProject", [{"scope": "module", "module": "content", "summary": "Different concrete content implementation", "relations": [link]}])
+        local = self.read(module="engine", limit=1)
+        self.assertEqual(len(local["stale"]), 1)
+        self.assertEqual(local["logic_routes"][0]["scope"], "module")
+        result = knowledge.logic(self.project, self.vault, module="engine")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(len(result["task_reference_pointers"]), 5)
+        self.assertEqual([pointer["project"] for pointer in result["related_scopes"]], ["OtherProject"])
+        self.assertNotIn("summary", json.dumps(result))
+        self.write([self.method(symbol=f"Worker.route{number}", relations=[link]) for number in range(6)], event="too-many-routes")
+        bounded = knowledge.logic(self.project, self.vault, module="engine")
+        self.assertEqual(bounded["reason"], "narrow_task_logic_scope")
+        self.assertEqual(bounded["task_logic_routes"], [])
+        self.assertEqual(bounded["principles"], [])
+        self.assertEqual(knowledge.logic(self.project, self.vault, module="engine", principle_owner=link["project"], principle=link["module"])["status"], "ok")
+
     def test_missing_index_does_not_promote_unindexed_notes(self):
         owner = self.vault / "Projects" / "ExampleProject"
         owner.mkdir()
