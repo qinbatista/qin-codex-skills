@@ -570,14 +570,20 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
         state = load_knowledge(root, vault)
     except ProjectIdentityError:
         return {**result, "status": "skipped", "reason": "exact_project_mismatch"}
+    words = re.findall(r"[\w.+-]+", _text(query, "query", required=False).casefold())[:12]
+    task_scoped = bool(module or selected_files or selected_symbols or words)
+    result["recall_scope"] = {"project": state["project"]["owner"], "module": module, "files": selected_files, "symbols": selected_symbols, "query": query, "project_context_requested": include_project_context, "history_loaded": False}
+    if not task_scoped and not include_project_context:
+        return {**result, "status": "skipped", "reason": "task_scope_required", "limitations": ["Select a task module, file, symbol or meaningful query; project architecture requires explicit --include-project-context."]}
     source_cache = {}
     synthesis_status = _synthesis_status(root, state, source_cache)
     result["synthesis_status"] = synthesis_status
     result["maintenance_due"] = _maintenance_due(state, _timestamp(), synthesis_status=synthesis_status)
-    words = re.findall(r"[\w.+-]+", _text(query, "query", required=False).casefold())[:12]
     maximum = max(1, min(int(limit), 5))
     selected = []
     for entry in state["entries"]:
+        if not task_scoped and entry["scope"] != "project":
+            continue
         if module and entry["module"] != module:
             continue
         if selected_files and entry["file"] not in selected_files:
@@ -621,13 +627,13 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
     for entry in state["entries"]:
         if entry["id"] in selected_ids or not result["entries"] or entry["status"] == "retired":
             continue
-        if (include_project_context and entry["scope"] == "project") or (entry["scope"] == "module" and entry["module"] in modules):
+        if (include_project_context and entry["scope"] == "project") or (task_scoped and entry["scope"] == "module" and entry["module"] in modules):
             freshness, reason = _freshness(entry, root, source_cache)
             if freshness != "stale" and reason != "source_unreadable":
                 result["parent_context"].append({**entry, "freshness": freshness})
             if len(result["parent_context"]) == 3:
                 break
-    if include_project_context and result["entries"] and state["synthesis"] and synthesis_status["status"] == "ready":
+    if include_project_context and (result["entries"] or not task_scoped) and state["synthesis"] and synthesis_status["status"] == "ready":
         result["project_synthesis"] = {**state["synthesis"], "freshness": "unverified", "context_role": "navigation_only", "eligible_current_context": False}
         for relation in state["synthesis"]["relations"]:
             references[json.dumps(relation, sort_keys=True)] = {**relation, "context_loaded": False, "cross_project": relation["project"] != state["project"]["owner"]}
@@ -639,7 +645,7 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
         result["limitations"].append("No eligible scoped fact was found. Inspect the owning source; do not substitute whole Knowledge.md, another project, or default history.")
     result["references"] = [references[key] for key in sorted(references)][:32]
     result["limitations"] = sorted(set(result["limitations"]))
-    if result["entries"]:
+    if result["entries"] or "project_synthesis" in result:
         result["status"] = "ok"
     elif result["stale"] or result["unverified"] or result["retired"]:
         result["status"] = "skipped"

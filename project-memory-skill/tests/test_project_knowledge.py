@@ -77,7 +77,26 @@ class ProjectKnowledgeTests(unittest.TestCase):
         fresh = hashlib.sha256(index_before).hexdigest()
         result = self.write([self.method(summary="Apply the reviewed contract")], event="event-review", expected_index_sha256=fresh)
         self.assertTrue(result["read_back_verified"])
-        self.assertEqual(self.read()["entries"][0]["summary"], "Apply the reviewed contract")
+        self.assertEqual(self.read(module="engine")["entries"][0]["summary"], "Apply the reviewed contract")
+
+    def test_unscoped_recall_never_selects_arbitrary_module_facts(self):
+        self.write([self.method(), {"scope": "module", "module": "unrelated", "summary": "Unrelated private workflow"}])
+        for filters in ({}, {"query": "   "}, {"query": "???"}):
+            with self.subTest(filters=filters):
+                result = self.read(**filters)
+                self.assertEqual(result["reason"], "task_scope_required")
+                self.assertEqual(result["entries"], [])
+                self.assertEqual(result["parent_context"], [])
+                self.assertFalse(result["recall_scope"]["history_loaded"])
+        self.assertEqual(len(self.read(module="engine")["entries"]), 1)
+
+    def test_explicit_project_overview_does_not_seed_arbitrary_modules(self):
+        self.write([self.method(), {"scope": "project", "module": "ownership", "summary": "One project owner"}], consolidation={"summary": "Project architecture navigation"})
+        result = self.read(include_project_context=True)
+        self.assertEqual([entry["scope"] for entry in result["entries"]], ["project"])
+        self.assertEqual(result["parent_context"], [])
+        self.assertFalse(result["project_synthesis"]["eligible_current_context"])
+        self.assertNotIn("Keep the stable execution contract", json.dumps(result))
 
     def test_exact_method_filters_intersect_and_keep_same_symbols_in_other_files(self):
         first = self.method()
@@ -253,7 +272,7 @@ class ProjectKnowledgeTests(unittest.TestCase):
         other.mkdir()
         with mock.patch.object(knowledge.memory, "_registered_project_owner_paths", return_value=((self.project, "Registered"), (other, "Registered"))):
             self.write([{"scope": "project", "summary": "Retain shared registered owner facts"}])
-            result = knowledge.recall(other, self.vault)
+            result = knowledge.recall(other, self.vault, include_project_context=True)
         self.assertEqual(result["entries"][0]["summary"], "Retain shared registered owner facts")
 
     def alias_index(self):
