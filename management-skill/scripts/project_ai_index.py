@@ -247,8 +247,16 @@ def bootstrap_inventory(root):
     return {"agents_files": guides, "index_candidates": candidates, "bounded": bounded, "excluded_directories": sorted(PRUNED_DIRECTORIES)}
 
 
-def check_project(root, phase="start", changed_paths=None):
+def bootstrap_state(root):
+    present = [contained_path(root, relative).is_file() for relative in (SKILL_PATH, MANIFEST_PATH)]
+    return None if all(present) else "incomplete" if any(present) or contained_path(root, INDEX_DIRECTORY).exists() else "missing"
+
+
+def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved=False):
     root = project_root(root)
+    state = bootstrap_state(root)
+    if state and not bootstrap_approved:
+        return {"status": "approval_required", "project_root": str(root), "phase": phase, "index_state": state, "read_scope": "index_entry_presence_only", "question": "This project has no complete AI index. May I read the necessary project guidance and create it?"}
     result = validate_index(root)
     manifest = result.pop("manifest")
     result.update({"project_root": str(root), "phase": phase, "structure": shallow_structure(root), "guidance_hashes": {}, "affected_modules": [], "unmapped_paths": []})
@@ -281,6 +289,8 @@ def check_project(root, phase="start", changed_paths=None):
 
 def route_module(root, identifier):
     root = project_root(root)
+    if bootstrap_state(root):
+        return check_project(root)
     result = validate_index(root)
     manifest = result.pop("manifest")
     if result["status"] != "ready":
@@ -296,6 +306,8 @@ def route_module(root, identifier):
 def prepare_plan(root, plan):
     if not isinstance(plan, dict) or plan.get("schema_version") != 1 or plan.get("project_root") != str(root):
         raise ValueError("plan must bind schema_version 1 to the exact project_root")
+    if bootstrap_state(root) and plan.get("bootstrap_approved") is not True:
+        raise ValueError("initial AI index creation requires explicit user approval; set bootstrap_approved only after the user agrees")
     evidence, files = plan.get("evidence"), plan.get("files")
     if not isinstance(evidence, dict) or not isinstance(files, list) or not files:
         raise ValueError("plan requires evidence mapping and a nonempty files list")
@@ -424,7 +436,9 @@ def main():
         if name == "inspect":
             command.add_argument("--phase", choices=("start", "end"), default="start")
             command.add_argument("--changed-path", action="append", default=[])
-        elif name == "route":
+        if name in {"inspect", "check"}:
+            command.add_argument("--allow-bootstrap", action="store_true", help="Read bootstrap context only after explicit user approval")
+        if name == "route":
             command.add_argument("--module", required=True)
         elif name == "apply":
             command.add_argument("--plan", required=True, type=Path)
@@ -434,9 +448,9 @@ def main():
         root = project_root(args.project_root)
         match args.command:
             case "inspect":
-                result = check_project(root, args.phase, args.changed_path)
+                result = check_project(root, args.phase, args.changed_path, bootstrap_approved=args.allow_bootstrap)
             case "check":
-                result = check_project(root)
+                result = check_project(root, bootstrap_approved=args.allow_bootstrap)
             case "route":
                 result = route_module(root, args.module)
             case "apply":

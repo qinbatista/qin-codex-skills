@@ -19,7 +19,7 @@
 
 ## 任务流程
 
-1. 每次启动或恢复任务时，先[检查或建立项目 AI 索引](management-skill/references/project-ai-index.md)，只读取相关模块规则；确保 Obsidian 记忆库可用，按项目精确回忆并记录实际 Skill 用途，缺少匹配记忆时直接跳过。
+1. 每次启动或恢复任务时，先[轻量检查项目 AI 索引](management-skill/references/project-ai-index.md)。缺失时先征得同意，再读取规则并创建；未完成则下次启动再次提醒。已有索引直接复用相关模块规则；确保 Obsidian 记忆库可用，按项目精确回忆并记录实际 Skill 用途，缺少匹配记忆时直接跳过。
 2. 先简述目标和实现步骤，再按步骤执行；步骤发生重要变化时及时说明。
 3. 用户已确认的项目意图或结构变化时，以及交付前，自动更新精简的根 `AGENTS.md` 与 `.agents/skills/ai-index`。新增维护测试前先读项目测试 Skill，默认验证真实受影响场景，修复失败并清理一次性资源。
 4. 创建独立、未置顶的 Ending 前先核实所属服务的原生删除能力；没有可用路径时，在当前聊天完成收尾，不创建新会话。有可用路径时，显示创建链接后立即结束主线程，不等待 Ending。Ending 自行整理本地记忆、[审查资源](workflow-skill/references/ending-resource-audit.md)、恢复并执行原生删除及回读。保留活动和审阅/复用资源；归档不能代替删除。

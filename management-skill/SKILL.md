@@ -15,7 +15,7 @@ Each skill's source directory is its owner. Global skills describe reusable conc
 
 ### Automatic project AI index
 
-Use [the project AI-index function](references/project-ai-index.md) at project start/resume, on established intent/structure changes, and at finish. Its portable `scripts/project_ai_index.py` inspects and validates focused routes and applies reviewed, source-bound updates to root `AGENTS.md` and `.agents/skills/ai-index`. This is standing maintenance authorization within editable project scope; no repeated user request is needed. The project index is never installed globally or inside a plugin. Task Analyze, Workflow and Ending invoke this same owner.
+Use [the project AI-index function](references/project-ai-index.md) at project start/resume, on established intent/structure changes, and at finish. First check presence; a missing or unfinished index requires the user's agreement before project discovery or creation, with a new reminder at later starts until complete. Existing indexes receive automatic focused maintenance within editable scope. Its portable `scripts/project_ai_index.py` validates routes and applies reviewed, source-bound updates to root `AGENTS.md` and `.agents/skills/ai-index`. The project index is never installed globally or inside a plugin. Task Analyze, Workflow and Ending invoke this same owner and consent boundary.
 
 ### Authoring rules
 
