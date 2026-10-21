@@ -102,21 +102,26 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.assertEqual((self.project / "unrelated.txt").read_text(), "uncommitted user work\n")
         self.assertFalse(list(self.work.glob("ai-index-recovery-*")))
 
-    def test_missing_or_partial_index_repeats_approval_without_project_content_reads(self):
-        for partial in (False, True):
-            with self.subTest(partial=partial):
-                if partial:
+    def test_missing_or_partial_index_repeats_approval_without_project_discovery(self):
+        for state in ("missing", "entry-only", "empty-manifest", "empty-routes"):
+            with self.subTest(state=state):
+                if state != "missing":
                     self.write(INDEX.SKILL_PATH, "Unfinished index.\n")
+                if state == "empty-manifest":
+                    self.write(INDEX.MANIFEST_PATH, "{}\n")
+                if state == "empty-routes":
+                    self.write(INDEX.MANIFEST_PATH, json.dumps({"schema_version": 1, "rules": {}, "modules": []}))
                 with mock.patch.object(INDEX, "validate_index", side_effect=AssertionError("content read before consent")), mock.patch.object(INDEX, "bootstrap_inventory", side_effect=AssertionError("tree discovery before consent")), mock.patch.object(INDEX, "shallow_structure", side_effect=AssertionError("directory listing before consent")):
                     for phase in ("start", "end", "start"):
                         result = INDEX.check_project(self.project, phase)
                         self.assertEqual(result["status"], "approval_required")
-                        self.assertEqual(result["index_state"], "incomplete" if partial else "missing")
-                        self.assertEqual(result["read_scope"], "index_entry_presence_only")
+                        self.assertEqual(result["index_state"], "missing" if state == "missing" else "incomplete")
+                        self.assertEqual(result["read_scope"], "index_bootstrap_readiness_only")
                         self.assertNotIn("discovery", result)
                         self.assertNotIn("structure", result)
                 self.assertFalse((self.project / "AGENTS.md").exists())
-                self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
+                if state in {"missing", "entry-only"}:
+                    self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
 
     def test_bootstrap_cannot_apply_without_explicit_approval_and_existing_index_needs_no_new_approval(self):
         plan = self.plan()
