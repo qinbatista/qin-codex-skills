@@ -24,6 +24,7 @@ from task_artifact_paths import resolve_task_artifact_root, validate_external_di
 
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
 PROJECT_TESTING_SKILL_RELATIVE_PATH = Path(".agents/skills/testing-skill")
+PROJECT_AI_INDEX_SKILL_RELATIVE_PATH = Path(".agents/skills/ai-index")
 DEFAULT_REPORT_RELATIVE_PATH = Path("global-skill-regression/latest.json")
 DEFAULT_HISTORY_RELATIVE_PATH = Path("global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
@@ -183,11 +184,15 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
             deployed_candidate = workspace / "deployed" / "skills"
             copy_candidate(project_root, source_candidate, managed_skills, text[len(directive):], structural_agents)
             copy_candidate(deployed_root, deployed_candidate, managed_skills, text[len(directive):], structural_agents)
-            source_testing_skill = project_root / PROJECT_TESTING_SKILL_RELATIVE_PATH
-            if source_testing_skill.is_dir():
-                target = source_candidate / PROJECT_TESTING_SKILL_RELATIVE_PATH
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(source_testing_skill, target, ignore=shutil.ignore_patterns(*EXCLUDED_PARTS, "*.pyc", "*.pyo", "*.log"))
+            for name in ("README.md", "README.zh.md"):
+                if (project_root / name).is_file():
+                    shutil.copy2(project_root / name, source_candidate / name)
+            for relative in (PROJECT_TESTING_SKILL_RELATIVE_PATH, PROJECT_AI_INDEX_SKILL_RELATIVE_PATH):
+                project_skill = project_root / relative
+                if project_skill.is_dir():
+                    target = source_candidate / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(project_skill, target, ignore=shutil.ignore_patterns(*EXCLUDED_PARTS, "*.pyc", "*.pyo", "*.log"))
             plugin_cache = deployed_root.resolve().parent / "plugins" / "cache"
             copy_required_plugin_contracts(plugin_cache, source_candidate.parent / "plugins" / "cache")
             copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
@@ -238,6 +243,7 @@ def command_result(check_id: str, target: str, command: list[str], root: Path, t
         with tempfile.TemporaryDirectory(prefix="check-", dir=cache_root) as temporary_cache:
             for variable in ("CODEX_PROJECT_CACHE_ROOT", "TMP", "TEMP", "TMPDIR"):
                 environment[variable] = temporary_cache
+            environment["YOFA_TASK_ARTIFACT_ROOT"] = str(Path(temporary_cache) / "artifacts")
             for variable in ("ENDING_MEMORY_TEST_CACHE", "ENDING_CONCURRENCY_TEST_CACHE", "ENDING_LAUNCH_TEST_CACHE", "PROJECT_CHANGE_MEMORY_TEST_CACHE", "PROJECT_KNOWLEDGE_TEST_CACHE", "TASK_RESOURCE_LEDGER_TEST_CACHE", "ENDING_RESOURCE_AUDIT_TEST_CACHE"):
                 environment[variable] = temporary_cache
             completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())

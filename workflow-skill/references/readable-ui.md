@@ -1,6 +1,6 @@
 # Readable UI and visual presentation
 
-Apply these shared preferences to every UI or visual presentation task: websites, dashboards, tools, PDF reports, documents, and slide presentations. They apply even when no code changes and another Skill owns the renderer or export. Read relevant project memory first; absent matching notes are a normal skip. Keep project-specific content and style with its project.
+Apply these preferences to UI and visual tasks: websites, dashboards, tools, PDFs, documents and slides, even with no code changes or when another Skill renders/exports. Read relevant project memory first; skip absent notes. Keep project content and style with its project.
 
 ## Twelve basic principles
 

@@ -143,6 +143,7 @@ PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "
 APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 PROJECT_TESTING_SKILL = Path(".agents") / "skills" / "testing-skill"
+PROJECT_AI_INDEX_SKILL = Path(".agents") / "skills" / "ai-index"
 GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
 GLOBAL_AGENTS_DIRECTIVE = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
 LEGACY_GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
@@ -1505,6 +1506,12 @@ def publishable_source_path(relative_path):
         return True
     if relative_path.parts[:3] == PROJECT_TESTING_SKILL.parts:
         skill_relative = Path(*relative_path.parts[3:])
+    elif relative_path.parts[:3] == PROJECT_AI_INDEX_SKILL.parts:
+        skill_relative = Path(*relative_path.parts[3:])
+        if skill_relative != Path("index.json") and skill_relative.suffix != ".md":
+            return False
+        if any(Path(part).stem.casefold() in {"plan", "plans", "log", "logs", "receipt", "receipts", "recovery"} for part in skill_relative.parts):
+            return False
     elif relative_path.parts and relative_path.parts[0] in APPROVED_GLOBAL_SKILL_NAMES:
         skill_relative = Path(*relative_path.parts[1:])
     else:
@@ -1712,8 +1719,8 @@ def validated_publication_candidate(source_dir, selected_paths, prepare_readmes=
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source_dir / path, target)
         skill_paths = skill_directories(candidate)
-        project_testing_skill = candidate / PROJECT_TESTING_SKILL
-        assert_public_safe([*skill_paths, project_testing_skill] if project_testing_skill.exists() or project_testing_skill.is_symlink() else skill_paths)
+        project_skills = [candidate / path for path in (PROJECT_TESTING_SKILL, PROJECT_AI_INDEX_SKILL)]
+        assert_public_safe([*skill_paths, *[path for path in project_skills if path.exists() or path.is_symlink()]])
         readme_changes = render_source_readmes(candidate, skill_paths, dry_run=True) if prepare_readmes else []
         unselected_readmes = [name for name in readme_changes if Path(name) not in selected_paths]
         if unselected_readmes:

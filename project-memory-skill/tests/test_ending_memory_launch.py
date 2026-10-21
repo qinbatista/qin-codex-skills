@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import os
 import sys
@@ -32,6 +33,10 @@ class EndingLaunchTests(unittest.TestCase):
         self.project = Path(self.temporary.name) / "ExampleProject"
         self.project.mkdir()
         (self.project / "script.py").write_text("value = 1\n")
+        for relative, content in self.index_documents().items():
+            path = self.project / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
         self.vault = Path(self.temporary.name) / "vault"
         (self.vault / "Projects").mkdir(parents=True)
         (self.vault / "AI Memory").mkdir()
@@ -45,6 +50,18 @@ class EndingLaunchTests(unittest.TestCase):
         args = {"project_root": self.project, "memory_available": True, "native_delete_available": True}
         args.update(changes)
         return MODULE.prepare_launch(self.completed, **args)
+
+    def index_documents(self):
+        directory = ".agents/skills/ai-index"
+        rules = {name: f"{directory}/{name}.md" for name in ("repository", "structure", "verification")}
+        manifest = {"schema_version": 1, "rules": rules, "modules": [{"id": "example", "summary": "Example project behavior", "document": f"{directory}/example.md", "sources": ["script.py"]}]}
+        return {"AGENTS.md": f"# ExampleProject\nRead [AI index]({directory}/SKILL.md).\n", f"{directory}/SKILL.md": "---\nname: ai-index\ndescription: Route ExampleProject tasks to their owners.\n---\nRead [the route map](index.json).\n", f"{directory}/index.json": json.dumps(manifest), f"{directory}/example.md": "# Example\nThe script owns the example behavior.\n", **{relative: f"# {name.title()}\nKeep this responsibility in its declared owner.\n" for name, relative in rules.items()}}
+
+    def index_result(self, **changes):
+        return {"project_root": str(self.project), "origin_task_id": "task-1", "status": "complete", "read_back_verified": True, "source": "project_ai_index.py check and exact guidance readback", "changed_files": [], **changes}
+
+    def complete(self, packet, memory_result, resource_result=None):
+        return MODULE.record_completion(packet, memory_result, resource_result, self.index_result())
 
     def test_missing_deletion_route_never_creates_a_saved_ending(self):
         packet = self.prepare(native_delete_available=False)
@@ -168,7 +185,7 @@ class EndingLaunchTests(unittest.TestCase):
 
     def test_completion_requires_vault_event_and_matching_project(self):
         packet = self.acknowledged()
-        result = MODULE.record_completion(packet, self.vault_result(), self.resource_result())
+        result = self.complete(packet, self.vault_result(), self.resource_result())
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["branch_status"], "complete")
         self.assertEqual(result["event_id"], "event-1")
@@ -177,20 +194,20 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertEqual(result["conversation_cleanup"]["thread_id"], "thread-1")
         for changed in ({"read_back_verified": False}, {"vault_document": "local/store.jsonl"}, {"project": "OtherProject"}, {"event_id": ""}, {"current_memory": {}}):
             with self.assertRaises(ValueError):
-                MODULE.record_completion(packet, {**self.vault_result(), **changed})
+                self.complete(packet, {**self.vault_result(), **changed})
 
     def resource_result(self, **changes):
         return {"status": "complete", "origin_task_id": "task-1", "read_back_verified": True, "released": [], "retained": [], "pending": [], **changes}
 
     def test_memory_success_cannot_hide_pending_cleanup(self):
-        result = MODULE.record_completion(self.acknowledged(), self.vault_result())
+        result = self.complete(self.acknowledged(), self.vault_result())
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["memory_status"], "complete")
         self.assertEqual(result["resource_status"], "pending")
         self.assertEqual(result["conversation_cleanup"]["status"], "waiting")
 
     def test_native_archive_is_separate_from_local_deletion(self):
-        completed = MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result())
+        completed = self.complete(self.acknowledged(), self.vault_result(), self.resource_result())
         archive = {"thread_id": "thread-1", "host_id": "local", "status": "archived", "read_back_verified": True, "source": "native archive receipt and archived-thread readback"}
         result = MODULE.record_conversation_cleanup(completed, archive)
         self.assertEqual(result["status"], "pending")
@@ -209,10 +226,10 @@ class EndingLaunchTests(unittest.TestCase):
     def test_cleanup_waits_for_both_branches_and_native_local_absence(self):
         receipt = {"thread_id": "thread-1", "host_id": "local", "status": "deleted", "read_back_verified": True, "source": "native deletion receipt and local-record absence readback", "local_record_absent": True}
         for memory_result, resource_result in (({"status": "pending", "reason": "vault unavailable"}, self.resource_result()), (self.vault_result(), self.resource_result(status="pending"))):
-            packet = MODULE.record_completion(self.acknowledged(), memory_result, resource_result)
+            packet = self.complete(self.acknowledged(), memory_result, resource_result)
             with self.assertRaisesRegex(ValueError, "branch completion"):
                 MODULE.record_conversation_cleanup(packet, receipt)
-        completed = MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result())
+        completed = self.complete(self.acknowledged(), self.vault_result(), self.resource_result())
         with self.assertRaisesRegex(ValueError, "local-record absence"):
             MODULE.record_conversation_cleanup(completed, {**receipt, "local_record_absent": False})
         deleted = MODULE.record_conversation_cleanup(completed, receipt)
@@ -224,14 +241,14 @@ class EndingLaunchTests(unittest.TestCase):
     def test_resource_success_survives_pending_or_skipped_memory(self):
         for memory_result in ({"status": "pending", "reason": "vault unavailable"}, {"status": "skipped", "reason": "no_durable_information"}):
             with self.subTest(memory_result=memory_result):
-                result = MODULE.record_completion(self.acknowledged(), memory_result, self.resource_result())
+                result = self.complete(self.acknowledged(), memory_result, self.resource_result())
                 self.assertEqual(result["resource_status"], "complete")
                 self.assertEqual(result["status"], "pending")
 
     def test_resource_completion_requires_originating_task_and_real_readback(self):
         for changes in ({"origin_task_id": "other"}, {"read_back_verified": False}, {"status": "invented"}):
             with self.assertRaises(ValueError):
-                MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result(**changes))
+                self.complete(self.acknowledged(), self.vault_result(), self.resource_result(**changes))
 
     def test_handoff_binds_method_evidence_before_ending(self):
         self.completed["outcome"]["symbols"] = ["Worker.read"]
@@ -266,17 +283,17 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertIn("user corrections", packet["create_thread"]["prompt"])
 
     def test_pending_writer_cannot_be_reported_as_complete(self):
-        result = MODULE.record_completion(self.acknowledged(), {"status": "pending", "reason": "obsidian_vault_unavailable"})
+        result = self.complete(self.acknowledged(), {"status": "pending", "reason": "obsidian_vault_unavailable"})
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["reason"], "obsidian_vault_unavailable")
 
     def test_due_synthesis_blocks_completion_while_resource_result_survives(self):
         memory = {**self.vault_result(), "current_memory": {"read_back_verified": True, "maintenance_due": True}}
-        result = MODULE.record_completion(self.acknowledged(), memory, self.resource_result())
+        result = self.complete(self.acknowledged(), memory, self.resource_result())
         self.assertEqual((result["status"], result["memory_status"], result["resource_status"]), ("pending", "pending", "complete"))
         self.assertEqual(result["reason"], "project_synthesis_due")
         with self.assertRaisesRegex(ValueError, "explicit synthesis cadence"):
-            MODULE.record_completion(self.acknowledged(), {**memory, "current_memory": {"read_back_verified": True}}, self.resource_result())
+            self.complete(self.acknowledged(), {**memory, "current_memory": {"read_back_verified": True}}, self.resource_result())
 
     def test_empty_outcome_still_prepares_due_synthesis_without_resource_audit(self):
         entry = {"scope": "module", "module": "example", "summary": "Preserve the established restoration contract", "verification_status": "partial", "verification": ["Only the original environment was observed"]}
@@ -295,6 +312,143 @@ class EndingLaunchTests(unittest.TestCase):
         data = json.loads(consolidated["create_thread"]["prompt"].split("Completed outcome data:\n", 1)[1])
         self.assertNotIn("memories", data["outcome"])
         self.assertNotIn("files", data["outcome"])
+
+    def test_empty_memory_still_requires_residual_project_index_inspection(self):
+        self.completed["outcome"] = {}
+        packet = self.prepare()
+        self.assertTrue(packet["index_required"])
+        self.assertEqual(packet["index_status"], "pending")
+        self.assertEqual(packet["project_index"], {"project_root": str(self.project), "origin_task_id": "task-1", "phase": "end", "plan": None, "skip_reason": None})
+        prompt = packet["create_thread"]["prompt"]
+        self.assertIn("Always run inspect --project-root ROOT --phase end", prompt)
+        self.assertIn("Do not create additional AGENTS.md files", prompt)
+        self.assertIn("local-only unless separate explicit delivery authorization", prompt)
+        data = json.loads(prompt.split("Completed outcome data:\n", 1)[1])
+        self.assertEqual(data["project_index"], packet["project_index"])
+        self.assertEqual(data["outcome"], {})
+
+    def index_plan(self):
+        root_document = self.project / "AGENTS.md"
+        return {"schema_version": 1, "project_root": str(self.project), "evidence": {"script.py": hashlib.sha256((self.project / "script.py").read_bytes()).hexdigest()}, "files": [{"path": "AGENTS.md", "expected_sha256": hashlib.sha256(root_document.read_bytes()).hexdigest(), "content": root_document.read_text() + "Keep example behavior in script.py.\n"}]}
+
+    def test_index_plan_handoff_uses_shared_scope_and_source_guards(self):
+        plan = self.index_plan()
+        packet = self.prepare(project_index={"project_root": str(self.project), "origin_task_id": "task-1", "plan": plan})
+        self.assertEqual(packet["project_index"]["plan"], plan)
+        self.assertNotIn("project_index", json.loads(packet["create_thread"]["prompt"].split("Completed outcome data:\n", 1)[1])["outcome"])
+        for path in ("../outside.md", "script.py", ".agents/skills/ai-index/nested/AGENTS.md", "plugins/ai-index/SKILL.md"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                self.prepare(project_index={"plan": {**plan, "files": [{**plan["files"][0], "path": path}]}})
+        (self.project / "script.py").write_text("value = 2\n")
+        with self.assertRaisesRegex(ValueError, "source evidence"):
+            self.prepare(project_index={"plan": plan})
+        plan = self.index_plan()
+        (self.project / "AGENTS.md").write_text("Concurrent project guidance\n")
+        with self.assertRaisesRegex(ValueError, "preimage changed"):
+            self.prepare(project_index={"plan": plan})
+
+    def test_index_handoff_rejects_cross_project_and_origin_mismatches(self):
+        for handoff in ({"project_root": str(self.project.parent)}, {"project_root": "relative"}, {"origin_task_id": "other"}, {"skip_reason": "unnecessary"}, {"skip_reason": "read_only", "plan": self.index_plan()}):
+            with self.subTest(handoff=handoff), self.assertRaises(ValueError):
+                self.prepare(project_index=handoff)
+        packet = self.prepare()
+        with self.assertRaisesRegex(ValueError, "different outcome or project"):
+            self.prepare(previous=packet, project_index={"skip_reason": "read_only"})
+
+    def test_plan_postimages_and_source_evidence_gate_closure_and_scoped_refresh(self):
+        helper = MODULE.project_index_helper()
+        obsolete = ".agents/skills/ai-index/obsolete.md"
+        (self.project / obsolete).write_text("Obsolete detail\n")
+        plan = self.index_plan()
+        plan["evidence"]["AGENTS.md"] = plan["files"][0]["expected_sha256"]
+        plan["evidence"][obsolete] = helper.file_hash(self.project / obsolete)
+        plan["files"].append({"path": obsolete, "expected_sha256": plan["evidence"][obsolete], "content": None})
+        packet = MODULE.acknowledge_launch(self.prepare(project_index={"plan": plan}), {"threadId": "thread-1", "hostId": "local"})
+        for supplied in (self.index_result(), self.index_result(status="skipped", reason="unchanged")):
+            before = MODULE.record_completion(packet, self.vault_result(), self.resource_result(), supplied)
+            self.assertEqual(before["index_result"]["check"]["status"], "ready")
+            self.assertEqual(before["index_status"], "pending")
+            self.assertEqual(before["index_result"]["reason"], "project_index_plan_readback_failed")
+            self.assertEqual(before["resource_status"], "complete")
+        with mock.patch.dict(os.environ, {"YOFA_TASK_ARTIFACT_ROOT": str(self.project.parent / "artifacts")}):
+            applied = helper.apply_plan(self.project, plan, self.project.parent / "apply-original")
+            self.assertEqual(applied["status"], "complete")
+            after = self.complete(packet, self.vault_result(), self.resource_result())
+            self.assertEqual(after["index_status"], "complete")
+            self.assertEqual(after["index_result"]["plan_readback"]["postimages"][obsolete], {"expected": None, "actual": None})
+            self.assertEqual(set(after["index_result"]["plan_readback"]["evidence"]), {"script.py"})
+            self.assertEqual(set(after["index_result"]["changed_files"]), {"AGENTS.md", obsolete})
+            self.assertEqual(after["index_result"]["delivery"], "local_only")
+            (self.project / "script.py").write_text("value = 2\n")
+            drifted = self.complete(packet, self.vault_result(), self.resource_result())
+            self.assertEqual((drifted["index_status"], drifted["resource_status"]), ("pending", "complete"))
+            self.assertIn("source evidence changed", drifted["index_result"]["plan_readback"]["issues"][0])
+            refreshed_plan = self.index_plan()
+            refreshed = MODULE.refresh_index_plan(drifted, {"plan": refreshed_plan})
+            for field in ("thread_id", "origin_task_id", "project_key", "project_owner"):
+                self.assertEqual(refreshed[field], packet[field])
+            self.assertEqual(refreshed["conversation_cleanup"]["status"], "waiting")
+            self.assertEqual(helper.apply_plan(self.project, refreshed_plan, self.project.parent / "apply-refreshed")["status"], "complete")
+            self.assertEqual(self.complete(refreshed, self.vault_result(), self.resource_result())["index_status"], "complete")
+        for handoff in ({}, {"origin_task_id": "other", "plan": self.index_plan()}, {"project_root": str(self.project.parent), "plan": self.index_plan()}):
+            with self.subTest(handoff=handoff), self.assertRaises(ValueError):
+                MODULE.refresh_index_plan(packet, handoff)
+
+    def test_index_completion_runs_current_helper_and_preserves_cleanup_results(self):
+        packet = self.acknowledged()
+        result = self.complete(packet, self.vault_result(), self.resource_result())
+        self.assertEqual(result["index_status"], "complete")
+        self.assertEqual(result["index_result"]["check"]["status"], "ready")
+        self.assertEqual(result["index_result"]["check"]["project_root"], str(self.project))
+        self.assertEqual(result["index_result"]["check"]["guidance_hashes"]["AGENTS.md"], hashlib.sha256((self.project / "AGENTS.md").read_bytes()).hexdigest())
+        (self.project / ".agents/skills/ai-index/example.md").unlink()
+        result = self.complete(packet, self.vault_result(), self.resource_result())
+        self.assertEqual((result["index_status"], result["memory_status"], result["resource_status"]), ("pending", "complete", "complete"))
+        self.assertEqual(result["index_result"]["reason"], "project_index_check_failed")
+        self.assertEqual(result["conversation_cleanup"]["status"], "waiting")
+
+    def test_missing_or_pending_index_result_cannot_complete_new_handoffs(self):
+        packet = self.acknowledged()
+        for index_result in (None, self.index_result(status="pending", reason="source changed", read_back_verified=False)):
+            result = MODULE.record_completion(packet, self.vault_result(), self.resource_result(), index_result)
+            self.assertEqual(result["branch_status"], "pending")
+            self.assertEqual(result["resource_status"], "complete")
+            with self.assertRaisesRegex(ValueError, "branch completion"):
+                MODULE.record_conversation_cleanup(result, {})
+        for changed in ({"project_root": str(self.project.parent)}, {"origin_task_id": "other"}, {"read_back_verified": False}, {"source": ""}, {"status": "invented"}, {"changed_files": ["script.py"]}):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                MODULE.record_completion(packet, self.vault_result(), self.resource_result(), self.index_result(**changed))
+
+    def test_index_boundary_skips_are_explicit_and_unchanged_requires_real_check(self):
+        for reason in ("read_only", "no_project"):
+            packet = MODULE.acknowledge_launch(self.prepare(project_index={"skip_reason": reason}), {"threadId": "thread-1", "hostId": "local"})
+            original = json.dumps(packet, sort_keys=True)
+            for handoff in ({"plan": self.index_plan()}, {"plan": self.index_plan(), "skip_reason": None}):
+                with self.subTest(reason=reason, handoff=handoff), self.assertRaisesRegex(ValueError, "originating handoff boundary"):
+                    MODULE.refresh_index_plan(packet, handoff)
+                self.assertEqual(json.dumps(packet, sort_keys=True), original)
+            for supplied in (self.index_result(), self.index_result(changed_files=["AGENTS.md"]), self.index_result(status="skipped", reason="unchanged"), self.index_result(status="skipped", reason=reason, changed_files=["AGENTS.md"])):
+                with self.subTest(reason=reason, supplied=supplied):
+                    result = MODULE.record_completion(packet, self.vault_result(), self.resource_result(), supplied)
+                    self.assertEqual((result["index_status"], result["resource_status"]), ("pending", "complete"))
+                    self.assertEqual(result["index_result"]["reason"], "project_index_boundary_requires_skip")
+                    self.assertEqual(result["index_result"]["boundary"], reason)
+            result = MODULE.record_completion(packet, self.vault_result(), self.resource_result(), self.index_result(status="skipped", reason=reason))
+            self.assertEqual(result["index_status"], "skipped")
+            with self.assertRaisesRegex(ValueError, "boundary skip"):
+                MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result(), self.index_result(status="skipped", reason=reason))
+        result = MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result(), self.index_result(status="skipped", reason="unchanged"))
+        self.assertEqual(result["index_result"]["check"]["status"], "ready")
+        with self.assertRaises(ValueError):
+            MODULE.record_completion(self.acknowledged(), self.vault_result(), self.resource_result(), self.index_result(status="skipped", reason="unchanged", changed_files=["AGENTS.md"]))
+
+    def test_legacy_packets_do_not_acquire_a_new_completion_obligation(self):
+        packet = self.acknowledged()
+        for name in ("index_required", "index_status", "project_index"):
+            packet.pop(name)
+        result = MODULE.record_completion(packet, self.vault_result(), self.resource_result())
+        self.assertEqual(result["branch_status"], "complete")
+        self.assertEqual(result["index_status"], "skipped")
 
 if __name__ == "__main__":
     unittest.main()

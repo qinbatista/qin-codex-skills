@@ -6,27 +6,29 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 
 | Skill | Responsibility |
 | --- | --- |
-| [Task Analyze](task-analyze-skill/SKILL.md) | Tracks Skill use for a final summary; requires action delivery and recovery. |
-| [Workflow](workflow-skill/SKILL.md) | Coordinates work and resource cleanup; preserves active use and user review/reuse. |
+| [Task Analyze](task-analyze-skill/SKILL.md) | Reports Skill use; requires delivery and recovery. |
+| [Workflow](workflow-skill/SKILL.md) | Coordinates work and cleanup; preserves active/review/reuse resources. |
 | [Code](code-skill/SKILL.md) | Guides structure, readable code, and portable, quiet execution. |
 | [Prompt](prompt-skill/SKILL.md) | Shapes reusable prompts with clear inputs, constraints, and output contracts. |
-| [Verify](verify-skill/SKILL.md) | Checks real behavior or outputs in the active task and keeps test coverage focused. |
-| [Project Memory](project-memory-skill/SKILL.md) | Recalls relevant project context and records useful durable changes in Obsidian. |
+| [Verify](verify-skill/SKILL.md) | Checks real behavior in the active task; focuses test coverage. |
+| [Project Memory](project-memory-skill/SKILL.md) | Recalls project context and stores durable knowledge in Obsidian. |
 | [Optimization](optimization-skill/SKILL.md) | Simplifies requested code or workflows and measures claimed improvements. |
-| [Management](management-skill/SKILL.md) | Installs the managed skills recoverably and validates authorized publication. |
+| [Management](management-skill/SKILL.md) | Maintains project indexes, installs skills recoverably and validates authorized publication. |
 
 ## Task flow
 
-1. At startup or resume, ensure the Obsidian vault, then read applicable skills and exact-project memory. Track Skill use, steps and reasons; skip missing memory.
+1. At startup/resume, [inspect or build the project AI index](management-skill/references/project-ai-index.md), then read relevant routes and exact-project memory. Ensure the Obsidian vault, skip missing memory, and track Skill use.
 2. Preview the objective and implementation steps, then execute. Ask only for necessary decisions or authorization.
-3. Before adding maintained tests, consult project testing Skills and consolidate duplicate purposes. Default to real affected-case checks; deliver evidence, repair failures and clean disposable resources.
-4. Check native deletion before creating an unpinned projectless Ending; otherwise close out in the current chat. Show its creation link and finish immediately; the parent never waits. Ending owns memory, [resource cleanup](workflow-skill/references/ending-resource-audit.md), recovery and verified native self-deletion. Preserve active/review resources. Archival is not deletion.
+3. Update concise root `AGENTS.md` and `.agents/skills/ai-index` automatically when accepted intent or structure changes and before delivery. Consult project testing Skills; run real affected-case checks and clean disposable resources.
+4. Before creating an unpinned projectless Ending, check native deletion; otherwise close out inline. Show its link and finish without waiting. Ending reconciles the index, consolidates memory, [cleans resources](workflow-skill/references/ending-resource-audit.md), and deletes itself. Preserve active/review resources; archival is not deletion.
 
 At completion, summarize actual Skill names, steps and reasons once, including branch use; distinguish unused, missing or unreadable Skills. Progress updates need no repeated lists; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
 
 One Memory.json and Knowledge.md serve each project. Recall excludes stale facts; Ending consolidates touched entries and links.
 
 Project memories stay isolated. Read relevant shared preferences only. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
+
+Each project owns its AI index, without global or plugin copies. The helper validates routes and applies reviewed updates against source and document hashes. This runs within the task workflow, not as a background watcher.
 
 Without a vault, [Project Memory](project-memory-skill/SKILL.md) creates and verifies one outside Codex and the project using [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki). Back up the entire vault regularly: it holds all Codex and project memory. The generator is a public template, not a private-memory backup.
 
@@ -38,7 +40,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
-Skills own instructions, helpers and release tests. The [external artifact policy](workflow-skill/references/project-cache-artifact-policy.md) places AI support outside projects and Codex under `YoFaAI/TaskArtifacts`. Each execution gets a fresh `temp-*`. Copy selected continuation inputs, verify bytes, then release completed directories and disposable worktrees. Preserve source, deliverables, canonical assets and active/review/reuse resources.
+Skills own instructions, helpers and release tests. Keep support in a fresh external `YoFaAI/TaskArtifacts/temp-*` run under [the artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Verify selected continuation inputs, then release disposable directories and worktrees. Preserve source, deliverables, assets and active/review/reuse resources.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

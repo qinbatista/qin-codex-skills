@@ -41,6 +41,18 @@ class TaskCacheCleanupTests(unittest.TestCase):
     def sweep(self, **kwargs):
         return cleanup.checkpoint(self.project, "mine", artifact_root=self.base, apply=True, **kwargs)
 
+    def finish_when_native_readers_close(self, run, finish):
+        # Spotlight can briefly read a new fixture; keep every native guard active.
+        deadline = time.monotonic() + 5
+        for attempt in range(10):
+            result = finish()
+            entries = result.get("results", [])
+            waiting = len(entries) == 1 and entries[0].get("path") == str(run) and entries[0].get("action") == "keep" and entries[0].get("reason") == "active open files or working directory"
+            if not waiting or attempt == 9 or time.monotonic() >= deadline:
+                return result
+            self.assertTrue(run.exists(), result)
+            time.sleep(0.1)
+
     def test_allocator_registers_task_project_run_without_payload_pollution(self):
         run = self.run_root()
         record = json.loads(self.record_path(run).read_text())
@@ -81,7 +93,7 @@ class TaskCacheCleanupTests(unittest.TestCase):
         run = self.run_root()
         (run / "nested").mkdir()
         (run / "nested" / "result.bin").write_bytes(b"disposable" * 100)
-        result = self.sweep(phase="finish", current_run=run)
+        result = self.finish_when_native_readers_close(run, lambda: self.sweep(phase="finish", current_run=run))
         self.assertEqual(result["results"][0]["action"], "deleted", result)
         self.assertEqual(result["bytes_deleted"], 1000)
         self.assertFalse(run.exists())
@@ -284,8 +296,11 @@ class TaskCacheCleanupTests(unittest.TestCase):
         allocated = subprocess.run([sys.executable, str(SCRIPTS / "task_artifact_paths.py"), "--project-root", str(self.project), "--task-id", "cli-task", "--artifact-root", str(self.base), "--create"], capture_output=True, text=True, check=True, **hidden_process_options())
         run = Path(json.loads(allocated.stdout)["task_root"])
         (run / "payload").write_bytes(b"cli")
-        finished = subprocess.run([sys.executable, str(SCRIPTS / "task_cache_cleanup.py"), "checkpoint", "--project-root", str(self.project), "--task-id", "cli-task", "--artifact-root", str(self.base), "--phase", "finish", "--current-run", str(run), "--apply"], capture_output=True, text=True, check=True, **hidden_process_options())
-        self.assertEqual(json.loads(finished.stdout)["results"][0]["action"], "deleted")
+        def finish():
+            finished = subprocess.run([sys.executable, str(SCRIPTS / "task_cache_cleanup.py"), "checkpoint", "--project-root", str(self.project), "--task-id", "cli-task", "--artifact-root", str(self.base), "--phase", "finish", "--current-run", str(run), "--apply"], capture_output=True, text=True, check=True, **hidden_process_options())
+            return json.loads(finished.stdout)
+        result = self.finish_when_native_readers_close(run, finish)
+        self.assertEqual(result["results"][0]["action"], "deleted", result)
         self.assertFalse(run.exists())
         self.assertFalse(self.record_path(run).exists())
 
