@@ -128,6 +128,8 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertEqual(len(knowledge.scopes(self.project, self.vault, files=["src/first.py"])["scopes"]), 2)
         self.assertEqual(self.read(module=pointer["module"])["entries"], [])
         self.assertEqual(knowledge.scopes(self.project, self.vault)["reason"], "task_scope_required")
+        self.write([self.method(module="maps", summary="Normal Mask owns the map contract"), self.method(module="normalization", summary="Normalize inventory dimensions")])
+        self.assertEqual([value["module"] for value in knowledge.scopes(self.project, self.vault, query="normal")["scopes"]], ["maps"])
 
     def test_ambiguous_method_query_skips_without_loose_fallback(self):
         self.write([self.method(), self.method(file="src/second.py")])
