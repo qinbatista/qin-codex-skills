@@ -4,4 +4,6 @@ Start at [SKILL.md](../../../../project-memory-skill/SKILL.md) and [memory/Endin
 
 Keep durable memory solely in the verified vault and exact owner. A hash or source readback is not runtime proof. The parent ends after acknowledged Ending creation; Ending owns its recovery and removal and must never bring cleanup back to the parent. Guidance data is separate from memory payloads.
 
+Recall follows project → task → underlying logic. `project_knowledge.py logic` traverses explicit `applies-logic` links to shared `logic.*` principles and bounded case pointers. It never imports foreign implementation facts; selected references retain exact owners, applicability, differences and dated proof. This uses the existing relation/index store, not keyword-based automatic generalization.
+
 Tests stay in `project-memory-skill/tests/`, tracked by the [testing Skill](../../testing-skill/SKILL.md). Workflow owns resource audit mechanics; Management owns residual project AI-index updates. Neither dependency authorizes product tests, builds or publication by Ending.
