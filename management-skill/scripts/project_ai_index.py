@@ -265,7 +265,7 @@ def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved
     root = project_root(root)
     state = bootstrap_state(root)
     if state and not bootstrap_approved:
-        return {"status": "approval_required", "project_root": str(root), "phase": phase, "index_state": state, "read_scope": "index_bootstrap_readiness_only", "question": "This project has no complete AI index. May I read the necessary project guidance and create it?"}
+        return {"status": "approval_required", "project_root": str(root), "phase": phase, "index_state": state, "read_scope": "index_bootstrap_readiness_only", "required_action": "ask_user", "blocks_project_work": True, "remind_at": "next_project_start_or_resume", "question": "This project has no complete AI index. May I read the necessary project guidance and create it?"}
     result = validate_index(root)
     manifest = result.pop("manifest")
     result.update({"project_root": str(root), "phase": phase, "structure": shallow_structure(root), "guidance_hashes": {}, "affected_modules": [], "unmapped_paths": []})

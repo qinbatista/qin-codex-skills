@@ -115,6 +115,9 @@ class ProjectAIIndexTests(unittest.TestCase):
                     for phase in ("start", "end", "start"):
                         result = INDEX.check_project(self.project, phase)
                         self.assertEqual(result["status"], "approval_required")
+                        self.assertEqual(result["required_action"], "ask_user")
+                        self.assertTrue(result["blocks_project_work"])
+                        self.assertEqual(result["remind_at"], "next_project_start_or_resume")
                         self.assertEqual(result["index_state"], "missing" if state == "missing" else "incomplete")
                         self.assertEqual(result["read_scope"], "index_bootstrap_readiness_only")
                         self.assertNotIn("discovery", result)
@@ -122,6 +125,19 @@ class ProjectAIIndexTests(unittest.TestCase):
                 self.assertFalse((self.project / "AGENTS.md").exists())
                 if state in {"missing", "entry-only"}:
                     self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
+
+    def test_all_unapproved_cli_entrypoints_keep_the_question_visible(self):
+        for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end")), ("check", ()), ("route", ("--module", "api"))):
+            with self.subTest(command=command, arguments=arguments):
+                result = self.cli(command, *arguments)
+                payload = json.loads(result.stdout)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(payload["required_action"], "ask_user")
+                self.assertTrue(payload["blocks_project_work"])
+                self.assertIn("create", payload["question"])
+                self.assertNotIn("discovery", payload)
+                self.assertNotIn("structure", payload)
+        self.assertFalse((self.project / "AGENTS.md").exists())
 
     def test_bootstrap_cannot_apply_without_explicit_approval_and_existing_index_needs_no_new_approval(self):
         plan = self.plan()

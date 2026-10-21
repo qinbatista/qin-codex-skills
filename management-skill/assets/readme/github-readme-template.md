@@ -46,7 +46,7 @@ Skills own instructions, helpers and release tests. Keep support in a fresh exte
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
 ```
 
-On Windows, use `py -3 -B` with the same Python entry point. Installation replaces the eight managed skills with locking, backup, and recovery, then ensures and reports the Obsidian memory vault. It preserves unrelated skills, user AGENTS, and existing private history. An explicitly requested global AGENTS update uses `install-global-agents --source-dir .` and creates a restorable backup.
+Windows uses `py -3 -B`. Installation uses locking, backup, and recovery and preserves unrelated skills, user AGENTS, and existing private history. Explicit `install-global-agents --source-dir . --startup-only` updates the mandatory startup block with a restorable backup. Deployment reports missing/stale activation or overrides; verify a fresh session.
 
 Source, installation and GitHub publication are distinct. `push` selects task-owned files with `--include-path` and existing task commits with `--include-commit` full hashes. It merges, validates, pushes and reads back the configured upstream, preserving unselected worktree and index changes.
 

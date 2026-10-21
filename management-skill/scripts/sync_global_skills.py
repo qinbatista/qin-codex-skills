@@ -149,6 +149,8 @@ GLOBAL_AGENTS_DIRECTIVE = "This template is written only by the explicit `instal
 LEGACY_GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
 GLOBAL_AGENTS_BACKUP_DIRECTORY = "global-agents-backups"
 GLOBAL_AGENTS_BACKUP_MANIFEST = "manifest.json"
+AI_INDEX_STARTUP_START = "<!-- qin-ai-index-startup -->"
+AI_INDEX_STARTUP_END = "<!-- /qin-ai-index-startup -->"
 OFFICIAL_USER_SKILLS_DIRECTORY = Path.home() / ".agents" / "skills"
 INSTALL_TRANSACTION_PREFIX = ".qin-codex-install-"
 INSTALL_MANIFEST_NAME = "install-transaction.json"
@@ -764,6 +766,37 @@ def materialized_global_agents_text(source_dir):
     return text[len(GLOBAL_AGENTS_DIRECTIVE):] if text.startswith(GLOBAL_AGENTS_DIRECTIVE) else text
 
 
+def ai_index_startup_rule(source_dir):
+    text = canonical_global_agents_text(source_dir)
+    if text.count(AI_INDEX_STARTUP_START) != 1 or text.count(AI_INDEX_STARTUP_END) != 1:
+        raise RuntimeError("The global AGENTS template must contain one AI-index startup block")
+    start, end = text.index(AI_INDEX_STARTUP_START), text.index(AI_INDEX_STARTUP_END)
+    if end < start:
+        raise RuntimeError("The global AGENTS AI-index startup markers are reversed")
+    return text[start:end + len(AI_INDEX_STARTUP_END)]
+
+
+def merge_ai_index_startup(existing, rule):
+    counts = existing.count(AI_INDEX_STARTUP_START), existing.count(AI_INDEX_STARTUP_END)
+    if counts == (0, 0):
+        return rule + "\n\n" + existing
+    if counts != (1, 1) or existing.index(AI_INDEX_STARTUP_END) < existing.index(AI_INDEX_STARTUP_START):
+        raise RuntimeError("Existing global AGENTS has ambiguous AI-index startup markers; preserve it and resolve the block first")
+    start, end = existing.index(AI_INDEX_STARTUP_START), existing.index(AI_INDEX_STARTUP_END) + len(AI_INDEX_STARTUP_END)
+    return existing[:start] + rule + existing[end:]
+
+
+def ai_index_startup_status(source_dir):
+    root = codex_home()
+    override = root / "AGENTS.override.md"
+    if os.path.lexists(override) and (not override.is_file() or override.is_symlink() or override.read_text(encoding="utf-8").strip()):
+        return "shadowed_by_global_override"
+    target = root / "AGENTS.md"
+    if not target.is_file() or target.is_symlink():
+        return "missing_global_entry"
+    return "ready" if ai_index_startup_rule(source_dir) in target.read_text(encoding="utf-8") else "startup_rule_missing_or_stale"
+
+
 def codex_home():
     """Resolve Codex configuration independently from the user Skill directory."""
     return lexical_absolute_path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
@@ -831,12 +864,17 @@ def _write_global_agents_target(target, rendered):
             os.unlink(temporary_name)
 
 
-def install_global_agents(source_dir, skills_dir):
+def install_global_agents(source_dir, skills_dir, *, startup_only=False):
     source_dir = Path(source_dir).expanduser().resolve()
     skills_dir = lexical_absolute_path(skills_dir)
     expected_text = canonical_global_agents_text(source_dir)
     target = global_agents_targets(skills_dir)[0]
     with installation_lock(target):
+        if startup_only:
+            if os.path.lexists(target) and (target.is_symlink() or not target.is_file()):
+                raise RuntimeError("Startup-only installation requires a regular global AGENTS file or an absent target")
+            existing = target.read_text(encoding="utf-8") if target.exists() else ""
+            expected_text = merge_ai_index_startup(existing, ai_index_startup_rule(source_dir))
         if global_agents_target_matches(target, expected_text):
             return {"changed": False, "backup_id": None, "target": target}
         backup_dir, manifest = create_global_agents_backup(skills_dir, target)
@@ -1367,6 +1405,10 @@ def deploy(source_dir, skills_dir):
     print("Preserved user global AGENTS.md files; use install-global-agents for an explicit, recoverable template installation.")
     print("Installation complete: consumer install/update replaced the published managed source without rerunning validation gates.")
     if skills_dir == lexical_absolute_path(OFFICIAL_USER_SKILLS_DIRECTORY):
+        startup_status = ai_index_startup_status(source_dir)
+        print(f"AI-index startup activation: {startup_status}. Skill installation alone does not reload instructions in existing sessions.")
+        if startup_status != "ready":
+            print("Mandatory startup reminders are pending. Explicitly install the preserved startup block with install-global-agents --source-dir SOURCE --startup-only; resolve a global override first if reported. Start a new Codex session to load it.")
         repair_legacy_user_skills(skills_dir, source_dir, installed_names)
     return installed_names
 
@@ -1872,6 +1914,7 @@ def main():
     deploy_parser.add_argument("--skills-dir", type=Path, dest="deploy_skills_dir", default=argparse.SUPPRESS)
     install_agents_parser = subparsers.add_parser("install-global-agents")
     install_agents_parser.add_argument("--source-dir", type=Path, required=True)
+    install_agents_parser.add_argument("--startup-only", action="store_true", help="Recoverably update only the AI-index startup block while preserving other global guidance")
     install_agents_parser.add_argument("--skills-dir", type=Path, dest="install_agents_skills_dir", default=argparse.SUPPRESS)
     restore_agents_parser = subparsers.add_parser("restore-global-agents")
     restore_agents_parser.add_argument("--backup-id", required=True)
@@ -1913,7 +1956,7 @@ def main():
         deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
         announce_memory_vault(getattr(args, "deploy_skills_dir", args.skills_dir))
     elif args.command == "install-global-agents":
-        installation = install_global_agents(args.source_dir, getattr(args, "install_agents_skills_dir", args.skills_dir))
+        installation = install_global_agents(args.source_dir, getattr(args, "install_agents_skills_dir", args.skills_dir), startup_only=args.startup_only)
         if installation["changed"]:
             print(f"Installed the global AGENTS template at {installation['target']} with persistent backup {installation['backup_id']}.")
         else:
