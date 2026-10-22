@@ -12,7 +12,7 @@ Keep root `AGENTS.md` a concise project contract: purpose, overall structure, cr
 
 The project index contains:
 
-- `SKILL.md`: frontmatter `name: ai-index`, when/how to select a route, and a link to `index.json`.
+- `SKILL.md`: frontmatter `name: ai-index`, when/how to select a route through the compact module menu, and a link to `index.json` for maintained metadata rather than routine full-manifest reading.
 - `index.json`: the single route map, with project-relative paths. `rules` declares `repository`, `structure` and `verification` documents. `modules` declares each `id`, short `summary`, `document`, `sources`, and `dependencies` with a module ID and reason. Optional `code_targets` locate reviewed methods and key-line anchors under that module.
 - Focused Markdown documents for repository/asset ownership, code placement, verification, and each meaningful module. Use a folder/sub-index only when a module needs it; do not create a document for every function.
 
@@ -51,7 +51,9 @@ Maintain a compact `code_targets` list in the module's manifest entry for the co
 
 Register only targets that exist; referenced related targets must also be declared in their owners. Keep one module document for explanatory logic, not a document per method. Do not copy source bodies, persistent line ranges, source hashes, task outcomes or execution traces into the index. Stable navigation and contracts belong here; dated decisions, failures and source-bound verification remain in [Project Memory](../../project-memory-skill/SKILL.md). Temporary code follows the same reading/writing discipline but its disposable paths never become maintained routes; index its maintained producer or test owner when useful.
 
-`route --module ID` lists target summaries without reading source content. `route --module ID --target TARGET` opens only the chosen file (at most 1 MiB), resolves its unique exact-line anchor against current bytes, and returns the current line, source hash and bounded excerpt (12 lines each side by default; `--context-lines 0..40`, at most 16 KiB of excerpt text). The hash and line numbers are transient read evidence, not runtime acceptance. Related entries are pointers only and do not recursively load source. Missing/ambiguous anchors, unknown targets and oversized sources stay `needs_review`; use a bounded symbol lookup and repair the verified route before editing. `inspect`/`check` validate metadata and paths without reading source bodies, so structural success alone cannot prove that anchors remain current.
+Start with `route --project-root ROOT`: it returns only each module's `id`, `summary` and `document`, without source content or the full manifest. Choose from this compact menu instead of reading all of `index.json`. `route --module ID` then lists that module's target summaries without reading source content. `--target` requires `--module`; without it the helper returns `needs_review`. Every route retains the missing-index consent gate.
+
+`route --module ID --target TARGET` opens only the chosen file (at most 1 MiB), resolves its unique exact-line anchor against current bytes, and returns the current line, source hash and bounded excerpt (12 lines each side by default; `--context-lines 0..40`, at most 16 KiB of excerpt text). The hash and line numbers are transient read evidence, not runtime acceptance. Related entries are pointers only and do not recursively load source. Missing/ambiguous anchors, unknown targets and oversized sources stay `needs_review`; use a bounded symbol lookup and repair the verified route before editing. `inspect`/`check` validate metadata and paths without reading source bodies, so structural success alone cannot prove that anchors remain current.
 
 After changing code, reconcile touched targets, contracts, anchors and necessary relationships from the actual final source before delivery. Remove old targets/references for renamed, moved or deleted code, and verify each changed target through a fresh selected route. Use guarded `apply` with evidence for the selected source files. Existing indexes without targets remain valid; enrich the touched scope incrementally, never pre-index every function or rescan unrelated code. Instructions and navigation must match the delivered source; memory cannot excuse a stale route.
 
@@ -68,6 +70,7 @@ Checks follow linked Markdown only inside the project index, including focused s
 ```text
 project_ai_index.py inspect --project-root ROOT --phase start --changed-path src/feature.py
 project_ai_index.py inspect --project-root ROOT --phase start --allow-bootstrap
+project_ai_index.py route --project-root ROOT
 project_ai_index.py route --project-root ROOT --module feature
 project_ai_index.py route --project-root ROOT --module feature --target read-content --context-lines 12
 project_ai_index.py check --project-root ROOT

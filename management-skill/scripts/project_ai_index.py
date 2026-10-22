@@ -336,7 +336,7 @@ def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved
     return result
 
 
-def route_module(root, identifier, target=None, context_lines=12):
+def route_module(root, identifier=None, target=None, context_lines=12):
     root = project_root(root)
     if bootstrap_state(root):
         return check_project(root)
@@ -344,6 +344,10 @@ def route_module(root, identifier, target=None, context_lines=12):
     manifest = result.pop("manifest")
     if result["status"] != "ready":
         return result
+    if identifier is None:
+        if target is not None:
+            return {"status": "needs_review", "structural_check_only": True, "issues": ["--target requires --module; select a module from the route menu first"]}
+        return {"status": "ready", "structural_check_only": True, "modules": [{key: module[key] for key in ("id", "summary", "document")} for module in manifest["modules"]]}
     modules = {module["id"]: module for module in manifest["modules"]}
     if identifier not in modules:
         return {"status": "needs_review", "structural_check_only": True, "issues": [f"unknown module: {identifier}"]}
@@ -519,7 +523,7 @@ def main():
         if name in {"inspect", "check"}:
             command.add_argument("--allow-bootstrap", action="store_true", help="Read bootstrap context only after explicit user approval")
         if name == "route":
-            command.add_argument("--module", required=True)
+            command.add_argument("--module", help="Select a module; omit to list the compact module menu")
             command.add_argument("--target", help="Read one indexed method or key-line anchor; related sources remain unopened")
             command.add_argument("--context-lines", type=int, default=12, help="Lines around the unique anchor, from 0 to 40")
         elif name == "apply":

@@ -128,7 +128,7 @@ class ProjectAIIndexTests(unittest.TestCase):
                     self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
 
     def test_all_unapproved_cli_entrypoints_keep_the_question_visible(self):
-        for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end")), ("check", ()), ("route", ("--module", "api")), ("route", ("--module", "api", "--target", "request"))):
+        for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end")), ("check", ()), ("route", ()), ("route", ("--target", "request")), ("route", ("--module", "api")), ("route", ("--module", "api", "--target", "request"))):
             with self.subTest(command=command, arguments=arguments):
                 result = self.cli(command, *arguments)
                 payload = json.loads(result.stdout)
@@ -148,6 +148,15 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.write(INDEX.MANIFEST_PATH, json.dumps(manifest))
         (self.project / "src/api.py").write_bytes(b"\xff")
         (self.project / "assets/original.txt").write_bytes(b"\xff")
+        modules = self.cli("route")
+        self.assertEqual(modules.returncode, 0, modules.stdout + modules.stderr)
+        self.assertEqual(json.loads(modules.stdout), {"status": "ready", "structural_check_only": True, "modules": [{key: module[key] for key in ("id", "summary", "document")} for module in manifest["modules"]]})
+        for detail in ("src/api.py", "assets/original.txt", "code_targets", "anchor", "def request", "Canonical request asset", "Read the original only"):
+            self.assertNotIn(detail, modules.stdout)
+        missing_module = self.cli("route", "--target", "request")
+        self.assertEqual(missing_module.returncode, 2)
+        self.assertEqual(json.loads(missing_module.stdout)["status"], "needs_review")
+        self.assertIn("--target requires --module", json.loads(missing_module.stdout)["issues"][0])
         menu = self.cli("route", "--module", "api")
         self.assertEqual(menu.returncode, 0, menu.stdout + menu.stderr)
         self.assertEqual(json.loads(menu.stdout)["code_targets"][0]["symbol"], "request")

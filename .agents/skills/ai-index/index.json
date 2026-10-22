@@ -177,7 +177,7 @@
           "id": "index-route",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "route_module",
-          "anchor": "def route_module(root, identifier, target=None, context_lines=12):",
+          "anchor": "def route_module(root, identifier=None, target=None, context_lines=12):",
           "summary": "Select a module menu or resolve one unique code anchor from bounded current source; return necessary relationship pointers without loading them.",
           "related": [
             {
