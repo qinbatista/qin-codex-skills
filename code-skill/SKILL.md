@@ -24,6 +24,7 @@ Briefly explain the intended change and implementation steps before detailed exe
 
 | Work | Read |
 | --- | --- |
+| Long source/text, build output or machine error logs | [Workflow's bounded text and log reading](../workflow-skill/references/text-and-log-reading.md) |
 | Python | [Python rules](references/python-rules.md) |
 | C# | [Unity C# common style](references/unity-csharp-rules.md); Unity-specific rules apply only to Unity |
 | UI, PDF/report layout, or other visual presentation | [Coding approach and UI preferences](references/coding-approach.md) |

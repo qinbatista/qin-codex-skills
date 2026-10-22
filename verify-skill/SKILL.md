@@ -17,6 +17,8 @@ Select the smallest level that can prove the claim: level 1 checks a focused fun
 
 ## Choose evidence
 
+For large test/build output and error logs, follow [Workflow's bounded text and log reading](../workflow-skill/references/text-and-log-reading.md): inspect the latest page, search observed identifiers, and trace bounded context to the cause before interpreting the result.
+
 - API checks, client tests, and push/release tests default to process and workflow acceptance: verify request/response contracts, job completion, save/reopen when applicable, generated artifact existence, successful downloads, and valid file bytes. For images, check that output was generated and can be decoded; do not compare artwork, garment details, text, colors, or other content with the source. For documents, check generation, delivery, format, and required files/pages; do not judge content or visual quality. Do not pause these tests or block a push because of an unsolicited quality assessment. Add image/content quality, source fidelity, or layout review only when the user explicitly requests that scope. Keep intrinsic production checks unchanged, preserve their actual statuses, and report quality as not assessed when it was not requested.
 - Simple code edits: read back the changed value and exercise the affected consumer when one exists.
 - Logic or structural changes: exercise changed behavior with focused existing tests or a small isolated case, including the important failure boundary.

@@ -15,6 +15,10 @@ For every UI or visual presentation task, including websites, PDF reports, docum
 
 For image generation, edits, retries, or batches, follow [image generation and closure](references/image-generation.md): use the required browser entry, prepare downstream work while generation runs, move native downloads into their exact owner, and finish bounded cleanup without blocking independent jobs.
 
+## Long text and machine logs
+
+Use [bounded text and log reading](references/text-and-log-reading.md) for long text, build/test output and machine error logs. Start chronological logs at the last page, move backward only as needed, then search specific keywords and read bounded context. Never dump the entire file or start with its first page by default.
+
 ## Browser testing
 
 For any browser-based test, prefer the Codex or ChatGPT built-in browser surface. Use a named external browser only when the user explicitly requests that browser. If the built-in browser is unavailable, record that limitation and do not silently switch browsers or present a fallback as equivalent evidence. Keep task-created browser surfaces hidden unless the user asks to show them; retain user-opened and shared surfaces.
