@@ -7,7 +7,7 @@ description: "Start and finish project work with automatic AI-index maintenance,
 
 Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
 
-At every project start/resume and finish, apply [automatic project AI index](../management-skill/references/project-ai-index.md). Check presence before broad reading; ask for first-bootstrap consent when missing or unfinished and remind at later starts until complete. Reuse existing indexes without another creation question, keep root `AGENTS.md` concise, and read only relevant routes. Automatically reconcile both when accepted user intent, module ownership or source structure changes; do not wait for another request. Finish reconciliation before authorized delivery and pass its evidence and consent boundary to Ending for the residual check.
+At every project start/resume and finish, apply [automatic project AI index](../management-skill/references/project-ai-index.md). Check presence before broad reading; ask for bootstrap consent only when the project has no AI index at all. Existing indexes, including incomplete ones, receive automatic focused repair and expansion without another creation question. Keep root `AGENTS.md` concise and read only relevant routes. Automatically reconcile both when accepted user intent, module ownership or source structure changes; do not wait for another request. Finish reconciliation before authorized delivery and pass its evidence and consent boundary to Ending for the residual check.
 
 ## Mandatory visible Skill reporting
 

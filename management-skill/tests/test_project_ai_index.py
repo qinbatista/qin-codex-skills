@@ -103,29 +103,46 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.assertEqual((self.project / "unrelated.txt").read_text(), "uncommitted user work\n")
         self.assertFalse(list(self.work.glob("ai-index-recovery-*")))
 
-    def test_missing_or_partial_index_repeats_approval_without_project_discovery(self):
-        for state in ("missing", "entry-only", "empty-manifest", "empty-routes"):
+    def test_missing_index_repeats_approval_without_project_discovery(self):
+        with mock.patch.object(INDEX, "validate_index", side_effect=AssertionError("content read before consent")), mock.patch.object(INDEX, "bootstrap_inventory", side_effect=AssertionError("tree discovery before consent")), mock.patch.object(INDEX, "shallow_structure", side_effect=AssertionError("directory listing before consent")):
+            for phase in ("start", "end", "start"):
+                result = INDEX.check_project(self.project, phase)
+                self.assertEqual(result["status"], "approval_required")
+                self.assertEqual(result["required_action"], "ask_user")
+                self.assertTrue(result["blocks_project_work"])
+                self.assertEqual(result["remind_at"], "next_project_start_or_resume")
+                self.assertEqual(result["index_state"], "missing")
+                self.assertEqual(result["read_scope"], "index_presence_only")
+                self.assertNotIn("discovery", result)
+                self.assertNotIn("structure", result)
+        self.assertFalse((self.project / "AGENTS.md").exists())
+        self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
+
+    def test_existing_partial_index_is_repaired_without_another_bootstrap_question(self):
+        for state in ("directory-only", "entry-only", "manifest-only", "empty-manifest", "malformed-manifest", "empty-routes"):
             with self.subTest(state=state):
-                if state != "missing":
+                (self.project / INDEX.INDEX_DIRECTORY).mkdir(parents=True, exist_ok=True)
+                for relative in (INDEX.SKILL_PATH, INDEX.MANIFEST_PATH):
+                    (self.project / relative).unlink(missing_ok=True)
+                if state not in {"directory-only", "manifest-only"}:
                     self.write(INDEX.SKILL_PATH, "Unfinished index.\n")
-                if state == "empty-manifest":
+                if state in {"manifest-only", "empty-manifest"}:
                     self.write(INDEX.MANIFEST_PATH, "{}\n")
+                if state == "malformed-manifest":
+                    self.write(INDEX.MANIFEST_PATH, "{\n")
                 if state == "empty-routes":
                     self.write(INDEX.MANIFEST_PATH, json.dumps({"schema_version": 1, "rules": {}, "modules": []}))
-                with mock.patch.object(INDEX, "validate_index", side_effect=AssertionError("content read before consent")), mock.patch.object(INDEX, "bootstrap_inventory", side_effect=AssertionError("tree discovery before consent")), mock.patch.object(INDEX, "shallow_structure", side_effect=AssertionError("directory listing before consent")):
-                    for phase in ("start", "end", "start"):
-                        result = INDEX.check_project(self.project, phase)
-                        self.assertEqual(result["status"], "approval_required")
-                        self.assertEqual(result["required_action"], "ask_user")
-                        self.assertTrue(result["blocks_project_work"])
-                        self.assertEqual(result["remind_at"], "next_project_start_or_resume")
-                        self.assertEqual(result["index_state"], "missing" if state == "missing" else "incomplete")
-                        self.assertEqual(result["read_scope"], "index_bootstrap_readiness_only")
-                        self.assertNotIn("discovery", result)
-                        self.assertNotIn("structure", result)
-                self.assertFalse((self.project / "AGENTS.md").exists())
-                if state in {"missing", "entry-only"}:
-                    self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
+                for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end")), ("check", ()), ("route", ())):
+                    result = self.cli(command, *arguments)
+                    payload = json.loads(result.stdout)
+                    self.assertEqual(payload["status"], "needs_review", payload)
+                    self.assertNotIn("required_action", payload)
+                    self.assertNotIn("question", payload)
+                    self.assertNotIn("discovery", payload)
+                plan = self.plan()
+                plan.pop("bootstrap_approved")
+                self.assertEqual(INDEX.apply_plan(self.project, plan, self.work)["status"], "complete")
+                self.assertEqual(json.loads(self.cli("check").stdout)["status"], "ready")
 
     def test_all_unapproved_cli_entrypoints_keep_the_question_visible(self):
         for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end")), ("check", ()), ("route", ()), ("route", ("--target", "request")), ("route", ("--module", "api")), ("route", ("--module", "api", "--target", "request"))):
@@ -256,6 +273,14 @@ class ProjectAIIndexTests(unittest.TestCase):
         plan = self.plan()
         plan.pop("bootstrap_approved")
         self.assertEqual(INDEX.apply_plan(self.project, plan, self.work)["status"], "unchanged")
+        document = f"{INDEX.INDEX_DIRECTORY}/modules/worker.md"
+        manifest = next(record for record in plan["files"] if record["path"] == INDEX.MANIFEST_PATH)
+        expanded = json.loads(manifest["content"])
+        expanded["modules"].append({"id": "worker", "summary": "Worker request handling", "document": document, "sources": ["src/api.py"], "dependencies": []})
+        manifest["content"] = json.dumps(expanded)
+        plan["files"].append({"path": document, "expected_sha256": None, "content": "# Worker\nReuse the request handler.\n"})
+        self.assertEqual(INDEX.apply_plan(self.project, plan, self.work)["status"], "complete")
+        self.assertEqual(json.loads(self.cli("route", "--module", "worker").stdout)["status"], "ready")
         self.assertEqual(INDEX.check_project(self.project)["status"], "ready")
 
     def test_existing_index_does_not_discover_the_whole_project(self):
@@ -488,9 +513,9 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.write("AGENTS.md", "Keep current project guidance.\n")
         self.write(INDEX.SKILL_PATH, "Existing custom index without machine manifest.\n")
         before = (self.project / INDEX.SKILL_PATH).read_bytes()
-        self.assertEqual(INDEX.check_project(self.project)["status"], "approval_required")
-        result = INDEX.check_project(self.project, bootstrap_approved=True)
+        result = INDEX.check_project(self.project)
         self.assertEqual(result["status"], "needs_review")
+        self.assertNotIn("question", result)
         self.assertNotIn("discovery", result)
         self.assertEqual((self.project / INDEX.SKILL_PATH).read_bytes(), before)
 

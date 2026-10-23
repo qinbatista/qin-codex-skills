@@ -257,6 +257,41 @@
           "anchor": "def test_code_target_metadata_rejects_unsafe_ownership_and_relations(self):",
           "summary": "Reject unsafe paths, wrong owners and invalid code target relationships.",
           "related": []
+        },
+        {
+          "id": "index-presence",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "bootstrap_state",
+          "anchor": "def bootstrap_state(root):",
+          "summary": "Require first-bootstrap consent only when the project index directory is absent; existing partial indexes are repair cases.",
+          "related": []
+        },
+        {
+          "id": "index-startup",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "check_project",
+          "anchor": "def check_project(root, phase=\"start\", changed_paths=None, *, bootstrap_approved=False):",
+          "summary": "Ask before the first project index; validate existing guidance and changed-path owners without renewed consent.",
+          "related": [
+            {
+              "module": "management",
+              "target": "index-presence",
+              "reason": "Presence alone controls the bootstrap question."
+            },
+            {
+              "module": "management",
+              "target": "index-repair-test",
+              "reason": "Proves partial indexes can be inspected and repaired without renewed consent."
+            }
+          ]
+        },
+        {
+          "id": "index-repair-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_existing_partial_index_is_repaired_without_another_bootstrap_question",
+          "anchor": "def test_existing_partial_index_is_repaired_without_another_bootstrap_question(self):",
+          "summary": "Exercise real CLI inspection and guarded repair of partial or malformed existing indexes without another bootstrap question.",
+          "related": []
         }
       ]
     },
