@@ -19,6 +19,7 @@ from task_artifact_paths import project_artifact_directory, validate_external_di
 
 
 INDEX_DIRECTORY = ".agents/skills/ai-index"
+VISIBLE_INDEX_DIRECTORY = "skills/ai-index"
 SKILL_PATH = f"{INDEX_DIRECTORY}/SKILL.md"
 MANIFEST_PATH = f"{INDEX_DIRECTORY}/index.json"
 REQUIRED_RULES = {"repository", "structure", "verification"}
@@ -70,11 +71,20 @@ def contained_path(root, value):
     return path
 
 
+def index_directory(root):
+    """Prefer the existing visible owner; preserve legacy projects and bootstrap consent."""
+    for relative in (VISIBLE_INDEX_DIRECTORY, INDEX_DIRECTORY):
+        if contained_path(root, relative).exists():
+            return relative
+    return INDEX_DIRECTORY
+
+
 def guidance_target(root, value):
     path = contained_path(root, value)
     relative = relative_path(value)
-    is_index_document = value.startswith(INDEX_DIRECTORY + "/") and relative.suffix == ".md" and relative.name.lower() != "agents.md"
-    if value != "AGENTS.md" and value != MANIFEST_PATH and not is_index_document:
+    directory = index_directory(root)
+    is_index_document = value.startswith(directory + "/") and relative.suffix == ".md" and relative.name.lower() != "agents.md"
+    if value != "AGENTS.md" and value != f"{directory}/index.json" and not is_index_document:
         raise ValueError(f"write is outside root AGENTS.md and project ai-index: {value}")
     if path.exists() and not path.is_file():
         raise ValueError(f"guidance target must be a regular file: {value}")
@@ -116,7 +126,7 @@ def validate_document(root, relative, overlay, issues, advisories, documents):
     text = document_text(root, relative, overlay)
     if not text.strip():
         issues.append(f"empty guidance: {relative}")
-    budget = 800 if relative in {"AGENTS.md", SKILL_PATH} else 2000
+    budget = 800 if relative in {"AGENTS.md", f"{index_directory(root)}/SKILL.md"} else 2000
     if len(text.split()) > budget:
         advisories.append(f"review mixed responsibilities or split linked detail: {relative} exceeds {budget} words")
     for raw in re.findall(r"\]\(([^)]+)\)", text):
@@ -141,22 +151,24 @@ def validate_document(root, relative, overlay, issues, advisories, documents):
         exists = overlay[local] is not None if local in overlay else candidate.exists()
         if not exists:
             issues.append(f"missing document link: {relative} -> {target}")
-        elif local.startswith(INDEX_DIRECTORY + "/") and local.endswith(".md"):
+        elif local.startswith(index_directory(root) + "/") and local.endswith(".md"):
             documents.add(local)
     return text
 
 
 def validate_index(root, overlay=None):
     overlay = {} if overlay is None else overlay
+    directory = index_directory(root)
+    skill_path, manifest_path = f"{directory}/SKILL.md", f"{directory}/index.json"
     issues, advisories = [], []
-    documents = {"AGENTS.md", SKILL_PATH, MANIFEST_PATH}
+    documents = {"AGENTS.md", skill_path, manifest_path}
     documents.update(relative for relative, content in overlay.items() if content is not None and relative.endswith(".md"))
     manifest = None
     try:
         agents = validate_document(root, "AGENTS.md", overlay, issues, advisories, documents)
-        if SKILL_PATH not in agents:
-            issues.append("root AGENTS.md must point to .agents/skills/ai-index/SKILL.md")
-        skill = validate_document(root, SKILL_PATH, overlay, issues, advisories, documents)
+        if skill_path not in agents:
+            issues.append(f"root AGENTS.md must point to {skill_path}")
+        skill = validate_document(root, skill_path, overlay, issues, advisories, documents)
         frontmatter = re.match(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|$)", skill, re.DOTALL)
         if not frontmatter or not re.search(r"(?m)^name:\s*['\"]?ai-index['\"]?\s*$", frontmatter[1]):
             issues.append("project SKILL.md must have frontmatter name: ai-index")
@@ -165,7 +177,7 @@ def validate_index(root, overlay=None):
             issues.append("project SKILL.md must have a nonempty frontmatter description")
         if "index.json" not in skill:
             issues.append("project SKILL.md must point to index.json")
-        manifest = json.loads(document_text(root, MANIFEST_PATH, overlay))
+        manifest = json.loads(document_text(root, manifest_path, overlay))
         if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
             raise ValueError("index.json requires schema_version 1")
         rules, modules = manifest.get("rules"), manifest.get("modules")
@@ -202,10 +214,10 @@ def validate_index(root, overlay=None):
                     issues.append(f"unknown or self dependency: {module['id']} -> {dependency.get('module')}")
         validate_code_targets(root, modules, overlay)
         for relative in [*rules.values(), *(module.get("document") for module in modules)]:
-            if not isinstance(relative, str) or not relative.startswith(INDEX_DIRECTORY + "/") or not relative.endswith(".md"):
+            if not isinstance(relative, str) or not relative.startswith(directory + "/") or not relative.endswith(".md"):
                 raise ValueError("rule and module documents must be Markdown inside the project ai-index")
             documents.add(relative)
-        checked = {"AGENTS.md", SKILL_PATH, MANIFEST_PATH}
+        checked = {"AGENTS.md", skill_path, manifest_path}
         while remaining := sorted(documents - checked):
             if len(documents) > MAX_INDEX_DOCUMENTS:
                 raise ValueError(f"project index exceeds {MAX_INDEX_DOCUMENTS} guidance documents")
@@ -288,7 +300,7 @@ def bootstrap_inventory(root):
 
 
 def bootstrap_state(root):
-    return None if contained_path(root, INDEX_DIRECTORY).exists() else "missing"
+    return None if contained_path(root, index_directory(root)).exists() else "missing"
 
 
 def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved=False):
@@ -310,7 +322,7 @@ def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved
     modules = manifest.get("modules", []) if isinstance(manifest, dict) else []
     for changed in changed_paths or []:
         relative_path(changed)
-        if changed == "AGENTS.md" or changed.startswith(INDEX_DIRECTORY + "/"):
+        if changed == "AGENTS.md" or changed.startswith(index_directory(root) + "/"):
             continue
         owners = [module["id"] for module in modules if isinstance(module, dict) and isinstance(module.get("id"), str) and isinstance(module.get("sources"), list) and any(changed == source or changed.startswith(source + "/") for source in module["sources"] if isinstance(source, str))]
         result["affected_modules"].extend(owners)

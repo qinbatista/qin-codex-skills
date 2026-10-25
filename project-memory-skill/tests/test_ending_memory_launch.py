@@ -331,6 +331,20 @@ class EndingLaunchTests(unittest.TestCase):
         root_document = self.project / "AGENTS.md"
         return {"schema_version": 1, "project_root": str(self.project), "evidence": {"script.py": hashlib.sha256((self.project / "script.py").read_bytes()).hexdigest()}, "files": [{"path": "AGENTS.md", "expected_sha256": hashlib.sha256(root_document.read_bytes()).hexdigest(), "content": root_document.read_text() + "Keep example behavior in script.py.\n"}]}
 
+    def test_visible_project_index_remains_selected_by_ending_handoff(self):
+        for relative, content in self.index_documents().items():
+            target = self.project / relative.replace(".agents/skills/ai-index", "skills/ai-index")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content.replace(".agents/skills/ai-index", "skills/ai-index"), encoding="utf-8")
+        target = self.project / "skills/ai-index/example.md"
+        plan = {"schema_version": 1, "project_root": str(self.project), "evidence": {}, "files": [{"path": "skills/ai-index/example.md", "expected_sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "content": "# Example\nThe script remains the source owner.\n"}]}
+        packet = self.prepare(project_index={"plan": plan})
+        self.assertEqual(packet["project_index"]["plan"], plan)
+        self.assertIn("existing AI-index guidance selected by the Management helper", packet["create_thread"]["prompt"])
+        self.assertEqual(MODULE.project_index_helper().check_project(self.project)["status"], "ready")
+        with self.assertRaisesRegex(ValueError, "outside"):
+            MODULE.project_index_helper().guidance_target(self.project, ".agents/skills/ai-index/example.md")
+
     def test_index_plan_handoff_uses_shared_scope_and_source_guards(self):
         plan = self.index_plan()
         packet = self.prepare(project_index={"project_root": str(self.project), "origin_task_id": "task-1", "plan": plan})

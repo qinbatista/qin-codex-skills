@@ -263,8 +263,16 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "bootstrap_state",
           "anchor": "def bootstrap_state(root):",
-          "summary": "Require first-bootstrap consent only when the project index directory is absent; existing partial indexes are repair cases.",
+          "summary": "Require first-bootstrap consent only when neither visible nor legacy index exists; existing partial indexes are repair cases.",
           "related": []
+        },
+        {
+          "id": "index-directory",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "index_directory",
+          "anchor": "def index_directory(root):",
+          "summary": "Select an existing visible project index before the legacy owner without reading content or recreating a hidden duplicate.",
+          "related": [{"module": "management", "target": "index-presence", "reason": "Presence selection preserves the original first-bootstrap consent boundary."}]
         },
         {
           "id": "index-startup",

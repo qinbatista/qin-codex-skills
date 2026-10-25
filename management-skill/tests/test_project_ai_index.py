@@ -118,6 +118,50 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.assertFalse((self.project / "AGENTS.md").exists())
         self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
 
+    def test_visible_index_real_cli_repair_route_and_scoped_apply(self):
+        visible = INDEX.VISIBLE_INDEX_DIRECTORY
+        (self.project / visible).mkdir(parents=True)
+        plan = json.loads(json.dumps(self.plan()).replace(INDEX.INDEX_DIRECTORY, visible))
+        plan.pop("bootstrap_approved")
+        plan_path = self.work / "visible-plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        applied = self.cli("apply", "--plan", str(plan_path), "--work-dir", str(self.work))
+        self.assertEqual(json.loads(applied.stdout)["status"], "complete", applied.stdout)
+        inspected = json.loads(self.cli("inspect").stdout)
+        self.assertEqual(inspected["status"], "ready", inspected)
+        self.assertIn(f"{visible}/SKILL.md", inspected["documents"])
+        routed = json.loads(self.cli("route", "--module", "api").stdout)
+        self.assertEqual(routed["document"], f"{visible}/modules/api.md")
+        self.assertFalse((self.project / ".agents").exists())
+        target = f"{visible}/modules/api.md"
+        update = {"schema_version": 1, "project_root": str(self.project), "evidence": plan["evidence"], "files": [{"path": target, "expected_sha256": INDEX.file_hash(self.project / target), "content": "# API\nCurrent request owner: src/api.py.\n"}]}
+        self.assertEqual(INDEX.apply_plan(self.project, update, self.work)["status"], "complete")
+        self.assertIn("Current request owner", (self.project / target).read_text())
+        self.assertFalse((self.project / ".agents").exists())
+        for forbidden in (f"{INDEX.INDEX_DIRECTORY}/rules/extra.md", "skills/another-skill/SKILL.md", "src/api.py"):
+            with self.subTest(forbidden=forbidden), self.assertRaisesRegex(ValueError, "outside"):
+                INDEX.guidance_target(self.project, forbidden)
+
+    def test_visible_owner_precedes_existing_legacy_without_rewriting_it(self):
+        self.bootstrap()
+        legacy = {record["path"]: (self.project / record["path"]).read_bytes() for record in self.plan()["files"] if record["path"].startswith(INDEX.INDEX_DIRECTORY)}
+        for record in self.plan()["files"]:
+            self.write(record["path"].replace(INDEX.INDEX_DIRECTORY, INDEX.VISIBLE_INDEX_DIRECTORY), record["content"].replace(INDEX.INDEX_DIRECTORY, INDEX.VISIBLE_INDEX_DIRECTORY))
+        result = INDEX.check_project(self.project)
+        self.assertEqual(result["status"], "ready", result)
+        self.assertIn(f"{INDEX.VISIBLE_INDEX_DIRECTORY}/index.json", result["documents"])
+        self.assertNotIn(INDEX.MANIFEST_PATH, result["documents"])
+        self.assertEqual(legacy, {relative: (self.project / relative).read_bytes() for relative in legacy})
+
+    def test_partial_visible_owner_is_repair_case_without_legacy_fallback(self):
+        self.bootstrap()
+        (self.project / INDEX.VISIBLE_INDEX_DIRECTORY).mkdir(parents=True)
+        for command in ("inspect", "check", "route"):
+            result = json.loads(self.cli(command).stdout)
+            self.assertEqual(result["status"], "needs_review", result)
+            self.assertNotIn("question", result)
+            self.assertIn(f"{INDEX.VISIBLE_INDEX_DIRECTORY}/SKILL.md", result["documents"])
+
     def test_existing_partial_index_is_repaired_without_another_bootstrap_question(self):
         for state in ("directory-only", "entry-only", "manifest-only", "empty-manifest", "malformed-manifest", "empty-routes"):
             with self.subTest(state=state):
