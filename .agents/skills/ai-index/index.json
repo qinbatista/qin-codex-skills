@@ -38,6 +38,71 @@
           "module": "project-memory",
           "reason": "Ending handoff and native self-deletion belong to Project Memory."
         }
+      ],
+      "code_targets": [
+        {
+          "id": "cache-retention-update",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "touch_run",
+          "anchor": "def touch_run(project_root, task_id, run_root, *, artifact_root=None, state=\"working\", reason=None):",
+          "summary": "Update an exact owned run; retention requires a concrete need and next review.",
+          "related": [
+            {
+              "module": "workflow",
+              "target": "cache-retention-contract-test",
+              "reason": "Checks reason rejection and due/legacy review without deletion."
+            }
+          ]
+        },
+        {
+          "id": "cache-retention-release",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "release_retention",
+          "anchor": "def release_retention(project_root, task_id, run_root, *, run_id, expected_identity, reason,",
+          "summary": "Retire exact owner-released retention only after unchanged identity and native consumers."
+        },
+        {
+          "id": "cache-consumer-probe",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "probe_activity",
+          "anchor": "def probe_activity(path, *, deadline=None):",
+          "summary": "Read native open-handle inventory and process references with exact directory boundaries; fail closed on incomplete probes.",
+          "related": [
+            {
+              "module": "workflow",
+              "target": "cache-native-consumer-test",
+              "reason": "Exercises a real held file and release after the native consumer closes."
+            }
+          ]
+        },
+        {
+          "id": "cache-checkpoint-record",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_sweep_record",
+          "anchor": "def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):",
+          "summary": "Review due retention and remove only identity-stable disposable runs with fresh consumers."
+        },
+        {
+          "id": "artifact-allocation",
+          "file": "workflow-skill/scripts/task_artifact_paths.py",
+          "symbol": "resolve_task_artifact_root",
+          "anchor": "def resolve_task_artifact_root(",
+          "summary": "Allocate fresh external execution roots, opportunistically clean predecessors and bound automatic diagnostics."
+        },
+        {
+          "id": "cache-retention-contract-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_retention_requires_concrete_reason_and_due_review_does_not_delete",
+          "anchor": "def test_retention_requires_concrete_reason_and_due_review_does_not_delete(self):",
+          "summary": "Reject unreasoned retention and surface due/legacy retention while preserving payload."
+        },
+        {
+          "id": "cache-native-consumer-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_real_open_file_and_process_reference_are_protected",
+          "anchor": "def test_real_open_file_and_process_reference_are_protected(self):",
+          "summary": "Use a real native open file independent of argv/cwd and verify deletion remains blocked until closure."
+        }
       ]
     },
     {
@@ -272,7 +337,13 @@
           "symbol": "index_directory",
           "anchor": "def index_directory(root):",
           "summary": "Select an existing visible project index before the legacy owner without reading content or recreating a hidden duplicate.",
-          "related": [{"module": "management", "target": "index-presence", "reason": "Presence selection preserves the original first-bootstrap consent boundary."}]
+          "related": [
+            {
+              "module": "management",
+              "target": "index-presence",
+              "reason": "Presence selection preserves the original first-bootstrap consent boundary."
+            }
+          ]
         },
         {
           "id": "index-startup",

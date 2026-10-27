@@ -169,10 +169,12 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     populated = any(path.iterdir())
     if (location == "legacy" or populated) and not (isinstance(legacy_reason, str) and legacy_reason.strip()):
         raise ValueError("existing runs require an exact audited disposable reason")
+    now = time.time()
+    retention = _retention_fields(state, legacy_reason, now)
     snapshot = _snapshot(path)
     record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
-    now = time.time()
     record = {"schema_version": SCHEMA, "path": str(path), "project_root": str(project), "task_id": task_id, "run_id": artifacts.task_artifact_run_id(path) if location == "external" else uuid.uuid4().hex, "location": location, "identity": snapshot["identity"], "state": state, "heartbeat": now, "registered_at": now, "creator_pid": os.getpid(), "creator_identity": _process_identity(os.getpid()), "disposable_reason": legacy_reason or "fresh task-owned disposable support allocation"}
+    record.update(retention)
     with _lock(record_path):
         if record_path.exists():
             raise ValueError("run already registered; use touch/checkpoint without replacing ownership")
@@ -180,7 +182,15 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     return record
 
 
-def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="working"):
+def _retention_fields(state, reason, now):
+    if state not in {"retained", "recovery"}:
+        return {}
+    if not isinstance(reason, str) or not reason.strip() or reason.strip() == "fresh task-owned disposable support allocation":
+        raise ValueError("retention/recovery requires a concrete current consumer, review or minimum recovery reason")
+    return {"retention_reason": reason.strip(), "retention_review_at": now + STALE_SECONDS}
+
+
+def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="working", reason=None):
     if state not in STATES:
         raise ValueError("invalid lifecycle state")
     project = Path(project_root).resolve(strict=True)
@@ -198,7 +208,9 @@ def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="wor
             raise ValueError("blocked deletion requires owner review; touch cannot bypass it")
         if record["state"] in {"retained", "recovery"} and state not in {"retained", "recovery"}:
             raise ValueError("retention/recovery must be released by its actual owner; finish cannot erase protection")
-        record.update(state=state, heartbeat=time.time())
+        now = time.time()
+        record.update(_retention_fields(state, reason, now))
+        record.update(state=state, heartbeat=now)
         _write(record_path, record)
     return record
 
@@ -347,13 +359,20 @@ def probe_activity(path, *, deadline=None):
         ps = shutil.which("ps")
         if not lsof or not ps:
             return {"safe": False, "pending": True, "reason": "lsof/ps unavailable; consumer probe pending"}
-        opened = _run_command([lsof, "-nP", "+D", str(path), "-Fpn"], timeout=_remaining(deadline))
+        # Inventory open handles once instead of making lsof traverse every file
+        # in a large build tree. NUL-delimited names preserve spaces/newlines.
+        opened = _run_command([lsof, "-nP", "-Fpn0"], timeout=_remaining(deadline))
         warnings = _outside_mount_warnings(path, opened.stderr, deadline=deadline) if opened.stderr.strip() and opened.returncode in {0, 1} else []
         if opened.returncode not in {0, 1} or warnings is None:
             return {"safe": False, "pending": True, "reason": "open-file probe incomplete: " + opened.stderr.strip()[:300]}
         context = {"scope_warnings": warnings} if warnings else {}
-        if opened.stdout.strip():
-            return {**context, "safe": False, "reason": "active open files or working directory"}
+        target = str(Path(path).resolve(strict=True))
+        for field in opened.stdout.split("\0"):
+            field = field.lstrip("\n")
+            if field.startswith("n") and (field[1:] == target or field[1:].startswith(target + os.sep)):
+                return {**context, "safe": False, "reason": "active open files or working directory"}
+        if opened.stdout.strip() and "\0" not in opened.stdout:
+            return {**context, "safe": False, "pending": True, "reason": "open-file probe returned unverified field format"}
         processes = _run_command([ps, "-axo", "pid=,command="], timeout=_remaining(deadline))
         if processes.returncode or processes.stderr.strip():
             return {**context, "safe": False, "pending": True, "reason": "process probe incomplete"}
@@ -400,8 +419,16 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             return {**result, "action": "absent"}
         if record["state"] not in STATES:
             raise ValueError("invalid registered lifecycle state")
-        if record["state"] in PROTECTED_STATES or path == current_run:
-            return {**result, "action": "keep", "reason": "current, retained, recovery or blocked run"}
+        if path == current_run or record["state"] == "blocked":
+            return {**result, "action": "keep", "reason": "current run or deletion blocked pending owner review"}
+        if record["state"] in {"retained", "recovery"}:
+            retention_reason = record.get("retention_reason")
+            review_at = record.get("retention_review_at")
+            if (not isinstance(retention_reason, str) or not retention_reason.strip()
+                    or retention_reason == "fresh task-owned disposable support allocation"
+                    or not isinstance(review_at, (int, float)) or not now < review_at <= record["heartbeat"] + STALE_SECONDS):
+                return {**result, "action": "pending", "reason": "retention owner review required; renew a concrete need or explicitly release the exact run", "retention_reason": retention_reason, "retention_review_at": review_at}
+            return {**result, "action": "keep", "reason": "current retention need recorded", "retention_reason": retention_reason, "retention_review_at": review_at}
         own = record["task_id"] == task_id
         if own and record["state"] not in {"complete", "obsolete"}:
             return {**result, "action": "keep", "reason": "own working run needs an exact completion or transition"}
@@ -572,7 +599,7 @@ def main():
     parser.add_argument("--run-id", help="Registered run ID required for explicit retention release")
     parser.add_argument("--identity", type=int, nargs=2, metavar=("DEVICE", "INODE"), help="Registered directory identity required for retention release")
     parser.add_argument("--state", choices=sorted(STATES), default="working")
-    parser.add_argument("--reason", help="Exact audited evidence that an existing run is disposable")
+    parser.add_argument("--reason", help="Audited disposal/release evidence, or concrete current retention/recovery need")
     parser.add_argument("--phase", choices=("start", "transition", "finish"), default="start")
     parser.add_argument("--current-run", type=Path)
     parser.add_argument("--obsolete-run", type=Path, action="append", default=[])
@@ -594,7 +621,7 @@ def main():
         elif args.command == "register":
             result = register_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, legacy_reason=args.reason, state=args.state)
         elif args.command == "touch":
-            result = touch_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, state=args.state)
+            result = touch_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, state=args.state, reason=args.reason)
         elif args.command == "release-retention":
             if not args.run_id or args.identity is None:
                 raise ValueError("retention release requires --run-id and --identity")

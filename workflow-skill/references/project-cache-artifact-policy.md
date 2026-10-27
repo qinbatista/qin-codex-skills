@@ -23,6 +23,8 @@ Configure each tool's output, working directory and cache options before launch,
 
 ## Separate executions and continuation
 
+For an isolated source/build/test snapshot, use the producer's source-file allowlist, including only explicitly required untracked inputs. Never recursively copy a project with its `Cache`, `Library`, `Temp`, `Logs`, previous snapshots or external task store into another run; a nested cache can otherwise multiply every earlier build. Check the selected roots, destination containment and file/byte inventory before copying. Canonical reusable runtime caches stay with their actual owner rather than being cloned per attempt. The producer must release its snapshot on success, failure, timeout and cancellation after verified result or minimum recovery handoff.
+
 A new request, resumed execution or newly started test, build, package or deployment unit allocates a new run, even in the same window, chat or logical task. Never append later output to an earlier run or keep one growing directory for the chat's lifetime. An exact active run remains available to its own consumers; this does not protect completed sibling runs.
 
 Before allocating the next run, execute the [task-transition cleanup checkpoint](task-resource-lifecycle.md#task-transition-cleanup-checkpoint). Unrelated work triggers cleanup too: delete confirmed unused predecessor support without copying it into the new run. The allocator registers exact run ownership in the external operational index; keep lifecycle state current and run the finish checkpoint after delivery. Every checkpoint also checks registered disposable runs from other tasks with at least 24 hours of inactivity. Fresh allocation alone does not discharge old-run cleanup.

@@ -151,7 +151,8 @@ def resolve_task_artifact_root(
             checkpoint = {"bytes_deleted": 0, "results": [{"action": "pending", "reason": str(error)}]}
         actionable = [item for item in checkpoint["results"] if item["action"] in {"deleted", "pending"}]
         if actionable:
-            print(json.dumps({"event": "task_cache_checkpoint", "bytes_deleted": checkpoint["bytes_deleted"], "results": actionable}, sort_keys=True), file=sys.stderr)
+            counts = {action: sum(item["action"] == action for item in actionable) for action in ("deleted", "pending")}
+            print(json.dumps({"event": "task_cache_checkpoint", "bytes_deleted": checkpoint["bytes_deleted"], "result_counts": counts, "results": actionable[:5], "results_omitted": max(0, len(actionable) - 5)}, sort_keys=True), file=sys.stderr)
         path.mkdir(parents=True, exist_ok=False)
         validate_external_directory(path, project_root, environ=environ)
         try:

@@ -1,4 +1,6 @@
 import json
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -83,6 +85,17 @@ class TaskCacheCleanupTests(unittest.TestCase):
         self.assertTrue(previous.exists())
         self.assertTrue(following.is_dir())
 
+    def test_allocator_bounds_repeated_pending_review_diagnostics(self):
+        report = {"bytes_deleted": 0, "results": [{"action": "pending", "reason": "review required", "path": f"run-{index}"} for index in range(20)]}
+        stderr = io.StringIO()
+        with mock.patch.object(cleanup, "checkpoint", return_value=report), contextlib.redirect_stderr(stderr):
+            run = self.run_root()
+        event = json.loads(stderr.getvalue())
+        self.assertEqual(event["result_counts"], {"deleted": 0, "pending": 20})
+        self.assertEqual(len(event["results"]), 5)
+        self.assertEqual(event["results_omitted"], 15)
+        self.assertTrue(run.exists())
+
     def test_concurrent_allocators_keep_distinct_registered_runs(self):
         with ThreadPoolExecutor(max_workers=4) as pool:
             runs = list(pool.map(self.run_root, ["mine"] * 8))
@@ -138,8 +151,8 @@ class TaskCacheCleanupTests(unittest.TestCase):
 
     def test_retention_recovery_and_native_ledger_always_protected(self):
         retained, recovery, ledger = self.run_root("retain"), self.run_root("recover"), self.run_root("ledger")
-        cleanup.touch_run(self.project, "retain", retained, artifact_root=self.base, state="retained")
-        cleanup.touch_run(self.project, "recover", recovery, artifact_root=self.base, state="recovery")
+        cleanup.touch_run(self.project, "retain", retained, artifact_root=self.base, state="retained", reason="User is reviewing this exact exported fixture")
+        cleanup.touch_run(self.project, "recover", recovery, artifact_root=self.base, state="recovery", reason="Retry still needs this exact failed-job input")
         (ledger / ".codex-task-resource-ledger.json").write_text("{}")
         with mock.patch.object(cleanup.time, "time", return_value=time.time() + 90000), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             result = self.sweep()
@@ -149,6 +162,28 @@ class TaskCacheCleanupTests(unittest.TestCase):
             owner = json.loads(self.record_path(protected).read_text())["task_id"]
             with self.assertRaisesRegex(ValueError, "finish cannot erase"):
                 cleanup.checkpoint(self.project, owner, artifact_root=self.base, phase="finish", current_run=protected, apply=True)
+
+    def test_retention_requires_concrete_reason_and_due_review_does_not_delete(self):
+        run = self.run_root()
+        for state in ("retained", "recovery"):
+            for reason in (None, " ", "fresh task-owned disposable support allocation"):
+                with self.assertRaisesRegex(ValueError, "concrete current"):
+                    cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state=state, reason=reason)
+        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="retained", reason="User reviews this native fixture until its acceptance decision")
+        self.assertEqual(record["retention_review_at"], record["heartbeat"] + cleanup.STALE_SECONDS)
+        current = self.sweep()
+        self.assertEqual(current["results"][0]["action"], "keep")
+        with mock.patch.object(cleanup.time, "time", return_value=record["retention_review_at"] + 1):
+            due = self.sweep()
+        self.assertEqual(due["results"][0]["action"], "pending")
+        self.assertIn("owner review required", due["results"][0]["reason"])
+        self.assertTrue(run.exists())
+        record.pop("retention_reason")
+        record.pop("retention_review_at")
+        cleanup._write(self.record_path(run), record)
+        legacy = self.sweep()
+        self.assertEqual(legacy["results"][0]["action"], "pending")
+        self.assertTrue(run.exists())
 
     def test_unknown_legacy_is_never_deleted_then_exact_audited_adoption_cleans(self):
         legacy = self.project / "Cache" / "old-generated"
@@ -171,7 +206,7 @@ class TaskCacheCleanupTests(unittest.TestCase):
         run = self.run_root()
         payload = run / "input.bin"
         payload.write_bytes(b"retired recovery")
-        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="recovery")
+        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="recovery", reason="Recovery input needed for an identified retry")
         arguments = dict(artifact_root=self.base, run_id=record["run_id"],
                          expected_identity=record["identity"], reason="Actual owner retired this recovery input")
         child = subprocess.Popen([sys.executable, "-c",
@@ -195,7 +230,7 @@ class TaskCacheCleanupTests(unittest.TestCase):
 
     def test_explicit_owner_release_rejects_wrong_identity_owner_and_blocked(self):
         run = self.run_root()
-        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="retained")
+        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="retained", reason="Explicit user fixture review remains open")
         arguments = dict(artifact_root=self.base, run_id=record["run_id"],
                          expected_identity=record["identity"], reason="Actual owner release")
         for changes in ({"expected_identity": [0, 0]}, {"run_id": "wrong"}, {"reason": " "}):
@@ -335,6 +370,22 @@ class TaskCacheCleanupTests(unittest.TestCase):
         for platform in ("win32", "unsupported"):
             with mock.patch.object(cleanup.sys, "platform", platform):
                 self.assertFalse(cleanup.probe_activity(run)["safe"])
+
+    def test_open_handle_inventory_uses_exact_directory_boundary(self):
+        run = self.run_root()
+        def native(arguments, **kwargs):
+            if Path(arguments[0]).name == "lsof":
+                self.assertNotIn("+D", arguments)
+                self.assertIn("-Fpn0", arguments)
+                return subprocess.CompletedProcess(arguments, 0, fields, "")
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native):
+            fields = f"p123\0\nn{run}-sibling/open.bin\0\n"
+            self.assertTrue(cleanup.probe_activity(run)["safe"])
+            fields += f"n{run}/directory with spaces/file\nname.bin\0\n"
+            self.assertEqual(cleanup.probe_activity(run)["reason"], "active open files or working directory")
+            fields = "unverified output"
+            self.assertTrue(cleanup.probe_activity(run)["pending"])
 
     @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX activity check")
     def test_real_open_file_and_process_reference_are_protected(self):
