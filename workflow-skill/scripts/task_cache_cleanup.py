@@ -881,7 +881,12 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
         except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
             results.append({"record": str(record_path), "action": "pending", "reason": str(error)})
     completed = all(not path.exists() and not path.is_symlink() and not (_registry(base, project) / "runs" / (_key(path) + ".json")).exists() for path in requested) if requested else None
-    return {"phase": phase, "applied": apply, "results": results, "requested_complete": completed, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
+    try:
+        remote_review = _remote_owner_review(project / "Cache", project)
+    except (OSError, ValueError) as error:
+        remote_review = []
+        results.append({"path": str(project / "Cache"), "action": "pending", "reason": "remote owner inventory failed: " + str(error)})
+    return {"phase": phase, "applied": apply, "results": results, "requested_complete": completed, "remote_review": remote_review, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
 
 
 def scan(project_root, artifact_root=None):
@@ -900,6 +905,11 @@ def scan(project_root, artifact_root=None):
             errors.append({"path": str(record_path), "reason": str(error)})
     unknown = []
     violations = []
+    remote_review = {}
+    try:
+        remote_review.update((item["path"], item) for item in _remote_owner_review(project / "Cache", project))
+    except (OSError, ValueError) as error:
+        errors.append({"path": str(project / "Cache"), "reason": str(error)})
     for record_path in sorted((directory / "projects").glob("*.json")):
         try:
             record = _read(record_path)
@@ -908,6 +918,7 @@ def scan(project_root, artifact_root=None):
             for cache in roots:
                 if cache.is_dir():
                     violations.extend(_cache_violations(cache, owner))
+                    remote_review.update((item["path"], item) for item in _remote_owner_review(cache, owner))
             roots.append(owner / "Cache" if base == owner / "Cache" else base / ("p-" + _key(owner)[:16]))
             for root in roots:
                 artifacts._check_ancestors(root)
@@ -915,7 +926,15 @@ def scan(project_root, artifact_root=None):
                     unknown.extend({"path": str(child), "project_root": str(owner), "action": "needs-review"} for child in root.iterdir() if str(child) not in known)
         except (OSError, ValueError, KeyError) as error:
             errors.append({"path": str(record_path), "reason": str(error)})
-    return {"registered": records, "unclassified": unknown, "violations": violations, "errors": errors}
+    return {"registered": records, "unclassified": unknown, "violations": violations, "remote_review": list(remote_review.values()), "errors": errors}
+
+
+def _remote_owner_review(cache, project):
+    """Inventory direct remote names without inferring ownership or deletion consent."""
+    if not cache.exists() and not cache.is_symlink():
+        return []
+    artifacts._check_ancestors(cache)
+    return [{"path": str(child), "project_root": str(project), "action": "needs-owner-review", "reason": "remote-* supplies no durable owner or synchronization proof; verify native references and retire consumed test payloads"} for child in sorted(cache.iterdir()) if child.name.startswith("remote-") and child.name != REGISTRY]
 
 
 def _cache_violations(cache, project):
@@ -927,6 +946,7 @@ def discover(search_roots, *, project_root, artifact_root=None, apply=False, lim
     """One bounded inventory; later checkpoints use the registry, not whole disk."""
     found = []
     violations = []
+    remote_review = []
     unclassified = []
     errors = []
     project = Path(project_root).resolve(strict=True)
@@ -957,13 +977,14 @@ def discover(search_roots, *, project_root, artifact_root=None, apply=False, lim
                     else:
                         found.append({"path": str(current), "project_root": str(owner), "action": "needs-review"})
                         violations.extend(_cache_violations(current, owner))
+                        remote_review.extend(_remote_owner_review(current, owner))
                         if apply:
                             register_project(owner, artifact_root=base, cache_roots=[current])
                     continue
                 pending.extend(child for child in current.iterdir() if child.name not in {".git", "node_modules", REGISTRY, ".codex", ".agents"} and child.is_dir() and not child.is_symlink())
             except (OSError, ValueError) as error:
                 errors.append({"path": str(current), "reason": str(error)})
-    return {"cache_roots": found, "unclassified_cache_roots": unclassified, "violations": violations, "errors": errors, "visited": count, "limit_reached": count >= limit}
+    return {"cache_roots": found, "unclassified_cache_roots": unclassified, "violations": violations, "remote_review": remote_review, "errors": errors, "visited": count, "limit_reached": count >= limit}
 
 
 def main():

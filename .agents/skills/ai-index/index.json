@@ -87,7 +87,7 @@
           "file": "workflow-skill/scripts/task_artifact_paths.py",
           "symbol": "resolve_task_artifact_root",
           "anchor": "def resolve_task_artifact_root(",
-          "summary": "Allocate fresh project Cache execution roots, opportunistically clean predecessors and bound automatic diagnostics."
+          "summary": "Allocate fresh project Cache execution roots, close eligible predecessors and report bounded cleanup and remote-owner diagnostics."
         },
         {
           "id": "cache-retention-contract-test",
@@ -149,7 +149,7 @@
           "id": "cache-checkpoint-priority",
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "checkpoint",
-          "anchor": "def checkpoint(project_root, task_id,",
+          "anchor": "def checkpoint(project_root, task_id, *, artifact_root=None, phase=\"start\", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):",
           "summary": "Prioritize explicit owners, report idempotent requested completion and support exact nested fixture closure."
         },
         {
@@ -172,6 +172,27 @@
           "symbol": "task_artifact_scope",
           "anchor": "def task_artifact_scope(project_root, task_id, *, borrowed_root=None):",
           "summary": "Close an owned registered run on every exit, preserve borrowed owners and surface closure failures without hiding the original error."
+        },
+        {
+          "id": "cache-remote-owner-review",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_remote_owner_review",
+          "anchor": "def _remote_owner_review(cache, project):",
+          "summary": "Inventory only direct remote Cache names for native owner review; exclude the operational registry and never infer retention, synchronization or deletion authority.",
+          "related": [
+            {
+              "module": "workflow",
+              "target": "cache-remote-owner-review-test",
+              "reason": "Proves discovery, scan and checkpoints expose candidates without deleting payloads and allocation bounds the diagnostic sample."
+            }
+          ]
+        },
+        {
+          "id": "cache-remote-owner-review-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_remote_prefix_requires_owner_review_without_adopting_or_deleting",
+          "anchor": "def test_remote_prefix_requires_owner_review_without_adopting_or_deleting(self):",
+          "summary": "Exercise real Cache directories, configuration and test payload preservation, direct-child-only inventory, registry exclusion and bounded allocation diagnostics."
         }
       ]
     },
@@ -467,14 +488,14 @@
           "id": "regression-command-owner",
           "file": "management-skill/scripts/global_skill_regression_gate.py",
           "symbol": "command_result",
-          "anchor": "def command_result(check_id:",
+          "anchor": "def command_result(check_id: str, target: str, command: list[str], root: Path, timeout_seconds: int, replacements: dict[str, str]) -> dict[str, object]:",
           "summary": "Give every regression command a registered owner and close it after real success/timeout."
         },
         {
           "id": "regression-candidate-owner",
           "file": "management-skill/scripts/global_skill_regression_gate.py",
           "symbol": "candidate_layouts",
-          "anchor": "def candidate_layouts(project_root:",
+          "anchor": "def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str]):",
           "summary": "Own or borrow a bounded candidate workspace with explicit lifecycle closure."
         },
         {

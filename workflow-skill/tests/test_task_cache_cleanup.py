@@ -635,6 +635,32 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             with mock.patch.object(cleanup.sys, "platform", platform):
                 self.assertFalse(cleanup.probe_activity(run)["safe"])
 
+    def test_remote_prefix_requires_owner_review_without_adopting_or_deleting(self):
+        names = {"remote-game-config", "remote-ios-runtime-evidence", *{f"remote-test-{index}" for index in range(6)}}
+        for name in names:
+            payload = self.base / name / "nested" / "Cache"
+            payload.mkdir(parents=True)
+            (payload / "payload").write_bytes(name.encode())
+        discovered = cleanup.discover([self.project], project_root=self.project, artifact_root=self.base)
+        scanned = cleanup.scan(self.project, self.base)
+        checkpoint = self.sweep()
+        for report in (discovered, scanned, checkpoint):
+            self.assertEqual({Path(item["path"]).name for item in report["remote_review"]}, names)
+            self.assertTrue(all(item["action"] == "needs-owner-review" for item in report["remote_review"]))
+        self.assertEqual(scanned["registered"], [])
+        self.assertEqual(checkpoint["results"], [])
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            run = self.run_root()
+        event = json.loads(stderr.getvalue())
+        self.assertEqual(event["remote_review_count"], len(names))
+        self.assertEqual(len(event["remote_review"]), 5)
+        self.assertEqual(event["remote_review_omitted"], 3)
+        self.assertTrue(run.is_dir())
+        self.assertEqual({Path(item["path"]).name for item in self.sweep()["remote_review"]}, names)
+        for name in names:
+            self.assertEqual((self.base / name / "nested" / "Cache" / "payload").read_bytes(), name.encode())
+
     def test_open_handle_inventory_uses_exact_directory_boundary(self):
         run = self.run_root()
         def native(arguments, **kwargs):
