@@ -2,7 +2,7 @@
 
 Use this workflow when the user requests Cache or `temp-*` cleanup, or for exact predecessor runs selected by the [automatic task-transition checkpoint](task-resource-lifecycle.md#task-transition-cleanup-checkpoint). The request authorizes deletion of eligible temporary support within the selected scope. Complete independent safe cleanup without asking again; preserve exact active, recovery, shared and review/reuse resources.
 
-Automatic checkpoints clean exact predecessors and registered disposable runs from other tasks that have had no activity for at least 24 hours. This standing authorization does not require another request. Broad filesystem discovery builds the index when requested; subsequent checkpoints use that local index rather than repeatedly traversing the whole computer.
+Automatic checkpoints clean exact predecessors and registered completed/obsolete disposable runs immediately after fresh guards pass. Foreign working runs require at least 24 hours without activity. This standing authorization does not require another request. Broad filesystem discovery builds the index when requested; subsequent checkpoints use that local index rather than repeatedly traversing the whole computer.
 
 ## Local index and executable checkpoints
 
@@ -17,6 +17,14 @@ python task_cache_cleanup.py checkpoint --project-root PROJECT --task-id THREAD 
 ```
 
 Use resolved absolute project/run paths. Omit `--current-run` when no run has been allocated; repeat `--obsolete-run` for exact retired predecessors. `finish` declares that delivery and any necessary retention/recovery handoff have already been verified. It removes the current disposable run and its registry entry. Call these commands in the active task; the Skill is not an OS scheduler or a Codex startup hook.
+
+Explicit finished/obsolete runs are processed before unrelated records. Read `requested_complete` as well as each pending reason: an unrelated old record must not hide whether the requested owner actually closed. Nested owners and test fixtures may use `--requested-only` with an exact finished/obsolete run; ordinary task checkpoints keep the default indexed pass. Repeating a completed exact finish is idempotent.
+
+Before its first unlink, the helper persists a bounded compressed inventory bound to the original owner, volume/inode, member identities and file change times. Interrupted or budget-limited deletion keeps that proof and the precise error. The next checkpoint may resume only its unchanged remaining subset after fresh native consumer checks. New/modified/replaced members, changed retention, invalid proofs and legacy blocked records without original proof require exact owner review; never invent a new snapshot to make a blocked deletion pass. Remove the payload, proof and registry entry with absence readback. Control writes use one pending slot per record, and a bounded native lock pool releases crashed writers without accumulating per-run lock files; live or unverified legacy locks remain protected.
+
+Registered parents and descendants keep their separate lifecycle: a child cannot bypass its parent's protection, and parent deletion waits for each independently registered child to close, including a completed child whose registration still exists. Close nested owners from the inside outward; do not erase a pending child by deleting its enclosing run.
+
+Tests must close their registered fixture owner through the public exact checkpoint on success, setup/body failure, timeout and cooperative cancellation. Close subprocesses and cleanup callbacks first. When borrowing a caller's existing `CODEX_PROJECT_CACHE_ROOT`, delete only the inner fixture and leave the outer owner, registry and siblings intact. Removing the directory alone or swallowing a teardown error does not close its registered lifecycle. Surface unresolved cleanup and stop replacement allocation rather than repeatedly generating copies.
 
 Project Cache checkpoints also inspect the existing default legacy external ledger when it contains this exact project's registration. For a configured older store, pass its exact existing base with `--artifact-root` to `scan`, `checkpoint` or `release-retention`. This is cleanup compatibility only: new allocation, registration and working output remain project Cache only. A legacy run still needs its original project/task/run identity, concrete retirement, unchanged payload and native consumer checks; existing retention and native-ledger barriers remain in force. Never silently abandon the old ledger when changing the allocation policy.
 

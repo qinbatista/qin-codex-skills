@@ -11,12 +11,17 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, validate_task_directory
+import task_cache_cleanup
 
 _CODEX_SQLITE_PATH = Path(__file__).resolve().with_name("codex_sqlite.py")
 _CODEX_SQLITE_SPEC = importlib.util.spec_from_file_location("management_codex_sqlite", _CODEX_SQLITE_PATH)
@@ -437,8 +442,36 @@ def extract_error_message_from_exec_output(stdout_text):
 
 
 def run_live_probe(auth_path, workdir, prompt):
-    temp_home = Path(tempfile.mkdtemp(prefix="codex-auth-live-"))
+    configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    project_root = Path(workdir or Path.cwd()).resolve(strict=True)
+    if configured:
+        candidate = Path(configured).expanduser().absolute()
+        cache = next((parent for parent in candidate.parents if parent.name == "Cache"), None)
+        if cache is None:
+            raise ValueError("Live probe requires an existing project Cache task owner.")
+        project_root = cache.parent
+        owner = validate_task_directory(candidate, project_root)
+        if not owner.is_dir():
+            raise ValueError("The borrowed live-probe owner must already exist.")
+    activity = task_cache_cleanup.probe_activity(project_root)
+    if activity.get("pending"):
+        raise RuntimeError(f"Live probe cleanup unavailable; no fake CODEX_HOME created: {activity['reason']}")
+    task_id = "management-auth-live-" + uuid.uuid4().hex
+    if not configured:
+        owner = resolve_task_artifact_root(project_root, task_id, create=True)
+    probe_root = None
+    temp_home = None
+    registered = False
+    probe_error = None
     try:
+        probe_root = Path(tempfile.mkdtemp(prefix="codex-auth-live-", dir=owner))
+        validate_task_directory(probe_root, project_root)
+        task_cache_cleanup.register_run(project_root, task_id, probe_root, legacy_reason="Fresh isolated profile and sibling native TMP owned only by this live probe; borrowed outer owner remains caller-owned.")
+        registered = True
+        temp_home = probe_root / "profile"
+        temp_home.mkdir()
+        temporary = probe_root / "tmp"
+        temporary.mkdir()
         shutil.copyfile(auth_path, temp_home / "auth.json")
         result = subprocess.run(
             [
@@ -451,7 +484,7 @@ def run_live_probe(auth_path, workdir, prompt):
                 prompt,
             ],
             cwd=workdir,
-            env={**os.environ, "CODEX_HOME": str(temp_home)},
+            env={**os.environ, "CODEX_HOME": str(temp_home), "CODEX_PROJECT_CACHE_ROOT": str(owner), "XDG_CACHE_HOME": str(temp_home / "cache"), "PYTHONDONTWRITEBYTECODE": "1", **{name: str(temporary) for name in ("TMP", "TEMP", "TMPDIR")}},
             capture_output=True,
             text=True,
             timeout=180,
@@ -484,8 +517,34 @@ def run_live_probe(auth_path, workdir, prompt):
             snapshot["command_returncode"] = result.returncode
         snapshot["source"] = "live-probe"
         return snapshot
+    except BaseException as error:
+        probe_error = error
+        raise
     finally:
-        shutil.rmtree(temp_home, ignore_errors=True)
+        pending = None
+        try:
+            if registered:
+                closed = task_cache_cleanup.checkpoint(project_root, task_id, phase="finish", current_run=probe_root, apply=True, budget_seconds=15, requested_only=True)
+                if not closed.get("requested_complete") or probe_root.exists():
+                    reason = next((item.get("reason") for item in closed["results"] if item.get("reason")), "Exact fake CODEX_HOME remains unclosed")
+                    raise RuntimeError(reason)
+            elif probe_root is not None:
+                probe_root.rmdir()  # Registration failed before any auth/payload write.
+            if not configured:
+                closed = task_cache_cleanup.checkpoint(project_root, task_id, phase="finish", current_run=owner, apply=True, budget_seconds=15, requested_only=True)
+                if not closed.get("requested_complete") or owner.exists():
+                    raise RuntimeError("The probe-owned outer task run remains unclosed")
+        except Exception as error:
+            pending = {"task_id": task_id, "project_root": str(project_root), "probe_root": str(probe_root), "fake_codex_home": str(temp_home), "owned_outer": str(owner) if not configured else None, "reason": f"{type(error).__name__}: {error}"}
+        if pending:
+            message = "Live probe cleanup pending: " + json.dumps(pending, ensure_ascii=False)
+            if probe_error is not None:
+                probe_error.cleanup_pending = pending
+                print(message, file=sys.stderr)
+            else:
+                failure = RuntimeError(message)
+                failure.cleanup_pending = pending
+                raise failure
 
 
 def find_current_active_snapshot(rollout_paths):

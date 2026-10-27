@@ -2,7 +2,7 @@
 
 Workflow is the global resource coordinator inside the independent Ending thread. The originating thread ends immediately after app creation acknowledgement and never waits for this audit, collects its results or performs Ending removal. Ending resolves questions by reading the exact origin thread without messaging or waking it. Run memory and resource branches in parallel through independent tool calls or at most two subagents with disjoint writes; collect both results inside Ending. Cleanup never waits for memory availability. Keep one writer per resource owner or ledger. Release Ending's own scratch, workers and handles too.
 
-This automatic audit uses originating/recent-chat readbacks plus [Cache cleanup's local index](cache-cleanup.md#local-index-and-executable-checkpoints) for registered disposable runs inactive at least 24 hours. It does not perform a fresh whole-computer traversal. An explicit request to clean a particular project, all Codex projects or the whole computer follows that reference's discovery scope, with exact run/resource consumers checked before deletion.
+This automatic audit uses originating/recent-chat readbacks plus [Cache cleanup's local index](cache-cleanup.md#local-index-and-executable-checkpoints) for registered completed/obsolete disposable runs and foreign working runs inactive at least 24 hours. It does not perform a fresh whole-computer traversal. An explicit request to clean a particular project, all Codex projects or the whole computer follows that reference's discovery scope, with exact run/resource consumers checked before deletion.
 
 ## Select by purpose
 

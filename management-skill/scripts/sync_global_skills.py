@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
-from task_artifact_paths import resolve_task_artifact_root, validate_task_directory, verify_cache_git
+from task_artifact_paths import resolve_task_artifact_root, task_artifact_scope, validate_task_directory, verify_cache_git
 
 
 # Kept self-contained because this installer also runs before skills are downloaded.
@@ -212,7 +212,20 @@ def run_release_gate(source_dir, skills_dir, mode):
         "--mode",
         mode,
     ]
-    completed = subprocess.run(command, cwd=source_dir, text=True, encoding="utf-8", capture_output=True, check=False, timeout=3600, **hidden_process_options())
+    # A publication candidate is a different project from the invoking checkout.
+    # Bind the child to that project's own registered run, never the caller's Cache.
+    with task_artifact_scope(source_dir, "managed-release-gate") as cache_root:
+        temporary = cache_root / "tmp"
+        temporary.mkdir()
+        environment = dict(os.environ, CODEX_PROJECT_CACHE_ROOT=str(cache_root))
+        environment.update({name: str(temporary) for name in ("TMP", "TEMP", "TMPDIR")})
+        completed = subprocess.run(command, cwd=source_dir, env=environment, text=True, encoding="utf-8", capture_output=True, check=False, timeout=3600, **hidden_process_options())
+        if completed.returncode:
+            report_path = cache_root / "global-skill-regression" / "latest.json"
+            if report_path.is_file() and not report_path.is_symlink() and report_path.stat().st_size <= 2 * 1024 * 1024:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                failed = [check for check in report.get("checks", []) if check.get("status") != "pass"]
+                print(json.dumps({"failed_checks": failed}, ensure_ascii=False))
     if completed.stdout.strip():
         print(completed.stdout.strip())
     if completed.returncode != 0:
@@ -231,17 +244,10 @@ def project_cache_root():
 @contextmanager
 def temporary_workspace(prefix):
     configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
-    cache_root = project_cache_root()
-    cache_root.mkdir(parents=True, exist_ok=bool(configured))
-    try:
+    with task_artifact_scope(DEFAULT_PROJECT_ROOT, "management-skill-sync", borrowed_root=configured) as cache_root:
+        verify_cache_git(DEFAULT_PROJECT_ROOT, cache_root)
         with tempfile.TemporaryDirectory(prefix=prefix if prefix.startswith("temp-") else f"temp-{prefix}", dir=cache_root) as workspace:
             yield Path(workspace)
-    finally:
-        if not configured:
-            try:
-                cache_root.rmdir()
-            except OSError as error:
-                print(f"Temporary workspace cleanup pending: {cache_root} ({error.__class__.__name__}).")
 
 
 def repository_git_url(repository, read_only=False):

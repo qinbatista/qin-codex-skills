@@ -13,6 +13,8 @@ import sys
 import shutil
 import subprocess
 import uuid
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Mapping
 
@@ -23,6 +25,38 @@ from hidden_process import hidden_process_options
 
 
 RUN_NAME_RE = re.compile(r"temp-(?P<task_key>[0-9a-f]{24})-(?P<run_id>[0-9a-f]{32})")
+
+
+@contextmanager
+def task_artifact_scope(project_root, task_id, *, borrowed_root=None):
+    """Close an owned run and registration; a borrowed run stays caller-owned."""
+    root = validate_task_directory(borrowed_root, project_root) if borrowed_root else resolve_task_artifact_root(project_root, task_id, create=True)
+    if not root.is_dir():
+        raise ValueError("borrowed task owner must already exist")
+    failure = None
+    try:
+        yield root
+    except BaseException as error:
+        failure = error
+        raise
+    finally:
+        if not borrowed_root:
+            try:
+                deadline = time.monotonic() + 5
+                while True:
+                    result = task_cache_cleanup.checkpoint(project_root, task_id, phase="finish", current_run=root, apply=True, budget_seconds=10, requested_only=True)
+                    waiting = any(item.get("reason") == "active open files or working directory" for item in result["results"])
+                    if result.get("requested_complete") or not waiting or time.monotonic() >= deadline:
+                        break
+                    time.sleep(.1)
+                if not result.get("requested_complete"):
+                    raise RuntimeError("Task owner cleanup pending: " + json.dumps(result, sort_keys=True))
+            except Exception as cleanup_error:
+                if failure is not None:
+                    failure.add_note(str(cleanup_error))
+                    print(str(cleanup_error), file=sys.stderr)
+                else:
+                    raise
 
 
 def verify_cache_git(project_root: str | Path, path: str | Path) -> None:
@@ -300,14 +334,17 @@ def main() -> int:
         return 0
     except (OSError, ValueError) as error:
         cleanup = "not_created"
+        cleanup_detail = None
         if created_root is not None:
             try:
-                validate_external_directory(created_root, arguments.project_root)
-                created_root.rmdir()
-                cleanup = "removed"
-            except (OSError, ValueError):
+                result = task_cache_cleanup.checkpoint(arguments.project_root, arguments.task_id, phase="finish", current_run=created_root, apply=True, requested_only=True)
+                cleanup = "removed" if result.get("requested_complete") else "pending"
+                if cleanup == "pending":
+                    cleanup_detail = result["results"]
+            except (OSError, ValueError, KeyError) as cleanup_error:
                 cleanup = "pending"
-        print(json.dumps({"status": "error", "reason": str(error), "task_root": str(root) if root is not None else None, "run_id": task_artifact_run_id(root) if root is not None else None, "cleanup": cleanup}, sort_keys=True), file=sys.stderr)
+                cleanup_detail = str(cleanup_error)
+        print(json.dumps({"status": "error", "reason": str(error), "task_root": str(root) if root is not None else None, "run_id": task_artifact_run_id(root) if root is not None else None, "cleanup": cleanup, "cleanup_detail": cleanup_detail}, sort_keys=True), file=sys.stderr)
         return 2
 
 

@@ -80,7 +80,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_sweep_record",
           "anchor": "def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):",
-          "summary": "Review current and original legacy-ledger runs with unchanged retention, volume/inode and native-consumer guards."
+          "summary": "Review current and original legacy-ledger runs; resume only original unchanged deletion proofs while preserving retention, volume/inode and native-consumer guards."
         },
         {
           "id": "artifact-allocation",
@@ -123,6 +123,55 @@
           "symbol": "TaskCacheCleanupTests.test_legacy_cleanup_retains_guards_and_never_allows_new_output",
           "anchor": "def test_legacy_cleanup_retains_guards_and_never_allows_new_output(self):",
           "summary": "Exercise old-ledger cleanup while retaining identity, retention, live-consumer and allocation barriers."
+        },
+        {
+          "id": "cache-native-lock",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_lock",
+          "anchor": "def _lock(path):",
+          "summary": "Use bounded native locks and exact legacy-marker interoperability; recover proven dead writers without bypassing live or unknown owners."
+        },
+        {
+          "id": "cache-deletion-proof",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_write_deletion_plan",
+          "anchor": "def _write_deletion_plan(record_path, record, snapshot):",
+          "summary": "Persist bounded compressed original ownership and member/change identities before the first deletion."
+        },
+        {
+          "id": "cache-deletion-resume",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_remaining_deletion",
+          "anchor": "def _remaining_deletion(path, original, deadline, registry=None):",
+          "summary": "Admit only the unchanged remaining subset of the original deletion proof; reject new or modified inputs."
+        },
+        {
+          "id": "cache-checkpoint-priority",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "checkpoint",
+          "anchor": "def checkpoint(project_root, task_id,",
+          "summary": "Prioritize explicit owners, report idempotent requested completion and support exact nested fixture closure."
+        },
+        {
+          "id": "cache-crash-resume-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_process_death_releases_lock_and_resumes_real_partial_deletion",
+          "anchor": "def test_process_death_releases_lock_and_resumes_real_partial_deletion(self):",
+          "summary": "Kill an actual unlinking child and verify native lock recovery, safe continuation and proof/record absence."
+        },
+        {
+          "id": "cache-descendant-lifecycle",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_snapshot",
+          "anchor": "def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):",
+          "summary": "Inventory unchanged members and refuse parent deletion while an independently registered descendant remains unclosed."
+        },
+        {
+          "id": "cache-producer-scope",
+          "file": "workflow-skill/scripts/task_artifact_paths.py",
+          "symbol": "task_artifact_scope",
+          "anchor": "def task_artifact_scope(project_root, task_id, *, borrowed_root=None):",
+          "summary": "Close an owned registered run on every exit, preserve borrowed owners and surface closure failures without hiding the original error."
         }
       ]
     },
@@ -392,6 +441,48 @@
           "anchor": "def test_existing_partial_index_is_repaired_without_another_bootstrap_question(self):",
           "summary": "Exercise real CLI inspection and guarded repair of partial or malformed existing indexes without another bootstrap question.",
           "related": []
+        },
+        {
+          "id": "cache-test-fixture-owner",
+          "file": "management-skill/tests/test_project_cache_artifact_policy.py",
+          "symbol": "external_fixture",
+          "anchor": "def external_fixture(task_name=\"external-policy-test\", *, cache_root=None):",
+          "summary": "Own per-case project Cache lifecycle or borrow a caller owner; close exact registered roots after callbacks, errors, timeout and cancellation."
+        },
+        {
+          "id": "publication-gate-owner",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "run_release_gate",
+          "anchor": "def run_release_gate(source_dir, skills_dir, mode):",
+          "summary": "Bind a candidate subprocess to its own registered project Cache, then close its support on success/failure."
+        },
+        {
+          "id": "installer-workspace-owner",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "temporary_workspace",
+          "anchor": "def temporary_workspace(prefix):",
+          "summary": "Close the owned installer run and registry; borrowed outer owners and siblings remain intact."
+        },
+        {
+          "id": "regression-command-owner",
+          "file": "management-skill/scripts/global_skill_regression_gate.py",
+          "symbol": "command_result",
+          "anchor": "def command_result(check_id:",
+          "summary": "Give every regression command a registered owner and close it after real success/timeout."
+        },
+        {
+          "id": "regression-candidate-owner",
+          "file": "management-skill/scripts/global_skill_regression_gate.py",
+          "symbol": "candidate_layouts",
+          "anchor": "def candidate_layouts(project_root:",
+          "summary": "Own or borrow a bounded candidate workspace with explicit lifecycle closure."
+        },
+        {
+          "id": "auth-probe-owner",
+          "file": "management-skill/scripts/manage_auth_profiles.py",
+          "symbol": "run_live_probe",
+          "anchor": "def run_live_probe(auth_path, workdir, prompt):",
+          "summary": "Keep fake profile and temporary output in an isolated exact owner, retain borrowed outer owners and expose pending cleanup without masking the original failure."
         }
       ]
     },

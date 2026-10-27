@@ -1,9 +1,11 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import uuid
 from contextlib import contextmanager
@@ -35,21 +37,156 @@ PRIMARY_SKILLS = (
     "optimization-skill",
     "management-skill",
 )
+NATIVE_FIXTURE_CLEANUP = (sys.platform == "darwin" or sys.platform.startswith("linux")) and all(shutil.which(tool) for tool in ("lsof", "ps"))
 
 
 @contextmanager
-def external_fixture():
-    task_root = ARTIFACTS.resolve_task_artifact_root(
-        SKILLS_ROOT, f"external-policy-test-{uuid.uuid4().hex}", create=True
-    )
+def external_fixture(task_name="external-policy-test", *, cache_root=None):
+    configured = cache_root if cache_root is not None else os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    if not configured and not NATIVE_FIXTURE_CLEANUP:
+        raise RuntimeError("Fixture-owned runs need the supported native cleanup probe; supply an existing CODEX_PROJECT_CACHE_ROOT so its caller retains the outer lifecycle")
+    task_id = f"{task_name}-{uuid.uuid4().hex}"
+    task_root = None
     try:
+        task_root = ARTIFACTS.validate_task_directory(configured, SKILLS_ROOT) if configured else ARTIFACTS.resolve_task_artifact_root(SKILLS_ROOT, task_id, create=True)
+        if not task_root.is_dir():
+            raise ValueError("The configured fixture owner must already exist")
         with tempfile.TemporaryDirectory(prefix="policy-", dir=task_root) as directory:
             yield Path(directory)
     finally:
-        task_root.rmdir()
+        if not configured and task_root is not None:
+            cleanup = ARTIFACTS.task_cache_cleanup
+            result = cleanup.checkpoint(SKILLS_ROOT, task_id, phase="finish", current_run=task_root, apply=True, budget_seconds=5, requested_only=True)
+            record = cleanup._registry(task_root.parent, SKILLS_ROOT) / "runs" / (cleanup._key(task_root) + ".json")
+            if not result.get("requested_complete") or task_root.exists() or record.exists():
+                own = [item for item in result["results"] if item.get("path") == str(task_root) or item.get("record") == str(record)]
+                diagnostic = {key: str(value)[:600] for key, value in (own[0] if own else {"reason": "Exact owner not reached before checkpoint budget"}).items() if key in {"action", "reason", "path", "record"}}
+                raise AssertionError(f"Fixture owner cleanup pending; root or registry still exists: {task_root}; {diagnostic}")
+
+
+class ProjectCacheTestCase(unittest.TestCase):
+    fixture_task_name = "skill-fixture-tests"
+
+    def run(self, result=None):
+        with external_fixture(self.fixture_task_name) as fixture:
+            self.fixture_root = fixture
+            try:
+                return super().run(result)
+            finally:
+                # unittest skips doCleanups when KeyboardInterrupt escapes run().
+                # Drain callbacks before this fixture's owning context closes.
+                self.doCleanups()
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
+    @unittest.skipUnless(NATIVE_FIXTURE_CLEANUP, "Native fixture owner closure requires lsof/ps on macOS/Linux")
+    def test_fixture_owner_closes_after_success_setup_failure_timeout_and_cancel(self):
+        observed = []
+        cleanup_observations = []
+
+        class FixtureCase(ProjectCacheTestCase):
+            fixture_task_name = "fixture-owner-lifecycle-contract"
+            outcome = "success"
+
+            def setUp(self):
+                observed.append(self.fixture_root.parent)
+                marker = self.fixture_root / "active.txt"
+                marker.write_bytes(b"active until actual teardown")
+                self.addCleanup(lambda: cleanup_observations.append(marker.read_bytes()))
+                if self.outcome == "setup-failure":
+                    raise RuntimeError("actual setUp failure")
+
+            def runTest(self):
+                if self.outcome == "body-failure":
+                    self.fail("actual test body failure")
+                if self.outcome == "timeout":
+                    subprocess.run([sys.executable, "-B", "-c", "import time; time.sleep(5)"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=.1, check=True, **hidden_process_options())
+                if self.outcome == "cancel":
+                    raise KeyboardInterrupt("cooperative test cancellation")
+                self.assertEqual((self.fixture_root / "active.txt").read_bytes(), b"active until actual teardown")
+
+            def tearDown(self):
+                self.assertTrue((self.fixture_root / "active.txt").is_file())
+
+        with mock.patch.dict(os.environ):
+            os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+            for outcome in ("success", "setup-failure", "body-failure", "timeout", "cancel"):
+                with self.subTest(outcome=outcome):
+                    case = FixtureCase()
+                    case.outcome = outcome
+                    result = unittest.TestResult()
+                    if outcome == "cancel":
+                        with self.assertRaises(KeyboardInterrupt):
+                            case.run(result)
+                    else:
+                        case.run(result)
+                        self.assertEqual(len(result.errors), 0 if outcome in {"success", "body-failure"} else 1, result.errors)
+                        self.assertEqual(len(result.failures), 1 if outcome == "body-failure" else 0, result.failures)
+                    root = observed[-1]
+                    cleanup = ARTIFACTS.task_cache_cleanup
+                    record = cleanup._registry(root.parent, SKILLS_ROOT) / "runs" / (cleanup._key(root) + ".json")
+                    self.assertFalse(root.exists())
+                    self.assertFalse(record.exists())
+        self.assertEqual(cleanup_observations, [b"active until actual teardown"] * 5)
+
+    @unittest.skipUnless(NATIVE_FIXTURE_CLEANUP, "Native fixture concurrency acceptance requires lsof/ps on macOS/Linux")
+    def test_fixture_borrowed_owner_and_concurrent_runs_remain_independent(self):
+        with external_fixture() as fixture:
+            caller = fixture.parent
+            marker = fixture / "caller-owned.txt"
+            marker.write_bytes(b"keep caller owner")
+            cleanup = ARTIFACTS.task_cache_cleanup
+            record = cleanup._registry(SKILLS_ROOT / "Cache", SKILLS_ROOT) / "runs" / (cleanup._key(caller) + ".json")
+            before = record.read_bytes() if record.exists() else None
+            with external_fixture(cache_root=caller) as borrowed:
+                (borrowed / "fixture.txt").write_bytes(b"borrowed scratch")
+            self.assertFalse(borrowed.exists())
+            self.assertTrue(caller.is_dir())
+            self.assertEqual(marker.read_bytes(), b"keep caller owner")
+            self.assertEqual(record.read_bytes() if record.exists() else None, before)
+
+        ready = threading.Barrier(3, timeout=45)
+        released = threading.Event()
+        finished = threading.Event()
+        paths, failures = {}, []
+
+        def worker(index):
+            try:
+                with external_fixture("concurrent-fixture-contract") as fixture:
+                    paths[index] = fixture
+                    (fixture / ".codex-task-resource-ledger.json").write_text("intentional active fixture owner", encoding="utf-8")
+                    ready.wait()
+                    if index == 1 and not released.wait(45):
+                        raise TimeoutError("Concurrent fixture test did not release its owner")
+            except BaseException as error:
+                failures.append(error)
+            finally:
+                if index == 0:
+                    finished.set()
+
+        with mock.patch.dict(os.environ):
+            os.environ.pop("CODEX_PROJECT_CACHE_ROOT", None)
+            threads = [threading.Thread(target=worker, args=(index,)) for index in range(2)]
+            for thread in threads:
+                thread.start()
+            try:
+                ready.wait()
+                self.assertTrue(finished.wait(45))
+                self.assertEqual(failures, [])
+                self.assertFalse(paths[0].parent.exists())
+                self.assertTrue(paths[1].is_dir())
+                self.assertTrue((paths[1] / ".codex-task-resource-ledger.json").exists())
+                cleanup = ARTIFACTS.task_cache_cleanup
+                record = cleanup._registry(paths[1].parent.parent, SKILLS_ROOT) / "runs" / (cleanup._key(paths[1].parent) + ".json")
+                self.assertEqual(json.loads(record.read_text())["state"], "working")
+            finally:
+                released.set()
+                for thread in threads:
+                    thread.join(45)
+            self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertEqual(failures, [])
+            self.assertTrue(all(not fixture.parent.exists() for fixture in paths.values()))
+
     def test_canonical_policy_requires_project_cache_first_write_and_owner_preservation(self):
         text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
         required_rules = (

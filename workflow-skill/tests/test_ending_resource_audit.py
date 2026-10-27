@@ -1,7 +1,6 @@
 import sys
 import copy
 import json
-import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -12,18 +11,18 @@ sys.path.insert(0, str(SCRIPTS))
 import task_artifact_paths as ARTIFACTS
 import ending_resource_audit as AUDIT
 import task_resource_ledger as LEDGER
+sys.path.insert(0, str(SCRIPTS.parents[1] / "management-skill" / "tests"))
+from test_project_cache_artifact_policy import ProjectCacheTestCase
 
 
 HASH = "a" * 64
 
 
-class EndingResourceAuditTests(unittest.TestCase):
+class EndingResourceAuditTests(ProjectCacheTestCase):
+    fixture_task_name = "ending-audit-tests"
+
     def setUp(self):
-        self.scratch_parent = ARTIFACTS.resolve_task_artifact_root(SCRIPTS.parents[1], "ending-audit-tests", create=True)
-        self.temporary = tempfile.TemporaryDirectory(prefix="c-", dir=self.scratch_parent)
-        self.addCleanup(self.temporary.cleanup)
-        fixture = Path(self.temporary.name)
-        self.project = fixture / "p"
+        self.project = self.fixture_root / "p"
         self.project.mkdir()
         self.artifact_base = self.project / "Cache"
         self.task_id = "finished-task"
@@ -31,14 +30,6 @@ class EndingResourceAuditTests(unittest.TestCase):
         self.ledger = LEDGER.new_ledger(self.project, self.task_id, self.task_root)
         self.ledger_path = self.project / self.task_root / LEDGER.LEDGER_NAME
         self.readback = {"task_id": self.task_id, "run_id": self.ledger["run_id"], "state": "complete", "purpose": "Completed website and package test", "observed_at": time.time(), "source": "owning-chat final outcome and current execution readback"}
-
-    def tearDown(self):
-        self.temporary.cleanup()
-        try:
-            self.scratch_parent.rmdir()
-            self.scratch_parent.parent.rmdir()
-        except OSError:
-            pass
 
     def file(self, resource_id, *, scope="main"):
         path = f"{self.task_root}/{resource_id}.txt"

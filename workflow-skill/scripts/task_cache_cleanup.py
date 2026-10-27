@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
+import gzip
 import hashlib
 import json
 import os
@@ -35,6 +37,20 @@ PROTECTED_STATES = {"retained", "recovery", "blocked"}
 STATES = PROTECTED_STATES | {"working", "complete", "obsolete"}
 BARRIERS = {".git", ".keep", ".retain", ".task-cache-retain", ".codex-task-resource-owner.json", ".codex-task-resource-ledger.json"}
 MAX_ENTRIES = 1000000
+MAX_PLAN_BYTES = 256 * 1024 * 1024
+LOCK_PROTOCOL = "task-cache-native-lock-v1"
+
+
+def _native_file_lock(stream, acquire):
+    if os.name == "nt":
+        import msvcrt
+        stream.seek(0)
+        msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK if acquire else msvcrt.LK_UNLCK, 1)
+    elif sys.platform == "darwin" or sys.platform.startswith("linux"):
+        import fcntl
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB if acquire else fcntl.LOCK_UN)
+    else:
+        raise ValueError("native registry locking unavailable on this host")
 
 
 def _key(value):
@@ -144,37 +160,127 @@ def _read(path):
 
 @contextlib.contextmanager
 def _lock(path):
+    """Finite native locks survive crashes; markers interoperate with old writers."""
+    if path.parent.name not in {"projects", "runs"} or re.fullmatch(r"[0-9a-f]{64}\.json", path.name) is None:
+        raise ValueError("registry lock requires an exact project or run record")
+    directory = path.parent.parent
+    pool = directory / "locks"
+    artifacts._check_ancestors(pool)
+    pool.mkdir(exist_ok=True)
+    bucket = pool / (f"{int(_key(path)[:2], 16) % 64:02x}.lock")
+    artifacts._check_ancestors(pool)
     lock = path.with_suffix(".lock")
     deadline = time.monotonic() + 3
-    while True:
+    descriptor = os.open(bucket, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(descriptor, "r+b") as stream:
+        opened = os.fstat(stream.fileno())
+        named = bucket.lstat()
+        if not stat.S_ISREG(named.st_mode) or getattr(named, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0) or _identity(opened) != _identity(named):
+            raise ValueError("native registry lock identity changed")
+        while True:
+            try:
+                _native_file_lock(stream, True)
+                break
+            except OSError as error:
+                if error.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                    raise
+                if time.monotonic() >= deadline:
+                    raise ValueError("resource registry lock busy; native owner is still holding it") from error
+                time.sleep(0.02)
+        owned = False
+        prepared = False
         try:
-            with lock.open("x", encoding="utf-8") as stream:
-                stream.write(str(os.getpid()))
-                identity = _identity(os.fstat(stream.fileno()))
-            break
-        except FileExistsError:
-            if time.monotonic() >= deadline:
-                raise ValueError("resource registry lock busy; retry a later checkpoint")
-            time.sleep(0.02)
-    try:
-        yield
-    finally:
-        if _identity(_safe_stat(lock)) == identity:
-            lock.unlink()
+            opened = os.fstat(stream.fileno())
+            if opened.st_nlink != 1:
+                stream.seek(0)
+                claim = json.loads(stream.read().decode("utf-8"))
+                relative = claim.get("record", "")
+                if opened.st_nlink != 2 or claim.get("protocol") != LOCK_PROTOCOL or claim.get("bucket") != bucket.name or re.fullmatch(r"(?:projects|runs)/[0-9a-f]{64}\.json", relative) is None:
+                    raise ValueError("native lock claim proof is inconsistent; preserve its aliases")
+                abandoned = (directory / relative).with_suffix(".lock")
+                artifacts._check_ancestors(abandoned.parent)
+                observed = abandoned.lstat()
+                if _identity(observed) != _identity(opened) or not stat.S_ISREG(observed.st_mode):
+                    raise ValueError("native lock marker identity changed")
+                abandoned.unlink()
+            prepared = True
+            claim = {"protocol": LOCK_PROTOCOL, "bucket": bucket.name, "record": path.relative_to(directory).as_posix()}
+            stream.seek(0)
+            stream.truncate()
+            stream.write(json.dumps(claim, sort_keys=True).encode("utf-8"))
+            stream.flush()
+            os.fsync(stream.fileno())
+            while True:
+                try:
+                    # Link a complete claim atomically; a killed writer cannot
+                    # leave an ownerless, empty O_EXCL marker behind.
+                    os.link(bucket, lock)
+                    owned = True
+                    if _identity(lock.lstat()) != _identity(os.fstat(stream.fileno())) or _identity(bucket.lstat()) != _identity(os.fstat(stream.fileno())):
+                        raise ValueError("native registry lock namespace changed")
+                    break
+                except FileExistsError:
+                    observed = _safe_stat(lock)
+                    contents = lock.read_text(encoding="utf-8").strip()
+                    if contents.isdigit() and _process_identity(int(contents)) is None:
+                        if _identity(_safe_stat(lock)) != _identity(observed) or lock.read_text(encoding="utf-8").strip() != contents:
+                            raise ValueError("legacy lock changed during owner readback")
+                        lock.unlink()
+                        continue
+                    if not contents.isdigit():
+                        raise ValueError("legacy lock owner proof is unavailable; owner review required")
+                    if time.monotonic() >= deadline:
+                        raise ValueError("legacy registry lock still has a live or unverified owner")
+                    time.sleep(0.02)
+            yield
+        finally:
+            try:
+                if prepared:
+                    observed = lock.lstat() if lock.exists() or lock.is_symlink() else None
+                    if observed is not None and _identity(observed) == _identity(os.fstat(stream.fileno())) and stat.S_ISREG(observed.st_mode):
+                        lock.unlink()
+                    elif owned:
+                        raise ValueError("registry lock marker changed during operation")
+                    if os.fstat(stream.fileno()).st_nlink != 1:
+                        raise ValueError("native registry lock has an unknown alias")
+                    stream.seek(0)
+                    stream.truncate()
+                    stream.write(b"{}\n")
+                    stream.flush()
+            finally:
+                _native_file_lock(stream, False)
 
 
 def _write(path, value):
     artifacts._check_ancestors(path.parent)
-    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    temporary = path.with_name(path.name + ".pending")
+    _discard_control_pending(temporary)
+    created = None
     try:
         with temporary.open("x", encoding="utf-8") as stream:
+            created = _identity(os.fstat(stream.fileno()))
             json.dump(value, stream, sort_keys=True)
             stream.flush()
             os.fsync(stream.fileno())
         temporary.replace(path)
     finally:
-        if temporary.exists():
+        if created is not None and (temporary.exists() or temporary.is_symlink()):
+            if _identity(_safe_stat(temporary)) != created:
+                raise ValueError("temporary control record identity changed")
             temporary.unlink()
+
+
+def _discard_control_pending(path):
+    if path.exists() or path.is_symlink():
+        before = _safe_stat(path)
+        activity = probe_activity(path)
+        if not activity["safe"]:
+            raise ValueError("uncommitted control record has a current reader: " + activity["reason"])
+        after = _safe_stat(path)
+        fields = ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns")
+        if any(getattr(before, field) != getattr(after, field) for field in fields):
+            raise ValueError("uncommitted control record changed")
+        path.unlink()
 
 
 def register_project(project_root, artifact_root=None, cache_roots=None):
@@ -201,29 +307,41 @@ def _bound_path(path, project, base):
     artifacts._check_ancestors(path)
     if not path.is_dir():
         raise ValueError("run must be an existing exact directory")
-    if base == project / "Cache":
-        if path.parent == base and artifacts.RUN_NAME_RE.fullmatch(path.name):
-            return "project"
-    else:
-        _cleanup_base(project, base)
-        external = base / ("p-" + _key(project)[:16])
-        if path.parent == external and (artifacts.RUN_NAME_RE.fullmatch(path.name) or re.fullmatch(r"t-[0-9a-f]{24}", path.name)):
-            return "legacy-external"
     registry = _registry(base, project)
     project_record = _read(registry / "projects" / (_key(project) + ".json"))
     roots = [artifacts._absolute_path(root, "registered Cache") for root in project_record["cache_roots"]]
     if project_record["project_root"] != str(project) or any(project not in root.parents or root.name.lower() != "cache" for root in roots):
         raise ValueError("registered Cache ownership is inconsistent")
-    if any(root in path.parents and path != root for root in roots):
-        if any((ancestor / ".git").exists() for ancestor in (project, *project.parents)):
-            git = shutil.which("git")
-            if not git:
-                raise ValueError("Git tracking probe unavailable")
-            tracked = _run_command([git, "-C", str(project), "ls-files", "-z", "--", str(path)])
-            if tracked.returncode or tracked.stderr.strip() or tracked.stdout:
-                raise ValueError("tracked or unverified Git files are protected")
-        return "legacy"
-    raise ValueError("run is outside its registered project Cache or exact external owner")
+    external = base if base == project / "Cache" else base / ("p-" + _key(project)[:16])
+    if path.parent == external and artifacts.RUN_NAME_RE.fullmatch(path.name):
+        location, boundary = ("project" if base == project / "Cache" else "legacy-external"), external
+    elif base != project / "Cache" and path.parent == external and re.fullmatch(r"t-[0-9a-f]{24}", path.name):
+        location, boundary = "legacy-external", external
+    else:
+        matches = [root for root in roots if root in path.parents]
+        if not matches:
+            raise ValueError("run is outside its registered project Cache or exact external owner")
+        location, boundary = "legacy", max(matches, key=lambda value: len(value.parts))
+    if _safe_stat(path).st_dev != _safe_stat(boundary).st_dev:
+        raise ValueError("mounted resources require their native owner")
+    for ancestor in path.parents:
+        if ancestor == boundary:
+            break
+        if any((ancestor / marker).exists() or (ancestor / marker).is_symlink() for marker in BARRIERS):
+            raise ValueError("ancestor Git, retention or native resource ledger is protected")
+        parent_record = registry / "runs" / (_key(ancestor) + ".json")
+        if parent_record.is_file():
+            parent = _read(parent_record)
+            if parent.get("path") != str(ancestor) or parent.get("project_root") != str(project) or parent.get("state") in PROTECTED_STATES:
+                raise ValueError("ancestor registered resource requires its owner's release")
+    if project in path.parents and any((ancestor / ".git").exists() for ancestor in (project, *project.parents)):
+        git = shutil.which("git")
+        if not git:
+            raise ValueError("Git tracking probe unavailable")
+        tracked = _run_command([git, "-C", str(project), "ls-files", "-z", "--", str(path)])
+        if tracked.returncode or tracked.stderr.strip() or tracked.stdout:
+            raise ValueError("tracked or unverified Git files are protected")
+    return location
 
 
 def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_reason=None, state="working"):
@@ -313,13 +431,13 @@ def release_retention(project_root, task_id, run_root, *, run_id, expected_ident
         if list(expected_identity) != record["identity"]:
             raise ValueError("retention release identity does not match registered run")
         _bound_path(path, project, base)
-        snapshot = _snapshot(path, deadline)
+        snapshot = _snapshot(path, deadline, registry=record_path.parent.parent)
         if not _record_identity_matches(path, record):
             raise ValueError("retained run identity changed")
         activity = probe_activity(path, deadline=deadline)
         if not activity["safe"]:
             raise ValueError("retention release consumer check: " + activity["reason"])
-        if _snapshot(path, deadline) != snapshot:
+        if _snapshot(path, deadline, registry=record_path.parent.parent) != snapshot:
             raise ValueError("retained run changed during consumer readback")
         record["retention_release"] = {"previous_state": record["state"], "reason": reason.strip(),
                                        "released_at": time.time(), "consumer_probe": activity}
@@ -328,12 +446,13 @@ def release_retention(project_root, task_id, run_root, *, run_id, expected_ident
     return record
 
 
-def _snapshot(path, deadline=None):
+def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
     artifacts._check_ancestors(path)
     root = _safe_stat(path)
     entries = {}
     latest = 0
     byte_count = 0
+    file_ctimes = {}
     pending = [path]
     while pending:
         if deadline is not None and time.monotonic() >= deadline:
@@ -352,10 +471,19 @@ def _snapshot(path, deadline=None):
         if len(entries) > MAX_ENTRIES:
             raise ValueError("run exceeds bounded inspection limit")
         if stat.S_ISDIR(observed.st_mode):
+            if registry is not None and current != path:
+                child_record = registry / "runs" / (_key(current) + ".json")
+                if child_record.exists() or child_record.is_symlink():
+                    raise ValueError("registered descendant has a separate lifecycle; close its exact owner before the parent")
             pending.extend(current.iterdir())
         else:
             byte_count += observed.st_size
-    return {"identity": _identity(root), "entries": entries, "latest": latest / 1000000000, "bytes": byte_count}
+            if include_ctime:
+                file_ctimes[relative] = observed.st_ctime_ns
+    result = {"identity": _identity(root), "entries": entries, "latest": latest / 1000000000, "bytes": byte_count}
+    if include_ctime:
+        result["file_ctimes"] = file_ctimes
+    return result
 
 
 def _run_command(arguments, timeout=10):
@@ -463,10 +591,129 @@ def probe_activity(path, *, deadline=None):
         return {"safe": False, "pending": True, "reason": "unsupported host activity probe"}
 
 
-def _remove_snapshot(path, snapshot):
+def _plan_path(record_path):
+    return record_path.parent.parent / "deletions" / (record_path.stem + ".json.gz")
+
+
+def _write_deletion_plan(record_path, record, snapshot):
+    target = _plan_path(record_path)
+    artifacts._check_ancestors(target.parent)
+    target.parent.mkdir(exist_ok=True)
+    ignored = {"state", "block_reason", "deletion_plan", "deletion_error", "deletion_attempt_at"}
+    plan = {"schema_version": 1, "authority": {key: value for key, value in record.items() if key not in ignored}, "snapshot": snapshot}
+    temporary = target.with_name(target.name + ".pending")
+    created = None
+    try:
+        _discard_control_pending(temporary)
+        with temporary.open("xb") as stream:
+            created = _identity(os.fstat(stream.fileno()))
+            with gzip.GzipFile(fileobj=stream, mode="wb", mtime=0) as compressed:
+                count = 0
+                for chunk in json.JSONEncoder(sort_keys=True, separators=(",", ":")).iterencode(plan):
+                    data = chunk.encode("utf-8")
+                    count += len(data)
+                    if count > MAX_PLAN_BYTES:
+                        raise ValueError("deletion proof exceeds its bounded size; payload preserved")
+                    compressed.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        digest = artifacts._file_sha256(temporary)
+        temporary.replace(target)
+        return {"schema_version": 1, "sha256": digest, "entries": len(snapshot["entries"]), "bytes": snapshot["bytes"]}
+    finally:
+        if created is not None and temporary.exists():
+            if _identity(_safe_stat(temporary)) != created:
+                raise ValueError("temporary deletion proof identity changed")
+            temporary.unlink()
+
+
+def _read_deletion_plan(record_path, record):
+    metadata = record.get("deletion_plan")
+    if not isinstance(metadata, dict) or metadata.get("schema_version") != 1:
+        raise ValueError("interrupted deletion has no original proof; exact owner review required")
+    target = _plan_path(record_path)
+    _safe_stat(target)
+    if artifacts._file_sha256(target) != metadata.get("sha256"):
+        raise ValueError("original deletion proof changed; payload preserved")
+    with gzip.open(target, "rb") as stream:
+        raw = stream.read(MAX_PLAN_BYTES + 1)
+    if len(raw) > MAX_PLAN_BYTES:
+        raise ValueError("deletion proof exceeds its bounded size")
+    plan = json.loads(raw)
+    if not isinstance(plan, dict):
+        raise ValueError("invalid original deletion proof")
+    ignored = {"state", "block_reason", "deletion_plan", "deletion_error", "deletion_attempt_at"}
+    authority = {key: value for key, value in record.items() if key not in ignored}
+    if plan.get("schema_version") != 1 or plan.get("authority") != authority:
+        raise ValueError("deletion owner or retention evidence changed")
+    snapshot = plan.get("snapshot", {})
+    if not isinstance(snapshot, dict):
+        raise ValueError("invalid original deletion snapshot")
+    entries = snapshot.get("entries", {})
+    file_ctimes = snapshot.get("file_ctimes", {})
+    identity = snapshot.get("identity")
+    if not isinstance(identity, list) or len(identity) != 2 or any(type(value) is not int for value in identity) or not isinstance(file_ctimes, dict):
+        raise ValueError("invalid original deletion change identity")
+    if type(metadata.get("bytes")) is not int or metadata["bytes"] < 0 or snapshot.get("bytes") != metadata["bytes"]:
+        raise ValueError("invalid original deletion byte inventory")
+    if not isinstance(entries, dict) or len(entries) != metadata.get("entries") or not 0 < len(entries) <= MAX_ENTRIES or "." not in entries:
+        raise ValueError("invalid original deletion entry inventory")
+    for relative, expected in entries.items():
+        if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts or str(Path(relative)) != relative:
+            raise ValueError("invalid original deletion member boundary")
+        if not isinstance(expected, list) or len(expected) != 5 or any(type(value) is not int for value in expected):
+            raise ValueError("invalid original deletion member identity")
+        if stat.S_ISREG(expected[2]) and type(file_ctimes.get(relative)) is not int:
+            raise ValueError("missing original deletion member change identity")
+    snapshot["entries"] = {relative: tuple(expected) for relative, expected in entries.items()}
+    return snapshot
+
+
+def _remaining_deletion(path, original, deadline, registry=None):
+    current = _snapshot(path, deadline, include_ctime=True, registry=registry)
+    device = current["identity"][0]
+    for relative, observed in current["entries"].items():
+        expected = original["entries"].get(relative)
+        if expected is None:
+            raise ValueError("new member appeared after deletion started; owner review required")
+        if expected[0] != original["identity"][0] or observed[:3] != (device, expected[1], expected[2]):
+            raise ValueError("deletion member identity changed; replacement preserved")
+        if stat.S_ISREG(observed[2]) and (observed[3:] != expected[3:] or current["file_ctimes"][relative] != original["file_ctimes"][relative]):
+            raise ValueError("deletion member changed after interruption; payload preserved")
+    return current
+
+
+def _discard_deletion_plan(record_path, record):
+    target = _plan_path(record_path)
+    if target.exists() or target.is_symlink():
+        _safe_stat(target)
+        if artifacts._file_sha256(target) != record.get("deletion_plan", {}).get("sha256"):
+            raise ValueError("payload is absent but deletion proof changed; owner review required")
+        target.unlink()
+    _discard_control_pending(target.with_name(target.name + ".pending"))
+    _discard_control_pending(record_path.with_name(record_path.name + ".pending"))
+
+
+def _finish_deletion(record_path, record, path, snapshot, result, deadline):
+    try:
+        _remove_snapshot(path, snapshot, deadline=deadline)
+        if path.exists() or path.is_symlink():
+            raise ValueError("deletion absence readback failed")
+        _discard_deletion_plan(record_path, record)
+        record_path.unlink()
+    except Exception as error:
+        record["deletion_error"] = {"type": type(error).__name__, "message": str(error)[:600], "at": time.time()}
+        _write(record_path, record)
+        raise
+    return {**result, "action": "deleted", "bytes": snapshot["bytes"]}
+
+
+def _remove_snapshot(path, snapshot, *, deadline=None):
     # Recheck each entry while deleting. Do not follow newly introduced links or
-    # remove a replacement file. Failure remains blocked rather than auto-retried.
+    # remove a replacement file. Persisted plans permit exact guarded continuation.
     for relative, expected in sorted(snapshot["entries"].items(), key=lambda item: len(Path(item[0]).parts), reverse=True):
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("deletion paused at its budget; original proof permits the next checkpoint")
         current = path / relative
         artifacts._check_ancestors(current.parent)
         observed = _safe_stat(current)
@@ -491,12 +738,32 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             raise ValueError("registry filename does not match exact run")
         if not path.exists() and not path.is_symlink():
             if apply:
+                _discard_deletion_plan(record_path, record)
                 record_path.unlink()
             return {**result, "action": "absent"}
         if record["state"] not in STATES:
             raise ValueError("invalid registered lifecycle state")
-        if path == current_run or record["state"] == "blocked":
-            return {**result, "action": "keep", "reason": "current run or deletion blocked pending owner review"}
+        if path == current_run:
+            return {**result, "action": "keep", "reason": "current run"}
+        if record["state"] == "blocked":
+            if not record.get("deletion_plan"):
+                return {**result, "action": "pending", "reason": "interrupted legacy deletion has no original proof; exact owner review required"}
+            _bound_path(path, project, base)
+            if not _record_identity_matches(path, record):
+                raise ValueError("interrupted run identity changed")
+            original = _read_deletion_plan(record_path, record)
+            remaining = _remaining_deletion(path, original, deadline, record_path.parent.parent)
+            for attempt in range(2):
+                activity = probe_activity(path, deadline=deadline)
+                if not activity["safe"]:
+                    return {**result, "action": "pending", "reason": activity["reason"], "resumable": True}
+                fresh = _remaining_deletion(path, original, deadline, record_path.parent.parent)
+                if fresh["entries"] != remaining["entries"] or fresh["file_ctimes"] != remaining["file_ctimes"]:
+                    raise ValueError("interrupted deletion changed during consumer readback")
+                remaining = fresh
+            if not apply:
+                return {**result, "action": "eligible", "bytes": remaining["bytes"], "resumable": True}
+            return _finish_deletion(record_path, record, path, remaining, {**result, "resumed": True}, deadline)
         if record["state"] in {"retained", "recovery"}:
             retention_reason = record.get("retention_reason")
             review_at = record.get("retention_review_at")
@@ -508,14 +775,14 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
         own = record["task_id"] == task_id
         if own and record["state"] not in {"complete", "obsolete"}:
             return {**result, "action": "keep", "reason": "own working run needs an exact completion or transition"}
-        if not own and now - record["heartbeat"] < STALE_SECONDS:
+        if not own and record["state"] == "working" and now - record["heartbeat"] < STALE_SECONDS:
             return {**result, "action": "keep", "reason": "foreign run updated within 24 hours"}
         _bound_path(path, project, base)
-        snapshot = _snapshot(path, deadline)
+        snapshot = _snapshot(path, deadline, registry=record_path.parent.parent)
         if not _record_identity_matches(path, record):
             raise ValueError("registered run identity changed")
         inactive = now - max(record["heartbeat"], snapshot["latest"])
-        if not own and inactive < STALE_SECONDS:
+        if not own and record["state"] == "working" and inactive < STALE_SECONDS:
             return {**result, "action": "keep", "reason": "foreign run updated within 24 hours"}
         if not own and record["state"] == "working":
             creator = _process_identity(record["creator_pid"], deadline)
@@ -532,7 +799,7 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             return {**result, "action": "eligible", "bytes": snapshot["bytes"], "inactive_seconds": inactive}
         # The scan output is never a deletion plan. Re-read the actual tree and
         # consumers under the registry lock immediately before touching payload.
-        fresh = _snapshot(path, deadline)
+        fresh = _snapshot(path, deadline, registry=record_path.parent.parent)
         if fresh["entries"] != snapshot["entries"]:
             raise ValueError("run changed after inspection")
         activity = probe_activity(path, deadline=deadline)
@@ -540,17 +807,17 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             result["scope_warnings"] = list(dict.fromkeys(result.get("scope_warnings", []) + activity["scope_warnings"]))
         if not activity["safe"]:
             return {**result, "action": "pending" if activity.get("pending") else "keep", "reason": activity["reason"]}
-        if _snapshot(path, deadline)["entries"] != snapshot["entries"]:
+        proof = _snapshot(path, deadline, include_ctime=True, registry=record_path.parent.parent)
+        if proof["entries"] != snapshot["entries"]:
             raise ValueError("run changed during consumer readback")
+        record["deletion_plan"] = _write_deletion_plan(record_path, record, proof)
         record["state"] = "blocked"
-        record["block_reason"] = "deletion started; any interruption requires owner review"
+        record["block_reason"] = "deletion started; resume only the unchanged original proof"
         _write(record_path, record)
-        _remove_snapshot(path, snapshot)
-        record_path.unlink()
-        return {**result, "action": "deleted", "bytes": snapshot["bytes"]}
+        return _finish_deletion(record_path, record, path, proof, result, deadline)
 
 
-def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30):
+def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):
     if phase not in {"start", "transition", "finish"}:
         raise ValueError("invalid checkpoint phase")
     if not 0 < budget_seconds <= 300:
@@ -559,16 +826,32 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
     project = Path(project_root).resolve(strict=True)
     base = _cleanup_base(project, artifact_root)
     current = artifacts._absolute_path(current_run, "current_run") if current_run else None
+    requested = [artifacts._absolute_path(value, "obsolete_run") for value in obsolete_runs]
+    if phase == "finish" and current is not None:
+        requested.append(current)
+    if requested_only and not requested:
+        raise ValueError("requested-only cleanup requires exact finished or obsolete runs")
     if current in [Path(value) for value in obsolete_runs]:
         raise ValueError("current run cannot also be obsolete")
     if not apply and (obsolete_runs or phase == "finish"):
         raise ValueError("lifecycle changes require --apply; scan is read-only")
     for previous in obsolete_runs:
-        touch_run(project, task_id, previous, artifact_root=base, state="obsolete")
+        previous_path = Path(previous)
+        previous_record = _registry(base, project) / "runs" / (_key(previous_path) + ".json")
+        if previous_path.exists() and (not previous_record.exists() or _read(previous_record).get("state") != "blocked"):
+            touch_run(project, task_id, previous, artifact_root=base, state="obsolete")
     if phase == "finish":
         if current is None:
             raise ValueError("finish requires exact current_run")
-        touch_run(project, task_id, current, artifact_root=base, state="complete")
+        current_record = _registry(base, project) / "runs" / (_key(current) + ".json")
+        if current_record.exists():
+            owner = _read(current_record)
+            if owner.get("task_id") != task_id or owner.get("project_root") != str(project) or owner.get("path") != str(current):
+                raise ValueError("finish does not own the exact project/task/run")
+            if current.exists() and owner["state"] != "blocked":
+                touch_run(project, task_id, current, artifact_root=base, state="complete")
+        elif current.exists() or current.is_symlink():
+            raise ValueError("finish cannot adopt an unregistered existing run")
         current = None
     bases = [base]
     if base == project / "Cache":
@@ -577,6 +860,18 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
             bases.append(legacy)
     results = []
     records = [(owner, record) for owner in bases for record in sorted((_registry(owner, project) / "runs").glob("*.json"))]
+    requested_keys = {_key(path) for path in requested}
+    if requested_only:
+        records = [(owner, record) for owner, record in records if record.stem in requested_keys]
+    def priority(item):
+        owner, record_path = item
+        if record_path.stem in requested_keys:
+            return 0
+        try:
+            return 1 if _read(record_path).get("task_id") == task_id else 2
+        except (OSError, ValueError):
+            return 2
+    records.sort(key=priority)
     for owner, record_path in records:
         if time.monotonic() >= deadline:
             results.append({"record": str(record_path), "action": "pending", "reason": "checkpoint budget exhausted; remaining records await next checkpoint"})
@@ -585,7 +880,8 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
             results.append(_sweep_record(record_path, owner, task_id, current, apply, time.time(), deadline))
         except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
             results.append({"record": str(record_path), "action": "pending", "reason": str(error)})
-    return {"phase": phase, "applied": apply, "results": results, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
+    completed = all(not path.exists() and not path.is_symlink() and not (_registry(base, project) / "runs" / (_key(path) + ".json")).exists() for path in requested) if requested else None
+    return {"phase": phase, "applied": apply, "results": results, "requested_complete": completed, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
 
 
 def scan(project_root, artifact_root=None):
@@ -686,9 +982,12 @@ def main():
     parser.add_argument("--obsolete-run", type=Path, action="append", default=[])
     parser.add_argument("--search-root", type=Path, action="append", default=[])
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--requested-only", action="store_true", help="Close only explicit finished/obsolete runs, for nested owners and test fixtures")
     parser.add_argument("--budget-seconds", type=float, default=30)
     args = parser.parse_args()
     try:
+        if args.requested_only and args.command != "checkpoint":
+            raise ValueError("--requested-only applies only to checkpoint")
         if args.command in {"register", "touch", "release-retention", "checkpoint"} and not args.task_id:
             raise ValueError("this command requires --task-id")
         if args.command in {"register", "touch", "release-retention"} and args.run_root is None:
@@ -710,7 +1009,7 @@ def main():
                                        expected_identity=args.identity, reason=args.reason,
                                        artifact_root=args.artifact_root, budget_seconds=args.budget_seconds)
         else:
-            result = checkpoint(args.project_root, args.task_id, artifact_root=args.artifact_root, phase=args.phase, current_run=args.current_run, obsolete_runs=args.obsolete_run, apply=args.apply, budget_seconds=args.budget_seconds)
+            result = checkpoint(args.project_root, args.task_id, artifact_root=args.artifact_root, phase=args.phase, current_run=args.current_run, obsolete_runs=args.obsolete_run, apply=args.apply, budget_seconds=args.budget_seconds, requested_only=args.requested_only)
         print(json.dumps(result, sort_keys=True))
         return 2 if any(item.get("action") == "pending" for item in result.get("results", [])) else 0
     except (OSError, ValueError, KeyError) as error:

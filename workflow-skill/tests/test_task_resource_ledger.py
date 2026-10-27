@@ -7,7 +7,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 import uuid
 import zipfile
@@ -25,27 +24,20 @@ SPEC = importlib.util.spec_from_file_location("task_resource_ledger", SCRIPT_PAT
 LEDGER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LEDGER)
 HASH = hashlib.sha256(b"verified-readback").hexdigest()
+sys.path.insert(0, str(SCRIPT_PATH.parents[2] / "management-skill" / "tests"))
+from test_project_cache_artifact_policy import ProjectCacheTestCase
 
 
-class TaskResourceLedgerTests(unittest.TestCase):
+class TaskResourceLedgerTests(ProjectCacheTestCase):
+    fixture_task_name = "ledger-tests"
+
     def setUp(self):
-        self.scratch_parent = ARTIFACTS.resolve_task_artifact_root(SCRIPT_PATH.parents[2], "ledger-tests", create=True)
-        self.temporary_directory = tempfile.TemporaryDirectory(prefix="c-", dir=self.scratch_parent)
-        fixture = Path(self.temporary_directory.name)
-        self.project_root = fixture / "p"
+        self.project_root = self.fixture_root / "p"
         self.project_root.mkdir()
         self.artifact_base = self.project_root / "Cache"
         self.task_id = "producer-task"
         self.task_root = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, artifact_root=self.artifact_base).as_posix()
         self.ledger = LEDGER.new_ledger(self.project_root, self.task_id, self.task_root)
-
-    def tearDown(self):
-        self.temporary_directory.cleanup()
-        try:
-            self.scratch_parent.rmdir()
-            self.scratch_parent.parent.rmdir()
-        except OSError:
-            pass
 
     def _path(self, name):
         return f"{self.task_root}/{name}"
@@ -94,18 +86,18 @@ class TaskResourceLedgerTests(unittest.TestCase):
             LEDGER.validate_ledger(changed)
 
     def test_external_resolver_rejects_projects_codex_tokens_and_link_escapes(self):
-        codex = Path(self.temporary_directory.name) / "codex-owner"
+        codex = self.fixture_root / "codex-owner"
         for invalid in ("relative", "%SystemDrive%/cache", "$env:TEMP/cache", "~/cache", self.project_root / "scratch", codex / "scratch"):
             with self.subTest(path=invalid), self.assertRaises(ValueError):
                 ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=invalid, environ={"CODEX_HOME": str(codex)})
-        other_project = Path(self.temporary_directory.name) / "other-git"
+        other_project = self.fixture_root / "other-git"
         (other_project / ".git").mkdir(parents=True)
         with self.assertRaisesRegex(ValueError, "owning project's Cache"):
             ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=other_project / "scratch")
-        packaged = Path(self.temporary_directory.name) / "Packages" / "OpenAI.Codex_test" / "LocalCache" / "scratch"
+        packaged = self.fixture_root / "Packages" / "OpenAI.Codex_test" / "LocalCache" / "scratch"
         with self.assertRaisesRegex(ValueError, "owning project's Cache"):
             ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=packaged)
-        linked = Path(self.temporary_directory.name) / "linked"
+        linked = self.fixture_root / "linked"
         try:
             linked.symlink_to(self.artifact_base, target_is_directory=True)
         except OSError:

@@ -108,7 +108,10 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
 
     def test_zero_test_command_is_a_failure_even_with_exit_zero(self):
         completed = subprocess.CompletedProcess(["test"], 0, stdout="Ran 0 tests\nOK\n", stderr="")
-        with mock.patch.object(GATE, "verify_cache_git"), mock.patch.object(GATE.subprocess, "run", return_value=completed):
+        native_run = subprocess.run
+        def execute(command, **kwargs):
+            return completed if command == ["test"] else native_run(command, **kwargs)
+        with mock.patch.object(GATE, "verify_cache_git"), mock.patch.object(GATE.subprocess, "run", side_effect=execute):
             result = GATE.command_result("zero", "source", ["test"], PROJECT_ROOT, 1, {})
         self.assertEqual(result["status"], "fail")
         self.assertEqual((result["test_count"], result["passed_count"]), (0, 0))
@@ -217,6 +220,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 plugin_skill.parent.mkdir(parents=True)
                 plugin_skill.write_text(f"{plugin_id}:{skill_name}\n", encoding="utf-8")
             expected_cache = Path(temp_dir) / "external-candidates"
+            expected_cache.mkdir()
             with mock.patch.dict(os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(expected_cache)}):
                 with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
                     workspace = roots["source"].parents[1]
@@ -274,9 +278,11 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             with mock.patch.object(GATE.subprocess, "run", wraps=GATE.subprocess.run) as runner:
                 result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
             self.assertEqual(result["status"], "pass", result)
-            completed_cache = Path(runner.call_args.kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"])
+            command_call = next(call for call in runner.call_args_list if call.kwargs.get("env", {}).get("CODEX_PROJECT_CACHE_ROOT"))
+            completed_cache = Path(command_call.kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"])
             self.assertFalse(completed_cache.exists())
             self.assertFalse(completed_cache.parent.exists())
+            self.assertEqual(list((project_root / "Cache" / "remote-task-cache-registry" / "runs").glob("*.json")), [])
             observed = []
             original_run = subprocess.run
 
@@ -293,6 +299,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                     GATE.command_result("timeout", "source", ["test"], project_root, 1, {})
             self.assertFalse(observed[0].exists())
             self.assertFalse(observed[0].parent.exists())
+            self.assertEqual(list((project_root / "Cache" / "remote-task-cache-registry" / "runs").glob("*.json")), [])
 
     def test_candidate_cache_override_rejects_project_codex_and_tokens_before_writing(self):
         for cache_root in (PROJECT_ROOT / "management-skill", Path.home() / ".codex" / "scratch", PROJECT_ROOT / "Cache" / "remote-test", Path("%SystemDrive%/tmp")):

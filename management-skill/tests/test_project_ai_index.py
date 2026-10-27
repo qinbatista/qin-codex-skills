@@ -15,25 +15,15 @@ INDEX = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(INDEX)
 sys.path.insert(0, str(PROJECT / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
-from task_artifact_paths import resolve_task_artifact_root
-from task_cache_cleanup import checkpoint
+sys.path.insert(0, str(PROJECT / "management-skill" / "tests"))
+from test_project_cache_artifact_policy import ProjectCacheTestCase
 
 
-class ProjectAIIndexTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
-        cls.owned_run = not configured
-        cls.output = Path(configured) if configured else resolve_task_artifact_root(PROJECT, "project-ai-index-tests", create=True)
-        cls.output.mkdir(parents=True, exist_ok=True)
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.owned_run:
-            checkpoint(PROJECT, "project-ai-index-tests", phase="finish", current_run=cls.output, apply=True)
+class ProjectAIIndexTests(ProjectCacheTestCase):
+    fixture_task_name = "project-ai-index-tests"
 
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ai-index-", dir=self.output)
+        temporary = tempfile.TemporaryDirectory(prefix="ai-index-", dir=self.fixture_root)
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name).resolve()
         self.project = self.base / "project"

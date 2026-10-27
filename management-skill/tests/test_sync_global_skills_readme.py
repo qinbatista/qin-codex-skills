@@ -1,4 +1,6 @@
 import importlib.util
+import contextlib
+import io
 import json
 import re
 import sys
@@ -178,6 +180,29 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                     raise RuntimeError("expected installer failure")
             self.assertFalse(workspace.exists())
             self.assertFalse(workspace.parent.exists())
+            cleanup = sys.modules["task_cache_cleanup"]
+            record = workspace.parent.parent / cleanup.REGISTRY / "runs" / (cleanup._key(workspace.parent) + ".json")
+            self.assertFalse(record.exists())
+
+    def test_candidate_gate_rebinds_inherited_cache_and_closes_success_and_failure(self):
+        project = Path(self.codex_sandbox.name) / "publication-project"
+        gate = project / "management-skill" / "scripts" / "global_skill_regression_gate.py"
+        gate.parent.mkdir(parents=True)
+        code = "import os; from pathlib import Path; p=Path(os.environ['CODEX_PROJECT_CACHE_ROOT']); assert p.parent==Path.cwd()/'Cache'; assert all(Path(os.environ[k])==p/'tmp' for k in ('TMP','TEMP','TMPDIR')); (p/'tmp'/'payload').write_bytes(b'owned candidate support'); print('candidate checked')\n"
+        for failure in (False, True):
+            diagnostic = "import json; q=p/'global-skill-regression'; q.mkdir(); (q/'latest.json').write_text(json.dumps({'checks':[{'status':'fail','errors':['deliberate child diagnostic']}]})); raise SystemExit(3)\n"
+            gate.write_text(code + (diagnostic if failure else ""))
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                if failure:
+                    with self.assertRaisesRegex(RuntimeError, "regression gate failed"):
+                        REAL_RUN_RELEASE_GATE(project, project / "installed", "release")
+                else:
+                    self.assertEqual(REAL_RUN_RELEASE_GATE(project, project / "installed", "release").returncode, 0)
+            if failure:
+                self.assertIn("deliberate child diagnostic", output.getvalue())
+            self.assertEqual(list((project / "Cache").glob("temp-*")), [])
+            self.assertEqual(list((project / "Cache" / "remote-task-cache-registry" / "runs").glob("*.json")), [])
 
     def test_configured_workspace_owner_and_active_sibling_are_preserved(self):
         owner = Path(self.codex_sandbox.name) / "configured-owner"
@@ -912,11 +937,15 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             installed_gate.parent.mkdir(parents=True)
             installed_gate.write_text("# installed gate\n", encoding="utf-8")
             completed = mock.Mock(stdout="", stderr="", returncode=0)
-
-            with mock.patch.object(sync_global_skills.subprocess, "run", return_value=completed) as runner:
+            native_run = sync_global_skills.subprocess.run
+            def execute(command, **kwargs):
+                if len(command) > 2 and command[2] == str(installed_gate.resolve()):
+                    return completed
+                return native_run(command, **kwargs)
+            with mock.patch.object(sync_global_skills.subprocess, "run", side_effect=execute) as runner:
                 REAL_RUN_RELEASE_GATE(source_dir, skills_dir, "deployed")
 
-            command = runner.call_args.args[0]
+            command = next(call.args[0] for call in runner.call_args_list if call.kwargs.get("env", {}).get("CODEX_PROJECT_CACHE_ROOT"))
             self.assertEqual(command[1], "-B")
             self.assertEqual(Path(command[2]), installed_gate.resolve())
 
@@ -1214,7 +1243,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         if configured_upstream:
             command.insert(2, "--set-upstream")
         sync_global_skills.run_command(command, cwd=source_dir)
-        environment = mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(sandbox / "publication-artifacts")})
+        artifact_owner = sandbox / "publication-artifacts"
+        artifact_owner.mkdir(exist_ok=True)
+        environment = mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(artifact_owner)})
         environment.start()
         self.addCleanup(environment.stop)
         return source_dir, remote_dir

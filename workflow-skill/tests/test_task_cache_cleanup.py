@@ -1,11 +1,11 @@
 import json
 import contextlib
+import hashlib
 import io
 import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -19,20 +19,19 @@ import task_cache_cleanup as cleanup
 
 sys.path.insert(0, str(SCRIPTS.parents[1] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
+sys.path.insert(0, str(SCRIPTS.parents[1] / "management-skill" / "tests"))
+from test_project_cache_artifact_policy import ProjectCacheTestCase
 
 
-class TaskCacheCleanupTests(unittest.TestCase):
+class TaskCacheCleanupTests(ProjectCacheTestCase):
+    fixture_task_name = "cache-cleanup-tests"
+
     def setUp(self):
-        self.owner = artifacts.resolve_task_artifact_root(SCRIPTS.parents[1], "cache-cleanup-tests", create=True)
-        self.fixture = tempfile.TemporaryDirectory(dir=self.owner)
-        self.root = Path(self.fixture.name)
+        self.owner = self.fixture_root.parent
+        self.root = self.fixture_root
         self.project = self.root / "project"
         self.project.mkdir()
         self.base = self.project / "Cache"
-
-    def tearDown(self):
-        self.fixture.cleanup()
-        self.owner.rmdir()
 
     def run_root(self, task="mine"):
         return artifacts.resolve_task_artifact_root(self.project, task, artifact_root=self.base, create=True)
@@ -123,7 +122,7 @@ class TaskCacheCleanupTests(unittest.TestCase):
                 waiting = result["safe"] is False and result.get("reason") == "active open files or working directory"
             else:
                 entries = result.get("results", [])
-                waiting = len(entries) == 1 and entries[0].get("path") == str(run) and entries[0].get("action") == "keep" and entries[0].get("reason") == "active open files or working directory"
+                waiting = len(entries) == 1 and entries[0].get("path") == str(run) and entries[0].get("action") in {"keep", "pending"} and entries[0].get("reason") == "active open files or working directory"
             if not waiting or attempt == 9 or time.monotonic() >= deadline:
                 return result
             self.assertTrue(run.exists(), result)
@@ -367,7 +366,7 @@ class TaskCacheCleanupTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["action"], "deleted", result)
         self.assertFalse(run.exists())
 
-    def test_interrupted_deletion_blocks_automatic_retry(self):
+    def test_interrupted_deletion_resumes_only_its_original_proof(self):
         run = self.run_root()
         (run / "payload").write_bytes(b"first")
         with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}), mock.patch.object(cleanup, "_remove_snapshot", side_effect=OSError("permission denied")):
@@ -376,7 +375,201 @@ class TaskCacheCleanupTests(unittest.TestCase):
         self.assertEqual(json.loads(self.record_path(run).read_text())["state"], "blocked")
         with self.assertRaises(ValueError):
             cleanup.touch_run(self.project, "mine", run, artifact_root=self.base)
-        self.assertEqual(self.sweep()["results"][0]["action"], "keep")
+        self.assertTrue(cleanup._plan_path(self.record_path(run)).is_file())
+        with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            resumed = self.sweep(phase="finish", current_run=run)
+        self.assertTrue(resumed["requested_complete"], resumed)
+        self.assertTrue(resumed["results"][0]["resumed"])
+        self.assertFalse(run.exists())
+        self.assertFalse(cleanup._plan_path(self.record_path(run)).exists())
+        self.assertTrue(self.sweep(phase="finish", current_run=run)["requested_complete"])
+
+    def test_original_plan_rejects_new_changed_and_corrupt_recovery_inputs(self):
+        for mutation in ("new", "changed", "proof", "retention"):
+            run = self.run_root()
+            payload = run / "payload"
+            payload.write_bytes(b"first")
+            with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}), mock.patch.object(cleanup, "_remove_snapshot", side_effect=OSError("injected interrupted unlink")):
+                self.sweep(phase="finish", current_run=run)
+            if mutation == "new":
+                (run / "new-input").write_bytes(b"future consumer")
+            elif mutation == "changed":
+                details = payload.stat()
+                payload.write_bytes(b"later")
+                os.utime(payload, ns=(details.st_atime_ns, details.st_mtime_ns))
+            elif mutation == "proof":
+                cleanup._plan_path(self.record_path(run)).write_bytes(b"changed proof")
+            else:
+                (run / ".retain").write_text("Concrete future review consumer")
+            with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+                result = self.sweep(phase="finish", current_run=run, requested_only=True)
+            self.assertFalse(result["requested_complete"], result)
+            self.assertTrue(run.is_dir())
+            self.assertEqual(payload.read_bytes(), b"later" if mutation == "changed" else b"first")
+
+    @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX process/consumer checks")
+    def test_process_death_releases_lock_and_resumes_real_partial_deletion(self):
+        if not shutil.which("lsof") or not shutil.which("ps"):
+            self.skipTest("native probes unavailable")
+        run = self.run_root()
+        (run / "first").write_bytes(b"first payload")
+        (run / "second").write_bytes(b"second payload")
+        program = "\n".join([
+            "import json,os,sys,time; from pathlib import Path",
+            "sys.path.insert(0,sys.argv[1]); import task_cache_cleanup as c",
+            "def interrupt(path,snapshot,**kwargs):",
+            "    (path/'first').unlink()",
+            "    os._exit(41)",
+            "c._remove_snapshot=interrupt",
+            "deadline=time.monotonic()+8",
+            "for attempt in range(15):",
+            "    result=c.checkpoint(Path(sys.argv[2]),'mine',phase='finish',current_run=Path(sys.argv[3]),apply=True,requested_only=True)",
+            "    entries=result.get('results',[])",
+            "    waiting=len(entries)==1 and entries[0].get('reason')=='active open files or working directory'",
+            "    if not waiting or time.monotonic()>=deadline: break",
+            "    time.sleep(.1)",
+            "print(json.dumps(result))",
+        ])
+        child = subprocess.run([sys.executable, "-B", "-c", program, str(SCRIPTS), str(self.project), str(run)], capture_output=True, text=True, timeout=30, **hidden_process_options())
+        self.assertEqual(child.returncode, 41, child.stdout + child.stderr)
+        self.assertFalse((run / "first").exists())
+        self.assertTrue((run / "second").exists())
+        self.assertTrue(self.record_path(run).with_suffix(".lock").exists())
+        result = self.finish_when_native_readers_close(run, lambda: self.sweep(phase="finish", current_run=run, requested_only=True))
+        self.assertTrue(result["requested_complete"], result)
+        self.assertFalse(self.record_path(run).with_suffix(".lock").exists())
+        self.assertFalse(cleanup._plan_path(self.record_path(run)).exists())
+
+    def test_requested_finish_precedes_slow_foreign_records(self):
+        def allocate(task, prefix):
+            task_key = hashlib.sha256(task.encode()).hexdigest()[:24]
+            for number in range(1000):
+                run_id = f"{number:032x}"
+                candidate = self.base / f"temp-{task_key}-{run_id}"
+                if cleanup._key(candidate).startswith(prefix):
+                    return artifacts.resolve_task_artifact_root(self.project, task, run_id=run_id, create=True)
+            self.fail("could not construct ordered registry fixture")
+        own = allocate("mine", "f")
+        foreign = allocate("foreign", "0")
+        calls = []
+        sweep = cleanup._sweep_record
+        def delayed(record_path, *args):
+            calls.append(record_path.stem)
+            if record_path.stem == cleanup._key(foreign):
+                time.sleep(1.1)
+            return sweep(record_path, *args)
+        with mock.patch.object(cleanup, "_sweep_record", side_effect=delayed), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            result = self.sweep(phase="finish", current_run=own, budget_seconds=1)
+        self.assertTrue(result["requested_complete"], result)
+        self.assertEqual(calls[0], cleanup._key(own))
+        self.assertTrue(foreign.is_dir())
+
+    def test_fresh_completed_foreign_run_closes_without_delaying_a_day(self):
+        retired = self.run_root("completed-owner")
+        (retired / "payload").write_bytes(b"delivered disposable support")
+        cleanup.touch_run(self.project, "completed-owner", retired, state="complete")
+        active = self.run_root("still-working")
+        with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            result = self.sweep()
+        self.assertFalse(retired.exists(), result)
+        self.assertFalse(self.record_path(retired).exists())
+        self.assertTrue(active.is_dir())
+
+    def test_allocator_cli_failure_closes_created_payload_and_registration(self):
+        created = []
+        native_environment = artifacts.task_artifact_environment
+        def fail_after_tmp_creation(root, **kwargs):
+            created.append(root)
+            native_environment(root, **kwargs)
+            (root / "tmp" / "partial-output").write_bytes(b"failed setup support")
+            raise OSError("injected environment setup failure")
+        argv = ["task_artifact_paths.py", "--project-root", str(self.project), "--task-id", "mine", "--create"]
+        output = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(artifacts, "task_artifact_environment", side_effect=fail_after_tmp_creation), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}), contextlib.redirect_stderr(output):
+            status = artifacts.main()
+        self.assertEqual(status, 2)
+        self.assertEqual(json.loads(output.getvalue())["cleanup"], "removed")
+        self.assertEqual(len(created), 1)
+        self.assertFalse(created[0].exists())
+        self.assertFalse(self.record_path(created[0]).exists())
+
+    def test_abandoned_control_writes_have_one_slot_and_close_with_owner(self):
+        run = self.run_root()
+        record = self.record_path(run)
+        pending = record.with_name(record.name + ".pending")
+        pending.write_bytes(b"interrupted record write")
+        plan_pending = cleanup._plan_path(record).with_name(cleanup._plan_path(record).name + ".pending")
+        plan_pending.parent.mkdir(exist_ok=True)
+        plan_pending.write_bytes(b"interrupted proof write")
+        with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            result = self.sweep(phase="finish", current_run=run, requested_only=True)
+        self.assertTrue(result["requested_complete"], result)
+        self.assertFalse(pending.exists())
+        self.assertFalse(plan_pending.exists())
+
+        protected = self.run_root()
+        pending = self.record_path(protected).with_name(self.record_path(protected).name + ".pending")
+        pending.write_bytes(b"old interrupted slot")
+        def writer_reappears(path, **kwargs):
+            pending.write_bytes(b"new writer input")
+            return {"safe": True}
+        with mock.patch.object(cleanup, "probe_activity", side_effect=writer_reappears), self.assertRaisesRegex(ValueError, "control record changed"):
+            self.sweep(phase="finish", current_run=protected, requested_only=True)
+        self.assertEqual(pending.read_bytes(), b"new writer input")
+        self.assertTrue(protected.is_dir())
+
+    def test_child_cleanup_cannot_bypass_parent_retention_or_native_ledger(self):
+        for marker in (None, ".codex-task-resource-ledger.json", ".retain", ".git"):
+            parent = self.run_root("parent")
+            child = parent / "Library"
+            child.mkdir()
+            (child / "source-input").write_bytes(b"future input")
+            if marker is None:
+                cleanup.touch_run(self.project, "parent", parent, state="retained", reason="Prepared environment needed after pending artwork")
+            else:
+                (parent / marker).write_text("original native owner")
+            with self.assertRaises(ValueError):
+                cleanup.register_run(self.project, "mine", child, legacy_reason="Attempted independent child cleanup", state="complete")
+            self.assertEqual((child / "source-input").read_bytes(), b"future input")
+
+    def test_parent_cleanup_cannot_bypass_registered_child_lifecycle(self):
+        for state in ("working", "retained", "complete"):
+            parent = self.run_root()
+            child = parent / "prepared-input"
+            child.mkdir()
+            payload = child / "source-input"
+            payload.write_bytes(b"separate consumer input")
+            reason = "Prepared child consumed after pending artwork" if state == "retained" else None
+            cleanup.register_run(self.project, "child-owner", child, state=state, legacy_reason=reason or "Exact child created by the fixture")
+            with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+                result = self.sweep(phase="finish", current_run=parent, requested_only=True)
+            self.assertFalse(result["requested_complete"], result)
+            self.assertEqual(payload.read_bytes(), b"separate consumer input")
+            self.assertTrue(self.record_path(child).exists())
+            if state == "complete":
+                with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+                    child_result = cleanup.checkpoint(self.project, "child-owner", phase="finish", current_run=child, apply=True, requested_only=True)
+                    parent_result = self.sweep(phase="finish", current_run=parent, requested_only=True)
+                self.assertTrue(child_result["requested_complete"], child_result)
+                self.assertTrue(parent_result["requested_complete"], parent_result)
+
+    def test_native_lock_storage_is_bounded_and_live_legacy_owner_is_preserved(self):
+        run = self.run_root()
+        path = self.record_path(run)
+        marker = path.with_suffix(".lock")
+        marker.write_text(str(os.getpid()))
+        before = marker.read_bytes()
+        with self.assertRaises(ValueError):
+            with cleanup._lock(path):
+                self.fail("live legacy lock was bypassed")
+        self.assertEqual(marker.read_bytes(), before)
+        marker.unlink()
+        for number in range(90):
+            target = path.with_name(hashlib.sha256(str(number).encode()).hexdigest() + ".json")
+            with cleanup._lock(target):
+                self.assertTrue(target.with_suffix(".lock").exists())
+        self.assertLessEqual(len(list((self.base / cleanup.REGISTRY / "locks").iterdir())), 64)
+        self.assertEqual(list(path.parent.glob("*.lock")), [])
 
     def test_git_and_retention_markers_block_even_inside_deep_tree(self):
         for barrier in (".git", ".keep", ".task-cache-retain"):
