@@ -7,3 +7,5 @@ Workflow owns readiness, bounded waits, Git branch/delivery rules, browser surfa
 The Cache helper owns reasoned retention with due owner review, identity-bound explicit release, and fresh native consumer inventories. Source snapshot producers apply Workflow's project Cache artifact policy and their source allowlist; nested project Cache/build trees are not source inputs.
 
 Tests remain in `workflow-skill/tests/`, registered by the [testing Skill](../../testing-skill/SKILL.md). Read Code's platform helper only for subprocess/portability changes; read Project Memory for Ending handoff/deletion, not ordinary scratch allocation.
+
+Legacy external ledgers remain cleanup inputs after project Cache allocation is restored. Checkpoints inspect the exact existing default ledger; custom old stores require an explicit cleanup-only base. New output and registration stay project-owned. macOS remount reconciliation requires the originally recorded native volume UUID plus the unchanged inode; absent original proof remains pending.

@@ -80,7 +80,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_sweep_record",
           "anchor": "def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):",
-          "summary": "Review due retention and remove only identity-stable disposable runs with fresh consumers."
+          "summary": "Review current and original legacy-ledger runs with unchanged retention, volume/inode and native-consumer guards."
         },
         {
           "id": "artifact-allocation",
@@ -102,6 +102,27 @@
           "symbol": "TaskCacheCleanupTests.test_real_open_file_and_process_reference_are_protected",
           "anchor": "def test_real_open_file_and_process_reference_are_protected(self):",
           "summary": "Use a real native open file independent of argv/cwd and verify deletion remains blocked until closure."
+        },
+        {
+          "id": "cache-cleanup-base",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_cleanup_base",
+          "anchor": "def _cleanup_base(project, artifact_root=None):",
+          "summary": "Admit only an existing exact-project legacy ledger for cleanup; new allocation remains project Cache."
+        },
+        {
+          "id": "cache-volume-identity",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_record_identity_matches",
+          "anchor": "def _record_identity_matches(path, record):",
+          "summary": "Accept an unchanged inode after device renumbering only with its original native volume UUID."
+        },
+        {
+          "id": "cache-legacy-cleanup-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_legacy_cleanup_retains_guards_and_never_allows_new_output",
+          "anchor": "def test_legacy_cleanup_retains_guards_and_never_allows_new_output(self):",
+          "summary": "Exercise old-ledger cleanup while retaining identity, retention, live-consumer and allocation barriers."
         }
       ]
     },

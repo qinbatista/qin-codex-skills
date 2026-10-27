@@ -43,6 +43,77 @@ class TaskCacheCleanupTests(unittest.TestCase):
     def sweep(self, **kwargs):
         return cleanup.checkpoint(self.project, "mine", artifact_root=self.base, apply=True, **kwargs)
 
+    def legacy_run(self):
+        base = self.root / "legacy-store"
+        registry = base / cleanup.LEGACY_REGISTRY
+        for name in ("projects", "runs"):
+            (registry / name).mkdir(parents=True)
+        (registry / "projects" / (cleanup._key(self.project) + ".json")).write_text(json.dumps({"schema_version": 1, "project_root": str(self.project), "cache_roots": [str(self.base)]}))
+        name = artifacts.RUN_NAME_RE.fullmatch(self.run_root().name)
+        run = base / ("p-" + cleanup._key(self.project)[:16]) / name[0]
+        run.mkdir(parents=True)
+        (run / "payload").write_bytes(b"retired legacy support")
+        record = json.loads(self.record_path(self.base / name[0]).read_text())
+        record.update(path=str(run), identity=cleanup._identity(run.stat()), state="retained", location="external")
+        record_path = registry / "runs" / (cleanup._key(run) + ".json")
+        record_path.write_text(json.dumps(record))
+        return base, run, record, record_path
+
+    def test_legacy_cleanup_retains_guards_and_never_allows_new_output(self):
+        base, run, record, record_path = self.legacy_run()
+        # Model a legacy external store inside the required task-owned fixture.
+        exists = Path.exists
+        def fixture_exists(path):
+            if path.name == ".git" and path.parent in self.owner.parents:
+                return False
+            return exists(path)
+        with mock.patch.object(Path, "exists", fixture_exists):
+            self.assertEqual(cleanup._bound_path(run, self.project, base), "legacy-external")
+            with self.assertRaises(ValueError):
+                artifacts.resolve_task_artifact_root(self.project, "mine", artifact_root=base, create=True)
+            with self.assertRaises(ValueError):
+                cleanup.touch_run(self.project, "mine", run, artifact_root=base, state="working")
+            result = cleanup.checkpoint(self.project, "mine", artifact_root=base, apply=True)
+            self.assertEqual(result["results"][0]["action"], "pending")
+            with mock.patch.object(cleanup, "probe_activity", return_value={"safe": False, "reason": "live reader"}), self.assertRaises(ValueError):
+                cleanup.release_retention(self.project, "mine", run, run_id=record["run_id"], expected_identity=record["identity"], reason="Audited retired support", artifact_root=base)
+            with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+                cleanup.release_retention(self.project, "mine", run, run_id=record["run_id"], expected_identity=record["identity"], reason="Audited retired support", artifact_root=base)
+                result = cleanup.checkpoint(self.project, "mine", artifact_root=base, apply=True)
+            self.assertEqual(result["results"][0]["action"], "deleted", result)
+            self.assertFalse(run.exists())
+            self.assertFalse(record_path.exists())
+
+    def test_legacy_owner_identity_and_automatic_checkpoint_remain_exact(self):
+        base, run, record, record_path = self.legacy_run()
+        exists = Path.exists
+        def fixture_exists(path):
+            return False if path.name == ".git" and path.parent in self.owner.parents else exists(path)
+        with mock.patch.object(Path, "exists", fixture_exists), mock.patch.object(cleanup, "_legacy_base", return_value=base):
+            result = self.sweep()
+            self.assertTrue(any(item.get("path") == str(run) and item["action"] == "pending" for item in result["results"]))
+            with self.assertRaises(ValueError):
+                cleanup.release_retention(self.project, "mine", run, run_id=record["run_id"], expected_identity=[0, 0], reason="Audited retired support", artifact_root=base)
+            (run / ".git").mkdir()
+            with self.assertRaises(ValueError):
+                cleanup.release_retention(self.project, "mine", run, run_id=record["run_id"], expected_identity=record["identity"], reason="Audited retired support", artifact_root=base)
+        self.assertTrue(run.exists())
+        self.assertTrue(record_path.exists())
+
+    def test_remounted_device_requires_original_volume_and_inode(self):
+        run = self.run_root()
+        record = json.loads(self.record_path(run).read_text())
+        record["identity"][0] += 1
+        with mock.patch.object(cleanup, "_volume_identity", return_value="same-volume"):
+            self.assertFalse(cleanup._record_identity_matches(run, record))
+            record["filesystem_uuid"] = "same-volume"
+            self.assertTrue(cleanup._record_identity_matches(run, record))
+            record["identity"][1] += 1
+            self.assertFalse(cleanup._record_identity_matches(run, record))
+        record["identity"][1] -= 1
+        with mock.patch.object(cleanup, "_volume_identity", return_value="different-volume"):
+            self.assertFalse(cleanup._record_identity_matches(run, record))
+
     def finish_when_native_readers_close(self, run, finish):
         # Spotlight can briefly read a new fixture; keep every native guard active.
         deadline = time.monotonic() + 5

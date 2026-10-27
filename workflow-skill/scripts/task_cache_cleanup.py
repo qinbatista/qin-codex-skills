@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import json
 import os
+import plistlib
 import re
 import shutil
 import stat
@@ -27,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scr
 from hidden_process import hidden_process_options
 
 REGISTRY = "remote-task-cache-registry"
+LEGACY_REGISTRY = ".task-cache-registry"
 SCHEMA = 1
 STALE_SECONDS = 86400
 PROTECTED_STATES = {"retained", "recovery", "blocked"}
@@ -54,9 +56,75 @@ def _identity(observed):
     return [observed.st_dev, observed.st_ino]
 
 
+def _volume_identity(path):
+    """macOS device numbers change after reboot; a volume UUID does not."""
+    if sys.platform != "darwin":
+        return None
+    executable = shutil.which("diskutil")
+    filesystem_tool = shutil.which("df")
+    if executable is None or filesystem_tool is None:
+        return None
+    try:
+        filesystem = _run_command([filesystem_tool, "-P", str(path)], timeout=5)
+        rows = filesystem.stdout.splitlines()
+        if filesystem.returncode or filesystem.stderr.strip() or len(rows) != 2:
+            return None
+        device = rows[1].split()[0]
+        if re.fullmatch(r"/dev/disk[0-9]+(?:s[0-9]+)*", device) is None:
+            return None
+        result = _run_command([executable, "info", "-plist", device], timeout=5)
+        if result.returncode or result.stderr.strip():
+            return None
+        volume = plistlib.loads(result.stdout.encode("utf-8"))
+        if volume.get("DeviceNode") != device or Path(volume.get("MountPoint", "")).stat().st_dev != Path(path).stat().st_dev:
+            return None
+        value = volume.get("VolumeUUID")
+        return str(uuid.UUID(value)) if isinstance(value, str) else None
+    except (OSError, ValueError, plistlib.InvalidFileException, subprocess.TimeoutExpired):
+        return None
+
+
+def _record_identity_matches(path, record):
+    identity = _identity(_safe_stat(path))
+    if identity == record["identity"]:
+        return True
+    stored_volume = record.get("filesystem_uuid")
+    return bool(stored_volume and identity[1] == record["identity"][1] and _volume_identity(path) == stored_volume)
+
+
+def _cleanup_base(project, artifact_root=None):
+    """Accept an existing legacy ledger for cleanup, never new allocation."""
+    project = Path(project).resolve(strict=True)
+    if artifact_root is None or Path(artifact_root) == project / "Cache":
+        return artifacts.resolve_artifact_base(project, artifact_root=artifact_root)
+    base = artifacts._absolute_path(artifact_root, "legacy artifact directory")
+    artifacts._check_ancestors(base)
+    codex = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).resolve(strict=False)
+    if (base == Path(base.anchor) or base == Path.home() or artifacts._codex_component(base)
+            or any(artifacts._within(base, owner) for owner in (project, codex, Path.home() / ".agents"))
+            or any((owner / ".git").exists() for owner in (base, *base.parents))):
+        raise ValueError("legacy cleanup must remain outside projects and Codex storage")
+    record = _read(base / LEGACY_REGISTRY / "projects" / (_key(project) + ".json"))
+    if record.get("project_root") != str(project):
+        raise ValueError("legacy artifact ledger does not own the exact project")
+    return base
+
+
+def _legacy_base(project):
+    if os.name == "nt":
+        base = Path.home() / "YoFaAI" / "TaskArtifacts"
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support" / "YoFaAI" / "TaskArtifacts"
+    else:
+        base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "YoFaAI" / "TaskArtifacts"
+    if not (base / LEGACY_REGISTRY / "projects" / (_key(project) + ".json")).is_file():
+        return None
+    return _cleanup_base(project, base)
+
+
 def _registry(base, project, create=False):
-    base = artifacts.validate_external_directory(base, project)
-    directory = base / REGISTRY
+    base = artifacts.resolve_artifact_base(project, artifact_root=base) if create else _cleanup_base(project, base)
+    directory = base / (REGISTRY if base == Path(project) / "Cache" else LEGACY_REGISTRY)
     artifacts._check_ancestors(directory)
     if create:
         for name in ("projects", "runs"):
@@ -133,9 +201,14 @@ def _bound_path(path, project, base):
     artifacts._check_ancestors(path)
     if not path.is_dir():
         raise ValueError("run must be an existing exact directory")
-    external = artifacts.project_artifact_directory(project, artifact_root=base)
-    if path.parent == external and artifacts.RUN_NAME_RE.fullmatch(path.name):
-        return "project"
+    if base == project / "Cache":
+        if path.parent == base and artifacts.RUN_NAME_RE.fullmatch(path.name):
+            return "project"
+    else:
+        _cleanup_base(project, base)
+        external = base / ("p-" + _key(project)[:16])
+        if path.parent == external and (artifacts.RUN_NAME_RE.fullmatch(path.name) or re.fullmatch(r"t-[0-9a-f]{24}", path.name)):
+            return "legacy-external"
     registry = _registry(base, project)
     project_record = _read(registry / "projects" / (_key(project) + ".json"))
     roots = [artifacts._absolute_path(root, "registered Cache") for root in project_record["cache_roots"]]
@@ -174,6 +247,7 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     snapshot = _snapshot(path)
     record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
     record = {"schema_version": SCHEMA, "path": str(path), "project_root": str(project), "task_id": task_id, "run_id": artifacts.task_artifact_run_id(path) if location == "project" else uuid.uuid4().hex, "location": location, "identity": snapshot["identity"], "state": state, "heartbeat": now, "registered_at": now, "creator_pid": os.getpid(), "creator_identity": _process_identity(os.getpid()), "disposable_reason": legacy_reason or "fresh task-owned disposable support allocation"}
+    record["filesystem_uuid"] = _volume_identity(path)
     record.update(retention)
     with _lock(record_path):
         if record_path.exists():
@@ -194,7 +268,9 @@ def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="wor
     if state not in STATES:
         raise ValueError("invalid lifecycle state")
     project = Path(project_root).resolve(strict=True)
-    base = artifacts.resolve_artifact_base(project, artifact_root=artifact_root)
+    base = _cleanup_base(project, artifact_root)
+    if base != project / "Cache" and state == "working":
+        raise ValueError("legacy external runs are cleanup inputs, not new working output")
     path = artifacts._absolute_path(run_root, "run_root")
     record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
     with _lock(record_path):
@@ -202,7 +278,7 @@ def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="wor
         if record["task_id"] != task_id or record["project_root"] != str(project) or record["path"] != str(path):
             raise ValueError("lifecycle update does not own this exact task/project/run")
         _bound_path(path, project, base)
-        if _identity(_safe_stat(path)) != record["identity"]:
+        if not _record_identity_matches(path, record):
             raise ValueError("run identity changed")
         if record["state"] == "blocked":
             raise ValueError("blocked deletion requires owner review; touch cannot bypass it")
@@ -224,7 +300,7 @@ def release_retention(project_root, task_id, run_root, *, run_id, expected_ident
         raise ValueError("release budget must be between 0 and 300 seconds")
     deadline = time.monotonic() + budget_seconds
     project = Path(project_root).resolve(strict=True)
-    base = artifacts.resolve_artifact_base(project, artifact_root=artifact_root)
+    base = _cleanup_base(project, artifact_root)
     path = artifacts._absolute_path(run_root, "run_root")
     record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
     with _lock(record_path):
@@ -238,7 +314,7 @@ def release_retention(project_root, task_id, run_root, *, run_id, expected_ident
             raise ValueError("retention release identity does not match registered run")
         _bound_path(path, project, base)
         snapshot = _snapshot(path, deadline)
-        if snapshot["identity"] != record["identity"]:
+        if not _record_identity_matches(path, record):
             raise ValueError("retained run identity changed")
         activity = probe_activity(path, deadline=deadline)
         if not activity["safe"]:
@@ -436,7 +512,7 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             return {**result, "action": "keep", "reason": "foreign run updated within 24 hours"}
         _bound_path(path, project, base)
         snapshot = _snapshot(path, deadline)
-        if snapshot["identity"] != record["identity"]:
+        if not _record_identity_matches(path, record):
             raise ValueError("registered run identity changed")
         inactive = now - max(record["heartbeat"], snapshot["latest"])
         if not own and inactive < STALE_SECONDS:
@@ -481,7 +557,7 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
         raise ValueError("checkpoint budget must be between 0 and 300 seconds")
     deadline = time.monotonic() + budget_seconds
     project = Path(project_root).resolve(strict=True)
-    base = artifacts.resolve_artifact_base(project, artifact_root=artifact_root)
+    base = _cleanup_base(project, artifact_root)
     current = artifacts._absolute_path(current_run, "current_run") if current_run else None
     if current in [Path(value) for value in obsolete_runs]:
         raise ValueError("current run cannot also be obsolete")
@@ -494,14 +570,19 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
             raise ValueError("finish requires exact current_run")
         touch_run(project, task_id, current, artifact_root=base, state="complete")
         current = None
-    directory = _registry(base, project)
+    bases = [base]
+    if base == project / "Cache":
+        legacy = _legacy_base(project)
+        if legacy is not None and legacy != base:
+            bases.append(legacy)
     results = []
-    for record_path in sorted((directory / "runs").glob("*.json")):
+    records = [(owner, record) for owner in bases for record in sorted((_registry(owner, project) / "runs").glob("*.json"))]
+    for owner, record_path in records:
         if time.monotonic() >= deadline:
             results.append({"record": str(record_path), "action": "pending", "reason": "checkpoint budget exhausted; remaining records await next checkpoint"})
             break
         try:
-            results.append(_sweep_record(record_path, base, task_id, current, apply, time.time(), deadline))
+            results.append(_sweep_record(record_path, owner, task_id, current, apply, time.time(), deadline))
         except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
             results.append({"record": str(record_path), "action": "pending", "reason": str(error)})
     return {"phase": phase, "applied": apply, "results": results, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
@@ -509,7 +590,7 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
 
 def scan(project_root, artifact_root=None):
     project = Path(project_root).resolve(strict=True)
-    base = artifacts.resolve_artifact_base(project, artifact_root=artifact_root)
+    base = _cleanup_base(project, artifact_root)
     directory = _registry(base, project)
     records = []
     errors = []
@@ -531,7 +612,7 @@ def scan(project_root, artifact_root=None):
             for cache in roots:
                 if cache.is_dir():
                     violations.extend(_cache_violations(cache, owner))
-            roots.append(artifacts.project_artifact_directory(owner, artifact_root=base))
+            roots.append(owner / "Cache" if base == owner / "Cache" else base / ("p-" + _key(owner)[:16]))
             for root in roots:
                 artifacts._check_ancestors(root)
                 if root.is_dir():
