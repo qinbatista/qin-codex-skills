@@ -5,7 +5,7 @@ description: "Use to create, review, edit, or test reusable prompts and durable 
 
 # Prompt Skill
 
-Before writing task support, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve its external owner before the first write; maintained prompts keep their source owner.
+Before writing task support, apply the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve the Cache owner before first write; prompts keep their owner.
 
 ## Scope
 
@@ -45,4 +45,4 @@ Actual image jobs follow [image generation and closure](../workflow-skill/refere
 
 ## Guardrails
 
-Preserve user authority and the authorized scope. Do not weaken acceptance criteria to make an output pass. Use the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md) when creating support artifacts. Keep reusable instructions concise enough that a capable model can apply the goal without a ritual checklist.
+Preserve user authority and the authorized scope. Do not weaken acceptance criteria to make an output pass. Use the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md) when creating support artifacts. Keep reusable instructions concise enough that a capable model can apply the goal without a ritual checklist.

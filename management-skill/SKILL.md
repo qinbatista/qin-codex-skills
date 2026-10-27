@@ -5,7 +5,7 @@ description: "Automatically maintain project AI indexes and concise root guidanc
 
 # Skill Management
 
-Before any file write, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). All task support belongs outside project directories and Codex storage from its first write. Source, installed updates and retained recovery backups keep their declared owners; inspect exact paths and the Git index before committing.
+Before any file write, apply the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). All task support belongs in the owning project Cache from its first write. Source, installed updates and retained recovery backups keep their declared owners; inspect exact paths and the Git index before committing.
 
 Use for automatic project AI-index maintenance and requested global Skill maintenance, installation or publication. Ensure the Obsidian vault through Project Memory and read related project memory; skip absent matching records and isolate other projects. Briefly explain the intended steps before execution.
 
@@ -25,7 +25,7 @@ Keep Skills focused on stable rules, decision criteria, essential workflow, and 
 
 Prefer existing local tools or small scripts for deterministic transformations, validation, file handling, and repeated operations. Keep judgment and meaningful choices in the Skill; executable mechanics belong to their code owner. Describe how to invoke the code, its inputs, outputs, and failure behavior instead of duplicating its algorithm as prose. Reuse a working implementation before adding helpers; a one-off adapter belongs in task scratch unless a demonstrated reusable need justifies maintaining it.
 
-Keep per-run inputs, parameters, intermediate code, logs, receipts and changing execution state in the [external task directory](../workflow-skill/references/project-cache-artifact-policy.md), passed to stable tools as data. Durable project knowledge belongs in project memory; maintained source, configuration and requested deliverables retain their declared owners. Skill folders are not task notebooks or runtime output directories.
+Keep per-run inputs, parameters, intermediate code, logs, receipts and changing execution state in the [project Cache task directory](../workflow-skill/references/project-cache-artifact-policy.md), passed to stable tools as data. Durable project knowledge belongs in project memory; maintained source, configuration and requested deliverables retain their declared owners. Skill folders are not task notebooks or runtime output directories.
 
 Ordinary task completion, a new result, or a one-off exception does not trigger a global/domain Skill update. Project AI-index maintenance is the scoped exception: automatically reconcile root guidance and the project index when established intent, ownership or structure changes. Other Skill revisions require an explicitly requested durable rule change or an authorized reusable defect repair. Make the narrow correction in its owner, remove superseded guidance and verify it. Do not add a global rule for each observed case or automatically reinstall or publish Skills after tasks.
 

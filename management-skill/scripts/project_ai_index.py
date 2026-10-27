@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
-from task_artifact_paths import project_artifact_directory, validate_external_directory
+from task_artifact_paths import project_artifact_directory, validate_task_directory
 
 
 INDEX_DIRECTORY = ".agents/skills/ai-index"
@@ -505,7 +505,7 @@ def apply_locked_plan(root, plan, work):
 
 def apply_plan(root, plan, work_dir):
     root = project_root(root)
-    work = validate_external_directory(work_dir, root)
+    work = validate_task_directory(work_dir, root)
     try:
         with project_lock(root):
             return apply_locked_plan(root, plan, work)
@@ -542,7 +542,7 @@ def main():
             case "route":
                 result = route_module(root, args.module, args.target, args.context_lines)
             case "apply":
-                validate_external_directory(args.plan.parent, root)
+                validate_task_directory(args.plan.parent, root)
                 reject_links(args.plan)
                 result = apply_plan(root, json.loads(args.plan.read_text(encoding="utf-8")), args.work_dir)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))

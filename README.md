@@ -40,7 +40,7 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 Install user Skills only in `~/.agents/skills` ([official location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)). `CODEX_HOME` (default `~/.codex`) owns configuration, global `AGENTS.md`, and system resources. Automatically [repair legacy roots](management-skill/references/skill-directory-repair.md); preserve `.system` and plugins.
 
-Keep task support in a fresh external `YoFaAI/TaskArtifacts/temp-*` run under [the artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Verify continuation inputs; release disposable directories/worktrees. Preserve source, deliverables, assets and active/review/reuse resources.
+Keep task support in a fresh project `Cache/temp-<task>/` run under [the artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Verify continuation inputs; release disposable directories/worktrees. Preserve source, deliverables, assets and active/review/reuse resources.
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .

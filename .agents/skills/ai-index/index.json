@@ -24,7 +24,7 @@
     },
     {
       "id": "workflow",
-      "summary": "Ready-work coordination, Git delivery and exact external resource ownership",
+      "summary": "Ready-work coordination, Git delivery and exact project Cache resource ownership",
       "document": ".agents/skills/ai-index/modules/workflow.md",
       "sources": [
         "workflow-skill"
@@ -87,7 +87,7 @@
           "file": "workflow-skill/scripts/task_artifact_paths.py",
           "symbol": "resolve_task_artifact_root",
           "anchor": "def resolve_task_artifact_root(",
-          "summary": "Allocate fresh external execution roots, opportunistically clean predecessors and bound automatic diagnostics."
+          "summary": "Allocate fresh project Cache execution roots, opportunistically clean predecessors and bound automatic diagnostics."
         },
         {
           "id": "cache-retention-contract-test",
@@ -160,7 +160,7 @@
         },
         {
           "module": "workflow",
-          "reason": "Evidence files and tool surfaces use external resource ownership."
+          "reason": "Evidence files and tool surfaces use task-bound resource ownership."
         }
       ]
     },

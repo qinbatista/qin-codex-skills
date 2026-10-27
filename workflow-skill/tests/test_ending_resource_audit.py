@@ -25,7 +25,7 @@ class EndingResourceAuditTests(unittest.TestCase):
         fixture = Path(self.temporary.name)
         self.project = fixture / "p"
         self.project.mkdir()
-        self.artifact_base = fixture / "a"
+        self.artifact_base = self.project / "Cache"
         self.task_id = "finished-task"
         self.task_root = ARTIFACTS.resolve_task_artifact_root(self.project, self.task_id, artifact_root=self.artifact_base).as_posix()
         self.ledger = LEDGER.new_ledger(self.project, self.task_id, self.task_root)
@@ -249,7 +249,7 @@ class EndingResourceAuditTests(unittest.TestCase):
     def test_inspection_and_release_never_traverse_symlink_roots(self):
         target = self.file("output")
         linked = self.project / "Cache" / "temp-linked"
-        linked.parent.mkdir()
+        linked.parent.mkdir(exist_ok=True)
         try:
             linked.symlink_to(self.ledger_path.parent, target_is_directory=True)
         except OSError:

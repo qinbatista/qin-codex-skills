@@ -26,7 +26,7 @@ import task_artifact_paths as artifacts
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
 
-REGISTRY = ".task-cache-registry"
+REGISTRY = "remote-task-cache-registry"
 SCHEMA = 1
 STALE_SECONDS = 86400
 PROTECTED_STATES = {"retained", "recovery", "blocked"}
@@ -135,7 +135,7 @@ def _bound_path(path, project, base):
         raise ValueError("run must be an existing exact directory")
     external = artifacts.project_artifact_directory(project, artifact_root=base)
     if path.parent == external and artifacts.RUN_NAME_RE.fullmatch(path.name):
-        return "external"
+        return "project"
     registry = _registry(base, project)
     project_record = _read(registry / "projects" / (_key(project) + ".json"))
     roots = [artifacts._absolute_path(root, "registered Cache") for root in project_record["cache_roots"]]
@@ -162,7 +162,7 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     base = register_project(project, artifact_root)
     path = artifacts._absolute_path(run_root, "run_root")
     location = _bound_path(path, project, base)
-    if location == "external" and artifacts.RUN_NAME_RE.fullmatch(path.name)["task_key"] != hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:24]:
+    if location == "project" and artifacts.RUN_NAME_RE.fullmatch(path.name)["task_key"] != hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:24]:
         raise ValueError("task identifier does not match allocated run")
     # An existing run is never adopted from its name or age. Automatic allocation
     # registers an empty newly created run, before any payload is written.
@@ -173,7 +173,7 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     retention = _retention_fields(state, legacy_reason, now)
     snapshot = _snapshot(path)
     record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
-    record = {"schema_version": SCHEMA, "path": str(path), "project_root": str(project), "task_id": task_id, "run_id": artifacts.task_artifact_run_id(path) if location == "external" else uuid.uuid4().hex, "location": location, "identity": snapshot["identity"], "state": state, "heartbeat": now, "registered_at": now, "creator_pid": os.getpid(), "creator_identity": _process_identity(os.getpid()), "disposable_reason": legacy_reason or "fresh task-owned disposable support allocation"}
+    record = {"schema_version": SCHEMA, "path": str(path), "project_root": str(project), "task_id": task_id, "run_id": artifacts.task_artifact_run_id(path) if location == "project" else uuid.uuid4().hex, "location": location, "identity": snapshot["identity"], "state": state, "heartbeat": now, "registered_at": now, "creator_pid": os.getpid(), "creator_identity": _process_identity(os.getpid()), "disposable_reason": legacy_reason or "fresh task-owned disposable support allocation"}
     record.update(retention)
     with _lock(record_path):
         if record_path.exists():

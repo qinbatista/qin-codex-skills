@@ -385,7 +385,7 @@ class EndingLaunchTests(unittest.TestCase):
             self.assertEqual(before["index_result"]["reason"], "project_index_plan_readback_failed")
             self.assertEqual(before["resource_status"], "complete")
         with mock.patch.dict(os.environ, {"YOFA_TASK_ARTIFACT_ROOT": str(self.project.parent / "artifacts")}):
-            applied = helper.apply_plan(self.project, plan, self.project.parent / "apply-original")
+            applied = helper.apply_plan(self.project, plan, self.project / "Cache" / "temp-apply-original")
             self.assertEqual(applied["status"], "complete")
             after = self.complete(packet, self.vault_result(), self.resource_result())
             self.assertEqual(after["index_status"], "complete")
@@ -402,7 +402,7 @@ class EndingLaunchTests(unittest.TestCase):
             for field in ("thread_id", "origin_task_id", "project_key", "project_owner"):
                 self.assertEqual(refreshed[field], packet[field])
             self.assertEqual(refreshed["conversation_cleanup"]["status"], "waiting")
-            self.assertEqual(helper.apply_plan(self.project, refreshed_plan, self.project.parent / "apply-refreshed")["status"], "complete")
+            self.assertEqual(helper.apply_plan(self.project, refreshed_plan, self.project / "Cache" / "temp-apply-refreshed")["status"], "complete")
             self.assertEqual(self.complete(refreshed, self.vault_result(), self.resource_result())["index_status"], "complete")
         for handoff in ({}, {"origin_task_id": "other", "plan": self.index_plan()}, {"project_root": str(self.project.parent), "plan": self.index_plan()}):
             with self.subTest(handoff=handoff), self.assertRaises(ValueError):

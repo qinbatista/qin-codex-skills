@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
-from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
+from task_artifact_paths import resolve_task_artifact_root, validate_task_directory, verify_cache_git
 
 
 # Kept self-contained because this installer also runs before skills are downloaded.
@@ -223,7 +223,9 @@ def run_release_gate(source_dir, skills_dir, mode):
 
 def project_cache_root():
     configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
-    return validate_external_directory(configured, DEFAULT_PROJECT_ROOT) if configured else resolve_task_artifact_root(DEFAULT_PROJECT_ROOT, "management-skill-sync")
+    path = validate_task_directory(configured, DEFAULT_PROJECT_ROOT) if configured else resolve_task_artifact_root(DEFAULT_PROJECT_ROOT, "management-skill-sync")
+    verify_cache_git(DEFAULT_PROJECT_ROOT, path)
+    return path
 
 
 @contextmanager
@@ -436,11 +438,12 @@ def read_sync_state(state_file):
 
 def sync_state_file():
     configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
-    return validate_external_directory(configured, DEFAULT_PROJECT_ROOT) / DEFAULT_CACHE_ROOT.name / "state" / "management-skill-sync.json" if configured else DEFAULT_STATE_FILE
+    return validate_task_directory(configured, DEFAULT_PROJECT_ROOT) / DEFAULT_CACHE_ROOT.name / "state" / "management-skill-sync.json" if configured else DEFAULT_STATE_FILE
 
 
 def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
-    validate_external_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
+    validate_task_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
+    verify_cache_git(DEFAULT_PROJECT_ROOT, state_file.parent)
     if state_file in SYNC_STATE_RECEIPTS and (state_file.is_symlink() or state_file.read_bytes() != SYNC_STATE_RECEIPTS[state_file]):
         raise RuntimeError("Sync receipt changed after this runtime wrote it")
     directories = [state_file.parent, state_file.parent.parent] if state_file.parent.parent.name == DEFAULT_CACHE_ROOT.name else [state_file.parent]
@@ -455,7 +458,7 @@ def write_sync_state(state_file, repository, remote_head, local_hash, remote_has
 def cleanup_sync_state():
     for state_file, receipt in list(SYNC_STATE_RECEIPTS.items()):
         try:
-            validate_external_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
+            validate_task_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
             if state_file.is_symlink():
                 raise ValueError("Sync receipt became a symbolic link")
             if state_file.exists():
@@ -467,7 +470,7 @@ def cleanup_sync_state():
             print(f"Sync receipt cleanup pending: {state_file} ({error.__class__.__name__}).")
     for directory in sorted(SYNC_STATE_DIRECTORIES, key=lambda path: len(path.parts), reverse=True):
         try:
-            validate_external_directory(directory, DEFAULT_PROJECT_ROOT)
+            validate_task_directory(directory, DEFAULT_PROJECT_ROOT)
             if directory.exists():
                 directory.rmdir()
             SYNC_STATE_DIRECTORIES.remove(directory)

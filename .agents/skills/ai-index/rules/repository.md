@@ -8,4 +8,4 @@ Follow [Workflow's Git ownership and delivery contract](../../../../workflow-ski
 
 For a Windows global Skill update, protect unrelated dirty work and pull current published source before Windows checks. Repair Windows defects in maintained source, verify both platforms, then publish and read back both checkouts and installations.
 
-Before staging, inspect exact paths and the Git index. Temporary support never enters Git. Canonical runtime/assets, maintained tests and final deliverables retain their owners; external task support follows [execution and resources](execution.md).
+Before staging, inspect exact paths and the Git index. Temporary support never enters Git. Canonical runtime/assets, maintained tests and final deliverables retain their owners; project Cache task support follows [execution and resources](execution.md).

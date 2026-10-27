@@ -76,11 +76,11 @@ project_ai_index.py route --project-root ROOT
 project_ai_index.py route --project-root ROOT --module feature
 project_ai_index.py route --project-root ROOT --module feature --target read-content --context-lines 12
 project_ai_index.py check --project-root ROOT
-project_ai_index.py apply --project-root ROOT --plan PLAN_JSON --work-dir EXTERNAL_RUN
+project_ai_index.py apply --project-root ROOT --plan PLAN_JSON --work-dir PROJECT_CACHE_RUN
 project_ai_index.py inspect --project-root ROOT --phase end --changed-path src/feature.py
 ```
 
-The agent authors a reviewed plan in the current [external task run](../../workflow-skill/references/project-cache-artifact-policy.md). The helper checks exact project identity, evidence hashes, target preimages, path containment and the proposed map before writing. It cannot infer semantics or override permissions. Plan shape:
+The agent authors a reviewed plan in the current [project Cache task run](../../workflow-skill/references/project-cache-artifact-policy.md). The helper checks exact project identity, evidence hashes, target preimages, path containment and the proposed map before writing. It cannot infer semantics or override permissions. Plan shape:
 
 ```json
 {

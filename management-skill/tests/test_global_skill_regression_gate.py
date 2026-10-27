@@ -108,7 +108,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
 
     def test_zero_test_command_is_a_failure_even_with_exit_zero(self):
         completed = subprocess.CompletedProcess(["test"], 0, stdout="Ran 0 tests\nOK\n", stderr="")
-        with mock.patch.object(GATE.subprocess, "run", return_value=completed):
+        with mock.patch.object(GATE, "verify_cache_git"), mock.patch.object(GATE.subprocess, "run", return_value=completed):
             result = GATE.command_result("zero", "source", ["test"], PROJECT_ROOT, 1, {})
         self.assertEqual(result["status"], "fail")
         self.assertEqual((result["test_count"], result["passed_count"]), (0, 0))
@@ -264,13 +264,13 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 invalid = GATE.run_check(check, "source", PROJECT_ROOT, PROJECT_ROOT, roots, catalog["managed_skills"])
                 self.assertEqual(invalid["status"], "fail", invalid)
 
-    def test_command_tempfile_stays_external_and_cleans_on_timeout(self):
+    def test_command_tempfile_stays_in_project_cache_and_cleans_on_timeout(self):
         task_cache = GATE.resolve_task_artifact_root(PROJECT_ROOT, "testing-skill")
         task_cache.mkdir(parents=True, exist_ok=True)
         self.addCleanup(task_cache.rmdir)
         with tempfile.TemporaryDirectory(prefix="gate-check-", dir=task_cache) as project_dir:
             project_root = Path(project_dir)
-            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert Path(os.environ['YOFA_TASK_ARTIFACT_ROOT']) == p / 'artifacts'; assert not p.is_relative_to(Path.cwd()); print('Ran 1 test')"
+            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert 'YOFA_TASK_ARTIFACT_ROOT' not in os.environ; assert p.is_relative_to(Path.cwd() / 'Cache'); print('Ran 1 test')"
             with mock.patch.object(GATE.subprocess, "run", wraps=GATE.subprocess.run) as runner:
                 result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
             self.assertEqual(result["status"], "pass", result)
@@ -278,11 +278,14 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             self.assertFalse(completed_cache.exists())
             self.assertFalse(completed_cache.parent.exists())
             observed = []
+            original_run = subprocess.run
 
             def timeout(*args, **kwargs):
+                if "env" not in kwargs:
+                    return original_run(*args, **kwargs)
                 observed.append(Path(kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"]))
                 self.assertTrue(observed[-1].is_dir())
-                self.assertFalse(observed[-1].is_relative_to(project_root))
+                self.assertTrue(observed[-1].is_relative_to(project_root / "Cache"))
                 raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
 
             with mock.patch.object(GATE.subprocess, "run", side_effect=timeout):

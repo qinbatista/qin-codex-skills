@@ -37,9 +37,9 @@ class ProjectAIIndexTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name).resolve()
         self.project = self.base / "project"
-        self.work = self.base / "work"
+        self.work = self.project / "Cache/temp-ai-index"
         self.project.mkdir()
-        self.work.mkdir()
+        self.work.mkdir(parents=True)
         environment = mock.patch.dict(os.environ, {"YOFA_TASK_ARTIFACT_ROOT": str(self.base / "artifacts")})
         environment.start()
         self.addCleanup(environment.stop)
@@ -450,7 +450,9 @@ class ProjectAIIndexTests(unittest.TestCase):
         manifest = self.manifest()
         manifest["modules"] = [{"id": "project", "summary": "Initial project scope", "document": f"{INDEX.INDEX_DIRECTORY}/modules/api.md", "sources": ["AGENTS.md"], "dependencies": []}]
         next(record for record in plan["files"] if record["path"] == INDEX.MANIFEST_PATH)["content"] = json.dumps(manifest)
-        result = INDEX.apply_plan(empty, plan, self.work)
+        empty_work = empty / "Cache/temp-ai-index"
+        empty_work.mkdir(parents=True)
+        result = INDEX.apply_plan(empty, plan, empty_work)
         self.assertEqual(result["status"], "complete", result)
         self.assertEqual(INDEX.route_module(empty, "project")["sources"], ["AGENTS.md"])
         self.assertFalse((empty / "src").exists())

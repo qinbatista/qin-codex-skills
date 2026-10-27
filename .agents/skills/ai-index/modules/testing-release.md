@@ -1,6 +1,6 @@
 # Project testing and release
 
-Start at the [project testing Skill](../../testing-skill/SKILL.md), [test registry](../../testing-skill/references/test-registry.json) and [audit_registry.py](../../testing-skill/scripts/audit_registry.py). They own stable test purpose, goal, level, relative path, runner and Skill ownership; results remain in the current external run.
+Start at the [project testing Skill](../../testing-skill/SKILL.md), [test registry](../../testing-skill/references/test-registry.json) and [audit_registry.py](../../testing-skill/scripts/audit_registry.py). They own stable test purpose, goal, level, relative path, runner and Skill ownership; results remain in the current project Cache run.
 
 Each global Skill's clean-clone tests stay in that Skill's `tests/`. Project-only tests stay under the project testing Skill. Consolidate by purpose before adding cases; retain distinct compatibility and release coverage. Apply [verification rules](../rules/verification.md).
 

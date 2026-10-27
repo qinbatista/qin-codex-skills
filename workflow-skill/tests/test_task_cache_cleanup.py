@@ -28,7 +28,7 @@ class TaskCacheCleanupTests(unittest.TestCase):
         self.root = Path(self.fixture.name)
         self.project = self.root / "project"
         self.project.mkdir()
-        self.base = self.root / "artifacts"
+        self.base = self.project / "Cache"
 
     def tearDown(self):
         self.fixture.cleanup()

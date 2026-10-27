@@ -280,14 +280,16 @@ def new_ledger(
     if task_root is not None:
         task_root = _task_root_path(task_root)
         if not Path(task_root).is_absolute():
-            _fail("new task roots must be external absolute directories; legacy Cache roots are read-only")
+            _fail("new task roots must be absolute project Cache directories")
         if artifact_root is None:
-            artifact_root = Path(task_root).parent.parent
+            artifact_root = Path(task_root).parent
     run_id = task_artifact_run_id(task_root) if task_root is not None else None
     expected = resolve_task_artifact_root(root, task_id, run_id=run_id, artifact_root=artifact_root)
     if task_root is not None and Path(task_root) != expected:
-        _fail("task_root must match the resolved external project and task identity")
-    project_artifact_directory(root, artifact_root=expected.parent.parent, create=True)
+        _fail("task_root must match the resolved project Cache and task identity")
+    from task_artifact_paths import verify_cache_git
+    verify_cache_git(root, expected)
+    project_artifact_directory(root, artifact_root=expected.parent, create=True)
     task_root_absolute = expected
     task_root = expected.as_posix()
     task_root_absolute.mkdir(exist_ok=False)
@@ -301,8 +303,8 @@ def new_ledger(
         "task_root": task_root,
         "binding": {
             "project_fingerprint": _fingerprint(root),
-            "artifact_base": expected.parent.parent.as_posix(),
-            "artifact_base_identity": _binding_identity(expected.parent.parent),
+            "artifact_base": expected.parent.as_posix(),
+            "artifact_base_identity": _binding_identity(expected.parent),
             "project_artifact_identity": _binding_identity(expected.parent),
             "task_root_identity": _binding_identity(task_root_absolute),
         },

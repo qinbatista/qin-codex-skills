@@ -131,13 +131,13 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         self.assertIsNotNone(executable, "Native Windows ACL verification requires icacls")
         return sync_global_skills.subprocess.run([executable, str(path), *options], capture_output=True, text=True, check=True, timeout=60, **sync_global_skills.hidden_process_options())
 
-    def test_default_runtime_state_stays_outside_project_and_codex(self):
+    def test_default_runtime_state_stays_in_project_cache(self):
         self.assertEqual(sync_global_skills.DEFAULT_PROJECT_ROOT, Path.cwd().resolve())
         self.assertEqual(
             sync_global_skills.DEFAULT_STATE_FILE,
             sync_global_skills.DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json",
         )
-        self.assertFalse(sync_global_skills.DEFAULT_CACHE_ROOT.is_relative_to(sync_global_skills.DEFAULT_PROJECT_ROOT))
+        self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT.parent, sync_global_skills.DEFAULT_PROJECT_ROOT / "Cache")
         self.assertFalse(sync_global_skills.DEFAULT_CACHE_ROOT.is_relative_to(Path.home() / ".codex"))
         run_id = sync_global_skills.DEFAULT_CACHE_ROOT.name.rsplit("-", 1)[1]
         self.assertEqual(sync_global_skills.DEFAULT_CACHE_ROOT, sync_global_skills.resolve_task_artifact_root(sync_global_skills.DEFAULT_PROJECT_ROOT, "management-skill-sync", run_id=run_id))
@@ -166,7 +166,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
                 self.assertEqual(second_marker.read_bytes(), b"second run remains active")
             self.assertFalse(second.exists())
             self.assertFalse(second.parent.exists())
-            self.assertEqual(list(second.parent.parent.iterdir()), [])
+            self.assertTrue(second.parent.parent.is_dir())
 
     def test_workspace_error_removes_its_owned_run(self):
         artifact_base = Path(self.codex_sandbox.name) / "failed-run"
@@ -265,7 +265,7 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             self.assertEqual(legacy_state.read_bytes(), b"preexisting configured state")
 
     def test_scratch_override_rejects_project_and_unexpanded_tokens_before_write(self):
-        for configured in (str(sync_global_skills.DEFAULT_PROJECT_ROOT / "Cache" / "temp-test"), "%SystemDrive%/scratch"):
+        for configured in (str(sync_global_skills.DEFAULT_PROJECT_ROOT / "management-skill"), "%SystemDrive%/scratch"):
             with self.subTest(configured=configured), mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": configured}):
                 with mock.patch.object(Path, "mkdir", side_effect=AssertionError("invalid scratch must not write")):
                     with self.assertRaises(ValueError):

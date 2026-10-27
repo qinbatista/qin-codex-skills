@@ -34,7 +34,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
         fixture = Path(self.temporary_directory.name)
         self.project_root = fixture / "p"
         self.project_root.mkdir()
-        self.artifact_base = fixture / "a"
+        self.artifact_base = self.project_root / "Cache"
         self.task_id = "producer-task"
         self.task_root = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, artifact_root=self.artifact_base).as_posix()
         self.ledger = LEDGER.new_ledger(self.project_root, self.task_id, self.task_root)
@@ -59,7 +59,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
     def test_new_executions_are_independent_and_configure_real_child_temp(self):
         resolved = ARTIFACTS.resolve_task_artifact_root(self.project_root, self.task_id, run_id=self.ledger["run_id"], artifact_root=self.artifact_base)
         self.assertEqual(resolved, Path(self.task_root))
-        self.assertFalse(resolved.is_relative_to(self.project_root))
+        self.assertEqual(resolved.parent, self.project_root / "Cache")
         self.assertNotEqual(resolved, ARTIFACTS.resolve_task_artifact_root(self.project_root, "other-task", artifact_root=self.artifact_base))
         following = LEDGER.new_ledger(self.project_root, self.task_id, artifact_root=self.artifact_base)
         self.assertNotEqual(resolved, Path(following["task_root"]))
@@ -100,29 +100,26 @@ class TaskResourceLedgerTests(unittest.TestCase):
                 ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=invalid, environ={"CODEX_HOME": str(codex)})
         other_project = Path(self.temporary_directory.name) / "other-git"
         (other_project / ".git").mkdir(parents=True)
-        with self.assertRaisesRegex(ValueError, "Git project"):
+        with self.assertRaisesRegex(ValueError, "owning project's Cache"):
             ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=other_project / "scratch")
         packaged = Path(self.temporary_directory.name) / "Packages" / "OpenAI.Codex_test" / "LocalCache" / "scratch"
-        with self.assertRaisesRegex(ValueError, "Codex"):
+        with self.assertRaisesRegex(ValueError, "owning project's Cache"):
             ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=packaged)
         linked = Path(self.temporary_directory.name) / "linked"
         try:
             linked.symlink_to(self.artifact_base, target_is_directory=True)
         except OSError:
             return
-        with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+        with self.assertRaisesRegex(ValueError, "owning project's Cache"):
             ARTIFACTS.resolve_task_artifact_root(self.project_root, "invalid", artifact_root=linked / "scratch")
 
-    def test_new_cache_ledger_cannot_be_created(self):
-        with self.assertRaisesRegex(ValueError, "external absolute"):
-            LEDGER.new_ledger(self.project_root, "old-layout", "Cache/temp-old-layout")
-        self.assertFalse((self.project_root / "Cache").exists())
+    def test_new_cache_ledger_is_created_in_project_cache(self):
+        created = LEDGER.new_ledger(self.project_root, "another-task")
+        self.assertEqual(Path(created["task_root"]).parent, self.project_root / "Cache")
 
-    def test_native_default_remains_outside_packaged_codex_storage(self):
+    def test_native_default_is_project_cache(self):
         root = ARTIFACTS.resolve_artifact_base(self.project_root, environ={})
-        if os.name == "nt":
-            self.assertEqual(root, Path.home() / "YoFaAI" / "TaskArtifacts")
-        self.assertFalse(ARTIFACTS._codex_component(root))
+        self.assertEqual(root, self.project_root / "Cache")
 
     def _acquire_file(self, resource_id, name, *, scope="main", content="owned"):
         relative_path = self._path(name)
@@ -628,7 +625,7 @@ class TaskResourceLedgerTests(unittest.TestCase):
     def test_cli_round_trip_removes_only_the_registered_path(self):
         cli_project = self.project_root / "cli-project"
         cli_project.mkdir()
-        cli_task_root = ARTIFACTS.resolve_task_artifact_root(cli_project, "cli-task", artifact_root=self.artifact_base).as_posix()
+        cli_task_root = ARTIFACTS.resolve_task_artifact_root(cli_project, "cli-task").as_posix()
         ledger_path = cli_project / cli_task_root / LEDGER.LEDGER_NAME
 
         def run(*arguments):

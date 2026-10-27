@@ -5,7 +5,7 @@ description: "Use for code creation, repair, refactoring, and code review when w
 
 # Code Skill
 
-Before any file write, apply the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve task support outside project directories and Codex storage from its first write, including child-tool caches and test output. Maintained source and final deliverables keep their actual owners; inspect exact paths and the Git index before committing.
+Before any file write, apply the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve task support in the owning project Cache from its first write, including child-tool caches and test output. Maintained source and final deliverables keep their actual owners; inspect exact paths and the Git index before committing.
 
 ## Scope
 
@@ -44,4 +44,4 @@ Do not start the whole project, run a full build, or compile all of Unity just t
 
 ## Guardrails
 
-Preserve public contracts, serialization, execution order, exceptions, cancellation, and Unity main-thread rules unless the request changes them. Publish only when authorized. Put temporary support in the owner resolved by the [external artifact policy](../workflow-skill/references/project-cache-artifact-policy.md).
+Preserve public contracts, serialization, execution order, exceptions, cancellation, and Unity main-thread rules unless the request changes them. Publish only when authorized. Put temporary support in the owner resolved by the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve ordinary task support outside projects and Codex-managed storage."""
+"""Resolve ordinary task support inside the owning project's Cache."""
 
 from __future__ import annotations
 
@@ -11,15 +11,31 @@ import re
 import stat
 import sys
 import shutil
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Mapping
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import task_cache_cleanup
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
 
 
 RUN_NAME_RE = re.compile(r"temp-(?P<task_key>[0-9a-f]{24})-(?P<run_id>[0-9a-f]{32})")
+
+
+def verify_cache_git(project_root: str | Path, path: str | Path) -> None:
+    project = Path(project_root).resolve(strict=True)
+    if not any((parent / ".git").exists() for parent in (project, *project.parents)):
+        return
+    git = shutil.which("git")
+    if git is None:
+        raise ValueError("Git is required to verify Cache isolation")
+    ignored = subprocess.run([git, "-C", str(project), "check-ignore", "-q", str(path)], capture_output=True, timeout=30, shell=False, **hidden_process_options())
+    tracked = subprocess.run([git, "-C", str(project), "ls-files", "-z", "--", "Cache"], capture_output=True, timeout=30, shell=False, **hidden_process_options())
+    if ignored.returncode != 0 or tracked.returncode != 0 or tracked.stdout:
+        raise ValueError("project Cache must be ignored and contain no tracked files")
 
 
 def _absolute_path(value: str | Path, label: str) -> Path:
@@ -73,17 +89,18 @@ def validate_external_directory(
     project = Path(project_root).expanduser().resolve(strict=True)
     if not project.is_dir():
         raise ValueError("project_root must be an existing directory")
-    codex_value = environment.get("CODEX_HOME")
-    codex = _absolute_path(codex_value, "CODEX_HOME") if codex_value else Path.home() / ".codex"
-    for forbidden in (project, codex.resolve(strict=False), Path.home() / ".agents"):
-        if _within(path, forbidden):
-            raise ValueError("task artifacts must remain outside the project and Codex directories")
-    if _codex_component(path):
-        raise ValueError("task artifacts must remain outside Codex directories")
-    if any((ancestor / ".git").exists() for ancestor in (path, *path.parents)):
-        raise ValueError("task artifacts must remain outside every Git project")
-    if path == Path(path.anchor) or path == Path.home():
-        raise ValueError("an entire filesystem or home directory is not an artifact owner")
+    cache = project / "Cache"
+    if _within(path, cache):
+        return path
+    raise ValueError("task artifacts must use the owning project's Cache directory")
+
+
+def validate_task_directory(directory: str | Path, project_root: str | Path) -> Path:
+    path = validate_external_directory(directory, project_root)
+    cache = Path(project_root).expanduser().resolve(strict=True) / "Cache"
+    relative = path.relative_to(cache)
+    if not relative.parts or not relative.parts[0].startswith("temp-"):
+        raise ValueError("task output must be inside a project Cache/temp-* directory")
     return path
 
 
@@ -94,18 +111,12 @@ def resolve_artifact_base(
     environ: Mapping[str, str] | None = None,
 ) -> Path:
     environment = os.environ if environ is None else environ
-    selected = artifact_root if artifact_root is not None else environment.get("YOFA_TASK_ARTIFACT_ROOT")
-    if selected is None:
-        if os.name == "nt":
-            # MSIX hosts can transparently redirect LOCALAPPDATA into Codex's
-            # managed package storage. The home-owned directory stays external.
-            selected = Path.home() / "YoFaAI" / "TaskArtifacts"
-        elif sys.platform == "darwin":
-            selected = Path.home() / "Library" / "Application Support" / "YoFaAI" / "TaskArtifacts"
-        else:
-            cache = environment.get("XDG_CACHE_HOME")
-            selected = (_absolute_path(cache, "XDG_CACHE_HOME") if cache else Path.home() / ".cache") / "YoFaAI" / "TaskArtifacts"
-    return validate_external_directory(selected, project_root, environ=environment)
+    project = Path(project_root).expanduser().resolve(strict=True)
+    cache = project / "Cache"
+    selected = _absolute_path(artifact_root, "artifact directory") if artifact_root is not None else cache
+    if selected != cache:
+        raise ValueError("task artifacts must use the owning project's Cache directory")
+    return validate_external_directory(selected, project, environ=environment)
 
 
 def project_artifact_directory(
@@ -116,8 +127,7 @@ def project_artifact_directory(
     create: bool = False,
 ) -> Path:
     project = Path(project_root).expanduser().resolve(strict=True)
-    identity = hashlib.sha256(os.fsencode(os.path.normcase(str(project)))).hexdigest()[:16]
-    path = resolve_artifact_base(project, artifact_root=artifact_root, environ=environ) / f"p-{identity}"
+    path = resolve_artifact_base(project, artifact_root=artifact_root, environ=environ)
     validate_external_directory(path, project, environ=environ)
     if create:
         path.mkdir(parents=True, exist_ok=True)
@@ -142,11 +152,13 @@ def resolve_task_artifact_root(
         run_id = uuid.uuid4().hex
     if not isinstance(run_id, str) or not re.fullmatch(r"[0-9a-f]{32}", run_id):
         raise ValueError("run_id must be a lowercase 32-character UUID hex value")
-    path = project_artifact_directory(project_root, artifact_root=artifact_root, environ=environ, create=create) / f"temp-{task_key}-{run_id}"
+    path = project_artifact_directory(project_root, artifact_root=artifact_root, environ=environ) / f"temp-{task_key}-{run_id}"
     validate_external_directory(path, project_root, environ=environ)
     if create:
+        verify_cache_git(project_root, path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            checkpoint = task_cache_cleanup.checkpoint(project_root, task_id, artifact_root=path.parent.parent, phase="start", current_run=path, apply=True, budget_seconds=5)
+            checkpoint = task_cache_cleanup.checkpoint(project_root, task_id, artifact_root=path.parent, phase="start", current_run=path, apply=True, budget_seconds=5)
         except (OSError, ValueError) as error:
             checkpoint = {"bytes_deleted": 0, "results": [{"action": "pending", "reason": str(error)}]}
         actionable = [item for item in checkpoint["results"] if item["action"] in {"deleted", "pending"}]
@@ -156,7 +168,7 @@ def resolve_task_artifact_root(
         path.mkdir(parents=True, exist_ok=False)
         validate_external_directory(path, project_root, environ=environ)
         try:
-            task_cache_cleanup.register_run(project_root, task_id, path, artifact_root=path.parent.parent)
+            task_cache_cleanup.register_run(project_root, task_id, path, artifact_root=path.parent)
         except (OSError, ValueError):
             path.rmdir()
             raise
@@ -184,7 +196,7 @@ def copy_run_inputs(project_root: str | Path, source_root: str | Path, destinati
     destination = validate_external_directory(destination_root, project_root)
     if source == destination or source.parent != destination.parent:
         raise ValueError("continuation requires different execution directories for the same project")
-    expected_parent = project_artifact_directory(project_root, artifact_root=destination.parent.parent)
+    expected_parent = project_artifact_directory(project_root, artifact_root=destination.parent)
     if source.parent != expected_parent or not source.is_dir() or not destination.is_dir():
         raise ValueError("continuation roots must belong to the exact existing project artifact owner")
     task_artifact_run_id(destination)
@@ -248,14 +260,12 @@ def task_artifact_environment(
     root = root.resolve(strict=False)
     environment = dict(os.environ if environ is None else environ)
     task_artifact_run_id(root)
-    if not root.is_dir() or not re.fullmatch(r"p-[0-9a-f]{16}", root.parent.name):
-        raise ValueError("temporary environment requires a resolved external project/task root")
+    if not root.is_dir() or root.parent.name != "Cache":
+        raise ValueError("temporary environment requires a project Cache/temp-* task root")
     codex_value = environment.get("CODEX_HOME")
     codex = _absolute_path(codex_value, "CODEX_HOME") if codex_value else Path.home() / ".codex"
     if _within(root, codex.resolve(strict=False)):
         raise ValueError("task temporary environment must remain outside Codex")
-    if _codex_component(root) or any((ancestor / ".git").exists() for ancestor in (root, *root.parents)):
-        raise ValueError("task temporary environment must remain outside projects and Codex")
     temporary = root / "tmp"
     _check_ancestors(temporary)
     if create:

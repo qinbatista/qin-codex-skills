@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
-from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
+from task_artifact_paths import resolve_task_artifact_root, validate_task_directory, verify_cache_git
 
 
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
@@ -161,7 +161,9 @@ def copy_required_plugin_contracts(plugin_cache: Path, candidate_cache: Path) ->
 
 
 def project_task_cache_root(project_root: Path, cache_root: Path) -> Path:
-    return validate_external_directory(cache_root, project_root)
+    path = validate_task_directory(cache_root, project_root)
+    verify_cache_git(project_root, path)
+    return path
 
 
 @contextmanager
@@ -238,12 +240,13 @@ def command_result(check_id: str, target: str, command: list[str], root: Path, t
         environment["PYTHONUTF8"] = "1"
         environment["PYTHONIOENCODING"] = "utf-8"
     cache_root = resolve_task_artifact_root(root, f"global-skill-check:{target}:{check_id}")
+    verify_cache_git(root, cache_root)
     cache_root.mkdir(parents=True, exist_ok=True)
     try:
         with tempfile.TemporaryDirectory(prefix="check-", dir=cache_root) as temporary_cache:
             for variable in ("CODEX_PROJECT_CACHE_ROOT", "TMP", "TEMP", "TMPDIR"):
                 environment[variable] = temporary_cache
-            environment["YOFA_TASK_ARTIFACT_ROOT"] = str(Path(temporary_cache) / "artifacts")
+            environment.pop("YOFA_TASK_ARTIFACT_ROOT", None)
             for variable in ("ENDING_MEMORY_TEST_CACHE", "ENDING_CONCURRENCY_TEST_CACHE", "ENDING_LAUNCH_TEST_CACHE", "PROJECT_CHANGE_MEMORY_TEST_CACHE", "PROJECT_KNOWLEDGE_TEST_CACHE", "TASK_RESOURCE_LEDGER_TEST_CACHE", "ENDING_RESOURCE_AUDIT_TEST_CACHE"):
                 environment[variable] = temporary_cache
             completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())
@@ -582,8 +585,8 @@ def main() -> int:
         default_history = task_cache / DEFAULT_HISTORY_RELATIVE_PATH
     output = args.output if args.output else default_output
     history = args.history if args.history else default_history
-    validate_external_directory(output.parent, project_root)
-    validate_external_directory(history.parent, project_root)
+    validate_task_directory(output.parent, project_root)
+    validate_task_directory(history.parent, project_root)
     write_report(output, report)
     append_history(history, report)
     print(json.dumps({"status": report["status"], **report["summary"], "report": str(output)}, ensure_ascii=False))

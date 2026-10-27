@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect external task roots and release purpose-reviewed completed resources.
+"""Inspect project Cache task roots and release purpose-reviewed completed resources.
 
 Task liveness and purpose decisions come from fresh owning-tool readbacks. This
 helper reuses the producer ledger's identity, consumer, lock and deletion rules;
@@ -25,14 +25,14 @@ MAX_READBACK_AGE_SECONDS = 120
 
 
 def inspect_cache(project_root: str | Path, *, limit: int = MAX_ROOTS, artifact_root: str | Path | None = None) -> dict[str, Any]:
-    """Inspect bounded external roots and legacy Cache; never create a directory."""
+    """Inspect bounded project Cache roots; never create a directory."""
     if not isinstance(limit, int) or not 1 <= limit <= MAX_ROOTS:
         raise ValueError("artifact inspection limit must be between 1 and 64")
     root = resources._canonical_root(project_root)
     roots = []
     count = 0
     reached = False
-    owners = ((project_artifact_directory(root, artifact_root=artifact_root), "external"), (root / "Cache", "legacy_cache"))
+    owners = ((project_artifact_directory(root, artifact_root=artifact_root), "project_cache"),)
     for directory, location in owners:
         if not directory.exists() and not directory.is_symlink():
             continue
@@ -44,9 +44,9 @@ def inspect_cache(project_root: str | Path, *, limit: int = MAX_ROOTS, artifact_
             if count > limit:
                 reached = True
                 break
-            if location == "legacy_cache" and not entry.name.startswith(("temp-", "tmp-")):
+            if not entry.name.startswith(("temp-", "tmp-")):
                 continue
-            task_root = f"Cache/{entry.name}" if location == "legacy_cache" else Path(entry.path).as_posix()
+            task_root = f"Cache/{entry.name}"
             try:
                 resources._task_root_path(task_root)
                 resources._safe_lstat(Path(entry.path), directory=True)
@@ -54,7 +54,7 @@ def inspect_cache(project_root: str | Path, *, limit: int = MAX_ROOTS, artifact_
                 resources._safe_lstat(ledger_path, directory=False)
                 ledger = resources.load_ledger(ledger_path)
                 resources._assert_ledger_location(root, ledger_path, ledger, read_only=True)
-                roots.append({"task_root": task_root, "location": location, "read_only": location == "legacy_cache", "owner_task_key": ledger["owner_task_key"], "run_id": ledger.get("run_id"), "ledger_id": ledger["ledger_id"], "resources": [{key: item[key] for key in ("id", "kind", "purpose", "state")} for item in ledger["resources"]]})
+                roots.append({"task_root": ledger["task_root"], "location": location, "read_only": ledger["schema_version"] == resources.LEGACY_SCHEMA_VERSION, "owner_task_key": ledger["owner_task_key"], "run_id": ledger.get("run_id"), "ledger_id": ledger["ledger_id"], "resources": [{key: item[key] for key in ("id", "kind", "purpose", "state")} for item in ledger["resources"]]})
             except (OSError, ValueError) as error:
                 roots.append({"task_root": task_root, "location": location, "status": "pending", "reason": str(error), "action": "preserve_unknown"})
         if reached:

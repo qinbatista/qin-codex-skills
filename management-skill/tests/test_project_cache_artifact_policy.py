@@ -50,20 +50,13 @@ def external_fixture():
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
-    def test_canonical_policy_requires_external_first_write_and_real_owner_preservation(self):
+    def test_canonical_policy_requires_project_cache_first_write_and_owner_preservation(self):
         text = PROJECT_CACHE_POLICY_PATH.read_text(encoding="utf-8")
         required_rules = (
-            "outside every project directory and Codex-managed storage from its first write",
-            "YOFA_TASK_ARTIFACT_ROOT",
-            "Discovered home joined with",
-            "XDG_CACHE_HOME",
+            "owning project's ignored `Cache/temp-<task>/` from their first write",
             "task_artifact_paths.py",
-            "resolve_task_artifact_root",
-            "task_artifact_environment",
-            "Missing, invalid or unavailable",
-            "Reject links/reparse points",
-            "`tempfile` only with an explicit directory",
-            "Disable project-local bytecode, pytest, coverage",
+            "TMP`, `TEMP` and `TMPDIR",
+            "Reject links and reparse paths",
             "canonical asset originals/history",
             "versioned non-runtime tests",
             "requested final deliverables",
@@ -78,36 +71,32 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         for required in required_rules:
             with self.subTest(rule=required):
                 self.assertIn(required, text)
-        self.assertNotIn("Use only the resolved workspace's ignored", text)
+        self.assertNotIn("outside every project directory and Codex-managed storage", text)
 
-    def test_all_managed_entries_link_the_single_external_policy_before_support_writes(self):
+    def test_all_managed_entries_link_the_single_cache_policy_before_support_writes(self):
         for skill in PRIMARY_SKILLS:
             text = (SKILLS_ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
             with self.subTest(skill=skill):
                 self.assertIn("project-cache-artifact-policy.md", text)
                 self.assertIn("first write", text)
-                self.assertIn("external", text)
-                self.assertNotIn("`Cache/temp-<task>/`", text)
+                self.assertIn("Cache", text)
 
-    def test_installable_entry_preserves_global_agents_and_forbids_project_scratch(self):
+    def test_installable_entry_preserves_global_agents_and_requires_project_cache(self):
         text = GLOBAL_ENTRY_RULE_PATH.read_text(encoding="utf-8")
         for required in (
             "deploy, pull, and sync preserve user AGENTS.md files",
-            "outside every project directory and Codex-managed storage",
-            "from its first write",
-            "YOFA_TASK_ARTIFACT_ROOT",
-            "Each request or newly started test/build/package/deploy unit",
-            "child TMP/TEMP/TMPDIR before launch",
-            "real runtime/asset Cache owners",
-            "moving never bypasses rejected deletion",
+            "owning project's ignored Cache/temp-<task>/",
+            "from their first write",
+            "fresh task run for each execution",
+            "child TMP/TEMP/TMPDIR",
+            "actual runtime or asset owners",
             "temporary files never enter Git",
             "minimum recovery inputs/state",
             "preserve unrelated work",
         ):
             with self.subTest(rule=required):
                 self.assertIn(required, text)
-        self.assertNotIn("current task workspace's Cache", text)
-        self.assertNotIn("Cache/temp-<task>/", text)
+        self.assertNotIn("outside every project directory and Codex-managed storage", text)
 
     @unittest.skipUnless(
         os.environ.get("VERIFY_INSTALLED_GLOBAL_SKILLS") == "1",
@@ -124,8 +113,8 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
     def test_resource_cleanup_is_exact_and_preserves_review_recovery_and_other_tasks(self):
         text = (SKILLS_ROOT / "workflow-skill/references/task-resource-lifecycle.md").read_text(encoding="utf-8")
         for required in (
-            "external artifact policy",
-            "project-Cache ledgers remain read-only",
+            "project Cache artifact policy",
+            "project Cache ledgers remain bound",
             "fresh process or website request",
             "minimum inputs and resumable state",
             "never authorizes indefinite temp retention",
@@ -174,12 +163,12 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                         template = SKILLS_ROOT / "management-skill/assets/readme" / f"github-readme-template{suffix}.md"
                         rule = next(
                             line for line in template.read_text(encoding="utf-8").splitlines()
-                            if "YoFaAI/TaskArtifacts" in line
+                            if "Cache/temp-<task>/" in line
                         )
                         with self.subTest(language=suffix or "en"):
                             published = (workspace / f"README{suffix}.md").read_text(encoding="utf-8")
                             self.assertIn(rule, published)
-                            self.assertNotIn("Cache/temp-<task>/", rule)
+                            self.assertIn("Cache/temp-<task>/", rule)
                 self.assertFalse(workspace.exists())
 
     def test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache(self):
@@ -191,18 +180,15 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             original = project_one / "Cache" / "remote-assets" / "original.bin"
             original.parent.mkdir(parents=True)
             original.write_bytes(b"canonical asset bytes")
-            base = fixture / "task-artifacts"
             roots = (
-                ARTIFACTS.resolve_task_artifact_root(project_one, "same-task", artifact_root=base, create=True),
-                ARTIFACTS.resolve_task_artifact_root(project_two, "same-task", artifact_root=base, create=True),
-                ARTIFACTS.resolve_task_artifact_root(project_one, "other-task", artifact_root=base, create=True),
-                ARTIFACTS.resolve_task_artifact_root(project_one, "same-task", artifact_root=base, create=True),
+                ARTIFACTS.resolve_task_artifact_root(project_one, "same-task", create=True),
+                ARTIFACTS.resolve_task_artifact_root(project_two, "same-task", create=True),
+                ARTIFACTS.resolve_task_artifact_root(project_one, "other-task", create=True),
+                ARTIFACTS.resolve_task_artifact_root(project_one, "same-task", create=True),
             )
             self.assertEqual(len(set(roots)), 4)
-            for root in roots:
-                self.assertTrue(root.is_relative_to(base))
-                self.assertFalse(root.is_relative_to(project_one))
-                self.assertFalse(root.is_relative_to(project_two))
+            for root, owner in zip(roots, (project_one, project_two, project_one, project_one)):
+                self.assertEqual(root.parent, owner / "Cache")
             environment = ARTIFACTS.task_artifact_environment(roots[0], create=True)
             for name in ("TMP", "TEMP", "TMPDIR"):
                 self.assertEqual(Path(environment[name]), roots[0] / "tmp")
@@ -213,7 +199,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         with external_fixture() as fixture:
             project = fixture / "project"
             project.mkdir()
-            base = fixture / "artifacts"
+            base = project / "Cache"
             previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=base, create=True)
             following = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=base, create=True)
             (previous / "input.bin").write_bytes(b"useful input")
@@ -240,7 +226,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         with external_fixture() as fixture:
             project = fixture / "project"
             project.mkdir()
-            command = [sys.executable, "-B", str(ARTIFACT_SCRIPT_PATH), "--project-root", str(project), "--artifact-root", str(fixture / "artifacts"), "--task-id", "same-chat", "--create"]
+            command = [sys.executable, "-B", str(ARTIFACT_SCRIPT_PATH), "--project-root", str(project), "--task-id", "same-chat", "--create"]
             previous = json.loads(subprocess.run(command, capture_output=True, text=True, check=True, **hidden_process_options()).stdout)
             source = Path(previous["task_root"])
             (source / "fixture.bin").write_bytes(b"continued test input")
@@ -255,9 +241,9 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         with external_fixture() as fixture:
             project = fixture / "project"
             project.mkdir()
-            previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=fixture / "artifacts", create=True)
+            previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", create=True)
             (previous / "input.bin").write_bytes(b"keep original input")
-            command = [sys.executable, "-B", str(ARTIFACT_SCRIPT_PATH), "--project-root", str(project), "--artifact-root", str(fixture / "artifacts"), "--task-id", "chat", "--create", "--copy-from", str(previous), "--input", "missing.bin"]
+            command = [sys.executable, "-B", str(ARTIFACT_SCRIPT_PATH), "--project-root", str(project), "--task-id", "chat", "--create", "--copy-from", str(previous), "--input", "missing.bin"]
             result = subprocess.run(command, capture_output=True, text=True, check=False, **hidden_process_options())
             self.assertEqual(result.returncode, 2)
             failure = json.loads(result.stderr)
@@ -270,8 +256,8 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
         with external_fixture() as fixture:
             project = fixture / "project"
             project.mkdir()
-            previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=fixture / "artifacts", create=True)
-            following = ARTIFACTS.resolve_task_artifact_root(project, "chat", artifact_root=fixture / "artifacts", create=True)
+            previous = ARTIFACTS.resolve_task_artifact_root(project, "chat", create=True)
+            following = ARTIFACTS.resolve_task_artifact_root(project, "chat", create=True)
             (previous / "input.bin").write_bytes(b"keep original")
             sentinel = following / "other.bin"
             sentinel.write_bytes(b"keep unrelated destination")
@@ -293,14 +279,13 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     marker = workspace / "marker.txt"
                     marker.write_text("external support\n", encoding="utf-8")
                     self.assertEqual(workspace.parent, fixture)
-                    self.assertFalse(workspace.is_relative_to(SKILLS_ROOT))
+                    self.assertTrue(workspace.is_relative_to(SKILLS_ROOT / "Cache"))
                     self.assertEqual(marker.read_text(encoding="utf-8"), "external support\n")
                 self.assertFalse(workspace.exists())
                 self.assertEqual(retained.read_bytes(), b"keep for user review")
 
     def test_invalid_management_paths_fail_before_any_scratch_write(self):
         invalid_paths = (
-            SKILLS_ROOT / "Cache" / "temp-retired",
             SKILLS_ROOT / "management-skill",
             Path.home() / ".codex" / "policy-test",
             Path("relative-scratch"),
@@ -314,13 +299,13 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                             with SYNC.temporary_workspace("rejected-"):
                                 self.fail("invalid scratch was accepted")
 
-    def test_management_default_state_and_support_are_external(self):
+    def test_management_default_state_and_support_are_in_project_cache(self):
         self.assertEqual(SYNC.DEFAULT_SOURCE_DIR, SYNC_SCRIPT_PATH.resolve().parents[2])
         self.assertEqual(SYNC.DEFAULT_PROJECT_ROOT, Path.cwd().resolve())
         expected_root = ARTIFACTS.resolve_task_artifact_root(SYNC.DEFAULT_PROJECT_ROOT, "management-skill-sync", run_id=ARTIFACTS.task_artifact_run_id(SYNC.DEFAULT_CACHE_ROOT))
         self.assertEqual(SYNC.DEFAULT_CACHE_ROOT, expected_root)
         self.assertEqual(SYNC.DEFAULT_STATE_FILE, expected_root / "state" / "management-skill-sync.json")
-        self.assertFalse(expected_root.is_relative_to(SYNC.DEFAULT_PROJECT_ROOT))
+        self.assertEqual(expected_root.parent, SYNC.DEFAULT_PROJECT_ROOT / "Cache")
 
 
 if __name__ == "__main__":

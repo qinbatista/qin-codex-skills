@@ -38,7 +38,7 @@ AI 索引由全局工作流在开始、变化和结束时自动检查维护，�
 
 用户 Skill 默认统一安装到官方目录 `~/.agents/skills`，参见 [Codex 官方说明](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)。`CODEX_HOME`（默认 `~/.codex`）仍负责配置、全局 `AGENTS.md` 和系统内置资源。发现旧目录或旧引用时按[自动修复流程](management-skill/references/skill-directory-repair.md)处理；项目 Skill 保持在项目内，迁移保留 `.system`、插件和可恢复备份。
 
-Skill 目录只保存指令、引用、辅助脚本和版本化发布测试。[外部任务产物规则](workflow-skill/references/project-cache-artifact-policy.md)要求所有 AI 临时支持、截图、回执、测试输出和工具缓存从首次写入起位于项目目录和 Codex 管理目录之外，不得进入 Git。统一解析器使用 `YOFA_TASK_ARTIFACT_ROOT` 或当前平台发现的 `YoFaAI/TaskArtifacts` 基址，按准确项目、任务和执行隔离；同一窗口/聊天的每次请求、续测、构建、打包或部署也分配新的 `temp-*`。继续工作只复制有用输入并回读字节，完成的旧目录和一次性 worktree 立即按 owner 回收，不等整条聊天结束。正式源码、交付、运行时和素材保留原 owner；旧临时文件只在归属、使用方、字节和引用核验后迁移。交付或最小恢复状态回读后清理一次性支持，保留用户审阅和复用资源；`remote-*` 名称本身不证明保留权。
+Skill 目录只保存指令、引用、辅助脚本和版本化发布测试。[项目 Cache 产物规则](workflow-skill/references/project-cache-artifact-policy.md)要求所有 AI 临时支持、截图、回执、测试输出和工具缓存从首次写入起位于所属项目的 `Cache/temp-<task>/`，不得进入 Git；无项目时使用当前工作区 Cache。同一聊天的新执行分配独立目录，继续工作只复制必要输入并回读字节。交付或最小恢复状态验证后清理一次性支持，保留正式源码、素材和用户审阅／复用资源；`remote-*` 名称本身不证明保留权。
 
 ```text
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
