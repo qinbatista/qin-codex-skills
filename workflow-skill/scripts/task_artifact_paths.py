@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import argparse
 import json
+import plistlib
 import os
 import re
 import stat
@@ -17,6 +18,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Mapping
+from xml.parsers.expat import ExpatError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import task_cache_cleanup
@@ -70,6 +72,51 @@ def verify_cache_git(project_root: str | Path, path: str | Path) -> None:
     tracked = subprocess.run([git, "-C", str(project), "ls-files", "-z", "--", "Cache"], capture_output=True, timeout=30, shell=False, **hidden_process_options())
     if ignored.returncode != 0 or tracked.returncode != 0 or tracked.stdout:
         raise ValueError("project Cache must be ignored and contain no tracked files")
+
+
+def _ensure_cache_backup_exclusion(cache: Path) -> None:
+    """Verify macOS Cache exclusion before task payload or registry writes."""
+    if sys.platform != "darwin":
+        return
+    executable = shutil.which("tmutil")
+    if executable is None:
+        raise ValueError("Cache Time Machine exclusion cannot be verified: tmutil was not found on PATH")
+
+    def is_excluded():
+        _check_ancestors(cache)
+        before = cache.lstat()
+        observed = subprocess.run([executable, "isexcluded", "-X", str(cache)], capture_output=True, timeout=10, check=False, **hidden_process_options())
+        if observed.returncode or observed.stderr.strip():
+            raise ValueError(f"tmutil isexcluded exited {observed.returncode}: {observed.stderr.decode('utf-8', 'replace').strip()[:400]}")
+        records = plistlib.loads(observed.stdout)
+        if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict) or not isinstance(records[0].get("Path"), str) or type(records[0].get("IsExcluded")) not in (int, bool) or records[0]["IsExcluded"] not in (0, 1):
+            raise ValueError("tmutil isexcluded returned an invalid exclusion plist")
+        reported = _absolute_path(records[0].get("Path", ""), "tmutil Cache path")
+        _check_ancestors(reported)
+        _check_ancestors(cache)
+        current, returned = cache.lstat(), reported.lstat()
+        identities = {(item.st_dev, item.st_ino) for item in (before, current, returned)}
+        if identities != {root_identity} or not stat.S_ISDIR(current.st_mode) or not stat.S_ISDIR(returned.st_mode):
+            raise ValueError("tmutil exclusion did not identify the unchanged Cache directory")
+        return bool(records[0]["IsExcluded"])
+
+    try:
+        _check_ancestors(cache)
+        original = cache.lstat()
+        root_identity = (original.st_dev, original.st_ino)
+        if is_excluded():
+            return
+        _check_ancestors(cache)
+        current = cache.lstat()
+        if (current.st_dev, current.st_ino) != root_identity:
+            raise ValueError("Cache directory changed before tmutil addexclusion")
+        added = subprocess.run([executable, "addexclusion", str(cache)], capture_output=True, timeout=10, check=False, **hidden_process_options())
+        if added.returncode or added.stderr.strip():
+            raise ValueError(f"tmutil addexclusion exited {added.returncode}: {added.stderr.decode('utf-8', 'replace').strip()[:400]}")
+        if not is_excluded():
+            raise ValueError("tmutil still reports Cache included after addexclusion")
+    except (OSError, subprocess.SubprocessError, ValueError, plistlib.InvalidFileException, ExpatError) as error:
+        raise ValueError(f"Cache Time Machine exclusion could not be verified for {cache}: {error}") from error
 
 
 def _absolute_path(value: str | Path, label: str) -> Path:
@@ -166,6 +213,7 @@ def project_artifact_directory(
     if create:
         path.mkdir(parents=True, exist_ok=True)
         validate_external_directory(path, project, environ=environ)
+        _ensure_cache_backup_exclusion(path)
     return path
 
 
@@ -191,6 +239,7 @@ def resolve_task_artifact_root(
     if create:
         verify_cache_git(project_root, path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_cache_backup_exclusion(path.parent)
         try:
             checkpoint = task_cache_cleanup.checkpoint(project_root, task_id, artifact_root=path.parent, phase="start", current_run=path, apply=True, budget_seconds=5)
         except (OSError, ValueError) as error:
@@ -304,6 +353,7 @@ def task_artifact_environment(
     temporary = root / "tmp"
     _check_ancestors(temporary)
     if create:
+        _ensure_cache_backup_exclusion(root.parent)
         temporary.mkdir(parents=True, exist_ok=True)
         _check_ancestors(temporary)
     elif not temporary.is_dir():

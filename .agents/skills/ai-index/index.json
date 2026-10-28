@@ -87,7 +87,7 @@
           "file": "workflow-skill/scripts/task_artifact_paths.py",
           "symbol": "resolve_task_artifact_root",
           "anchor": "def resolve_task_artifact_root(",
-          "summary": "Allocate fresh project Cache execution roots, close eligible predecessors and report bounded cleanup and remote-owner diagnostics."
+          "summary": "Allocate fresh project Cache execution roots only after native macOS backup exclusion verifies, then close eligible predecessors and report bounded owner diagnostics."
         },
         {
           "id": "cache-retention-contract-test",
@@ -193,6 +193,13 @@
           "symbol": "TaskCacheCleanupTests.test_remote_prefix_requires_owner_review_without_adopting_or_deleting",
           "anchor": "def test_remote_prefix_requires_owner_review_without_adopting_or_deleting(self):",
           "summary": "Exercise real Cache directories, configuration and test payload preservation, direct-child-only inventory, registry exclusion and bounded allocation diagnostics."
+        },
+        {
+          "id": "cache-time-machine-exclusion",
+          "file": "workflow-skill/scripts/task_artifact_paths.py",
+          "symbol": "_ensure_cache_backup_exclusion",
+          "anchor": "def _ensure_cache_backup_exclusion(cache: Path) -> None:",
+          "summary": "On macOS verify native plist and unchanged link-free Cache identity, add default sticky exclusion only when included and fail closed before task writes; other hosts make no Time Machine calls."
         }
       ]
     },
@@ -504,6 +511,13 @@
           "symbol": "run_live_probe",
           "anchor": "def run_live_probe(auth_path, workdir, prompt):",
           "summary": "Keep fake profile and temporary output in an isolated exact owner, retain borrowed outer owners and expose pending cleanup without masking the original failure."
+        },
+        {
+          "id": "cache-native-backup-test",
+          "file": "management-skill/tests/test_project_cache_artifact_policy.py",
+          "symbol": "ProjectCacheArtifactPolicyTests.test_native_time_machine_exclusion_survives_cache_recreation",
+          "anchor": "def test_native_time_machine_exclusion_survives_cache_recreation(self):",
+          "summary": "Exercise real macOS exclusion and case-equivalent native identity after Cache creation and recreation; companion unit cases cover dispatch and pre-payload failures."
         }
       ]
     },

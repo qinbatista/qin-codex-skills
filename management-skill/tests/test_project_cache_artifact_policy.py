@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -79,6 +80,90 @@ class ProjectCacheTestCase(unittest.TestCase):
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
+    def test_time_machine_dispatch_and_verified_sticky_exclusion(self):
+        with external_fixture() as fixture:
+            cache = fixture / "Cache"
+            cache.mkdir()
+            for platform in ("win32", "linux"):
+                with self.subTest(platform=platform), mock.patch.object(ARTIFACTS.sys, "platform", platform), mock.patch.object(ARTIFACTS.shutil, "which") as find, mock.patch.object(ARTIFACTS.subprocess, "run") as run:
+                    ARTIFACTS._ensure_cache_backup_exclusion(cache)
+                    find.assert_not_called()
+                    run.assert_not_called()
+            included = subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(cache), "IsExcluded": 0}]), b"")
+            excluded = subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(cache), "IsExcluded": 1}]), b"")
+            added = subprocess.CompletedProcess([], 0, b"", b"")
+            for observations in ([excluded], [included, added, excluded]):
+                with self.subTest(native_calls=len(observations)), mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=observations) as run:
+                    ARTIFACTS._ensure_cache_backup_exclusion(cache)
+                    commands = [call.args[0][1:] for call in run.call_args_list]
+                    expected = [["isexcluded", "-X", str(cache)]]
+                    if len(observations) == 3:
+                        expected.extend([["addexclusion", str(cache)], ["isexcluded", "-X", str(cache)]])
+                    self.assertEqual(commands, expected)
+                    self.assertTrue(all(call.kwargs["timeout"] == 10 and call.kwargs["capture_output"] for call in run.call_args_list))
+
+    def test_time_machine_failures_and_changed_owner_reject_payload(self):
+        with external_fixture() as fixture:
+            cache, other = fixture / "Cache", fixture / "other"
+            cache.mkdir()
+            other.mkdir()
+            included = subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(cache), "IsExcluded": 0}]), b"")
+            added = subprocess.CompletedProcess([], 0, b"", b"")
+            failures = {
+                "query": [subprocess.CompletedProcess([], 1, b"", b"native read denied")],
+                "plist": [subprocess.CompletedProcess([], 0, b"not a plist", b"")],
+                "wrong-directory": [subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(other), "IsExcluded": 1}]), b"")],
+                "unknown-status": [subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(cache), "IsExcluded": "1"}]), b"")],
+                "add": [included, subprocess.CompletedProcess([], 1, b"", b"native add denied")],
+                "readback": [included, added, included],
+                "timeout": subprocess.TimeoutExpired("tmutil", 10),
+                "launch": OSError("native launch denied"),
+            }
+            for reason, observations in failures.items():
+                with self.subTest(reason=reason), mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=observations):
+                    with self.assertRaisesRegex(ValueError, "Time Machine exclusion could not be verified"):
+                        ARTIFACTS._ensure_cache_backup_exclusion(cache)
+            with mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value=None), mock.patch.object(ARTIFACTS.subprocess, "run") as run:
+                with self.assertRaisesRegex(ValueError, "tmutil was not found"):
+                    ARTIFACTS._ensure_cache_backup_exclusion(cache)
+                run.assert_not_called()
+
+            def replace_cache(*args, **kwargs):
+                cache.rename(fixture / "original-cache")
+                cache.mkdir()
+                return subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(cache), "IsExcluded": 1}]), b"")
+
+            with mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=replace_cache):
+                with self.assertRaisesRegex(ValueError, "unchanged Cache"):
+                    ARTIFACTS._ensure_cache_backup_exclusion(cache)
+
+            project = fixture / "project"
+            project.mkdir()
+            with mock.patch.object(ARTIFACTS, "_ensure_cache_backup_exclusion", side_effect=ValueError("native exclusion unavailable")), mock.patch.object(ARTIFACTS.task_cache_cleanup, "checkpoint") as checkpoint:
+                with self.assertRaisesRegex(ValueError, "native exclusion unavailable"):
+                    ARTIFACTS.resolve_task_artifact_root(project, "blocked-before-payload", create=True)
+                checkpoint.assert_not_called()
+                self.assertEqual(list((project / "Cache").iterdir()), [])
+
+    @unittest.skipUnless(sys.platform == "darwin" and shutil.which("tmutil"), "Native Time Machine acceptance requires macOS tmutil")
+    def test_native_time_machine_exclusion_survives_cache_recreation(self):
+        with external_fixture() as fixture:
+            project = fixture / "native-project"
+            project.mkdir()
+            lower = project / "cache"
+            lower.mkdir()
+            if not (project / "Cache").exists():
+                lower.rmdir()
+            for attempt in range(2):
+                cache = ARTIFACTS.project_artifact_directory(project, create=True)
+                probe = subprocess.run([shutil.which("tmutil"), "isexcluded", "-X", str(cache)], capture_output=True, timeout=10, check=True, **hidden_process_options())
+                record = plistlib.loads(probe.stdout)[0]
+                self.assertEqual(record["IsExcluded"], 1)
+                self.assertTrue(Path(record["Path"]).samefile(cache))
+                self.assertEqual(list(cache.iterdir()), [])
+                if attempt == 0:
+                    cache.rmdir()
+
     @unittest.skipUnless(NATIVE_FIXTURE_CLEANUP, "Native fixture owner closure requires lsof/ps on macOS/Linux")
     def test_fixture_owner_closes_after_success_setup_failure_timeout_and_cancel(self):
         observed = []
