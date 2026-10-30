@@ -151,6 +151,26 @@ def _within(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
 
 
+def legacy_artifact_base(*, environ: Mapping[str, str] | None = None) -> Path:
+    """Locate the retired native task store for read/cleanup compatibility."""
+    environment = os.environ if environ is None else environ
+    match sys.platform:
+        case "win32":
+            return Path.home() / "YoFaAI" / "TaskArtifacts"
+        case "darwin":
+            return Path.home() / "Library" / "Application Support" / "YoFaAI" / "TaskArtifacts"
+        case "linux":
+            return Path(environment.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "YoFaAI" / "TaskArtifacts"
+        case _:
+            raise ValueError(f"unsupported task artifact host platform: {sys.platform}")
+
+
+def _check_new_artifact_owner(project: Path, *, environ: Mapping[str, str] | None = None) -> None:
+    legacy = legacy_artifact_base(environ=environ).resolve(strict=False)
+    if _within(project, legacy) or (legacy.is_dir() and any(owner.samefile(legacy) for owner in (project, *project.parents))):
+        raise ValueError("legacy task artifact stores are cleanup-only and cannot be project_root for new output; select the actual project or current workspace")
+
+
 def _codex_component(path: Path) -> bool:
     return any(part.lower() in {".codex", ".agents", "codex-runtimes"} or part.lower().startswith("openai.codex_") for part in path.parts)
 
@@ -211,6 +231,7 @@ def project_artifact_directory(
     path = resolve_artifact_base(project, artifact_root=artifact_root, environ=environ)
     validate_external_directory(path, project, environ=environ)
     if create:
+        _check_new_artifact_owner(project, environ=environ)
         path.mkdir(parents=True, exist_ok=True)
         validate_external_directory(path, project, environ=environ)
         _ensure_cache_backup_exclusion(path)
@@ -237,6 +258,7 @@ def resolve_task_artifact_root(
     path = project_artifact_directory(project_root, artifact_root=artifact_root, environ=environ) / f"temp-{task_key}-{run_id}"
     validate_external_directory(path, project_root, environ=environ)
     if create:
+        _check_new_artifact_owner(Path(project_root).expanduser().resolve(strict=True), environ=environ)
         verify_cache_git(project_root, path)
         path.parent.mkdir(parents=True, exist_ok=True)
         _ensure_cache_backup_exclusion(path.parent)
@@ -353,6 +375,7 @@ def task_artifact_environment(
     temporary = root / "tmp"
     _check_ancestors(temporary)
     if create:
+        _check_new_artifact_owner(root.parent.parent, environ=environment)
         _ensure_cache_backup_exclusion(root.parent)
         temporary.mkdir(parents=True, exist_ok=True)
         _check_ancestors(temporary)

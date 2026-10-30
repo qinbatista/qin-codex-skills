@@ -127,12 +127,7 @@ def _cleanup_base(project, artifact_root=None):
 
 
 def _legacy_base(project):
-    if os.name == "nt":
-        base = Path.home() / "YoFaAI" / "TaskArtifacts"
-    elif sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support" / "YoFaAI" / "TaskArtifacts"
-    else:
-        base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "YoFaAI" / "TaskArtifacts"
+    base = artifacts.legacy_artifact_base()
     if not (base / LEGACY_REGISTRY / "projects" / (_key(project) + ".json")).is_file():
         return None
     return _cleanup_base(project, base)

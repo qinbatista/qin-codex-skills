@@ -6,6 +6,8 @@ Reading another project or inspecting an external path never authorizes creating
 
 Use `workflow-skill/scripts/task_artifact_paths.py` to allocate a fresh `Cache/temp-<task-key>-<run-id>/` for each execution. Reopen an allocated run by its exact ID and bind child `TMP`, `TEMP` and `TMPDIR` to it. Configure output and caches before launch. Reject links and reparse paths; in Git projects verify Cache is ignored and untracked before writing. Maintained source, requested deliverables, canonical runtime and asset owners and Obsidian memory retain their own boundaries.
 
+The retired native `YoFaAI/TaskArtifacts` store and its descendants are read/cleanup-only, never a substitute `project_root`. Every creation entry rejects that owner before directories, backup settings or registry writes; projectless work uses the current workspace instead. The native location follows the host home and Linux `XDG_CACHE_HOME`; an unrelated project named `TaskArtifacts` remains valid.
+
 On macOS, project Cache must also be excluded from Time Machine; Git ignore does not exclude backups. Before registration or payload writes, the allocator checks native `tmutil isexcluded -X` output for the unchanged, link-free Cache identity. An excluded ancestor suffices; only an included directory receives default sticky `addexclusion`, followed by verified readback. Missing tools, native errors or unverified exclusion block allocation. Other platforms make no Time Machine calls. Sticky exclusion follows directory moves/copies but is lost when its root is deleted: recreate Cache through this owner so exclusion is restored before writing. This is no fixed-path or basename wildcard rule, and it does not remove existing backups or snapshots.
 
 ## Separate executions and continuation

@@ -80,6 +80,70 @@ class ProjectCacheTestCase(unittest.TestCase):
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
+    def test_retired_native_store_cannot_be_reintroduced_as_a_project_owner(self):
+        with external_fixture() as fixture:
+            home = fixture / "home"
+            configured = {"XDG_CACHE_HOME": str(home / "xdg-cache")}
+            layouts = {
+                "win32": home / "YoFaAI" / "TaskArtifacts",
+                "darwin": home / "Library" / "Application Support" / "YoFaAI" / "TaskArtifacts",
+                "linux": home / "xdg-cache" / "YoFaAI" / "TaskArtifacts",
+            }
+            for platform, base in layouts.items():
+                for owner in (base, base / "p-old-owner"):
+                    run = owner / "Cache" / f"temp-{'a' * 24}-{'b' * 32}"
+                    run.mkdir(parents=True)
+                    with self.subTest(platform=platform, owner=owner), mock.patch.object(ARTIFACTS.sys, "platform", platform), mock.patch.object(Path, "home", return_value=home):
+                        self.assertEqual(ARTIFACTS.legacy_artifact_base(environ=configured), base)
+                        self.assertEqual(ARTIFACTS.project_artifact_directory(owner, environ=configured), owner / "Cache")
+                        resolved = ARTIFACTS.resolve_task_artifact_root(owner, "read-legacy", run_id="c" * 32, environ=configured)
+                        self.assertEqual(resolved.parent, owner / "Cache")
+                        with mock.patch.object(Path, "mkdir", side_effect=AssertionError("reject the retired owner before mkdir")), mock.patch.object(ARTIFACTS, "_ensure_cache_backup_exclusion") as exclusion, mock.patch.object(ARTIFACTS.task_cache_cleanup, "checkpoint") as checkpoint, mock.patch.object(ARTIFACTS.task_cache_cleanup, "register_run") as register:
+                            with self.assertRaisesRegex(ValueError, "legacy task artifact stores are cleanup-only"):
+                                ARTIFACTS.project_artifact_directory(owner, environ=configured, create=True)
+                            with self.assertRaisesRegex(ValueError, "legacy task artifact stores are cleanup-only"):
+                                ARTIFACTS.resolve_task_artifact_root(owner, "reject-new", environ=configured, create=True)
+                            with self.assertRaisesRegex(ValueError, "legacy task artifact stores are cleanup-only"):
+                                ARTIFACTS.task_artifact_environment(run, environ=configured, create=True)
+                            exclusion.assert_not_called()
+                            checkpoint.assert_not_called()
+                            register.assert_not_called()
+                        self.assertEqual(list(run.iterdir()), [])
+            with mock.patch.object(ARTIFACTS.sys, "platform", "linux"), mock.patch.object(Path, "home", return_value=home):
+                self.assertEqual(ARTIFACTS.legacy_artifact_base(environ={}), home / ".cache" / "YoFaAI" / "TaskArtifacts")
+
+    def test_native_cli_rejects_retired_store_and_accepts_unrelated_same_name(self):
+        with external_fixture() as fixture:
+            home = fixture / "home"
+            environment = dict(os.environ, XDG_CACHE_HOME=str(home / "xdg-cache"))
+            with mock.patch.object(Path, "home", return_value=home):
+                legacy = ARTIFACTS.legacy_artifact_base(environ=environment)
+            legacy.mkdir(parents=True)
+            task_id = "native-owner-allocation"
+            launcher = "import runpy,sys\nfrom pathlib import Path\nfrom unittest import mock\nfixture_home,script=sys.argv[1:3]\nsys.argv=sys.argv[2:]\nwith mock.patch.object(Path,'home',return_value=Path(fixture_home)):\n    runpy.run_path(script,run_name='__main__')\n"
+            command = [sys.executable, "-B", "-c", launcher, str(home), str(ARTIFACT_SCRIPT_PATH), "--task-id", task_id, "--create", "--project-root"]
+            rejected = subprocess.run([*command, str(legacy)], capture_output=True, text=True, env=environment, check=False, **hidden_process_options())
+            self.assertEqual(rejected.returncode, 2, rejected)
+            self.assertIn("cleanup-only", json.loads(rejected.stderr)["reason"])
+            self.assertEqual(json.loads(rejected.stderr)["cleanup"], "not_created")
+            self.assertEqual(list(legacy.iterdir()), [])
+            alias = legacy.with_name("tAsKaRtIfAcTs")
+            if alias.is_dir():
+                rejected_alias = subprocess.run([*command, str(alias)], capture_output=True, text=True, env=environment, check=False, **hidden_process_options())
+                self.assertEqual(rejected_alias.returncode, 2, rejected_alias)
+                self.assertIn("cleanup-only", json.loads(rejected_alias.stderr)["reason"])
+                self.assertEqual(list(legacy.iterdir()), [])
+            project = home / "projects" / "TaskArtifacts"
+            project.mkdir(parents=True)
+            created = subprocess.run([*command, str(project)], capture_output=True, text=True, env=environment, check=False, **hidden_process_options())
+            self.assertEqual(created.returncode, 0, created)
+            root = Path(json.loads(created.stdout)["task_root"])
+            self.assertEqual(root.parent, project / "Cache")
+            self.assertTrue((root / "tmp").is_dir())
+            cleanup = ARTIFACTS.task_cache_cleanup.checkpoint(project, task_id, phase="finish", current_run=root, apply=True, requested_only=True)
+            self.assertTrue(cleanup["requested_complete"], cleanup)
+            self.assertFalse(root.exists())
+
     def test_time_machine_dispatch_and_verified_sticky_exclusion(self):
         with external_fixture() as fixture:
             cache = fixture / "Cache"
