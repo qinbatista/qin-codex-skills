@@ -565,6 +565,34 @@
           "symbol": "ProjectAIIndexTests.test_reference_scope_skips_real_cli_prompts_routes_and_writes",
           "anchor": "def test_reference_scope_skips_real_cli_prompts_routes_and_writes(self):",
           "summary": "Run every reference CLI entrypoint against absent, partial and complete indexes without prompts, plan reads or writes; current scope retains its behavior."
+        },
+        {
+          "id": "installer-memory-check",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "announce_memory_vault",
+          "anchor": "def announce_memory_vault(skills_dir):",
+          "summary": "Check the installed memory setup entry after CLI installation and report availability without bootstrapping external resources."
+        },
+        {
+          "id": "installer-memory-check-test",
+          "file": "management-skill/tests/test_sync_global_skills_readme.py",
+          "symbol": "SyncGlobalSkillsReadmeTest.test_cli_install_reports_memory_location_and_backup_requirement",
+          "anchor": "def test_cli_install_reports_memory_location_and_backup_requirement(self):",
+          "summary": "Verify the installer memory-check invocation and existing-vault location/backup reporting."
+        },
+        {
+          "id": "test-default-temp-owner",
+          "file": "management-skill/tests/test_project_cache_artifact_policy.py",
+          "symbol": "ProjectCacheTestCase.run",
+          "anchor": "class ProjectCacheTestCase(unittest.TestCase):",
+          "summary": "Bind default tempfile allocation and child TMP/TEMP/TMPDIR to the exact project Cache fixture and restore caller state on every exit."
+        },
+        {
+          "id": "installer-memory-real-test",
+          "file": "management-skill/tests/test_sync_global_skills_readme.py",
+          "symbol": "SyncGlobalSkillsReadmeTest.test_installer_memory_check_runs_real_setup_without_creating_missing_parent",
+          "anchor": "def test_installer_memory_check_runs_real_setup_without_creating_missing_parent(self):",
+          "summary": "Execute the real post-install setup subprocess, read back its no-create status and prove missing vault parent and Codex roots remain absent."
         }
       ]
     },

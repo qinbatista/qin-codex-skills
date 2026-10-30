@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ElementTree
 from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
+from test_project_cache_artifact_policy import ProjectCacheTestCase
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "sync_global_skills.py"
@@ -85,7 +86,7 @@ def svg_bounds_issues(svg_path):
     return issues
 
 
-class SyncGlobalSkillsReadmeTest(unittest.TestCase):
+class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
     def setUp(self):
         self.codex_sandbox = tempfile.TemporaryDirectory()
         self.addCleanup(self.codex_sandbox.cleanup)
@@ -576,14 +577,25 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
             setup = skills_dir / "project-memory-skill" / "scripts" / "obsidian_vault_setup.py"
             setup.parent.mkdir(parents=True)
             setup.write_text("# setup entry\n", encoding="utf-8")
-            payload = {"status": "created", "vault": str(Path(temp_dir) / "Obsidian" / "Memory"),
+            payload = {"status": "ready", "vault": str(Path(temp_dir) / "Obsidian" / "Memory"),
                        "backup_message": "Back up this entire vault regularly."}
             completed = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
             with mock.patch.object(sync_global_skills.subprocess, "run", return_value=completed) as launched, mock.patch("builtins.print") as printer:
                 sync_global_skills.announce_memory_vault(skills_dir)
         self.assertIn(str(setup.resolve()), launched.call_args.args[0])
+        self.assertIn("--existing-only", launched.call_args.args[0])
         printer.assert_any_call(f"Obsidian memory vault: {payload['vault']}")
         printer.assert_any_call(payload["backup_message"])
+
+    def test_installer_memory_check_runs_real_setup_without_creating_missing_parent(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            parent = Path(temp_dir) / "missing-vault-parent"
+            environment = {"CODEX_OBSIDIAN_VAULT": str(parent / "Memory"), "PYTHONDONTWRITEBYTECODE": "1"}
+            with mock.patch.dict(sync_global_skills.os.environ, environment), mock.patch("builtins.print") as printer:
+                sync_global_skills.announce_memory_vault(SKILLS_DIR)
+            printer.assert_any_call("Obsidian memory setup pending: vault_creation_disabled.")
+            self.assertFalse(parent.exists())
+            self.assertFalse(self.codex_root.exists())
 
     def test_pull_updates_to_latest_published_bytes_without_consumer_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:

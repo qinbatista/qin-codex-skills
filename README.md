@@ -30,11 +30,11 @@ Each project owns its AI index. The helper validates routes and source/document 
 
 All code edits, including tests, follow module → file → method/anchor → necessary relationships plus scoped memory. Selected routes return bounded current excerpts; edits refresh touched routes. Prefer cohesive methods, parameterized variants and deliberate extraction.
 
-Without a vault, [Project Memory](project-memory-skill/SKILL.md) creates and verifies one outside Codex and the project using [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki). Back up the entire vault regularly: it holds all Codex and project memory. The generator is a public template, not a private-memory backup.
+Repository work and installers use `--existing-only`; missing vaults remain pending. First-vault setup with [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki) requires explicit authorization through [Project Memory](project-memory-skill/SKILL.md). Back up the whole vault containing Codex and project memory; the generator contains no private memories.
 
-macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --project-root .`
+macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --project-root . --existing-only`
 
-Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.py --project-root .`
+Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.py --project-root . --existing-only`
 
 ## Source and installation
 

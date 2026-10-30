@@ -1443,17 +1443,13 @@ def repair_legacy_user_skills(skills_dir, source_dir, installed_names):
 
 
 def announce_memory_vault(skills_dir):
-    """Bootstrap the separate Obsidian vault after a CLI Skill installation."""
+    """Report an existing Obsidian vault without creating external resources."""
     setup = Path(skills_dir).expanduser().resolve() / "project-memory-skill" / "scripts" / "obsidian_vault_setup.py"
     if not setup.is_file():
         print("Obsidian memory setup pending: the installed Project Memory setup script is unavailable.")
         return
     try:
-        completed = subprocess.run(
-            [sys.executable, "-B", str(setup), "--project-root", str(Path.cwd())],
-            capture_output=True, text=True, check=False, timeout=180,
-            **hidden_process_options(),
-        )
+        completed = subprocess.run([sys.executable, "-B", str(setup), "--project-root", str(Path.cwd()), "--existing-only"], capture_output=True, text=True, check=False, timeout=180, **hidden_process_options())
         result = json.loads(completed.stdout)
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
         print(f"Obsidian memory setup pending: {error.__class__.__name__}.")

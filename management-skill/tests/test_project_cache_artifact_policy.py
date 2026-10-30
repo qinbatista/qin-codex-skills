@@ -71,12 +71,13 @@ class ProjectCacheTestCase(unittest.TestCase):
     def run(self, result=None):
         with external_fixture(self.fixture_task_name) as fixture:
             self.fixture_root = fixture
-            try:
-                return super().run(result)
-            finally:
-                # unittest skips doCleanups when KeyboardInterrupt escapes run().
-                # Drain callbacks before this fixture's owning context closes.
-                self.doCleanups()
+            with mock.patch.object(tempfile, "tempdir", str(fixture)), mock.patch.dict(os.environ, {name: str(fixture) for name in ("TMP", "TEMP", "TMPDIR")}):
+                try:
+                    return super().run(result)
+                finally:
+                    # unittest skips doCleanups when KeyboardInterrupt escapes run().
+                    # Drain callbacks before this fixture's owning context closes.
+                    self.doCleanups()
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
@@ -242,6 +243,10 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 marker = self.fixture_root / "active.txt"
                 marker.write_bytes(b"active until actual teardown")
                 self.addCleanup(lambda: cleanup_observations.append(marker.read_bytes()))
+                with tempfile.TemporaryDirectory() as directory:
+                    self.assertEqual(Path(directory).parent, self.fixture_root)
+                child = subprocess.run([sys.executable, "-B", "-c", "import tempfile; print(tempfile.gettempdir())"], capture_output=True, text=True, timeout=15, check=True, **hidden_process_options())
+                self.assertEqual(Path(child.stdout.strip()).resolve(), self.fixture_root.resolve())
                 if self.outcome == "setup-failure":
                     raise RuntimeError("actual setUp failure")
 

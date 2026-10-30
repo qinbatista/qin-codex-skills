@@ -44,7 +44,7 @@ Skill 目录只保存指令、引用、辅助脚本和版本化发布测试。[�
 python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
 ```
 
-Windows 使用 `py -3 -B`。安装以锁、备份和恢复机制替换八个托管 Skill，保留其他 Skill、用户 AGENTS 和已有私人历史。明确更新全局 AGENTS 时使用 `install-global-agents --source-dir .`，并生成可恢复备份。
+Windows 使用 `py -3 -B`。安装以锁、备份和恢复机制替换八个托管 Skill，保留其他 Skill、用户 AGENTS 和已有私人历史。安装后的记忆检查使用 `--existing-only`，只复用已有库；缺库时保持待处理，不创建库或父目录。首次建库属于单独明确授权的设置任务。明确更新全局 AGENTS 时使用 `install-global-agents --source-dir .`，并生成可恢复备份。
 
 强制 AI-index 启动提问需要始终加载的全局入口，单独安装 Skill 不会自动触发。获得授权后，用同一安装器执行 `install-global-agents --source-dir . --startup-only`，只更新启动区块并保留个人规则。普通部署会提示入口缺失、过期或被全局 override 遮蔽，不会擅自覆盖。请用新的 Codex 会话验证；已运行的会话可能仍保留旧指令。
 
