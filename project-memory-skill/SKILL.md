@@ -11,6 +11,8 @@ Memory reduces repeated explanations. Preserve project problems and user struggl
 
 ## Recall before work
 
+When the current task prohibits creating external directories, invoke `scripts/obsidian_vault_setup.py --project-root PROJECT_ROOT --existing-only`. This mode reuses an existing vault and returns `pending` with `vault_creation_disabled` if creation would be needed, without creating parent directories, cloning or running the generator. Skip unavailable recall without creating a fallback. An explicit `--vault` path alone does not lift this boundary.
+
 Resolve the actual project first. Run `scripts/obsidian_vault_setup.py --project-root PROJECT_ROOT` to find the configured memory vault. If none exists, it connects to [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki), generates a private vault outside Codex and the project, and verifies it. Use `--vault PATH` for a chosen durable location or `--source PATH` for an offline copy of the generator. Never place the vault in `CODEX_HOME` or project `Cache`. Report the exact returned vault location and tell the user to back up the whole vault regularly because it holds all Codex and project memory. If setup fails, report the reason and leave writes pending without local fallback.
 
 On a replacement computer, restore or sync the existing whole vault before memory setup or new writes. A registered or configured vault that is unavailable or still syncing is pending; wait for that vault instead of generating an empty replacement. The public generator provides structure for a first vault, not a backup of private memories. Verify the restored `AI Memory` and `Projects` contents before claiming recovery.

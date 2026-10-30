@@ -2,6 +2,8 @@
 
 This repository owns eight public global Skills: Task Analyze, Workflow, Code, Verify, Prompt, Optimization, Project Memory and Management. Each source folder owns its instructions, references, helpers and clean-clone tests. Product-specific implementations belong in their project Skills.
 
+When this repository is the current task project, keep task-created directories inside it. Reference lookups in other projects are read-only and never authorize directory creation there. Do not automatically install Skills, create an external memory vault/resource store, or launch Unity/Unity Hub for repository work. Use this repository's `project-memory-skill/scripts/obsidian_vault_setup.py --existing-only` for recall; an absent vault is a nonblocking skip. Only an explicit request targeting an external installation or resource authorizes its exact destination. Keep all scratch in this project's ignored `Cache/temp-*`.
+
 Read the [project AI index](.agents/skills/ai-index/SKILL.md) at task start/resume and finish. Select the affected owner and only the rules needed for the action. Automatically reconcile this root contract and the project index when established intent or structure changes, before authorized delivery. Preserve useful scoped guidance; other Skill changes require their existing authorization.
 
 - All local code changes, including tests, use the index’s module/file/method anchors, scoped memory and necessary dependency reads. Refresh touched stable routes after edits; Code owns cohesive method boundaries and justified extraction.

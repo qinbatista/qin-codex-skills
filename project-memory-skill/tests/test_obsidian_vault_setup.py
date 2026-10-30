@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 SPEC = importlib.util.spec_from_file_location("obsidian_vault_setup", SCRIPTS / "obsidian_vault_setup.py")
 SETUP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SETUP)
+from hidden_process import hidden_process_options
 
 
 FAKE_GENERATOR = '''
@@ -69,6 +71,31 @@ class ObsidianVaultSetupTests(unittest.TestCase):
         self.assertEqual(result["status"], "created")
         self.assertEqual(result["vault"], str(target.resolve()))
         self.assertTrue((target / "Projects").is_dir())
+
+    def test_existing_only_never_creates_missing_vault_or_parent(self):
+        target = self.root / "absent-parent" / "Memory"
+        with mock.patch.dict(os.environ, {"CODEX_OBSIDIAN_VAULT": ""}, clear=False), mock.patch.object(SETUP, "DEFAULT_VAULT", target), mock.patch.object(SETUP, "_resolve_vault", return_value=None), mock.patch.object(SETUP, "_obsidian_config_paths", return_value=[]):
+            result = SETUP.ensure_vault(existing_only=True, source=self.source)
+        self.assertEqual(result["reason"], "vault_creation_disabled")
+        self.assertFalse(target.parent.exists())
+        target.mkdir(parents=True)
+        result = SETUP.ensure_vault(vault=target, existing_only=True)
+        self.assertEqual(result["reason"], "vault_creation_disabled")
+        self.assertEqual(list(target.iterdir()), [])
+        (target / "AI Memory").mkdir()
+        (target / "Projects").mkdir()
+        (target / "AI Memory" / "ai_memory.py").write_text("# existing vault\n", encoding="utf-8")
+        result = SETUP.ensure_vault(vault=target, existing_only=True)
+        self.assertEqual((result["status"], result["created"]), ("ready", False))
+
+    def test_existing_only_native_cli_returns_pending_without_writes(self):
+        target = self.root / "cli-missing-parent" / "Memory"
+        environment = dict(os.environ, CODEX_HOME=str(self.root / "codex"), CODEX_OBSIDIAN_VAULT="", PYTHONDONTWRITEBYTECODE="1")
+        result = subprocess.run([sys.executable, "-B", str(SCRIPTS / "obsidian_vault_setup.py"), "--vault", str(target), "--existing-only"], env=environment, capture_output=True, text=True, timeout=15, **hidden_process_options())
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["reason"], "vault_creation_disabled")
+        self.assertFalse(target.parent.exists())
+        self.assertFalse((self.root / "codex").exists())
 
     def test_registered_vault_waits_for_sync_instead_of_creating_blank_default(self):
         registered = self.root / "iCloud" / "MyAILLM"

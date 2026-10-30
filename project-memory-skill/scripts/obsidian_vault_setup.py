@@ -76,8 +76,8 @@ def _run(command, *, cwd=None, env=None, timeout=120):
     return result.stdout.strip()
 
 
-def ensure_vault(*, vault=None, project_root=None, source=None):
-    """Return an existing memory vault or install one from qin-llm-wiki."""
+def ensure_vault(*, vault=None, project_root=None, source=None, existing_only=False):
+    """Reuse a vault; create one only when the caller permits setup writes."""
     configured = bool(str(os.environ.get("CODEX_OBSIDIAN_VAULT", "")).strip())
     if vault is None and not configured:
         registered = _registered_vaults()
@@ -111,8 +111,11 @@ def ensure_vault(*, vault=None, project_root=None, source=None):
                 return {"status": "pending", "reason": "unsafe_vault_location", "detail": str(error), "created": False}
             return {"status": "ready", "vault": str(existing), "created": False,
                     "backup_required": True, "backup_message": BACKUP_MESSAGE}
+    target = _target_path(vault)
+    if existing_only and not target.exists():
+        return {"status": "pending", "reason": "vault_creation_disabled", "vault": str(target), "created": False}
     try:
-        target = _guard_location(_target_path(vault), project_root)
+        target = _guard_location(target, project_root)
     except ValueError as error:
         return {"status": "pending", "reason": "unsafe_vault_location", "detail": str(error), "created": False}
     if _memory_vault(target):
@@ -122,6 +125,8 @@ def ensure_vault(*, vault=None, project_root=None, source=None):
         return {"status": "pending", "reason": "configured_vault_unavailable", "vault": str(target), "created": False}
     if target.exists() and (not target.is_dir() or any(target.iterdir())):
         return {"status": "pending", "reason": "target_is_not_an_empty_memory_vault", "vault": str(target), "created": False}
+    if existing_only:
+        return {"status": "pending", "reason": "vault_creation_disabled", "vault": str(target), "created": False}
     source_path = Path(source).expanduser().resolve() if source is not None else None
     if source_path is not None and not (source_path / "qin_llm_wiki" / "__main__.py").is_file():
         return {"status": "pending", "reason": "generator_source_unavailable", "vault": str(target), "created": False}
@@ -162,9 +167,10 @@ def main():
     parser.add_argument("--vault", type=Path, help="Explicit durable vault destination")
     parser.add_argument("--project-root", type=Path)
     parser.add_argument("--source", type=Path, help="Local qin-llm-wiki source for offline setup")
+    parser.add_argument("--existing-only", action="store_true", help="Find and verify an existing vault without creating directories or running the generator")
     args = parser.parse_args()
     try:
-        result = ensure_vault(vault=args.vault, project_root=args.project_root, source=args.source)
+        result = ensure_vault(vault=args.vault, project_root=args.project_root, source=args.source, existing_only=args.existing_only)
     except ValueError as error:
         result = {"status": "pending", "reason": "unsafe_vault_location", "detail": str(error), "created": False}
     print(json.dumps(result, ensure_ascii=False))

@@ -314,6 +314,29 @@
           "module": "management",
           "reason": "Ending uses the same guarded project-only AI-index helper for residual guidance."
         }
+      ],
+      "code_targets": [
+        {
+          "id": "vault-setup",
+          "file": "project-memory-skill/scripts/obsidian_vault_setup.py",
+          "symbol": "ensure_vault",
+          "anchor": "def ensure_vault(*, vault=None, project_root=None, source=None, existing_only=False):",
+          "summary": "Resolve an existing vault; existing_only returns pending before any creation, generator or parent writes."
+        },
+        {
+          "id": "vault-setup-cli",
+          "file": "project-memory-skill/scripts/obsidian_vault_setup.py",
+          "symbol": "main",
+          "anchor": "def main():",
+          "summary": "Expose --existing-only and retain structured pending status and nonzero CLI exit when no usable vault exists."
+        },
+        {
+          "id": "vault-existing-only-test",
+          "file": "project-memory-skill/tests/test_obsidian_vault_setup.py",
+          "symbol": "ObsidianVaultSetupTests.test_existing_only_native_cli_returns_pending_without_writes",
+          "anchor": "def test_existing_only_native_cli_returns_pending_without_writes(self):",
+          "summary": "Run the real setup CLI and assert pending with no missing vault parent or Codex folder creation."
+        }
       ]
     },
     {
