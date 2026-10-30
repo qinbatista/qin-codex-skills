@@ -108,6 +108,38 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         self.assertFalse((self.project / "AGENTS.md").exists())
         self.assertFalse((self.project / INDEX.MANIFEST_PATH).exists())
 
+    def test_reference_scope_skips_real_cli_prompts_routes_and_writes(self):
+        for state in ("missing", "partial", "complete"):
+            with self.subTest(state=state):
+                if state == "partial":
+                    self.write(INDEX.MANIFEST_PATH, "malformed reference index\n")
+                elif state == "complete":
+                    self.bootstrap()
+                before = {path.relative_to(self.project).as_posix(): path.read_bytes() for path in self.project.rglob("*") if path.is_file()}
+                for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end", "--allow-bootstrap")), ("check", ()), ("route", ("--module", "api", "--target", "request")), ("apply", ("--plan", str(self.base / "unread-plan.json"), "--work-dir", str(self.base / "unused-work")))):
+                    result = self.cli(command, "--project-scope", "reference", *arguments)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    payload = json.loads(result.stdout)
+                    self.assertEqual(payload["status"], "skipped")
+                    self.assertEqual(payload["project_scope"], "reference")
+                    self.assertEqual(payload["read_scope"], "none")
+                    self.assertFalse(payload["blocks_project_work"])
+                    for forbidden in ("question", "required_action", "discovery", "documents", "excerpt"):
+                        self.assertNotIn(forbidden, payload)
+                after = {path.relative_to(self.project).as_posix(): path.read_bytes() for path in self.project.rglob("*") if path.is_file()}
+                self.assertEqual(before, after)
+        current = self.cli("check", "--project-scope", "current")
+        self.assertEqual(json.loads(current.stdout)["status"], "ready")
+
+    def test_reference_api_skips_before_index_reads_or_artifact_allocation(self):
+        with mock.patch.object(INDEX, "bootstrap_state", side_effect=AssertionError("reference presence check")), mock.patch.object(INDEX, "validate_index", side_effect=AssertionError("reference content read")), mock.patch.object(INDEX, "validate_task_directory", side_effect=AssertionError("reference write preparation")), mock.patch.object(INDEX, "project_lock", side_effect=AssertionError("reference lock allocation")):
+            results = (INDEX.check_project(self.project, project_scope="reference"), INDEX.route_module(self.project, project_scope="reference"), INDEX.apply_plan(self.project, None, None, project_scope="reference"))
+            self.assertTrue(all(result["status"] == "skipped" for result in results))
+        with self.assertRaisesRegex(ValueError, "project_scope"):
+            INDEX.check_project(self.project, project_scope="unknown")
+        self.assertEqual(json.loads(self.cli("inspect", "--project-scope", "current").stdout)["status"], "approval_required")
+        self.assertFalse((self.project / INDEX.INDEX_DIRECTORY).exists())
+
     def test_visible_index_real_cli_repair_route_and_scoped_apply(self):
         visible = INDEX.VISIBLE_INDEX_DIRECTORY
         (self.project / visible).mkdir(parents=True)

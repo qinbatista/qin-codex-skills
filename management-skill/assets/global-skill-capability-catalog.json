@@ -454,7 +454,7 @@
       "id": "project-ai-index",
       "owner_skill": "management-skill",
       "name": "Automatic project AI index",
-      "function": "At project start, request consent before missing-index discovery or creation and repeat at later starts until complete; automatically maintain existing focused routes and concise root guidance, guard source/preimage updates and require Ending readback without inferred publication. Route all local code edits, including tests, through reviewed module/file/method anchors with bounded current-source excerpts and explicit related pointers; maintain touched routes without copying source or memory history.",
+      "function": "Only for the current task project, request consent before missing-index discovery or creation and repeat at later starts until complete; reference lookups in other projects skip index prompts, reads and writes without blocking; automatically maintain existing focused routes and concise root guidance, guard source/preimage updates and require Ending readback without inferred publication. Route all local code edits, including tests, through reviewed module/file/method anchors with bounded current-source excerpts and explicit related pointers; maintain touched routes without copying source or memory history.",
       "checks": [
         "project-ai-index-check",
         "management-units",

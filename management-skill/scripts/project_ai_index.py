@@ -303,8 +303,19 @@ def bootstrap_state(root):
     return None if contained_path(root, index_directory(root)).exists() else "missing"
 
 
-def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved=False):
+def reference_project_result(root, project_scope):
+    if project_scope not in {"current", "reference"}:
+        raise ValueError("project_scope must be current or reference")
+    if project_scope == "reference":
+        return {"status": "skipped", "project_root": str(root), "project_scope": "reference", "reason": "AI-index prompts and maintenance apply only to the current task project", "read_scope": "none", "blocks_project_work": False}
+    return None
+
+
+def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved=False, project_scope="current"):
     root = project_root(root)
+    skipped = reference_project_result(root, project_scope)
+    if skipped is not None:
+        return skipped
     state = bootstrap_state(root)
     if state and not bootstrap_approved:
         return {"status": "approval_required", "project_root": str(root), "phase": phase, "index_state": state, "read_scope": "index_presence_only", "required_action": "ask_user", "blocks_project_work": True, "remind_at": "next_project_start_or_resume", "question": "This project has no AI index. May I read the necessary project guidance and create its first AI index?"}
@@ -338,8 +349,11 @@ def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved
     return result
 
 
-def route_module(root, identifier=None, target=None, context_lines=12):
+def route_module(root, identifier=None, target=None, context_lines=12, *, project_scope="current"):
     root = project_root(root)
+    skipped = reference_project_result(root, project_scope)
+    if skipped is not None:
+        return skipped
     if bootstrap_state(root):
         return check_project(root)
     result = validate_index(root)
@@ -503,8 +517,11 @@ def apply_locked_plan(root, plan, work):
         return {"status": "pending", "project_root": str(root), "reason": str(error), "unresolved": unresolved, "recovery": str(recovery) if recovery is not None and recovery.exists() else None}
 
 
-def apply_plan(root, plan, work_dir):
+def apply_plan(root, plan, work_dir, *, project_scope="current"):
     root = project_root(root)
+    skipped = reference_project_result(root, project_scope)
+    if skipped is not None:
+        return skipped
     work = validate_task_directory(work_dir, root)
     try:
         with project_lock(root):
@@ -519,6 +536,7 @@ def main():
     for name in ("inspect", "check", "route", "apply"):
         command = commands.add_parser(name)
         command.add_argument("--project-root", required=True, type=Path)
+        command.add_argument("--project-scope", choices=("current", "reference"), default="current", help="Current task project (default), or another project consulted only as a reference; reference scope skips index prompts, reads and writes")
         if name == "inspect":
             command.add_argument("--phase", choices=("start", "end"), default="start")
             command.add_argument("--changed-path", action="append", default=[])
@@ -534,6 +552,10 @@ def main():
     args = parser.parse_args()
     try:
         root = project_root(args.project_root)
+        skipped = reference_project_result(root, args.project_scope)
+        if skipped is not None:
+            print(json.dumps(skipped, ensure_ascii=False, sort_keys=True))
+            return 0
         match args.command:
             case "inspect":
                 result = check_project(root, args.phase, args.changed_path, bootstrap_approved=args.allow_bootstrap)

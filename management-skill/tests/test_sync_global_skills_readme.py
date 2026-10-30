@@ -1091,6 +1091,9 @@ class SyncGlobalSkillsReadmeTest(unittest.TestCase):
         target.write_text(personal, encoding="utf-8")
         skills = self.codex_root.parent / "skills"
         rule = sync_global_skills.ai_index_startup_rule(SKILLS_DIR)
+        self.assertIn("AI-index prompts and maintenance apply only to the current task project", rule)
+        self.assertIn("--project-scope reference", rule)
+        self.assertIn("Only an explicit change of the main work project", rule)
         first = sync_global_skills.install_global_agents(SKILLS_DIR, skills, startup_only=True)
         self.assertEqual(target.read_text(encoding="utf-8"), rule + "\n\n" + personal)
         self.assertTrue(first["changed"])

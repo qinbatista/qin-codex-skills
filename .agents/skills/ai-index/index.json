@@ -363,7 +363,7 @@
           "id": "index-route",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "route_module",
-          "anchor": "def route_module(root, identifier=None, target=None, context_lines=12):",
+          "anchor": "def route_module(root, identifier=None, target=None, context_lines=12, *, project_scope=\"current\"):",
           "summary": "Select a module menu or resolve one unique code anchor from bounded current source; return necessary relationship pointers without loading them.",
           "related": [
             {
@@ -470,8 +470,8 @@
           "id": "index-startup",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "check_project",
-          "anchor": "def check_project(root, phase=\"start\", changed_paths=None, *, bootstrap_approved=False):",
-          "summary": "Ask before the first project index; validate existing guidance and changed-path owners without renewed consent.",
+          "anchor": "def check_project(root, phase=\"start\", changed_paths=None, *, bootstrap_approved=False, project_scope=\"current\"):",
+          "summary": "Gate only the current task project; reference scope skips before index reads and prompts, while current missing indexes require first-bootstrap consent.",
           "related": [
             {
               "module": "management",
@@ -482,6 +482,16 @@
               "module": "management",
               "target": "index-repair-test",
               "reason": "Proves partial indexes can be inspected and repaired without renewed consent."
+            },
+            {
+              "module": "management",
+              "target": "index-scope",
+              "reason": "Classifies consulted projects before any index gate."
+            },
+            {
+              "module": "management",
+              "target": "index-reference-test",
+              "reason": "Proves reference lookups never prompt or maintain another project index."
             }
           ]
         },
@@ -541,6 +551,20 @@
           "symbol": "ProjectCacheArtifactPolicyTests.test_native_time_machine_exclusion_survives_cache_recreation",
           "anchor": "def test_native_time_machine_exclusion_survives_cache_recreation(self):",
           "summary": "Exercise real macOS exclusion and case-equivalent native identity after Cache creation and recreation; companion unit cases cover dispatch and pre-payload failures."
+        },
+        {
+          "id": "index-scope",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "reference_project_result",
+          "anchor": "def reference_project_result(root, project_scope):",
+          "summary": "Validate current/reference scope and return a nonblocking reference skip shared by CLI and API entrypoints."
+        },
+        {
+          "id": "index-reference-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_reference_scope_skips_real_cli_prompts_routes_and_writes",
+          "anchor": "def test_reference_scope_skips_real_cli_prompts_routes_and_writes(self):",
+          "summary": "Run every reference CLI entrypoint against absent, partial and complete indexes without prompts, plan reads or writes; current scope retains its behavior."
         }
       ]
     },
