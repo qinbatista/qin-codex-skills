@@ -207,6 +207,20 @@
           "symbol": "_refresh_cache_index",
           "anchor": "def _refresh_cache_index(project):",
           "summary": "Refresh an established current Cache operations index after registration and cleanup; never bootstrap or delete payloads."
+        },
+        {
+          "id": "cache-native-mount-table",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_macos_mounts",
+          "anchor": "def _macos_mounts():",
+          "summary": "Read Darwin current mount identities with MNT_NOWAIT; classify only verified disjoint SMB warnings without waiting on network I/O."
+        },
+        {
+          "id": "cache-native-sticky-exclusion",
+          "file": "workflow-skill/scripts/task_artifact_paths.py",
+          "symbol": "_native_sticky_excluded",
+          "anchor": "def _native_sticky_excluded(cache: Path) -> bool:",
+          "summary": "Verify exact native sticky backup exclusion metadata on unchanged link-free owner or ancestor before using backupd queries."
         }
       ]
     },
