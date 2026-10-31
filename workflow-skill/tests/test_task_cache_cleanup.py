@@ -747,6 +747,46 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         for name in names:
             self.assertEqual((self.base / name / "nested" / "Cache" / "payload").read_bytes(), name.encode())
 
+    def test_lsof_preflight_preserves_unknown_state_and_matches_exact_observers(self):
+        with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup, "_run_command") as native:
+            native.return_value = subprocess.CompletedProcess([], 0, "1 Ss /sbin/launchd\n2 S /usr/sbin/lsof\n3 U /tools/not-lsof\n", "")
+            self.assertIsNone(cleanup._lsof_preflight("ps"))
+            native.return_value = subprocess.CompletedProcess([], 0, "4 U /usr/sbin/lsof\n5 U+ lsof\n", "")
+            result = cleanup._lsof_preflight("ps")
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["native_pids"], ["4", "5"])
+            for code, stdout, stderr in [(1, "", ""), (0, "", ""), (0, "bad format", ""), (0, "4 U lsof\n", "warning")]:
+                native.return_value = subprocess.CompletedProcess([], code, stdout, stderr)
+                self.assertTrue(cleanup._lsof_preflight("ps")["pending"])
+        with mock.patch.object(cleanup.sys, "platform", "linux"), mock.patch.object(cleanup, "_run_command") as native:
+            self.assertIsNone(cleanup._lsof_preflight("ps"))
+            native.assert_not_called()
+
+    def test_lsof_preflight_suppresses_new_observer_before_handle_inventory(self):
+        run = self.run_root()
+        with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", return_value=subprocess.CompletedProcess([], 0, "7 U /usr/sbin/lsof\n", "")) as native:
+            result = cleanup.probe_activity(run)
+            self.assertFalse(result["safe"])
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["native_pids"], ["7"])
+            self.assertEqual(native.call_count, 1)
+            self.assertEqual(native.call_args.args[0], ["ps", "-axo", "pid=,state=,comm="])
+
+    @unittest.skipUnless(sys.platform == "darwin", "native Darwin process inventory")
+    def test_real_lsof_preflight_uses_only_process_metadata(self):
+        ps = shutil.which("ps")
+        if not ps:
+            self.skipTest("native process inventory unavailable")
+        real = cleanup._run_command
+        def metadata_only(arguments, **kwargs):
+            self.assertEqual(Path(arguments[0]).name, "ps")
+            return real(arguments, **kwargs)
+        with mock.patch.object(cleanup, "_run_command", side_effect=metadata_only):
+            result = cleanup._lsof_preflight(ps, deadline=time.monotonic() + 2)
+        if result is not None:
+            self.assertTrue(result["pending"], result)
+            self.assertFalse(result["safe"], result)
+
     def test_open_handle_inventory_uses_exact_directory_boundary(self):
         run = self.run_root()
         def native(arguments, **kwargs):
@@ -754,6 +794,8 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
                 self.assertNotIn("+D", arguments)
                 self.assertIn("-Fpn0", arguments)
                 return subprocess.CompletedProcess(arguments, 0, fields, "")
+            if "pid=,state=,comm=" in arguments:
+                return subprocess.CompletedProcess(arguments, 0, "1 Ss /sbin/launchd\n", "")
             return subprocess.CompletedProcess(arguments, 0, "", "")
         with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native):
             fields = f"p123\0\nn{run}-sibling/open.bin\0\n"
@@ -801,13 +843,15 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         def native(arguments, **kwargs):
             if Path(arguments[0]).name == "lsof":
                 return subprocess.CompletedProcess(arguments, 1, "", warning)
+            if "pid=,state=,comm=" in arguments:
+                return subprocess.CompletedProcess(arguments, 0, "1 Ss /sbin/launchd\n", "")
             return subprocess.CompletedProcess(arguments, 0, "", "")
         with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native), mock.patch.object(cleanup, "_macos_mounts", return_value=inventory):
             clear = cleanup.probe_activity(run)
             self.assertTrue(clear["safe"], clear)
             self.assertEqual(clear["scope_warnings"], [warning.rstrip()])
             for rejected in (warning + "lsof: unexpected warning\n", warning.replace(str(outside), str(run)), warning.replace(str(outside), str(run / "nested-mount")), warning.replace(str(outside), "/"), warning.replace("smbfs", "nfs")):
-                with mock.patch.object(cleanup, "_run_command", side_effect=lambda arguments, **kwargs: subprocess.CompletedProcess(arguments, 1, "", rejected) if Path(arguments[0]).name == "lsof" else inventory):
+                with mock.patch.object(cleanup, "_run_command", side_effect=lambda arguments, **kwargs: subprocess.CompletedProcess(arguments, 1, "", rejected) if Path(arguments[0]).name == "lsof" else subprocess.CompletedProcess(arguments, 0, "1 Ss /sbin/launchd\n", "")):
                     result = cleanup.probe_activity(run)
                     self.assertFalse(result["safe"], result)
                     self.assertTrue(result["pending"], result)

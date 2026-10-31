@@ -599,6 +599,27 @@ def _outside_mount_warnings(path, stderr, *, deadline=None):
     return warnings or None
 
 
+def _lsof_preflight(ps, *, deadline=None):
+    """Do not multiply Darwin observers already stuck in a kernel I/O wait."""
+    if sys.platform != "darwin":
+        return None
+    observed = _run_command([ps, "-axo", "pid=,state=,comm="], timeout=_remaining(deadline))
+    pending = {"safe": False, "pending": True}
+    if observed.returncode or observed.stderr.strip() or not observed.stdout.strip():
+        return {**pending, "reason": "lsof preflight process inventory unavailable"}
+    blocked = []
+    for line in observed.stdout.splitlines():
+        fields = line.strip().split(None, 2)
+        if len(fields) != 3 or not fields[0].isdigit() or not re.fullmatch(r"[A-Z][A-Za-z+<>-]*", fields[1]):
+            return {**pending, "reason": "lsof preflight process inventory malformed"}
+        if fields[1].startswith("U") and Path(fields[2]).name == "lsof":
+            blocked.append(fields[0])
+    if blocked:
+        return {**pending, "reason": "lsof remains in an uninterruptible kernel wait; new observer launch suppressed",
+                "native_pids": blocked[:16], "native_pid_count": len(blocked)}
+    return None
+
+
 def probe_activity(path, *, deadline=None):
     """Fresh native consumers; unsupported/inaccessible probes fail closed."""
     if sys.platform == "darwin" or sys.platform.startswith("linux"):
@@ -606,6 +627,9 @@ def probe_activity(path, *, deadline=None):
         ps = shutil.which("ps")
         if not lsof or not ps:
             return {"safe": False, "pending": True, "reason": "lsof/ps unavailable; consumer probe pending"}
+        blocked = _lsof_preflight(ps, deadline=deadline)
+        if blocked:
+            return blocked
         # Inventory open handles once instead of making lsof traverse every file
         # in a large build tree. NUL-delimited names preserve spaces/newlines.
         opened = _run_command([lsof, "-nP", "-Fpn0"], timeout=_remaining(deadline))

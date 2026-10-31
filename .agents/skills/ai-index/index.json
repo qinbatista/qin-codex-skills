@@ -66,7 +66,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "probe_activity",
           "anchor": "def probe_activity(path, *, deadline=None):",
-          "summary": "Read native open-handle inventory and process references with exact directory boundaries; fail closed on incomplete probes.",
+          "summary": "Read native open-handle inventory and process references with exact directory boundaries; suppress repeated Darwin observers when a kernel-stuck lsof exists and fail closed on incomplete probes.",
           "related": [
             {
               "module": "workflow",
@@ -74,6 +74,20 @@
               "reason": "Exercises a real held file and release after the native consumer closes."
             }
           ]
+        },
+        {
+          "id": "cache-lsof-preflight",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_lsof_preflight",
+          "anchor": "def _lsof_preflight(ps, *, deadline=None):",
+          "summary": "Use bounded Darwin process metadata to report kernel-stuck lsof PIDs before starting another observer; unavailable inventory remains pending."
+        },
+        {
+          "id": "cache-lsof-preflight-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_real_lsof_preflight_uses_only_process_metadata",
+          "anchor": "def test_real_lsof_preflight_uses_only_process_metadata(self):",
+          "summary": "Exercise the real Darwin preflight without launching lsof; companion cases verify exact executable/state matching, unknown-state protection and launch suppression."
         },
         {
           "id": "cache-checkpoint-record",
