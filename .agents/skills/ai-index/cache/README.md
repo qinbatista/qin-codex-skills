@@ -1,10 +1,13 @@
 # Cache ownership and current state
 
-Read this folder at task start/resume and finish. The project owns its cache
-policy here; `current.json` is a bounded replacement of current operational
-state, never a memory log. Refresh it with Management's
-`project_ai_index.py cache --project-root ROOT --apply` after allocation,
-retention changes and deletion. Missing paths disappear on refresh.
+At task start/resume, read this folder, execute Workflow's Cache cleanup
+checkpoint before allocating new support or implementing the task, then refresh
+with Management's `project_ai_index.py cache --project-root ROOT --apply`.
+Listing files or refreshing inventory alone does not complete startup cleanup.
+Repeat cleanup and refresh at finish and after consumption or retention changes.
+The project owns its cache policy here; `current.json` is a bounded replacement
+of current operational state, never a memory log. Missing paths disappear on
+refresh; failed native checks keep exact items visibly pending.
 
 - Task support belongs to a fresh `Cache/temp-*` run. Release unused exports,
   builds, copied projects and other intermediates immediately when the user's
