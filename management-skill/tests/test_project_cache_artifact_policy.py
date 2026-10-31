@@ -231,10 +231,9 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 lower.rmdir()
             for attempt in range(2):
                 cache = ARTIFACTS.project_artifact_directory(project, create=True)
-                probe = subprocess.run([shutil.which("tmutil"), "isexcluded", "-X", str(cache)], capture_output=True, timeout=10, check=True, **hidden_process_options())
-                record = plistlib.loads(probe.stdout)[0]
-                self.assertEqual(record["IsExcluded"], 1)
-                self.assertTrue(Path(record["Path"]).samefile(cache))
+                # Sticky native metadata is the actual local exclusion owner;
+                # querying backupd here would reintroduce unrelated SMB waits.
+                self.assertTrue(ARTIFACTS._native_sticky_excluded(cache))
                 self.assertEqual(list(cache.iterdir()), [])
                 if attempt == 0:
                     cache.rmdir()
