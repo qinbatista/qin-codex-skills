@@ -609,6 +609,13 @@
           "summary": "Check the installed memory setup entry after CLI installation and report availability without bootstrapping external resources."
         },
         {
+          "id": "installer-candidate-closure-test",
+          "file": "management-skill/tests/test_sync_global_skills_readme.py",
+          "symbol": "SyncGlobalSkillsReadmeTest.test_candidate_gate_rebinds_inherited_cache_and_closes_success_and_failure",
+          "anchor": "def test_candidate_gate_rebinds_inherited_cache_and_closes_success_and_failure(self):",
+          "summary": "Execute successful and failing candidate children with rebound Cache paths; require all payload and run records removed while preserving the canonical control registry."
+        },
+        {
           "id": "installer-memory-check-test",
           "file": "management-skill/tests/test_sync_global_skills_readme.py",
           "symbol": "SyncGlobalSkillsReadmeTest.test_cli_install_reports_memory_location_and_backup_requirement",

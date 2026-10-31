@@ -202,8 +202,10 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
                     self.assertEqual(REAL_RUN_RELEASE_GATE(project, project / "installed", "release").returncode, 0)
             if failure:
                 self.assertIn("deliberate child diagnostic", output.getvalue())
-            self.assertEqual(list((project / "Cache").glob("temp-*")), [])
-            self.assertEqual(list((project / "Cache" / "remote-task-cache-registry" / "runs").glob("*.json")), [])
+            cleanup = sys.modules["task_cache_cleanup"]
+            registry = cleanup._registry(project / "Cache", project)
+            self.assertEqual(set((project / "Cache").iterdir()), {registry})
+            self.assertEqual(list((registry / "runs").glob("*.json")), [])
 
     def test_configured_workspace_owner_and_active_sibling_are_preserved(self):
         owner = Path(self.codex_sandbox.name) / "configured-owner"
