@@ -13,6 +13,7 @@ import errno
 import gzip
 import hashlib
 import json
+import math
 import os
 import plistlib
 import re
@@ -29,10 +30,11 @@ import task_artifact_paths as artifacts
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
 
-REGISTRY = "remote-task-cache-registry"
+REGISTRY = "temp-task-cache-registry"
+PREVIOUS_REGISTRY = "remote-task-cache-registry"
 LEGACY_REGISTRY = ".task-cache-registry"
 SCHEMA = 1
-STALE_SECONDS = 86400
+STALE_SECONDS = 3 * 86400
 PROTECTED_STATES = {"retained", "recovery", "blocked"}
 STATES = PROTECTED_STATES | {"working", "complete", "obsolete"}
 BARRIERS = {".git", ".keep", ".retain", ".task-cache-retain", ".codex-task-resource-owner.json", ".codex-task-resource-ledger.json"}
@@ -135,7 +137,13 @@ def _legacy_base(project):
 
 def _registry(base, project, create=False):
     base = artifacts.resolve_artifact_base(project, artifact_root=base) if create else _cleanup_base(project, base)
-    directory = base / (REGISTRY if base == Path(project) / "Cache" else LEGACY_REGISTRY)
+    name = REGISTRY if base == Path(project) / "Cache" else LEGACY_REGISTRY
+    if name == REGISTRY and (base / PREVIOUS_REGISTRY).exists():
+        if (base / REGISTRY).exists():
+            raise ValueError("two Cache control registries exist; preserve both for owner reconciliation")
+        # Continue the live owner's local ledger; never rename its lock domain.
+        name = PREVIOUS_REGISTRY
+    directory = base / name
     artifacts._check_ancestors(directory)
     if create:
         for name in ("projects", "runs"):
@@ -347,6 +355,8 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     project = artifacts._absolute_path(project_root, "project_root").resolve(strict=True)
     base = register_project(project, artifact_root)
     path = artifacts._absolute_path(run_root, "run_root")
+    if path.name in {REGISTRY, PREVIOUS_REGISTRY, LEGACY_REGISTRY}:
+        raise ValueError("Cache control registries are not disposable task payload")
     location = _bound_path(path, project, base)
     if location == "project" and artifacts.RUN_NAME_RE.fullmatch(path.name)["task_key"] != hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:24]:
         raise ValueError("task identifier does not match allocated run")
@@ -366,7 +376,7 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
         if record_path.exists():
             raise ValueError("run already registered; use touch/checkpoint without replacing ownership")
         _write(record_path, record)
-    return record
+    return {**record, "cache_index": _refresh_cache_index(project)}
 
 
 def _retention_fields(state, reason, now):
@@ -401,7 +411,7 @@ def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="wor
         record.update(_retention_fields(state, reason, now))
         record.update(state=state, heartbeat=now)
         _write(record_path, record)
-    return record
+    return {**record, "cache_index": _refresh_cache_index(project)}
 
 
 def release_retention(project_root, task_id, run_root, *, run_id, expected_identity, reason,
@@ -438,7 +448,7 @@ def release_retention(project_root, task_id, run_root, *, run_id, expected_ident
                                        "released_at": time.time(), "consumer_probe": activity}
         record.update(state="complete", heartbeat=time.time())
         _write(record_path, record)
-    return record
+    return {**record, "cache_index": _refresh_cache_index(project)}
 
 
 def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
@@ -482,7 +492,22 @@ def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
 
 
 def _run_command(arguments, timeout=10):
-    return subprocess.run(arguments, capture_output=True, text=True, timeout=timeout, check=False, **hidden_process_options())
+    process = subprocess.Popen(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **hidden_process_options())
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        process.kill()
+        try:
+            process.communicate(timeout=0.2)
+        except subprocess.TimeoutExpired:
+            # An uninterruptible native I/O wait must not hang this checkpoint.
+            # Closing our pipes does not claim that the native child exited.
+            process.stdout.close()
+            process.stderr.close()
+        error.native_pid = process.pid
+        error.native_exit_confirmed = process.poll() is not None
+        raise
+    return subprocess.CompletedProcess(arguments, process.returncode, stdout, stderr)
 
 
 def _remaining(deadline):
@@ -506,25 +531,48 @@ def _process_identity(pid, deadline=None):
         return "unverified"
 
 
+def _macos_mounts():
+    """Read Darwin's current mount table without waiting on network filesystems."""
+    if sys.platform != "darwin":
+        return None
+    import ctypes
+
+    class StatFS64(ctypes.Structure):
+        _fields_ = [("bsize", ctypes.c_uint32), ("iosize", ctypes.c_int32),
+                    ("counts", ctypes.c_uint64 * 5), ("fsid", ctypes.c_int32 * 2),
+                    ("owner", ctypes.c_uint32), ("type", ctypes.c_uint32),
+                    ("flags", ctypes.c_uint32), ("subtype", ctypes.c_uint32),
+                    ("fstype", ctypes.c_char * 16), ("mountpoint", ctypes.c_char * 1024),
+                    ("source", ctypes.c_char * 1024), ("flags_ext", ctypes.c_uint32),
+                    ("reserved", ctypes.c_uint32 * 7)]
+
+    library = ctypes.CDLL(None)
+    native = getattr(library, "getmntinfo$INODE64", library.getmntinfo)
+    native.argtypes = [ctypes.POINTER(ctypes.POINTER(StatFS64)), ctypes.c_int]
+    native.restype = ctypes.c_int
+    pointer = ctypes.POINTER(StatFS64)()
+    count = native(ctypes.byref(pointer), 2)  # MNT_NOWAIT from Darwin sys/mount.h
+    if not pointer or not 0 < count <= 4096:
+        return None
+    mounts = {}
+    for item in pointer[:count]:
+        location, filesystem = os.fsdecode(item.mountpoint), os.fsdecode(item.fstype)
+        if not location.startswith("/") or location != os.path.normpath(location) or location in mounts or not filesystem:
+            return None
+        mounts[location] = (filesystem, {"local"} if item.flags & 0x1000 else set())
+    return mounts
+
+
 def _outside_mount_warnings(path, stderr, *, deadline=None):
     """Classify only macOS stat warnings for verified, disjoint mounts."""
     if sys.platform != "darwin":
         return None
-    mount = shutil.which("mount")
-    if not mount:
+    try:
+        mounts = _macos_mounts()
+    except (OSError, AttributeError, ValueError):
         return None
-    inventory = _run_command([mount], timeout=_remaining(deadline))
-    if inventory.returncode or inventory.stderr.strip():
+    if not mounts:
         return None
-    mounts = {}
-    for line in inventory.stdout.splitlines():
-        match = re.fullmatch(r".+ on (/.*) \(([^, )]+)(?:, (.*))?\)", line)
-        if not match:
-            return None
-        location, filesystem, flags = match.groups()
-        if location != os.path.normpath(location) or location in mounts:
-            return None
-        mounts[location] = (filesystem, set((flags or "").split(", ")))
     target = Path(path).resolve(strict=True)
     ancestors = [location for location in mounts if target.is_relative_to(location)]
     if not ancestors or "local" not in mounts[max(ancestors, key=len)][1]:
@@ -738,6 +786,8 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             return {**result, "action": "absent"}
         if record["state"] not in STATES:
             raise ValueError("invalid registered lifecycle state")
+        if type(record.get("heartbeat")) not in (int, float) or not math.isfinite(record["heartbeat"]):
+            raise ValueError("registered heartbeat is invalid; inactivity cannot be verified")
         if path == current_run:
             return {**result, "action": "keep", "reason": "current run"}
         if record["state"] == "blocked":
@@ -759,27 +809,27 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             if not apply:
                 return {**result, "action": "eligible", "bytes": remaining["bytes"], "resumable": True}
             return _finish_deletion(record_path, record, path, remaining, {**result, "resumed": True}, deadline)
+        expiring = record["state"] in {"working", "retained", "recovery"}
         if record["state"] in {"retained", "recovery"}:
             retention_reason = record.get("retention_reason")
             review_at = record.get("retention_review_at")
             if (not isinstance(retention_reason, str) or not retention_reason.strip()
                     or retention_reason == "fresh task-owned disposable support allocation"
-                    or not isinstance(review_at, (int, float)) or not now < review_at <= record["heartbeat"] + STALE_SECONDS):
+                    or type(review_at) not in (int, float) or not math.isfinite(review_at)
+                    or review_at > record["heartbeat"] + STALE_SECONDS):
                 return {**result, "action": "pending", "reason": "retention owner review required; renew a concrete need or explicitly release the exact run", "retention_reason": retention_reason, "retention_review_at": review_at}
-            return {**result, "action": "keep", "reason": "current retention need recorded", "retention_reason": retention_reason, "retention_review_at": review_at}
-        own = record["task_id"] == task_id
-        if own and record["state"] not in {"complete", "obsolete"}:
-            return {**result, "action": "keep", "reason": "own working run needs an exact completion or transition"}
-        if not own and record["state"] == "working" and now - record["heartbeat"] < STALE_SECONDS:
-            return {**result, "action": "keep", "reason": "foreign run updated within 24 hours"}
+            if now < review_at:
+                return {**result, "action": "keep", "reason": "current retention need recorded", "retention_reason": retention_reason, "retention_review_at": review_at}
+        if expiring and now - record["heartbeat"] < STALE_SECONDS:
+            return {**result, "action": "keep", "reason": "task run updated within 72 hours"}
         _bound_path(path, project, base)
         snapshot = _snapshot(path, deadline, registry=record_path.parent.parent)
         if not _record_identity_matches(path, record):
             raise ValueError("registered run identity changed")
         inactive = now - max(record["heartbeat"], snapshot["latest"])
-        if not own and record["state"] == "working" and inactive < STALE_SECONDS:
-            return {**result, "action": "keep", "reason": "foreign run updated within 24 hours"}
-        if not own and record["state"] == "working":
+        if expiring and inactive < STALE_SECONDS:
+            return {**result, "action": "keep", "reason": "task run updated within 72 hours"}
+        if expiring:
             creator = _process_identity(record["creator_pid"], deadline)
             if creator == "unverified":
                 return {**result, "action": "pending", "reason": "original producer process identity is unverified"}
@@ -810,6 +860,23 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
         record["block_reason"] = "deletion started; resume only the unchanged original proof"
         _write(record_path, record)
         return _finish_deletion(record_path, record, path, proof, result, deadline)
+
+
+def _refresh_cache_index(project):
+    """Refresh only an established current-project index, never bootstrap one."""
+    if not any((project / path).is_dir() for path in ("skills/ai-index", ".agents/skills/ai-index")):
+        return {"status": "skipped", "reason": "no established project AI index"}
+    helper = Path(__file__).resolve().parents[2] / "management-skill" / "scripts" / "project_ai_index.py"
+    if not helper.is_file():
+        return {"status": "pending", "reason": "Management Cache index helper unavailable"}
+    try:
+        result = _run_command([sys.executable, "-B", str(helper), "cache", "--project-root", str(project), "--apply"], timeout=10)
+        if result.returncode:
+            return {"status": "pending", "reason": "Cache index refresh failed", "detail": result.stdout[:1000]}
+        value = json.loads(result.stdout)
+        return {key: value[key] for key in ("status", "reason", "cache_index", "current_path") if key in value}
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        return {"status": "pending", "reason": str(error)[:500]}
 
 
 def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):
@@ -874,14 +941,18 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
         try:
             results.append(_sweep_record(record_path, owner, task_id, current, apply, time.time(), deadline))
         except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
-            results.append({"record": str(record_path), "action": "pending", "reason": str(error)})
+            pending = {"record": str(record_path), "action": "pending", "reason": str(error)}
+            if hasattr(error, "native_pid"):
+                pending.update(native_pid=error.native_pid, native_exit_confirmed=error.native_exit_confirmed)
+            results.append(pending)
     completed = all(not path.exists() and not path.is_symlink() and not (_registry(base, project) / "runs" / (_key(path) + ".json")).exists() for path in requested) if requested else None
     try:
         remote_review = _remote_owner_review(project / "Cache", project)
     except (OSError, ValueError) as error:
         remote_review = []
         results.append({"path": str(project / "Cache"), "action": "pending", "reason": "remote owner inventory failed: " + str(error)})
-    return {"phase": phase, "applied": apply, "results": results, "requested_complete": completed, "remote_review": remote_review, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
+    cache_index = _refresh_cache_index(project) if apply else {"status": "skipped", "reason": "read-only checkpoint"}
+    return {"phase": phase, "applied": apply, "results": results, "requested_complete": completed, "remote_review": remote_review, "cache_index": cache_index, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
 
 
 def scan(project_root, artifact_root=None):
@@ -918,7 +989,7 @@ def scan(project_root, artifact_root=None):
             for root in roots:
                 artifacts._check_ancestors(root)
                 if root.is_dir():
-                    unknown.extend({"path": str(child), "project_root": str(owner), "action": "needs-review"} for child in root.iterdir() if str(child) not in known)
+                    unknown.extend({"path": str(child), "project_root": str(owner), "action": "needs-review"} for child in root.iterdir() if str(child) not in known and child.name not in {REGISTRY, PREVIOUS_REGISTRY, LEGACY_REGISTRY})
         except (OSError, ValueError, KeyError) as error:
             errors.append({"path": str(record_path), "reason": str(error)})
     return {"registered": records, "unclassified": unknown, "violations": violations, "remote_review": list(remote_review.values()), "errors": errors}
@@ -929,7 +1000,7 @@ def _remote_owner_review(cache, project):
     if not cache.exists() and not cache.is_symlink():
         return []
     artifacts._check_ancestors(cache)
-    return [{"path": str(child), "project_root": str(project), "action": "needs-owner-review", "reason": "remote-* supplies no durable owner or synchronization proof; verify native references and retire consumed test payloads"} for child in sorted(cache.iterdir()) if child.name.startswith("remote-") and child.name != REGISTRY]
+    return [{"path": str(child), "project_root": str(project), "action": "needs-owner-review", "reason": "remote-* supplies no durable owner or synchronization proof; verify native references and retire consumed test payloads"} for child in sorted(cache.iterdir()) if child.name.startswith("remote-") and child.name not in {REGISTRY, PREVIOUS_REGISTRY}]
 
 
 def _cache_violations(cache, project):
@@ -976,7 +1047,7 @@ def discover(search_roots, *, project_root, artifact_root=None, apply=False, lim
                         if apply:
                             register_project(owner, artifact_root=base, cache_roots=[current])
                     continue
-                pending.extend(child for child in current.iterdir() if child.name not in {".git", "node_modules", REGISTRY, ".codex", ".agents"} and child.is_dir() and not child.is_symlink())
+                pending.extend(child for child in current.iterdir() if child.name not in {".git", "node_modules", REGISTRY, PREVIOUS_REGISTRY, ".codex", ".agents"} and child.is_dir() and not child.is_symlink())
             except (OSError, ValueError) as error:
                 errors.append({"path": str(current), "reason": str(error)})
     return {"cache_roots": found, "unclassified_cache_roots": unclassified, "violations": violations, "remote_review": remote_review, "errors": errors, "visited": count, "limit_reached": count >= limit}

@@ -341,7 +341,7 @@
       "id": "ending-memory",
       "owner_skill": "project-memory-skill",
       "name": "Ending memory branch",
-      "function": "Verify native deletion on the creating service or close out in the current chat without a new conversation. With a verified route, launch Ending Task | <project> in ordinary recents and immediately finish the parent after app acknowledgement. Ending alone reads its exact source chat, consolidates scoped Obsidian knowledge and due synthesis alongside resource cleanup, owns recovery, and must execute native self-deletion through the exposed tool or ending_conversation.py and verify all-provider list and rollout absence; archival stays deletion pending.",
+      "function": "Close guidance, scoped Obsidian memory and resource cleanup inline. Codex chats and sessions remain user-managed; never create automatic Ending conversations or archive/delete session records as Cache cleanup. Explicit conversation helpers require their own user request.",
       "checks": [
         "project-memory-units",
         "verify-units"
@@ -433,7 +433,7 @@
       "id": "resources",
       "owner_skill": "workflow-skill",
       "name": "Global resource coordination and Ending audit",
-      "function": "Execute indexed cleanup at task start, transition and finish: release own completed or obsolete disposable runs immediately and registered foreign disposable runs inactive at least 24 hours after fresh consumer checks. Detect project Cache naming violations, repair their producers and release obsolete material. Follow native owners for ledgers, worktrees, UI, process and network resources; preserve active, recovery and actual review/reuse needs.",
+      "function": "Execute indexed cleanup at task start, transition and finish: release own completed or obsolete disposable runs immediately and registered foreign disposable runs inactive at least 72 hours after fresh consumer checks. Detect project Cache naming violations, repair their producers and release obsolete material. Follow native owners for ledgers, worktrees, UI, process and network resources; preserve active, recovery and actual review/reuse needs.",
       "checks": [
         "workflow-units",
         "project-memory-units",
@@ -454,7 +454,7 @@
       "id": "project-ai-index",
       "owner_skill": "management-skill",
       "name": "Automatic project AI index",
-      "function": "Only for the current task project, request consent before missing-index discovery or creation and repeat at later starts until complete; reference lookups in other projects skip index prompts, reads and writes without blocking; automatically maintain existing focused routes and concise root guidance, guard source/preimage updates and require Ending readback without inferred publication. Route all local code edits, including tests, through reviewed module/file/method anchors with bounded current-source excerpts and explicit related pointers; maintain touched routes without copying source or memory history.",
+      "function": "Only for the current task project, request consent before missing-index discovery or creation and repeat at later starts until complete; reference lookups in other projects skip index prompts, reads and writes without blocking; automatically maintain existing focused routes and concise root guidance, guard source/preimage updates and refresh bounded current Cache ownership without inferred publication. Route all local code edits, including tests, through reviewed module/file/method anchors with bounded current-source excerpts and explicit related pointers; maintain touched routes without copying source or memory history.",
       "checks": [
         "project-ai-index-check",
         "management-units",

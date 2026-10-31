@@ -21,8 +21,19 @@ The project index contains:
 - `SKILL.md`: frontmatter `name: ai-index`, when/how to select a route through the compact module menu, and a link to `index.json` for maintained metadata rather than routine full-manifest reading.
 - `index.json`: the single route map, with project-relative paths. `rules` declares `repository`, `structure` and `verification` documents. `modules` declares each `id`, short `summary`, `document`, `sources`, and `dependencies` with a module ID and reason. Optional `code_targets` locate reviewed methods and key-line anchors under that module.
 - Focused Markdown documents for repository/asset ownership, code placement, verification, and each meaningful module. Use a folder/sub-index only when a module needs it; do not create a document for every function.
+- `cache/README.md`: the project's maintained Cache ownership and cleanup entry. Link it from `SKILL.md`. Keep project-specific canonical assets/runtime/configuration, real remote synchronization routes, task output and local debugging/review boundaries explicit. Optional `cache/owners.json` supplies those same bounded owner mappings to the helper. `cache/current.json` is an ignored, replaceable current operational view; it is the narrow exception for changing Cache state, not project memory or history.
 
-Repository/asset rules cover Git and publication boundaries, canonical inputs/assets, runtime data, generated artifacts, secrets and disposable support. Structure rules state responsibilities and where new code belongs. Each module document names its entry files/symbols, contracts, exclusions, justified dependencies and relevant test owner. Link existing rules instead of copying whole Skills, prompts or source files. Store task history, failures, results and changing inventories in their existing memory/resource owners, not these instructions.
+Repository/asset rules cover Git and publication boundaries, canonical inputs/assets, runtime data, generated artifacts, secrets and disposable support. Structure rules state responsibilities and where new code belongs. Each module document names its entry files/symbols, contracts, exclusions, justified dependencies and relevant test owner. Link existing rules instead of copying whole Skills, prompts or source files. Store task history, failures and results in their existing memory/resource owners. Keep only the bounded current Cache operations view below in the index; never append dated cleanup logs or create one document per task.
+
+## Current Cache management
+
+For each current editable project with an existing index, run `project_ai_index.py cache --project-root ROOT --apply` at start/resume and finish, and after allocation, retention changes or deletion. Startup/finish `inspect` remains read-only and returns `cache_management.required_action: refresh_cache_index` when this view is absent or stale; explicit read-only work reports that need without writing. Reference scope skips before index/Cache inspection or writes. The command never creates the project's first index and never deletes Cache payloads or native registry records.
+
+The helper creates missing `cache/README.md` and `cache/.gitignore`, preserving authored rules. It replaces `cache/current.json` from immediate Cache children and bounded Workflow task records, dropping vanished paths. It never traverses remote payloads, follows links or scans Codex/iCloud storage. Details cap at 512 rows, registry reads at 4096 bounded records, with omitted totals and read errors explicit. The existing Workflow registry remains authoritative for complete task identities, heartbeats, retention, consumer probes and deletion proofs. Do not commit `current.json`, pending writes, native task records or changing inventories. Stable README, ignore rules and owner mappings are versioned source.
+
+Optional `owners.json` has `schema_version: 1` and an `owners` list. Each owner has `path` (an immediate `Cache/<name>` child, or terminal `Cache/temp-*` / `Cache/remote-*` pattern), `kind` (`task`, `durable`, `remote`), `consumer` and `cleanup`. A real `remote` additionally names its native `sync` route; a prefix or local test-case consumer alone remains `remote_requires_review`. Exact paths override patterns. Canonical assets, configuration and service/runtime data require their actual native owner and retain that owner even while no process has an open file.
+
+Task rules must state the user's actual endpoint: release unused copied projects, exports, packages and intermediates immediately after verified output/upload handoff; keep only concrete local debugging, review or minimum recovery consumers. An interrupted or failed run with no further activity becomes due after 72 hours, measured from heartbeat and descendant changes and checked through native guards before deletion. A live consumer, canonical original or uncertain provider operation stays protected. Update the current view after partial deletion as well as complete retirement. `remote-*` local-only scratch is an ownership defect to repair through its real producer, not a permanent retention label. Codex sessions and databases are user-managed; Cache maintenance does not archive, delete or purge them.
 
 ## Start, change and finish
 
@@ -82,6 +93,8 @@ project_ai_index.py route --project-root ROOT
 project_ai_index.py route --project-root ROOT --module feature
 project_ai_index.py route --project-root ROOT --module feature --target read-content --context-lines 12
 project_ai_index.py check --project-root ROOT
+project_ai_index.py cache --project-root ROOT
+project_ai_index.py cache --project-root ROOT --apply
 project_ai_index.py apply --project-root ROOT --plan PLAN_JSON --work-dir PROJECT_CACHE_RUN
 project_ai_index.py inspect --project-root ROOT --phase end --changed-path src/feature.py
 ```

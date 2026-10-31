@@ -2,6 +2,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ from unittest import mock
 ARTIFACT_PROJECT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ARTIFACT_PROJECT / "workflow-skill" / "scripts"))
 from task_artifact_paths import resolve_task_artifact_root, validate_external_directory
+from hidden_process import hidden_process_options
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ending_memory_launch.py"
@@ -47,7 +49,8 @@ class EndingLaunchTests(unittest.TestCase):
                           "outcome": {"module": "example", "summary": "Saved result", "reason": "Preserve outcome", "result": "Available", "files": ["script.py"]}}
 
     def prepare(self, **changes):
-        args = {"project_root": self.project, "memory_available": True, "native_delete_available": True}
+        # Legacy lifecycle/readback tests exercise an explicitly requested utility.
+        args = {"project_root": self.project, "memory_available": True, "native_delete_available": True, "explicit_user_request": True}
         args.update(changes)
         return MODULE.prepare_launch(self.completed, **args)
 
@@ -71,6 +74,36 @@ class EndingLaunchTests(unittest.TestCase):
         self.assertEqual(packet["closeout_owner"], "current_chat")
         with self.assertRaises(ValueError):
             self.prepare(native_delete_available="yes")
+
+    def test_default_closeout_keeps_sessions_manual_even_with_native_deletion(self):
+        with mock.patch.object(MODULE, "prepare_project_index", side_effect=AssertionError("automatic index handoff")), mock.patch.object(MODULE, "prepare_entries", side_effect=AssertionError("automatic memory handoff")), mock.patch.object(MODULE.memory, "_project_identity", side_effect=AssertionError("automatic memory identity lookup")):
+            for native_delete_available in (True, False):
+                for memory_available in (True, False):
+                    packet = MODULE.prepare_launch(self.completed, project_root=self.project, memory_available=memory_available, native_delete_available=native_delete_available, previous={"status": "launched", "thread_id": "old-ending"})
+                    self.assertEqual(packet["status"], "inline_required")
+                    self.assertEqual(packet["conversation_policy"], "manual_sessions")
+                    self.assertEqual(packet["closeout_owner"], "current_chat")
+                    self.assertFalse(packet["deletion_required"])
+                    self.assertFalse(packet["automatic_conversation_actions"])
+                    self.assertIsNone(packet["create_thread"])
+                    self.assertNotIn("thread_id", packet)
+                    self.assertNotIn("prompt", packet)
+                    with self.assertRaisesRegex(ValueError, "explicitly user-requested"):
+                        MODULE.acknowledge_launch(packet, {"threadId": "new-ending", "hostId": "local"})
+        with self.assertRaisesRegex(ValueError, "conversation request"):
+            self.prepare(explicit_user_request="yes")
+
+    def test_real_cli_native_availability_does_not_enable_automatic_conversations(self):
+        outcome = self.project / "Cache" / "temp-cli" / "outcome.json"
+        outcome.parent.mkdir(parents=True)
+        outcome.write_text(json.dumps(self.completed), encoding="utf-8")
+        result = subprocess.run([sys.executable, "-B", str(SCRIPT), "prepare", "--outcome", str(outcome), "--project-root", str(self.project), "--memory-available", "true", "--native-delete-available"], capture_output=True, text=True, timeout=15, check=False, **hidden_process_options())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        packet = json.loads(result.stdout)
+        self.assertEqual(packet["status"], "inline_required")
+        self.assertEqual(packet["reason"], "codex_sessions_manual")
+        self.assertFalse(packet["deletion_required"])
+        self.assertIsNone(packet["create_thread"])
 
     def acknowledged(self):
         packet = self.prepare()
@@ -386,7 +419,7 @@ class EndingLaunchTests(unittest.TestCase):
             self.assertEqual(before["resource_status"], "complete")
         with mock.patch.dict(os.environ, {"YOFA_TASK_ARTIFACT_ROOT": str(self.project.parent / "artifacts")}):
             applied = helper.apply_plan(self.project, plan, self.project / "Cache" / "temp-apply-original")
-            self.assertEqual(applied["status"], "complete")
+            self.assertEqual(applied["status"], "complete", applied)
             after = self.complete(packet, self.vault_result(), self.resource_result())
             self.assertEqual(after["index_status"], "complete")
             self.assertEqual(after["index_result"]["plan_readback"]["postimages"][obsolete], {"expected": None, "actual": None})

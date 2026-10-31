@@ -36,7 +36,7 @@
         },
         {
           "module": "project-memory",
-          "reason": "Ending handoff and native self-deletion belong to Project Memory."
+          "reason": "Scoped memory closure and explicit-only conversation utility policy belong to Project Memory."
         }
       ],
       "code_targets": [
@@ -80,7 +80,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_sweep_record",
           "anchor": "def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):",
-          "summary": "Review current and original legacy-ledger runs; resume only original unchanged deletion proofs while preserving retention, volume/inode and native-consumer guards."
+          "summary": "Expire idle registered working/recovery/review runs after 72 hours, preserve native and identity guards, resume only original deletion proofs."
         },
         {
           "id": "artifact-allocation",
@@ -92,9 +92,9 @@
         {
           "id": "cache-retention-contract-test",
           "file": "workflow-skill/tests/test_task_cache_cleanup.py",
-          "symbol": "TaskCacheCleanupTests.test_retention_requires_concrete_reason_and_due_review_does_not_delete",
-          "anchor": "def test_retention_requires_concrete_reason_and_due_review_does_not_delete(self):",
-          "summary": "Reject unreasoned retention and surface due/legacy retention while preserving payload."
+          "symbol": "TaskCacheCleanupTests.test_retention_requires_reason_and_expires_with_inactivity",
+          "anchor": "def test_retention_requires_reason_and_expires_with_inactivity(self):",
+          "summary": "Require a concrete task-retention reason; expire unused task runs after 72 hours while preserving unknown producers and malformed records."
         },
         {
           "id": "cache-native-consumer-test",
@@ -199,7 +199,14 @@
           "file": "workflow-skill/scripts/task_artifact_paths.py",
           "symbol": "_ensure_cache_backup_exclusion",
           "anchor": "def _ensure_cache_backup_exclusion(cache: Path) -> None:",
-          "summary": "On macOS verify native plist and unchanged link-free Cache identity, add default sticky exclusion only when included and fail closed before task writes; other hosts make no Time Machine calls."
+          "summary": "Verify native sticky exclusion on the unchanged local owner/ancestor, otherwise require native tmutil readback before payload writes; other hosts make no calls."
+        },
+        {
+          "id": "cache-current-refresh",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_refresh_cache_index",
+          "anchor": "def _refresh_cache_index(project):",
+          "summary": "Refresh an established current Cache operations index after registration and cleanup; never bootstrap or delete payloads."
         }
       ]
     },
@@ -300,7 +307,7 @@
     },
     {
       "id": "project-memory",
-      "summary": "Exact-project Obsidian knowledge and independent Ending closure",
+      "summary": "Exact-project Obsidian knowledge and inline closure with user-managed Codex sessions",
       "document": ".agents/skills/ai-index/modules/project-memory.md",
       "sources": [
         "project-memory-skill"
@@ -336,6 +343,20 @@
           "symbol": "ObsidianVaultSetupTests.test_existing_only_native_cli_returns_pending_without_writes",
           "anchor": "def test_existing_only_native_cli_returns_pending_without_writes(self):",
           "summary": "Run the real setup CLI and assert pending with no missing vault parent or Codex folder creation."
+        },
+        {
+          "id": "ending-manual-policy",
+          "file": "project-memory-skill/scripts/ending_memory_launch.py",
+          "symbol": "prepare_launch",
+          "anchor": "def prepare_launch(completed, *, project_root, memory_available, previous=None, resource_audit=True, native_delete_available=False, project_index=None, explicit_user_request=False):",
+          "summary": "Default inline closure with user-managed sessions; native availability never supplies conversation creation/deletion authorization."
+        },
+        {
+          "id": "ending-manual-policy-test",
+          "file": "project-memory-skill/tests/test_ending_memory_launch.py",
+          "symbol": "EndingLaunchTests.test_real_cli_native_availability_does_not_enable_automatic_conversations",
+          "anchor": "def test_real_cli_native_availability_does_not_enable_automatic_conversations(self):",
+          "summary": "Exercise real CLI default session protection even when native deletion is available."
         }
       ]
     },
@@ -593,6 +614,27 @@
           "symbol": "SyncGlobalSkillsReadmeTest.test_installer_memory_check_runs_real_setup_without_creating_missing_parent",
           "anchor": "def test_installer_memory_check_runs_real_setup_without_creating_missing_parent(self):",
           "summary": "Execute the real post-install setup subprocess, read back its no-create status and prove missing vault parent and Codex roots remain absent."
+        },
+        {
+          "id": "cache-index-sync",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "sync_cache_index",
+          "anchor": "def sync_cache_index(root, *, apply=False, project_scope=\"current\"):",
+          "summary": "Replace bounded current Cache owner/inventory state without traversing remote payload or deleting files."
+        },
+        {
+          "id": "cache-index-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_cache_cli_refresh_tracks_current_owners_without_payload_deletion",
+          "anchor": "def test_cache_cli_refresh_tracks_current_owners_without_payload_deletion(self):",
+          "summary": "Exercise Cache current-state refresh, vanished owners and real CLI no-payload-deletion behavior."
+        },
+        {
+          "id": "cache-index-boundary-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_cache_inventory_rejects_policy_escape_and_never_follows_remote_payload",
+          "anchor": "def test_cache_inventory_rejects_policy_escape_and_never_follows_remote_payload(self):",
+          "summary": "Reject escaping owner paths and preserve direct-child-only remote inventories."
         }
       ]
     },

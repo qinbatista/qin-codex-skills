@@ -116,7 +116,7 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
                 elif state == "complete":
                     self.bootstrap()
                 before = {path.relative_to(self.project).as_posix(): path.read_bytes() for path in self.project.rglob("*") if path.is_file()}
-                for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end", "--allow-bootstrap")), ("check", ()), ("route", ("--module", "api", "--target", "request")), ("apply", ("--plan", str(self.base / "unread-plan.json"), "--work-dir", str(self.base / "unused-work")))):
+                for command, arguments in (("inspect", ("--phase", "start")), ("inspect", ("--phase", "end", "--allow-bootstrap")), ("check", ()), ("route", ("--module", "api", "--target", "request")), ("apply", ("--plan", str(self.base / "unread-plan.json"), "--work-dir", str(self.base / "unused-work"))), ("cache", ("--apply",))):
                     result = self.cli(command, "--project-scope", "reference", *arguments)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     payload = json.loads(result.stdout)
@@ -133,7 +133,7 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
 
     def test_reference_api_skips_before_index_reads_or_artifact_allocation(self):
         with mock.patch.object(INDEX, "bootstrap_state", side_effect=AssertionError("reference presence check")), mock.patch.object(INDEX, "validate_index", side_effect=AssertionError("reference content read")), mock.patch.object(INDEX, "validate_task_directory", side_effect=AssertionError("reference write preparation")), mock.patch.object(INDEX, "project_lock", side_effect=AssertionError("reference lock allocation")):
-            results = (INDEX.check_project(self.project, project_scope="reference"), INDEX.route_module(self.project, project_scope="reference"), INDEX.apply_plan(self.project, None, None, project_scope="reference"))
+            results = (INDEX.check_project(self.project, project_scope="reference"), INDEX.route_module(self.project, project_scope="reference"), INDEX.apply_plan(self.project, None, None, project_scope="reference"), INDEX.sync_cache_index(self.project, apply=True, project_scope="reference"))
             self.assertTrue(all(result["status"] == "skipped" for result in results))
         with self.assertRaisesRegex(ValueError, "project_scope"):
             INDEX.check_project(self.project, project_scope="unknown")
@@ -163,6 +163,96 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         for forbidden in (f"{INDEX.INDEX_DIRECTORY}/rules/extra.md", "skills/another-skill/SKILL.md", "src/api.py"):
             with self.subTest(forbidden=forbidden), self.assertRaisesRegex(ValueError, "outside"):
                 INDEX.guidance_target(self.project, forbidden)
+
+    def test_cache_cli_refresh_tracks_current_owners_without_payload_deletion(self):
+        missing = json.loads(self.cli("cache", "--apply").stdout)
+        self.assertEqual(missing["status"], "approval_required")
+        self.assertFalse((self.project / INDEX.INDEX_DIRECTORY).exists())
+        for record in self.plan()["files"]:
+            self.write(record["path"], record["content"])
+        task = self.write("Cache/temp-upload/native-export/object.bin", "consumed compiler output")
+        remote = self.write("Cache/remote-assets/private/payload.bin", "canonical asset")
+        local = self.write("Cache/remote-local-case/case.txt", "local fixture")
+        record = {"path": str(task.parent.parent), "project_root": str(self.project), "task_id": "upload", "state": "complete", "heartbeat": 100, "disposable_reason": "upload accepted and no local continuation"}
+        self.write(f"Cache/{INDEX.task_cache_cleanup.REGISTRY}/runs/example.json", json.dumps(record))
+        folder = f"{INDEX.INDEX_DIRECTORY}/cache"
+        self.write(f"{folder}/owners.json", json.dumps({"schema_version": 1, "owners": [{"path": "Cache/remote-assets", "kind": "remote", "consumer": "asset loader", "sync": "native manifest synchronization", "cleanup": "asset owner only"}, {"path": "Cache/remote-local-case", "kind": "remote", "consumer": "local test only"}]}))
+        inspected = json.loads(self.cli("inspect").stdout)
+        self.assertEqual(inspected["cache_management"]["required_action"], "refresh_cache_index")
+        self.assertFalse((self.project / folder / "current.json").exists())
+        applied = self.cli("cache", "--apply")
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+        inventory = json.loads((self.project / folder / "current.json").read_text())
+        rows = {row["path"]: row for row in inventory["entries"]}
+        self.assertEqual(rows["Cache/temp-upload"]["state"], "complete")
+        self.assertEqual(rows["Cache/remote-assets"]["kind"], "verified_remote")
+        self.assertEqual(rows["Cache/remote-local-case"]["kind"], "remote_requires_review")
+        self.assertEqual(inventory["cleanup_after_idle_seconds"], 259200)
+        self.assertEqual(inventory["codex_sessions"], "user_managed_excluded")
+        self.assertNotIn("payload.bin", json.dumps(inventory))
+        self.assertEqual(task.read_text(), "consumed compiler output")
+        self.assertEqual(remote.read_text(), "canonical asset")
+        self.assertEqual(local.read_text(), "local fixture")
+        self.assertIn("current.json", (self.project / folder / ".gitignore").read_text().splitlines())
+        repeat = self.cli("cache", "--apply")
+        self.assertEqual(json.loads(repeat.stdout)["status"], "unchanged")
+        task.unlink()
+        task.parent.rmdir()
+        task.parent.parent.rmdir()
+        refreshed = self.cli("cache", "--apply")
+        self.assertEqual(refreshed.returncode, 0, refreshed.stdout)
+        rows = json.loads((self.project / folder / "current.json").read_text())["entries"]
+        self.assertNotIn("Cache/temp-upload", [row["path"] for row in rows])
+        self.assertTrue((self.project / f"Cache/{INDEX.task_cache_cleanup.REGISTRY}/runs/example.json").exists())
+        self.assertEqual(json.loads(self.cli("inspect").stdout)["cache_management"]["status"], "ready")
+        skill = self.project / INDEX.SKILL_PATH
+        skill.write_text(skill.read_text() + "\nRead [Cache ownership](cache/README.md).\n")
+        (self.project / folder / "current.json").unlink()
+        cloned = json.loads(self.cli("inspect").stdout)
+        self.assertEqual(cloned["status"], "ready", cloned)
+        self.assertEqual(cloned["cache_management"]["required_action"], "refresh_cache_index")
+
+    def test_cache_inventory_bounds_rows_and_preserves_authored_policy(self):
+        for record in self.plan()["files"]:
+            self.write(record["path"], record["content"])
+        folder = f"{INDEX.INDEX_DIRECTORY}/cache"
+        readme = self.write(f"{folder}/README.md", "# Cache\nProject-specific source assets remain protected.\n")
+        ignore = self.write(f"{folder}/.gitignore", "current.json\n!current.json\n")
+        for index in range(INDEX.MAX_CACHE_ROWS + 3):
+            self.write(f"Cache/temp-case-{index:04d}/payload.txt", "unused case")
+        result = INDEX.sync_cache_index(self.project, apply=True)
+        self.assertEqual(result["entry_count"], INDEX.MAX_CACHE_ROWS + 4)
+        current = self.project / folder / "current.json"
+        first = current.read_bytes()
+        rows = json.loads(first)
+        self.assertEqual(len(rows["entries"]), INDEX.MAX_CACHE_ROWS)
+        self.assertEqual(rows["omitted_count"], 4)
+        self.assertEqual(readme.read_text(), "# Cache\nProject-specific source assets remain protected.\n")
+        self.assertTrue(ignore.read_text().endswith(INDEX.CACHE_IGNORE_BLOCK))
+        self.assertIn("!current.json", ignore.read_text())
+        self.assertEqual(INDEX.sync_cache_index(self.project, apply=True)["status"], "unchanged")
+        self.assertEqual(first, current.read_bytes())
+
+    def test_cache_inventory_rejects_policy_escape_and_never_follows_remote_payload(self):
+        for record in self.plan()["files"]:
+            self.write(record["path"], record["content"])
+        folder = f"{INDEX.INDEX_DIRECTORY}/cache"
+        self.write("Cache/remote-assets/private/secret.txt", "private payload")
+        original = Path.iterdir
+        def guarded_iterdir(path):
+            if "remote-assets" in path.parts:
+                raise AssertionError("remote payload traversal")
+            return original(path)
+        with mock.patch.object(Path, "iterdir", guarded_iterdir):
+            self.assertEqual(INDEX.sync_cache_index(self.project, apply=True)["status"], "complete")
+        current = (self.project / folder / "current.json").read_bytes()
+        self.write(f"{folder}/owners.json", json.dumps({"schema_version": 1, "owners": [{"path": "Cache/../../outside", "kind": "durable"}]}))
+        rejected = self.cli("cache", "--apply")
+        self.assertEqual(rejected.returncode, 2)
+        self.assertEqual((self.project / folder / "current.json").read_bytes(), current)
+        inspected = json.loads(self.cli("inspect").stdout)
+        self.assertEqual(inspected["status"], "ready", inspected)
+        self.assertEqual(inspected["cache_management"]["required_action"], "review_cache_owner")
 
     def test_visible_owner_precedes_existing_legacy_without_rewriting_it(self):
         self.bootstrap()

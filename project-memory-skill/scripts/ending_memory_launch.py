@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch an independent Ending for project guidance, memory and resources."""
+"""Prepare inline closeout, or an explicitly user-requested conversation action."""
 
 import argparse
 import hashlib
@@ -40,8 +40,8 @@ def project_index_helper():
     return module
 
 
-def prepare_launch(completed, *, project_root, memory_available, previous=None, resource_audit=True, native_delete_available=False, project_index=None):
-    """Return app arguments; preparation is pending, not proof of a visible task."""
+def prepare_launch(completed, *, project_root, memory_available, previous=None, resource_audit=True, native_delete_available=False, project_index=None, explicit_user_request=False):
+    """Keep sessions manual unless the user explicitly requests this conversation lifecycle."""
     root = Path(project_root).expanduser().resolve()
     if not root.is_dir():
         raise ValueError("project root must exist")
@@ -61,6 +61,10 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
         raise ValueError("native deletion availability must be a verified boolean")
     if not isinstance(resource_audit, bool):
         raise ValueError("resource audit selection must be a boolean")
+    if not isinstance(explicit_user_request, bool):
+        raise ValueError("explicit user conversation request must be a boolean")
+    if not explicit_user_request:
+        return {"status": "inline_required", "reason": "codex_sessions_manual", "conversation_policy": "manual_sessions", "automatic_conversation_actions": False, "closeout_owner": "current_chat", "completion_owner": "current_chat", "parent_wait_required": False, "deletion_required": False, "visible": False, "create_thread": None, "origin_task_id": completed["task_id"], "resource_audit": resource_audit, "memory_status": "pending", "index_status": "pending"}
     index_handoff = prepare_project_index(project_index, root, completed["task_id"])
     durable = outcome.get("durable") is not False and bool(set(outcome) - {"durable", "consolidation", "expected_index_sha256"})
     consolidation = knowledge.normalize_consolidation(outcome.get("consolidation"))
@@ -75,7 +79,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
     if "host_id" in completed:
         origin_thread["hostId"] = completed["host_id"]
     key = hashlib.sha256(f"{root}\n{completed['task_id']}".encode()).hexdigest()
-    fingerprint = hashlib.sha256(json.dumps({"outcome": outcome, "resource_audit": resource_audit, "origin_thread": origin_thread, "project_index": index_handoff}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    fingerprint = hashlib.sha256(json.dumps({"outcome": outcome, "resource_audit": resource_audit, "origin_thread": origin_thread, "project_index": index_handoff, "explicit_user_request": True}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     identity = memory._project_identity(root)
     packet = {"status": "pending", "visible": False, "launch_key": key, "outcome_fingerprint": fingerprint,
               "purpose": "guidance_memory_and_resources" if resource_audit else "guidance_and_memory", "origin_task_id": completed["task_id"], "origin_thread": origin_thread,
@@ -83,7 +87,7 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
               "resource_audit": resource_audit, "memory_status": "pending", "resource_status": "pending" if resource_audit else "skipped", "memory_required": True, "consolidation_required": consolidation is not None, "maintenance_check_required": True,
               "index_required": True, "index_status": "pending", "project_index": index_handoff,
               "project_key": identity["key"], "project_owner": identity.get("owner") or root.name,
-              "create_thread": None}
+              "create_thread": None, "explicit_user_request": True, "conversation_policy": "explicit_user_request"}
     if previous is not None:
         if previous.get("launch_key") != key or previous.get("outcome_fingerprint") != fingerprint:
             raise ValueError("previous Ending belongs to a different outcome or project")
@@ -179,8 +183,8 @@ def prepare_launch(completed, *, project_root, memory_available, previous=None, 
 
 def acknowledge_launch(packet, app_ack, thread_readback=None):
     """An app creation receipt releases the parent; it never waits for Ending."""
-    if packet.get("status") != "pending":
-        raise ValueError("only a pending Ending can be acknowledged")
+    if packet.get("status") != "pending" or packet.get("explicit_user_request") is not True:
+        raise ValueError("only an explicitly user-requested pending Ending can be acknowledged")
     thread_id = app_ack.get("threadId")
     host_id = app_ack.get("hostId")
     if not isinstance(thread_id, str) or not thread_id or not isinstance(host_id, str) or not host_id:
@@ -367,6 +371,7 @@ def main():
     prepare.add_argument("--previous", type=Path)
     prepare.add_argument("--project-index", type=Path, help="Optional exact-project guidance handoff; residual inspection is always required")
     prepare.add_argument("--native-delete-available", action="store_true", help="Only after the creating service has a verified native deletion route")
+    prepare.add_argument("--explicit-user-request", action="store_true", help="Only for the user's explicit request to create this exact Ending and later delete it; task completion or Cache cleanup is not consent")
     prepare.add_argument("--skip-resource-audit", action="store_true", help="Use only when a resource audit is explicitly unnecessary")
     acknowledge = commands.add_parser("acknowledge")
     acknowledge.add_argument("--packet", type=Path, required=True)

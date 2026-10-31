@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "owners": [
+    {
+      "path": "Cache/temp-*",
+      "kind": "task",
+      "consumer": "Current task scratch, isolated verification and release candidates; requested review artifacts retained only while needed",
+      "cleanup": "Finish exact owned run immediately after consumption; idle task support expires after 72 hours and native checks"
+    },
+    {
+      "path": "Cache/remote-task-cache-registry",
+      "kind": "durable",
+      "consumer": "Legacy local Workflow control registry and live native lock domain; not remotely synchronized",
+      "cleanup": "Keep control state, prune consumed run records through Workflow; never delete as a task payload"
+    },
+    {
+      "path": "Cache/temp-task-cache-registry",
+      "kind": "durable",
+      "consumer": "Local Workflow control registry for fresh projects",
+      "cleanup": "Keep control state, prune consumed run records through Workflow; never delete as a task payload"
+    }
+  ]
+}

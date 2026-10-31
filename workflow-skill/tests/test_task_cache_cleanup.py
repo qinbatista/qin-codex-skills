@@ -32,6 +32,11 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.project = self.root / "project"
         self.project.mkdir()
         self.base = self.project / "Cache"
+        # Native Time Machine setup has dedicated policy tests. These isolated
+        # fixtures exercise cleanup, not the availability of a network backup.
+        exclusion = mock.patch.object(artifacts, "_ensure_cache_backup_exclusion")
+        exclusion.start()
+        self.addCleanup(exclusion.stop)
 
     def run_root(self, task="mine"):
         return artifacts.resolve_task_artifact_root(self.project, task, artifact_root=self.base, create=True)
@@ -137,6 +142,14 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertEqual(record["state"], "working")
         self.assertEqual(list(run.iterdir()), [])
 
+    def test_native_command_timeout_is_bounded_and_reports_owned_child(self):
+        started = time.monotonic()
+        with self.assertRaises(subprocess.TimeoutExpired) as caught:
+            cleanup._run_command([sys.executable, "-B", "-c", "import time; time.sleep(30)"], timeout=0.1)
+        self.assertLess(time.monotonic() - started, 3)
+        self.assertTrue(caught.exception.native_exit_confirmed)
+        self.assertIsInstance(caught.exception.native_pid, int)
+
     def test_allocator_automatically_cleans_finished_predecessor(self):
         previous = self.run_root()
         (previous / "disposable.bin").write_bytes(b"old")
@@ -200,7 +213,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         recent = self.run_root("foreign-recent")
         touched = self.run_root("foreign-heartbeat")
         (old / "payload").write_bytes(b"old")
-        later = time.time() + 90000
+        later = time.time() + cleanup.STALE_SECONDS + 100
         (recent / "deep").mkdir()
         (recent / "deep" / "new").write_bytes(b"new")
         os.utime(recent / "deep" / "new", (later, later))
@@ -214,12 +227,12 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
 
     def test_foreign_old_working_run_protects_original_live_pid_identity(self):
         run = self.run_root("foreign-producer")
-        with mock.patch.object(cleanup.time, "time", return_value=time.time() + 90000), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+        with mock.patch.object(cleanup.time, "time", return_value=time.time() + cleanup.STALE_SECONDS + 100), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             result = self.sweep()
         self.assertTrue(run.exists())
         self.assertIn("producer", result["results"][0]["reason"])
 
-    def test_retention_recovery_and_native_ledger_always_protected(self):
+    def test_recent_retention_recovery_and_native_ledger_are_protected(self):
         retained, recovery, ledger = self.run_root("retain"), self.run_root("recover"), self.run_root("ledger")
         cleanup.touch_run(self.project, "retain", retained, artifact_root=self.base, state="retained", reason="User is reviewing this exact exported fixture")
         cleanup.touch_run(self.project, "recover", recovery, artifact_root=self.base, state="recovery", reason="Retry still needs this exact failed-job input")
@@ -227,13 +240,13 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         with mock.patch.object(cleanup.time, "time", return_value=time.time() + 90000), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             result = self.sweep()
         self.assertTrue(all(path.exists() for path in (retained, recovery, ledger)), result)
-        self.assertTrue(any(item["action"] == "pending" for item in result["results"]))
+        self.assertTrue(all(item["action"] == "keep" for item in result["results"]), result)
         for protected in (retained, recovery):
             owner = json.loads(self.record_path(protected).read_text())["task_id"]
             with self.assertRaisesRegex(ValueError, "finish cannot erase"):
                 cleanup.checkpoint(self.project, owner, artifact_root=self.base, phase="finish", current_run=protected, apply=True)
 
-    def test_retention_requires_concrete_reason_and_due_review_does_not_delete(self):
+    def test_retention_requires_reason_and_expires_with_inactivity(self):
         run = self.run_root()
         for state in ("retained", "recovery"):
             for reason in (None, " ", "fresh task-owned disposable support allocation"):
@@ -243,10 +256,10 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertEqual(record["retention_review_at"], record["heartbeat"] + cleanup.STALE_SECONDS)
         current = self.sweep()
         self.assertEqual(current["results"][0]["action"], "keep")
-        with mock.patch.object(cleanup.time, "time", return_value=record["retention_review_at"] + 1):
+        with mock.patch.object(cleanup.time, "time", return_value=record["retention_review_at"] + 1), mock.patch.object(cleanup, "_process_identity", return_value="unverified"):
             due = self.sweep()
         self.assertEqual(due["results"][0]["action"], "pending")
-        self.assertIn("owner review required", due["results"][0]["reason"])
+        self.assertIn("process identity", due["results"][0]["reason"])
         self.assertTrue(run.exists())
         record.pop("retention_reason")
         record.pop("retention_review_at")
@@ -254,6 +267,79 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         legacy = self.sweep()
         self.assertEqual(legacy["results"][0]["action"], "pending")
         self.assertTrue(run.exists())
+
+    def test_72_hour_expiry_reclaims_stopped_retained_recovery_and_own_runs(self):
+        runs = [self.run_root(task) for task in ("review", "retry", "mine")]
+        for task, run, state in zip(("review", "retry", "mine"), runs, ("retained", "recovery", "working")):
+            (run / "payload").write_bytes(b"unused task support")
+            cleanup.touch_run(self.project, task, run, state=state, reason="Temporary review/retry of this task")
+        now = time.time()
+        with mock.patch.object(cleanup.time, "time", return_value=now + 2 * 86400), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            self.sweep()
+        self.assertTrue(all(run.exists() for run in runs))
+        with mock.patch.object(cleanup.time, "time", return_value=now + cleanup.STALE_SECONDS + 100), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            result = self.sweep()
+        self.assertTrue(all(not run.exists() and not self.record_path(run).exists() for run in runs), result)
+
+    def test_stale_retention_preserves_recent_descendants_and_live_consumers(self):
+        live, changed = self.run_root("live-review"), self.run_root("changed-review")
+        for task, run in (("live-review", live), ("changed-review", changed)):
+            cleanup.touch_run(self.project, task, run, state="retained", reason="Local debug review")
+        later = time.time() + cleanup.STALE_SECONDS + 100
+        (changed / "new").write_bytes(b"still used")
+        os.utime(changed / "new", (later, later))
+        with mock.patch.object(cleanup.time, "time", return_value=later), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": False, "reason": "active open files"}):
+            result = self.sweep()
+        self.assertTrue(live.exists() and changed.exists(), result)
+
+    @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX activity check")
+    def test_real_idle_recovery_expires_with_native_probes_and_current_run_protected(self):
+        run, current = self.run_root("stopped-retry"), self.run_root("mine")
+        (run / "retry-input.bin").write_bytes(b"consumed interrupted task")
+        record = cleanup.touch_run(self.project, "stopped-retry", run, state="recovery", reason="Temporary failed upload retry input")
+        producer = subprocess.Popen([sys.executable, "-B", "-c", "pass"], **hidden_process_options())
+        self.assertEqual(producer.wait(timeout=10), 0)
+        # A real exited child models the interrupted producer; time is advanced
+        # while filesystem, process, lsof and unlink operations stay native.
+        record["creator_pid"] = producer.pid
+        record["creator_identity"] = "exited producer"
+        cleanup._write(self.record_path(run), record)
+        with mock.patch.object(cleanup.time, "time", return_value=time.time() + cleanup.STALE_SECONDS + 100):
+            result = self.finish_when_native_readers_close(run, lambda: self.sweep(current_run=current))
+        self.assertFalse(run.exists(), result)
+        self.assertFalse(self.record_path(run).exists())
+        self.assertTrue(current.exists())
+
+    def test_local_registry_uses_temp_name_and_preserves_legacy_live_owner(self):
+        first = self.run_root()
+        registry = self.base / cleanup.REGISTRY
+        self.assertTrue(registry.is_dir())
+        old = self.base / cleanup.PREVIOUS_REGISTRY
+        registry.rename(old)
+        second = self.run_root("another")
+        self.assertFalse(registry.exists())
+        self.assertTrue((old / "runs" / (cleanup._key(first) + ".json")).is_file())
+        self.assertTrue((old / "runs" / (cleanup._key(second) + ".json")).is_file())
+        self.assertNotIn(str(old), {x["path"] for x in cleanup.scan(self.project)["unclassified"]})
+        with self.assertRaisesRegex(ValueError, "not disposable"):
+            cleanup.register_run(self.project, "control", old, legacy_reason="must not adopt control state", state="complete")
+
+    def test_invalid_heartbeat_never_supplies_inactivity_evidence(self):
+        run = self.run_root()
+        original = cleanup._read(self.record_path(run))
+        for value in (float("nan"), float("inf"), True, "old"):
+            cleanup._write(self.record_path(run), {**original, "heartbeat": value})
+            result = self.sweep()
+            self.assertTrue(run.exists(), result)
+            self.assertEqual(result["results"][0]["action"], "pending")
+            self.assertIn("inactivity", result["results"][0]["reason"])
+
+    def test_registration_and_retention_surface_current_index_failure(self):
+        with mock.patch.object(cleanup, "_refresh_cache_index", return_value={"status": "pending", "reason": "owner conflict"}):
+            run = self.run_root()
+            record = cleanup.touch_run(self.project, "mine", run, state="retained", reason="Current local debug")
+        self.assertEqual(record["cache_index"]["status"], "pending")
+        self.assertNotIn("cache_index", cleanup._read(self.record_path(run)))
 
     def test_unknown_legacy_is_never_deleted_then_exact_audited_adoption_cleans(self):
         legacy = self.project / "Cache" / "old-generated"
@@ -711,14 +797,12 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         run = self.run_root()
         outside = self.root / "other-mount"
         warning = f"lsof: WARNING: can't stat() smbfs file system {outside}\n      Output information may be incomplete.\n      assuming \"dev=36000040\" from mount table\n"
-        inventory = subprocess.CompletedProcess([], 0, f"disk on / (apfs, local)\nnetwork on {outside} (smbfs, nobrowse)\n", "")
+        inventory = {"/": ("apfs", {"local"}), str(outside): ("smbfs", set())}
         def native(arguments, **kwargs):
             if Path(arguments[0]).name == "lsof":
                 return subprocess.CompletedProcess(arguments, 1, "", warning)
-            if Path(arguments[0]).name == "mount":
-                return inventory
             return subprocess.CompletedProcess(arguments, 0, "", "")
-        with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native):
+        with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native), mock.patch.object(cleanup, "_macos_mounts", return_value=inventory):
             clear = cleanup.probe_activity(run)
             self.assertTrue(clear["safe"], clear)
             self.assertEqual(clear["scope_warnings"], [warning.rstrip()])
@@ -729,9 +813,18 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
                     self.assertTrue(result["pending"], result)
             # Target/child mounts must fail even when present in the native table.
             for location in (run, run / "nested-mount"):
-                inventory.stdout = f"disk on / (apfs, local)\nnetwork on {location} (smbfs, nobrowse)\n"
+                inventory.clear()
+                inventory.update({"/": ("apfs", {"local"}), str(location): ("smbfs", set())})
                 warning = f"lsof: WARNING: can't stat() smbfs file system {location}\n      Output information may be incomplete.\n"
                 self.assertFalse(cleanup.probe_activity(run)["safe"])
+
+    @unittest.skipUnless(sys.platform == "darwin", "native Darwin mount inventory")
+    def test_real_mount_inventory_does_not_launch_blocking_mount_command(self):
+        with mock.patch.object(cleanup, "_run_command", side_effect=AssertionError("must read local native mount table")):
+            inventory = cleanup._macos_mounts()
+        self.assertIsInstance(inventory, dict)
+        owner = max((p for p in inventory if self.project.is_relative_to(p)), key=len)
+        self.assertIn("local", inventory[owner][1])
 
     def test_cli_scan_reads_actual_registry(self):
         run = self.run_root()

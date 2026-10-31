@@ -4,7 +4,7 @@ Start at [SKILL.md](../../../../project-memory-skill/SKILL.md) and [memory/Endin
 
 For this repository, recall uses `obsidian_vault_setup.py --existing-only`; missing memory is a nonblocking skip, never permission for external directory creation. The setup and CLI targets enforce the no-create path; its real CLI regression checks parent absence.
 
-Keep durable memory solely in the verified vault and exact owner. A hash or source readback is not runtime proof. The parent ends after acknowledged Ending creation; Ending owns its recovery and removal and must never bring cleanup back to the parent. Guidance data is separate from memory payloads.
+Keep durable memory solely in the verified vault and exact owner. A hash or source readback is not runtime proof. Close memory/resources inline. Codex session lifecycle stays manual; the launch helper defaults to inline_required even with a native deletion route. Legacy native conversation utilities require explicit user authorization, not ordinary task completion. Guidance data is separate from memory payloads.
 
 Recall follows project → task → underlying logic. `project_knowledge.py logic` traverses explicit `applies-logic` links to shared `logic.*` principles and bounded case pointers. It never imports foreign implementation facts; selected references retain exact owners, applicability, differences and dated proof. This uses the existing relation/index store, not keyword-based automatic generalization.
 

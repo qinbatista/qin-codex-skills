@@ -1,0 +1,7 @@
+current.json
+*.pending
+
+# managed-cache-current-start
+current.json
+*.pending
+# managed-cache-current-end

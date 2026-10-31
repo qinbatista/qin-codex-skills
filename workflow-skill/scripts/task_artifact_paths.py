@@ -74,9 +74,37 @@ def verify_cache_git(project_root: str | Path, path: str | Path) -> None:
         raise ValueError("project Cache must be ignored and contain no tracked files")
 
 
+def _native_sticky_excluded(cache: Path) -> bool:
+    """Read the native sticky exclusion marker without consulting backup mounts."""
+    if sys.platform != "darwin":
+        return False
+    executable = shutil.which("xattr")
+    if executable is None:
+        return False
+    original = cache.lstat()
+    for ancestor in (cache, *cache.parents):
+        _check_ancestors(ancestor)
+        before = ancestor.lstat()
+        result = task_cache_cleanup._run_command([executable, "-px", "com.apple.metadata:com_apple_backup_excludeItem", str(ancestor)], timeout=3)
+        after, target = ancestor.lstat(), cache.lstat()
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino) or (target.st_dev, target.st_ino) != (original.st_dev, original.st_ino):
+            raise ValueError("native exclusion directory identity changed")
+        if result.returncode == 0 and not result.stderr.strip():
+            try:
+                marker = plistlib.loads(bytes.fromhex(result.stdout))
+            except (ValueError, plistlib.InvalidFileException, ExpatError):
+                return False
+            if marker == "com.apple.backupd":
+                return True
+    return False
+
+
 def _ensure_cache_backup_exclusion(cache: Path) -> None:
     """Verify macOS Cache exclusion before task payload or registry writes."""
     if sys.platform != "darwin":
+        return
+    _check_ancestors(cache)
+    if _native_sticky_excluded(cache):
         return
     executable = shutil.which("tmutil")
     if executable is None:

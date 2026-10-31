@@ -19,3 +19,9 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Versioned Cache management rules; current.json remains ignored by its owner.
+!.agents/skills/ai-index/cache/
+!.agents/skills/ai-index/cache/README.md
+!.agents/skills/ai-index/cache/owners.json
+!.agents/skills/ai-index/cache/.gitignore

@@ -158,7 +158,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             excluded = subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(cache), "IsExcluded": 1}]), b"")
             added = subprocess.CompletedProcess([], 0, b"", b"")
             for observations in ([excluded], [included, added, excluded]):
-                with self.subTest(native_calls=len(observations)), mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=observations) as run:
+                with self.subTest(native_calls=len(observations)), mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS, "_native_sticky_excluded", return_value=False), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=observations) as run:
                     ARTIFACTS._ensure_cache_backup_exclusion(cache)
                     commands = [call.args[0][1:] for call in run.call_args_list]
                     expected = [["isexcluded", "-X", str(cache)]]
@@ -185,10 +185,10 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 "launch": OSError("native launch denied"),
             }
             for reason, observations in failures.items():
-                with self.subTest(reason=reason), mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=observations):
+                with self.subTest(reason=reason), mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS, "_native_sticky_excluded", return_value=False), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=observations):
                     with self.assertRaisesRegex(ValueError, "Time Machine exclusion could not be verified"):
                         ARTIFACTS._ensure_cache_backup_exclusion(cache)
-            with mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value=None), mock.patch.object(ARTIFACTS.subprocess, "run") as run:
+            with mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS, "_native_sticky_excluded", return_value=False), mock.patch.object(ARTIFACTS.shutil, "which", return_value=None), mock.patch.object(ARTIFACTS.subprocess, "run") as run:
                 with self.assertRaisesRegex(ValueError, "tmutil was not found"):
                     ARTIFACTS._ensure_cache_backup_exclusion(cache)
                 run.assert_not_called()
@@ -198,7 +198,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                 cache.mkdir()
                 return subprocess.CompletedProcess([], 0, plistlib.dumps([{"Path": str(cache), "IsExcluded": 1}]), b"")
 
-            with mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=replace_cache):
+            with mock.patch.object(ARTIFACTS.sys, "platform", "darwin"), mock.patch.object(ARTIFACTS, "_native_sticky_excluded", return_value=False), mock.patch.object(ARTIFACTS.shutil, "which", return_value="native-tmutil"), mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=replace_cache):
                 with self.assertRaisesRegex(ValueError, "unchanged Cache"):
                     ARTIFACTS._ensure_cache_backup_exclusion(cache)
 
@@ -209,6 +209,16 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
                     ARTIFACTS.resolve_task_artifact_root(project, "blocked-before-payload", create=True)
                 checkpoint.assert_not_called()
                 self.assertEqual(list((project / "Cache").iterdir()), [])
+
+    @unittest.skipUnless(sys.platform == "darwin" and shutil.which("xattr"), "Native sticky metadata requires macOS xattr")
+    def test_native_sticky_ancestor_avoids_unrelated_backup_mount_queries(self):
+        with external_fixture() as fixture:
+            self.assertTrue(ARTIFACTS._native_sticky_excluded(fixture))
+            with mock.patch.object(ARTIFACTS.subprocess, "run", side_effect=AssertionError("sticky metadata should not query tmutil")):
+                ARTIFACTS._ensure_cache_backup_exclusion(fixture)
+            malformed = subprocess.CompletedProcess([], 0, "00 01 02", "")
+            with mock.patch.object(ARTIFACTS.task_cache_cleanup, "_run_command", return_value=malformed):
+                self.assertFalse(ARTIFACTS._native_sticky_excluded(fixture))
 
     @unittest.skipUnless(sys.platform == "darwin" and shutil.which("tmutil"), "Native Time Machine acceptance requires macOS tmutil")
     def test_native_time_machine_exclusion_survives_cache_recreation(self):
@@ -411,7 +421,7 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             "never authorizes indefinite temp retention",
             "bounds-check every deletion target",
             "no unknown files remain",
-            "never controls, interrupts, archives, or deletes another",
+            "never controls, interrupts, archives, or deletes any",
         ):
             self.assertIn(required, text)
         self.assertNotIn("`Cache/temp-<task>/` scratch", text)

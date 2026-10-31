@@ -19,6 +19,8 @@ Use [the project AI-index function](references/project-ai-index.md) only for the
 
 For every local code edit, including tests, use [code navigation](references/project-ai-index.md#code-navigation): module, exact file, reviewed method/key-line target, scoped memory and only necessary relationships. Maintain touched stable targets against current source; return bounded excerpts on selection and keep implementation history in Project Memory. Code owns cohesive method boundaries and deliberate extraction.
 
+For the current editable project, read its AI-index `cache/` owner rules and run `project_ai_index.py cache --project-root ROOT --apply` at startup and finish, after native cleanup. This replaces a bounded Git-ignored `cache/current.json`; stable `cache/README.md` and `owners.json` explain durable, task and remote consumers. `inspect`/`check` only report stale state and remain read-only. Reference and explicit read-only tasks do not write. Removed payloads leave the current inventory; no task history or memory is stored there.
+
 ### Authoring rules
 
 Keep Skills focused on stable rules, decision criteria, essential workflow, and acceptance. On every authorized creation or revision, seek the simplest complete route: reuse existing capabilities, remove unnecessary steps, merge duplicate rules, and retire obsolete instructions. Keep optional detail in linked references. Preserve required behavior, evidence, permissions, and failure handling; fewer words or steps alone do not prove an improvement.

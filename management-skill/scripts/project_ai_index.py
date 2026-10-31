@@ -3,6 +3,7 @@
 
 import argparse
 import base64
+import fnmatch
 import hashlib
 import json
 import os
@@ -16,6 +17,7 @@ from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
 from task_artifact_paths import project_artifact_directory, validate_task_directory
+import task_cache_cleanup
 
 
 INDEX_DIRECTORY = ".agents/skills/ai-index"
@@ -31,6 +33,46 @@ MAX_DISCOVERY_DEPTH = 6
 MAX_SOURCE_BYTES = 1048576
 MAX_EXCERPT_BYTES = 16384
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+MAX_CACHE_ROWS = 512
+MAX_CACHE_RECORDS = 4096
+MAX_CACHE_RECORD_BYTES = 65536
+MAX_CACHE_CURRENT_BYTES = 2097152
+CACHE_IGNORE_BLOCK = "# managed-cache-current-start\ncurrent.json\n*.pending\n# managed-cache-current-end\n"
+CACHE_README = """# Cache ownership and current state
+
+Read this folder at task start/resume and finish. The project owns its cache
+policy here; `current.json` is a bounded replacement of current operational
+state, never a memory log. Refresh it with Management's
+`project_ai_index.py cache --project-root ROOT --apply` after allocation,
+retention changes and deletion. Missing paths disappear on refresh.
+
+- Task support belongs to a fresh `Cache/temp-*` run. Release unused exports,
+  builds, copied projects and other intermediates immediately when the user's
+  actual objective and necessary output handoff finish. A verified upload can
+  finish the local package's purpose without waiting for unrelated backend work.
+- Local debugging keeps only its actual live inputs; delivered videos or other
+  requested results may remain while disposable test projects are released.
+  Failed, stopped or abandoned task support is due for cleanup after 72 hours
+  without heartbeat or descendant changes, after fresh native consumer checks.
+  Active resources, real recovery dependencies and canonical originals remain
+  protected; age alone does not delete them.
+- Canonical assets, configuration and service/runtime data keep their native
+  owners. Describe project-specific owners in this README or optional
+  `owners.json`; cleanup must use the actual native owner.
+- `remote-*` requires a real long-term consumer and synchronization route.
+  Offline task cases, reports and local-only scratch do not earn that name.
+  Verify updates/remote readback through the synchronization owner; do not sweep
+  a remote directory by prefix. Unproven mappings are review candidates.
+- Codex sessions, databases and managed worktrees are user-managed and excluded.
+
+The Workflow registry at `Cache/temp-task-cache-registry` owns exact task
+identity, heartbeat, retention and deletion proofs. The ignored `current.json`
+summarizes that registry and immediate Cache children without traversing remote
+payloads. An inventory row is not permission to delete. Keep current state
+ignored in Git; stable owner rules remain versioned. Do not add one file per run.
+An existing `remote-task-cache-registry` is local control compatibility, not a
+remote resource or disposable payload; preserve its active native owner.
+"""
 
 
 def reject_links(path):
@@ -311,6 +353,174 @@ def reference_project_result(root, project_scope):
     return None
 
 
+def cache_json(path):
+    """Read bounded operational control data without following links."""
+    reject_links(path)
+    if not path.is_file() or path.stat().st_size > MAX_CACHE_RECORD_BYTES:
+        raise ValueError(f"cache control must be a bounded regular file: {path.name}")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"cache control must be an object: {path.name}")
+    return value
+
+
+def collect_cache_inventory(root):
+    """Summarize current task identities and shallow owners, never remote payloads."""
+    cache = contained_path(root, "Cache")
+    folder = contained_path(root, f"{index_directory(root)}/cache")
+    policies = []
+    owners = folder / "owners.json"
+    if owners.exists():
+        policy = cache_json(owners)
+        if policy.get("schema_version") != 1 or not isinstance(policy.get("owners"), list) or len(policy["owners"]) > MAX_CACHE_ROWS:
+            raise ValueError("cache owners.json requires schema_version 1 and a bounded owners list")
+        for owner in policy["owners"]:
+            if not isinstance(owner, dict) or owner.get("kind") not in {"task", "durable", "remote"}:
+                raise ValueError("cache owner requires task, durable or remote kind")
+            path = relative_path(owner.get("path"))
+            if len(path.parts) != 2 or path.parts[0] != "Cache" or ("*" in str(path) and str(path) not in {"Cache/temp-*", "Cache/remote-*"}):
+                raise ValueError("cache owner path must identify one immediate Cache child or temp/remote pattern")
+            policies.append(owner)
+    rows, issues, record_count = {}, [], 0
+    registry = task_cache_cleanup._registry(cache, root)
+    records = registry / "runs"
+    reject_links(records)
+    if records.is_dir():
+        for entry in sorted(records.iterdir()):
+            if entry.suffix != ".json":
+                continue
+            record_count += 1
+            if record_count > MAX_CACHE_RECORDS:
+                issues.append("registry exceeds bounded record inspection; native registry remains authoritative")
+                break
+            try:
+                record = cache_json(entry)
+                path = Path(record.get("path", ""))
+                if not path.is_absolute() or not path.is_relative_to(cache) or record.get("project_root") != str(root):
+                    raise ValueError("registry owner is outside this project Cache")
+                reject_links(path)
+                if not path.exists():
+                    continue
+                relative = path.relative_to(root).as_posix()
+                observed = path.stat()
+                row = {"path": relative, "kind": "task", "state": str(record.get("state", "unknown"))[:32], "task_id": str(record.get("task_id", ""))[:200], "activity": "requires_native_consumer_check", "modified_at": observed.st_mtime}
+                for key in ("heartbeat", "retention_review_at"):
+                    if isinstance(record.get(key), (int, float)):
+                        row[key] = record[key]
+                for key in ("retention_reason", "disposable_reason"):
+                    if isinstance(record.get(key), str):
+                        row[key] = record[key][:500]
+                rows[relative] = row
+            except (OSError, ValueError, TypeError) as error:
+                if len(issues) < 32:
+                    issues.append(f"{entry.name}: {error}")
+    child_count = 0
+    if cache.exists():
+        if not cache.is_dir():
+            raise ValueError("project Cache must be a directory")
+        for entry in sorted(cache.iterdir()):
+            if entry == registry:
+                continue
+            child_count += 1
+            relative = entry.relative_to(root).as_posix()
+            if entry.is_symlink():
+                rows[relative] = {"path": relative, "kind": "protected_link", "activity": "not_inspected"}
+                continue
+            observed = entry.lstat()
+            row = rows.setdefault(relative, {"path": relative, "kind": "unclassified", "state": "unregistered", "activity": "requires_owner_review", "modified_at": observed.st_mtime})
+            matching = [policy for policy in policies if fnmatch.fnmatchcase(relative, policy["path"])]
+            matching.sort(key=lambda policy: "*" in policy["path"])
+            policy = matching[0] if matching else None
+            if policy:
+                consumer = str(policy.get("consumer", "")).strip()
+                sync = str(policy.get("sync", "")).strip()
+                if policy["kind"] == "remote":
+                    row["kind"] = "verified_remote" if consumer and sync else "remote_requires_review"
+                elif policy["kind"] == "durable":
+                    row["kind"] = "durable" if consumer else "unclassified"
+                else:
+                    row["kind"] = "task"
+                for key in ("consumer", "sync", "cleanup"):
+                    if isinstance(policy.get(key), str):
+                        row[key] = policy[key][:500]
+            elif entry.name.startswith("remote-"):
+                row["kind"] = "remote_requires_review"
+            elif entry.name.startswith("temp-"):
+                row["kind"] = "task"
+    ordered = [rows[key] for key in sorted(rows)]
+    kinds = {kind: sum(row["kind"] == kind for row in ordered) for kind in sorted({row["kind"] for row in ordered})}
+    states = {state: sum(row.get("state", "unknown") == state for row in ordered) for state in sorted({row.get("state", "unknown") for row in ordered})}
+    return {"schema_version": 1, "registry": registry.relative_to(root).as_posix(), "scope": "immediate Cache children and registered task identities; no payload traversal", "cleanup_after_idle_seconds": 259200, "codex_sessions": "user_managed_excluded", "child_count": child_count, "record_count": record_count, "entry_count": len(ordered), "counts_by_kind": kinds, "counts_by_state": states, "entries": ordered[:MAX_CACHE_ROWS], "omitted_count": max(0, len(ordered) - MAX_CACHE_ROWS), "issues": issues}
+
+
+def write_cache_control(target, content, expected):
+    """Replace one current control file only if its inspected preimage still matches."""
+    reject_links(target)
+    temporary = target.with_name(target.name + ".pending")
+    identity = None
+    try:
+        with temporary.open("xb") as stream:
+            observed = os.fstat(stream.fileno())
+            identity = (observed.st_dev, observed.st_ino)
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        reject_links(target)
+        current = target.read_bytes() if target.exists() else None
+        if current != expected:
+            raise ValueError(f"cache index changed during refresh: {target.name}")
+        temporary.replace(target)
+    finally:
+        if identity is not None and temporary.exists():
+            observed = temporary.lstat()
+            if (observed.st_dev, observed.st_ino) == identity:
+                temporary.unlink()
+
+
+def sync_cache_index(root, *, apply=False, project_scope="current"):
+    """Refresh one existing current project's bounded Cache operations index."""
+    root = project_root(root)
+    skipped = reference_project_result(root, project_scope)
+    if skipped is not None:
+        return skipped
+    if bootstrap_state(root):
+        return {"status": "approval_required", "project_root": str(root), "read_scope": "index_presence_only", "required_action": "ask_user", "blocks_project_work": True}
+    folder = contained_path(root, f"{index_directory(root)}/cache")
+    inventory = collect_cache_inventory(root)
+    current = folder / "current.json"
+    reject_links(current)
+    if current.exists() and (not current.is_file() or current.stat().st_size > MAX_CACHE_CURRENT_BYTES):
+        raise ValueError("cache current inventory must be a bounded regular file")
+    previous = current.read_bytes() if current.is_file() else None
+    content = (json.dumps(inventory, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    stale = previous != content
+    readme = folder / "README.md"
+    ignore = folder / ".gitignore"
+    for target in (readme, ignore):
+        reject_links(target)
+    ignored = ignore.read_bytes() if ignore.is_file() else b""
+    ignore_text = ignored.decode("utf-8")
+    unowned_ignore = re.sub(r"(?m)^# managed-cache-current-start\n.*?^# managed-cache-current-end\n?", "", ignore_text, flags=re.DOTALL)
+    updated_ignore = (unowned_ignore.rstrip("\n") + "\n\n" if unowned_ignore.strip() else "") + CACHE_IGNORE_BLOCK
+    ignore_stale = ignore_text != updated_ignore
+    changed = []
+    if apply:
+        folder.mkdir(parents=True, exist_ok=True)
+        if ignore_stale:
+            write_cache_control(ignore, updated_ignore.encode("utf-8"), ignored if ignore.exists() else None)
+            changed.append(ignore.relative_to(root).as_posix())
+        if not readme.exists():
+            write_cache_control(readme, CACHE_README.encode("utf-8"), None)
+            changed.append(readme.relative_to(root).as_posix())
+        if stale:
+            write_cache_control(current, content, previous)
+            changed.append(current.relative_to(root).as_posix())
+    result = {"status": "complete" if changed else "unchanged" if apply else "needs_review" if stale or not readme.exists() or ignore_stale else "ready", "project_root": str(root), "cache_index": folder.relative_to(root).as_posix(), "current_path": current.relative_to(root).as_posix(), "stale": stale and not apply, "entry_count": inventory["entry_count"], "omitted_count": inventory["omitted_count"], "issues": inventory["issues"], "changed": changed, "payloads_deleted": False}
+    if not apply and result["status"] == "needs_review":
+        result["required_action"] = "refresh_cache_index"
+    return result
+
+
 def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved=False, project_scope="current"):
     root = project_root(root)
     skipped = reference_project_result(root, project_scope)
@@ -346,6 +556,11 @@ def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved
             result["status"] = "needs_review"
     if result["issues"] and result["status"] == "ready":
         result["status"] = "needs_review"
+    if state is None:
+        try:
+            result["cache_management"] = sync_cache_index(root)
+        except (OSError, ValueError, TypeError) as error:
+            result["cache_management"] = {"status": "pending", "reason": str(error), "required_action": "review_cache_owner", "payloads_deleted": False}
     return result
 
 
@@ -533,7 +748,7 @@ def apply_plan(root, plan, work_dir, *, project_scope="current"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("inspect", "check", "route", "apply"):
+    for name in ("inspect", "check", "route", "apply", "cache"):
         command = commands.add_parser(name)
         command.add_argument("--project-root", required=True, type=Path)
         command.add_argument("--project-scope", choices=("current", "reference"), default="current", help="Current task project (default), or another project consulted only as a reference; reference scope skips index prompts, reads and writes")
@@ -549,6 +764,8 @@ def main():
         elif name == "apply":
             command.add_argument("--plan", required=True, type=Path)
             command.add_argument("--work-dir", required=True, type=Path)
+        elif name == "cache":
+            command.add_argument("--apply", action="store_true", help="Refresh the bounded current Cache inventory; never deletes cache payloads")
     args = parser.parse_args()
     try:
         root = project_root(args.project_root)
@@ -567,6 +784,8 @@ def main():
                 validate_task_directory(args.plan.parent, root)
                 reject_links(args.plan)
                 result = apply_plan(root, json.loads(args.plan.read_text(encoding="utf-8")), args.work_dir)
+            case "cache":
+                result = sync_cache_index(root, apply=args.apply)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if result["status"] in {"ready", "complete", "unchanged"} else 2
     except (OSError, ValueError, TypeError) as error:
