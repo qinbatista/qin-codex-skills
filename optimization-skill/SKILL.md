@@ -24,6 +24,8 @@ Read relevant project memory on every task through [project memory](../project-m
 
 For a Skill-root review, the optional `scripts/skill_optimizer.py scan <skills-root>` lists visible Skills; `audit <skill-path>` checks references and duplicate instructions. Use these when they save work, not as required pre-reading ceremony.
 
+For `verify`, Python syntax is checked in memory. macOS AppleScript compilation requires `TMPDIR`, `TEMP` or `TMP` to point inside the current project's `Cache/temp-*` run; without that owner, the check reports an error instead of writing to system temporary storage.
+
 ## Verification and measurement
 
 Check output equivalence or the intentional behavior difference, including ordering, side effects, error handling, and cancellation. Parallel changes also preserve deterministic collection and isolate writes; compare critical-path elapsed time, not summed worker durations.

@@ -359,6 +359,22 @@
           "module": "verify",
           "reason": "Measured improvement and behavior preservation need real comparable evidence."
         }
+      ],
+      "code_targets": [
+        {
+          "id": "validate-script-cache",
+          "file": "optimization-skill/scripts/skill_optimizer.py",
+          "symbol": "validate_script",
+          "anchor": "def validate_script(script_path: Path) -> list[str]:",
+          "summary": "Check Python in memory and bind native compiler output to the project task Cache."
+        },
+        {
+          "id": "task-temporary-root",
+          "file": "optimization-skill/scripts/skill_optimizer.py",
+          "symbol": "_task_temporary_root",
+          "anchor": "def _task_temporary_root() -> Path | None:",
+          "summary": "Admit only an existing link-free project Cache task temporary directory from the environment."
+        }
       ]
     },
     {

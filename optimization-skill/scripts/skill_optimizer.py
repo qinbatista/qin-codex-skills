@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import py_compile
+import os
 import re
 import shutil
 import subprocess
@@ -362,13 +362,26 @@ def audit_skill(skill_dir: Path) -> AuditResult:
     )
 
 
+def _task_temporary_root() -> Path | None:
+    for _key in ("TMPDIR", "TEMP", "TMP"):
+        _value = os.environ.get(_key)
+        if not _value:
+            continue
+        _path = Path(_value).expanduser().absolute()
+        if not _path.is_dir() or any(_part.is_symlink() for _part in (_path, *_path.parents)):
+            continue
+        if any(_parent.name.startswith("temp-") and _parent.parent.name == "Cache" for _parent in (_path, *_path.parents)):
+            return _path
+    return None
+
+
 def validate_script(script_path: Path) -> list[str]:
     _errors = []
     if script_path.suffix == ".py":
         try:
-            py_compile.compile(str(script_path), doraise=True)
-        except py_compile.PyCompileError as _error:
-            _errors.append(f"Python syntax check failed for {script_path}: {_error.msg}")
+            compile(script_path.read_bytes(), str(script_path), "exec", dont_inherit=True)
+        except (SyntaxError, ValueError) as _error:
+            _errors.append(f"Python syntax check failed for {script_path}: {_error}")
     elif script_path.suffix == ".sh":
         _shell = shutil.which("bash")
         if not _shell:
@@ -383,7 +396,11 @@ def validate_script(script_path: Path) -> list[str]:
             if not _compiler:
                 _errors.append("AppleScript syntax check unavailable: osacompile is not on PATH.")
                 return _errors
-            with tempfile.TemporaryDirectory() as _temporary_directory:
+            _temporary_root = _task_temporary_root()
+            if _temporary_root is None:
+                _errors.append("AppleScript syntax check requires TMPDIR, TEMP or TMP inside the current project Cache task run.")
+                return _errors
+            with tempfile.TemporaryDirectory(dir=_temporary_root) as _temporary_directory:
                 _output_path = Path(_temporary_directory) / "skill_optimizer_compile.scpt"
                 _result = subprocess.run([_compiler, "-o", str(_output_path), str(script_path)], capture_output=True, text=True, **hidden_process_options())
                 if _result.returncode != 0:
