@@ -676,9 +676,16 @@ def _lsof_preflight(ps, *, deadline=None):
     blocked = []
     for line in observed.stdout.splitlines():
         fields = line.strip().split(None, 2)
-        if len(fields) != 3 or not fields[0].isdigit() or not re.fullmatch(r"[A-Z][A-Za-z+<>-]*", fields[1]):
+        if len(fields) != 3 or not fields[0].isdigit():
             return {**pending, "reason": "lsof preflight process inventory malformed"}
-        if fields[1].startswith("U") and Path(fields[2]).name == "lsof":
+        observer = Path(fields[2]).name in {"lsof", "(lsof)"}
+        # This preflight only classifies lsof observers. Darwin may show ? or
+        # ?E for unrelated exiting processes; the native handle probe follows.
+        if not observer:
+            continue
+        if not re.fullmatch(r"[A-Z][A-Za-z+<>-]*", fields[1]):
+            return {**pending, "reason": "lsof preflight observer state unverified", "native_pids": [fields[0]]}
+        if fields[1].startswith("U"):
             blocked.append(fields[0])
     if blocked:
         return {**pending, "reason": "lsof remains in an uninterruptible kernel wait; new observer launch suppressed",

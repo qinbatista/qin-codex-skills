@@ -821,13 +821,13 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
 
     def test_lsof_preflight_preserves_unknown_state_and_matches_exact_observers(self):
         with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup, "_run_command") as native:
-            native.return_value = subprocess.CompletedProcess([], 0, "1 Ss /sbin/launchd\n2 S /usr/sbin/lsof\n3 U /tools/not-lsof\n", "")
+            native.return_value = subprocess.CompletedProcess([], 0, "1 Ss /sbin/launchd\n2 S /usr/sbin/lsof\n3 U /tools/not-lsof\n9 ?E (dotnet)\n10 ? (id)\n", "")
             self.assertIsNone(cleanup._lsof_preflight("ps"))
-            native.return_value = subprocess.CompletedProcess([], 0, "4 U /usr/sbin/lsof\n5 U+ lsof\n", "")
+            native.return_value = subprocess.CompletedProcess([], 0, "4 U /usr/sbin/lsof\n5 U+ lsof\n6 U (lsof)\n", "")
             result = cleanup._lsof_preflight("ps")
             self.assertTrue(result["pending"])
-            self.assertEqual(result["native_pids"], ["4", "5"])
-            for code, stdout, stderr in [(1, "", ""), (0, "", ""), (0, "bad format", ""), (0, "4 U lsof\n", "warning")]:
+            self.assertEqual(result["native_pids"], ["4", "5", "6"])
+            for code, stdout, stderr in [(1, "", ""), (0, "", ""), (0, "bad format", ""), (0, "4 ?E lsof\n", ""), (0, "4 ?E (lsof)\n", ""), (0, "4 U lsof\n", "warning")]:
                 native.return_value = subprocess.CompletedProcess([], code, stdout, stderr)
                 self.assertTrue(cleanup._lsof_preflight("ps")["pending"])
         with mock.patch.object(cleanup.sys, "platform", "linux"), mock.patch.object(cleanup, "_run_command") as native:

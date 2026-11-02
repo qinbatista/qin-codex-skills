@@ -80,14 +80,14 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_lsof_preflight",
           "anchor": "def _lsof_preflight(ps, *, deadline=None):",
-          "summary": "Use bounded Darwin process metadata to report kernel-stuck lsof PIDs before starting another observer; unavailable inventory remains pending."
+          "summary": "Use bounded Darwin metadata to suppress kernel-stuck lsof; ignore unrelated process states and keep unknown observer states pending."
         },
         {
           "id": "cache-lsof-preflight-test",
           "file": "workflow-skill/tests/test_task_cache_cleanup.py",
           "symbol": "TaskCacheCleanupTests.test_real_lsof_preflight_uses_only_process_metadata",
           "anchor": "def test_real_lsof_preflight_uses_only_process_metadata(self):",
-          "summary": "Exercise the real Darwin preflight without launching lsof; companion cases verify exact executable/state matching, unknown-state protection and launch suppression."
+          "summary": "Exercise real native metadata, exact observer matching and launch suppression; unrelated Darwin ?/?E states do not block cleanup and unknown lsof states remain pending."
         },
         {
           "id": "cache-checkpoint-record",
