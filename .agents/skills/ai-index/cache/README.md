@@ -9,12 +9,12 @@ The project owns its cache policy here; `current.json` is a bounded replacement
 of current operational state, never a memory log. Missing paths disappear on
 refresh; failed native checks keep exact items visibly pending.
 
+- Before implementation, plan deletion, final destinations and exact necessary retained files with consumers and ending conditions. No shared scratch pools, convenience backups or speculative review/reuse retention. Each verified and reported result triggers immediate delivery cleanup, even in the same chat.
 - Task support belongs to a fresh `Cache/temp-*` run. Release unused exports,
   builds, copied projects and other intermediates immediately when the user's
   actual objective and necessary output handoff finish. A verified upload can
   finish the local package's purpose without waiting for unrelated backend work.
-- Local debugging keeps only its actual live inputs; delivered videos or other
-  requested results may remain while disposable test projects are released.
+- Local debugging keeps only its actual live inputs; requested final results leave scratch through verified owner handoff. Retain only exact necessary active/recovery inputs or explicit user holds; remove unrelated files before retention.
   Failed, stopped or abandoned task support is due for cleanup after 72 hours
   without heartbeat or descendant changes, after fresh native consumer checks.
   Active resources, real recovery dependencies and canonical originals remain

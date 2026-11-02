@@ -45,7 +45,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "touch_run",
           "anchor": "def touch_run(project_root, task_id, run_root, *, artifact_root=None, state=\"working\", reason=None):",
-          "summary": "Update an exact owned run; retention requires a concrete need and next review.",
+          "summary": "Update exact owned run; retain only planned necessary files and reject extra scratch; verify final output hashes before completion.",
           "related": [
             {
               "module": "workflow",
@@ -94,7 +94,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_sweep_record",
           "anchor": "def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):",
-          "summary": "Expire idle registered working/recovery/review runs after 72 hours, preserve native and identity guards, resume only original deletion proofs."
+          "summary": "Clean completed units immediately; classify legacy reason-only retention, expire abandoned planned input runs after 72 idle hours and preserve exact native consumers."
         },
         {
           "id": "artifact-allocation",
@@ -164,7 +164,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "checkpoint",
           "anchor": "def checkpoint(project_root, task_id, *, artifact_root=None, phase=\"start\", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):",
-          "summary": "Prioritize explicit owners, report idempotent requested completion and support exact nested fixture closure."
+          "summary": "Prioritize explicit owners; delivery/finish close each exact unit immediately after verified reported results with idempotent absence readback."
         },
         {
           "id": "cache-crash-resume-test",
@@ -235,6 +235,34 @@
           "symbol": "_native_sticky_excluded",
           "anchor": "def _native_sticky_excluded(cache: Path) -> bool:",
           "summary": "Verify exact native sticky backup exclusion metadata on unchanged link-free owner or ancestor before using backupd queries."
+        },
+        {
+          "id": "cache-unit-plan",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "plan_run",
+          "anchor": "def plan_run(project_root, task_id, run_root, plan, *, artifact_root=None):",
+          "summary": "Bind per-unit delete-all scratch, final owner/hash destinations and exact necessary retained inputs before work."
+        },
+        {
+          "id": "cache-planned-delivery-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_planned_delivery_closes_each_same_chat_unit_with_native_readback",
+          "anchor": "def test_planned_delivery_closes_each_same_chat_unit_with_native_readback(self):",
+          "summary": "Verify real native deletion and final-file preservation while another unit in the same chat stays active."
+        },
+        {
+          "id": "cache-plan-rejection-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_plan_blocks_missing_handoff_and_undeclared_retention",
+          "anchor": "def test_plan_blocks_missing_handoff_and_undeclared_retention(self):",
+          "summary": "Reject changed handoff hashes, reason-only retention and unnecessary logs beside planned retry inputs."
+        },
+        {
+          "id": "cache-child-environment",
+          "file": "workflow-skill/scripts/task_artifact_paths.py",
+          "symbol": "task_artifact_environment",
+          "anchor": "def task_artifact_environment(",
+          "summary": "Bind exact child TMP/TEMP/TMPDIR and disable Python bytecode writes to source or installed helper folders."
         }
       ]
     },
@@ -670,6 +698,13 @@
           "symbol": "ProjectAIIndexTests.test_cache_inventory_rejects_policy_escape_and_never_follows_remote_payload",
           "anchor": "def test_cache_inventory_rejects_policy_escape_and_never_follows_remote_payload(self):",
           "summary": "Reject escaping owner paths and preserve direct-child-only remote inventories."
+        },
+        {
+          "id": "cache-child-import-test",
+          "file": "management-skill/tests/test_project_cache_artifact_policy.py",
+          "symbol": "ProjectCacheArtifactPolicyTests.test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache",
+          "anchor": "def test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache(self):",
+          "summary": "Exercise independent task directories, preserve canonical resources and verify a real child import creates no bytecode cache."
         }
       ]
     },

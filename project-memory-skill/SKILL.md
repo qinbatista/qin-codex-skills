@@ -41,7 +41,7 @@ Apply Management’s current-project index check before delivery. Reconcile esta
 
 Write useful established project facts only to the configured Obsidian vault, with source-bound verification and current-state readback. Consolidate touched scopes, preserving history and unrelated knowledge. Check due synthesis through the existing owner; unavailable memory stays pending and never blocks independent resource cleanup. Do not create a local pending queue, a memory file per task, or another chat to perform this work.
 
-Release completed disposable resources through their actual owners in the active task. Retain only the requested deliverable, live debugging inputs or minimum current recovery state. Package/upload and testing outcomes follow Workflow’s immediate consumption and 72-hour idle-task policy; current operational Cache information is an explicit bounded index exception, not project knowledge or a history log.
+Release completed disposable resources through their actual owners in the active task. Requested deliverables belong outside scratch. Retain only exact necessary active/recovery inputs or explicit user holds with consumers and end conditions under [Workflow’s cleanup plan](../workflow-skill/references/project-cache-artifact-policy.md#plan-before-producing-files). Each verified and reported unit result triggers immediate cleanup; 72 hours is only an abandoned-run fallback; current operational Cache information is an explicit bounded index exception, not project knowledge or a history log.
 
 ### Ending conversation cleanup
 

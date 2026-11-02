@@ -4,8 +4,8 @@
     {
       "path": "Cache/temp-*",
       "kind": "task",
-      "consumer": "Current task scratch, isolated verification and release candidates; requested review artifacts retained only while needed",
-      "cleanup": "Finish exact owned run immediately after consumption; idle task support expires after 72 hours and native checks"
+      "consumer": "Current task scratch, isolated verification and release candidates; exact necessary active/recovery inputs or explicit user holds only",
+      "cleanup": "Pre-work cleanup plan; delete each verified and reported unit immediately; 72 hours only for abandoned units and native checks"
     },
     {
       "path": "Cache/remote-task-cache-registry",

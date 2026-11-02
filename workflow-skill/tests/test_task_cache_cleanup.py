@@ -41,6 +41,17 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
     def run_root(self, task="mine"):
         return artifacts.resolve_task_artifact_root(self.project, task, artifact_root=self.base, create=True)
 
+    def retain_run(self, project, task, run, *, state, reason, artifact_root=None):
+        if state not in {"retained", "recovery"}:
+            return cleanup.touch_run(project, task, run, state=state, reason=reason, artifact_root=artifact_root)
+        if not any(run.iterdir()):
+            (run / "required-input.bin").write_bytes(b"explicit required fixture")
+        retained = [{"path": str(child.relative_to(run)), "kind": "recovery-input" if state == "recovery" else "user-hold",
+                     "consumer": "this exact fixture's test", "reason": reason, "until": "fixture assertion and native-consumer closure"}
+                    for child in run.iterdir()]
+        cleanup.plan_run(project, task, run, {"purpose": "native retention boundary", "delete": ["."], "outputs": [], "retain": retained, "trigger": "verified-result-reported"}, artifact_root=artifact_root)
+        return cleanup.touch_run(project, task, run, state=state, reason=reason, artifact_root=artifact_root)
+
     def record_path(self, path):
         return self.base / cleanup.REGISTRY / "runs" / (cleanup._key(path) + ".json")
 
@@ -198,6 +209,63 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertFalse(run.exists())
         self.assertFalse(self.record_path(run).exists())
 
+    def test_planned_delivery_closes_each_same_chat_unit_with_native_readback(self):
+        if not shutil.which("lsof") or not shutil.which("ps"):
+            self.skipTest("native probes unavailable")
+        first, second = self.run_root(), self.run_root()
+        self.assertEqual(cleanup._read(self.record_path(first))["cleanup_plan"]["delete"], ["."])
+        (first / "intermediate.bin").write_bytes(b"consumed scratch")
+        output = self.project / "results" / "accepted.bin"
+        output.parent.mkdir()
+        output.write_bytes(b"requested final bytes")
+        plan = {"purpose": "deliver accepted result", "delete": ["."], "retain": [], "trigger": "verified-result-reported",
+                "outputs": [{"path": str(output), "sha256": hashlib.sha256(output.read_bytes()).hexdigest()}]}
+        cleanup.plan_run(self.project, "mine", first, plan)
+        result = self.finish_when_native_readers_close(first, lambda: self.sweep(phase="delivery", current_run=first))
+        self.assertTrue(result["requested_complete"], result)
+        self.assertFalse(first.exists())
+        self.assertFalse(self.record_path(first).exists())
+        self.assertTrue(second.is_dir(), "later unit in the same chat has its own owner")
+        self.assertEqual(output.read_bytes(), b"requested final bytes")
+        self.assertTrue(self.sweep(phase="delivery", current_run=first)["requested_complete"])
+
+    def test_plan_blocks_missing_handoff_and_undeclared_retention(self):
+        run = self.run_root()
+        output = self.project / "final.bin"
+        output.write_bytes(b"changed final bytes")
+        plan = {"purpose": "verified handoff", "delete": ["."], "retain": [], "trigger": "verified-result-reported",
+                "outputs": [{"path": str(output), "sha256": "0" * 64}]}
+        cleanup.plan_run(self.project, "mine", run, plan)
+        with self.assertRaisesRegex(ValueError, "handoff hash"):
+            self.sweep(phase="delivery", current_run=run)
+        self.assertEqual(cleanup._read(self.record_path(run))["state"], "working")
+        with self.assertRaisesRegex(ValueError, "exact necessary files"):
+            cleanup.touch_run(self.project, "mine", run, state="retained", reason="May save steps on a future review")
+        (run / "needed.bin").write_bytes(b"actual retry input")
+        (run / "old.log").write_text("disposable log")
+        plan.update(outputs=[], retain=[{"path": "needed.bin", "kind": "recovery-input", "consumer": "pending exact upload", "reason": "only retry input", "until": "upload acknowledgement"}])
+        cleanup.plan_run(self.project, "mine", run, plan)
+        with self.assertRaisesRegex(ValueError, "remove unneeded scratch.*old.log"):
+            cleanup.touch_run(self.project, "mine", run, state="recovery", reason="pending exact upload")
+        (run / "old.log").unlink()
+        record = cleanup.touch_run(self.project, "mine", run, state="recovery", reason="pending exact upload")
+        self.assertEqual(record["state"], "recovery")
+
+    def test_plan_rejects_cache_outputs_whole_run_holds_and_wrong_owner(self):
+        run = self.run_root()
+        plan = {"purpose": "one independent unit", "delete": ["."], "retain": [], "outputs": [], "trigger": "verified-result-reported"}
+        for destination in (run / "final.txt", self.base / "remote-insurance" / "final.txt"):
+            with self.assertRaisesRegex(ValueError, "outside task Cache"):
+                cleanup.plan_run(self.project, "mine", run, dict(plan, outputs=[{"path": str(destination), "sha256": None}]))
+        for relative in (".", "../source.py", str(self.project / "source.py")):
+            with self.assertRaisesRegex(ValueError, "exact relative"):
+                cleanup.plan_run(self.project, "mine", run, dict(plan, retain=[{"path": relative}]))
+        for field in ("outputs", "retain"):
+            with self.assertRaises(ValueError):
+                cleanup.plan_run(self.project, "mine", run, dict(plan, **{field: [None]}))
+        with self.assertRaisesRegex(ValueError, "exact task/project/run"):
+            cleanup.plan_run(self.project, "other", run, plan)
+
     def test_transition_cleans_exact_obsolete_run_preserves_current_and_unfinished(self):
         previous, current, working = self.run_root(), self.run_root(), self.run_root()
         with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
@@ -234,8 +302,8 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
 
     def test_recent_retention_recovery_and_native_ledger_are_protected(self):
         retained, recovery, ledger = self.run_root("retain"), self.run_root("recover"), self.run_root("ledger")
-        cleanup.touch_run(self.project, "retain", retained, artifact_root=self.base, state="retained", reason="User is reviewing this exact exported fixture")
-        cleanup.touch_run(self.project, "recover", recovery, artifact_root=self.base, state="recovery", reason="Retry still needs this exact failed-job input")
+        self.retain_run(self.project, "retain", retained, artifact_root=self.base, state="retained", reason="User is reviewing this exact exported fixture")
+        self.retain_run(self.project, "recover", recovery, artifact_root=self.base, state="recovery", reason="Retry still needs this exact failed-job input")
         (ledger / ".codex-task-resource-ledger.json").write_text("{}")
         with mock.patch.object(cleanup.time, "time", return_value=time.time() + 90000), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             result = self.sweep()
@@ -252,7 +320,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             for reason in (None, " ", "fresh task-owned disposable support allocation"):
                 with self.assertRaisesRegex(ValueError, "concrete current"):
                     cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state=state, reason=reason)
-        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="retained", reason="User reviews this native fixture until its acceptance decision")
+        record = self.retain_run(self.project, "mine", run, artifact_root=self.base, state="retained", reason="User reviews this native fixture until its acceptance decision")
         self.assertEqual(record["retention_review_at"], record["heartbeat"] + cleanup.STALE_SECONDS)
         current = self.sweep()
         self.assertEqual(current["results"][0]["action"], "keep")
@@ -272,7 +340,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         runs = [self.run_root(task) for task in ("review", "retry", "mine")]
         for task, run, state in zip(("review", "retry", "mine"), runs, ("retained", "recovery", "working")):
             (run / "payload").write_bytes(b"unused task support")
-            cleanup.touch_run(self.project, task, run, state=state, reason="Temporary review/retry of this task")
+            self.retain_run(self.project, task, run, state=state, reason="Temporary review/retry of this task")
         now = time.time()
         with mock.patch.object(cleanup.time, "time", return_value=now + 2 * 86400), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             self.sweep()
@@ -284,7 +352,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
     def test_stale_retention_preserves_recent_descendants_and_live_consumers(self):
         live, changed = self.run_root("live-review"), self.run_root("changed-review")
         for task, run in (("live-review", live), ("changed-review", changed)):
-            cleanup.touch_run(self.project, task, run, state="retained", reason="Local debug review")
+            self.retain_run(self.project, task, run, state="retained", reason="Local debug review")
         later = time.time() + cleanup.STALE_SECONDS + 100
         (changed / "new").write_bytes(b"still used")
         os.utime(changed / "new", (later, later))
@@ -296,7 +364,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
     def test_real_idle_recovery_expires_with_native_probes_and_current_run_protected(self):
         run, current = self.run_root("stopped-retry"), self.run_root("mine")
         (run / "retry-input.bin").write_bytes(b"consumed interrupted task")
-        record = cleanup.touch_run(self.project, "stopped-retry", run, state="recovery", reason="Temporary failed upload retry input")
+        record = self.retain_run(self.project, "stopped-retry", run, state="recovery", reason="Temporary failed upload retry input")
         producer = subprocess.Popen([sys.executable, "-B", "-c", "pass"], **hidden_process_options())
         self.assertEqual(producer.wait(timeout=10), 0)
         # A real exited child models the interrupted producer; time is advanced
@@ -337,7 +405,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
     def test_registration_and_retention_surface_current_index_failure(self):
         with mock.patch.object(cleanup, "_refresh_cache_index", return_value={"status": "pending", "reason": "owner conflict"}):
             run = self.run_root()
-            record = cleanup.touch_run(self.project, "mine", run, state="retained", reason="Current local debug")
+            record = self.retain_run(self.project, "mine", run, state="retained", reason="Current local debug")
         self.assertEqual(record["cache_index"]["status"], "pending")
         self.assertNotIn("cache_index", cleanup._read(self.record_path(run)))
 
@@ -362,7 +430,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         run = self.run_root()
         payload = run / "input.bin"
         payload.write_bytes(b"retired recovery")
-        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="recovery", reason="Recovery input needed for an identified retry")
+        record = self.retain_run(self.project, "mine", run, artifact_root=self.base, state="recovery", reason="Recovery input needed for an identified retry")
         arguments = dict(artifact_root=self.base, run_id=record["run_id"],
                          expected_identity=record["identity"], reason="Actual owner retired this recovery input")
         child = subprocess.Popen([sys.executable, "-c",
@@ -386,7 +454,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
 
     def test_explicit_owner_release_rejects_wrong_identity_owner_and_blocked(self):
         run = self.run_root()
-        record = cleanup.touch_run(self.project, "mine", run, artifact_root=self.base, state="retained", reason="Explicit user fixture review remains open")
+        record = self.retain_run(self.project, "mine", run, artifact_root=self.base, state="retained", reason="Explicit user fixture review remains open")
         arguments = dict(artifact_root=self.base, run_id=record["run_id"],
                          expected_identity=record["identity"], reason="Actual owner release")
         for changes in ({"expected_identity": [0, 0]}, {"run_id": "wrong"}, {"reason": " "}):
@@ -611,7 +679,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             child.mkdir()
             (child / "source-input").write_bytes(b"future input")
             if marker is None:
-                cleanup.touch_run(self.project, "parent", parent, state="retained", reason="Prepared environment needed after pending artwork")
+                self.retain_run(self.project, "parent", parent, state="retained", reason="Prepared environment needed after pending artwork")
             else:
                 (parent / marker).write_text("original native owner")
             with self.assertRaises(ValueError):
@@ -626,7 +694,11 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             payload = child / "source-input"
             payload.write_bytes(b"separate consumer input")
             reason = "Prepared child consumed after pending artwork" if state == "retained" else None
-            cleanup.register_run(self.project, "child-owner", child, state=state, legacy_reason=reason or "Exact child created by the fixture")
+            cleanup.register_run(self.project, "child-owner", child, legacy_reason="Exact child created by the fixture")
+            if state in {"retained", "recovery"}:
+                self.retain_run(self.project, "child-owner", child, state=state, reason=reason)
+            elif state != "working":
+                cleanup.touch_run(self.project, "child-owner", child, state=state)
             with mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
                 result = self.sweep(phase="finish", current_run=parent, requested_only=True)
             self.assertFalse(result["requested_complete"], result)
@@ -883,8 +955,12 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         allocated = subprocess.run([sys.executable, str(SCRIPTS / "task_artifact_paths.py"), "--project-root", str(self.project), "--task-id", "cli-task", "--artifact-root", str(self.base), "--create"], capture_output=True, text=True, check=True, **hidden_process_options())
         run = Path(json.loads(allocated.stdout)["task_root"])
         (run / "payload").write_bytes(b"cli")
+        plan_file = run / "plan.json"
+        plan_file.write_text(json.dumps({"purpose": "real CLI unit plan", "delete": ["."], "outputs": [], "retain": [], "trigger": "verified-result-reported"}))
+        planned = subprocess.run([sys.executable, str(SCRIPTS / "task_cache_cleanup.py"), "plan", "--project-root", str(self.project), "--task-id", "cli-task", "--run-root", str(run), "--plan", str(plan_file)], capture_output=True, text=True, check=True, **hidden_process_options())
+        self.assertEqual(json.loads(planned.stdout)["cleanup_plan"]["purpose"], "real CLI unit plan")
         def finish():
-            finished = subprocess.run([sys.executable, str(SCRIPTS / "task_cache_cleanup.py"), "checkpoint", "--project-root", str(self.project), "--task-id", "cli-task", "--artifact-root", str(self.base), "--phase", "finish", "--current-run", str(run), "--apply"], capture_output=True, text=True, check=True, **hidden_process_options())
+            finished = subprocess.run([sys.executable, str(SCRIPTS / "task_cache_cleanup.py"), "checkpoint", "--project-root", str(self.project), "--task-id", "cli-task", "--artifact-root", str(self.base), "--phase", "delivery", "--current-run", str(run), "--apply"], capture_output=True, text=True, check=True, **hidden_process_options())
             return json.loads(finished.stdout)
         result = self.finish_when_native_readers_close(run, finish)
         self.assertEqual(result["results"][0]["action"], "deleted", result)

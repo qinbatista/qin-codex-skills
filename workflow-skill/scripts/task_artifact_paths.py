@@ -410,6 +410,7 @@ def task_artifact_environment(
     elif not temporary.is_dir():
         raise ValueError("create the exact task tmp directory before preparing a child environment")
     environment.update({name: str(temporary) for name in ("TMP", "TEMP", "TMPDIR")})
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     return environment
 
 

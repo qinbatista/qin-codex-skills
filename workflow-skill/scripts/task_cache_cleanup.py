@@ -372,6 +372,7 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     record = {"schema_version": SCHEMA, "path": str(path), "project_root": str(project), "task_id": task_id, "run_id": artifacts.task_artifact_run_id(path) if location == "project" else uuid.uuid4().hex, "location": location, "identity": snapshot["identity"], "state": state, "heartbeat": now, "registered_at": now, "creator_pid": os.getpid(), "creator_identity": _process_identity(os.getpid()), "disposable_reason": legacy_reason or "fresh task-owned disposable support allocation"}
     record["filesystem_uuid"] = _volume_identity(path)
     record.update(retention)
+    record["cleanup_plan"] = {"purpose": task_id, "delete": ["."], "outputs": [], "retain": [], "trigger": "verified-result-reported"}
     with _lock(record_path):
         if record_path.exists():
             raise ValueError("run already registered; use touch/checkpoint without replacing ownership")
@@ -379,11 +380,57 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     return {**record, "cache_index": _refresh_cache_index(project)}
 
 
-def _retention_fields(state, reason, now):
+def plan_run(project_root, task_id, run_root, plan, *, artifact_root=None):
+    """Bind one unit's deletion, output destinations and necessary retained files."""
+    if not isinstance(plan, dict) or not isinstance(plan.get("purpose"), str) or not plan["purpose"].strip():
+        raise ValueError("cleanup plan requires a concrete purpose")
+    if plan.get("delete") != ["."] or plan.get("trigger") != "verified-result-reported":
+        raise ValueError("each run must delete its entire scratch after its verified result is reported")
+    outputs, retained = plan.get("outputs"), plan.get("retain")
+    if not isinstance(outputs, list) or not isinstance(retained, list):
+        raise ValueError("cleanup plan requires outputs and retain lists, empty when unnecessary")
+    project = Path(project_root).resolve(strict=True)
+    base = _cleanup_base(project, artifact_root)
+    path = artifacts._absolute_path(run_root, "run_root")
+    for output in outputs:
+        if not isinstance(output, dict) or not isinstance(output.get("path"), str):
+            raise ValueError("planned outputs require an absolute file path")
+        destination = artifacts._absolute_path(output["path"], "final output")
+        artifacts._check_ancestors(destination.parent)
+        if artifacts._within(destination, base) or artifacts._codex_component(destination):
+            raise ValueError("final outputs must have an owner outside task Cache and Codex storage")
+        if output.get("sha256") is not None and re.fullmatch(r"[0-9a-f]{64}", str(output["sha256"])) is None:
+            raise ValueError("final output hash must be SHA-256 or null until handoff")
+    for item in retained:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            raise ValueError("planned retention requires an exact relative input path")
+        relative = Path(item["path"])
+        if relative.is_absolute() or not relative.parts or any(part in {".", ".."} for part in relative.parts):
+            raise ValueError("retention must name exact relative inputs, never the whole run")
+        if item.get("kind") not in {"active-input", "recovery-input", "user-hold"}:
+            raise ValueError("retention kind must be active-input, recovery-input or explicit user-hold")
+        if any(not isinstance(item.get(key), str) or not item[key].strip() for key in ("consumer", "reason", "until")):
+            raise ValueError("retained files require an actual consumer, necessity and end condition")
+    record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
+    with _lock(record_path):
+        record = _read(record_path)
+        if record["task_id"] != task_id or record["project_root"] != str(project) or record["path"] != str(path):
+            raise ValueError("cleanup plan does not own this exact task/project/run")
+        _bound_path(path, project, base)
+        if not _record_identity_matches(path, record) or record["state"] in PROTECTED_STATES:
+            raise ValueError("release retained/blocked ownership before replacing its cleanup plan")
+        record["cleanup_plan"] = plan
+        _write(record_path, record)
+    return record
+
+
+def _retention_fields(state, reason, now, plan=None):
     if state not in {"retained", "recovery"}:
         return {}
     if not isinstance(reason, str) or not reason.strip() or reason.strip() == "fresh task-owned disposable support allocation":
         raise ValueError("retention/recovery requires a concrete current consumer, review or minimum recovery reason")
+    if not plan or not plan.get("retain"):
+        raise ValueError("retention requires a cleanup plan naming exact necessary files, consumer and end condition; review/reuse alone is insufficient")
     return {"retention_reason": reason.strip(), "retention_review_at": now + STALE_SECONDS}
 
 
@@ -408,7 +455,26 @@ def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="wor
         if record["state"] in {"retained", "recovery"} and state not in {"retained", "recovery"}:
             raise ValueError("retention/recovery must be released by its actual owner; finish cannot erase protection")
         now = time.time()
-        record.update(_retention_fields(state, reason, now))
+        record.update(_retention_fields(state, reason, now, record.get("cleanup_plan")))
+        if state in {"retained", "recovery"}:
+            retained = [path / item["path"] for item in record["cleanup_plan"]["retain"]]
+            for required in retained:
+                artifacts._check_ancestors(required.parent)
+                _safe_stat(required)
+            snapshot = _snapshot(path)
+            extras = [name for name in snapshot["entries"] if name != "." and not any(path / name == required or required in (path / name).parents or path / name in required.parents for required in retained)]
+            if extras:
+                raise ValueError("remove unneeded scratch before retention: " + ", ".join(extras[:10]))
+        if state in {"complete", "obsolete"}:
+            plan = record.get("cleanup_plan", {})
+            if plan.get("retain"):
+                raise ValueError("handoff necessary retained files and clear the plan before delivery")
+            for output in plan.get("outputs", []):
+                destination = artifacts._absolute_path(output["path"], "final output")
+                artifacts._check_ancestors(destination.parent)
+                _safe_stat(destination)
+                if not output.get("sha256") or artifacts._file_sha256(destination) != output["sha256"]:
+                    raise ValueError("final output is missing or differs from its verified handoff hash")
         record.update(state=state, heartbeat=now)
         _write(record_path, record)
     return {**record, "cache_index": _refresh_cache_index(project)}
@@ -837,7 +903,8 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
         if record["state"] in {"retained", "recovery"}:
             retention_reason = record.get("retention_reason")
             review_at = record.get("retention_review_at")
-            if (not isinstance(retention_reason, str) or not retention_reason.strip()
+            if (not record.get("cleanup_plan", {}).get("retain")
+                    or not isinstance(retention_reason, str) or not retention_reason.strip()
                     or retention_reason == "fresh task-owned disposable support allocation"
                     or type(review_at) not in (int, float) or not math.isfinite(review_at)
                     or review_at > record["heartbeat"] + STALE_SECONDS):
@@ -904,7 +971,7 @@ def _refresh_cache_index(project):
 
 
 def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):
-    if phase not in {"start", "transition", "finish"}:
+    if phase not in {"start", "transition", "delivery", "finish"}:
         raise ValueError("invalid checkpoint phase")
     if not 0 < budget_seconds <= 300:
         raise ValueError("checkpoint budget must be between 0 and 300 seconds")
@@ -913,20 +980,20 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
     base = _cleanup_base(project, artifact_root)
     current = artifacts._absolute_path(current_run, "current_run") if current_run else None
     requested = [artifacts._absolute_path(value, "obsolete_run") for value in obsolete_runs]
-    if phase == "finish" and current is not None:
+    if phase in {"delivery", "finish"} and current is not None:
         requested.append(current)
     if requested_only and not requested:
         raise ValueError("requested-only cleanup requires exact finished or obsolete runs")
     if current in [Path(value) for value in obsolete_runs]:
         raise ValueError("current run cannot also be obsolete")
-    if not apply and (obsolete_runs or phase == "finish"):
+    if not apply and (obsolete_runs or phase in {"delivery", "finish"}):
         raise ValueError("lifecycle changes require --apply; scan is read-only")
     for previous in obsolete_runs:
         previous_path = Path(previous)
         previous_record = _registry(base, project) / "runs" / (_key(previous_path) + ".json")
         if previous_path.exists() and (not previous_record.exists() or _read(previous_record).get("state") != "blocked"):
             touch_run(project, task_id, previous, artifact_root=base, state="obsolete")
-    if phase == "finish":
+    if phase in {"delivery", "finish"}:
         if current is None:
             raise ValueError("finish requires exact current_run")
         current_record = _registry(base, project) / "runs" / (_key(current) + ".json")
@@ -1079,16 +1146,17 @@ def discover(search_roots, *, project_root, artifact_root=None, apply=False, lim
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("discover", "scan", "register", "touch", "release-retention", "checkpoint"))
+    parser.add_argument("command", choices=("discover", "scan", "register", "plan", "touch", "release-retention", "checkpoint"))
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--artifact-root", type=Path)
     parser.add_argument("--task-id")
     parser.add_argument("--run-root", type=Path)
+    parser.add_argument("--plan", type=Path, help="Unit cleanup plan JSON inside its task Cache run")
     parser.add_argument("--run-id", help="Registered run ID required for explicit retention release")
     parser.add_argument("--identity", type=int, nargs=2, metavar=("DEVICE", "INODE"), help="Registered directory identity required for retention release")
     parser.add_argument("--state", choices=sorted(STATES), default="working")
     parser.add_argument("--reason", help="Audited disposal/release evidence, or concrete current retention/recovery need")
-    parser.add_argument("--phase", choices=("start", "transition", "finish"), default="start")
+    parser.add_argument("--phase", choices=("start", "transition", "delivery", "finish"), default="start")
     parser.add_argument("--current-run", type=Path)
     parser.add_argument("--obsolete-run", type=Path, action="append", default=[])
     parser.add_argument("--search-root", type=Path, action="append", default=[])
@@ -1099,9 +1167,9 @@ def main():
     try:
         if args.requested_only and args.command != "checkpoint":
             raise ValueError("--requested-only applies only to checkpoint")
-        if args.command in {"register", "touch", "release-retention", "checkpoint"} and not args.task_id:
+        if args.command in {"register", "plan", "touch", "release-retention", "checkpoint"} and not args.task_id:
             raise ValueError("this command requires --task-id")
-        if args.command in {"register", "touch", "release-retention"} and args.run_root is None:
+        if args.command in {"register", "plan", "touch", "release-retention"} and args.run_root is None:
             raise ValueError("this command requires --run-root")
         if args.command == "discover":
             if not args.search_root:
@@ -1111,6 +1179,14 @@ def main():
             result = scan(args.project_root, args.artifact_root)
         elif args.command == "register":
             result = register_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, legacy_reason=args.reason, state=args.state)
+        elif args.command == "plan":
+            if args.plan is None:
+                raise ValueError("plan requires --plan JSON")
+            artifacts._check_ancestors(args.plan.parent)
+            _safe_stat(args.plan)
+            if not artifacts._within(args.plan, args.run_root):
+                raise ValueError("plan JSON must belong to its exact task run")
+            result = plan_run(args.project_root, args.task_id, args.run_root, json.loads(args.plan.read_text(encoding="utf-8")), artifact_root=args.artifact_root)
         elif args.command == "touch":
             result = touch_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, state=args.state, reason=args.reason)
         elif args.command == "release-retention":
