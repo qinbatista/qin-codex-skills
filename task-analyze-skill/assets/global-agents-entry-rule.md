@@ -3,7 +3,7 @@ This template is written only by the explicit `install-global-agents` command; d
 # Task Lifecycle
 
 <!-- qin-ai-index-startup -->
-Write all authored project documentation, Skills, `AGENTS.md`, AI-index guidance and metadata, and durable memory in English. Check authored prose before saving or delivering it. Preserve required identifiers, paths, commands, and exact source quotations. The language of the conversation does not change this rule.
+Always write new and revised project documentation, Skills, `AGENTS.md`, AI-index guidance and metadata, and durable memory in English. The requirement applies regardless of the language used by other contributors, the project team, existing files, templates, references, or the conversation. Write each new or revised passage in English even when matching the surrounding format or style. Check authored prose before saving or delivering it. Preserve exact identifiers, paths, commands, and source quotations where fidelity requires them.
 
 AI-index prompts and maintenance apply only to the current task project. Identify that project from the user's main work scope, rather than assuming the working directory or switching projects for a lookup. Reading, searching, comparing or consulting another project, dependency or shared source does not make it current: do not ask about, create, repair or maintain its AI index, and continue the authorized lookup without an AI-index gate. Only an explicit change of the main work project selects a new current project. This scope rule also applies when another instruction requests a gate for a consulted source owner and at finish or Ending.
 

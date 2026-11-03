@@ -25,7 +25,7 @@ For the current editable project, read its AI-index `cache/` owner rules and run
 
 ### Authoring rules
 
-Write all authored project documentation and durable AI guidance in English. This includes Skills, every `AGENTS.md`, and AI-index prose and metadata. Use English for durable knowledge and summaries under [Project Memory](../project-memory-skill/SKILL.md). Before saving or delivering changes, review the authored prose for English. Preserve exact identifiers, paths, commands, and source quotations when they are needed as evidence.
+Always write new and revised project documentation and durable AI guidance in English. This includes Skills, every `AGENTS.md`, AI-index prose and metadata, and [durable memory](../project-memory-skill/SKILL.md). English is mandatory regardless of the language used by other contributors, the project team, existing files, templates, references, or the conversation. When editing a non-English file, write every new or revised passage in English even when matching its format or style. Check the authored prose before saving or delivering it. Preserve exact identifiers, paths, commands, and source quotations where fidelity requires them.
 
 Keep Skills focused on stable rules, decision criteria, essential workflow, and acceptance. On every authorized creation or revision, seek the simplest complete route: reuse existing capabilities, remove unnecessary steps, merge duplicate rules, and retire obsolete instructions. Keep optional detail in linked references. Preserve required behavior, evidence, permissions, and failure handling; fewer words or steps alone do not prove an improvement.
 

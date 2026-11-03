@@ -16,7 +16,7 @@ Each current editable project owns one project-local AI index. Prefer existing `
 
 Keep root `AGENTS.md` a concise project contract: purpose, overall structure, critical boundaries and conventions, definition of done, and one link to the project index. Put detailed module rules in the index's focused documents or their existing authoritative references. Avoid adding nested `AGENTS.md` files as navigation. Preserve existing nested scopes and tool-required files; consolidate only when their rules, precedence and consumers can be preserved. Never silently delete or flatten them.
 
-Write every root or nested `AGENTS.md` and all AI-index guidance in English. Review Markdown and human-readable metadata, including titles, summaries, route descriptions, dependency reasons, and Cache owner rules, during bootstrap, repair, compression, and delivery. Translate legacy prose within the authorized migration scope while preserving route keys, paths, symbols, link targets, and exact quoted evidence. Recheck routes after changing prose used as anchors.
+Apply the [mandatory English authoring rule](../SKILL.md#authoring-rules) to every new or revised passage in root and nested `AGENTS.md` and AI-index guidance, regardless of the project's or contributors' language. Review Markdown and human-readable metadata, including titles, summaries, route descriptions, dependency reasons, and Cache owner rules, during bootstrap, repair, compression, and delivery. Translate legacy prose within the authorized migration scope while preserving route keys, paths, symbols, link targets, and exact quoted evidence. Recheck routes after changing prose used as anchors.
 
 The project index contains:
 

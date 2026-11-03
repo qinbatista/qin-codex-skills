@@ -19,7 +19,7 @@ Keep one authoritative rule per behavior. Merge repeated warnings into a clear r
 
 Separate stable policy from per-run data. Ask only for a missing decision that materially changes the result; otherwise proceed with a reasonable stated assumption. Correct unambiguous spelling in new durable instructions and follow [correct task names](../task-analyze-skill/SKILL.md#correct-task-names) in task wording. Preserve quoted user prose, user data, external names, and persisted/public contracts.
 
-For Skill creation or revision, apply [Skill authoring rules](../management-skill/SKILL.md#authoring-rules): retain essential rules and choices, move deterministic mechanics to existing local code, and keep changing run data out of durable instructions. Simplify the complete workflow before adding another rule or step.
+Apply [Management's authoring rules](../management-skill/SKILL.md#authoring-rules), including mandatory English for new and revised durable instructions. Keep essential rules and choices, move deterministic steps to existing local code, and exclude per-run data. Simplify the workflow before adding instructions.
 
 ## Workflow
 
