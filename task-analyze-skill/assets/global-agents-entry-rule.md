@@ -3,6 +3,8 @@ This template is written only by the explicit `install-global-agents` command; d
 # Task Lifecycle
 
 <!-- qin-ai-index-startup -->
+Write all authored project documentation, Skills, `AGENTS.md`, AI-index guidance and metadata, and durable memory in English. Check authored prose before saving or delivering it. Preserve required identifiers, paths, commands, and exact source quotations. The language of the conversation does not change this rule.
+
 AI-index prompts and maintenance apply only to the current task project. Identify that project from the user's main work scope, rather than assuming the working directory or switching projects for a lookup. Reading, searching, comparing or consulting another project, dependency or shared source does not make it current: do not ask about, create, repair or maintain its AI index, and continue the authorized lookup without an AI-index gate. Only an explicit change of the main work project selects a new current project. This scope rule also applies when another instruction requests a gate for a consulted source owner and at finish or Ending.
 
 At the current project's task start/resume or explicit main-project change, run the installed `management-skill/scripts/project_ai_index.py inspect --project-root ROOT --project-scope current --phase start` before additional project reading, searches, Git operations, memory recall or delegated work. This includes read-only work on the current project. If invoking the helper for a consulted project, pass `--project-scope reference`; it returns nonblocking `skipped` without index reads, prompts or writes. User Skills live under the discovered home directory's `.agents/skills`.

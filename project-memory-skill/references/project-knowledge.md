@@ -4,6 +4,7 @@ Use this contract when recalling code context or consolidating a completed outco
 
 ## Storage and identity
 
+- Use English for all authored memory prose, including summaries, reasons, decisions, results, risks, verification notes, and synthesis. In an authorized language migration, update current entries through the supported writer with the same scope, relationships, source hashes, and verification status. Regenerate the readable view and read it back. Retain original event records, dates, identifiers, and exact evidence in their existing owners.
 - `Projects/<owner>/Memory.json` holds the project's structured current knowledge and consolidation state. `Knowledge.md` is its readable view, not a competing store. Keep historical evidence in the existing `AI Memory/events.jsonl`.
 - Scope every entry by registered project identity, module, project-relative file, and symbol where relevant. Use a qualified method name or signature when a short name is ambiguous. Omit inapplicable scopes rather than inventing empty module or method records.
 - Record architecture and ownership changes at the project or module level. Record a method only when its responsibility, contract, dependency, or important constraint adds durable value. Link related entries instead of copying their content.

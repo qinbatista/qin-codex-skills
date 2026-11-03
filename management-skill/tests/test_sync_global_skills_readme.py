@@ -439,15 +439,15 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
 
-    def test_chinese_readme_is_compact_and_has_the_same_policy(self):
+    def test_legacy_readme_is_compact_and_uses_english_guidance(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="zh")
         template = sync_global_skills.CHINESE_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"
         expected = template
         self.assertEqual(readme, expected)
         self.assertLess(len(template.splitlines()), 80)
-        for concept in ("本仓库维护八个可复用的全局 Codex Skill", "## 各 Skill 的职责", "先简述目标", "缺少匹配记忆时直接跳过", "在当前任务内", "项目测试 Skill", "真实受影响场景", "本地记忆", "项目记忆互相隔离", "结尾一次性汇总实际使用的 Skill"):
+        for concept in ("eight reusable global Codex Skills", "## Skill responsibilities", "Preview the objective", "skip absent matching memory", "in the active task", "project testing Skill", "Verify the real affected case", "in Obsidian", "Each project owns its own memory", "At completion, report the exact Skills used", "AI-index guidance, and durable memory in English"):
             self.assertIn(concept, readme)
-        self.assertNotIn("每条进度更新和阶段切换都必须重复列出 Skill", readme)
+        self.assertNotRegex(readme, r"[\u3400-\u9fff]")
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
@@ -1039,7 +1039,7 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             hasher.assert_not_called()
             printer.assert_called_once_with("Installation complete; sync state could not be recorded (PermissionError).")
 
-    def test_render_readme_cli_uses_chinese_template_for_zh_output(self):
+    def test_render_readme_cli_preserves_legacy_zh_output_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "README.zh.md"
             argv = ["sync_global_skills.py", "--skills-dir", str(SKILLS_DIR), "render-readme", "--output", str(output)]

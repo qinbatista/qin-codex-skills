@@ -9,6 +9,8 @@ Before support/probe writes, apply the [project Cache artifact policy](../workfl
 
 Memory reduces repeated explanations. Preserve project problems and user struggles/corrections, attempted solutions, last verified state and date, actual results and evidence, unresolved items and next steps, alongside architecture, ownership, contracts, decisions and preferences in one project knowledge store. Capture useful established outcomes at completion, failure or pause; retain the actual blocker, partial or failed result and next step without inventing proof. Use the existing reason, result, decisions, verification and risks fields; do not invent whole-project status from a passing check. Read [project knowledge](references/project-knowledge.md) for scoped recall, addressable entries, and consolidation.
 
+Write and review all authored durable memory prose in English before saving. This covers current entries, synthesis, and new event summaries even when the conversation or source is in another language. Preserve exact evidence and existing event history.
+
 ## Recall before work
 
 When the current task prohibits creating external directories, invoke `scripts/obsidian_vault_setup.py --project-root PROJECT_ROOT --existing-only`. This mode reuses an existing vault and returns `pending` with `vault_creation_disabled` if creation would be needed, without creating parent directories, cloning or running the generator. Skip unavailable recall without creating a fallback. An explicit `--vault` path alone does not lift this boundary.

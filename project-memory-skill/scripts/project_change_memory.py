@@ -488,6 +488,7 @@ DOCUMENT_PROJECT_OWNER_ROOTS = (
     ("YofaGames/AIVFX2D", "AIVFX2D"),
     ("YofaGames/YoFaAssets", "YoFaAssets"),
     ("YofaGames/YoFaPublisher", "YoFaPublisher"),
+    ("YofaGames/YoFaUnityPlguin", "YoFaUnityPlguin"),
     ("Mokozoo/Unity-淘金热", "Unity-淘金热"),
     ("FilesManagement/Destiny", "Destiny"),
     ("YofaGames/Destiny", "Destiny"),
