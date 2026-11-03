@@ -33,6 +33,10 @@ MAX_DISCOVERY_DEPTH = 6
 MAX_SOURCE_BYTES = 1048576
 MAX_EXCERPT_BYTES = 16384
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+ROOT_GUIDANCE_BUDGET = (60, 6400)
+INDEX_ENTRY_BUDGET = (40, 4000)
+INDEX_DOCUMENT_BUDGET = (60, 9600)
+INDEX_MANIFEST_LINE_BUDGET = 800
 MAX_CACHE_ROWS = 512
 MAX_CACHE_RECORDS = 4096
 MAX_CACHE_RECORD_BYTES = 65536
@@ -163,12 +167,33 @@ def document_text(root, relative, overlay):
     return content.decode("utf-8")
 
 
-def validate_document(root, relative, overlay, issues, advisories, documents):
+def record_compression_target(targets, relative, text, line_limit, character_limit=None, *, canonical_lines=0):
+    """Measure guidance without treating layout changes as a shorter contract."""
+    lines = len(text.splitlines())
+    characters = len(re.sub(r"\s+", "", text)) if character_limit is not None else None
+    reasons = []
+    if max(lines, canonical_lines) > line_limit:
+        reasons.append("lines")
+    if character_limit is not None and characters > character_limit:
+        reasons.append("characters")
+    if reasons:
+        target = {"path": relative, "lines": lines, "line_limit": line_limit, "reasons": reasons}
+        if character_limit is not None:
+            target.update({"characters": characters, "character_limit": character_limit})
+        if canonical_lines:
+            target["canonical_lines"] = canonical_lines
+        targets.append(target)
+
+
+def validate_document(root, relative, overlay, issues, advisories, documents, compression_targets):
     guidance_target(root, relative)
     text = document_text(root, relative, overlay)
     if not text.strip():
         issues.append(f"empty guidance: {relative}")
-    budget = 800 if relative in {"AGENTS.md", f"{index_directory(root)}/SKILL.md"} else 2000
+    is_entry = relative == f"{index_directory(root)}/SKILL.md"
+    line_budget = ROOT_GUIDANCE_BUDGET if relative == "AGENTS.md" else INDEX_ENTRY_BUDGET if is_entry else INDEX_DOCUMENT_BUDGET
+    record_compression_target(compression_targets, relative, text, *line_budget)
+    budget = 800 if relative == "AGENTS.md" or is_entry else 2000
     if len(text.split()) > budget:
         advisories.append(f"review mixed responsibilities or split linked detail: {relative} exceeds {budget} words")
     for raw in re.findall(r"\]\(([^)]+)\)", text):
@@ -202,15 +227,15 @@ def validate_index(root, overlay=None):
     overlay = {} if overlay is None else overlay
     directory = index_directory(root)
     skill_path, manifest_path = f"{directory}/SKILL.md", f"{directory}/index.json"
-    issues, advisories = [], []
+    issues, advisories, compression_targets = [], [], []
     documents = {"AGENTS.md", skill_path, manifest_path}
     documents.update(relative for relative, content in overlay.items() if content is not None and relative.endswith(".md"))
     manifest = None
     try:
-        agents = validate_document(root, "AGENTS.md", overlay, issues, advisories, documents)
+        agents = validate_document(root, "AGENTS.md", overlay, issues, advisories, documents, compression_targets)
         if skill_path not in agents:
             issues.append(f"root AGENTS.md must point to {skill_path}")
-        skill = validate_document(root, skill_path, overlay, issues, advisories, documents)
+        skill = validate_document(root, skill_path, overlay, issues, advisories, documents, compression_targets)
         frontmatter = re.match(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|$)", skill, re.DOTALL)
         if not frontmatter or not re.search(r"(?m)^name:\s*['\"]?ai-index['\"]?\s*$", frontmatter[1]):
             issues.append("project SKILL.md must have frontmatter name: ai-index")
@@ -219,7 +244,9 @@ def validate_index(root, overlay=None):
             issues.append("project SKILL.md must have a nonempty frontmatter description")
         if "index.json" not in skill:
             issues.append("project SKILL.md must point to index.json")
-        manifest = json.loads(document_text(root, manifest_path, overlay))
+        manifest_text = document_text(root, manifest_path, overlay)
+        manifest = json.loads(manifest_text)
+        record_compression_target(compression_targets, manifest_path, manifest_text, INDEX_MANIFEST_LINE_BUDGET, canonical_lines=len(json.dumps(manifest, indent=2).splitlines()))
         if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
             raise ValueError("index.json requires schema_version 1")
         rules, modules = manifest.get("rules"), manifest.get("modules")
@@ -264,11 +291,15 @@ def validate_index(root, overlay=None):
             if len(documents) > MAX_INDEX_DOCUMENTS:
                 raise ValueError(f"project index exceeds {MAX_INDEX_DOCUMENTS} guidance documents")
             relative = remaining[0]
-            validate_document(root, relative, overlay, issues, advisories, documents)
+            validate_document(root, relative, overlay, issues, advisories, documents, compression_targets)
             checked.add(relative)
     except (OSError, ValueError, TypeError, KeyError) as error:
         issues.append(str(error))
-    return {"status": "needs_review" if issues else "ready", "structural_check_only": True, "issues": issues, "advisories": advisories, "documents": sorted(documents), "manifest": manifest}
+    compression = {"status": "due" if compression_targets else "pending" if issues else "within_budget", "targets": sorted(compression_targets, key=lambda target: target["path"])}
+    if compression_targets:
+        compression["required_action"] = "review_index_and_project_memory"
+        compression["workflow"] = "management-skill/references/project-ai-index.md#ai-index-compression"
+    return {"status": "needs_review" if issues else "ready", "structural_check_only": True, "issues": issues, "advisories": advisories, "documents": sorted(documents), "manifest": manifest, "compression": compression}
 
 
 def validate_code_targets(root, modules, overlay):
@@ -540,6 +571,7 @@ def check_project(root, phase="start", changed_paths=None, *, bootstrap_approved
     if state == "missing":
         result["status"] = "missing"
         result["discovery"] = bootstrap_inventory(root)
+        result.pop("compression")
     modules = manifest.get("modules", []) if isinstance(manifest, dict) else []
     for changed in changed_paths or []:
         relative_path(changed)
@@ -721,7 +753,7 @@ def apply_locked_plan(root, plan, work):
         if validation["status"] != "ready" or any((guidance_bytes(root, relative, {}) != content) for relative, content in overlay.items()):
             raise ValueError("guidance readback changed or failed validation")
         recovery.unlink()
-        return {"status": "complete", "project_root": str(root), "changed": changed, "guidance_hashes": {relative: file_hash(guidance_target(root, relative)) for relative in overlay}, "advisories": validation["advisories"], "structural_check_only": True}
+        return {"status": "complete", "project_root": str(root), "changed": changed, "guidance_hashes": {relative: file_hash(guidance_target(root, relative)) for relative in overlay}, "advisories": validation["advisories"], "compression": validation["compression"], "structural_check_only": True}
     except (OSError, ValueError) as error:
         unresolved = rollback_guidance(root, attempted, overlay, originals)
         for directory in reversed(created_directories):

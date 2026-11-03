@@ -26,7 +26,7 @@ At completion, summarize actual Skill names, steps and reasons once, including b
 
 Project memories stay isolated in Memory.json and Knowledge.md. Recall excludes stale facts. Ending consolidates touched entries and shared preferences remain scoped. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
 
-Each project owns its AI index. The helper validates routes and source/document hashes within the task, without a background watcher.
+[AI Index Compression](management-skill/references/project-ai-index.md#ai-index-compression) reviews oversized project guidance against current source and scoped Obsidian memory during tasks, preserving rules and history.
 
 All code edits, including tests, follow module → file → method/anchor → necessary relationships plus scoped memory. Selected routes return bounded current excerpts; edits refresh touched routes. Prefer cohesive methods, parameterized variants and deliberate extraction.
 

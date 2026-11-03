@@ -9,6 +9,8 @@ Read the request, applicable skills, and relevant existing project memory. Ident
 
 Only for the current task project, at start/resume and finish, apply [automatic project AI index](../management-skill/references/project-ai-index.md). Reading, searching or consulting another project does not switch the current project: continue without AI-index prompts or maintenance there. Only an explicit main-project change selects a new current project. Check current-project presence before broad reading; ask for bootstrap consent only when the project has no AI index at all. Existing indexes, including incomplete ones, receive automatic focused repair and expansion without another creation question. Keep root `AGENTS.md` concise and read only relevant routes. Automatically reconcile both when accepted user intent, module ownership or source structure changes; do not wait for another request. Finish reconciliation before authorized delivery and pass its evidence and consent boundary to Ending for the residual check.
 
+When current-project inspection reports `compression.status: due`, run [AI Index Compression](../management-skill/references/project-ai-index.md#ai-index-compression) inline, including exact-owner Obsidian review. Check again after index changes and before delivery; explicit read-only tasks only report the overage.
+
 ## Mandatory visible Skill reporting
 
 Keep a concise internal record as work proceeds: each exact Skill name actually used, the task step or action where it was applied, and the reason or purpose for using it. Read and follow a Skill before recording it as applied; a catalog entry, plan or name alone does not prove use. Collect the same actual-use details from delegated branches. This working record needs no separate per-task file.

@@ -8,4 +8,4 @@ Keep durable memory solely in the verified vault and exact owner. A hash or sour
 
 Recall follows project → task → underlying logic. `project_knowledge.py logic` traverses explicit `applies-logic` links to shared `logic.*` principles and bounded case pointers. It never imports foreign implementation facts; selected references retain exact owners, applicability, differences and dated proof. This uses the existing relation/index store, not keyword-based automatic generalization.
 
-Tests stay in `project-memory-skill/tests/`, tracked by the [testing Skill](../../testing-skill/SKILL.md). Workflow owns resource audit mechanics; Management owns residual project AI-index updates. Neither dependency authorizes product tests, builds or publication by Ending.
+Tests stay in `project-memory-skill/tests/`, tracked by the [testing Skill](../../testing-skill/SKILL.md). Workflow owns resource audits; Management owns index updates and signals [scoped memory synthesis](../../../../project-memory-skill/references/project-knowledge.md#ai-index-triggered-synthesis). Close those branches inline without authorizing unrelated execution.

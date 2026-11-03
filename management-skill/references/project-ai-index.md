@@ -25,6 +25,23 @@ The project index contains:
 
 Repository/asset rules cover Git and publication boundaries, canonical inputs/assets, runtime data, generated artifacts, secrets and disposable support. Structure rules state responsibilities and where new code belongs. Each module document names its entry files/symbols, contracts, exclusions, justified dependencies and relevant test owner. Link existing rules instead of copying whole Skills, prompts or source files. Store task history, failures and results in their existing memory/resource owners. Keep only the bounded current Cache operations view below in the index; never append dated cleanup logs or create one document per task.
 
+## AI Index Compression
+
+On current-project `inspect` at start/resume and before delivery, and after applying index changes, read `compression`. When `status: due`, run the following review in the same task for every reported target. Explicit read-only work reports the targets without changing guidance or memory. Reference projects and missing indexes never trigger compression. A `pending` result means structural validation could not check the whole active index; resolve that boundary through ordinary index maintenance and inspect again.
+
+| Managed file | Review when over | Working target after review |
+| --- | --- | --- |
+| Root `AGENTS.md` | 60 lines or 6,400 non-whitespace characters | About 40 lines |
+| Active index `SKILL.md` | 40 lines or 4,000 non-whitespace characters | About 30 lines |
+| Linked or registered index Markdown, including Cache rules | 60 lines or 9,600 non-whitespace characters | About 45 lines |
+| Active `index.json` | 800 physical or canonical two-space JSON lines | Below 800 when redundant metadata can be removed |
+
+These are review thresholds, not truncation limits. In 27 repository snapshots with an index, the root and entry reached 19 and 22 lines, focused Markdown had a 9-line median and a 37-line maximum, and the machine route map grew from 172 to 746 lines. The defaults give working headroom without routinely reading every module. Physical lines include blank lines; character limits catch dense prose in any language, and canonical JSON line counts catch minification. Nested `AGENTS.md`, unrelated files, and the replaceable `cache/current.json` are outside this check.
+
+1. Read each flagged file and the authoritative source or Git history needed to classify its statements. Keep still-binding rules, precedence, ownership, exceptions, links and route targets. Move reusable detail to its existing focused owner, merge equivalent instructions, and remove obsolete guidance only when current evidence supports it. Preserve meaningful distinct metadata and report any remaining overage that still earns its place. Never hard-wrap or minify to claim compression.
+2. Use [Project Memory's compression procedure](../../project-memory-skill/references/project-knowledge.md#ai-index-triggered-synthesis) for the same project's corresponding scopes. Confirm useful historical facts have a verified memory owner before removing their only copy from guidance. If memory is missing, stale or ambiguous, leave affected transfers pending and continue safe guidance cleanup independently.
+3. Apply reviewed guidance through the existing preimage-checked plan (or ordinary scoped Git edits), then rerun `inspect` and check the surviving rules and routes. Read back the exact Obsidian owner separately. Report the actual reductions, retained overages and pending memory. Keep plans and temporary evidence in task Cache; do not write a permanent compression log or suppress future checks.
+
 ## Current Cache management
 
 For each current editable project with an existing index, startup reads its Cache rules and current inventory, executes Workflow's [cleanup checkpoint](../../workflow-skill/references/cache-cleanup.md#local-index-and-executable-checkpoints), then runs `project_ai_index.py cache --project-root ROOT --apply`. This sequence is mandatory in the always-loaded AI-index startup block before implementation or new task allocation; inventory refresh alone is not cleanup. Establish a missing Cache sub-index with `cache --apply` before reading it, without bypassing first-index consent. Refresh again at finish and after allocation, retention changes or deletion. Startup/finish `inspect` remains read-only and returns `cache_management.required_action: refresh_cache_index` when this view is absent or stale; explicit read-only work reports that need without writing. Reference scope skips before index/Cache inspection or writes. The command never creates the project's first index and never deletes Cache payloads or native registry records.

@@ -494,6 +494,27 @@
           "related": []
         },
         {
+          "id": "index-compression",
+          "file": "management-skill/scripts/project_ai_index.py",
+          "symbol": "record_compression_target",
+          "anchor": "def record_compression_target(targets, relative, text, line_limit, character_limit=None, *, canonical_lines=0):",
+          "summary": "Report oversized guidance without writes, using physical lines, dense Markdown and canonical JSON size.",
+          "related": [
+            {
+              "module": "management",
+              "target": "index-compression-test",
+              "reason": "Proves real detection and guarded compression readback."
+            }
+          ]
+        },
+        {
+          "id": "index-compression-test",
+          "file": "management-skill/tests/test_project_ai_index.py",
+          "symbol": "ProjectAIIndexTests.test_compression_cli_detects_growth_and_clears_after_reviewed_apply",
+          "anchor": "def test_compression_cli_detects_growth_and_clears_after_reviewed_apply(self):",
+          "summary": "Exercise start and finish triggers, compact JSON, dense prose, reference exclusion and preserved routes after reviewed apply."
+        },
+        {
           "id": "index-plan",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "prepare_plan",

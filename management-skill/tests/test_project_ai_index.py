@@ -685,6 +685,49 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         self.assertTrue(any("AGENTS.md exceeds" in warning for warning in result["advisories"]))
         self.assertEqual((self.project / "AGENTS.md").read_text(), source)
 
+    def test_compression_cli_detects_growth_and_clears_after_reviewed_apply(self):
+        self.bootstrap()
+        stable = {item["path"]: item["content"] for item in self.plan()["files"]}
+        root = "AGENTS.md"
+        module = f"{INDEX.INDEX_DIRECTORY}/modules/api.md"
+        skill = INDEX.SKILL_PATH
+        manifest = INDEX.MANIFEST_PATH
+        self.write(root, stable[root] + "\n" * 58)
+        self.write(skill, stable[skill] + "\n" * 35)  # Exactly 40 lines.
+        self.assertEqual(json.loads(self.cli("inspect").stdout)["compression"]["status"], "within_budget")
+        originals = {root: stable[root] + "\n" * 59, skill: stable[skill] + "\n" * 36, module: stable[module] + "旧说明" * 3300}
+        expanded = self.manifest()
+        expanded["modules"].extend({**expanded["modules"][0], "id": f"legacy-api-{number}"} for number in range(70))
+        originals[manifest] = json.dumps(expanded, separators=(",", ":"))
+        for path, content in originals.items():
+            self.write(path, content)
+        cache = self.write(f"{INDEX.INDEX_DIRECTORY}/cache/current.json", "\n" * 1000)
+        reference = json.loads(self.cli("inspect", "--project-scope", "reference").stdout)
+        self.assertNotIn("compression", reference)
+        for phase in ("start", "end"):
+            inspected = self.cli("inspect", "--phase", phase)
+            self.assertEqual(inspected.returncode, 0, inspected.stdout)
+            compression = json.loads(inspected.stdout)["compression"]
+            self.assertEqual(compression["status"], "due")
+            self.assertEqual(compression["required_action"], "review_index_and_project_memory")
+            targets = {item["path"]: item for item in compression["targets"]}
+            self.assertEqual(set(targets), set(originals))
+            self.assertEqual(targets[root]["lines"], 61)
+            self.assertEqual(targets[skill]["lines"], 41)
+            self.assertEqual(targets[module]["reasons"], ["characters"])
+            self.assertEqual(targets[manifest]["lines"], 1)
+            self.assertGreater(targets[manifest]["canonical_lines"], 800)
+        for path, content in originals.items():
+            self.assertEqual((self.project / path).read_bytes(), content.encode())
+        plan = self.plan()
+        plan["files"] = [item for item in plan["files"] if item["path"] in originals]
+        result = INDEX.apply_plan(self.project, plan, self.work)
+        self.assertEqual(result["status"], "complete", result)
+        self.assertEqual(result["compression"]["status"], "within_budget")
+        self.assertEqual(json.loads(self.cli("inspect", "--phase", "end").stdout)["compression"]["status"], "within_budget")
+        self.assertEqual(json.loads(self.cli("route", "--module", "api").stdout)["sources"], ["src/api.py"])
+        self.assertEqual(cache.read_text(), "\n" * 1000)
+
 
 if __name__ == "__main__":
     unittest.main()
