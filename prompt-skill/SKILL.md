@@ -5,21 +5,23 @@ description: "Use to create, review, edit, or test reusable prompts and durable 
 
 # Prompt Skill
 
-Before writing task support, apply the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve the Cache owner before first write; prompts keep their owner.
+Before the first write of support, apply the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md); prompts keep their owner.
 
 ## Scope
 
-Read the relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md); skip it when unavailable. Recall the exact project and relevant prompt/module/file/symbol context rather than the whole history. Keep project facts scoped to that project, and explicit global preferences separate. Cross-project examples remain labeled references whose applicability must be established here. Current instructions and fresh source override stale memory.
+Read relevant [project memory](../project-memory-skill/SKILL.md) on every task; skip it when unavailable. Recall exact prompt/module/file/symbol context, not whole history. Keep project facts scoped to that project and global preferences separate. Label cross-project examples as references. Current instructions and fresh source override stale memory.
 
 ## Design
 
 State the objective, necessary inputs and their roles, requirements, and output contract. Include success/failure criteria and a verification step when they improve acceptance. Define placeholders, units, enums, missing-value behavior, and reference authority only where relevant.
 
+Limit responses to the requested fields, values and format; prohibit unrequested metadata, explanations, wrappers and duplicated content. For color-only JSON require `{"color":"blue"}`; for a choice-only answer require just `1`. Allow additions explicitly requested or required by the actual schema, validator, safety or failure contract. Preserve distinct source facts and required evidence; check the consumer before removing existing fields.
+
 Keep one authoritative rule per behavior. Merge repeated warnings into a clear rule, resolve contradictions, and remove obvious instructions that add no constraint. Use role, tool order, autonomy limits, verbosity targets, delimiters, or examples only when they change the result. Examples illustrate rules; they do not override them. Do not request private chain-of-thought or force visible planning.
 
-Separate stable policy from per-run data. Ask only for a missing decision that materially changes the result; otherwise proceed with a reasonable stated assumption. Correct unambiguous spelling in new durable instructions and follow [correct task names](../task-analyze-skill/SKILL.md#correct-task-names) in task wording. Preserve quoted user prose, user data, external names, and persisted/public contracts.
+Separate stable policy from per-run data. Ask only for a material missing decision; otherwise state a reasonable assumption. Correct unambiguous spelling in durable instructions; follow [correct task names](../task-analyze-skill/SKILL.md#correct-task-names). Preserve quoted user prose, user data, external names, and persisted/public contracts.
 
-Apply [Management's authoring rules](../management-skill/SKILL.md#authoring-rules), including mandatory English for new and revised durable instructions. Keep essential rules and choices, move deterministic steps to existing local code, and exclude per-run data. Simplify the workflow before adding instructions.
+Apply [Management's authoring rules](../management-skill/SKILL.md#authoring-rules): write durable instructions in English, move deterministic steps to local code and simplify before adding instructions.
 
 ## Workflow
 
@@ -27,14 +29,14 @@ Apply [Management's authoring rules](../management-skill/SKILL.md#authoring-rule
 2. Identify the desired result and replace the weakest ambiguous or conflicting rule with the smallest complete instruction.
 3. Verify within this active task. For consequential output behavior, use representative inputs and inspect semantic correctness as well as format. Read back simple value-only edits. Do not start the whole project or compile it merely to check a prompt unless requested.
 4. Return the artifact and concise evidence under [Task Analyze's action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests). State when a provider trial or stochastic reliability remains untested; one good sample does not prove stability.
-5. Ending's memory branch summarizes useful project knowledge and consolidates the affected prompt contract. It performs no product verification or code repair and creates no separate note per prompt or task. In parallel, [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md) releases disposable completed-task resources and preserves user review/reuse.
+5. Ending's memory branch consolidates useful knowledge; it performs no product verification or code repair. [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md) releases disposable resources and preserves user review/reuse.
 
 ## Output-specific checks
 
 | Output | Relevant contract |
 | --- | --- |
-| Structured data | Schema, required fields, types, allowed missing values, and cross-field consistency |
-| Human-readable content | Audience, factual support, terminology, and useful length/organization |
+| Structured data | Schema, exact permitted fields, types, allowed missing values, and cross-field consistency; no unsolicited keys |
+| Human-readable content | Requested answer only, audience, factual support, terminology, and useful length/organization |
 | Image or multimodal output | Each reference's role; what stays fixed; count, pose, crop, aspect ratio, and actual file/transparency requirements |
 | Prompt in executable code | [Code Skill](../code-skill/SKILL.md) and [string integration](../code-skill/references/prompt-generation.md) for syntax, interpolation, and consumers |
 | Functional code shipped in Skills | [Skill platform compatibility](../code-skill/references/skill-platform-compatibility.md) |
