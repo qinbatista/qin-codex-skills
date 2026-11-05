@@ -65,6 +65,9 @@ retention changes and deletion. Missing paths disappear on refresh.
   `owners.json`; cleanup must use the actual native owner.
 - `remote-*` requires a real long-term consumer and synchronization route.
   Offline task cases, reports and local-only scratch do not earn that name.
+  Its payload holds current directly usable final data and required maintained
+  code/configuration; route their generated intermediates and test outputs to
+  the execution's `temp-*` run, even when their producer lives in `remote-*`.
   Verify updates/remote readback through the synchronization owner; do not sweep
   a remote directory by prefix. Unproven mappings are review candidates.
 - Codex sessions, databases and managed worktrees are user-managed and excluded.

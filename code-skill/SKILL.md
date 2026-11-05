@@ -7,6 +7,8 @@ description: "Use for code creation, repair, refactoring, and code review when w
 
 Before any file write, apply the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve task support in the owning project Cache from its first write, including child-tool caches and test output. Maintained source and final deliverables keep their actual owners; inspect exact paths and the Git index before committing.
 
+When designing paths or configuring a producer, classify each output separately from the producer's location. Code in `remote-*` must write tests, intermediate results, logs and staging directly to the execution's `temp-*` run; only accepted, current data for direct consumption goes to its verified final owner. Pass explicit paths and temporary environments to child processes and exclude scratch from synchronization.
+
 ## Scope
 
 Apply this workflow to every local code change in any language, including tests, scripts and temporary code; another domain Skill may own its specific APIs and implementation. These are structure and writing preferences, not feature recipes. Running an unchanged command or an exact read-only lookup does not require the code-design workflow.
