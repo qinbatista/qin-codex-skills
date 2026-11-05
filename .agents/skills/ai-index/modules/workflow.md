@@ -16,4 +16,6 @@ Interrupted deletion resumes from its persisted original member/change-identity 
 
 Scan, discovery and allocation checkpoints expose direct `remote-*` children for native owner review, excluding the operational registry. Naming never proves retention or synchronization; verify real long-term configuration/asset/service consumers and retire consumed test payloads through existing guards. Allocation diagnostics keep a total and bounded path sample without traversing payload trees.
 
+Classify generated paths independently of the producer: `remote-*` code writes test outputs and intermediates to the task's `temp-*` run. Its verified remote payload holds current directly usable final data and required code/configuration, with accepted results published through the native owner. Preserve separately owned canonical history and active runtime state.
+
 A current-project Cache checkpoint refreshes the bounded operational [Cache index](../cache/README.md) after registration, retention changes and deletion. The 72-hour rule only recovers abandoned task input runs; current native consumers and formal durable owners still govern their exact data. New local control registries use temp-task-cache-registry; existing remote-task-cache-registry remains local compatibility state while its lock domain is live.

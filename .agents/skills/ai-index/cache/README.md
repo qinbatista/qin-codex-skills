@@ -24,6 +24,9 @@ refresh; failed native checks keep exact items visibly pending.
   `owners.json`; cleanup must use the actual native owner.
 - `remote-*` requires a real long-term consumer and synchronization route.
   Offline task cases, reports and local-only scratch do not earn that name.
+  Keep current directly usable final data and required maintained code/config
+  there; generated intermediates and test outputs go directly to `temp-*`,
+  including when their producer is in `remote-*`.
   Verify updates/remote readback through the synchronization owner; do not sweep
   a remote directory by prefix. Unproven mappings are review candidates.
 - Codex sessions, databases and managed worktrees are user-managed and excluded.
