@@ -20,29 +20,6 @@
           "module": "management",
           "reason": "Project start/finish needs the shared AI-index inspection and guarded update helper."
         }
-      ],
-      "code_targets": [
-        {
-          "id": "closeout-stop-decision",
-          "file": "task-analyze-skill/scripts/closeout_stop_hook.py",
-          "symbol": "closeout_decision",
-          "anchor": "def closeout_decision(event):",
-          "summary": "Request one same-chat closeout continuation for a valid Stop event and prevent continuation loops.",
-          "related": [
-            {
-              "module": "task-analyze",
-              "target": "closeout-stop-test",
-              "reason": "Exercises the real hook process and its scope and loop guards."
-            }
-          ]
-        },
-        {
-          "id": "closeout-stop-test",
-          "file": "task-analyze-skill/tests/test_closeout_stop_hook.py",
-          "symbol": "CloseoutStopHookTests.test_first_stop_requests_same_chat_closeout_with_scope_guards",
-          "anchor": "def test_first_stop_requests_same_chat_closeout_with_scope_guards(self):",
-          "summary": "Exercise the real Stop hook process and verify its same-chat closeout request and scope guards."
-        }
       ]
     },
     {

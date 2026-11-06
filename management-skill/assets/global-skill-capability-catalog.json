@@ -88,13 +88,6 @@
       ]
     },
     {
-      "id": "task-analyze-units",
-      "kind": "command",
-      "targets": ["source", "deployed"],
-      "timeout_seconds": 120,
-      "command": ["{python}", "-m", "unittest", "discover", "-s", "task-analyze-skill/tests", "-p", "test_*.py"]
-    },
-    {
       "id": "prompt-units",
       "kind": "command",
       "targets": [
@@ -303,13 +296,6 @@
     }
   ],
   "capabilities": [
-    {
-      "id": "inline-closeout-stop-hook",
-      "owner_skill": "task-analyze-skill",
-      "name": "Same-chat closeout continuation",
-      "function": "Request one guarded Codex Stop continuation for applicable cleanup, scoped memory and AI-index checks without creating a separate chat; preserve user scope and prevent continuation loops.",
-      "checks": ["task-analyze-units"]
-    },
     {
       "id": "skill-usage-visibility",
       "owner_skill": "task-analyze-skill",
