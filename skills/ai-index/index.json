@@ -1,17 +1,17 @@
 {
   "schema_version": 1,
   "rules": {
-    "repository": ".agents/skills/ai-index/rules/repository.md",
-    "structure": ".agents/skills/ai-index/rules/structure.md",
-    "verification": ".agents/skills/ai-index/rules/verification.md",
-    "execution": ".agents/skills/ai-index/rules/execution.md",
-    "memory": ".agents/skills/ai-index/rules/memory.md"
+    "repository": "skills/ai-index/rules/repository.md",
+    "structure": "skills/ai-index/rules/structure.md",
+    "verification": "skills/ai-index/rules/verification.md",
+    "execution": "skills/ai-index/rules/execution.md",
+    "memory": "skills/ai-index/rules/memory.md"
   },
   "modules": [
     {
       "id": "task-analyze",
       "summary": "Task goals, chat naming, action completion and final Skill reporting",
-      "document": ".agents/skills/ai-index/modules/task-analyze.md",
+      "document": "skills/ai-index/modules/task-analyze.md",
       "sources": [
         "task-analyze-skill"
       ],
@@ -25,7 +25,7 @@
     {
       "id": "workflow",
       "summary": "Ready-work coordination, Git delivery and exact project Cache resource ownership",
-      "document": ".agents/skills/ai-index/modules/workflow.md",
+      "document": "skills/ai-index/modules/workflow.md",
       "sources": [
         "workflow-skill"
       ],
@@ -269,7 +269,7 @@
     {
       "id": "code",
       "summary": "Code ownership, state/side-effect design and portable helper checks",
-      "document": ".agents/skills/ai-index/modules/code.md",
+      "document": "skills/ai-index/modules/code.md",
       "sources": [
         "code-skill"
       ],
@@ -310,7 +310,7 @@
     {
       "id": "verify",
       "summary": "Active-task evidence planning and consequential-result acceptance",
-      "document": ".agents/skills/ai-index/modules/verify.md",
+      "document": "skills/ai-index/modules/verify.md",
       "sources": [
         "verify-skill"
       ],
@@ -328,7 +328,7 @@
     {
       "id": "prompt",
       "summary": "Reusable prompt and durable AI-instruction contracts",
-      "document": ".agents/skills/ai-index/modules/prompt.md",
+      "document": "skills/ai-index/modules/prompt.md",
       "sources": [
         "prompt-skill"
       ],
@@ -346,7 +346,7 @@
     {
       "id": "optimization",
       "summary": "Requested Skill/code/workflow optimization with preserved behavior",
-      "document": ".agents/skills/ai-index/modules/optimization.md",
+      "document": "skills/ai-index/modules/optimization.md",
       "sources": [
         "optimization-skill"
       ],
@@ -380,7 +380,7 @@
     {
       "id": "project-memory",
       "summary": "Exact-project Obsidian knowledge and inline closure with user-managed Codex sessions",
-      "document": ".agents/skills/ai-index/modules/project-memory.md",
+      "document": "skills/ai-index/modules/project-memory.md",
       "sources": [
         "project-memory-skill"
       ],
@@ -435,7 +435,7 @@
     {
       "id": "management",
       "summary": "Skill authoring, automatic project indexes and recoverable delivery",
-      "document": ".agents/skills/ai-index/modules/management.md",
+      "document": "skills/ai-index/modules/management.md",
       "sources": [
         "management-skill",
         "README.md",
@@ -748,7 +748,7 @@
     {
       "id": "testing-release",
       "summary": "Project test registry and global Skill clean-clone release coverage",
-      "document": ".agents/skills/ai-index/modules/testing-release.md",
+      "document": "skills/ai-index/modules/testing-release.md",
       "sources": [
         ".agents/skills/testing-skill"
       ],

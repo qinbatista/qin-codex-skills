@@ -50,7 +50,7 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
 
     def plan(self):
         prefix = INDEX.INDEX_DIRECTORY
-        contents = {"AGENTS.md": "# Project\nKeep original assets. Read [AI index](.agents/skills/ai-index/SKILL.md).\n", INDEX.SKILL_PATH: "---\nname: ai-index\ndescription: Route project work to its owning instructions.\n---\nRead [the index](index.json), then the selected module only.\n", INDEX.MANIFEST_PATH: json.dumps(self.manifest(), indent=2), f"{prefix}/rules/repository.md": "# Repository and assets\nPreserve unrelated changes and canonical assets.\n", f"{prefix}/rules/structure.md": "# Structure\nRequests belong in src; originals belong in assets.\n", f"{prefix}/rules/verification.md": "# Verification\nExercise the affected request and read its actual result.\n", f"{prefix}/modules/api.md": "# API\nRequest handler: src/api.py::request.\n", f"{prefix}/modules/assets.md": "# Assets\nUNRELATED_ASSET_DETAIL is scoped to asset tasks.\n"}
+        contents = {"AGENTS.md": "# Project\nKeep original assets. Read [AI index](skills/ai-index/SKILL.md).\n", INDEX.SKILL_PATH: "---\nname: ai-index\ndescription: Route project work to its owning instructions.\n---\nRead [the index](index.json), then the selected module only.\n", INDEX.MANIFEST_PATH: json.dumps(self.manifest(), indent=2), f"{prefix}/rules/repository.md": "# Repository and assets\nPreserve unrelated changes and canonical assets.\n", f"{prefix}/rules/structure.md": "# Structure\nRequests belong in src; originals belong in assets.\n", f"{prefix}/rules/verification.md": "# Verification\nExercise the affected request and read its actual result.\n", f"{prefix}/modules/api.md": "# API\nRequest handler: src/api.py::request.\n", f"{prefix}/modules/assets.md": "# Assets\nUNRELATED_ASSET_DETAIL is scoped to asset tasks.\n"}
         return {"schema_version": 1, "project_root": str(self.project), "bootstrap_approved": True, "evidence": {"src/api.py": INDEX.file_hash(self.project / "src/api.py")}, "files": [{"path": relative, "expected_sha256": INDEX.file_hash(self.project / relative), "content": content} for relative, content in contents.items()]}
 
     def bootstrap(self):
@@ -76,6 +76,8 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
         fresh = self.cli("check")
         self.assertEqual(json.loads(fresh.stdout)["status"], "ready")
+        self.assertTrue((self.project / "skills/ai-index/SKILL.md").is_file())
+        self.assertFalse((self.project / INDEX.LEGACY_INDEX_DIRECTORY).exists())
         self.assertTrue(json.loads(fresh.stdout)["structural_check_only"])
         routed = self.cli("route", "--module", "api")
         route = json.loads(routed.stdout)
@@ -160,7 +162,7 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         self.assertEqual(INDEX.apply_plan(self.project, update, self.work)["status"], "complete")
         self.assertIn("Current request owner", (self.project / target).read_text())
         self.assertFalse((self.project / ".agents").exists())
-        for forbidden in (f"{INDEX.INDEX_DIRECTORY}/rules/extra.md", "skills/another-skill/SKILL.md", "src/api.py"):
+        for forbidden in (f"{INDEX.LEGACY_INDEX_DIRECTORY}/rules/extra.md", "skills/another-skill/SKILL.md", "src/api.py"):
             with self.subTest(forbidden=forbidden), self.assertRaisesRegex(ValueError, "outside"):
                 INDEX.guidance_target(self.project, forbidden)
 
@@ -254,19 +256,31 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         self.assertEqual(inspected["status"], "ready", inspected)
         self.assertEqual(inspected["cache_management"]["required_action"], "review_cache_owner")
 
+    def test_legacy_only_index_remains_readable_until_migrated(self):
+        for record in self.plan()["files"]:
+            self.write(record["path"].replace(INDEX.INDEX_DIRECTORY, INDEX.LEGACY_INDEX_DIRECTORY), record["content"].replace(INDEX.INDEX_DIRECTORY, INDEX.LEGACY_INDEX_DIRECTORY))
+        result = json.loads(self.cli("route", "--module", "api").stdout)
+        self.assertEqual(result["status"], "ready", result)
+        self.assertEqual(result["document"], f"{INDEX.LEGACY_INDEX_DIRECTORY}/modules/api.md")
+        self.assertFalse((self.project / INDEX.INDEX_DIRECTORY).exists())
+
     def test_visible_owner_precedes_existing_legacy_without_rewriting_it(self):
         self.bootstrap()
-        legacy = {record["path"]: (self.project / record["path"]).read_bytes() for record in self.plan()["files"] if record["path"].startswith(INDEX.INDEX_DIRECTORY)}
+        legacy = {}
         for record in self.plan()["files"]:
-            self.write(record["path"].replace(INDEX.INDEX_DIRECTORY, INDEX.VISIBLE_INDEX_DIRECTORY), record["content"].replace(INDEX.INDEX_DIRECTORY, INDEX.VISIBLE_INDEX_DIRECTORY))
+            if record["path"].startswith(INDEX.INDEX_DIRECTORY):
+                path = record["path"].replace(INDEX.INDEX_DIRECTORY, INDEX.LEGACY_INDEX_DIRECTORY)
+                self.write(path, record["content"].replace(INDEX.INDEX_DIRECTORY, INDEX.LEGACY_INDEX_DIRECTORY))
+                legacy[path] = (self.project / path).read_bytes()
         result = INDEX.check_project(self.project)
         self.assertEqual(result["status"], "ready", result)
         self.assertIn(f"{INDEX.VISIBLE_INDEX_DIRECTORY}/index.json", result["documents"])
-        self.assertNotIn(INDEX.MANIFEST_PATH, result["documents"])
+        self.assertNotIn(f"{INDEX.LEGACY_INDEX_DIRECTORY}/index.json", result["documents"])
         self.assertEqual(legacy, {relative: (self.project / relative).read_bytes() for relative in legacy})
 
     def test_partial_visible_owner_is_repair_case_without_legacy_fallback(self):
-        self.bootstrap()
+        for record in self.plan()["files"]:
+            self.write(record["path"].replace(INDEX.INDEX_DIRECTORY, INDEX.LEGACY_INDEX_DIRECTORY), record["content"].replace(INDEX.INDEX_DIRECTORY, INDEX.LEGACY_INDEX_DIRECTORY))
         (self.project / INDEX.VISIBLE_INDEX_DIRECTORY).mkdir(parents=True)
         for command in ("inspect", "check", "route"):
             result = json.loads(self.cli(command).stdout)
@@ -511,7 +525,7 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
     def test_linked_subdocuments_are_checked_and_hashed_without_following_source_docs(self):
         self.bootstrap()
         detail = f"{INDEX.INDEX_DIRECTORY}/modules/request-details.md"
-        self.write(detail, "# Request details\nSee [API](api.md) and [source](../../../../src/AGENTS.md).\n")
+        self.write(detail, "# Request details\nSee [API](api.md) and [source](../../../src/AGENTS.md).\n")
         self.write(f"{INDEX.INDEX_DIRECTORY}/modules/api.md", "# API\nRead [request details](request-details.md).\n")
         self.write("src/AGENTS.md", "Scoped source guide with [a source-only link](not-indexed.md).\n")
         checked = self.cli("inspect", "--phase", "end")

@@ -5,7 +5,7 @@ description: Route qin-codex-skills work to its eight global Skill owners, proje
 
 # qin-codex-skills AI index
 
-Start with `project_ai_index.py route --project-root ROOT` from the installed Management Skill to read only the compact module menu. Select `--module ID`, then `--target TARGET` to read the current method or bounded key-line fragment. [index.json](index.json) owns the maintained metadata; do not load the whole manifest for routine navigation. For every local code edit, including tests, use [code navigation](../../../management-skill/references/project-ai-index.md#code-navigation), exact-scope memory and only necessary related contracts. Reuse unchanged context and refresh touched targets after edits. The source directories contain the public global Skills; this index is project-only and must never be installed globally or bundled as a plugin Skill.
+Start with `project_ai_index.py route --project-root ROOT` from the installed Management Skill to read only the compact module menu. Select `--module ID`, then `--target TARGET` to read the current method or bounded key-line fragment. [index.json](index.json) owns the maintained metadata; do not load the whole manifest for routine navigation. For every local code edit, including tests, use [code navigation](../../management-skill/references/project-ai-index.md#code-navigation), exact-scope memory and only necessary related contracts. Reuse unchanged context and refresh touched targets after edits. The source directories contain the public global Skills; this index is project-only and must never be installed globally or bundled as a plugin Skill.
 
 Choose shared rules by the action:
 
@@ -17,6 +17,6 @@ Choose shared rules by the action:
 | Task coordination, writes, tools or cleanup | [Execution and resources](rules/execution.md) |
 | Recall, durable knowledge or Ending | [Memory and Ending](rules/memory.md) |
 
-Use Management's [automatic project AI index](../../../management-skill/references/project-ai-index.md) at start/resume, on accepted intent/ownership changes and before delivery. Follow [AI Index Compression](../../../management-skill/references/project-ai-index.md#ai-index-compression) when inspection or apply reports it due. Repair missing routes with a bounded lookup and verified anchor; follow dependencies only for their stated reason.
+Use Management's [automatic project AI index](../../management-skill/references/project-ai-index.md) at start/resume, on accepted intent/ownership changes and before delivery. Follow [AI Index Compression](../../management-skill/references/project-ai-index.md#ai-index-compression) when inspection or apply reports it due. Repair missing routes with a bounded lookup and verified anchor; follow dependencies only for their stated reason.
 
 Keep detailed policies in their linked owning Skill. This map records stable responsibilities. Its [Cache management](cache/README.md) sub-index is the bounded operational exception: stable owners plus ignored current.json, replacing current rows rather than keeping task history. Repeated unrelated context is evidence to explain a proposed module split; source restructuring still needs the user's direction. Preserve existing scoped guidance and user decisions.

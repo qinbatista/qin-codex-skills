@@ -2,7 +2,7 @@
 
 This repository owns eight public global Skills: Task Analyze, Workflow, Code, Verify, Prompt, Optimization, Project Memory and Management. Their source folders own instructions, references, helpers and clean-clone tests. Product-specific implementations belong in project Skills.
 
-Read the [project AI index](.agents/skills/ai-index/SKILL.md) at start/resume and finish when this is the current project. Reference lookups never trigger index maintenance or authorize writes. Select focused routes, reconcile established intent or structure before delivery, and run AI Index Compression when inspection reports it due. Preserve scoped rules and other Skills' authorization boundaries.
+Read the [project AI index](skills/ai-index/SKILL.md) at start/resume and finish when this is the current project. Reference lookups never trigger index maintenance or authorize writes. Select focused routes, reconcile established intent or structure before delivery, and run AI Index Compression when inspection reports it due. Preserve scoped rules and other Skills' authorization boundaries.
 
 - Write all project documentation, Skills, AGENTS files, AI-index guidance, and durable memory in English under [Management's authoring rules](management-skill/SKILL.md#authoring-rules).
 - Code changes, including tests, use module/file/method anchors, scoped memory and necessary dependencies. Refresh touched routes; Code owns method boundaries and justified extraction. Keep guidance portable, concise and stable; the bounded ignored Cache inventory is the operational exception.

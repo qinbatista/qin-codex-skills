@@ -12,7 +12,9 @@ The helper accepts `--project-scope current|reference` on every command, default
 
 ## One project owner
 
-Each current editable project owns one project-local AI index. Prefer existing `skills/ai-index/SKILL.md`; otherwise reuse existing `.agents/skills/ai-index/SKILL.md`. Directory presence selects the owner, including partial or malformed entries: a visible index must not silently fall back to a legacy index. Never recreate `.agents` after an explicitly visible-source migration. With neither directory present, retain the first-bootstrap consent gate; the helper's default bootstrap location remains the legacy path unless the user establishes a visible owner. This is a project Skill, never a global installation or plugin Skill. Existing domain/plugin Skills remain their own authorities; the index links to them. Resolve the user's current main work project first, even when the chat's working directory is another repository; consulted projects remain references. A fixture, snapshot or isolated test copy cannot satisfy maintenance of that live target. Respect explicit read-only boundaries, user holds and repository permissions; report an unavailable index instead of writing elsewhere. A projectless conversation has no index to create.
+Each current editable project owns one project-local AI index at `skills/ai-index/SKILL.md` by default. Use another location only when the user explicitly requests it. For an existing `.agents/skills/ai-index`, preserve its contents and consumers, and migrate it to `skills/ai-index` within the authorized current-project scope: update project-relative routes, Markdown links, ignore exceptions and references; verify the new owner and consumers before removing the old one. Preserve active edits and report collisions or unsupported consumers rather than overwriting or silently duplicating either index. Until a safe migration is complete, recognize the legacy index without treating the project as unindexed. When both exist, the visible index is authoritative, including when partial; reconcile distinct legacy content before removing it. Respect explicit read-only boundaries and user holds.
+
+With neither directory present, retain the first-bootstrap consent gate; after consent, create the index at the visible default. This is a project Skill, never a global installation or plugin Skill. Existing domain/plugin Skills remain their own authorities; the index links to them. Resolve the user's current main work project first, even when the chat's working directory is another repository; consulted projects remain references. A fixture, snapshot or isolated test copy cannot satisfy maintenance of that live target. Report an unavailable index instead of writing elsewhere. A projectless conversation has no index to create.
 
 In a Git-managed project, the AI index is shared project source: track and commit its stable instructions, routes, metadata, and Cache owner rules even when the index lives under `.agents/`. Make narrow ignore exceptions when necessary, and include index updates in the project's normal Git delivery. Keep machine-specific operational inventories, temporary files, secrets and private data out of Git; `cache/current.json` remains ignored. Verify the intended files are tracked and the delivered remote ref contains them. Never create an index solely to satisfy this rule or override the first-bootstrap consent boundary.
 
@@ -130,7 +132,7 @@ The agent authors a reviewed plan in the current [project Cache task run](../../
   "evidence": {"src/feature.py": "<sha256>"},
   "files": [
     {"path": "AGENTS.md", "expected_sha256": "<sha256>", "content": "<reviewed complete document>"},
-    {"path": ".agents/skills/ai-index/SKILL.md", "expected_sha256": null, "content": "<reviewed complete skill>"}
+    {"path": "skills/ai-index/SKILL.md", "expected_sha256": null, "content": "<reviewed complete skill>"}
   ]
 }
 ```

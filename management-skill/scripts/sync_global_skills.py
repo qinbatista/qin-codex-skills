@@ -143,7 +143,8 @@ PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "
 APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
 SUPPORT_SKILL_NAMES = set()
 PROJECT_TESTING_SKILL = Path(".agents") / "skills" / "testing-skill"
-PROJECT_AI_INDEX_SKILL = Path(".agents") / "skills" / "ai-index"
+PROJECT_AI_INDEX_SKILL = Path("skills") / "ai-index"
+LEGACY_PROJECT_AI_INDEX_SKILL = Path(".agents") / "skills" / "ai-index"
 GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
 GLOBAL_AGENTS_DIRECTIVE = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
 LEGACY_GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
@@ -1553,8 +1554,11 @@ def publishable_source_path(relative_path):
         return True
     if relative_path.parts[:3] == PROJECT_TESTING_SKILL.parts:
         skill_relative = Path(*relative_path.parts[3:])
-    elif relative_path.parts[:3] == PROJECT_AI_INDEX_SKILL.parts:
-        skill_relative = Path(*relative_path.parts[3:])
+    elif any(relative_path.parts[:len(owner.parts)] == owner.parts for owner in (PROJECT_AI_INDEX_SKILL, LEGACY_PROJECT_AI_INDEX_SKILL)):
+        owner = next(owner for owner in (PROJECT_AI_INDEX_SKILL, LEGACY_PROJECT_AI_INDEX_SKILL) if relative_path.parts[:len(owner.parts)] == owner.parts)
+        skill_relative = Path(*relative_path.parts[len(owner.parts):])
+        if skill_relative in {Path("cache/README.md"), Path("cache/owners.json"), Path("cache/.gitignore")}:
+            return True
         if skill_relative != Path("index.json") and skill_relative.suffix != ".md":
             return False
         if any(Path(part).stem.casefold() in {"plan", "plans", "log", "logs", "receipt", "receipts", "recovery"} for part in skill_relative.parts):

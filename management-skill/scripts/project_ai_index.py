@@ -20,8 +20,9 @@ from task_artifact_paths import project_artifact_directory, validate_task_direct
 import task_cache_cleanup
 
 
-INDEX_DIRECTORY = ".agents/skills/ai-index"
-VISIBLE_INDEX_DIRECTORY = "skills/ai-index"
+INDEX_DIRECTORY = "skills/ai-index"
+VISIBLE_INDEX_DIRECTORY = INDEX_DIRECTORY
+LEGACY_INDEX_DIRECTORY = ".agents/skills/ai-index"
 SKILL_PATH = f"{INDEX_DIRECTORY}/SKILL.md"
 MANIFEST_PATH = f"{INDEX_DIRECTORY}/index.json"
 REQUIRED_RULES = {"repository", "structure", "verification"}
@@ -121,8 +122,8 @@ def contained_path(root, value):
 
 
 def index_directory(root):
-    """Prefer the existing visible owner; preserve legacy projects and bootstrap consent."""
-    for relative in (VISIBLE_INDEX_DIRECTORY, INDEX_DIRECTORY):
+    """Use the shared default while continuing to recognize existing legacy indexes."""
+    for relative in (INDEX_DIRECTORY, LEGACY_INDEX_DIRECTORY):
         if contained_path(root, relative).exists():
             return relative
     return INDEX_DIRECTORY

@@ -1199,10 +1199,10 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/local/private.json")))
         self.assertFalse(sync_global_skills.publishable_source_path(Path(".agents/skills/testing-skill/auth.json")))
         index_root = sync_global_skills.PROJECT_AI_INDEX_SKILL
-        for name in ("SKILL.md", "index.json", "rules/repository.md", "modules/publisher.md", "modules/publisher/validation.md"):
+        for name in ("SKILL.md", "index.json", "rules/repository.md", "modules/publisher.md", "modules/publisher/validation.md", "cache/README.md", "cache/owners.json", "cache/.gitignore"):
             with self.subTest(index_path=name):
                 self.assertTrue(sync_global_skills.publishable_source_path(index_root / name))
-        for name in (".", "plan.json", "state.json", "rules/index.json", "plan.md", "plans/update.md", "logs/run.md", "output.log", "local/rules.md", "auth.json", "scripts/update.py", "../other-skill/SKILL.md"):
+        for name in (".", "plan.json", "state.json", "rules/index.json", "plan.md", "plans/update.md", "logs/run.md", "output.log", "local/rules.md", "auth.json", "scripts/update.py", "cache/current.json", "../other-skill/SKILL.md"):
             with self.subTest(index_path=name):
                 self.assertFalse(sync_global_skills.publishable_source_path(index_root / name))
 

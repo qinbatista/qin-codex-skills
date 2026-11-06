@@ -24,7 +24,7 @@ from task_artifact_paths import resolve_task_artifact_root, task_artifact_scope,
 
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
 PROJECT_TESTING_SKILL_RELATIVE_PATH = Path(".agents/skills/testing-skill")
-PROJECT_AI_INDEX_SKILL_RELATIVE_PATH = Path(".agents/skills/ai-index")
+PROJECT_AI_INDEX_SKILL_RELATIVE_PATH = Path("skills/ai-index")
 DEFAULT_REPORT_RELATIVE_PATH = Path("global-skill-regression/latest.json")
 DEFAULT_HISTORY_RELATIVE_PATH = Path("global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
