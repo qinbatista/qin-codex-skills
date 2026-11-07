@@ -19,12 +19,12 @@ This repository maintains eight global Codex skills. Projects retain domain rule
 
 1. At startup/resume, [check the current task project's AI index](management-skill/references/project-ai-index.md): request first-bootstrap consent; otherwise reuse focused routes. Never prompt or maintain indexes in reference projects. Ensure Obsidian memory, skip missing memory, and track Skill use.
 2. Preview the objective and implementation steps, then execute. Ask only for necessary decisions or authorization.
-3. Update concise root `AGENTS.md` and `skills/ai-index` automatically when accepted intent or structure changes and before delivery. Consult project testing Skills; run real affected-case checks and clean disposable resources.
-4. Before creating an unpinned projectless Ending, check native deletion; otherwise close out inline. Show its link and finish without waiting. Ending reconciles the index, consolidates memory, [cleans resources](workflow-skill/references/ending-resource-audit.md), and deletes itself. Preserve active/review resources; archival is not deletion.
+3. For every task that changes the project, update and verify its relevant AI-index guidance before delivery. Reconcile root `AGENTS.md` when needed. Consult project testing Skills; run real affected-case checks and clean disposable resources.
+4. Close out guidance, memory and resources in the active task under [Project Memory](project-memory-skill/SKILL.md) and [Workflow](workflow-skill/SKILL.md). Codex chats and sessions remain user-managed; do not create or delete an Ending chat automatically.
 
 At completion, summarize actual Skill names, steps and reasons once, including branch use; distinguish unused, missing or unreadable Skills. Progress updates need no repeated lists; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
 
-Project memories stay isolated in Memory.json and Knowledge.md. Recall excludes stale facts. Ending consolidates touched entries and shared preferences remain scoped. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
+Project memories stay isolated in Memory.json and Knowledge.md. Recall excludes stale facts. The active task consolidates touched entries and shared preferences remain scoped. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
 
 [AI Index Compression](management-skill/references/project-ai-index.md#ai-index-compression) reviews oversized project guidance against current source and scoped Obsidian memory during tasks, preserving rules and history.
 
