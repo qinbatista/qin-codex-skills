@@ -762,6 +762,24 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertEqual(target.read_text(), "original")
         self.assertTrue(run.exists())
 
+    @unittest.skipIf(sys.platform == "win32", "POSIX links and FIFOs required")
+    def test_completed_run_removes_internal_links_and_closed_fifo(self):
+        run = self.run_root()
+        (run / "payload").write_bytes(b"disposable")
+        (run / "internal-link").symlink_to("payload")
+        os.mkfifo(run / "closed-pipe")
+        descriptor = os.open(run / "closed-pipe", os.O_RDWR | os.O_NONBLOCK)
+        try:
+            guarded = self.sweep(phase="finish", current_run=run)
+            self.assertFalse(guarded["requested_complete"], guarded)
+            self.assertTrue(run.exists())
+        finally:
+            os.close(descriptor)
+        result = self.finish_when_native_readers_close(run, lambda: self.sweep(phase="finish", current_run=run))
+        self.assertTrue(result["requested_complete"], result)
+        self.assertFalse(run.exists())
+        self.assertFalse(self.record_path(run).exists())
+
     def test_discovery_registers_roots_only_and_scan_is_fast_without_full_walk(self):
         cache = self.project / "Cache"
         cache.mkdir()

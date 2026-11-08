@@ -70,6 +70,22 @@ def _safe_stat(path):
     return observed
 
 
+def _safe_member_stat(path, root):
+    """Inspect an owned member without following links or opening IPC nodes."""
+    observed = path.lstat()
+    if getattr(observed, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0):
+        raise ValueError("reparse points are protected")
+    if stat.S_ISLNK(observed.st_mode):
+        target = Path(os.path.realpath(path))
+        if not target.is_relative_to(root):
+            raise ValueError("links outside the task run are protected")
+    elif stat.S_ISFIFO(observed.st_mode) or stat.S_ISSOCK(observed.st_mode):
+        pass
+    else:
+        return _safe_stat(path)
+    return observed
+
+
 def _identity(observed):
     return [observed.st_dev, observed.st_ino]
 
@@ -529,7 +545,7 @@ def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
         if deadline is not None and time.monotonic() >= deadline:
             raise ValueError("checkpoint inspection budget exhausted; preserve this run")
         current = pending.pop()
-        observed = _safe_stat(current)
+        observed = _safe_member_stat(current, path) if current != path else root
         if observed.st_dev != root.st_dev:
             raise ValueError("mounted filesystems are protected")
         if current != path and current.name in BARRIERS:
@@ -803,7 +819,7 @@ def _read_deletion_plan(record_path, record):
             raise ValueError("invalid original deletion member boundary")
         if not isinstance(expected, list) or len(expected) != 5 or any(type(value) is not int for value in expected):
             raise ValueError("invalid original deletion member identity")
-        if stat.S_ISREG(expected[2]) and type(file_ctimes.get(relative)) is not int:
+        if not stat.S_ISDIR(expected[2]) and type(file_ctimes.get(relative)) is not int:
             raise ValueError("missing original deletion member change identity")
     snapshot["entries"] = {relative: tuple(expected) for relative, expected in entries.items()}
     return snapshot
@@ -818,7 +834,7 @@ def _remaining_deletion(path, original, deadline, registry=None):
             raise ValueError("new member appeared after deletion started; owner review required")
         if expected[0] != original["identity"][0] or observed[:3] != (device, expected[1], expected[2]):
             raise ValueError("deletion member identity changed; replacement preserved")
-        if stat.S_ISREG(observed[2]) and (observed[3:] != expected[3:] or current["file_ctimes"][relative] != original["file_ctimes"][relative]):
+        if not stat.S_ISDIR(observed[2]) and (observed[3:] != expected[3:] or current["file_ctimes"][relative] != original["file_ctimes"][relative]):
             raise ValueError("deletion member changed after interruption; payload preserved")
     return current
 
@@ -856,7 +872,7 @@ def _remove_snapshot(path, snapshot, *, deadline=None):
             raise TimeoutError("deletion paused at its budget; original proof permits the next checkpoint")
         current = path / relative
         artifacts._check_ancestors(current.parent)
-        observed = _safe_stat(current)
+        observed = _safe_member_stat(current, path) if current != path else _safe_stat(current)
         stable = (observed.st_dev, observed.st_ino, observed.st_mode)
         if stable != expected[:3]:
             raise ValueError("entry identity changed during deletion")

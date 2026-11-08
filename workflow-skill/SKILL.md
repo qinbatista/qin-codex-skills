@@ -51,6 +51,8 @@ At the start of every new user request or distinct work unit, including unrelate
 
 Use the local [Cache cleanup helper](references/cache-cleanup.md#local-index-and-executable-checkpoints) at start, transition and finish. Process explicit owners first. Registered completed/obsolete disposable runs have no age delay; foreign working runs require 72 hours without heartbeat or descendant changes and fresh consumer checks. Resume interrupted deletion only from its unchanged original proof. Resolve the helper's missing/due retention reviews instead of silently keeping every run labeled retained or recovery. Inspect project Cache naming violations too: direct child directories must be `temp-*` or `remote-*`; find and repair the producer, remove disposable violations, and resolve actual retained-resource ownership instead of disguising garbage by renaming it.
 
+The helper unlinks an owned run's internal symlinks and closed FIFO/socket nodes without following them after fresh consumer checks. Escaping links, reparse points, mounts, hard links and device nodes remain protected. Complete runs containing ordinary isolated tool installations must not remain indefinitely just because those installations contain internal links.
+
 ## Requested Cache cleanup
 
 When the user asks to clean Cache, `temp-*`, all Codex projects, or the whole computer, follow [Cache cleanup](references/cache-cleanup.md). Match the requested scope, enumerate exact runs and consumers, then delete only confirmed disposable Skill-generated support. A running project or chat protects only resources it still uses; completed earlier runs may be cleaned immediately. An explicit cleanup request covers eligible legacy `Cache/temp-*` directly; no migration or routine confirmation is required.
