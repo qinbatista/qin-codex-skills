@@ -535,8 +535,9 @@ def sync_cache_index(root, *, apply=False, project_scope="current"):
         reject_links(target)
     ignored = ignore.read_bytes() if ignore.is_file() else b""
     ignore_text = ignored.decode("utf-8")
-    unowned_ignore = re.sub(r"(?m)^# managed-cache-current-start\n.*?^# managed-cache-current-end\n?", "", ignore_text, flags=re.DOTALL)
-    updated_ignore = (unowned_ignore.rstrip("\n") + "\n\n" if unowned_ignore.strip() else "") + CACHE_IGNORE_BLOCK
+    newline = "\r\n" if "\r\n" in ignore_text else "\n"
+    unowned_ignore = re.sub(r"(?m)^# managed-cache-current-start\r?\n.*?^# managed-cache-current-end(?:\r?\n|$)", "", ignore_text, flags=re.DOTALL)
+    updated_ignore = (unowned_ignore.rstrip("\r\n") + newline * 2 if unowned_ignore.strip() else "") + CACHE_IGNORE_BLOCK.replace("\n", newline)
     ignore_stale = ignore_text != updated_ignore
     changed = []
     if apply:

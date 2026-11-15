@@ -41,7 +41,7 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
     def write(self, relative, content):
         path = self.project / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        path.write_bytes(content.encode("utf-8"))
         return path
 
     def manifest(self):
@@ -213,6 +213,20 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         cloned = json.loads(self.cli("inspect").stdout)
         self.assertEqual(cloned["status"], "ready", cloned)
         self.assertEqual(cloned["cache_management"]["required_action"], "refresh_cache_index")
+
+    def test_cache_refresh_preserves_windows_line_endings_and_is_idempotent(self):
+        for record in self.plan()["files"]:
+            self.write(record["path"], record["content"])
+        folder = self.project / INDEX.INDEX_DIRECTORY / "cache"
+        folder.mkdir(parents=True)
+        ignore = folder / ".gitignore"
+        original = b"personal-entry\r\n\r\n# managed-cache-current-start\r\ncurrent.json\r\n*.pending\r\n# managed-cache-current-end\r\n"
+        ignore.write_bytes(original)
+        first = self.cli("cache", "--apply")
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.assertEqual(ignore.read_bytes(), original)
+        self.assertEqual(json.loads(self.cli("cache", "--apply").stdout)["status"], "unchanged")
+        self.assertEqual(ignore.read_bytes(), original)
 
     def test_cache_inventory_bounds_rows_and_preserves_authored_policy(self):
         for record in self.plan()["files"]:

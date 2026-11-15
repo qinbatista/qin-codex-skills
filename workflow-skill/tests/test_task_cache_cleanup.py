@@ -300,6 +300,18 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertTrue(run.exists())
         self.assertIn("producer", result["results"][0]["reason"])
 
+    def test_old_unverified_producer_identity_never_adopts_a_live_pid(self):
+        run = self.run_root("foreign-legacy-producer")
+        record_path = self.record_path(run)
+        record = json.loads(record_path.read_text())
+        record["creator_identity"] = "unverified"
+        record_path.write_text(json.dumps(record))
+        with mock.patch.object(cleanup.time, "time", return_value=time.time() + cleanup.STALE_SECONDS + 100), mock.patch.object(cleanup, "_process_identity", return_value="live process identity"), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            result = self.sweep()
+        self.assertTrue(run.exists(), result)
+        self.assertEqual(result["results"][0]["action"], "pending")
+        self.assertIn("identity was not recorded", result["results"][0]["reason"])
+
     def test_recent_retention_recovery_and_native_ledger_are_protected(self):
         retained, recovery, ledger = self.run_root("retain"), self.run_root("recover"), self.run_root("ledger")
         self.retain_run(self.project, "retain", retained, artifact_root=self.base, state="retained", reason="User is reviewing this exact exported fixture")
@@ -805,6 +817,20 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertTrue(any(item["path"] == str(cache / "canonical-assets") for item in scanned["unclassified"]))
         self.assertEqual(self.sweep()["results"], [])
 
+    @unittest.skipUnless(sys.platform == "win32", "Windows native process identity required")
+    def test_windows_process_identity_observes_live_and_exited_child(self):
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], **hidden_process_options())
+        try:
+            identity = cleanup._process_identity(child.pid)
+            self.assertIsInstance(identity, str)
+            self.assertNotEqual(identity, "unverified")
+            self.assertTrue(identity.startswith(f"{child.pid} "))
+            self.assertEqual(cleanup._process_identity(child.pid), identity)
+        finally:
+            child.terminate()
+            child.wait(timeout=10)
+        self.assertIsNone(cleanup._process_identity(child.pid))
+
     def test_windows_and_unknown_platform_fail_closed(self):
         run = self.run_root()
         for platform in ("win32", "unsupported"):
@@ -890,7 +916,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native):
             fields = f"p123\0\nn{run}-sibling/open.bin\0\n"
             self.assertTrue(cleanup.probe_activity(run)["safe"])
-            fields += f"n{run}/directory with spaces/file\nname.bin\0\n"
+            fields += f"n{run / 'directory with spaces' / 'file'}\nname.bin\0\n"
             self.assertEqual(cleanup.probe_activity(run)["reason"], "active open files or working directory")
             fields = "unverified output"
             self.assertTrue(cleanup.probe_activity(run)["pending"])

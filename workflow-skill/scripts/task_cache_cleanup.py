@@ -533,6 +533,37 @@ def release_retention(project_root, task_id, run_root, *, run_id, expected_ident
     return {**record, "cache_index": _refresh_cache_index(project)}
 
 
+def _file_change_time(path, observed):
+    if sys.platform != "win32":
+        return observed.st_ctime_ns
+    import ctypes
+    from ctypes import wintypes
+
+    class FileBasicInfo(ctypes.Structure):
+        _fields_ = [("creation", ctypes.c_int64), ("access", ctypes.c_int64), ("write", ctypes.c_int64), ("change", ctypes.c_int64), ("attributes", wintypes.DWORD)]
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.GetFileInformationByHandleEx.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel.GetFileInformationByHandleEx.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.CreateFileW(str(path), 0x80, 7, None, 3, 0x00200000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        info = FileBasicInfo()
+        if not kernel.GetFileInformationByHandleEx(handle, 0, ctypes.byref(info), ctypes.sizeof(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        current = _safe_stat(path)
+        if (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns) != (observed.st_dev, observed.st_ino, observed.st_size, observed.st_mtime_ns):
+            raise ValueError("file changed during native change-time inspection")
+        return info.change
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
     artifacts._check_ancestors(path)
     root = _safe_stat(path)
@@ -566,7 +597,7 @@ def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
         else:
             byte_count += observed.st_size
             if include_ctime:
-                file_ctimes[relative] = observed.st_ctime_ns
+                file_ctimes[relative] = _file_change_time(current, observed)
     result = {"identity": _identity(root), "entries": entries, "latest": latest / 1000000000, "bytes": byte_count}
     if include_ctime:
         result["file_ctimes"] = file_ctimes
@@ -609,8 +640,30 @@ def _process_identity(pid, deadline=None):
             if result.returncode == 0 and result.stdout.strip() and not result.stderr.strip():
                 return result.stdout.strip()
         return "unverified"
-    else:
-        return "unverified"
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.GetProcessTimes.argtypes = [wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4)]
+        kernel.GetProcessTimes.restype = wintypes.BOOL
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return None if ctypes.get_last_error() == 87 else "unverified"
+        try:
+            created, exited, kernel_time, user_time = (wintypes.FILETIME() for _ in range(4))
+            if not kernel.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(exited), ctypes.byref(kernel_time), ctypes.byref(user_time)):
+                return "unverified"
+            if exited.dwHighDateTime or exited.dwLowDateTime:
+                return None
+            return f"{pid} {created.dwHighDateTime:08x}{created.dwLowDateTime:08x}"
+        finally:
+            kernel.CloseHandle(handle)
+    return "unverified"
 
 
 def _macos_mounts():
@@ -947,6 +1000,8 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             creator = _process_identity(record["creator_pid"], deadline)
             if creator == "unverified":
                 return {**result, "action": "pending", "reason": "original producer process identity is unverified"}
+            if creator is not None and record["creator_identity"] == "unverified":
+                return {**result, "action": "pending", "reason": "original producer identity was not recorded; live PID cannot be matched safely"}
             if creator is not None and creator == record["creator_identity"]:
                 return {**result, "action": "keep", "reason": "original producer process remains alive"}
         activity = probe_activity(path, deadline=deadline)

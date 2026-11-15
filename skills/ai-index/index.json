@@ -146,6 +146,13 @@
           "summary": "Use bounded native locks and exact legacy-marker interoperability; recover proven dead writers without bypassing live or unknown owners."
         },
         {
+          "id": "cache-process-identity",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_process_identity",
+          "anchor": "def _process_identity(pid, deadline=None):",
+          "summary": "Match a live producer to its original native creation identity; preserve inaccessible processes and legacy unknown identities."
+        },
+        {
           "id": "cache-deletion-proof",
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_write_deletion_plan",
@@ -157,7 +164,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_remaining_deletion",
           "anchor": "def _remaining_deletion(path, original, deadline, registry=None):",
-          "summary": "Admit only the unchanged remaining subset of the original deletion proof; reject new or modified inputs."
+          "summary": "Admit only the unchanged remaining subset of the original deletion proof; use native Windows change time and reject new or modified inputs."
         },
         {
           "id": "cache-checkpoint-priority",
@@ -720,7 +727,7 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "sync_cache_index",
           "anchor": "def sync_cache_index(root, *, apply=False, project_scope=\"current\"):",
-          "summary": "Replace bounded current Cache owner/inventory state without traversing remote payload or deleting files."
+          "summary": "Replace bounded current Cache owner/inventory state without traversing remote payload or deleting files; preserve managed ignore blocks across LF and CRLF."
         },
         {
           "id": "cache-index-test",
