@@ -88,7 +88,7 @@ def svg_bounds_issues(svg_path):
 
 class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
     def setUp(self):
-        self.codex_sandbox = tempfile.TemporaryDirectory()
+        self.codex_sandbox = tempfile.TemporaryDirectory(prefix="t-")
         self.addCleanup(self.codex_sandbox.cleanup)
         self.codex_root = Path(self.codex_sandbox.name) / "custom-codex-home"
         codex_environment = mock.patch.dict(sync_global_skills.os.environ, {"CODEX_HOME": str(self.codex_root)})
@@ -1227,6 +1227,8 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         self.assertNotIn("ai-index", sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES)
         with mock.patch("builtins.print"), sync_global_skills.validated_publication_candidate(source_dir, selected) as publication:
             candidate = publication[0]
+            self.assertEqual(candidate.name, "s")
+            self.assertTrue(candidate.parent.name.startswith("temp-p-"))
             for path, content in contents.items():
                 self.assertEqual((candidate / path).read_text(encoding="utf-8"), content)
             installed = candidate.parent / "installed-skills"
@@ -1240,8 +1242,17 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
 
     def publication_repository(self, configured_upstream=True, suffix=""):
         sandbox = Path(self.codex_sandbox.name)
-        source_dir = sandbox / f"publication-source{suffix}"
-        remote_dir = sandbox / f"remote{suffix}.git"
+        tag = suffix.replace("-", "")[:4]
+        source_dir = sandbox / f"s{tag}"
+        gate_owner = sync_global_skills.os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT") if sys.platform == "win32" else None
+        if gate_owner:
+            if not SKILLS_DIR.is_relative_to(Path(gate_owner)):
+                raise ValueError("release fixture owner must contain the isolated candidate")
+            remote_scope = tempfile.TemporaryDirectory(prefix="r-", dir=gate_owner)
+            self.addCleanup(remote_scope.cleanup)
+            remote_dir = Path(remote_scope.name) / f"r{tag}.git"
+        else:
+            remote_dir = sandbox / f"r{tag}.git"
         source_dir.mkdir()
         sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
         (source_dir / "AGENTS.md").write_text("# Publication fixture\n", encoding="utf-8")
@@ -1255,16 +1266,16 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         sync_global_skills.run_command(["git", "add", "--all"], cwd=source_dir)
         sync_global_skills.run_command(["git", "commit", "-m", "initial"], cwd=source_dir)
         sync_global_skills.run_command(["git", "init", "--bare", str(remote_dir)], cwd=sandbox)
+        if sys.platform == "win32":
+            sync_global_skills.run_command(["git", "config", "core.longpaths", "true"], cwd=remote_dir)
         sync_global_skills.run_command(["git", "remote", "add", "publication", str(remote_dir)], cwd=source_dir)
         command = ["git", "push", "publication", "HEAD:refs/heads/release-target"]
         if configured_upstream:
             command.insert(2, "--set-upstream")
-        sync_global_skills.run_command(command, cwd=source_dir)
-        artifact_owner = sandbox / "publication-artifacts"
-        artifact_owner.mkdir(exist_ok=True)
-        environment = mock.patch.dict(sync_global_skills.os.environ, {"CODEX_PROJECT_CACHE_ROOT": str(artifact_owner)})
-        environment.start()
-        self.addCleanup(environment.stop)
+        try:
+            sync_global_skills.run_command(command, cwd=source_dir)
+        except sync_global_skills.subprocess.CalledProcessError as error:
+            raise AssertionError(f"Fixture remote push failed: {error.stderr}") from error
         return source_dir, remote_dir
 
     def advance_publication_remote(self, remote_dir, relative_path, text):
@@ -1283,10 +1294,6 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
     def test_push_selects_exact_paths_and_preserves_other_index_work_and_stashes(self):
         source_dir, remote_dir = self.publication_repository()
         artifact_owner = Path(sync_global_skills.os.environ["CODEX_PROJECT_CACHE_ROOT"])
-        if sys.platform == "win32":
-            # Cross MAX_PATH for Git objects without exceeding Git's repository-discovery boundary.
-            while len(str(artifact_owner)) < 180:
-                artifact_owner /= "nested-owner"
         selected = source_dir / "verify-skill" / "SKILL.md"
         unrelated = source_dir / "workflow-skill" / "SKILL.md"
         original_unrelated = unrelated.read_bytes()
@@ -1308,7 +1315,7 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         def inspect_real_candidate(candidate, installed, mode):
             candidate_roots.append(candidate)
             if sys.platform == "win32":
-                self.assertGreater(max(len(str(path)) for path in (candidate / ".git/objects").rglob("*") if path.is_file()), 260)
+                self.assertTrue(candidate.is_relative_to(artifact_owner))
             self.assertNotEqual(candidate, source_dir)
             self.assertEqual((candidate / "workflow-skill/SKILL.md").read_bytes(), original_unrelated)
             self.assertEqual((installed / "workflow-skill/SKILL.md").read_bytes(), original_unrelated)

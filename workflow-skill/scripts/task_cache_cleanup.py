@@ -533,6 +533,37 @@ def release_retention(project_root, task_id, run_root, *, run_id, expected_ident
     return {**record, "cache_index": _refresh_cache_index(project)}
 
 
+def _file_change_time(path, observed):
+    if sys.platform != "win32":
+        return observed.st_ctime_ns
+    import ctypes
+    from ctypes import wintypes
+
+    class FileBasicInfo(ctypes.Structure):
+        _fields_ = [("creation", ctypes.c_int64), ("access", ctypes.c_int64), ("write", ctypes.c_int64), ("change", ctypes.c_int64), ("attributes", wintypes.DWORD)]
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.GetFileInformationByHandleEx.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel.GetFileInformationByHandleEx.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.CreateFileW(str(path), 0x80, 7, None, 3, 0x00200000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        info = FileBasicInfo()
+        if not kernel.GetFileInformationByHandleEx(handle, 0, ctypes.byref(info), ctypes.sizeof(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        current = _safe_stat(path)
+        if (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns) != (observed.st_dev, observed.st_ino, observed.st_size, observed.st_mtime_ns):
+            raise ValueError("file changed during native change-time inspection")
+        return info.change
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
     artifacts._check_ancestors(path)
     root = _safe_stat(path)
@@ -566,7 +597,7 @@ def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
         else:
             byte_count += observed.st_size
             if include_ctime:
-                file_ctimes[relative] = observed.st_ctime_ns
+                file_ctimes[relative] = _file_change_time(current, observed)
     result = {"identity": _identity(root), "entries": entries, "latest": latest / 1000000000, "bytes": byte_count}
     if include_ctime:
         result["file_ctimes"] = file_ctimes
@@ -574,7 +605,9 @@ def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
 
 
 def _run_command(arguments, timeout=10):
-    process = subprocess.Popen(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **hidden_process_options())
+    launch_cwd = Path.cwd().anchor if os.name == "nt" else None
+    process = subprocess.Popen(arguments, cwd=launch_cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True, **hidden_process_options())
     try:
         stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as error:
@@ -609,8 +642,30 @@ def _process_identity(pid, deadline=None):
             if result.returncode == 0 and result.stdout.strip() and not result.stderr.strip():
                 return result.stdout.strip()
         return "unverified"
-    else:
-        return "unverified"
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.GetProcessTimes.argtypes = [wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4)]
+        kernel.GetProcessTimes.restype = wintypes.BOOL
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return None if ctypes.get_last_error() == 87 else "unverified"
+        try:
+            created, exited, kernel_time, user_time = (wintypes.FILETIME() for _ in range(4))
+            if not kernel.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(exited), ctypes.byref(kernel_time), ctypes.byref(user_time)):
+                return "unverified"
+            if exited.dwHighDateTime or exited.dwLowDateTime:
+                return None
+            return f"{pid} {created.dwHighDateTime:08x}{created.dwLowDateTime:08x}"
+        finally:
+            kernel.CloseHandle(handle)
+    return "unverified"
 
 
 def _macos_mounts():
@@ -709,6 +764,110 @@ def _lsof_preflight(ps, *, deadline=None):
     return None
 
 
+def _windows_native_consumers(path, deadline):
+    """Query every owned member's open PIDs, then readable process arguments."""
+    import ctypes
+    from ctypes import wintypes
+
+    class IoStatus(ctypes.Structure):
+        _fields_ = [("status", ctypes.c_void_p), ("information", ctypes.c_size_t)]
+
+    class UnicodeString(ctypes.Structure):
+        _fields_ = [("length", wintypes.USHORT), ("maximum", wintypes.USHORT), ("buffer", ctypes.c_void_p)]
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    native = ctypes.WinDLL("ntdll")
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                   wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    native.NtQueryInformationFile.argtypes = [wintypes.HANDLE, ctypes.POINTER(IoStatus), ctypes.c_void_p,
+                                               wintypes.ULONG, wintypes.ULONG]
+    native.NtQueryInformationFile.restype = ctypes.c_long
+    native.NtQueryInformationProcess.argtypes = [wintypes.HANDLE, wintypes.ULONG, ctypes.c_void_p,
+                                                  wintypes.ULONG, ctypes.POINTER(wintypes.ULONG)]
+    native.NtQueryInformationProcess.restype = ctypes.c_long
+    psapi.EnumProcesses.argtypes = [ctypes.POINTER(wintypes.DWORD), wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    psapi.EnumProcesses.restype = wintypes.BOOL
+
+    target = os.path.normcase(str(path))
+    members = _snapshot(path, deadline)["entries"]
+    for relative in members:
+        _remaining(deadline)
+        member = path if relative == "." else path / relative
+        handle = kernel.CreateFileW(str(member), 0x80, 7, None, 3, 0x02200000, None)
+        if handle == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            size = 256
+            while size <= 65536:
+                _remaining(deadline)
+                buffer = ctypes.create_string_buffer(size)
+                status_block = IoStatus()
+                status = native.NtQueryInformationFile(handle, ctypes.byref(status_block), buffer, size, 47)
+                if status == 0:
+                    count = wintypes.ULONG.from_buffer(buffer).value
+                    offset = ctypes.sizeof(ctypes.c_void_p)
+                    if count > (status_block.information - offset) // offset or status_block.information > size:
+                        raise ValueError("Windows open-file inventory has invalid bounds")
+                    for index in range(count):
+                        pid = ctypes.c_size_t.from_buffer(buffer, offset + index * offset).value
+                        if pid and pid != os.getpid():
+                            return {"safe": False, "reason": "active open files or working directory", "pid": pid}
+                    break
+                if status & 0xffffffff not in {0x80000005, 0xc0000023, 0xc0000004}:
+                    raise OSError(f"Windows open-file inventory failed: 0x{status & 0xffffffff:08x}")
+                size *= 2
+            else:
+                raise ValueError("Windows open-file inventory exceeds bounded buffer")
+        finally:
+            kernel.CloseHandle(handle)
+
+    # A readable command line can retain a run even before it opens a handle.
+    # Native file PIDs above remain the authoritative check for protected processes.
+    count = 4096
+    while count <= 65536:
+        _remaining(deadline)
+        pids = (wintypes.DWORD * count)()
+        used = wintypes.DWORD()
+        if not psapi.EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(used)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if used.value < ctypes.sizeof(pids):
+            break
+        count *= 2
+    else:
+        raise ValueError("Windows process inventory exceeds bounded buffer")
+    for pid in pids[:used.value // ctypes.sizeof(wintypes.DWORD)]:
+        _remaining(deadline)
+        if not pid or pid == os.getpid():
+            continue
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            continue  # Protected process arguments are inaccessible; its open handles were queried above.
+        try:
+            buffer = ctypes.create_string_buffer(65536)
+            required = wintypes.ULONG()
+            status = native.NtQueryInformationProcess(handle, 60, buffer, len(buffer), ctypes.byref(required))
+            if status:
+                continue
+            argument = UnicodeString.from_buffer(buffer)
+            start = argument.buffer or 0
+            if (argument.length % 2 or argument.length > argument.maximum
+                    or start < ctypes.addressof(buffer) or start + argument.length > ctypes.addressof(buffer) + len(buffer)):
+                raise ValueError("Windows process command line has invalid bounds")
+            command = ctypes.wstring_at(start, argument.length // 2)
+            at = os.path.normcase(command).find(target)
+            if at >= 0 and (at + len(target) == len(command) or command[at + len(target)] in '\\/' + '" '):
+                return {"safe": False, "reason": "active process references exact run", "pid": pid}
+        finally:
+            kernel.CloseHandle(handle)
+    return {"safe": True, "reason": "native open-file and process probes clear"}
+
+
 def probe_activity(path, *, deadline=None):
     """Fresh native consumers; unsupported/inaccessible probes fail closed."""
     if sys.platform == "darwin" or sys.platform.startswith("linux"):
@@ -742,7 +901,10 @@ def probe_activity(path, *, deadline=None):
                 return {**context, "safe": False, "reason": "active process references exact run", "pid": parts[0]}
         return {**context, "safe": True, "reason": "native open-file and process probes clear"}
     elif sys.platform == "win32":
-        return {"safe": False, "pending": True, "reason": "Windows native handle probe unavailable; owner-native cleanup required"}
+        try:
+            return _windows_native_consumers(Path(path), deadline)
+        except (OSError, ValueError, TimeoutError) as error:
+            return {"safe": False, "pending": True, "reason": "Windows native consumer probe incomplete: " + str(error)[:300]}
     else:
         return {"safe": False, "pending": True, "reason": "unsupported host activity probe"}
 
@@ -947,6 +1109,8 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             creator = _process_identity(record["creator_pid"], deadline)
             if creator == "unverified":
                 return {**result, "action": "pending", "reason": "original producer process identity is unverified"}
+            if creator is not None and record["creator_identity"] == "unverified":
+                return {**result, "action": "pending", "reason": "original producer identity was not recorded; live PID cannot be matched safely"}
             if creator is not None and creator == record["creator_identity"]:
                 return {**result, "action": "keep", "reason": "original producer process remains alive"}
         activity = probe_activity(path, deadline=deadline)
@@ -1035,7 +1199,16 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
         if legacy is not None and legacy != base:
             bases.append(legacy)
     results = []
-    records = [(owner, record) for owner in bases for record in sorted((_registry(owner, project) / "runs").glob("*.json"))]
+    records = []
+    for owner in bases:
+        for record in sorted((_registry(owner, project) / "runs").glob("*.json")):
+            if owner != project / "Cache":
+                try:
+                    if _read(record).get("project_root") != str(project):
+                        continue  # The old external registry is shared by unrelated projects.
+                except (OSError, ValueError):
+                    pass  # Unknown ownership stays pending for exact review.
+            records.append((owner, record))
     requested_keys = {_key(path) for path in requested}
     if requested_only:
         records = [(owner, record) for owner, record in records if record.stem in requested_keys]

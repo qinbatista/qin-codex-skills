@@ -213,6 +213,12 @@ def run_release_gate(source_dir, skills_dir, mode):
         "--mode",
         mode,
     ]
+    if (sys.platform == "win32" and source_dir.name == "s"
+            and source_dir.parent.name.startswith("temp-p-")
+            and source_dir.is_relative_to(DEFAULT_PROJECT_ROOT / "Cache")):
+        publication_run = validate_task_directory(source_dir.parent.parent, DEFAULT_PROJECT_ROOT)
+        command.extend(["--layout-run-root", str(publication_run),
+                        "--layout-owner-project", str(DEFAULT_PROJECT_ROOT)])
     # A publication candidate is a different project from the invoking checkout.
     # Bind the child to that project's own registered run, never the caller's Cache.
     with task_artifact_scope(source_dir, "managed-release-gate") as cache_root:
@@ -1754,8 +1760,8 @@ def validated_publication_candidate(source_dir, selected_paths, prepare_readmes=
     filemode = run_command(["git", "config", "--default", "true", "--type=bool", "--get", "core.filemode"], cwd=source_dir).stdout.strip()
     staged_mode_output = run_command(["git", "--literal-pathspecs", "ls-files", "--stage", "-z", "--", *[path.as_posix() for path in selected_paths]], cwd=source_dir).stdout if selected_paths else ""
     staged_modes = {Path(record.split("\t", 1)[1]): record.split(" ", 1)[0] for record in staged_mode_output.split("\0") if record}
-    with temporary_workspace("publication-candidate-") as sandbox:
-        candidate = sandbox / "source"
+    with temporary_workspace("p-") as sandbox:
+        candidate = sandbox / "s"
         run_command(["git", "clone", "--no-hardlinks", "--no-checkout", str(source_dir), str(candidate)])
         run_command(["git", "config", "core.filemode", filemode], cwd=candidate)
         for key, default in (("core.autocrlf", "false"), ("core.eol", "native"), ("core.safecrlf", "false")):
@@ -1783,7 +1789,9 @@ def validated_publication_candidate(source_dir, selected_paths, prepare_readmes=
             for path in selected_modes:
                 executable = staged_modes.get(path, "100644") == "100755"
                 run_command(["git", "--literal-pathspecs", "update-index", "--chmod=+x" if executable else "--chmod=-x", "--", path.as_posix()], cwd=candidate)
-        run_command(["git", "diff", "--cached", "--check"], cwd=candidate)
+        # Preserve the ordinary whitespace checks while accepting native CRLF in copied fixture files.
+        whitespace = ["-c", "core.whitespace=trailing-space,space-before-tab,cr-at-eol"] if sys.platform == "win32" else []
+        run_command(["git", *whitespace, "diff", "--cached", "--check"], cwd=candidate)
         candidate_tree = run_command(["git", "write-tree"], cwd=candidate).stdout.strip()
         isolated_skills = sandbox / "installed-skills"
         deploy(candidate, isolated_skills)

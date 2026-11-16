@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -101,12 +102,22 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
 
     def test_legacy_owner_identity_and_automatic_checkpoint_remain_exact(self):
         base, run, record, record_path = self.legacy_run()
+        foreign_project = self.root / "foreign-project"
+        foreign_project.mkdir()
+        foreign_run = base / "foreign-owner" / "temp-foreign"
+        foreign_run.mkdir(parents=True)
+        (foreign_run / "keep.bin").write_bytes(b"another project's work")
+        foreign_record = {**record, "project_root": str(foreign_project), "path": str(foreign_run),
+                          "identity": cleanup._identity(foreign_run.stat()), "state": "complete"}
+        foreign_record_path = record_path.parent / (cleanup._key(foreign_run) + ".json")
+        foreign_record_path.write_text(json.dumps(foreign_record), encoding="utf-8")
         exists = Path.exists
         def fixture_exists(path):
             return False if path.name == ".git" and path.parent in self.owner.parents else exists(path)
         with mock.patch.object(Path, "exists", fixture_exists), mock.patch.object(cleanup, "_legacy_base", return_value=base):
             result = self.sweep()
             self.assertTrue(any(item.get("path") == str(run) and item["action"] == "pending" for item in result["results"]))
+            self.assertFalse(any(item.get("path") == str(foreign_run) for item in result["results"]))
             with self.assertRaises(ValueError):
                 cleanup.release_retention(self.project, "mine", run, run_id=record["run_id"], expected_identity=[0, 0], reason="Audited retired support", artifact_root=base)
             (run / ".git").mkdir()
@@ -114,6 +125,8 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
                 cleanup.release_retention(self.project, "mine", run, run_id=record["run_id"], expected_identity=record["identity"], reason="Audited retired support", artifact_root=base)
         self.assertTrue(run.exists())
         self.assertTrue(record_path.exists())
+        self.assertEqual((foreign_run / "keep.bin").read_bytes(), b"another project's work")
+        self.assertTrue(foreign_record_path.exists())
 
     def test_remounted_device_requires_original_volume_and_inode(self):
         run = self.run_root()
@@ -299,6 +312,18 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             result = self.sweep()
         self.assertTrue(run.exists())
         self.assertIn("producer", result["results"][0]["reason"])
+
+    def test_old_unverified_producer_identity_never_adopts_a_live_pid(self):
+        run = self.run_root("foreign-legacy-producer")
+        record_path = self.record_path(run)
+        record = json.loads(record_path.read_text())
+        record["creator_identity"] = "unverified"
+        record_path.write_text(json.dumps(record))
+        with mock.patch.object(cleanup.time, "time", return_value=time.time() + cleanup.STALE_SECONDS + 100), mock.patch.object(cleanup, "_process_identity", return_value="live process identity"), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            result = self.sweep()
+        self.assertTrue(run.exists(), result)
+        self.assertEqual(result["results"][0]["action"], "pending")
+        self.assertIn("identity was not recorded", result["results"][0]["reason"])
 
     def test_recent_retention_recovery_and_native_ledger_are_protected(self):
         retained, recovery, ledger = self.run_root("retain"), self.run_root("recover"), self.run_root("ledger")
@@ -742,14 +767,20 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         git = shutil.which("git")
         if not git:
             self.skipTest("Git unavailable")
-        subprocess.run([git, "init", "-q", str(self.project)], check=True, capture_output=True, **hidden_process_options())
-        candidate = self.project / "Cache" / "canonical"
-        candidate.mkdir(parents=True)
-        (candidate / "source.txt").write_text("authored")
-        subprocess.run([git, "-C", str(self.project), "add", "Cache"], check=True, capture_output=True, **hidden_process_options())
-        with self.assertRaisesRegex(ValueError, "tracked"):
-            cleanup.register_run(self.project, "mine", candidate, artifact_root=self.base, legacy_reason="incorrect assertion")
-        self.assertTrue((candidate / "source.txt").exists())
+        short_owner = os.environ.get("CODEX_PROJECT_CACHE_ROOT") if sys.platform == "win32" else None
+        project_scope = tempfile.TemporaryDirectory(prefix="g-", dir=short_owner) if short_owner else contextlib.nullcontext(self.project)
+        with project_scope as project_path:
+            project = Path(project_path)
+            base = project / "Cache"
+            options = ["-c", "core.longpaths=true"] if sys.platform == "win32" else []
+            subprocess.run([git, *options, "init", "-q", str(project)], check=True, capture_output=True, **hidden_process_options())
+            candidate = base / "canonical"
+            candidate.mkdir(parents=True)
+            (candidate / "source.txt").write_text("authored")
+            subprocess.run([git, *options, "-C", str(project), "add", "Cache"], check=True, capture_output=True, **hidden_process_options())
+            with self.assertRaisesRegex(ValueError, "tracked"):
+                cleanup.register_run(project, "mine", candidate, artifact_root=base, legacy_reason="incorrect assertion")
+            self.assertTrue((candidate / "source.txt").exists())
 
     @unittest.skipIf(sys.platform == "win32", "link privilege differs on Windows")
     def test_link_inside_candidate_cannot_delete_external_target(self):
@@ -805,11 +836,67 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertTrue(any(item["path"] == str(cache / "canonical-assets") for item in scanned["unclassified"]))
         self.assertEqual(self.sweep()["results"], [])
 
-    def test_windows_and_unknown_platform_fail_closed(self):
+    @unittest.skipUnless(sys.platform == "win32", "Windows native process identity required")
+    def test_windows_process_identity_observes_live_and_exited_child(self):
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], **hidden_process_options())
+        try:
+            identity = cleanup._process_identity(child.pid)
+            self.assertIsInstance(identity, str)
+            self.assertNotEqual(identity, "unverified")
+            self.assertTrue(identity.startswith(f"{child.pid} "))
+            self.assertEqual(cleanup._process_identity(child.pid), identity)
+        finally:
+            child.terminate()
+            child.wait(timeout=10)
+        self.assertIsNone(cleanup._process_identity(child.pid))
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows native consumer check required")
+    def test_windows_native_consumer_check_blocks_open_file_then_deletes_after_close(self):
         run = self.run_root()
-        for platform in ("win32", "unsupported"):
-            with mock.patch.object(cleanup.sys, "platform", platform):
-                self.assertFalse(cleanup.probe_activity(run)["safe"])
+        payload = run / "held.txt"
+        payload.write_text("held", encoding="utf-8")
+        command = "import sys; stream=open(sys.stdin.readline().strip(), 'rb'); print('ready',flush=True); sys.stdin.readline(); stream.close(); print('closed',flush=True); sys.stdin.readline()"
+        child = subprocess.Popen([sys.executable, "-c", command], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True, cwd=self.root, **hidden_process_options())
+        try:
+            child.stdin.write(str(payload) + "\n")
+            child.stdin.flush()
+            self.assertEqual(child.stdout.readline().strip(), "ready")
+            active = cleanup.probe_activity(run, deadline=time.monotonic() + 10)
+            self.assertEqual(active["reason"], "active open files or working directory", active)
+            self.assertEqual(active["pid"], child.pid)
+            guarded = self.sweep(phase="finish", current_run=run)
+            self.assertFalse(guarded["requested_complete"], guarded)
+            self.assertTrue(payload.exists())
+            child.stdin.write("close\n")
+            child.stdin.flush()
+            self.assertEqual(child.stdout.readline().strip(), "closed")
+            cleared = cleanup.probe_activity(run, deadline=time.monotonic() + 10)
+            self.assertTrue(cleared["safe"], cleared)
+            finished = self.sweep(phase="finish", current_run=run)
+            self.assertTrue(finished["requested_complete"], finished)
+            self.assertFalse(run.exists())
+        finally:
+            child.terminate()
+            child.communicate(timeout=10)
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows native process arguments required")
+    def test_windows_process_argument_without_open_handle_blocks_exact_run(self):
+        run = self.run_root()
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", str(run)],
+                                 cwd=self.root, **hidden_process_options())
+        try:
+            observed = cleanup.probe_activity(run, deadline=time.monotonic() + 10)
+            self.assertEqual(observed["reason"], "active process references exact run", observed)
+            self.assertEqual(observed["pid"], child.pid)
+        finally:
+            child.terminate()
+            child.wait(timeout=10)
+
+    def test_unknown_platform_fails_closed(self):
+        run = self.run_root()
+        with mock.patch.object(cleanup.sys, "platform", "unsupported"):
+            self.assertFalse(cleanup.probe_activity(run)["safe"])
 
     def test_remote_prefix_requires_owner_review_without_adopting_or_deleting(self):
         names = {"remote-game-config", "remote-ios-runtime-evidence", *{f"remote-test-{index}" for index in range(6)}}
@@ -890,7 +977,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         with mock.patch.object(cleanup.sys, "platform", "darwin"), mock.patch.object(cleanup.shutil, "which", side_effect=lambda name: name), mock.patch.object(cleanup, "_run_command", side_effect=native):
             fields = f"p123\0\nn{run}-sibling/open.bin\0\n"
             self.assertTrue(cleanup.probe_activity(run)["safe"])
-            fields += f"n{run}/directory with spaces/file\nname.bin\0\n"
+            fields += f"n{run / 'directory with spaces' / 'file'}\nname.bin\0\n"
             self.assertEqual(cleanup.probe_activity(run)["reason"], "active open files or working directory")
             fields = "unverified output"
             self.assertTrue(cleanup.probe_activity(run)["pending"])

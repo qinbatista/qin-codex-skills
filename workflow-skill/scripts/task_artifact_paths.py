@@ -63,15 +63,22 @@ def task_artifact_scope(project_root, task_id, *, borrowed_root=None):
 
 def verify_cache_git(project_root: str | Path, path: str | Path) -> None:
     project = Path(project_root).resolve(strict=True)
-    if not any((parent / ".git").exists() for parent in (project, *project.parents)):
+    git_root = next((parent for parent in (project, *project.parents) if (parent / ".git").exists()), None)
+    if git_root is None:
         return
     git = shutil.which("git")
     if git is None:
         raise ValueError("Git is required to verify Cache isolation")
-    ignored = subprocess.run([git, "-C", str(project), "check-ignore", "-q", str(path)], capture_output=True, timeout=30, shell=False, **hidden_process_options())
-    tracked = subprocess.run([git, "-C", str(project), "ls-files", "-z", "--", "Cache"], capture_output=True, timeout=30, shell=False, **hidden_process_options())
+    relative = Path(path).relative_to(git_root)
+    cache_relative = (project / "Cache").relative_to(git_root)
+    # Query the nearest repository from its root so ignored nested test projects
+    # do not force Git to discover a repository from a Windows long path.
+    launch_cwd = project.anchor if os.name == "nt" else None
+    ignored = subprocess.run([git, "-C", str(git_root), "check-ignore", "-q", str(relative)], cwd=launch_cwd, capture_output=True, timeout=30, shell=False, **hidden_process_options())
+    tracked = subprocess.run([git, "-C", str(git_root), "ls-files", "-z", "--", str(cache_relative)], cwd=launch_cwd, capture_output=True, timeout=30, shell=False, **hidden_process_options())
     if ignored.returncode != 0 or tracked.returncode != 0 or tracked.stdout:
-        raise ValueError("project Cache must be ignored and contain no tracked files")
+        raise ValueError(f"project Cache must be ignored and contain no tracked files: {project}; "
+                         f"ignore_exit={ignored.returncode}, tracked_exit={tracked.returncode}, tracked_bytes={len(tracked.stdout)}")
 
 
 def _native_sticky_excluded(cache: Path) -> bool:

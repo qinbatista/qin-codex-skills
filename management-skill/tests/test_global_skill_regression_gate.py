@@ -225,8 +225,13 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 with GATE.candidate_layouts(PROJECT_ROOT, deployed, catalog["managed_skills"]) as roots:
                     workspace = roots["source"].parents[1]
                     self.assertEqual(workspace.parent, expected_cache)
+                    self.assertEqual((roots["source"].parent.name, roots["source"].name), ("s", "k"))
+                    self.assertEqual((roots["deployed"].parent.name, roots["deployed"].name), ("d", "k"))
                     self.assertTrue((roots["source"].parent / "AGENTS.md").is_file())
                     self.assertTrue((roots["deployed"].parent / "AGENTS.md").is_file())
+                    for root in roots.values():
+                        self.assertEqual((root / ".gitignore").read_bytes(), (PROJECT_ROOT / ".gitignore").read_bytes())
+                        GATE.verify_cache_git(root, root / "Cache" / "temp-candidate-check")
                     source_testing_skill = PROJECT_ROOT / ".agents" / "skills" / "testing-skill" / "SKILL.md"
                     self.assertEqual((roots["source"] / ".agents" / "skills" / "testing-skill" / "SKILL.md").is_file(), source_testing_skill.is_file())
                     self.assertFalse((roots["deployed"] / ".agents" / "skills" / "testing-skill").exists())
@@ -252,6 +257,27 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                             self.assertTrue((root / relative).is_file(), relative)
                 self.assertFalse(workspace.exists())
 
+    def test_publication_candidates_use_shallow_owned_layout_on_windows(self):
+        previous_fixture = os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT")
+        with GATE.task_artifact_scope(PROJECT_ROOT, "shallow-release-layout-test") as run:
+            source = run / "publication" / "s"
+            deployed = run / "publication" / "i"
+            asset = source / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
+            asset.parent.mkdir(parents=True)
+            asset.write_bytes((PROJECT_ROOT / "task-analyze-skill" / "assets" / asset.name).read_bytes())
+            (source / ".gitignore").write_bytes((PROJECT_ROOT / ".gitignore").read_bytes())
+            deployed.mkdir()
+            with GATE.candidate_layouts(source, deployed, [], layout_run_root=run,
+                                        layout_owner_project=PROJECT_ROOT) as roots:
+                if os.name == "nt":
+                    self.assertEqual(os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT"), str(run))
+                for root in roots.values():
+                    self.assertTrue(root.is_relative_to(run))
+                    self.assertEqual(root.parents[2], run)
+                    GATE.verify_cache_git(root, root / "Cache" / "temp-check")
+            self.assertFalse(any(child.name.startswith("c-") for child in run.iterdir()))
+        self.assertEqual(os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT"), previous_fixture)
+
     @unittest.skipUnless((PROJECT_ROOT / ".agents" / "skills" / "testing-skill" / "SKILL.md").is_file(), "project testing Skill is source-only")
     def test_source_candidate_registry_check_accepts_inventory_and_rejects_missing_registry(self):
         catalog = GATE.load_catalog(PROJECT_ROOT)
@@ -274,14 +300,14 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
         self.addCleanup(task_cache.rmdir)
         with tempfile.TemporaryDirectory(prefix="gate-check-", dir=task_cache) as project_dir:
             project_root = Path(project_dir)
-            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('CODEX_PROJECT_CACHE_ROOT','TMP','TEMP','TMPDIR')); assert 'YOFA_TASK_ARTIFACT_ROOT' not in os.environ; assert p.is_relative_to(Path.cwd() / 'Cache'); print('Ran 1 test')"
+            code = "import os,tempfile; from pathlib import Path; p=Path(tempfile.gettempdir()); assert all(Path(os.environ[k]) == p for k in ('TMP','TEMP','TMPDIR')); assert Path(os.environ['CODEX_PROJECT_CACHE_ROOT']) == p.parent; assert 'YOFA_TASK_ARTIFACT_ROOT' not in os.environ; assert p.is_relative_to(Path.cwd() / 'Cache'); print('Ran 1 test')"
             with mock.patch.object(GATE.subprocess, "run", wraps=GATE.subprocess.run) as runner:
                 result = GATE.command_result("cache", "source", [sys.executable, "-B", "-c", code], project_root, 10, {})
             self.assertEqual(result["status"], "pass", result)
             command_call = next(call for call in runner.call_args_list if call.kwargs.get("env", {}).get("CODEX_PROJECT_CACHE_ROOT"))
             completed_cache = Path(command_call.kwargs["env"]["CODEX_PROJECT_CACHE_ROOT"])
             self.assertFalse(completed_cache.exists())
-            self.assertFalse(completed_cache.parent.exists())
+            self.assertTrue(completed_cache.parent.is_dir())
             self.assertEqual(list((project_root / "Cache" / "remote-task-cache-registry" / "runs").glob("*.json")), [])
             observed = []
             original_run = subprocess.run
@@ -298,7 +324,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     GATE.command_result("timeout", "source", ["test"], project_root, 1, {})
             self.assertFalse(observed[0].exists())
-            self.assertFalse(observed[0].parent.exists())
+            self.assertTrue(observed[0].parent.is_dir())
             self.assertEqual(list((project_root / "Cache" / "remote-task-cache-registry" / "runs").glob("*.json")), [])
 
     def test_candidate_cache_override_rejects_project_codex_and_tokens_before_writing(self):

@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -167,7 +167,8 @@ def project_task_cache_root(project_root: Path, cache_root: Path) -> Path:
 
 
 @contextmanager
-def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str]):
+def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str], *,
+                      layout_run_root: Path | None = None, layout_owner_project: Path | None = None):
     asset = project_root / "task-analyze-skill" / "assets" / "global-agents-entry-rule.md"
     directive = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
     text = asset.read_text(encoding="utf-8")
@@ -176,14 +177,29 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
     structural_agents_path = project_root / "AGENTS.md"
     structural_agents = structural_agents_path.read_text(encoding="utf-8") if structural_agents_path.is_file() else "# qin-codex-skills\n"
-    with task_artifact_scope(project_root, "global-skill-regression-candidates", borrowed_root=configured_cache_root) as cache_root:
-        verify_cache_git(project_root, cache_root)
-        with tempfile.TemporaryDirectory(prefix="candidate-", dir=cache_root) as temporary:
+    if layout_run_root is None:
+        layout_scope = task_artifact_scope(project_root, "global-skill-regression-candidates", borrowed_root=configured_cache_root)
+    else:
+        if layout_owner_project is None:
+            raise ValueError("shallow candidate layout requires its exact project owner")
+        owner = layout_owner_project.resolve(strict=True)
+        borrowed = validate_task_directory(layout_run_root, owner)
+        if not project_root.is_relative_to(borrowed) or not deployed_root.is_relative_to(borrowed):
+            raise ValueError("shallow candidate layout must remain inside its publication run")
+        layout_scope = nullcontext(borrowed)
+    with layout_scope as cache_root:
+        verify_cache_git(project_root if layout_run_root is None else layout_owner_project, cache_root)
+        with tempfile.TemporaryDirectory(prefix="c-", dir=cache_root) as temporary:
             workspace = Path(temporary)
-            source_candidate = workspace / "source" / "skills"
-            deployed_candidate = workspace / "deployed" / "skills"
+            source_candidate = workspace / "s" / "k"
+            deployed_candidate = workspace / "d" / "k"
             copy_candidate(project_root, source_candidate, managed_skills, text[len(directive):], structural_agents)
             copy_candidate(deployed_root, deployed_candidate, managed_skills, text[len(directive):], structural_agents)
+            # Both isolated project roots need the real Cache ignore boundary.
+            # On Windows, their enclosing publication clone can be a Git repo.
+            ignore_rules = (project_root / ".gitignore").read_bytes()
+            for root in (source_candidate, deployed_candidate):
+                (root / ".gitignore").write_bytes(ignore_rules)
             for name in ("README.md", "README.zh.md"):
                 if (project_root / name).is_file():
                     shutil.copy2(project_root / name, source_candidate / name)
@@ -196,7 +212,17 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
             plugin_cache = deployed_root.resolve().parent / "plugins" / "cache"
             copy_required_plugin_contracts(plugin_cache, source_candidate.parent / "plugins" / "cache")
             copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
-            yield {"source": source_candidate, "deployed": deployed_candidate}
+            previous_fixture_root = os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT")
+            if os.name == "nt":
+                os.environ["QIN_SKILL_GATE_FIXTURE_ROOT"] = str(cache_root)
+            try:
+                yield {"source": source_candidate, "deployed": deployed_candidate}
+            finally:
+                if os.name == "nt":
+                    if previous_fixture_root is None:
+                        os.environ.pop("QIN_SKILL_GATE_FIXTURE_ROOT", None)
+                    else:
+                        os.environ["QIN_SKILL_GATE_FIXTURE_ROOT"] = previous_fixture_root
 
 
 def parse_test_count(output: str) -> int:
@@ -233,13 +259,15 @@ def command_result(check_id: str, target: str, command: list[str], root: Path, t
         environment["PYTHONIOENCODING"] = "utf-8"
     with task_artifact_scope(root, f"global-skill-check:{target}:{check_id}") as cache_root:
         verify_cache_git(root, cache_root)
-        with tempfile.TemporaryDirectory(prefix="check-", dir=cache_root) as temporary_cache:
-            for variable in ("CODEX_PROJECT_CACHE_ROOT", "TMP", "TEMP", "TMPDIR"):
-                environment[variable] = temporary_cache
-            environment.pop("YOFA_TASK_ARTIFACT_ROOT", None)
-            for variable in ("ENDING_MEMORY_TEST_CACHE", "ENDING_CONCURRENCY_TEST_CACHE", "ENDING_LAUNCH_TEST_CACHE", "PROJECT_CHANGE_MEMORY_TEST_CACHE", "PROJECT_KNOWLEDGE_TEST_CACHE", "TASK_RESOURCE_LEDGER_TEST_CACHE", "ENDING_RESOURCE_AUDIT_TEST_CACHE"):
-                environment[variable] = temporary_cache
-            completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())
+        temporary_cache = cache_root / "tmp"
+        temporary_cache.mkdir()
+        environment["CODEX_PROJECT_CACHE_ROOT"] = str(cache_root)
+        for variable in ("TMP", "TEMP", "TMPDIR"):
+            environment[variable] = str(temporary_cache)
+        environment.pop("YOFA_TASK_ARTIFACT_ROOT", None)
+        for variable in ("ENDING_MEMORY_TEST_CACHE", "ENDING_CONCURRENCY_TEST_CACHE", "ENDING_LAUNCH_TEST_CACHE", "PROJECT_CHANGE_MEMORY_TEST_CACHE", "PROJECT_KNOWLEDGE_TEST_CACHE", "TASK_RESOURCE_LEDGER_TEST_CACHE", "ENDING_RESOURCE_AUDIT_TEST_CACHE"):
+            environment[variable] = str(temporary_cache)
+        completed = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=environment, **hidden_process_options())
     combined = completed.stdout + "\n" + completed.stderr
     count = parse_test_count(combined)
     passed = completed.returncode == 0 and count > 0
@@ -444,11 +472,13 @@ def append_history(path: Path, report: dict[str, object]) -> None:
         handle.write(json.dumps(compact, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
-def run_gate(project_root: Path, deployed_root: Path, mode: str) -> dict[str, object]:
+def run_gate(project_root: Path, deployed_root: Path, mode: str, *,
+             layout_run_root: Path | None = None, layout_owner_project: Path | None = None) -> dict[str, object]:
     catalog = load_catalog(project_root)
     managed_skills = list(map(str, catalog["managed_skills"]))
     results = []
-    with candidate_layouts(project_root, deployed_root, managed_skills) as execution_roots:
+    with candidate_layouts(project_root, deployed_root, managed_skills,
+                           layout_run_root=layout_run_root, layout_owner_project=layout_owner_project) as execution_roots:
         for check in catalog["checks"]:
             for target in selected_targets(mode, list(map(str, check["targets"]))):
                 try:
@@ -548,6 +578,8 @@ def main() -> int:
     check_parser.add_argument("--project-root", type=Path, default=Path.cwd())
     check_parser.add_argument("--skills-dir", type=Path, default=Path.home() / ".agents" / "skills")
     check_parser.add_argument("--mode", choices=("source", "deployed", "release"), required=True)
+    check_parser.add_argument("--layout-run-root", type=Path)
+    check_parser.add_argument("--layout-owner-project", type=Path)
     check_parser.add_argument("--output", type=Path)
     check_parser.add_argument("--history", type=Path)
     attest_parser = subparsers.add_parser("attest")
@@ -558,7 +590,9 @@ def main() -> int:
     if args.command == "attest":
         print(json.dumps(create_attestation(project_root, args.check_id), ensure_ascii=False, indent=2))
         return 0
-    report = run_gate(project_root, args.skills_dir.expanduser().resolve(), args.mode)
+    layout_options = ({"layout_run_root": args.layout_run_root, "layout_owner_project": args.layout_owner_project}
+                      if args.layout_run_root is not None else {})
+    report = run_gate(project_root, args.skills_dir.expanduser().resolve(), args.mode, **layout_options)
     configured_cache_root = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
     if configured_cache_root:
         task_cache = project_task_cache_root(project_root, Path(configured_cache_root))
