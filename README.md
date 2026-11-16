@@ -48,7 +48,7 @@ python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
 
 Windows uses `py -3 -B`. Installation uses locking, backup, and recovery and preserves unrelated skills, user AGENTS, and existing private history. Explicit `install-global-agents --source-dir . --startup-only` updates the mandatory startup block with a restorable backup. Deployment reports missing/stale activation or overrides; verify a fresh session.
 
-Source, installation and GitHub publication are distinct. `push` selects task-owned files with `--include-path` and existing task commits with `--include-commit` full hashes. It merges, validates, pushes and reads back the configured upstream, preserving unselected worktree and index changes.
+Source, installation and publication are distinct. `push` selects files with `--include-path` and existing commits with `--include-commit` full hashes. It fast-forwards or rebases unpublished commits, validates, pushes and reads back the configured upstream, preserving unselected worktree and index changes.
 
 ## Code reference owners
 

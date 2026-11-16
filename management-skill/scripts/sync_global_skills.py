@@ -1722,28 +1722,35 @@ def preserved_source_changes(source_dir):
                 raise RuntimeError(f"Publication recovery pending: restore stash {stash_head} with its index after resolving the current worktree. The saved stash remains available. {details}") from error
 
 
-def merge_publication_upstream(source_dir, upstream, include_commits=None):
+def integrate_publication_upstream(source_dir, upstream, include_commits=None):
     if publication_upstream(source_dir) != upstream:
         raise RuntimeError("Publication pending: the selected branch or configured upstream changed during delivery")
     previous_head = repository_head(source_dir)
+    unpublished_before_fetch = set(run_command(["git", "rev-list", previous_head, "--not", "--remotes"], cwd=source_dir).stdout.splitlines())
     run_command(["git", "fetch", "--no-tags", upstream["remote"], upstream["reference"]], cwd=source_dir)
     fetched_head = run_command(["git", "rev-parse", "FETCH_HEAD"], cwd=source_dir).stdout.strip()
+    ahead_commits = run_command(["git", "rev-list", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.splitlines()
+    local_merges = run_command(["git", "rev-list", "--min-parents=2", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.strip()
+    if local_merges:
+        raise RuntimeError("Publication pending: local merge commits require semantic reconciliation; no merge commit may be published")
     if include_commits is not None:
         if any(not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit) for commit in include_commits):
             raise RuntimeError("--include-commit requires an exact full lowercase commit hash")
-        ahead_commits = run_command(["git", "rev-list", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.splitlines()
         unselected_commits = [commit for commit in ahead_commits if commit not in include_commits]
         if unselected_commits:
             raise RuntimeError(f"Publication pending: preexisting local commits need explicit --include-commit selection before delivery: {', '.join(unselected_commits)}")
     ancestors = run_command(["git", "rev-list", f"{previous_head}..{fetched_head}"], cwd=source_dir).stdout.strip()
     if not ancestors:
         return False
+    if ahead_commits and any(commit not in unpublished_before_fetch for commit in ahead_commits):
+        raise RuntimeError("Publication pending: divergent commits were already published; preserve history instead of rebasing them")
+    command = ["git", "-c", "core.editor=true", "rebase", "--no-rebase-merges", "--no-autostash", fetched_head] if ahead_commits else ["git", "merge", "--no-autostash", "--ff-only", fetched_head]
     with preserved_source_changes(source_dir):
         try:
-            run_command(["git", "merge", "--no-edit", fetched_head], cwd=source_dir)
+            run_command(command, cwd=source_dir)
         except subprocess.CalledProcessError as error:
             details = error.stderr.strip() or error.stdout.strip()
-            raise RuntimeError(f"Upstream integration pending on {upstream['branch']} from {upstream['remote']}:{upstream['reference']}; resolve the merge and retry. Local HEAD: {repository_head(source_dir)}. {details}") from error
+            raise RuntimeError(f"Upstream integration pending on {upstream['branch']} from {upstream['remote']}:{upstream['reference']}; resolve the rebase or fast-forward failure and retry. Local HEAD: {repository_head(source_dir)}. {details}") from error
     return repository_head(source_dir) != previous_head
 
 
@@ -1847,7 +1854,7 @@ def push(repository, source_dir, message, dry_run, skills_dir=None, include_path
         print(f"Source HEAD: {local_head}")
         print(f"Configured upstream {upstream['remote']}:{upstream['reference']}: {remote_head or 'missing'}")
         return
-    merge_publication_upstream(source_dir, upstream, include_commits=include_commits or [])
+    integrate_publication_upstream(source_dir, upstream, include_commits=include_commits or [])
     with validated_publication_candidate(source_dir, selected_paths) as (candidate, readme_changes, validated_tree):
         if publication_upstream(source_dir) != upstream:
             raise RuntimeError("Publication pending: selected branch or upstream changed while its candidate was validated")
@@ -1862,7 +1869,7 @@ def push(repository, source_dir, message, dry_run, skills_dir=None, include_path
     last_rejected_remote = ""
     with preserved_source_changes(source_dir):
         while True:
-            merge_publication_upstream(source_dir, upstream)
+            integrate_publication_upstream(source_dir, upstream)
             integrated_remote_head = run_command(["git", "rev-parse", "FETCH_HEAD"], cwd=source_dir).stdout.strip()
             if run_command(["git", "rev-parse", "HEAD^{tree}"], cwd=source_dir).stdout.strip() != validated_tree:
                 with validated_publication_candidate(source_dir, [], prepare_readmes=False) as (candidate, readme_changes, validated_tree):
@@ -1881,7 +1888,7 @@ def push(repository, source_dir, message, dry_run, skills_dir=None, include_path
                 observed_after_rejection = remote_branch_head(source_dir, upstream)
                 if observed_after_rejection and observed_after_rejection not in (integrated_remote_head, last_rejected_remote):
                     last_rejected_remote = observed_after_rejection
-                    print("Configured upstream advanced during push; fetching, merging and validating the integrated source before retrying.")
+                    print("Configured upstream advanced during push; fetching, rebasing unpublished commits and validating the integrated source before retrying.")
                     continue
                 details = error.stderr.strip() or error.stdout.strip()
                 raise RuntimeError(f"Remote delivery pending for local commit {local_head} to {upstream['remote']}:{upstream['reference']}; repair the reported Git access or server failure and retry: {details}") from error

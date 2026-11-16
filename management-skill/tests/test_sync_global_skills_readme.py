@@ -1363,6 +1363,8 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         head = sync_global_skills.repository_head(source_dir)
         self.assertEqual(sync_global_skills.remote_branch_head(source_dir, sync_global_skills.publication_upstream(source_dir)), head)
         self.assertEqual(len(pushed_commands), 2)
+        self.assertEqual(real_run(["git", "rev-list", "--min-parents=2", "HEAD"], cwd=source_dir).stdout, "")
+        self.assertEqual(real_run(["git", "rev-parse", "HEAD^"], cwd=source_dir).stdout.strip(), advanced_heads[0])
         self.assertEqual(self.release_gate.call_count, 2)
         history = real_run(["git", "rev-list", "HEAD"], cwd=source_dir).stdout.splitlines()
         self.assertIn(first_remote, history)
@@ -1371,6 +1373,49 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         self.assertEqual((source_dir / "code-skill/upstream-during.md").read_text(), "during push\n")
         self.assertEqual(sync_global_skills.source_worktree_paths(source_dir), [])
         self.assertEqual(real_run(["git", "stash", "list"], cwd=source_dir).stdout, "")
+
+    def test_publication_rejects_local_merge_before_stashing_or_validation(self):
+        source_dir, remote_dir = self.publication_repository()
+        base = sync_global_skills.repository_head(source_dir)
+        sync_global_skills.run_command(["git", "switch", "-c", "fixture-feature"], cwd=source_dir)
+        self.advance_local_publication_commit(source_dir, "feature.md", "feature\n")
+        sync_global_skills.run_command(["git", "switch", "delivery-local"], cwd=source_dir)
+        self.advance_local_publication_commit(source_dir, "other.md", "other\n")
+        sync_global_skills.run_command(["git", "merge", "--no-ff", "--no-edit", "fixture-feature"], cwd=source_dir)
+        head = sync_global_skills.repository_head(source_dir)
+        (source_dir / "untracked.txt").write_text("preserve\n", encoding="utf-8")
+        state = sync_global_skills.dirty_source_signature(source_dir)
+        with self.assertRaisesRegex(RuntimeError, "local merge commits require semantic reconciliation"):
+            sync_global_skills.integrate_publication_upstream(source_dir, sync_global_skills.publication_upstream(source_dir))
+        self.assertEqual(sync_global_skills.repository_head(source_dir), head)
+        self.assertEqual(sync_global_skills.dirty_source_signature(source_dir), state)
+        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, sync_global_skills.publication_upstream(source_dir)), base)
+        self.assertEqual(sync_global_skills.run_command(["git", "stash", "list"], cwd=source_dir).stdout, "")
+
+    def advance_local_publication_commit(self, source_dir, name, contents):
+        (source_dir / name).write_text(contents, encoding="utf-8")
+        sync_global_skills.run_command(["git", "add", "--", name], cwd=source_dir)
+        sync_global_skills.run_command(["git", "commit", "-m", "Local fixture advance"], cwd=source_dir)
+        return sync_global_skills.repository_head(source_dir)
+
+    def test_publication_does_not_rebase_commits_published_to_another_remote_ref(self):
+        source_dir, remote_dir = self.publication_repository()
+        head = self.advance_local_publication_commit(source_dir, "local.md", "published elsewhere\n")
+        sync_global_skills.run_command(["git", "push", "publication", "HEAD:refs/heads/published-fixture"], cwd=source_dir)
+        self.advance_publication_remote(remote_dir, "remote.md", "upstream\n")
+        with self.assertRaisesRegex(RuntimeError, "divergent commits were already published"):
+            sync_global_skills.integrate_publication_upstream(source_dir, sync_global_skills.publication_upstream(source_dir))
+        self.assertEqual(sync_global_skills.repository_head(source_dir), head)
+        self.assertEqual(sync_global_skills.active_git_operation(source_dir), "")
+        self.assertEqual(sync_global_skills.run_command(["git", "stash", "list"], cwd=source_dir).stdout, "")
+
+    def test_upstream_only_publication_fast_forwards_with_merge_ff_false(self):
+        source_dir, remote_dir = self.publication_repository()
+        target = self.advance_publication_remote(remote_dir, "remote.md", "upstream\n")
+        sync_global_skills.run_command(["git", "config", "merge.ff", "false"], cwd=source_dir)
+        self.assertTrue(sync_global_skills.integrate_publication_upstream(source_dir, sync_global_skills.publication_upstream(source_dir)))
+        self.assertEqual(sync_global_skills.repository_head(source_dir), target)
+        self.assertEqual(sync_global_skills.run_command(["git", "rev-list", "--min-parents=2", "HEAD"], cwd=source_dir).stdout, "")
 
     def test_push_missing_upstream_preserves_head_work_and_index(self):
         source_dir, remote_dir = self.publication_repository(configured_upstream=False)
@@ -1385,26 +1430,27 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         self.assertEqual(sync_global_skills.dirty_source_signature(source_dir), original_state)
         self.release_gate.assert_not_called()
 
-    def test_push_merge_conflict_retains_local_commit_and_exact_recovery_stash(self):
+    def test_push_rebase_conflict_retains_local_commit_and_exact_recovery_stash(self):
         source_dir, remote_dir = self.publication_repository()
         selected = source_dir / "verify-skill/SKILL.md"
         selected.write_text("Local conflicting content.\n", encoding="utf-8")
         sync_global_skills.run_command(["git", "add", "--", "verify-skill/SKILL.md"], cwd=source_dir)
         sync_global_skills.run_command(["git", "commit", "-m", "Keep local commit"], cwd=source_dir)
         local_head = sync_global_skills.repository_head(source_dir)
+        upstream = sync_global_skills.publication_upstream(source_dir)
         unrelated = source_dir / "recover-me.txt"
         unrelated.write_text("minimum recovery content\n", encoding="utf-8")
         remote_head = self.advance_publication_remote(remote_dir, "verify-skill/SKILL.md", "Remote conflicting content.\n")
         with mock.patch("builtins.print") as printer, self.assertRaisesRegex(RuntimeError, "Upstream integration pending"):
             sync_global_skills.push("label/only", source_dir, "Must preserve conflict", False, include_commits=[local_head])
-        self.assertEqual(sync_global_skills.repository_head(source_dir), local_head)
-        self.assertEqual(sync_global_skills.active_git_operation(source_dir), "MERGE_HEAD")
+        self.assertEqual(sync_global_skills.run_command(["git", "rev-parse", "ORIG_HEAD"], cwd=source_dir).stdout.strip(), local_head)
+        self.assertIn(sync_global_skills.active_git_operation(source_dir), {"rebase-merge", "rebase-apply"})
         stash_head = sync_global_skills.run_command(["git", "rev-parse", "refs/stash"], cwd=source_dir).stdout.strip()
         self.assertEqual(sync_global_skills.run_command(["git", "show", f"{stash_head}^3:recover-me.txt"], cwd=source_dir).stdout, "minimum recovery content\n")
-        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, sync_global_skills.publication_upstream(source_dir)), remote_head)
+        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, upstream), remote_head)
         self.assertTrue(any(stash_head in str(call) and "not dropped" in str(call) for call in printer.call_args_list))
         self.release_gate.assert_not_called()
-        sync_global_skills.run_command(["git", "merge", "--abort"], cwd=source_dir)
+        sync_global_skills.run_command(["git", "rebase", "--abort"], cwd=source_dir)
         sync_global_skills.run_command(["git", "stash", "apply", "--index", stash_head], cwd=source_dir)
         self.assertEqual(unrelated.read_text(), "minimum recovery content\n")
 
