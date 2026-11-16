@@ -66,7 +66,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "probe_activity",
           "anchor": "def probe_activity(path, *, deadline=None):",
-          "summary": "Read native open-handle inventory and process references with exact directory boundaries; suppress repeated Darwin observers when a kernel-stuck lsof exists and fail closed on incomplete probes.",
+          "summary": "Read native open-handle inventory and process references with exact directory boundaries; use Windows member PID queries and readable process arguments, suppress repeated Darwin observers and fail closed on incomplete native probes.",
           "related": [
             {
               "module": "workflow",
@@ -74,6 +74,20 @@
               "reason": "Exercises a real held file and release after the native consumer closes."
             }
           ]
+        },
+        {
+          "id": "cache-windows-consumer-probe",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "_windows_native_consumers",
+          "anchor": "def _windows_native_consumers(path, deadline):",
+          "summary": "Query native open PIDs for each owned Windows member and readable process arguments within the checkpoint budget; return an active owner or a clear result."
+        },
+        {
+          "id": "cache-windows-consumer-test",
+          "file": "workflow-skill/tests/test_task_cache_cleanup.py",
+          "symbol": "TaskCacheCleanupTests.test_windows_native_consumer_check_blocks_open_file_then_deletes_after_close",
+          "anchor": "def test_windows_native_consumer_check_blocks_open_file_then_deletes_after_close(self):",
+          "summary": "Use a real Windows child to prove open-file protection and actual native deletion after the handle closes."
         },
         {
           "id": "cache-lsof-preflight",
@@ -101,7 +115,21 @@
           "file": "workflow-skill/scripts/task_artifact_paths.py",
           "symbol": "resolve_task_artifact_root",
           "anchor": "def resolve_task_artifact_root(",
-          "summary": "Allocate fresh project Cache execution roots only after native macOS backup exclusion verifies, then close eligible predecessors and report bounded owner diagnostics."
+          "summary": "Allocate fresh project Cache execution roots only after native macOS backup exclusion verifies and relative Git ignore checks pass, then close eligible predecessors and report bounded owner diagnostics."
+        },
+        {
+          "id": "cache-git-isolation",
+          "file": "workflow-skill/scripts/task_artifact_paths.py",
+          "symbol": "verify_cache_git",
+          "anchor": "def verify_cache_git(project_root: str | Path, path: str | Path) -> None:",
+          "summary": "Check an exact project Cache path from its nearest Git owner with relative arguments and a short Windows subprocess working directory."
+        },
+        {
+          "id": "cache-project-checkpoint",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "checkpoint",
+          "anchor": "def checkpoint(project_root, task_id, *, artifact_root=None, phase=\"start\", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):",
+          "summary": "Prioritize exact current-project owners, including records in a shared legacy registry, within the checkpoint budget; close verified delivery units with absence readback."
         },
         {
           "id": "cache-retention-contract-test",
@@ -165,13 +193,6 @@
           "symbol": "_remaining_deletion",
           "anchor": "def _remaining_deletion(path, original, deadline, registry=None):",
           "summary": "Admit only the unchanged remaining subset of the original deletion proof; use native Windows change time and reject new or modified inputs."
-        },
-        {
-          "id": "cache-checkpoint-priority",
-          "file": "workflow-skill/scripts/task_cache_cleanup.py",
-          "symbol": "checkpoint",
-          "anchor": "def checkpoint(project_root, task_id, *, artifact_root=None, phase=\"start\", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):",
-          "summary": "Prioritize explicit owners; delivery/finish close each exact unit immediately after verified reported results with idempotent absence readback."
         },
         {
           "id": "cache-crash-resume-test",
@@ -296,14 +317,7 @@
           "file": "code-skill/tests/test_code_writing_philosophy.py",
           "symbol": "CodeWritingPhilosophyTests.test_code_work_explains_steps_and_uses_optional_scoped_memory",
           "anchor": "def test_code_work_explains_steps_and_uses_optional_scoped_memory(self):",
-          "summary": "Protect all-local-code scope, startup routing, exact memory selectors, missing-memory continuation and current-source precedence.",
-          "related": [
-            {
-              "module": "code",
-              "target": "method-philosophy-contract-test",
-              "reason": "Companion contract checks cover cohesive method boundaries and refactor authorization."
-            }
-          ]
+          "summary": "Protect all-local-code scope, startup routing, exact memory selectors, missing-memory continuation and current-source precedence."
         },
         {
           "id": "method-philosophy-contract-test",
@@ -636,7 +650,7 @@
           "file": "management-skill/scripts/sync_global_skills.py",
           "symbol": "run_release_gate",
           "anchor": "def run_release_gate(source_dir, skills_dir, mode):",
-          "summary": "Bind a candidate subprocess to its own registered project Cache, then close its support on success/failure."
+          "summary": "Bind a candidate subprocess to its own registered project Cache and pass an exact shallow publication layout owner on Windows, then close its support."
         },
         {
           "id": "installer-workspace-owner",
@@ -646,18 +660,25 @@
           "summary": "Close the owned installer run and registry; borrowed outer owners and siblings remain intact."
         },
         {
+          "id": "publication-candidate",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "validated_publication_candidate",
+          "anchor": "def validated_publication_candidate(source_dir, selected_paths, prepare_readmes=True):",
+          "summary": "Stage selected source in a short project Cache candidate path before isolated installation and release validation."
+        },
+        {
           "id": "regression-command-owner",
           "file": "management-skill/scripts/global_skill_regression_gate.py",
           "symbol": "command_result",
           "anchor": "def command_result(check_id: str, target: str, command: list[str], root: Path, timeout_seconds: int, replacements: dict[str, str]) -> dict[str, object]:",
-          "summary": "Give every regression command a registered owner and close it after real success/timeout."
+          "summary": "Give every regression command a direct registered Cache owner, bind TMP beneath it, and close it after success or timeout."
         },
         {
           "id": "regression-candidate-owner",
           "file": "management-skill/scripts/global_skill_regression_gate.py",
           "symbol": "candidate_layouts",
-          "anchor": "def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str]):",
-          "summary": "Own or borrow a bounded candidate workspace with explicit lifecycle closure."
+          "anchor": "def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str], *,",
+          "summary": "Use an exact borrowed publication run for shallow isolated layouts on Windows or own a project Cache run; copy Cache ignore rules and close candidate fixtures."
         },
         {
           "id": "auth-probe-owner",

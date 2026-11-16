@@ -52,7 +52,7 @@ def external_fixture(task_name="external-policy-test", *, cache_root=None):
         task_root = ARTIFACTS.validate_task_directory(configured, SKILLS_ROOT) if configured else ARTIFACTS.resolve_task_artifact_root(SKILLS_ROOT, task_id, create=True)
         if not task_root.is_dir():
             raise ValueError("The configured fixture owner must already exist")
-        with tempfile.TemporaryDirectory(prefix="policy-", dir=task_root) as directory:
+        with tempfile.TemporaryDirectory(prefix="p-", dir=task_root) as directory:
             yield Path(directory)
     finally:
         if not configured and task_root is not None:
@@ -81,6 +81,34 @@ class ProjectCacheTestCase(unittest.TestCase):
 
 
 class ProjectCacheArtifactPolicyTests(unittest.TestCase):
+    def test_git_cache_check_uses_relative_path_and_short_windows_launch_directory(self):
+        with external_fixture() as fixture:
+            project = fixture / "project"
+            (project / ".git").mkdir(parents=True)
+            candidate = project / "Cache" / ("temp-" + "a" * 24 + "-" + "b" * 32)
+            completed = subprocess.CompletedProcess([], 0, b"", b"")
+            with mock.patch.object(ARTIFACTS.subprocess, "run", return_value=completed) as native:
+                ARTIFACTS.verify_cache_git(project, candidate)
+            self.assertEqual(native.call_count, 2)
+            self.assertEqual(native.call_args_list[0].args[0][-1], str(candidate.relative_to(project)))
+            self.assertEqual(native.call_args_list[1].args[0][-1], "Cache")
+            self.assertTrue(all(call.kwargs["cwd"] == (project.anchor if os.name == "nt" else None)
+                                for call in native.call_args_list))
+
+    def test_git_cache_check_uses_nearest_ancestor_repository_for_nested_project(self):
+        with external_fixture() as fixture:
+            project = fixture / "nested-project"
+            project.mkdir()
+            candidate = project / "Cache" / ("temp-" + "a" * 24 + "-" + "b" * 32)
+            completed = subprocess.CompletedProcess([], 0, b"", b"")
+            with mock.patch.object(ARTIFACTS.subprocess, "run", return_value=completed) as native:
+                ARTIFACTS.verify_cache_git(project, candidate)
+            git_owner = next(parent for parent in (project, *project.parents) if (parent / ".git").exists())
+            self.assertEqual(native.call_count, 2)
+            self.assertTrue(all(call.args[0][call.args[0].index("-C") + 1] == str(git_owner)
+                                for call in native.call_args_list))
+            self.assertEqual(native.call_args_list[1].args[0][-1], str((project / "Cache").relative_to(git_owner)))
+
     def test_retired_native_store_cannot_be_reintroduced_as_a_project_owner(self):
         with external_fixture() as fixture:
             home = fixture / "home"
