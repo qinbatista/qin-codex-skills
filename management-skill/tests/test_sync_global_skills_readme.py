@@ -432,7 +432,7 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         self.assertEqual(readme, expected)
         self.assertLess(len(template.split()), 600)
         self.assertNotIn("<!-- EXECUTION_DOMAIN_TABLE -->", readme)
-        for concept in ("This repository maintains eight global Codex skills", "## What each skill does", "implementation steps", "skip missing memory", "in the active task", "project testing Skills", "real affected-case checks", "unpinned", "Project memories stay isolated", "At completion, summarize actual Skill names, steps and reasons once"):
+        for concept in ("This repository maintains eight global Codex skills", "## What each skill does", "implementation steps", "skip missing memory", "in the active task", "project testing Skills", "real affected-case checks", "Codex chats and sessions remain user-managed", "Project memories stay isolated", "At completion, summarize actual Skill names, steps and reasons once"):
             self.assertIn(concept, readme)
         self.assertNotIn("Every progress update and phase transition repeats Skill names", readme)
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
