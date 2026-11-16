@@ -152,6 +152,9 @@ GLOBAL_AGENTS_BACKUP_DIRECTORY = "global-agents-backups"
 GLOBAL_AGENTS_BACKUP_MANIFEST = "manifest.json"
 AI_INDEX_STARTUP_START = "<!-- qin-ai-index-startup -->"
 AI_INDEX_STARTUP_END = "<!-- /qin-ai-index-startup -->"
+INLINE_CLOSEOUT_START = "<!-- qin-inline-closeout -->"
+INLINE_CLOSEOUT_END = "<!-- /qin-inline-closeout -->"
+LEGACY_CLOSEOUT_PREFIXES = ("After the main result and real in-task verification complete, use one authorized visible projectless Ending ", "For every identifiable project task, including ordinary questions and source investigations, complete the current-project cleanup checkpoint, AI-index check and scoped Obsidian memory closeout in the originating chat.")
 OFFICIAL_USER_SKILLS_DIRECTORY = Path.home() / ".agents" / "skills"
 INSTALL_TRANSACTION_PREFIX = ".qin-codex-install-"
 INSTALL_MANIFEST_NAME = "install-transaction.json"
@@ -813,6 +816,43 @@ def ai_index_startup_status(source_dir):
     return "ready" if ai_index_startup_rule(source_dir) in target.read_text(encoding="utf-8") else "startup_rule_missing_or_stale"
 
 
+def inline_closeout_rule(source_dir):
+    text = canonical_global_agents_text(source_dir)
+    if text.count(INLINE_CLOSEOUT_START) != 1 or text.count(INLINE_CLOSEOUT_END) != 1 or text.index(INLINE_CLOSEOUT_END) < text.index(INLINE_CLOSEOUT_START):
+        raise RuntimeError("The global AGENTS template must contain one ordered inline closeout block")
+    return text[text.index(INLINE_CLOSEOUT_START):text.index(INLINE_CLOSEOUT_END) + len(INLINE_CLOSEOUT_END)]
+
+
+def merge_inline_closeout(existing, rule):
+    counts = existing.count(INLINE_CLOSEOUT_START), existing.count(INLINE_CLOSEOUT_END)
+    if counts == (1, 1) and existing.index(INLINE_CLOSEOUT_START) < existing.index(INLINE_CLOSEOUT_END):
+        start, end = existing.index(INLINE_CLOSEOUT_START), existing.index(INLINE_CLOSEOUT_END) + len(INLINE_CLOSEOUT_END)
+        outside = existing[:start] + existing[end:]
+        if any(paragraph.startswith(LEGACY_CLOSEOUT_PREFIXES) for paragraph in outside.split("\n\n")):
+            raise RuntimeError("Existing global AGENTS has conflicting legacy Ending rules outside its closeout block")
+        return existing[:start] + rule + existing[end:]
+    if counts != (0, 0):
+        raise RuntimeError("Existing global AGENTS has ambiguous inline closeout markers; preserve it and resolve the block first")
+    legacy = [paragraph for paragraph in existing.split("\n\n") if paragraph.startswith(LEGACY_CLOSEOUT_PREFIXES)]
+    if len(legacy) > 1:
+        raise RuntimeError("Existing global AGENTS has ambiguous legacy Ending rules; preserve it and resolve them first")
+    return existing.replace(legacy[0], rule, 1) if legacy else rule + "\n\n" + existing
+
+
+def inline_closeout_status(source_dir):
+    root = codex_home()
+    override = root / "AGENTS.override.md"
+    if os.path.lexists(override) and (not override.is_file() or override.is_symlink() or override.read_text(encoding="utf-8").strip()):
+        return "shadowed_by_global_override"
+    target = root / "AGENTS.md"
+    if not target.is_file() or target.is_symlink():
+        return "missing_global_entry"
+    existing = target.read_text(encoding="utf-8")
+    if any(paragraph.startswith(LEGACY_CLOSEOUT_PREFIXES) for paragraph in existing.split("\n\n")):
+        return "legacy_closeout_rule_present"
+    return "ready" if inline_closeout_rule(source_dir) in existing else "inline_closeout_rule_missing_or_stale"
+
+
 def codex_home():
     """Resolve Codex configuration independently from the user Skill directory."""
     return lexical_absolute_path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
@@ -880,17 +920,19 @@ def _write_global_agents_target(target, rendered):
             os.unlink(temporary_name)
 
 
-def install_global_agents(source_dir, skills_dir, *, startup_only=False):
+def install_global_agents(source_dir, skills_dir, *, startup_only=False, closeout_only=False):
     source_dir = Path(source_dir).expanduser().resolve()
     skills_dir = lexical_absolute_path(skills_dir)
     expected_text = canonical_global_agents_text(source_dir)
     target = global_agents_targets(skills_dir)[0]
     with installation_lock(target):
-        if startup_only:
+        if startup_only and closeout_only:
+            raise RuntimeError("Select only one partial global AGENTS installation mode")
+        if startup_only or closeout_only:
             if os.path.lexists(target) and (target.is_symlink() or not target.is_file()):
-                raise RuntimeError("Startup-only installation requires a regular global AGENTS file or an absent target")
+                raise RuntimeError("Partial installation requires a regular global AGENTS file or an absent target")
             existing = target.read_text(encoding="utf-8") if target.exists() else ""
-            expected_text = merge_ai_index_startup(existing, ai_index_startup_rule(source_dir))
+            expected_text = merge_inline_closeout(existing, inline_closeout_rule(source_dir)) if closeout_only else merge_ai_index_startup(existing, ai_index_startup_rule(source_dir))
         if global_agents_target_matches(target, expected_text):
             return {"changed": False, "backup_id": None, "target": target}
         backup_dir, manifest = create_global_agents_backup(skills_dir, target)
@@ -1425,6 +1467,10 @@ def deploy(source_dir, skills_dir):
         print(f"AI-index startup activation: {startup_status}. Skill installation alone does not reload instructions in existing sessions.")
         if startup_status != "ready":
             print("Mandatory startup reminders are pending. Explicitly install the preserved startup block with install-global-agents --source-dir SOURCE --startup-only; resolve a global override first if reported. Start a new Codex session to load it.")
+        closeout_status = inline_closeout_status(source_dir)
+        print(f"Inline closeout activation: {closeout_status}.")
+        if closeout_status != "ready":
+            print("Global closeout guidance needs an explicitly authorized repair: install-global-agents --source-dir SOURCE --closeout-only preserves unrelated guidance and replaces the recognized legacy Ending paragraph. Resolve any global override separately. Existing chats can retain old instructions; do not create a verification or Ending task.")
         repair_legacy_user_skills(skills_dir, source_dir, installed_names)
     return installed_names
 
@@ -1938,7 +1984,9 @@ def main():
     deploy_parser.add_argument("--skills-dir", type=Path, dest="deploy_skills_dir", default=argparse.SUPPRESS)
     install_agents_parser = subparsers.add_parser("install-global-agents")
     install_agents_parser.add_argument("--source-dir", type=Path, required=True)
-    install_agents_parser.add_argument("--startup-only", action="store_true", help="Recoverably update only the AI-index startup block while preserving other global guidance")
+    partial_agents_mode = install_agents_parser.add_mutually_exclusive_group()
+    partial_agents_mode.add_argument("--startup-only", action="store_true", help="Recoverably update only the AI-index startup block while preserving other global guidance")
+    partial_agents_mode.add_argument("--closeout-only", action="store_true", help="Recoverably replace only managed closeout guidance or the recognized legacy Ending paragraph")
     install_agents_parser.add_argument("--skills-dir", type=Path, dest="install_agents_skills_dir", default=argparse.SUPPRESS)
     restore_agents_parser = subparsers.add_parser("restore-global-agents")
     restore_agents_parser.add_argument("--backup-id", required=True)
@@ -1980,7 +2028,8 @@ def main():
         deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
         announce_memory_vault(getattr(args, "deploy_skills_dir", args.skills_dir))
     elif args.command == "install-global-agents":
-        installation = install_global_agents(args.source_dir, getattr(args, "install_agents_skills_dir", args.skills_dir), startup_only=args.startup_only)
+        partial_mode = {"closeout_only": True} if args.closeout_only else {"startup_only": args.startup_only}
+        installation = install_global_agents(args.source_dir, getattr(args, "install_agents_skills_dir", args.skills_dir), **partial_mode)
         if installation["changed"]:
             print(f"Installed the global AGENTS template at {installation['target']} with persistent backup {installation['backup_id']}.")
         else:

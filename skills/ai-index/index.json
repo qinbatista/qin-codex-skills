@@ -770,6 +770,34 @@
           "symbol": "ProjectCacheArtifactPolicyTests.test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache",
           "anchor": "def test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache(self):",
           "summary": "Exercise independent task directories, preserve canonical resources and verify a real child import from a short Windows working directory creates no bytecode cache."
+        },
+        {
+          "id": "installer-closeout-merge",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "merge_inline_closeout",
+          "anchor": "def merge_inline_closeout(existing, rule):",
+          "summary": "Replace the managed block or one recognized legacy Ending paragraph; reject ambiguous markers and conflicting legacy copies before writes."
+        },
+        {
+          "id": "installer-closeout-status",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "inline_closeout_status",
+          "anchor": "def inline_closeout_status(source_dir):",
+          "summary": "Read actual global closeout activation independently of startup and detect legacy rules or a shadowing override."
+        },
+        {
+          "id": "installer-closeout-install",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "install_global_agents",
+          "anchor": "def install_global_agents(source_dir, skills_dir, *, startup_only=False, closeout_only=False):",
+          "summary": "Recoverably install the selected explicit global guidance mode with idempotence and exact backup restoration."
+        },
+        {
+          "id": "installer-closeout-real-test",
+          "file": "management-skill/tests/test_sync_global_skills_readme.py",
+          "symbol": "SyncGlobalSkillsReadmeTest.test_closeout_only_real_cli_replaces_legacy_rule_and_restores_exact_guidance",
+          "anchor": "def test_closeout_only_real_cli_replaces_legacy_rule_and_restores_exact_guidance(self):",
+          "summary": "Execute the real closeout-only CLI against old visible Ending guidance, preserving personal rules, routing, idempotence and exact restore bytes."
         }
       ]
     },

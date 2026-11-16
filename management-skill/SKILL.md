@@ -59,6 +59,8 @@ Installer workspaces, release candidates and individual regression checks use Wo
 
 Skills are selected on demand; installation alone does not make a Skill an always-run hook. For an explicitly authorized mandatory AI-index startup entry, use `install-global-agents --source-dir ROOT --startup-only`: it recoverably replaces only the marked startup block and preserves all other global guidance. Ordinary official-root deployment reports missing/stale activation or a shadowing global override without changing user instructions. Verify in a fresh Codex session; existing sessions may retain their original instruction chain.
 
+For an explicitly requested Ending/closeout repair, use `install-global-agents --source-dir ROOT --closeout-only`. It recoverably replaces the marked inline closeout block or one recognized legacy Ending paragraph, preserving unrelated global guidance and memory routing. Ambiguous markers or conflicting copies stop the repair without changing the target. Ordinary deployment reports closeout activation separately from startup activation; a current Skill installation cannot cancel a stale always-loaded global rule. Follow Project Memory's quiet inline closure and do not create a verification chat or promise silent conversation deletion.
+
 On Windows, every managed installation inherits the destination Skill root's permissions for the new files before restoring private local state. This prevents private staging permissions from excluding the normal account. Permission failures stop installation and restore the previous targets; preserve private state, unrelated skills, and the destination root's access policy.
 
 ## Publish

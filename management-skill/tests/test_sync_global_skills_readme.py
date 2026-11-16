@@ -1159,6 +1159,8 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             output = "\n".join(str(call.args[0]) for call in messages.call_args_list if call.args)
             self.assertIn("startup_rule_missing_or_stale", output)
             self.assertIn("--startup-only", output)
+            self.assertIn("inline_closeout_rule_missing_or_stale", output)
+            self.assertIn("--closeout-only", output)
             self.assertEqual(target.read_text(encoding="utf-8"), personal)
 
     def test_startup_only_cli_uses_preserving_installer(self):
@@ -1166,6 +1168,52 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         with mock.patch.object(sys, "argv", argv), mock.patch.object(sync_global_skills, "install_global_agents", return_value={"changed": False, "target": self.codex_root / "AGENTS.md"}) as installer:
             sync_global_skills.main()
         installer.assert_called_once_with(SKILLS_DIR, sync_global_skills.OFFICIAL_USER_SKILLS_DIRECTORY, startup_only=True)
+
+    def test_closeout_only_real_cli_replaces_legacy_rule_and_restores_exact_guidance(self):
+        target = self.codex_root / "AGENTS.md"
+        target.parent.mkdir(parents=True)
+        legacy = sync_global_skills.LEGACY_CLOSEOUT_PREFIXES[0] + "for memory and cleanup. Leave it unpinned in recent tasks."
+        personal = "# Personal rules\nPreserve exact user instructions.\n\n" + legacy + "\n\n## Memory routing\nPreserve the configured vault.\n"
+        target.write_text(personal, encoding="utf-8")
+        skills = self.codex_root.parent / "skills"
+        self.assertEqual(sync_global_skills.inline_closeout_status(SKILLS_DIR), "legacy_closeout_rule_present")
+        result = sync_global_skills.subprocess.run([sys.executable, "-B", str(MODULE_PATH), "install-global-agents", "--source-dir", str(SKILLS_DIR), "--closeout-only", "--skills-dir", str(skills)], capture_output=True, text=True, timeout=30, **sync_global_skills.hidden_process_options())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        rule = sync_global_skills.inline_closeout_rule(SKILLS_DIR)
+        self.assertEqual(target.read_text(encoding="utf-8"), personal.replace(legacy, rule))
+        self.assertIn("quietly in the originating chat", rule)
+        self.assertIn("Never create an automatic Ending task", rule)
+        self.assertIn("Routine authorized housekeeping needs no new confirmation", rule)
+        self.assertEqual(sync_global_skills.inline_closeout_status(SKILLS_DIR), "ready")
+        second = sync_global_skills.install_global_agents(SKILLS_DIR, skills, closeout_only=True)
+        self.assertFalse(second["changed"])
+        backups = sync_global_skills.list_global_agents_backups(skills)
+        self.assertEqual(len(backups), 1)
+        sync_global_skills.restore_global_agents_backup(skills, backups[0]["id"])
+        self.assertEqual(target.read_text(encoding="utf-8"), personal)
+
+    def test_closeout_merge_guards_markers_conflicts_and_shadowing(self):
+        rule = sync_global_skills.inline_closeout_rule(SKILLS_DIR)
+        legacy = sync_global_skills.LEGACY_CLOSEOUT_PREFIXES[1] + " Preserve other boundaries."
+        self.assertEqual(sync_global_skills.merge_inline_closeout(legacy, rule), rule)
+        self.assertEqual(sync_global_skills.merge_inline_closeout("Personal rules", rule), rule + "\n\nPersonal rules")
+        stale = sync_global_skills.INLINE_CLOSEOUT_START + "\nOld closeout.\n" + sync_global_skills.INLINE_CLOSEOUT_END
+        self.assertEqual(sync_global_skills.merge_inline_closeout("Prefix\n\n" + stale + "\n\nSuffix", rule), "Prefix\n\n" + rule + "\n\nSuffix")
+        for malformed in (sync_global_skills.INLINE_CLOSEOUT_START, rule + "\n\n" + rule, sync_global_skills.INLINE_CLOSEOUT_END + sync_global_skills.INLINE_CLOSEOUT_START, legacy + "\n\n" + legacy, rule + "\n\n" + legacy):
+            with self.subTest(malformed=malformed), self.assertRaisesRegex(RuntimeError, "ambiguous|conflicting"):
+                sync_global_skills.merge_inline_closeout(malformed, rule)
+        self.assertEqual(sync_global_skills.inline_closeout_status(SKILLS_DIR), "missing_global_entry")
+        target = self.codex_root / "AGENTS.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("Personal rules", encoding="utf-8")
+        self.assertEqual(sync_global_skills.inline_closeout_status(SKILLS_DIR), "inline_closeout_rule_missing_or_stale")
+        skills = self.codex_root.parent / "skills"
+        sync_global_skills.install_global_agents(SKILLS_DIR, skills, closeout_only=True)
+        override = self.codex_root / "AGENTS.override.md"
+        override.write_text("User override", encoding="utf-8")
+        self.assertEqual(sync_global_skills.inline_closeout_status(SKILLS_DIR), "shadowed_by_global_override")
+        override.write_text("\n", encoding="utf-8")
+        self.assertEqual(sync_global_skills.inline_closeout_status(SKILLS_DIR), "ready")
 
     def test_push_cli_defaults_to_the_maintained_repository_source(self):
         argv = ["sync_global_skills.py", "push", "--message", "source-first smoke", "--include-path", "verify-skill/SKILL.md", "--include-path", "README.md"]
