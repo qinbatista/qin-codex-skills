@@ -1244,7 +1244,15 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         sandbox = Path(self.codex_sandbox.name)
         tag = suffix.replace("-", "")[:4]
         source_dir = sandbox / f"s{tag}"
-        remote_dir = sandbox / f"r{tag}.git"
+        gate_owner = sync_global_skills.os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT") if sys.platform == "win32" else None
+        if gate_owner:
+            if not SKILLS_DIR.is_relative_to(Path(gate_owner)):
+                raise ValueError("release fixture owner must contain the isolated candidate")
+            remote_scope = tempfile.TemporaryDirectory(prefix="r-", dir=gate_owner)
+            self.addCleanup(remote_scope.cleanup)
+            remote_dir = Path(remote_scope.name) / f"r{tag}.git"
+        else:
+            remote_dir = sandbox / f"r{tag}.git"
         source_dir.mkdir()
         sync_global_skills.prepare_repository_snapshot(source_dir, SKILLS_DIR)
         (source_dir / "AGENTS.md").write_text("# Publication fixture\n", encoding="utf-8")
@@ -1264,7 +1272,10 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         command = ["git", "push", "publication", "HEAD:refs/heads/release-target"]
         if configured_upstream:
             command.insert(2, "--set-upstream")
-        sync_global_skills.run_command(command, cwd=source_dir)
+        try:
+            sync_global_skills.run_command(command, cwd=source_dir)
+        except sync_global_skills.subprocess.CalledProcessError as error:
+            raise AssertionError(f"Fixture remote push failed: {error.stderr}") from error
         return source_dir, remote_dir
 
     def advance_publication_remote(self, remote_dir, relative_path, text):

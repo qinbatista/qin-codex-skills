@@ -678,7 +678,7 @@
           "file": "management-skill/scripts/global_skill_regression_gate.py",
           "symbol": "candidate_layouts",
           "anchor": "def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: list[str], *,",
-          "summary": "Use an exact borrowed publication run for shallow isolated layouts on Windows or own a project Cache run; copy Cache ignore rules and close candidate fixtures."
+          "summary": "Use an exact borrowed publication run for shallow Windows layouts and short Git remote fixtures, or own a project Cache run; copy Cache ignore rules and close fixtures."
         },
         {
           "id": "auth-probe-owner",
@@ -769,7 +769,7 @@
           "file": "management-skill/tests/test_project_cache_artifact_policy.py",
           "symbol": "ProjectCacheArtifactPolicyTests.test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache",
           "anchor": "def test_resolved_projects_and_tasks_are_isolated_and_preserve_canonical_cache(self):",
-          "summary": "Exercise independent task directories, preserve canonical resources and verify a real child import creates no bytecode cache."
+          "summary": "Exercise independent task directories, preserve canonical resources and verify a real child import from a short Windows working directory creates no bytecode cache."
         }
       ]
     },

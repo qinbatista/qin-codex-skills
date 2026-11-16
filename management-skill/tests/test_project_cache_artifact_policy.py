@@ -521,7 +521,9 @@ class ProjectCacheArtifactPolicyTests(unittest.TestCase):
             for name in ("TMP", "TEMP", "TMPDIR"):
                 self.assertEqual(Path(environment[name]), roots[0] / "tmp")
             (roots[0] / "cache_probe.py").write_text("value = 41\n")
-            imported = subprocess.run([sys.executable, "-c", "import cache_probe; print(cache_probe.value + 1)"], cwd=roots[0], env=environment, capture_output=True, text=True, check=True, **hidden_process_options())
+            environment["PYTHONPATH"] = str(roots[0])
+            launch_cwd = roots[0].anchor if sys.platform == "win32" else roots[0]
+            imported = subprocess.run([sys.executable, "-c", "import cache_probe; print(cache_probe.value + 1)"], cwd=launch_cwd, env=environment, capture_output=True, text=True, check=True, **hidden_process_options())
             self.assertEqual(imported.stdout.strip(), "42")
             self.assertFalse((roots[0] / "__pycache__").exists())
             self.assertEqual(original.read_bytes(), b"canonical asset bytes")

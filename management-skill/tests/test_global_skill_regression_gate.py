@@ -258,6 +258,7 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                 self.assertFalse(workspace.exists())
 
     def test_publication_candidates_use_shallow_owned_layout_on_windows(self):
+        previous_fixture = os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT")
         with GATE.task_artifact_scope(PROJECT_ROOT, "shallow-release-layout-test") as run:
             source = run / "publication" / "s"
             deployed = run / "publication" / "i"
@@ -268,11 +269,14 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
             deployed.mkdir()
             with GATE.candidate_layouts(source, deployed, [], layout_run_root=run,
                                         layout_owner_project=PROJECT_ROOT) as roots:
+                if os.name == "nt":
+                    self.assertEqual(os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT"), str(run))
                 for root in roots.values():
                     self.assertTrue(root.is_relative_to(run))
                     self.assertEqual(root.parents[2], run)
                     GATE.verify_cache_git(root, root / "Cache" / "temp-check")
             self.assertFalse(any(child.name.startswith("c-") for child in run.iterdir()))
+        self.assertEqual(os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT"), previous_fixture)
 
     @unittest.skipUnless((PROJECT_ROOT / ".agents" / "skills" / "testing-skill" / "SKILL.md").is_file(), "project testing Skill is source-only")
     def test_source_candidate_registry_check_accepts_inventory_and_rejects_missing_registry(self):

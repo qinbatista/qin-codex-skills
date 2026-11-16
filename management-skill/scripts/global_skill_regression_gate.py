@@ -212,7 +212,17 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
             plugin_cache = deployed_root.resolve().parent / "plugins" / "cache"
             copy_required_plugin_contracts(plugin_cache, source_candidate.parent / "plugins" / "cache")
             copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
-            yield {"source": source_candidate, "deployed": deployed_candidate}
+            previous_fixture_root = os.environ.get("QIN_SKILL_GATE_FIXTURE_ROOT")
+            if os.name == "nt":
+                os.environ["QIN_SKILL_GATE_FIXTURE_ROOT"] = str(cache_root)
+            try:
+                yield {"source": source_candidate, "deployed": deployed_candidate}
+            finally:
+                if os.name == "nt":
+                    if previous_fixture_root is None:
+                        os.environ.pop("QIN_SKILL_GATE_FIXTURE_ROOT", None)
+                    else:
+                        os.environ["QIN_SKILL_GATE_FIXTURE_ROOT"] = previous_fixture_root
 
 
 def parse_test_count(output: str) -> int:
