@@ -519,28 +519,14 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "route_module",
           "anchor": "def route_module(root, identifier=None, target=None, context_lines=12, *, project_scope=\"current\"):",
-          "summary": "Select a module menu or resolve one unique code anchor from bounded current source; return necessary relationship pointers without loading them.",
-          "related": [
-            {
-              "module": "management",
-              "target": "index-validation",
-              "reason": "Routing validates the manifest before selecting any source."
-            }
-          ]
+          "summary": "Select a module menu or resolve one unique code anchor from bounded current source; return necessary relationship pointers without loading them."
         },
         {
           "id": "index-validation",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "validate_index",
           "anchor": "def validate_index(root, overlay=None):",
-          "summary": "Validate existing or proposed guidance and paths without reading source bodies.",
-          "related": [
-            {
-              "module": "management",
-              "target": "target-validation",
-              "reason": "Validate optional code target ownership, anchors and relationships."
-            }
-          ]
+          "summary": "Validate existing or proposed guidance and paths without reading source bodies."
         },
         {
           "id": "target-validation",
@@ -568,14 +554,7 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "prepare_plan",
           "anchor": "def prepare_plan(root, plan):",
-          "summary": "Bind a reviewed guidance plan to the project, source evidence and document preimages before guarded writes.",
-          "related": [
-            {
-              "module": "management",
-              "target": "index-validation",
-              "reason": "Validate the entire proposed guidance overlay before applying it."
-            }
-          ]
+          "summary": "Bind a reviewed guidance plan to the project, source evidence and document preimages before guarded writes."
         },
         {
           "id": "target-cli-test",
@@ -610,28 +589,14 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "index_directory",
           "anchor": "def index_directory(root):",
-          "summary": "Select an existing visible project index before the legacy owner without reading content or recreating a hidden duplicate.",
-          "related": [
-            {
-              "module": "management",
-              "target": "index-presence",
-              "reason": "Presence selection preserves the original first-bootstrap consent boundary."
-            }
-          ]
+          "summary": "Select an existing visible project index before the legacy owner without reading content or recreating a hidden duplicate."
         },
         {
           "id": "index-startup",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "check_project",
           "anchor": "def check_project(root, phase=\"start\", changed_paths=None, *, bootstrap_approved=False, project_scope=\"current\"):",
-          "summary": "Gate only the current task project; reference scope skips before index reads and prompts, while current missing indexes require first-bootstrap consent.",
-          "related": [
-            {
-              "module": "management",
-              "target": "index-presence",
-              "reason": "Presence alone controls the bootstrap question."
-            }
-          ]
+          "summary": "Gate only the current task project; reference scope skips before index reads and prompts, while current missing indexes require first-bootstrap consent."
         },
         {
           "id": "index-repair-test",

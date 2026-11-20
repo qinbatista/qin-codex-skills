@@ -240,6 +240,9 @@ class GlobalSkillRegressionGateTests(unittest.TestCase):
                     if (PROJECT_ROOT / index_path).is_file():
                         self.assertEqual((roots["source"] / index_path).read_bytes(), (PROJECT_ROOT / index_path).read_bytes())
                     self.assertFalse((roots["deployed"] / GATE.PROJECT_AI_INDEX_SKILL_RELATIVE_PATH).exists())
+                    for relative in GATE.PLUGIN_RELEASE_INPUTS:
+                        self.assertEqual((roots["source"] / relative).exists(), (PROJECT_ROOT / relative).exists())
+                        self.assertFalse((roots["deployed"] / relative).exists())
                     for name in ("README.md", "README.zh.md"):
                         if (PROJECT_ROOT / name).is_file():
                             self.assertEqual((roots["source"] / name).read_bytes(), (PROJECT_ROOT / name).read_bytes())

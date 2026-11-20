@@ -26,10 +26,6 @@ At completion, summarize actual Skill names, steps and reasons once, including b
 
 Project memories stay isolated in Memory.json and Knowledge.md. Recall excludes stale facts. The active task consolidates touched entries and shared preferences remain scoped. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
 
-[AI Index Compression](management-skill/references/project-ai-index.md#ai-index-compression) reviews oversized project guidance against current source and scoped Obsidian memory during tasks, preserving rules and history.
-
-All code edits, including tests, follow module → file → method/anchor → necessary relationships plus scoped memory. Selected routes return bounded current excerpts; edits refresh touched routes. Prefer cohesive methods, parameterized variants and deliberate extraction.
-
 Repository work and installers use `--existing-only`; missing vaults remain pending. First-vault setup with [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki) requires explicit authorization through [Project Memory](project-memory-skill/SKILL.md). Back up the whole vault containing Codex and project memory; the generator contains no private memories.
 
 macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --project-root . --existing-only`
@@ -38,33 +34,29 @@ Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.
 
 ## Install the global plugin
 
-Use a Codex CLI with `codex plugin add` support. Run these commands from any folder. Codex enables the plugin for your user across projects.
+Run from any folder with a current Codex CLI.
 
 ```text
 codex plugin marketplace add qinbatista/qin-codex-skills --ref codex/plugin
 codex plugin add qin-codex-skills@qin-codex-skills
 ```
 
-Open a new Codex session after installing or updating. In the Skills picker, select a Skill from **Qin Codex Skills**. Use `codex plugin list --json` to check the installed and enabled state.
+Codex enables the plugin across projects. Start a fresh session and select **Qin Codex Skills** in the Skills picker. Check activation with `codex plugin list --json`.
 
-The installed plugin is under `$CODEX_HOME/plugins/cache/qin-codex-skills/qin-codex-skills/`, in a version directory managed by Codex. `CODEX_HOME` normally resolves to `~/.codex`. The package contains `plugin.json` and `skills/` with the eight `SKILL.md` entries and their references, runtime scripts, assets, and display metadata. Repository README files, `AGENTS.md`, the project AI index and tests live on the source branch. See [OpenAI's installation and layout documentation](https://developers.openai.com/plugins/build/plugins#how-local-marketplaces-work).
+The install path is `$CODEX_HOME/plugins/cache/qin-codex-skills/qin-codex-skills/<version>/`. `CODEX_HOME` defaults to `~/.codex`. The package contains its manifest and the eight Skills with their references, scripts, assets and display metadata. READMEs, AGENTS, the project AI index and tests stay in source. See [OpenAI's plugin layout](https://developers.openai.com/plugins/build/plugins#how-local-marketplaces-work).
 
 ## Update or uninstall
-
-Remove the installed plugin and its registered Git marketplace in this order.
 
 ```text
 codex plugin remove qin-codex-skills@qin-codex-skills
 codex plugin marketplace remove qin-codex-skills
 ```
 
-To update, repeat both install commands after removal. This fetches the current `codex/plugin` branch and installs a fresh copy, so files removed from the release disappear. For removal only, stop after the two commands above.
+To fetch the latest package and replace all files, repeat both install commands after removal. To uninstall, stop here.
 
 ## Maintain the source
 
-GitHub Actions publishes the package from `master` to `codex/plugin`. Use the [project AI index](skills/ai-index/SKILL.md) to find development and release tools. Keep task support in a fresh project `Cache/temp-<task>/` run under [the artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Release disposable directories and preserve the project's source and active resources.
-
-Source, installation and publication are distinct. The [source publisher](management-skill/SKILL.md#publish) selects files with `--include-path` and existing commits with `--include-commit` full hashes. It integrates, verifies, pushes and reads back the configured upstream, preserving unselected worktree and index changes.
+GitHub Actions publishes the package from `master` to `codex/plugin`. The [source publisher](management-skill/SKILL.md#publish) uses `--include-path` and `--include-commit` to verify and deliver selected changes through the configured upstream.
 
 ## Code reference owners
 

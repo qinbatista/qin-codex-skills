@@ -451,12 +451,20 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
-    def test_readme_documents_installation_preservation_and_portable_entry(self):
-        readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="en")
-        for concept in ("deploy --source-dir .", "py -3 -B", "locking, backup, and recovery", "preserves unrelated skills, user AGENTS, and existing private history", "install-global-agents --source-dir .", "restorable backup", "--include-path", "--include-commit", "configured upstream", "unselected worktree and index changes"):
-            self.assertIn(concept, readme)
-        self.assertNotIn("/Users/", readme)
-        self.assertNotIn("shell=True", readme)
+    def test_readmes_document_native_plugin_install_and_clean_replacement(self):
+        for language in ("en", "zh"):
+            with self.subTest(language=language):
+                readme = sync_global_skills.build_readme(self.primary_skill_paths(), language=language)
+                for concept in (
+                    "codex plugin marketplace add qinbatista/qin-codex-skills --ref codex/plugin\ncodex plugin add qin-codex-skills@qin-codex-skills",
+                    "codex plugin remove qin-codex-skills@qin-codex-skills\ncodex plugin marketplace remove qin-codex-skills",
+                    "$CODEX_HOME/plugins/cache/qin-codex-skills/qin-codex-skills/",
+                    "repeat both install commands after removal", "--include-path", "--include-commit", "configured upstream",
+                ):
+                    self.assertIn(concept, readme)
+                self.assertNotIn("deploy --source-dir .", readme)
+                self.assertNotIn("/Users/", readme)
+                self.assertNotIn("shell=True", readme)
 
 
     def test_available_agent_short_descriptions_are_at_most_64_characters(self):
