@@ -11,7 +11,7 @@ Default new Cache output to `Cache/temp-*` whenever ownership, the consumer, or 
 
 Before the first payload write, record the workspace baseline and each producer's assigned run. Track exact paths and handles as tools create them for the [task leftover check](references/ending-resource-audit.md#check-and-reclaim-task-leftovers).
 
-Apply [Task Analyze](../task-analyze-skill/SKILL.md) for correct names and the opening brief: result, qualitative difficulty, known models, branch roles and dependencies. Keep it proportional to the work; a simple task needs only a sentence. Follow its [action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests) through execution, recovery and the final response.
+Apply [Task Analyze](../task-analyze-skill/SKILL.md) for correct names and the opening brief. Follow its [action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests) from defining the final result and acceptance criteria through verification and delivery.
 
 Follow [Task Analyze's final Skill report](../task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting): keep an internal record of exact Skills actually used, their steps or actions and reasons. Gather delegated branch use for one parent-visible final summary; ordinary progress updates need no repeated Skill list.
 
@@ -31,11 +31,11 @@ For any browser-based test, prefer the Codex or ChatGPT built-in browser surface
 
 Start every ready independent branch promptly through concurrent tools or subagents with clear goals and disjoint write ownership. Serialize only genuine prerequisites, shared mutable owners and required authorization. Join a branch when its output is needed. For example, generate an image while a separate branch cleans confirmed disposable files; prepare output paths, layout inputs and QA criteria before the image arrives. Never delete an active job's inputs or backing resources.
 
-Prefer events or completion notifications to polling. Give external jobs a time budget; use bounded checks with backoff while doing other ready work. If the budget expires or a client stays stale, record the exact job/target, last authoritative state and recovery action as pending, then continue independent work. The budget bounds polling for that step; it does not declare the whole task failed or excuse skipping useful implementation or recovery. Never duplicate a possibly accepted submission just because its UI is slow.
+Prefer events or completion notifications to polling. Use bounded checks with backoff while doing other ready work. If a check budget expires or a client stays stale, record the exact job, latest authoritative state and next recovery action. Continue through the service's status interface, a supported wait, or another viable recovery path. Apply Task Analyze's blocker rule once no useful authorized action remains. Check the existing submission before retrying to prevent duplicates.
 
 Close resources and memory inline. Codex chats/sessions are user-managed; do not create, archive or delete Ending conversations automatically.
 
-A site's authoritative success receipt or acknowledgement completes the submission step and unblocks independent work. Submission accepted, backend completion verified, tab closed and scratch removed remain separate states. Make at most one immediate readback and one bounded final readback for an acknowledged action; stale UI or unavailable APIs leave verification pending instead of triggering an endless loop. Return to exact owned tabs during final cleanup and close those no longer needed. Actual output acceptance, byte verification and irreversible-action authorization still govern their real dependents.
+An authoritative receipt proves submission. When submission is the requested endpoint, use at most one immediate and one bounded final readback. When the requested endpoint is backend completion, follow the job to its authoritative final state and verify its output. Return to exact owned tabs during final cleanup and close those no longer needed. Actual output acceptance, byte verification and irreversible-action authorization still govern their real dependents.
 
 ## Monitor Mode
 
