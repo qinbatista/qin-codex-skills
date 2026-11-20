@@ -530,14 +530,6 @@ def validate_code_samples(evidence: dict[str, object]) -> tuple[int, int]:
     return len(projects) if isinstance(projects, list) else 0, len(projects) if passed else 0
 
 
-def validate_unity_trials(evidence: dict[str, object]) -> tuple[int, int]:
-    trials = evidence.get("trials", [])
-    passed = evidence.get("status") == "pass" and evidence.get("trial_count") == 5 and evidence.get("passed_trials") == 5 and evidence.get("source_hashes_unchanged") is True and evidence.get("project_agents_unchanged") is True and evidence.get("all_work_copies_deleted") is True and evidence.get("unity_compile_requested") is True
-    if passed and isinstance(trials, list):
-        passed = len(trials) == 5 and all(trial.get("status") == "pass" and trial.get("unity_compile", {}).get("status") == "pass" and trial.get("unity_compile", {}).get("exit_code") == 0 and trial.get("work_copy_deleted") is True for trial in trials)
-    return len(trials) if isinstance(trials, list) else 0, len(trials) if passed else 0
-
-
 def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
     catalog = load_catalog(project_root)
     check = next((item for item in catalog["checks"] if item.get("id") == check_id), None)
@@ -549,8 +541,6 @@ def create_attestation(project_root: Path, check_id: str) -> dict[str, object]:
     evidence = load_json(evidence_path)
     if check_id == "code-sample-attestation":
         trial_count, passed_trials = validate_code_samples(evidence)
-    elif check_id == "unity-five-attestation":
-        trial_count, passed_trials = validate_unity_trials(evidence)
     else:
         raise RuntimeError(f"no evidence validator for attestation: {check_id}")
     if trial_count < 1 or passed_trials != trial_count:
@@ -584,7 +574,7 @@ def main() -> int:
     check_parser.add_argument("--history", type=Path)
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("--project-root", type=Path, default=Path.cwd())
-    attest_parser.add_argument("--check-id", choices=("code-sample-attestation", "unity-five-attestation", "memory-execution-consistency-attestation"), required=True)
+    attest_parser.add_argument("--check-id", choices=("code-sample-attestation", "memory-execution-consistency-attestation"), required=True)
     args = parser.parse_args()
     project_root = args.project_root.expanduser().resolve()
     if args.command == "attest":

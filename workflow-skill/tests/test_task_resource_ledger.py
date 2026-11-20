@@ -295,14 +295,14 @@ class TaskResourceLedgerTests(ProjectCacheTestCase):
         )
         preexisting = LEDGER.record_preexisting_path(
             self.ledger,
-            "unity-cache",
-            "Library/Artifacts",
-            "Unity-managed cache",
+            "runtime-cache",
+            "Runtime/Artifacts",
+            "Application-managed cache",
         )
         self.assertEqual(remote["state"], "retained")
         self.assertEqual(remote["sync_status"], "local_bytes_verified")
         self.assertEqual(preexisting["state"], "preexisting")
-        for resource_id in ("remote", "unity-cache"):
+        for resource_id in ("remote", "runtime-cache"):
             with self.assertRaisesRegex(ValueError, "remains untouched"):
                 LEDGER.prepare_release(self.ledger, resource_id)
 

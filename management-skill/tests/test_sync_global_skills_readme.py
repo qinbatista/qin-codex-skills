@@ -824,7 +824,7 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             target_dir = Path(temp_dir) / "global-skills"
             lock_dir = target_dir.parent / sync_global_skills.INSTALL_LOCK_NAME
             lock_dir.mkdir()
-            with mock.patch.object(sync_global_skills, "real_directory_entry", side_effect=FileNotFoundError):
+            with mock.patch.object(sync_global_skills.os.path, "lexists", side_effect=(True, False)), mock.patch.object(Path, "lstat", side_effect=FileNotFoundError):
                 self.assertTrue(sync_global_skills.clear_stale_installation_lock(lock_dir))
 
     def test_deploy_copies_repository_skills_and_preserves_local_private_state(self):

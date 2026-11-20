@@ -296,7 +296,7 @@
     },
     {
       "id": "code",
-      "summary": "Code ownership, state/side-effect design and portable helper checks",
+      "summary": "General code philosophy, Python rules, state and side effects, and portable helper checks",
       "document": "skills/ai-index/modules/code.md",
       "sources": [
         "code-skill"
@@ -312,6 +312,13 @@
         }
       ],
       "code_targets": [
+        {
+          "id": "python-rule-guard",
+          "file": "code-skill/scripts/code_rule_guard.py",
+          "symbol": "python_violations",
+          "anchor": "def python_violations(text):",
+          "summary": "Find Python direct-code violations while preserving valid patterns and documented semantic boundaries."
+        },
         {
           "id": "code-navigation-contract-test",
           "file": "code-skill/tests/test_code_writing_philosophy.py",
@@ -474,6 +481,13 @@
       ],
       "code_targets": [
         {
+          "id": "installer-lock-observation",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "clear_stale_installation_lock",
+          "anchor": "def clear_stale_installation_lock(lock_dir):",
+          "summary": "Distinguish a released lock from an unsafe directory entry with one native classification read."
+        },
+        {
           "id": "index-route",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "route_module",
@@ -506,8 +520,7 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "validate_code_targets",
           "anchor": "def validate_code_targets(root, modules, overlay):",
-          "summary": "Validate bounded method navigation metadata, file ownership and explicit relationship targets; source anchor resolution belongs to route_module.",
-          "related": []
+          "summary": "Validate bounded method navigation metadata, file ownership and explicit relationship targets; source anchor resolution belongs to route_module."
         },
         {
           "id": "index-compression",
@@ -549,24 +562,21 @@
           "file": "management-skill/tests/test_project_ai_index.py",
           "symbol": "ProjectAIIndexTests.test_code_target_cli_stale_unknown_and_bounded_failures",
           "anchor": "def test_code_target_cli_stale_unknown_and_bounded_failures(self):",
-          "summary": "Require bounded failures for stale, ambiguous or oversized source, unknown targets and invalid context sizes.",
-          "related": []
+          "summary": "Require bounded failures for stale, ambiguous or oversized source, unknown targets and invalid context sizes."
         },
         {
           "id": "target-metadata-test",
           "file": "management-skill/tests/test_project_ai_index.py",
           "symbol": "ProjectAIIndexTests.test_code_target_metadata_rejects_unsafe_ownership_and_relations",
           "anchor": "def test_code_target_metadata_rejects_unsafe_ownership_and_relations(self):",
-          "summary": "Reject unsafe paths, wrong owners and invalid code target relationships.",
-          "related": []
+          "summary": "Reject unsafe paths, wrong owners and invalid code target relationships."
         },
         {
           "id": "index-presence",
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "bootstrap_state",
           "anchor": "def bootstrap_state(root):",
-          "summary": "Require first-bootstrap consent only when neither visible nor legacy index exists; existing partial indexes are repair cases.",
-          "related": []
+          "summary": "Require first-bootstrap consent only when neither visible nor legacy index exists; existing partial indexes are repair cases."
         },
         {
           "id": "index-directory",
@@ -601,8 +611,7 @@
           "file": "management-skill/tests/test_project_ai_index.py",
           "symbol": "ProjectAIIndexTests.test_existing_partial_index_is_repaired_without_another_bootstrap_question",
           "anchor": "def test_existing_partial_index_is_repaired_without_another_bootstrap_question(self):",
-          "summary": "Exercise real CLI inspection and guarded repair of partial or malformed existing indexes without another bootstrap question.",
-          "related": []
+          "summary": "Exercise real CLI inspection and guarded repair of partial or malformed existing indexes without another bootstrap question."
         },
         {
           "id": "cache-test-fixture-owner",

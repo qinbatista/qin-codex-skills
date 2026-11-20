@@ -1,6 +1,6 @@
 # qin-codex-skills
 
-This repository owns eight public global Skills: Task Analyze, Workflow, Code, Verify, Prompt, Optimization, Project Memory and Management. Their source folders own instructions, references, helpers and clean-clone tests. Product-specific implementations belong in project Skills.
+This repository owns eight public global Skills: Task Analyze, Workflow, Code, Verify, Prompt, Optimization, Project Memory and Management. Code maintains general coding philosophy and Python guidance. Their source folders own instructions, references, helpers and clean-clone tests. Product-specific implementations belong in project Skills.
 
 Read the [project AI index](skills/ai-index/SKILL.md) at start/resume and finish when this is the current project. Every task that changes this project must update its relevant index guidance or metadata and verify the result before delivery. Reference lookups never trigger index maintenance or authorize writes. Select focused routes, reconcile root guidance when needed, and run AI Index Compression when inspection reports it due. Preserve scoped rules and other Skills' authorization boundaries.
 
@@ -11,6 +11,6 @@ Read the [project AI index](skills/ai-index/SKILL.md) at start/resume and finish
 - Task Analyze owns the opening preview, chat naming, action completion and final Skill report. Workflow owns ready work, Git delivery, bounded waits and cleanup. Verify at the smallest real boundary in the active task; read the testing Skill before maintained Python tests or extended checks. Keep release tests in their Skills and register them centrally. Full builds require a request or release requirement.
 - Keep task-created directories in this repository. Management owns authorized publication and recoverable installation to `~/.agents/skills`; project Skills remain project-local. `CODEX_HOME` owns configuration, global AGENTS and bundled resources. Preserve unrelated edits, installations, user AGENTS and private history. External installation or resource creation requires an explicit request; global AGENTS requires explicit authorization.
 - Use `project-memory-skill/scripts/obsidian_vault_setup.py --existing-only` and the configured Obsidian vault for scoped memory. An absent vault is a nonblocking skip. Close memory and resources inline. Codex chats and storage are user-managed; do not create automatic Ending chats or archive/delete session records.
-- Run scripts and tests quietly with portable paths. Do not open surfaces unless requested, click approvals, restart another task or launch Unity/Unity Hub for repository work. Use the built-in browser for browser tests.
+- Run scripts and tests quietly with portable paths. Open visible surfaces only when requested. Do not click approvals or restart another task. Use the built-in browser for browser tests.
 
 Done means instructions and executable behavior agree, relevant tests pass, owned outputs are read back, and source, installation and publication status are reported accurately.

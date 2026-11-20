@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "tests": [
-    {"path": "code-skill/tests/test_code_rule_guard.py", "purpose": "python-rule-guard", "goal": "Detect prohibited Python wrappers, recursion, and parse failures while preserving valid patterns.", "level": 1, "runner": "unittest", "owner": "code-skill"},
+    {"path": "code-skill/tests/test_code_rule_guard.py", "purpose": "python-rule-guard", "goal": "Detect Python wrappers, recursion, and parse failures, preserve valid patterns, and reject unsupported file types.", "level": 1, "runner": "unittest", "owner": "code-skill"},
     {"path": "code-skill/tests/test_code_writing_philosophy.py", "purpose": "code-authoring-contract", "goal": "Keep code ownership, scoped method navigation, cohesive method boundaries, refactor consent, naming and verification guidance aligned with the shared writing rules.", "level": 1, "runner": "unittest", "owner": "code-skill"},
     {"path": "code-skill/tests/test_hidden_process.py", "purpose": "hidden-subprocess-runtime", "goal": "Exercise hidden subprocess options on the native host and guarded Windows behavior.", "level": 2, "runner": "unittest", "owner": "code-skill"},
     {"path": "code-skill/tests/test_hidden_process_adoption.py", "purpose": "hidden-subprocess-adoption", "goal": "Find maintained launch sites that omit the shared hidden-process helper.", "level": 1, "runner": "unittest", "owner": "code-skill"},

@@ -26,7 +26,7 @@ class CodeRuleGuardTests(unittest.TestCase):
     def test_pattern_wildcard_and_real_semantic_boundary_are_allowed(self):
         boundary = "# code-gate: semantic-boundary=public validation\ndef save_data(value):\n    return provider.save_data(value)\n"
         self.assertNotIn("pass-through-wrapper", self.codes(boundary, ".py"))
-        self.assertEqual(self.codes("case _:\n    break;\n", ".cs"), set())
+        self.assertEqual(self.codes("match value:\n    case _:\n        pass\n", ".py"), set())
 
     def test_empty_semantic_boundary_reason_does_not_bypass_wrapper_rule(self):
         boundary = "# code-gate: semantic-boundary=\ndef save_data(value):\n    return provider.save_data(value)\n"
@@ -43,21 +43,13 @@ class CodeRuleGuardTests(unittest.TestCase):
         source = "async def wait_for_owner(pending):\n    await pending\n"
         self.assertEqual(self.codes(source, ".py"), set())
 
-    def test_unity_csharp_rejects_named_pitfalls(self):
-        source = "\n".join(["_ = SaveDataAsync();", "var controller = new PlayerController();", "void SaveData() { SaveData(); }", "public bool SaveData(Data value) => _provider.SaveData(value);", "SaveData(", "    value);", "Widget widget = new Widget(", "    first,", "    second);"])
-        self.assertTrue({"discard-assignment", "obvious-var", "self-recursion", "pass-through-wrapper", "avoidable-vertical-call"}.issubset(self.codes(source, ".cs")))
-
-    def test_unity_csharp_rejects_multiline_self_recursion_and_pass_through_wrapper(self):
-        source = "\n".join(["void SaveData()", "{", "    SaveData();", "}", "", "public bool PersistData(Data value)", "{", "    return _provider.PersistData(value);", "}"])
-        self.assertTrue({"self-recursion", "pass-through-wrapper"}.issubset(self.codes(source, ".cs")))
+    def test_non_python_input_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "require a .py file"):
+            self.codes("value = 1\n", ".txt")
 
     def test_duplicate_discard_bindings_on_one_line_emit_one_actionable_violation(self):
         violations = module.check_text("first, _, _, second = values\n", ".py")
         self.assertEqual([(item["code"], item["line"]) for item in violations], [("discard-binding", 1)])
-
-    def test_unity_csharp_allows_direct_call_explicit_type_and_marked_facade(self):
-        source = "\n".join(["await SaveDataAsync();", "PlayerController controller = new PlayerController();", "// code-gate: semantic-boundary=public validation", "public bool SaveData(Data value) => _provider.SaveData(value);"])
-        self.assertEqual(self.codes(source, ".cs"), set())
 
     def test_changed_line_filter_does_not_fail_for_legacy_violation_outside_patch(self):
         violations = [module.violation("legacy", 2, "old"), module.violation("new", 7, "new", 9)]

@@ -1031,8 +1031,8 @@ def print_lines(title, lines):
         print(f"- {line}")
 
 
-def real_directory_entry(path):
-    if not os.path.lexists(path):
+def real_directory_entry(path, *, require_exists=False):
+    if not require_exists and not os.path.lexists(path):
         return False
     path_status = Path(path).lstat()
     reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
@@ -1111,9 +1111,7 @@ def try_create_installation_lock(lock_dir, token):
 
 def clear_stale_installation_lock(lock_dir):
     try:
-        if not os.path.lexists(lock_dir):
-            return True
-        if not real_directory_entry(lock_dir):
+        if not real_directory_entry(lock_dir, require_exists=True):
             raise RuntimeError("The global Skill installation lock is not a safe real directory.")
         owner = read_json_if_available(lock_dir / "owner.json")
         if owner and process_is_running(owner.get("pid")):

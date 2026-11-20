@@ -1,6 +1,6 @@
 ---
 name: code-skill
-description: "Use for code creation, repair, refactoring, and code review when writing style, structure, or lifecycle decisions matter. Provides general preferences with Python and Unity C# references. Exact read-only lookups and mechanical commands need no code-design workflow."
+description: "Use for code creation, repair, refactoring, and review when structure, ownership, or lifecycle decisions matter. Provides general coding philosophy and Python guidance. Exact read-only lookups and mechanical commands need no code-design workflow."
 ---
 
 # Code Skill
@@ -28,22 +28,20 @@ Briefly explain the intended change and implementation steps before detailed exe
 | --- | --- |
 | Long source/text, build output or machine error logs | [Workflow's bounded text and log reading](../workflow-skill/references/text-and-log-reading.md) |
 | Python | [Python rules](references/python-rules.md) |
-| C# | [Unity C# common style](references/unity-csharp-rules.md); Unity-specific rules apply only to Unity |
 | UI, PDF/report layout, or other visual presentation | [Coding approach and UI preferences](references/coding-approach.md) |
-| Unity gameplay ownership or patterns | [Game structure](references/unity-game-code-structure-design.md) |
-| Unity callbacks, async, serialization | [Lifecycle and serialization](references/unity-lifecycle-and-serialization.md) |
-| Unity services or optional SDKs | [Service integration](references/unity-service-integration.md) |
 | Embedded prompts | [Prompt Skill](../prompt-skill/SKILL.md), then [prompt strings](references/prompt-generation.md) |
 | Authorized parallel implementation | [Parallelization](references/parallelization.md) |
 | Async results, pooled reuse, caches, configuration handoffs, or external retries | [State and side effects](references/state-and-side-effects.md) |
 | Host helpers, scripts, subprocesses, or tests | [Portable, quiet execution](references/skill-platform-compatibility.md) |
 
+Use [unity-code-skill](https://github.com/qinbatista/qin-unity-skills/tree/master/unity-code-skill) for the Unity C# profile.
+
 ## Verification
 
-Use focused function tests, direct-reference checks, or a small real fixture according to the changed behavior. Syntax validation and mocks can support diagnosis but do not prove runtime behavior. For rendered UI, inspect the affected state at relevant desktop and narrow widths; source/CSS alone does not prove alignment. For changed Python/C# style, `scripts/code_rule_guard.py --diff-from HEAD <changed-files>` checks newly added lines without rewriting legacy code. The guard supplements behavior evidence.
+Use focused function tests, direct-reference checks, or a small real fixture according to the changed behavior. Syntax validation and mocks can support diagnosis but do not prove runtime behavior. For rendered UI, inspect the affected state at relevant desktop and narrow widths; source/CSS alone does not prove alignment. For Python style, `scripts/code_rule_guard.py --diff-from HEAD <changed-files>` checks newly added lines. The guard supplements behavior evidence.
 
-Do not start the whole project, run a full build, or compile all of Unity just to check a local change unless the user requests it. Complete the authorized change and available focused checks before reporting a limit that requires broader execution; separate implemented behavior from unverified claims. Do not execute expensive, destructive, or external side effects solely for a routine check.
+Do not start the whole project or run a full build just to check a local change unless the user requests it. Complete the authorized change and available focused checks before reporting a limit that requires broader execution; separate implemented behavior from unverified claims. Do not execute expensive, destructive, or external side effects solely for a routine check.
 
 ## Guardrails
 
-Preserve public contracts, serialization, execution order, exceptions, cancellation, and Unity main-thread rules unless the request changes them. Publish only when authorized. Put temporary support in the owner resolved by the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md).
+Preserve public contracts, serialization, execution order, exceptions, cancellation, and the runtime's thread-affinity requirements unless the request changes them. Publish only when authorized. Put temporary support in the owner resolved by the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md).

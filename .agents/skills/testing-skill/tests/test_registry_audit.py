@@ -43,10 +43,10 @@ class RegistryAuditTests(unittest.TestCase):
                 skill_file = project_root / ".agents" / "skills" / "testing-skill" / "SKILL.md"
                 skill_file.parent.mkdir(parents=True)
                 skill_file.write_text("---\nname: testing-skill\n---\n", encoding="utf-8")
-                external_test = project_root / "UnityGame" / "Assets" / "Tests" / "Editor" / "test_interaction.py"
+                external_test = project_root / "NativeApp" / "Toolchain" / "Tests" / "test_interaction.py"
                 external_test.parent.mkdir(parents=True)
-                external_test.write_text("# Editor-only test fixture\n", encoding="utf-8")
-                registry = {"schema_version": 1, "tests": [{"path": external_test.relative_to(project_root).as_posix(), "purpose": "unity-interaction", "goal": "Verify the editor interaction at its required test location.", "level": 2, "runner": "Unity EditMode", "owner": "UnityGame"}]}
+                external_test.write_text("# Native toolchain test fixture\n", encoding="utf-8")
+                registry = {"schema_version": 1, "tests": [{"path": external_test.relative_to(project_root).as_posix(), "purpose": "native-interaction", "goal": "Verify the toolchain interaction at its required test location.", "level": 2, "runner": "Native runner", "owner": "NativeApp"}]}
                 self.assertEqual(AUDITOR.audit_registry(project_root, registry), [])
                 skill_file.write_text("---\nname: wrong-skill\n---\n", encoding="utf-8")
                 self.assertIn("testing-skill/SKILL.md requires frontmatter name: testing-skill", AUDITOR.audit_registry(project_root, registry))

@@ -1,6 +1,6 @@
 # Execution and resources
 
-Repository work creates directories only inside the current project. Consulted projects remain read-only; do not auto-install, bootstrap external resources or launch Unity/Unity Hub. Only an explicit external-resource task selects a destination outside the project. See root [AGENTS.md](../../../AGENTS.md) and Workflow's artifact policy.
+Repository work creates directories only inside the current project. Consulted projects remain read-only. Use explicit external-resource authorization to select a destination outside the project or install anything there. Keep application launches within the requested scope. See root [AGENTS.md](../../../AGENTS.md) and Workflow's artifact policy.
 
 [Task Analyze](../../../task-analyze-skill/SKILL.md) owns the opening preview: intended result, qualitative difficulty, actual known models, branch roles and real dependencies. Never invent a model name. Keep chat names concise. Carry action requests through useful authorized recovery and lead with delivered changes. Keep an internal record of actual Skill names, actions and purposes across branches; give one final Skill summary, including partial/failed/paused outcomes, without repeating inventories at each stage.
 

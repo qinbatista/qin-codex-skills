@@ -16,7 +16,7 @@ Use this reference when `verify-skill` needs to judge whether visible output is 
 
 1. Read the user's visual context first: audience, domain, output type, target platform, style references, brand constraints, intended mood, accessibility constraints, and what must stay consistent with prior work.
 2. Capture real evidence before judging: screenshot, browser viewport, rendered PDF page, slide export, gameplay capture, image output, or supplied reference. Do not accept code-only inspection for a visual claim when rendering is practical.
-3. Choose the artifact standard below. Combine standards when the output is mixed, such as a game UI inside a Unity scene or a report dashboard exported to PDF.
+3. Choose the artifact standard below. Combine standards when the output is mixed, such as a report dashboard exported to PDF.
 4. Compare against any available baseline: previous screenshot, reference image, existing design system, brand guide, golden file, user sample, or prior generated artifact.
 5. Return `pass`, `warning`, or `fail`, with the evidence path/state, selected standard, observed issue, and why it matters.
 

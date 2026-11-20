@@ -75,7 +75,7 @@ Review the exact task path list, `git ls-files` and `git diff --cached --name-st
 ## Test file placement
 
 - When project logic or goals change, inventory existing test files and their runner references. Remove obsolete and duplicate cases; revise a useful existing case before adding another file. Keep only tests that exercise a current behavior or a deliberate compatibility boundary.
-- Put a nonshipping retained harness/fixture in its declared external resource owner. Tests required by source or a clean-clone release use the toolchain's versioned, non-runtime development area, such as a Skill's `tests/` or an appropriate Unity editor-only area; their run output and caches stay in the project Cache run. Keep tests out of runtime source and final deliverable folders.
+- Put a nonshipping retained harness/fixture in its declared external resource owner. Tests required by source or a clean-clone release use the toolchain's versioned, non-runtime development area, such as a Skill's `tests/`. Their run output and caches stay in the project Cache run. Keep tests out of runtime source and final deliverable folders.
 - After moving or removing a test, update runner commands, imports, fixture paths, documentation, and release checks, then execute the affected test from its final location. Do not keep a stale copy at the old path.
 
 ## Portable paths and external resources

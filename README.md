@@ -56,5 +56,5 @@ Source, installation and publication are distinct. `push` selects files with `--
 - [State, async results and side effects](code-skill/references/state-and-side-effects.md)
 - [Actual target and evidence boundaries](verify-skill/SKILL.md#bind-evidence-to-the-actual-target)
 - [Python](code-skill/references/python-rules.md)
-- [Unity C#](code-skill/references/unity-csharp-rules.md)
+- [Unity Code](https://github.com/qinbatista/qin-unity-skills/tree/master/unity-code-skill)
 - [Portable quiet execution](code-skill/references/skill-platform-compatibility.md)

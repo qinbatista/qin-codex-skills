@@ -21,7 +21,7 @@ SCRIPT_CANDIDATES = [
         "Consider an existing browser tool for this action before proposing a new helper.",
     ),
     (
-        re.compile(r"\b(open|launch)\b.*\b(unity|editor|application|app)\b", re.IGNORECASE),
+        re.compile(r"\b(open|launch)\b.*\b(editor|application|app)\b", re.IGNORECASE),
         "Check whether the application's existing CLI or local launcher already owns this operation.",
     ),
     (
