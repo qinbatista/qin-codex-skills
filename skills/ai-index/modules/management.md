@@ -1,6 +1,6 @@
 # Management
 
-The [global plugin release](plugin-release.md) owns the native Codex bundle and its Git marketplace. The installer below remains the owner of explicitly requested loose-Skill maintenance and global AGENTS changes.
+The [global plugin release](plugin-release.md) owns the portable bundle and its Git Marketplace. The `install-skill-pack-group` target owns the direct global path and whole-pack replacement. The legacy installer serves explicitly requested loose-Skill maintenance and global AGENTS changes.
 
 Start at [SKILL.md](../../../management-skill/SKILL.md). Select [project_ai_index.py](../../../management-skill/scripts/project_ai_index.py) and its [contract](../../../management-skill/references/project-ai-index.md) for automatic project guidance; [repair_user_skill_root.py](../../../management-skill/scripts/repair_user_skill_root.py) for encountered directory repair; [sync_global_skills.py](../../../management-skill/scripts/sync_global_skills.py) for installation/publication; or [global_skill_regression_gate.py](../../../management-skill/scripts/global_skill_regression_gate.py) for release acceptance.
 

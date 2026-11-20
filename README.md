@@ -32,27 +32,19 @@ macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --
 
 Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.py --project-root . --existing-only`
 
-## Install the global plugin
+## Install the global Skill pack
 
-Run from any folder with a current Codex CLI.
-
-```text
-codex plugin marketplace add qinbatista/qin-codex-skills --ref codex/plugin
-codex plugin add qin-codex-skills@qin-codex-skills
-```
-
-Codex enables the plugin across projects. Start a fresh session and select **Qin Codex Skills** in the Skills picker. Check activation with `codex plugin list --json`.
-
-The install path is `$CODEX_HOME/plugins/cache/qin-codex-skills/qin-codex-skills/<version>/`. `CODEX_HOME` defaults to `~/.codex`. The package contains its manifest and the eight Skills with their references, scripts, assets and display metadata. READMEs, AGENTS, the project AI index and tests stay in source. See [OpenAI's plugin layout](https://developers.openai.com/plugins/build/plugins#how-local-marketplaces-work).
-
-## Update or uninstall
+Save [install_skill_pack.py](https://raw.githubusercontent.com/qinbatista/qin-codex-skills/master/management-skill/scripts/install_skill_pack.py) and run the command for your operation. Use `py -3 -B` on Windows.
 
 ```text
-codex plugin remove qin-codex-skills@qin-codex-skills
-codex plugin marketplace remove qin-codex-skills
+python3 -B install_skill_pack.py install qin-codex-skills
+python3 -B install_skill_pack.py update qin-codex-skills
+python3 -B install_skill_pack.py uninstall qin-codex-skills
 ```
 
-To fetch the latest package and replace all files, repeat both install commands after removal. To uninstall, stop here.
+Codex loads the Skills directly from `~/.agents/skills/qin-codex-skills/<skill>/SKILL.md`. The directory contains the pack manifest and each Skill's files. READMEs, AGENTS, project indexes and tests stay in source. [Codex user Skill locations](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)
+
+Update downloads the current `codex/plugin` package and replaces the whole directory. Uninstall removes the pack directory. When switching from the old Marketplace installation, also run `codex plugin remove qin-codex-skills@qin-codex-skills` and `codex plugin marketplace remove qin-codex-skills` to remove its previous copy.
 
 ## Maintain the source
 

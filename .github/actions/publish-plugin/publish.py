@@ -11,13 +11,13 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "management-skill" / "scripts"))
+from install_skill_pack import skill_file
 
 
 SOURCE_REF = "refs/heads/master"
 PACKAGE_REF = "refs/heads/codex/plugin"
 MARKETPLACE = ".agents/plugins/marketplace.json"
-SKILL_FOLDERS = {"agents", "assets", "references", "scripts"}
-OMITTED_NAMES = {"agents.md", "ai-index", "cache", "local", "readme", "test", "tests", "__pycache__"}
 
 
 def git(project, *args, content=None):
@@ -40,18 +40,6 @@ def source_entries(project, source):
             mode, _, oid = metadata.decode("ascii").split()
             entries[filename.decode("utf-8")] = mode, oid
     return entries
-
-
-def skill_file(relative):
-    if relative.parts == ("SKILL.md",):
-        return True
-    if len(relative.parts) < 2 or relative.parts[0] not in SKILL_FOLDERS:
-        return False
-    for part in relative.parts[1:]:
-        name = part.casefold()
-        if name in OMITTED_NAMES or name.startswith((".", "readme.", "github-readme-template")):
-            return False
-    return relative.suffix.casefold() not in {".pyc", ".pyo", ".log"}
 
 
 def write_tree(project, files):

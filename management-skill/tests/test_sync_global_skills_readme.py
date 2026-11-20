@@ -10,6 +10,7 @@ import time
 import unittest
 import unicodedata
 import xml.etree.ElementTree as ElementTree
+import zipfile
 from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
@@ -20,6 +21,9 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "sync_global_ski
 MODULE_SPEC = importlib.util.spec_from_file_location("sync_global_skills", MODULE_PATH)
 sync_global_skills = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(sync_global_skills)
+PACK_SPEC = importlib.util.spec_from_file_location("install_skill_pack", MODULE_PATH.with_name("install_skill_pack.py"))
+install_skill_pack = importlib.util.module_from_spec(PACK_SPEC)
+PACK_SPEC.loader.exec_module(install_skill_pack)
 REAL_RUN_RELEASE_GATE = sync_global_skills.run_release_gate
 SKILLS_DIR = Path(__file__).resolve().parents[2]
 README_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "readme"
@@ -451,20 +455,47 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         for skill_name in sync_global_skills.PRIMARY_SKILL_ORDER:
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
-    def test_readmes_document_native_plugin_install_and_clean_replacement(self):
+    def test_readmes_document_grouped_install_and_clean_replacement(self):
         for language in ("en", "zh"):
             with self.subTest(language=language):
                 readme = sync_global_skills.build_readme(self.primary_skill_paths(), language=language)
                 for concept in (
-                    "codex plugin marketplace add qinbatista/qin-codex-skills --ref codex/plugin\ncodex plugin add qin-codex-skills@qin-codex-skills",
-                    "codex plugin remove qin-codex-skills@qin-codex-skills\ncodex plugin marketplace remove qin-codex-skills",
-                    "$CODEX_HOME/plugins/cache/qin-codex-skills/qin-codex-skills/",
-                    "repeat both install commands after removal", "--include-path", "--include-commit", "configured upstream",
+                    "install_skill_pack.py install qin-codex-skills",
+                    "install_skill_pack.py update qin-codex-skills",
+                    "install_skill_pack.py uninstall qin-codex-skills",
+                    "~/.agents/skills/qin-codex-skills/<skill>/SKILL.md",
+                    "replaces the whole directory", "--include-path", "--include-commit", "configured upstream",
                 ):
                     self.assertIn(concept, readme)
                 self.assertNotIn("deploy --source-dir .", readme)
                 self.assertNotIn("/Users/", readme)
                 self.assertNotIn("shell=True", readme)
+
+    def test_grouped_install_replaces_one_directory_and_keeps_other_skills(self):
+        pack = "qin-codex-skills"
+        release = io.BytesIO()
+        with zipfile.ZipFile(release, "w") as archive:
+            prefix = f"release/plugins/{pack}/"
+            archive.writestr(prefix + "plugin.json", json.dumps({"name": pack, "version": "1.0.0"}))
+            archive.writestr(prefix + "skills/code-skill/SKILL.md", "# Code")
+            archive.writestr(prefix + "skills/code-skill/tests/test_code.py", "test")
+            archive.writestr(prefix + "skills/code-skill/references/README.md", "project guidance")
+        files = install_skill_pack.package_files(release.getvalue(), pack)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            scratch = Path(temp_dir)
+            root = scratch / ".agents" / "skills"
+            installed = install_skill_pack.apply_pack(root, pack, files, scratch)
+            self.assertEqual({entry.name for entry in installed.iterdir()}, {"plugin.json", "code-skill"})
+            old = installed / "code-skill" / "stale.txt"
+            old.write_text("obsolete", encoding="utf-8")
+            unrelated = root / "unrelated-skill"
+            unrelated.mkdir()
+            install_skill_pack.apply_pack(root, pack, files, scratch)
+            self.assertFalse(old.exists())
+            self.assertEqual((installed / "code-skill" / "SKILL.md").read_text(encoding="utf-8"), "# Code")
+            self.assertEqual(list((installed / "code-skill").iterdir()), [installed / "code-skill" / "SKILL.md"])
+            install_skill_pack.apply_pack(root, pack, None, scratch)
+            self.assertEqual(list(root.iterdir()), [unrelated])
 
 
     def test_available_agent_short_descriptions_are_at_most_64_characters(self):

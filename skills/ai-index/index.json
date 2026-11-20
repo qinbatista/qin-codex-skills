@@ -508,6 +508,13 @@
       ],
       "code_targets": [
         {
+          "id": "install-skill-pack-group",
+          "file": "management-skill/scripts/install_skill_pack.py",
+          "symbol": "apply_pack",
+          "anchor": "def apply_pack(root, pack, files, scratch=None):",
+          "summary": "Replace or remove a single owned user Skill group."
+        },
+        {
           "id": "installer-lock-observation",
           "file": "management-skill/scripts/sync_global_skills.py",
           "symbol": "clear_stale_installation_lock",
