@@ -714,14 +714,14 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "sync_cache_index",
           "anchor": "def sync_cache_index(root, *, apply=False, project_scope=\"current\"):",
-          "summary": "Replace bounded current Cache owner/inventory state without traversing remote payload or deleting files; preserve managed ignore blocks across LF and CRLF."
+          "summary": "Refresh the shallow Cache inventory, preserve remote declarations as review candidates and keep managed ignore blocks across LF and CRLF."
         },
         {
           "id": "cache-index-test",
           "file": "management-skill/tests/test_project_ai_index.py",
           "symbol": "ProjectAIIndexTests.test_cache_cli_refresh_tracks_current_owners_without_payload_deletion",
           "anchor": "def test_cache_cli_refresh_tracks_current_owners_without_payload_deletion(self):",
-          "summary": "Exercise Cache current-state refresh, vanished owners and real CLI no-payload-deletion behavior."
+          "summary": "Exercise real CLI Cache refresh, remote review despite declared metadata, vanished owners and payload preservation."
         },
         {
           "id": "cache-index-boundary-test",

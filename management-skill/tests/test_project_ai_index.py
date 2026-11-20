@@ -187,7 +187,8 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         inventory = json.loads((self.project / folder / "current.json").read_text())
         rows = {row["path"]: row for row in inventory["entries"]}
         self.assertEqual(rows["Cache/temp-upload"]["state"], "complete")
-        self.assertEqual(rows["Cache/remote-assets"]["kind"], "verified_remote")
+        self.assertEqual(rows["Cache/remote-assets"]["kind"], "remote_requires_review")
+        self.assertEqual(rows["Cache/remote-assets"]["sync"], "native manifest synchronization")
         self.assertEqual(rows["Cache/remote-local-case"]["kind"], "remote_requires_review")
         self.assertEqual(inventory["cleanup_after_idle_seconds"], 259200)
         self.assertEqual(inventory["codex_sessions"], "user_managed_excluded")

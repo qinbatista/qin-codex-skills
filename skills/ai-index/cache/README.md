@@ -10,10 +10,10 @@ of current operational state, never a memory log. Missing paths disappear on
 refresh; failed native checks keep exact items visibly pending.
 
 - Before implementation, plan deletion, final destinations and exact necessary retained files with consumers and ending conditions. No shared scratch pools, convenience backups or speculative review/reuse retention. Each verified and reported result triggers immediate delivery cleanup, even in the same chat.
-- Task support belongs to a fresh `Cache/temp-*` run. Release unused exports,
-  builds, copied projects and other intermediates immediately when the user's
-  actual objective and necessary output handoff finish. A verified upload can
-  finish the local package's purpose without waiting for unrelated backend work.
+- Task support and any undeclared new Cache output belong to a fresh
+  `Cache/temp-*` run. Release unused exports, builds, copied projects and other
+  intermediates immediately after the required output handoff. A verified upload
+  can finish the local package's purpose before unrelated backend work completes.
 - Local debugging keeps only its actual live inputs; requested final results leave scratch through verified owner handoff. Retain only exact necessary active/recovery inputs or explicit user holds; remove unrelated files before retention.
   Failed, stopped or abandoned task support is due for cleanup after 72 hours
   without heartbeat or descendant changes, after fresh native consumer checks.
@@ -22,13 +22,12 @@ refresh; failed native checks keep exact items visibly pending.
 - Canonical assets, configuration and service/runtime data keep their native
   owners. Describe project-specific owners in this README or optional
   `owners.json`; cleanup must use the actual native owner.
-- `remote-*` requires a real long-term consumer and synchronization route.
-  Offline task cases, reports and local-only scratch do not earn that name.
-  Keep current directly usable final data and required maintained code/config
-  there; generated intermediates and test outputs go directly to `temp-*`,
-  including when their producer is in `remote-*`.
-  Verify updates/remote readback through the synchronization owner; do not sweep
-  a remote directory by prefix. Unproven mappings are review candidates.
+- Reserve `remote-*` for exact payload files required by a lasting consumer
+  under a Git-tracked contract with a native destination and sync route.
+  Verify current bytes and synchronized readback through that owner. All
+  generated intermediates and test outputs go directly to `temp-*`.
+  Inventory metadata supplies review pointers. Check exact owners before any
+  cleanup.
 - Codex sessions, databases and managed worktrees are user-managed and excluded.
 
 The Workflow registry at `Cache/temp-task-cache-registry` owns exact task

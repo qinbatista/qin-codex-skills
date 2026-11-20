@@ -51,10 +51,10 @@ state, never a memory log. Refresh it with Management's
 `project_ai_index.py cache --project-root ROOT --apply` after allocation,
 retention changes and deletion. Missing paths disappear on refresh.
 
-- Task support belongs to a fresh `Cache/temp-*` run. Release unused exports,
-  builds, copied projects and other intermediates immediately when the user's
-  actual objective and necessary output handoff finish. A verified upload can
-  finish the local package's purpose without waiting for unrelated backend work.
+- Task support and undeclared new Cache output belong to a fresh `Cache/temp-*`
+  run. Release unused exports, builds, copied projects and other intermediates
+  after the required output handoff. A verified upload can finish the local
+  package's purpose before unrelated backend work completes.
 - Local debugging keeps only its actual live inputs; delivered videos or other
   requested results may remain while disposable test projects are released.
   Failed, stopped or abandoned task support is due for cleanup after 72 hours
@@ -64,13 +64,11 @@ retention changes and deletion. Missing paths disappear on refresh.
 - Canonical assets, configuration and service/runtime data keep their native
   owners. Describe project-specific owners in this README or optional
   `owners.json`; cleanup must use the actual native owner.
-- `remote-*` requires a real long-term consumer and synchronization route.
-  Offline task cases, reports and local-only scratch do not earn that name.
-  Its payload holds current directly usable final data and required maintained
-  code/configuration; route their generated intermediates and test outputs to
-  the execution's `temp-*` run, even when their producer lives in `remote-*`.
-  Verify updates/remote readback through the synchronization owner; do not sweep
-  a remote directory by prefix. Unproven mappings are review candidates.
+- Reserve `remote-*` for exact files or a narrow allowlist in a Git-tracked
+  contract that names the lasting consumer and native synchronization route.
+  Verify current payload and remote readback through that owner. All generated
+  intermediates and test outputs go directly to `temp-*`. Inventory metadata
+  identifies candidates for review. Check exact owners before any cleanup.
 - Codex sessions, databases and managed worktrees are user-managed and excluded.
 
 The Workflow registry at `Cache/temp-task-cache-registry` owns exact task
@@ -466,22 +464,16 @@ def collect_cache_inventory(root):
             matching = [policy for policy in policies if fnmatch.fnmatchcase(relative, policy["path"])]
             matching.sort(key=lambda policy: "*" in policy["path"])
             policy = matching[0] if matching else None
+            if entry.name.startswith("remote-") or (policy and policy["kind"] == "remote"):
+                row["kind"] = "remote_requires_review"
+            elif policy and policy["kind"] == "durable":
+                row["kind"] = "durable" if str(policy.get("consumer", "")).strip() else "unclassified"
+            elif policy or entry.name.startswith("temp-"):
+                row["kind"] = "task"
             if policy:
-                consumer = str(policy.get("consumer", "")).strip()
-                sync = str(policy.get("sync", "")).strip()
-                if policy["kind"] == "remote":
-                    row["kind"] = "verified_remote" if consumer and sync else "remote_requires_review"
-                elif policy["kind"] == "durable":
-                    row["kind"] = "durable" if consumer else "unclassified"
-                else:
-                    row["kind"] = "task"
                 for key in ("consumer", "sync", "cleanup"):
                     if isinstance(policy.get(key), str):
                         row[key] = policy[key][:500]
-            elif entry.name.startswith("remote-"):
-                row["kind"] = "remote_requires_review"
-            elif entry.name.startswith("temp-"):
-                row["kind"] = "task"
     ordered = [rows[key] for key in sorted(rows)]
     kinds = {kind: sum(row["kind"] == kind for row in ordered) for kind in sorted({row["kind"] for row in ordered})}
     states = {state: sum(row.get("state", "unknown") == state for row in ordered) for state in sorted({row.get("state", "unknown") for row in ordered})}
