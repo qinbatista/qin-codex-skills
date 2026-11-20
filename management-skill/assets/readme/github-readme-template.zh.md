@@ -60,6 +60,8 @@ To fetch the latest package and replace all files, repeat both install commands 
 
 GitHub Actions publishes the package from `master` to `codex/plugin`. The [source publisher](management-skill/SKILL.md#publish) uses `--include-path` and `--include-commit` to verify and deliver selected changes through the configured upstream.
 
+Keep disposable development files in a fresh ignored `Cache/temp-<task>/` run under [the project Cache policy](workflow-skill/references/project-cache-artifact-policy.md).
+
 ## Code reference owners
 
 - [Code philosophy](code-skill/references/code-writing-philosophy.md)
