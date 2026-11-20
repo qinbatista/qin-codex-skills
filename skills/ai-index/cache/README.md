@@ -17,8 +17,8 @@ refresh; failed native checks keep exact items visibly pending.
 - Local debugging keeps only its actual live inputs; requested final results leave scratch through verified owner handoff. Retain only exact necessary active/recovery inputs or explicit user holds; remove unrelated files before retention.
   Failed, stopped or abandoned task support is due for cleanup after 72 hours
   without heartbeat or descendant changes, after fresh native consumer checks.
-  Active resources, real recovery dependencies and canonical originals remain
-  protected; age alone does not delete them.
+  Keep explicit user holds until owner release. Preserve active resources,
+  real recovery dependencies and canonical originals.
 - Canonical assets, configuration and service/runtime data keep their native
   owners. Describe project-specific owners in this README or optional
   `owners.json`; cleanup must use the actual native owner.

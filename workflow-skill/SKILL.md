@@ -51,6 +51,8 @@ At the start of every new user request or distinct work unit, including unrelate
 
 Use the local [Cache cleanup helper](references/cache-cleanup.md#local-index-and-executable-checkpoints) at start, transition and finish. Process explicit owners first. Registered completed/obsolete disposable runs have no age delay; foreign working runs require 72 hours without heartbeat or descendant changes and fresh consumer checks. Resume interrupted deletion only from its unchanged original proof. Resolve the helper's missing/due retention reviews instead of silently keeping every run labeled retained or recovery. Inspect project Cache naming violations too: direct child directories must be `temp-*` or `remote-*`; find and repair the producer, remove disposable violations, and resolve actual retained-resource ownership instead of disguising garbage by renaming it.
 
+Keep exact recorded user holds through automatic expiry. Release them through their owner after the user ends the hold.
+
 The helper unlinks an owned run's internal symlinks and closed FIFO/socket nodes without following them after fresh consumer checks. Escaping links, reparse points, mounts, hard links and device nodes remain protected. Complete runs containing ordinary isolated tool installations must not remain indefinitely just because those installations contain internal links.
 
 ## Requested Cache cleanup

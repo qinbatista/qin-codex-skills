@@ -108,7 +108,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_sweep_record",
           "anchor": "def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):",
-          "summary": "Clean completed units immediately; classify legacy reason-only retention, expire abandoned planned input runs after 72 idle hours and preserve exact native consumers."
+          "summary": "Clean completed and abandoned units under native guards and preserve explicit user holds until owner release."
         },
         {
           "id": "artifact-allocation",

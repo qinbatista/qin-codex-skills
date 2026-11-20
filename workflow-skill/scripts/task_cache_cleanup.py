@@ -1054,6 +1054,11 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
         result = {"path": str(path), "task_id": record["task_id"], "run_id": record["run_id"]}
         if record_path.stem != _key(path):
             raise ValueError("registry filename does not match exact run")
+        retained = record.get("cleanup_plan", {}).get("retain", [])
+        if any(item.get("kind") == "user-hold" for item in retained) and not record.get("retention_release"):
+            if not path.exists() and not path.is_symlink():
+                return {**result, "action": "pending", "reason": "explicit user-held payload is missing"}
+            return {**result, "action": "keep", "reason": "explicit user hold awaits owner release"}
         if not path.exists() and not path.is_symlink():
             if apply:
                 _discard_deletion_plan(record_path, record)

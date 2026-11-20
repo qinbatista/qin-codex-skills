@@ -47,7 +47,7 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             return cleanup.touch_run(project, task, run, state=state, reason=reason, artifact_root=artifact_root)
         if not any(run.iterdir()):
             (run / "required-input.bin").write_bytes(b"explicit required fixture")
-        retained = [{"path": str(child.relative_to(run)), "kind": "recovery-input" if state == "recovery" else "user-hold",
+        retained = [{"path": str(child.relative_to(run)), "kind": "recovery-input" if state == "recovery" else "active-input",
                      "consumer": "this exact fixture's test", "reason": reason, "until": "fixture assertion and native-consumer closure"}
                     for child in run.iterdir()]
         cleanup.plan_run(project, task, run, {"purpose": "native retention boundary", "delete": ["."], "outputs": [], "retain": retained, "trigger": "verified-result-reported"}, artifact_root=artifact_root)
@@ -366,13 +366,27 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         for task, run, state in zip(("review", "retry", "mine"), runs, ("retained", "recovery", "working")):
             (run / "payload").write_bytes(b"unused task support")
             self.retain_run(self.project, task, run, state=state, reason="Temporary review/retry of this task")
+        held = self.run_root("held-review")
+        review = held / "proof.png"
+        review.write_bytes(b"user-held review output")
+        cleanup.plan_run(self.project, "held-review", held, {"purpose": "Hold the review output at the user's request", "delete": ["."], "outputs": [], "retain": [{"path": review.name, "kind": "user-hold", "consumer": "User reviewing the output", "reason": "User requested this exact file", "until": "User releases the hold"}], "trigger": "verified-result-reported"})
         now = time.time()
         with mock.patch.object(cleanup.time, "time", return_value=now + 2 * 86400), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             self.sweep()
         self.assertTrue(all(run.exists() for run in runs))
         with mock.patch.object(cleanup.time, "time", return_value=now + cleanup.STALE_SECONDS + 100), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             result = self.sweep()
+        self.assertIn("explicit user hold awaits owner release", [entry.get("reason") for entry in result["results"]])
         self.assertTrue(all(not run.exists() and not self.record_path(run).exists() for run in runs), result)
+        held_record = cleanup.touch_run(self.project, "held-review", held, state="retained", reason="User requested this exact file")
+        with mock.patch.object(cleanup.time, "time", return_value=time.time() + cleanup.STALE_SECONDS + 100), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            result = self.sweep()
+            self.assertEqual(result["results"][0]["action"], "keep", result)
+            self.assertEqual(review.read_bytes(), b"user-held review output")
+            cleanup.release_retention(self.project, "held-review", held, run_id=held_record["run_id"], expected_identity=held_record["identity"], reason="Fixture user released the review hold")
+            result = self.sweep()
+        self.assertFalse(held.exists(), result)
+        self.assertFalse(self.record_path(held).exists())
 
     def test_stale_retention_preserves_recent_descendants_and_live_consumers(self):
         live, changed = self.run_root("live-review"), self.run_root("changed-review")
