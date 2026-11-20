@@ -8,4 +8,6 @@ Keep durable memory solely in the verified vault and exact owner. At inline clos
 
 Recall follows project → task → underlying logic. `project_knowledge.py logic` traverses explicit `applies-logic` links to shared `logic.*` principles and bounded case pointers. It never imports foreign implementation facts; selected references retain exact owners, applicability, differences and dated proof. This uses the existing relation/index store, not keyword-based automatic generalization.
 
+[Memory-use evidence](../../../project-memory-skill/references/project-knowledge.md#report-memory-used) comes from applied recall results. The final report shows the exact owner, available scope levels, recall identifiers and the contribution to the task. Report closeout writes independently.
+
 Tests stay in `project-memory-skill/tests/`, tracked by the [testing Skill](../../../.agents/skills/testing-skill/SKILL.md). Workflow owns resource audits; Management owns index updates and signals [scoped memory synthesis](../../../project-memory-skill/references/project-knowledge.md#ai-index-triggered-synthesis). Close those branches inline without authorizing unrelated execution.

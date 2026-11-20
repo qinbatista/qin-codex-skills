@@ -1,6 +1,6 @@
 ---
 name: task-analyze-skill
-description: "Start and finish project work with automatic AI-index maintenance, preserve chat names, track Skill use for one final report, and deliver action requests with recovery and verification."
+description: "Start and finish project work with automatic AI-index maintenance, preserve chat names, report actual Skill and memory use, and deliver action requests with recovery and verification."
 ---
 
 # Task Analyze
@@ -18,6 +18,8 @@ Keep a concise internal record as work proceeds: each exact Skill name actually 
 Do not repeat Skill inventories at startup, resumed turns, analysis, task decomposition, execution, verification, deployment, cleanup or routine progress updates. Progress messages report work, evidence and next steps without a mandatory Skill list. Branches return their use records internally to the parent; the parent reports them with its own use once at the end.
 
 In one final response, including partial, failed or paused outcomes, summarize all Skills actually used across the task and branches. Give each exact name, the step or action it supported, and a short reason or concrete contribution. Identify planned but unused, missing or unreadable Skills separately without claiming activation. If no Skill applied, say `Skills: none` and why. Correct omissions before completion. Report outward actions and results, never private chain-of-thought.
+
+Include a **Memory used** section in that same final response. List each distinct memory entry that informed the work, with its exact project → module → file → function or symbol where available, a recall identifier, and the action or decision it supported. Track this in task context, including across compaction and authorized branches, using [Project Memory's evidence rules](../project-memory-skill/references/project-knowledge.md#report-memory-used). If no memory informed the work, say `Memory used: none` and give the actual reason.
 
 ## Complete action requests
 

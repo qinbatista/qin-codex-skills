@@ -37,6 +37,12 @@ Capture minimal per-entry source files and dependencies supporting that claim. S
 
 Relations point to `{project, module, file?, symbol?, relation, reason}` and do not automatically load target content. For a cross-project analogy, explicitly select the source project and relevant reference link or comparison scope. Keep the borrowed material labeled as a reference with its source identity; independently establish whether it applies here. It never becomes this project's current contract merely because names or code resemble each other.
 
+### Report memory used
+
+Use the actual recall response and record an entry when it informs a concrete task action or decision. Use `recall_scope.project` for the exact owner and the entry's own `module`, `file`, and `symbol`. Omit levels absent from that scope. Supply its `id` and include its `event_id` when available for vault lookup. Cite exact identifiers and summarize the contribution without reproducing private memory text. Deduplicate repeated uses of the same entry and preserve its evidence limits.
+
+Report selected entries and relevant parent entries only when applied. Discovery results, excluded entries, unloaded references, navigation-only synthesis, and closeout writes or their readbacks do not establish memory use. Label any explicitly consulted historical or cross-project memory that actually informed the work as historical or reference material and retain its exact owner and provenance. Give the observed reason when nothing informed the task, such as an unavailable vault, no eligible match, or a recalled entry that the work did not need. Keep this record in task context and report it once, alongside actual Skill use. Do not create a separate log or write a memory entry to fill the report.
+
 ## Project, task and underlying logic
 
 The retrieval chain is project → relevant task memory → underlying logic. Isolation prevents unrelated context; it must not prevent useful transfer between projects with the same causal principle. First identify the current problem, constraints and exact task scope. Then follow an established principle, not a shared word or project name.
