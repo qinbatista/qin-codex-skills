@@ -320,11 +320,11 @@
           "summary": "Find Python direct-code violations while preserving valid patterns and documented semantic boundaries."
         },
         {
-          "id": "code-navigation-contract-test",
-          "file": "code-skill/tests/test_code_writing_philosophy.py",
-          "symbol": "CodeWritingPhilosophyTests.test_code_work_explains_steps_and_uses_optional_scoped_memory",
-          "anchor": "def test_code_work_explains_steps_and_uses_optional_scoped_memory(self):",
-          "summary": "Protect all-local-code scope, startup routing, exact memory selectors, missing-memory continuation and current-source precedence."
+          "id": "guard-git-scope",
+          "file": "code-skill/scripts/qin_rule_guard_common.py",
+          "symbol": "git_added_lines",
+          "anchor": "def git_added_lines(path, reference):",
+          "summary": "Resolve actual changed lines identically for the Python and C# source checkers."
         },
         {
           "id": "method-philosophy-contract-test",

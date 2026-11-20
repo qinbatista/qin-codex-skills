@@ -5,25 +5,11 @@ import argparse
 import ast
 import json
 import re
-import subprocess
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
-from hidden_process import hidden_process_options
-
-GIT_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
-
-
-def violation(code, line, message, end_line=None):
-    return {"code": code, "line": line, "end_line": end_line or line, "message": message}
-
-
-def deduplicate_violations(violations):
-    unique = {}
-    for item in violations:
-        unique.setdefault((item["code"], item["line"], item["end_line"]), item)
-    return list(unique.values())
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from qin_rule_guard_common import deduplicate_violations, filter_violations, git_added_lines, violation
 
 
 def python_call_from_only_statement(function_node):
@@ -90,35 +76,6 @@ def check_text(text, suffix):
     if suffix.lower() != ".py":
         raise ValueError("Python source checks require a .py file.")
     return deduplicate_violations(python_violations(text))
-
-
-def filter_violations(violations, included_lines):
-    if included_lines is None:
-        return violations
-    return [item for item in violations if any(line in included_lines for line in range(item["line"], item["end_line"] + 1))]
-
-
-def git_added_lines(path, reference):
-    root_process = subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False, shell=False, **hidden_process_options())
-    if root_process.returncode != 0:
-        raise ValueError("git_root_unavailable")
-    repository_root = Path(root_process.stdout.strip()).resolve()
-    relative_path = path.resolve().relative_to(repository_root).as_posix()
-    tracked_process = subprocess.run(["git", "-C", str(repository_root), "ls-files", "--error-unmatch", "--", relative_path], capture_output=True, text=True, check=False, shell=False, **hidden_process_options())
-    if tracked_process.returncode != 0:
-        return set(range(1, len(path.read_text(encoding="utf-8").splitlines()) + 1))
-    diff_process = subprocess.run(["git", "-C", str(repository_root), "diff", "--unified=0", reference, "--", relative_path], capture_output=True, text=True, check=False, shell=False, **hidden_process_options())
-    if diff_process.returncode != 0:
-        raise ValueError("git_diff_unavailable")
-    added_lines = set()
-    for line in diff_process.stdout.splitlines():
-        match = GIT_HUNK.match(line)
-        if match is None:
-            continue
-        start = int(match.group("start"))
-        count = int(match.group("count") or "1")
-        added_lines.update(range(start, start + count))
-    return added_lines
 
 
 def check_path(path, diff_from=None):

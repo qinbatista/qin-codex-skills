@@ -34,7 +34,7 @@ Briefly explain the intended change and implementation steps before detailed exe
 | Async results, pooled reuse, caches, configuration handoffs, or external retries | [State and side effects](references/state-and-side-effects.md) |
 | Host helpers, scripts, subprocesses, or tests | [Portable, quiet execution](references/skill-platform-compatibility.md) |
 
-Use [unity-code-skill](https://github.com/qinbatista/qin-unity-skills/tree/master/unity-code-skill) for the Unity C# profile.
+Use the installed `qin-unity-skills/unity-code-skill` for C# writing rules and checking. Select its engine-specific references for Unity work. The standalone C# Skill is also available from [its source](https://github.com/qinbatista/qin-unity-skills/tree/master/unity-code-skill).
 
 ## Verification
 

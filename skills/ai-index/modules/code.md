@@ -7,3 +7,5 @@ For every local edit, including tests and scripts, use Management’s [code navi
 Code owns general writing, structure, lifecycle and side-effect contracts and the Python profile. Prompt owns reusable prompt design. Select the matching language or product Skill for specialized requirements through the Code entry. Preserve supported platform behavior and quiet execution. Use the real affected case for behavior evidence.
 
 Tests live in `code-skill/tests/` and the [project registry](../../../.agents/skills/testing-skill/SKILL.md). Verify owns acceptance; Workflow owns disposable tool output and process cleanup.
+
+[qin_rule_guard_common.py](../../../code-skill/scripts/qin_rule_guard_common.py) owns shared Git scopes and findings for the Python and C# checkers. Keep the small Unity runtime mirror byte-identical when changing that contract so each installed pack can run independently. `test_code_work_explains_steps_and_uses_optional_scoped_memory` in [test_code_writing_philosophy.py](../../../code-skill/tests/test_code_writing_philosophy.py) protects startup routing and scoped memory.
