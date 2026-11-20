@@ -23,4 +23,14 @@ The global pack root is `~/.agents/skills`. The paths in this guide are below th
 
 Code owns shared code policy. Unity Code owns C# and engine behavior, with only the common C# rules applying outside Unity. Verify owns evidence standards. Unity Testing selects the real Unity runner and runtime. Use Assets for imports and serialized references, UI for screen structure and input, Animation for motion playback, and Effects for appearance and emission. Apply additional entries only for work the task actually crosses. A linked game follows its current YoFaAssets source and local game rules before the reusable Unity guidance.
 
-To require this routing across repositories, reference this installed guide from the Codex user `developer_instructions` setting. Preserve any existing instruction text. A fresh session should open the matching Skill for an ordinary task without an explicit Skill mention.
+## Require routing across projects
+
+Set `developer_instructions` in the Codex user `config.toml` under `CODEX_HOME` (default `~/.codex`). Append the paragraph to the existing value when that key is already present. [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+
+```toml
+developer_instructions = """
+For tasks involving Qin's project workflow, code, prompts, verification, optimization, project memory, Skill management, or Unity, follow the project's startup and source-owner rules. Read ~/.agents/skills/qin-codex-skills/task-analyze-skill/references/global-skill-routing.md and open every matching installed SKILL.md before the corresponding work, even if the user does not name a Skill.
+"""
+```
+
+Verify in a fresh session with an ordinary task and check that it opens the installed Skill. Remove the routing paragraph from the user setting when uninstalling the pack.
