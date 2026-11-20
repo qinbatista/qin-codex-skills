@@ -25,6 +25,11 @@ from task_artifact_paths import resolve_task_artifact_root, task_artifact_scope,
 CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-catalog.json")
 PROJECT_TESTING_SKILL_RELATIVE_PATH = Path(".agents/skills/testing-skill")
 PROJECT_AI_INDEX_SKILL_RELATIVE_PATH = Path("skills/ai-index")
+PLUGIN_RELEASE_INPUTS = (
+    Path("plugins/qin-codex-skills"),
+    Path(".github/actions/publish-plugin"),
+    Path(".github/workflows/publish-plugin.yml"),
+)
 DEFAULT_REPORT_RELATIVE_PATH = Path("global-skill-regression/latest.json")
 DEFAULT_HISTORY_RELATIVE_PATH = Path("global-skill-regression/history.jsonl")
 EXCLUDED_PARTS = {".git", "__pycache__", "cache", "Cache", "outputs", "work", "local", ".venv", "venv", "node_modules", "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
@@ -203,12 +208,16 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
             for name in ("README.md", "README.zh.md"):
                 if (project_root / name).is_file():
                     shutil.copy2(project_root / name, source_candidate / name)
-            for relative in (PROJECT_TESTING_SKILL_RELATIVE_PATH, PROJECT_AI_INDEX_SKILL_RELATIVE_PATH):
-                project_skill = project_root / relative
-                if project_skill.is_dir():
-                    target = source_candidate / relative
+            source_inputs = (PROJECT_TESTING_SKILL_RELATIVE_PATH, PROJECT_AI_INDEX_SKILL_RELATIVE_PATH, *PLUGIN_RELEASE_INPUTS)
+            for relative in source_inputs:
+                source = project_root / relative
+                target = source_candidate / relative
+                if source.is_dir():
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copytree(project_skill, target, ignore=shutil.ignore_patterns(*EXCLUDED_PARTS, "*.pyc", "*.pyo", "*.log"))
+                    shutil.copytree(source, target, ignore=shutil.ignore_patterns(*EXCLUDED_PARTS, "*.pyc", "*.pyo", "*.log"))
+                elif source.is_file():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, target)
             plugin_cache = deployed_root.resolve().parent / "plugins" / "cache"
             copy_required_plugin_contracts(plugin_cache, source_candidate.parent / "plugins" / "cache")
             copy_required_plugin_contracts(plugin_cache, deployed_candidate.parent / "plugins" / "cache")
