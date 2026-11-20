@@ -2,8 +2,9 @@
 
 import re
 import subprocess
-import sys
 from pathlib import Path
+
+from hidden_process import hidden_process_options
 
 
 GIT_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
@@ -30,12 +31,9 @@ def filter_violations(violations, included_lines):
 
 
 def run_git(directory, *arguments):
-    options = {}
-    if sys.platform == "win32":
-        options = {"creationflags": subprocess.CREATE_NO_WINDOW}
     return subprocess.run(
         ["git", "--literal-pathspecs", "-C", str(directory), *arguments],
-        capture_output=True, encoding="utf-8", errors="replace", check=False, **options,
+        capture_output=True, encoding="utf-8", errors="replace", check=False, **hidden_process_options(),
     )
 
 
