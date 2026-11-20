@@ -47,7 +47,7 @@ Check the rule's executable consumer as well as its prose. Consolidation is inco
 
 ## Install
 
-For `qin-codex-skills` and `qin-unity-skills`, use their native Codex Git marketplaces. Follow the source repository's install, replacement and removal commands. Codex manages the user-global copy of each plugin under `CODEX_HOME/plugins/cache`. Use the loaded Skill's folder and its sibling Skills to locate bundled helpers.
+For `qin-codex-skills` and `qin-unity-skills`, use [install_skill_pack.py](scripts/install_skill_pack.py) with `install`, `update`, or `uninstall` and the pack name. The installer uses the published plugin archive and places each Skill directly under `~/.agents/skills/<pack>/`. Updates replace the whole owned group. Locate bundled helpers relative to the loaded Skill or its siblings.
 
 For separately managed standalone Skills, use the official user Skill directory `~/.agents/skills`. `CODEX_HOME` (default `~/.codex`) owns Codex configuration, global `AGENTS.md`, installed plugins and system resources. Preserve unique content and verify the destination before retiring an authorized legacy copy. Preserve `.system` and plugin-managed resources.
 
