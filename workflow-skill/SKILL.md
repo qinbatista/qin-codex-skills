@@ -9,6 +9,8 @@ Before implementation or any payload write, make the [unit cleanup plan](referen
 
 Default new Cache output to `Cache/temp-*` whenever ownership, the consumer, or the need for synchronization is unclear. Reserve `Cache/remote-*` for exact files a Git-tracked project contract declares for a lasting consumer, with a verified synchronization route. Follow the [artifact policy](references/project-cache-artifact-policy.md) for allowlisting and readback. Write every run's intermediates and test output directly to its own `temp-*`, including output from a producer in `remote-*`.
 
+Before the first payload write, record the workspace baseline and each producer's assigned run. Track exact paths and handles as tools create them for the [task leftover check](references/ending-resource-audit.md#check-and-reclaim-task-leftovers).
+
 Apply [Task Analyze](../task-analyze-skill/SKILL.md) for correct names and the opening brief: result, qualitative difficulty, known models, branch roles and dependencies. Keep it proportional to the work; a simple task needs only a sentence. Follow its [action completion rule](../task-analyze-skill/SKILL.md#complete-action-requests) through execution, recovery and the final response.
 
 Follow [Task Analyze's final Skill report](../task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting): keep an internal record of exact Skills actually used, their steps or actions and reasons. Gather delegated branch use for one parent-visible final summary; ordinary progress updates need no repeated Skill list.
@@ -42,6 +44,8 @@ Use [Monitor Mode](references/monitor-mode.md) when the user asks to monitor ano
 Check every five minutes, with earlier attention for completion or actionable failures. Compare progress with the user's scope, owning Skills, exact-project memory and current evidence. Stay quiet while work is on course; send brief steering only for a concrete deviation or blocker. Stop confirmed out-of-scope work through a supported control, or request a pause and verify acknowledgement when only messaging is available. Verify the agreed final result before closing supervision.
 
 ## Cleanup at every task transition
+
+At inline closeout, run the [task leftover check](references/ending-resource-audit.md#check-and-reclaim-task-leftovers) for resources created by this task wherever its tools placed them.
 
 Manage Cache by the requested end goal. After a verified upload, submission, test or delivery consumes an item, immediately remove unused local packages, exports, compiled intermediates and isolated source projects through their native owner. A package is a final deliverable only when the user needs a local package. Keep only exact necessary active/recovery inputs or explicit user holds from the plan. Put requested final files in their real owner outside scratch. After the verified result is reported, run `checkpoint --phase delivery` immediately and read back absence, even within the same chat. Generic review/reuse, saving setup and backup insurance never justify retention; 72 hours is only an abandoned-run fallback. Never delete Codex chats, sessions or databases; the user manages those manually. Do not create an automatic Ending chat.
 
