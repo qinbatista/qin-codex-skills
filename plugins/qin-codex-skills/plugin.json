@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "qin-codex-skills",
+  "version": "1.0.0",
+  "description": "Eight Codex skills for task delivery, coding, prompting, verification, optimization, memory, and project management.",
+  "repository": "https://github.com/qinbatista/qin-codex-skills",
+  "author": { "name": "Qin" },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Qin Codex Skills",
+        "shortDescription": "Task workflow, coding, prompts, verification, and project memory",
+        "category": "Productivity"
+      }
+    }
+  }
+}

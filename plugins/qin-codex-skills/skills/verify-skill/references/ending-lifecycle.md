@@ -1,0 +1,7 @@
+# Ending migration
+
+Ending coordinates useful Obsidian memory through `project-memory-skill` and the parallel [Workflow resource audit](../../workflow-skill/references/ending-resource-audit.md). Real product verification and code repairs finish inside the active task. No durable information skips memory only; an unavailable vault leaves that write pending while cleanup continues. Ending status never changes the main task result.
+
+The old `ending_verification_plan.py` and `ending_task_ledger.py` entry points refuse execution so stale plans cannot launch checks or repair tasks. Use `task_verification.py` to choose a focused in-task scope and `project-memory-skill/scripts/ending_memory.py` to save a completed summary. Existing evidence/history remains historical; it is not a current instruction.
+
+The user-authorized Ending lifecycle uses one fully independent visible projectless task after these checks finish. App creation acknowledgement completes the parent's handoff: show the actual link and immediately end the main turn, without any Ending wait, polling, result collection or removal follow-up. Ending reads the exact originating thread to resolve missing context, owns its memory/resource records and recovery, and must delete its own conversation after finishing. Archival retains records and remains deletion pending. Historical verification entry points stay retired; cleanup never reruns product tests.

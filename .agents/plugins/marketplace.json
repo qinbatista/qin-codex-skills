@@ -1,0 +1,20 @@
+{
+  "name": "qin-codex-skills",
+  "interface": {
+    "displayName": "Qin Codex Skills"
+  },
+  "plugins": [
+    {
+      "name": "qin-codex-skills",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qin-codex-skills"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "findings": [
+    {
+      "column": 97,
+      "fingerprint": "8fd693fdc218724e132b9110cf6a1ae901d64f3ee6df83fc802597e611b0e925",
+      "language": "python",
+      "line": 19,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "code-skill/scripts/skill_platform_check.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 27,
+      "fingerprint": "00b97518332abc8af64fa29d877bf427aa98b1c6d83fbb469b30f93a2988bddc",
+      "language": "python",
+      "line": 65,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "code-skill/scripts/skill_platform_check.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 35,
+      "fingerprint": "ab87c243c38166f2c5d3514c37add736944cc851af8fff590614ec7bb0049273",
+      "language": "python",
+      "line": 143,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "management-skill/scripts/sync_global_skills.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 23,
+      "fingerprint": "cdf64477bb0b6660edad215ffcfefb046de402dd8604687bab65c4f4d7c3781e",
+      "language": "python",
+      "line": 88,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "optimization-skill/scripts/audit_global_skills.py",
+      "rule": "SPG001"
+    },
+    {
+      "column": 35,
+      "fingerprint": "c4639887891254f03bd251922efd2d6a1a0f82003c7351af71d2ba15501fac4c",
+      "language": "python",
+      "line": 362,
+      "message": "platform-only command is not inside an explicit platform guard",
+      "relative_path": "optimization-skill/scripts/skill_optimizer.py",
+      "rule": "SPG002"
+    },
+    {
+      "column": 55,
+      "fingerprint": "5191a2af2fe3a6d06768e1441254b21edce26caf001c3645b00a19a06d7a0a69",
+      "language": "python",
+      "line": 362,
+      "message": "platform-rooted or separator-specific path is not guarded",
+      "relative_path": "optimization-skill/scripts/skill_optimizer.py",
+      "rule": "SPG001"
+    }
+  ],
+  "generated_by": "skill-platform-check/v1",
+  "schema_version": 1
+}

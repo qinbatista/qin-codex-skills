@@ -1,0 +1,64 @@
+---
+name: task-analyze-skill
+description: "Start and finish project work with automatic AI-index maintenance, preserve chat names, report actual Skill and memory use, and deliver action requests with recovery and verification."
+---
+
+# Task Analyze
+
+Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
+
+Only for the current task project, at start/resume and finish, apply [automatic project AI index](../management-skill/references/project-ai-index.md). Reading, searching or consulting another project does not switch the current project: continue without AI-index prompts or maintenance there. Only an explicit main-project change selects a new current project. Check current-project presence before broad reading; ask for bootstrap consent only when the project has no AI index at all. Existing indexes, including incomplete ones, receive automatic focused repair and expansion without another creation question. For every task that changes the project, update the relevant project AI-index guidance or metadata to reflect the actual change, and verify it before authorized delivery; checking alone is insufficient. Reconcile concise root `AGENTS.md` when needed and complete the residual check in this chat.
+
+When current-project inspection reports `compression.status: due`, run [AI Index Compression](../management-skill/references/project-ai-index.md#ai-index-compression) inline, including exact-owner Obsidian review. Check again after index changes and before delivery; explicit read-only tasks only report the overage.
+
+## Mandatory visible Skill reporting
+
+Keep a concise internal record as work proceeds: each exact Skill name actually used, the task step or action where it was applied, and the reason or purpose for using it. Read and follow a Skill before recording it as applied; a catalog entry, plan or name alone does not prove use. Collect the same actual-use details from delegated branches. This working record needs no separate per-task file.
+
+Do not repeat Skill inventories at startup, resumed turns, analysis, task decomposition, execution, verification, deployment, cleanup or routine progress updates. Progress messages report work, evidence and next steps without a mandatory Skill list. Branches return their use records internally to the parent; the parent reports them with its own use once at the end.
+
+In one final response, including partial, failed or paused outcomes, summarize all Skills actually used across the task and branches. Give each exact name, the step or action it supported, and a short reason or concrete contribution. Identify planned but unused, missing or unreadable Skills separately without claiming activation. If no Skill applied, say `Skills: none` and why. Correct omissions before completion. Report outward actions and results, never private chain-of-thought.
+
+Include a **Memory used** section in that same final response. List each distinct memory entry that informed the work, with its exact project → module → file → function or symbol where available, a recall identifier, and the action or decision it supported. Track this in task context, including across compaction and authorized branches, using [Project Memory's evidence rules](../project-memory-skill/references/project-knowledge.md#report-memory-used). If no memory informed the work, say `Memory used: none` and give the actual reason.
+
+## Complete action requests
+
+Treat an action request as authorization to carry out its intended work within scope. Deliver the requested change or artifact; a plan, diagnosis, list of problems, or "I tried and failed" alone does not fulfill it. Keep working while a useful authorized route remains.
+
+When an attempt fails, inspect the cause, repair what is within scope, retry the affected step, or use a suitable available alternative. Complete independent work while a dependency is blocked. A failed command, test, unavailable verification tool, or polling budget does not by itself justify abandoning implementation. Bound repeated checks against unchanged external state; do not use a fixed retry count as a reason to stop work that can still progress.
+
+Stop the affected work only for a concrete blocker that cannot be resolved through reasonable available actions within scope, such as confirmed missing network access, credentials, required input or authorization, an unavailable required runtime, or an impossible requirement. Establish the blocker through relevant attempts or authoritative evidence, explain its observed cause and what was attempted, and identify the minimum external change needed. Never bypass permissions, weaken acceptance, or invent success to avoid reporting a blocker.
+
+Lead the final response with what was actually delivered and its verification. Distinguish implementation, testing, deployment and publication. A blocked check does not erase completed work: "Updated the function; runtime verification is blocked because the required service is unreachable" accurately reports both states. If no requested result is achievable, give the specific evidenced reason after exhausting useful routes; do not substitute a generic failure reply or a promise to try later.
+
+## Correct task names
+
+Automatic naming is allowed only once per chat. A title supplied when creating the chat, a user-chosen title, or a confirmed earlier rename consumes that allowance. Preserve the current title on later turns, resume, context compaction, target/module changes, testing, deployment and cleanup; a changed task does not authorize another rename.
+
+Before an automatic title change, inspect this exact chat's current title, creation context and available history through the native chat tools or current conversation. Use its first successful creation/rename receipt and title readback, not another chat's name or a guessed identity. If prior naming cannot be established because history or readback is unavailable or incomplete, preserve the existing title instead of renaming again. Only a chat whose first naming is demonstrably pending may receive an automatic title change.
+
+Name Codex tasks/chats for the main module, system, component or file being worked on, using the shortest clear noun phrase, usually one to four words. Prefer the authoritative identifier when available: `WeatherManager`, `Pantone Helper`, `BOM System`. Omit action verbs, status, implementation steps and request descriptions: updating Pantone code is `Pantone Helper`, not `Pantone Helper update` or `Fix get_pantone_info parameters on the develop server`. Add a short qualifier only when needed to distinguish the target; preserve exact identifiers even when longer.
+
+Complete project guidance, scoped memory and resource closure inline. Codex chats and session records are managed manually by the user; never create an automatic Ending chat or archive/delete a session as Cache cleanup. Explicitly requested conversation operations retain their own authority.
+
+When first naming is pending and the target is clear, use the available title tool and confirm the result. Keep only the first confirmed naming record in this chat's own history: its exact thread ID and confirmed title, using the native receipt/readback already present. Preserve that first-name state in context summaries; do not create a separate log, local marker or memory entry, repeat the confirmation, or add another first-name record. A failed call does not count as success; read back an uncertain result before any safe retry.
+
+Only a later explicit human request to rename this exact chat may change a locked title. Perform that requested rename without replacing its original first-name record. A new target, spelling correction, Skill update, monitor or Ending does not supply this authorization. If title control is unavailable, report that limitation without claiming a rename.
+
+Resolve unambiguous spelling errors in user-supplied function, feature or task names from the owning source or authoritative context before naming the task. Use the verified correct name in titles, plans, progress, labels and results; do not echo the typo or a before/after mapping. Clarify only if the intended name is ambiguous. Preserve literal quotations, data, proper names and exact existing identifiers; show the original spelling only when an exact source reference or diagnostic requires it.
+
+## Carry out the task
+
+Before starting a new request or work unit, including an unrelated request in this same chat, execute [Workflow's task-transition cleanup checkpoint](../workflow-skill/references/task-resource-lifecycle.md#task-transition-cleanup-checkpoint). Use its local helper to remove own completed/obsolete support immediately and check registered disposable runs from other tasks inactive at least 72 hours. Check project Cache naming violations and repair their producers. A new task must not silently inherit an accumulating old scratch tree. Repeat at verification/delivery and finish; no separate cleanup request or Ending is required.
+
+Before implementation or new task payloads, follow [Workflow's unit cleanup plan](../workflow-skill/references/project-cache-artifact-policy.md#plan-before-producing-files). Declare deletion, final destinations and exact necessary retained inputs with consumers/end conditions. Default to no retention or shared scratch pools; clean immediately after each verified result is reported, even within the same chat.
+
+Before any file write, resolve its owner under the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Task support stays in the owning project Cache from its first write, including delegated output and tool caches. Maintained source and final deliverables retain their owners; inspect exact paths and the Git index before committing.
+
+Every task that changes a Git-managed project must pass [Workflow's complete delivery transaction](../workflow-skill/SKILL.md#execute) before reporting completion, without waiting for a separate commit/push request or reminder. Before Git edits, read its [branch ownership](../workflow-skill/SKILL.md#git-branch-ownership) and announce the actual selected branch and existing upstream. Workflow owns integration, scoped commits, normal push, recovery and fresh remote readback; preserve explicit read-only, hold, local-only or no-push requests.
+
+Before detailed execution, briefly tell the user the result, qualitative difficulty, actual known model assignments, and implementation steps. Say "inherited" or "model ID not exposed" when that is all the available evidence; never invent a model name. Use one sentence for simple work; for multiple branches, name each subtask, its assignee/model, what runs in parallel, and the actual join dependencies. Keep this preview concise and update material changes.
+
+Then follow [Workflow's ready-work policy](../workflow-skill/SKILL.md#keep-work-moving): start independent branches promptly and wait only where their outputs are needed. For long work requiring continuing verification or a request to monitor another chat, select [Monitor Mode](../workflow-skill/SKILL.md#monitor-mode) by module ownership: independent modules can use authorized worker chats; shared modules/functions use this chat's subagents. The user can interrupt or adjust the direction. Ask only when a missing decision materially affects the result or an action requires authorization; continue independent work where possible. Explain a material change in approach before carrying it out.
+
+Verify consequential changes in the active task at the smallest relevant boundary, following [Verify](../verify-skill/SKILL.md). Report the result, evidence, and limits. Before finishing every identifiable project task, including an ordinary question or source investigation, execute [Project Memory's inline closeout](../project-memory-skill/SKILL.md#inline-guidance-memory-and-resource-closure), the current-project index reconciliation, and Workflow's resource checkpoint. An investigation alone is not an explicit prohibition on routine housekeeping; honor an explicit read-only, no-delete or hold request and first-index consent. If there are no eligible facts or index changes, check and record the actual skip without inventing an update. Check each result independently; a pending memory or cleanup action must not be presented as complete or prevent the other checks. Preserve active work and user review/reuse.

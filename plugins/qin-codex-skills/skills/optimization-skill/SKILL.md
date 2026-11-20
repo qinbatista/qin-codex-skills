@@ -1,0 +1,45 @@
+---
+name: optimization-skill
+description: "Use for requested optimization or an authorized reusable workflow improvement. Preserve intended behavior and measure claimed gains; repetition or shorter prose alone is not a reason to expand scope."
+---
+
+# Optimization Skill
+
+Before writing benchmarks, fixtures, reports or other task support, apply the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md). Resolve the isolated project Cache owner before the first write, including tool caches.
+
+## Scope
+
+Optimize only the requested code, prompt, Skill, or process. Briefly explain the intended improvement and implementation steps before detailed execution.
+
+Read relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md). If unavailable, continue. Keep projects separate and use fresh evidence over stale notes. Record shared preferences globally only when the user makes them global.
+
+## Workflow
+
+1. Identify the owning path, expected output, and behavior that must remain: order, side effects, cancellation, failure semantics, and public contracts.
+2. Capture a representative baseline when claiming performance or behavior preservation.
+3. Choose the smallest useful change. For Skill work, follow the [authoring rules](../management-skill/SKILL.md#authoring-rules): simplify the workflow, reuse local code for deterministic mechanics, and keep per-run data in the project Cache task owner. Do not replace sound reasoning with brittle automation.
+4. Apply the relevant code or prompt preferences and change only the authorized scope.
+5. Verify during the active task with identical inputs and the smallest real comparison or output readback. For complex or high-risk changes, an independent review can run inside the same task. Do not start or compile the whole project unless requested.
+6. Report the artifact, measured comparison, and remaining limitations. Ending records useful project memory alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md); it does not re-verify, repair code or benchmark.
+
+For a Skill-root review, the optional `scripts/skill_optimizer.py scan <skills-root>` lists visible Skills; `audit <skill-path>` checks references and duplicate instructions. Use these when they save work, not as required pre-reading ceremony.
+
+For `verify`, Python syntax is checked in memory. macOS AppleScript compilation requires `TMPDIR`, `TEMP` or `TMP` to point inside the current project's `Cache/temp-*` run; without that owner, the check reports an error instead of writing to system temporary storage.
+
+## Verification and measurement
+
+Check output equivalence or the intentional behavior difference, including ordering, side effects, error handling, and cancellation. Parallel changes also preserve deterministic collection and isolate writes; compare critical-path elapsed time, not summed worker durations.
+
+Claims require measured evidence:
+
+- Use comparable inputs, scope, configuration, and acceptance criteria.
+- Report end-to-end elapsed time and relevant resource use, including material retry overhead; component timings may explain the result but cannot substitute for totals.
+- Keep cached input and reasoning output separate without double-counting them.
+- A single run is a smoke result. Use repeated, preferably alternating trials for a stable speed/cost claim.
+- A failed output invalidates its savings claim. Text size reduction alone is not measured token or runtime savings.
+
+If independent verification was not performed, do not call the work independently verified. If the meaningful comparison cannot run, state that limit rather than inventing proof or starting unrelated infrastructure.
+
+## Guardrails
+
+Preserve behavior unless the user changes the goal. Do not broaden another task to implement an optimization discovered along the way. Keep support artifacts under the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md), and publish only when authorized.
