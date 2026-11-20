@@ -1600,7 +1600,12 @@ def source_repository_root(source_dir):
 
 def publishable_source_path(relative_path):
     relative_path = Path(relative_path)
-    if relative_path.as_posix() in {".gitignore", "AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml"}:
+    if relative_path.as_posix() in {
+        ".gitignore", "AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml",
+        ".github/workflows/publish-plugin.yml", ".github/actions/publish-plugin/action.yml",
+        ".github/actions/publish-plugin/publish.py", "plugins/qin-codex-skills/plugin.json",
+        "plugins/qin-codex-skills/skills.json",
+    }:
         return True
     if relative_path.parts[:3] == PROJECT_TESTING_SKILL.parts:
         skill_relative = Path(*relative_path.parts[3:])

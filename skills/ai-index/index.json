@@ -461,6 +461,33 @@
       ]
     },
     {
+      "id": "plugin-release",
+      "summary": "Build and publish the skills-only Codex Git marketplace",
+      "document": "skills/ai-index/modules/plugin-release.md",
+      "sources": [
+        "plugins/qin-codex-skills",
+        ".github/actions/publish-plugin",
+        ".github/workflows/publish-plugin.yml"
+      ],
+      "dependencies": [],
+      "code_targets": [
+        {
+          "id": "build-plugin-package",
+          "file": ".github/actions/publish-plugin/publish.py",
+          "symbol": "build_package",
+          "anchor": "def build_package(project, source, name):",
+          "summary": "Select tracked Skill files and write the native marketplace tree."
+        },
+        {
+          "id": "publish-plugin-package",
+          "file": ".github/actions/publish-plugin/publish.py",
+          "symbol": "publish",
+          "anchor": "def publish(project, package):",
+          "summary": "Publish the current source package normally and read back the resulting ref."
+        }
+      ]
+    },
+    {
       "id": "management",
       "summary": "Skill authoring, automatic project indexes and recoverable delivery",
       "document": "skills/ai-index/modules/management.md",

@@ -1,0 +1,20 @@
+name: Publish a skills-only Codex plugin
+description: Publish the selected Skill sources as a Codex Git marketplace
+
+inputs:
+  plugin:
+    description: Plugin directory and marketplace name
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Publish the current package
+      shell: bash
+      env:
+        QIN_PLUGIN_NAME: ${{ inputs.plugin }}
+        GIT_AUTHOR_NAME: github-actions[bot]
+        GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        GIT_COMMITTER_NAME: github-actions[bot]
+        GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+      run: python3 -B "$GITHUB_ACTION_PATH/publish.py" --project-root "$GITHUB_WORKSPACE" --plugin "$QIN_PLUGIN_NAME" --publish

@@ -36,21 +36,35 @@ For local code changes, including tests, locate the module, file, method or key-
 
 Write project documentation, Skills, `AGENTS.md`, AI-index guidance, and durable memory in English. Follow [Management's authoring rules](management-skill/SKILL.md#authoring-rules).
 
-## Source and installation
+## Install the global plugin
 
-Install user Skills in `~/.agents/skills`, the [official Codex location](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills). `CODEX_HOME` defaults to `~/.codex` and owns configuration, global `AGENTS.md`, and bundled resources. Apply [the directory repair workflow](management-skill/references/skill-directory-repair.md) to legacy paths. Keep project Skills in their projects and preserve `.system`, plugins, and recoverable backups.
-
-Skill directories contain instructions, references, helpers, and versioned release tests. Put temporary support, screenshots, receipts, test output, and tool caches in a fresh ignored `Cache/temp-<task>/` from the first write, following [the project Cache artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Use the current workspace Cache for projectless work. Verify any inputs carried into a new run. After verifying delivery or handing off minimum recovery inputs, release disposable support and preserve source, assets, and resources needed for review or reuse. Verify ownership and active consumption of any `remote-*` resource before retaining it.
+Use a Codex CLI with `codex plugin add` support. Run these commands from any folder. Codex enables the plugin for your user across projects.
 
 ```text
-python3 -B management-skill/scripts/sync_global_skills.py deploy --source-dir .
+codex plugin marketplace add qinbatista/qin-codex-skills --ref codex/plugin
+codex plugin add qin-codex-skills@qin-codex-skills
 ```
 
-Use `py -3 -B` on Windows. Installation uses locking, backup, and recovery to update the eight managed Skills while preserving unrelated Skills, user AGENTS files, and private history. The memory check uses `--existing-only` and leaves an absent vault pending. First-vault creation requires separate authorization. An explicit `install-global-agents --source-dir .` creates a restorable backup before updating global AGENTS.
+Open a new Codex session after installing or updating. In the Skills picker, select a Skill from **Qin Codex Skills**. Use `codex plugin list --json` to check the installed and enabled state.
 
-The mandatory AI-index startup gate runs through global instructions. After authorization, use `install-global-agents --source-dir . --startup-only` to update the startup block and preserve personal rules. Normal deployment reports a missing, stale, or shadowed entry. Verify activation in a fresh Codex session.
+The installed plugin is under `$CODEX_HOME/plugins/cache/qin-codex-skills/qin-codex-skills/`, in a version directory managed by Codex. `CODEX_HOME` normally resolves to `~/.codex`. The package contains `plugin.json` and `skills/` with the eight `SKILL.md` entries and their references, runtime scripts, assets, and display metadata. Repository README files, `AGENTS.md`, the project AI index and tests live on the source branch. See [OpenAI's installation and layout documentation](https://developers.openai.com/plugins/build/plugins#how-local-marketplaces-work).
 
-Source edits, installation, and GitHub publication are distinct. Pass `--include-path` to `push` for each task-owned file and `--include-commit` with the full hash for each authorized existing local commit. The publisher integrates, verifies, pushes normally, and reads back the configured upstream while preserving unselected worktree and index changes.
+## Update or uninstall
+
+Remove the installed plugin and its registered Git marketplace in this order.
+
+```text
+codex plugin remove qin-codex-skills@qin-codex-skills
+codex plugin marketplace remove qin-codex-skills
+```
+
+To update, repeat both install commands after removal. This fetches the current `codex/plugin` branch and installs a fresh copy, so files removed from the release disappear. For removal only, stop after the two commands above.
+
+## Maintain the source
+
+GitHub Actions publishes the package from `master` to `codex/plugin`. Use the [project AI index](skills/ai-index/SKILL.md) to find development and release tools. Keep task support in a fresh project `Cache/temp-<task>/` run under [the artifact policy](workflow-skill/references/project-cache-artifact-policy.md). Release disposable directories and preserve the project's source and active resources.
+
+Source, installation and publication are distinct. The [source publisher](management-skill/SKILL.md#publish) selects files with `--include-path` and existing commits with `--include-commit` full hashes. It integrates, verifies, pushes and reads back the configured upstream, preserving unselected worktree and index changes.
 
 ## Code reference owners
 
