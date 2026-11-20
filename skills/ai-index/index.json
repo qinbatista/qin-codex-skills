@@ -484,11 +484,6 @@
               "module": "management",
               "target": "index-validation",
               "reason": "Routing validates the manifest before selecting any source."
-            },
-            {
-              "module": "management",
-              "target": "target-cli-test",
-              "reason": "Exercises actual selected routing, read boundaries and line relocation."
             }
           ]
         },
@@ -519,14 +514,7 @@
           "file": "management-skill/scripts/project_ai_index.py",
           "symbol": "record_compression_target",
           "anchor": "def record_compression_target(targets, relative, text, line_limit, character_limit=None, *, canonical_lines=0):",
-          "summary": "Report oversized guidance without writes, using physical lines, dense Markdown and canonical JSON size.",
-          "related": [
-            {
-              "module": "management",
-              "target": "index-compression-test",
-              "reason": "Proves real detection and guarded compression readback."
-            }
-          ]
+          "summary": "Report oversized guidance without writes, using physical lines, dense Markdown and canonical JSON size."
         },
         {
           "id": "index-compression-test",
@@ -554,14 +542,7 @@
           "file": "management-skill/tests/test_project_ai_index.py",
           "symbol": "ProjectAIIndexTests.test_code_target_cli_menu_selected_excerpt_and_moved_anchor",
           "anchor": "def test_code_target_cli_menu_selected_excerpt_and_moved_anchor(self):",
-          "summary": "Exercise the real CLI menu, bounded excerpt, unopened related source and source relocation.",
-          "related": [
-            {
-              "module": "management",
-              "target": "target-failure-test",
-              "reason": "Companion failure cases protect against stale or ambiguous navigation."
-            }
-          ]
+          "summary": "Exercise the real CLI menu, bounded excerpt, unopened related source and source relocation."
         },
         {
           "id": "target-failure-test",
@@ -612,21 +593,6 @@
               "module": "management",
               "target": "index-presence",
               "reason": "Presence alone controls the bootstrap question."
-            },
-            {
-              "module": "management",
-              "target": "index-repair-test",
-              "reason": "Proves partial indexes can be inspected and repaired without renewed consent."
-            },
-            {
-              "module": "management",
-              "target": "index-scope",
-              "reason": "Classifies consulted projects before any index gate."
-            },
-            {
-              "module": "management",
-              "target": "index-reference-test",
-              "reason": "Proves reference lookups never prompt or maintain another project index."
             }
           ]
         },
