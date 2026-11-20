@@ -55,6 +55,11 @@ class CodeRuleGuardTests(unittest.TestCase):
         violations = [module.violation("legacy", 2, "old"), module.violation("new", 7, "new", 9)]
         self.assertEqual([item["code"] for item in module.filter_violations(violations, {8})], ["new"])
 
+    def test_changed_forwarding_body_intersects_its_finding(self):
+        violations = module.check_text("def save_data(value):\n    return commit(value)\n", ".py")
+        scoped = module.filter_violations(violations, {2})
+        self.assertEqual([(item["code"], item["line"], item["end_line"]) for item in scoped], [("pass-through-wrapper", 1, 2)])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -61,10 +61,10 @@ def python_violations(text):
             if call is None:
                 continue
             if python_is_self_call(call, node.name):
-                violations.append(violation("self-recursion", node.lineno, "A function whose only action calls itself has no visible base case or progress."))
+                violations.append(violation("self-recursion", node.lineno, "A function whose only action calls itself has no visible base case or progress.", node.end_lineno))
                 continue
             if python_argument_names(call) == python_parameter_names(node) and not has_semantic_boundary(lines, node.lineno):
-                violations.append(violation("pass-through-wrapper", node.lineno, "Call the real owner directly or mark the actual semantic boundary."))
+                violations.append(violation("pass-through-wrapper", node.lineno, "Call the real owner directly or mark the actual semantic boundary.", node.end_lineno))
         if isinstance(node, ast.Call) and getattr(node, "end_lineno", node.lineno) > node.lineno:
             compact = ast.unparse(node)
             if len(compact) <= 200:
