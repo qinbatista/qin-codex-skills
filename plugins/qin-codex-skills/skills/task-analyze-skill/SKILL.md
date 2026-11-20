@@ -5,6 +5,8 @@ description: "Start and finish project work with automatic AI-index maintenance,
 
 # Task Analyze
 
+Use the [user-global routing guide](references/global-skill-routing.md) to open the matching Qin Skill for any related work. Follow the current project's required startup and source-owner gates.
+
 Read the request, applicable skills, and relevant existing project memory. Identify the intended result and constraints without importing another project's facts.
 
 Only for the current task project, at start/resume and finish, apply [automatic project AI index](../management-skill/references/project-ai-index.md). Reading, searching or consulting another project does not switch the current project: continue without AI-index prompts or maintenance there. Only an explicit main-project change selects a new current project. Check current-project presence before broad reading; ask for bootstrap consent only when the project has no AI index at all. Existing indexes, including incomplete ones, receive automatic focused repair and expansion without another creation question. For every task that changes the project, update the relevant project AI-index guidance or metadata to reflect the actual change, and verify it before authorized delivery; checking alone is insufficient. Reconcile concise root `AGENTS.md` when needed and complete the residual check in this chat.
