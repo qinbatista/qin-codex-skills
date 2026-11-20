@@ -360,14 +360,13 @@
       "sources": [
         "prompt-skill"
       ],
-      "dependencies": [
+      "code_targets": [
         {
-          "module": "management",
-          "reason": "Skill prompt changes must preserve global/project ownership and authoring boundaries."
-        },
-        {
-          "module": "verify",
-          "reason": "Prompt behavior claims need evidence appropriate to the actual change."
+          "id": "action-completion-contract",
+          "file": "prompt-skill/tests/test_prompt_contract.py",
+          "symbol": "PromptContractTests action completion cases",
+          "anchor": "def test_action_requests_require_delivery_and_recovery_before_stopping(self):",
+          "summary": "Locate the adjacent checks for upfront acceptance, recovery, limited questions and interim updates, evidenced blockers and verified delivery across execution entries."
         }
       ]
     },

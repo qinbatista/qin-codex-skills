@@ -6,4 +6,4 @@ Keep one authoritative rule per behavior, separate stable policy from per-run da
 
 Output contracts request only the result and fields the task and actual consumer need, without unsolicited explanations, metadata or duplicate content. Preserve required schema fields, source facts and evidence; inspect the consumer before removing an existing field.
 
-The maintained contract test is [test_prompt_contract.py](../../../prompt-skill/tests/test_prompt_contract.py), tracked by the [testing Skill](../../../.agents/skills/testing-skill/SKILL.md). Read Management only for Skill authoring/ownership changes; read Verify for meaningful affected-case acceptance.
+The maintained [contract test](../../../prompt-skill/tests/test_prompt_contract.py) checks prompt guidance and the execution entries that route to Task Analyze. The `action-completion-contract` target leads to the adjacent cases. The [testing Skill](../../../.agents/skills/testing-skill/SKILL.md) owns the runner. Use [Management](management.md) for Skill authoring and global or project ownership, and [Verify](verify.md) for affected-case acceptance.

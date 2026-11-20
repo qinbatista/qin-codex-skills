@@ -52,14 +52,37 @@ class PromptContractTests(unittest.TestCase):
     def test_action_requests_require_delivery_and_recovery_before_stopping(self):
         task_entry = (SKILL_ROOT.parent / "task-analyze-skill/SKILL.md").read_text(encoding="utf-8")
         policy = task_entry.split("## Complete action requests\n", 1)[1].split("\n## ", 1)[0]
-        for concept in ("carry out its intended work within scope", "Deliver the requested change or artifact", "Keep working while a useful authorized route remains", "inspect the cause", "retry the affected step", "suitable available alternative", "Complete independent work", "does not by itself justify abandoning implementation", "do not use a fixed retry count"):
-            self.assertIn(concept, policy)
+        for requirement in (
+            "before detailed execution",
+            "concrete final result, what will prove it",
+            "feasible given the known prerequisites",
+            "Carry out every technically viable step within that authority",
+            "diagnose the cause, repair it within scope",
+            "retry the affected step or use another authorized approach",
+            "continue independent work while waiting",
+            "check every requested outcome against actual evidence",
+            "Continue on every unmet requirement that still has a viable authorized path",
+        ):
+            with self.subTest(requirement=requirement):
+                self.assertIn(requirement, policy)
 
-    def test_action_blockers_require_evidence_and_preserve_truthful_partial_delivery(self):
+    def test_action_requests_limit_questions_updates_and_blocker_reports(self):
         task_entry = (SKILL_ROOT.parent / "task-analyze-skill/SKILL.md").read_text(encoding="utf-8")
         policy = task_entry.split("## Complete action requests\n", 1)[1].split("\n## ", 1)[0]
-        for concept in ("concrete blocker", "reasonable available actions within scope", "relevant attempts or authoritative evidence", "observed cause and what was attempted", "minimum external change needed", "Never bypass permissions, weaken acceptance, or invent success", "what was actually delivered", "Distinguish implementation, testing, deployment and publication", "A blocked check does not erase completed work", "If no requested result is achievable", "specific evidenced reason"):
-            self.assertIn(concept, policy)
+        for requirement in (
+            "reasonable reversible assumptions to resolve routine choices without asking",
+            "Ask only for indispensable input, a decision only the user can make, or required authorization",
+            "Ask for the exact dependency once",
+            "Never use an interim update to list unfinished work",
+            "relevant attempts or authoritative evidence",
+            "no further useful authorized work",
+            "Lead with verified results",
+            "minimum external change needed",
+            "Keep the acceptance criteria unless the user changes them",
+            "Report only supported results",
+        ):
+            with self.subTest(requirement=requirement):
+                self.assertIn(requirement, policy)
 
     def test_execution_entries_share_the_completion_owner_and_retire_premature_gap_exit(self):
         for relative in ("workflow-skill/SKILL.md", "verify-skill/SKILL.md", "code-skill/SKILL.md", "prompt-skill/SKILL.md"):
@@ -69,8 +92,11 @@ class PromptContractTests(unittest.TestCase):
                 self.assertNotIn("report the gap instead of claiming success", text)
         workflow = (SKILL_ROOT.parent / "workflow-skill/SKILL.md").read_text(encoding="utf-8")
         verification = (SKILL_ROOT.parent / "verify-skill/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("budget bounds polling for that step", workflow)
-        self.assertIn("does not declare the whole task failed", workflow)
+        self.assertIn("If a check budget expires or a client stays stale", workflow)
+        self.assertIn("another viable recovery path", workflow)
+        self.assertIn("once no useful authorized action remains", workflow)
+        self.assertIn("An authoritative receipt proves submission", workflow)
+        self.assertIn("follow the job to its authoritative final state and verify its output", workflow)
         self.assertIn("complete the authorized implementation and available focused checks first", verification)
 
     def test_completion_entry_points_keep_recovery_and_result_states_visible(self):
@@ -80,8 +106,9 @@ class PromptContractTests(unittest.TestCase):
                 self.assertIn("recoverable failures", metadata)
                 self.assertLess(len(metadata), 750)
         template = (SKILL_ROOT.parent / "task-analyze-skill/assets/global-agents-entry-rule.md").read_text(encoding="utf-8")
-        self.assertIn("action completion rule in `task-analyze-skill/SKILL.md`", template)
-        self.assertIn("Separate verification blockers from implementation", template)
+        self.assertIn("task-analyze-skill/SKILL.md#complete-action-requests", template)
+        self.assertIn("observable acceptance criteria", template)
+        self.assertIn("continue through verification and delivery while a viable authorized path remains", template)
 
     def test_skill_reporting_records_use_for_one_final_summary(self):
         task_entry = (SKILL_ROOT.parent / "task-analyze-skill/SKILL.md").read_text(encoding="utf-8")
