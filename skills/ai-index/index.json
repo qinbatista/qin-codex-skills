@@ -468,7 +468,6 @@
         ".github/actions/publish-plugin",
         ".github/workflows/publish-plugin.yml"
       ],
-      "dependencies": [],
       "code_targets": [
         {
           "id": "build-plugin-package",
@@ -482,7 +481,7 @@
           "file": ".github/actions/publish-plugin/publish.py",
           "symbol": "publish",
           "anchor": "def publish(project, package):",
-          "summary": "Publish the native Marketplace on master, tag the same commit and archive only the distributable Skill files."
+          "summary": "Refresh the generated marketplace on master in a single fast-forward when the source commit is still current."
         }
       ]
     },
@@ -506,6 +505,13 @@
         }
       ],
       "code_targets": [
+        {
+          "id": "fetch-skill-pack",
+          "file": "management-skill/scripts/install_skill_pack.py",
+          "symbol": "fetch_pack",
+          "anchor": "def fetch_pack(pack):",
+          "summary": "Read the public master archive within the download size limit."
+        },
         {
           "id": "install-skill-pack-group",
           "file": "management-skill/scripts/install_skill_pack.py",

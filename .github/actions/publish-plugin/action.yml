@@ -13,23 +13,10 @@ runs:
       shell: bash
       env:
         QIN_PLUGIN_NAME: ${{ inputs.plugin }}
-        GH_TOKEN: ${{ github.token }}
-        GH_REPO: ${{ github.repository }}
         GIT_AUTHOR_NAME: github-actions[bot]
         GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         GIT_COMMITTER_NAME: github-actions[bot]
         GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
       run: |
-        mkdir -p "$GITHUB_WORKSPACE/Cache"
-        run_dir=$(mktemp -d "$GITHUB_WORKSPACE/Cache/temp-plugin-XXXXXXXX")
-        archive="$run_dir/$QIN_PLUGIN_NAME.zip"
-        trap 'rm -f "$archive" "$run_dir/result.json"; rmdir "$run_dir"' EXIT
         python3 -B "$GITHUB_ACTION_PATH/publish.py" --project-root "$GITHUB_WORKSPACE" \
-          --plugin "$QIN_PLUGIN_NAME" --publish --archive "$archive" > "$run_dir/result.json"
-        cat "$run_dir/result.json"
-        if jq -e '.status == "superseded"' "$run_dir/result.json" > /dev/null; then exit 0; fi
-        if ! gh release view codex/plugin > /dev/null; then
-          gh release create codex/plugin --verify-tag --title "$QIN_PLUGIN_NAME" \
-            --notes "Installable Skill pack from the tagged master commit." --latest=false
-        fi
-        gh release upload codex/plugin "$archive" --clobber
+          --plugin "$QIN_PLUGIN_NAME" --publish

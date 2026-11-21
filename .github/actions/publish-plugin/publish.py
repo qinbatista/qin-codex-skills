@@ -16,7 +16,6 @@ from install_skill_pack import PACKS, skill_file
 
 
 SOURCE_REF = "refs/heads/master"
-PACKAGE_REF = "refs/tags/codex/plugin"
 MARKETPLACE = ".agents/plugins/marketplace.json"
 
 
@@ -130,25 +129,17 @@ def prepare(project, name):
 def publish(project, package):
     source = package["sourceCommit"]
     if remote_ref(project, SOURCE_REF) != source:
-        print("This run is no longer for the current master commit. The current run owns publication.")
         return {"status": "superseded"}
 
-    previous = remote_ref(project, PACKAGE_REF)
     tree = primary_tree(project, package)
-    commit = source
-    if tree != git_text(project, "rev-parse", f"{source}^{{tree}}"):
-        # Direct source pushes may omit the generated layout. Keep their full tree and history.
-        commit = git_text(project, "commit-tree", tree, "-p", source, "-m", f"Refresh {package['name']} marketplace files")
-    if previous == commit and source == commit:
-        return {"status": "current", "commit": commit}
-    git(project, "push", "--atomic", f"--force-with-lease={SOURCE_REF}:{source}",
-        f"--force-with-lease={PACKAGE_REF}:{previous or ''}", "origin",
-        f"{commit}:{SOURCE_REF}", f"{commit}:{PACKAGE_REF}")
-    current_primary = remote_ref(project, SOURCE_REF)
-    if current_primary != commit:
+    if tree == git_text(project, "rev-parse", f"{source}^{{tree}}"):
+        return {"status": "current", "commit": source}
+
+    # Refresh generated files after a direct source push on the same history.
+    commit = git_text(project, "commit-tree", tree, "-p", source, "-m", f"Refresh {package['name']} marketplace files")
+    git(project, "push", f"--force-with-lease={SOURCE_REF}:{source}", "origin", f"{commit}:{SOURCE_REF}")
+    if remote_ref(project, SOURCE_REF) != commit:
         return {"status": "superseded"}
-    if remote_ref(project, PACKAGE_REF) != commit:
-        raise RuntimeError("The package tag and the published master do not identify the same commit.")
     return {"status": "published", "commit": commit}
 
 
@@ -159,7 +150,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--publish", action="store_true")
     mode.add_argument("--prepare", action="store_true", help="Stage the distribution layout from the Git index in the source commit")
-    parser.add_argument("--archive", type=Path, help="Write a skills-only release ZIP for the grouped installer")
+    parser.add_argument("--archive", type=Path, help="Write a local skills-only ZIP")
     args = parser.parse_args()
     project = args.project_root.resolve()
     try:

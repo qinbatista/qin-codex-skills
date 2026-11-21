@@ -47,7 +47,7 @@ Check helpers, installers, validators and tests for superseded behavior. Update 
 
 ## Install
 
-For a supported pack, use [install_skill_pack.py](scripts/install_skill_pack.py) with `install`, `update` or `uninstall` and the pack name. It installs each Skill directly inside its group from the published archive and updates the whole group. Resolve helpers relative to the loaded Skill or its siblings.
+For a supported pack, use [install_skill_pack.py](scripts/install_skill_pack.py) with `install`, `update` or `uninstall` and the pack name. It reads the selected package from the repository's `master` archive, installs each Skill directly inside its group, and updates the whole group. Resolve helpers relative to the loaded Skill or its siblings.
 
 Use `~/.agents/skills` for standalone user Skills. Resolve `CODEX_HOME` (default `~/.codex`) for configuration, global `AGENTS.md`, plugins and system resources. Preserve `.system`, plugin resources and unique content. Verify the destination before retiring an authorized legacy copy.
 

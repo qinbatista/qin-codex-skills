@@ -7,15 +7,13 @@ import re
 import shutil
 import stat
 import tempfile
-import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
 
 PACKS = ("qin-codex-skills", "qin-unity-skills")
-RELEASE = "https://github.com/qinbatista/{pack}/releases/download/codex%2Fplugin/{pack}.zip"
-TAG_ARCHIVE = "https://codeload.github.com/qinbatista/{pack}/zip/codex/plugin"
+SOURCE_ARCHIVE = "https://codeload.github.com/qinbatista/{pack}/zip/refs/heads/master"
 SKILL_FOLDERS = {"agents", "assets", "references", "scripts"}
 OMITTED_NAMES = {"agents.md", "ai-index", "cache", "local", "readme", "test", "tests", "__pycache__"}
 MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
@@ -34,14 +32,7 @@ def skill_file(relative):
 
 
 def fetch_pack(pack):
-    try:
-        response = urllib.request.urlopen(RELEASE.format(pack=pack), timeout=40)
-    except urllib.error.HTTPError as error:
-        if error.code != 404:
-            raise
-        error.close()
-        response = urllib.request.urlopen(TAG_ARCHIVE.format(pack=pack), timeout=40)
-    with response:
+    with urllib.request.urlopen(SOURCE_ARCHIVE.format(pack=pack), timeout=40) as response:
         archive = response.read(MAX_ARCHIVE_BYTES + 1)
     if len(archive) > MAX_ARCHIVE_BYTES:
         raise ValueError("The downloaded package exceeds the supported size.")

@@ -5,7 +5,7 @@ This repository owns eight public global Skills: Task Analyze, Workflow, Code, V
 ## Global Skill pack
 
 - Use `install_skill_pack.py install qin-codex-skills` through Python to install at `~/.agents/skills/qin-codex-skills/`. Each Skill directory is an immediate child of that path.
-- Use `update qin-codex-skills` to fetch and replace the complete pack or `uninstall qin-codex-skills` to remove it. The source Git release continues to carry a native Codex Marketplace manifest. See [installation](README.md#install-the-global-skill-pack).
+- Use `update qin-codex-skills` to fetch and replace the complete pack from `master` or `uninstall qin-codex-skills` to remove it. The native Codex Marketplace manifest is tracked on `master`. See [installation](README.md#install-the-global-skill-pack).
 - Keep only the eight Skills, their support files and the pack manifest in the distribution. Repository README files, `AGENTS.md`, project AI index and tests stay in source.
 - To require matched Skills in every project, configure the Codex user setting with the [global routing guide](task-analyze-skill/references/global-skill-routing.md#require-routing-across-projects).
 

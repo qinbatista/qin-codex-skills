@@ -503,7 +503,7 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             install_skill_pack.apply_pack(root, pack, None, scratch)
             self.assertEqual(list(root.iterdir()), [unrelated])
 
-    def test_plugin_tag_and_native_marketplace_share_only_master_history(self):
+    def test_plugin_publishes_and_installs_from_master_without_tags(self):
         if not (SKILLS_DIR / ".github/workflows/publish-plugin.yml").is_file():
             self.skipTest("The GitHub Action ships with the source checkout")
         action = SKILLS_DIR / ".github/actions/publish-plugin/publish.py"
@@ -526,7 +526,7 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         def git(*args, cwd=source):
             return sync_global_skills.run_command(["git", *args], cwd=cwd).stdout.strip()
 
-        ref = "refs/tags/codex/plugin"
+        ref = "refs/heads/master"
         (source / "README.md").write_text("Authoring checkout\n", encoding="utf-8")
         prepare = [*publish[:-1], "--prepare"]
         for index, text in enumerate(("First package", "Updated package", "Prepared update")):
@@ -537,31 +537,29 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             git("commit", "-m", text)
             source_head = git("rev-parse", "HEAD")
             git("push", "origin", "master")
-            if index == 0:
-                # Previously installed releases used a parentless package commit.
-                bundle = json.loads(sync_global_skills.run_command(publish[:-1], cwd=source).stdout)
-                orphan = git("commit-tree", bundle["tree"], "-m", "Legacy package")
-                git("push", "origin", f"{orphan}:{ref}")
             archive = self.fixture_root / "pack.zip"
             result = json.loads(sync_global_skills.run_command([*publish, "--archive", str(archive)], cwd=source).stdout)
-            self.assertEqual(result["status"], "published")
+            self.assertEqual(result["status"], "published" if index == 1 else "current")
             with zipfile.ZipFile(archive) as released_files:
                 names = {part.filename[len(pack) + 1:] for part in released_files.infolist() if not part.is_dir()}
                 self.assertEqual(names, {".agents/plugins/marketplace.json", f"plugins/{pack}/plugin.json",
                                          f"plugins/{pack}/skills/code-skill/SKILL.md"})
-            files = install_skill_pack.package_files(archive.read_bytes(), pack)
+            source_archive = self.fixture_root / "master.zip"
+            git("archive", "--format=zip", f"--prefix={pack}-master/", f"--output={source_archive}", ref, cwd=remote)
+            files = install_skill_pack.package_files(source_archive.read_bytes(), pack)
+            self.assertEqual(set(files), {PurePosixPath("plugin.json"), PurePosixPath("code-skill/SKILL.md")})
             self.assertEqual(files[PurePosixPath("code-skill/SKILL.md")][0], (text + "\n").encode())
             released = git("rev-parse", ref, cwd=remote)
-            self.assertEqual(released, git("rev-parse", "refs/heads/master", cwd=remote))
             if index == 1:
                 self.assertEqual(git("rev-parse", f"{released}^", cwd=remote), source_head)
+                self.assertEqual(json.loads(sync_global_skills.run_command(publish, cwd=source).stdout)["status"], "superseded")
             else:
                 self.assertEqual(released, source_head)
             self.assertEqual(git("rev-list", "--all", "--not", "refs/heads/master", cwd=remote), "")
             self.assertEqual(git("show", f"{ref}:plugins/{pack}/skills/code-skill/SKILL.md", cwd=remote), text)
             self.assertEqual(git("show", f"{ref}:README.md", cwd=remote), "Authoring checkout")
             git("pull", "--ff-only", "--no-tags", "origin", "master")
-        self.assertEqual(git("for-each-ref", "--format=%(refname)", "refs/heads", cwd=remote), "refs/heads/master")
+        self.assertEqual(git("for-each-ref", "--format=%(refname)", cwd=remote), ref)
         self.assertEqual(json.loads(sync_global_skills.run_command(publish, cwd=source).stdout)["status"], "current")
 
 
