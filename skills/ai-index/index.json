@@ -779,7 +779,8 @@
       "summary": "Project test registry and global Skill clean-clone release coverage",
       "document": "skills/ai-index/modules/testing-release.md",
       "sources": [
-        ".agents/skills/testing-skill"
+        ".agents/skills/testing-skill",
+        ".github/workflows/ci.yml"
       ],
       "dependencies": [
         {
