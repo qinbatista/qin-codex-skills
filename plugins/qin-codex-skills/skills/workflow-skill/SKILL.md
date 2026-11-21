@@ -47,7 +47,7 @@ Check every five minutes, with earlier attention for completion or actionable fa
 
 At inline closeout, run the [task leftover check](references/ending-resource-audit.md#check-and-reclaim-task-leftovers) for resources created by this task wherever its tools placed them.
 
-Manage Cache by the requested end goal. After a verified upload, submission, test or delivery consumes an item, immediately remove unused local packages, exports, compiled intermediates and isolated source projects through their native owner. A package is a final deliverable only when the user needs a local package. Keep only exact necessary active/recovery inputs or explicit user holds from the plan. Put requested final files in their real owner outside scratch. After the verified result is reported, run `checkpoint --phase delivery` immediately and read back absence, even within the same chat. Generic review/reuse, saving setup and backup insurance never justify retention; 72 hours is only an abandoned-run fallback. Never delete Codex chats, sessions or databases; the user manages those manually. Do not create an automatic Ending chat.
+Manage Cache by the requested end goal. After a verified upload, submission, test or delivery consumes an item, immediately remove unused local packages, exports, compiled intermediates and isolated source projects through their native owner. A package is a final deliverable only when the user needs a local package. Keep only exact necessary active/recovery inputs or explicit user holds from the plan. Put requested final files in their real owner outside scratch. After the verified result is reported, run `checkpoint --phase delivery` immediately and read back absence, even within the same chat. Generic review/reuse, saving setup and backup insurance never justify retention; 48 hours is only an abandoned-run fallback. Never delete Codex chats, sessions or databases; the user manages those manually. Do not create an automatic Ending chat.
 
 At current-project startup and finish, read its AI-index `cache/README.md` and `cache/owners.json`, run cleanup, then refresh bounded current state with Management’s `project_ai_index.py cache --project-root ROOT --apply`. The ignored `cache/current.json` replaces the previous snapshot; removed payloads disappear instead of accumulating history. Reference lookups remain read-only.
 
@@ -55,7 +55,7 @@ At the start of every new user request or distinct work unit, including unrelate
 
 When a retry replaces a known run of the same task, use the [allocator's continuation command](references/project-cache-artifact-policy.md#separate-executions-and-continuation). It prepares a fresh directory, transfers only the named inputs and confirms removal of the previous run before returning the environment for the retry. Select the exact previous run so other units can keep their own directories.
 
-Use the local [Cache cleanup helper](references/cache-cleanup.md#local-index-and-executable-checkpoints) at start, transition and finish. Process explicit owners first. Registered completed/obsolete disposable runs have no age delay; foreign working runs require 72 hours without heartbeat or descendant changes and fresh consumer checks. Resume interrupted deletion only from its unchanged original proof. Resolve the helper's missing/due retention reviews instead of silently keeping every run labeled retained or recovery. Inspect project Cache naming violations too: direct child directories must be `temp-*` or `remote-*`; find and repair the producer, remove disposable violations, and resolve actual retained-resource ownership instead of disguising garbage by renaming it.
+Use the local [Cache cleanup helper](references/cache-cleanup.md#local-index-and-executable-checkpoints) at start, transition and finish. Process explicit owners first, then completed or obsolete disposable runs and resumable deletions. Check the remaining runs oldest heartbeat first. Abandoned runs require 48 hours without heartbeat or descendant changes and fresh consumer checks. Resume interrupted deletion from its unchanged original proof. Review missing retention evidence and repair producers of obsolete Cache entries.
 
 Keep exact recorded user holds through automatic expiry. Release them through their owner after the user ends the hold.
 
@@ -64,6 +64,8 @@ The helper unlinks an owned run's internal symlinks and closed FIFO/socket nodes
 ## Requested Cache cleanup
 
 When the user asks to clean Cache, `temp-*`, all Codex projects, or the whole computer, follow [Cache cleanup](references/cache-cleanup.md). Match the requested scope, enumerate exact runs and consumers, then delete only confirmed disposable Skill-generated support. A running project or chat protects only resources it still uses; completed earlier runs may be cleaned immediately. An explicit cleanup request covers eligible legacy `Cache/temp-*` directly; no migration or routine confirmation is required.
+
+When the user requests daily cleanup, configure one local schedule and use the [multi-project sweep](references/cache-cleanup.md#daily-multi-project-sweep). Run the first sweep immediately if requested. Continue independent tasks after the current project's checkpoint and report exact pending owners separately.
 
 ## Git branch ownership
 

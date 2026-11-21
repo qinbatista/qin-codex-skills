@@ -57,7 +57,7 @@ retention changes and deletion. Missing paths disappear on refresh.
   package's purpose before unrelated backend work completes.
 - Local debugging keeps only its actual live inputs; delivered videos or other
   requested results may remain while disposable test projects are released.
-  Failed, stopped or abandoned task support is due for cleanup after 72 hours
+  Failed, stopped or abandoned task support is due for cleanup after 48 hours
   without heartbeat or descendant changes, after fresh native consumer checks.
   Active resources, real recovery dependencies and canonical originals remain
   protected; age alone does not delete them.
@@ -477,7 +477,7 @@ def collect_cache_inventory(root):
     ordered = [rows[key] for key in sorted(rows)]
     kinds = {kind: sum(row["kind"] == kind for row in ordered) for kind in sorted({row["kind"] for row in ordered})}
     states = {state: sum(row.get("state", "unknown") == state for row in ordered) for state in sorted({row.get("state", "unknown") for row in ordered})}
-    return {"schema_version": 1, "registry": registry.relative_to(root).as_posix(), "scope": "immediate Cache children and registered task identities; no payload traversal", "cleanup_after_idle_seconds": 259200, "codex_sessions": "user_managed_excluded", "child_count": child_count, "record_count": record_count, "entry_count": len(ordered), "counts_by_kind": kinds, "counts_by_state": states, "entries": ordered[:MAX_CACHE_ROWS], "omitted_count": max(0, len(ordered) - MAX_CACHE_ROWS), "issues": issues}
+    return {"schema_version": 1, "registry": registry.relative_to(root).as_posix(), "scope": "immediate Cache children and registered task identities; no payload traversal", "cleanup_after_idle_seconds": task_cache_cleanup.STALE_SECONDS, "codex_sessions": "user_managed_excluded", "child_count": child_count, "record_count": record_count, "entry_count": len(ordered), "counts_by_kind": kinds, "counts_by_state": states, "entries": ordered[:MAX_CACHE_ROWS], "omitted_count": max(0, len(ordered) - MAX_CACHE_ROWS), "issues": issues}
 
 
 def write_cache_control(target, content, expected):

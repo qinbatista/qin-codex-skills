@@ -2,7 +2,7 @@
 
 Workflow performs this bounded resource audit inline in the current task. Codex chats/sessions remain user-managed: do not create automatic Ending chats or archive/delete conversation records. Legacy audit helpers remain usable for scoped resources without a new conversation.
 
-The [Cache checkpoint](cache-cleanup.md#local-index-and-executable-checkpoints) also checks registered completed or obsolete disposable runs and foreign working runs inactive for at least 72 hours. Explicit requests to clean a project, all Codex projects or the whole computer follow that reference's discovery scope and exact consumer checks.
+The [Cache checkpoint](cache-cleanup.md#local-index-and-executable-checkpoints) also checks registered completed or obsolete disposable runs and foreign working runs inactive for at least 48 hours. Explicit requests to clean a project, all Codex projects or the whole computer follow that reference's discovery scope and exact consumer checks.
 
 ## Select by purpose
 

@@ -2,7 +2,8 @@
 """Opportunistic, identity-bound cleanup of registered disposable task runs.
 
 This is a local resource registry, not task memory or a scheduler. Invoke a
-checkpoint at task boundaries. Discovery never makes an unknown Cache disposable.
+checkpoint at task boundaries or sweep selected projects from a daily schedule.
+Discovery never makes an unknown Cache disposable.
 """
 
 from __future__ import annotations
@@ -34,7 +35,8 @@ REGISTRY = "temp-task-cache-registry"
 PREVIOUS_REGISTRY = "remote-task-cache-registry"
 LEGACY_REGISTRY = ".task-cache-registry"
 SCHEMA = 1
-STALE_SECONDS = 3 * 86400
+STALE_SECONDS = 48 * 3600
+LEGACY_RETENTION_SECONDS = 72 * 3600
 PROTECTED_STATES = {"retained", "recovery", "blocked"}
 STATES = PROTECTED_STATES | {"working", "complete", "obsolete"}
 BARRIERS = {".git", ".keep", ".retain", ".task-cache-retain", ".codex-task-resource-owner.json", ".codex-task-resource-ledger.json"}
@@ -1227,19 +1229,20 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
                     or not isinstance(retention_reason, str) or not retention_reason.strip()
                     or retention_reason == "fresh task-owned disposable support allocation"
                     or type(review_at) not in (int, float) or not math.isfinite(review_at)
-                    or review_at > record["heartbeat"] + STALE_SECONDS):
+                    or review_at > record["heartbeat"] + LEGACY_RETENTION_SECONDS):
                 return {**result, "action": "pending", "reason": "retention owner review required; renew a concrete need or explicitly release the exact run", "retention_reason": retention_reason, "retention_review_at": review_at}
+            review_at = min(review_at, record["heartbeat"] + STALE_SECONDS)
             if now < review_at:
                 return {**result, "action": "keep", "reason": "current retention need recorded", "retention_reason": retention_reason, "retention_review_at": review_at}
         if expiring and now - record["heartbeat"] < STALE_SECONDS:
-            return {**result, "action": "keep", "reason": "task run updated within 72 hours"}
+            return {**result, "action": "keep", "reason": "task run updated within 48 hours"}
         _bound_path(path, project, base)
         snapshot = _snapshot(path, deadline, registry=record_path.parent.parent)
         if not _record_identity_matches(path, record):
             raise ValueError("registered run identity changed")
         inactive = now - max(record["heartbeat"], snapshot["latest"])
         if expiring and inactive < STALE_SECONDS:
-            return {**result, "action": "keep", "reason": "task run updated within 72 hours"}
+            return {**result, "action": "keep", "reason": "task run updated within 48 hours"}
         if expiring:
             creator = _process_identity(record["creator_pid"], deadline)
             if creator == "unverified":
@@ -1289,7 +1292,7 @@ def _refresh_cache_index(project):
         return {"status": "pending", "reason": str(error)[:500]}
 
 
-def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):
+def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False, refresh_index=True):
     if phase not in {"start", "transition", "delivery", "finish"}:
         raise ValueError("invalid checkpoint phase")
     if not 0 < budget_seconds <= 300:
@@ -1345,13 +1348,19 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
     if requested_only:
         records = [(owner, record) for owner, record in records if record.stem in requested_keys]
     def priority(item):
-        owner, record_path = item
+        _, record_path = item
         if record_path.stem in requested_keys:
-            return 0
+            return (0, 0)
         try:
-            return 1 if _read(record_path).get("task_id") == task_id else 2
+            record = _read(record_path)
+            if record.get("state") in {"complete", "obsolete"} or record.get("deletion_plan"):
+                return (1, 0)
+            heartbeat = record.get("heartbeat")
+            if type(heartbeat) in (int, float) and math.isfinite(heartbeat):
+                return (2, heartbeat)
         except (OSError, ValueError):
-            return 2
+            pass
+        return (3, 0)
     records.sort(key=priority)
     for owner, record_path in records:
         if time.monotonic() >= deadline:
@@ -1370,7 +1379,9 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
     except (OSError, ValueError) as error:
         remote_review = []
         results.append({"path": str(project / "Cache"), "action": "pending", "reason": "remote owner inventory failed: " + str(error)})
-    cache_index = _refresh_cache_index(project) if apply else {"status": "skipped", "reason": "read-only checkpoint"}
+    cache_index = {"status": "skipped", "reason": "read-only checkpoint"}
+    if apply:
+        cache_index = _refresh_cache_index(project) if refresh_index else {"status": "skipped", "reason": "multi-project sweep"}
     return {"phase": phase, "applied": apply, "results": results, "requested_complete": completed, "remote_review": remote_review, "cache_index": cache_index, "bytes_deleted": sum(item.get("bytes", 0) for item in results if item["action"] == "deleted")}
 
 
@@ -1391,27 +1402,57 @@ def scan(project_root, artifact_root=None):
     unknown = []
     violations = []
     remote_review = {}
-    try:
-        remote_review.update((item["path"], item) for item in _remote_owner_review(project / "Cache", project))
-    except (OSError, ValueError) as error:
-        errors.append({"path": str(project / "Cache"), "reason": str(error)})
+    roots = {project / "Cache": project}
     for record_path in sorted((directory / "projects").glob("*.json")):
         try:
             record = _read(record_path)
             owner = Path(record["project_root"])
-            roots = [Path(value) for value in record["cache_roots"]]
-            for cache in roots:
-                if cache.is_dir():
-                    violations.extend(_cache_violations(cache, owner))
-                    remote_review.update((item["path"], item) for item in _remote_owner_review(cache, owner))
-            roots.append(owner / "Cache" if base == owner / "Cache" else base / ("p-" + _key(owner)[:16]))
-            for root in roots:
-                artifacts._check_ancestors(root)
-                if root.is_dir():
-                    unknown.extend({"path": str(child), "project_root": str(owner), "action": "needs-review"} for child in root.iterdir() if str(child) not in known and child.name not in {REGISTRY, PREVIOUS_REGISTRY, LEGACY_REGISTRY})
+            roots.update((Path(value), owner) for value in record["cache_roots"])
+            if base != owner / "Cache":
+                roots[base / ("p-" + _key(owner)[:16])] = owner
         except (OSError, ValueError, KeyError) as error:
             errors.append({"path": str(record_path), "reason": str(error)})
+    for root, owner in sorted(roots.items()):
+        try:
+            artifacts._check_ancestors(root)
+            if not root.is_dir():
+                continue
+            if root.name.lower() == "cache":
+                violations.extend(_cache_violations(root, owner))
+                remote_review.update((item["path"], item) for item in _remote_owner_review(root, owner))
+            unknown.extend({"path": str(child), "project_root": str(owner), "action": "needs-review"} for child in sorted(root.iterdir()) if str(child) not in known and child.name not in {REGISTRY, PREVIOUS_REGISTRY, LEGACY_REGISTRY})
+        except (OSError, ValueError) as error:
+            errors.append({"path": str(root), "reason": str(error)})
     return {"registered": records, "unclassified": unknown, "violations": violations, "remote_review": list(remote_review.values()), "errors": errors}
+
+
+def sweep(project_roots, task_id, *, apply=False, budget_seconds=30):
+    """Run the indexed checkpoint and shallow Cache inventory for each selected project."""
+    projects = []
+    errors = []
+    seen = set()
+    for path in project_roots:
+        try:
+            project = Path(path).resolve(strict=True)
+            if project in seen:
+                continue
+            seen.add(project)
+            result = checkpoint(project, task_id, apply=apply, budget_seconds=budget_seconds, refresh_index=False)
+        except (OSError, ValueError, KeyError) as error:
+            errors.append({"project_root": str(path), "reason": str(error)})
+            continue
+        report = {"project_root": str(project), **result}
+        projects.append(report)
+        try:
+            inventory = scan(project)
+            report.update({key: inventory[key] for key in ("remote_review", "unclassified", "violations", "errors")})
+        except (OSError, ValueError, KeyError) as error:
+            report["errors"] = [{"path": str(project / "Cache"), "reason": str(error)}]
+    deleted = [item for project in projects for item in project["results"] if item["action"] == "deleted"]
+    pending = sum(item["action"] == "pending" for project in projects for item in project["results"])
+    return {"applied": apply, "projects": projects, "errors": errors, "directories_deleted": len(deleted),
+            "bytes_deleted": sum(item["bytes"] for item in deleted),
+            "pending_count": pending + len(errors) + sum(len(project["errors"]) for project in projects)}
 
 
 def _remote_owner_review(cache, project):
@@ -1474,8 +1515,8 @@ def discover(search_roots, *, project_root, artifact_root=None, apply=False, lim
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("discover", "scan", "register", "plan", "touch", "release-retention", "checkpoint"))
-    parser.add_argument("--project-root", type=Path, required=True)
+    parser.add_argument("command", choices=("discover", "scan", "register", "plan", "touch", "release-retention", "checkpoint", "sweep"))
+    parser.add_argument("--project-root", type=Path, required=True, action="append", help="Repeat only for a multi-project sweep")
     parser.add_argument("--artifact-root", type=Path)
     parser.add_argument("--task-id")
     parser.add_argument("--run-root", type=Path)
@@ -1495,8 +1536,19 @@ def main():
     try:
         if args.requested_only and args.command != "checkpoint":
             raise ValueError("--requested-only applies only to checkpoint")
-        if args.command in {"register", "plan", "touch", "release-retention", "checkpoint"} and not args.task_id:
+        if args.command in {"register", "plan", "touch", "release-retention", "checkpoint", "sweep"} and not args.task_id:
             raise ValueError("this command requires --task-id")
+        if args.command == "sweep":
+            if args.artifact_root is not None:
+                raise ValueError("sweep uses the project Cache and default legacy registry; check exact custom stores separately")
+            if args.current_run is not None or args.obsolete_run or args.phase != "start":
+                raise ValueError("use checkpoint for exact run transitions")
+            result = sweep(args.project_root, args.task_id, apply=args.apply, budget_seconds=args.budget_seconds)
+            print(json.dumps(result, sort_keys=True))
+            return 2 if result["pending_count"] else 0
+        if len(args.project_root) != 1:
+            raise ValueError("multiple project roots require sweep")
+        args.project_root = args.project_root[0]
         if args.command in {"register", "plan", "touch", "release-retention"} and args.run_root is None:
             raise ValueError("this command requires --run-root")
         if args.command == "discover":
