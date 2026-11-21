@@ -497,6 +497,40 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             install_skill_pack.apply_pack(root, pack, None, scratch)
             self.assertEqual(list(root.iterdir()), [unrelated])
 
+    def test_plugin_release_updates_only_the_package_tag(self):
+        if not (SKILLS_DIR / ".github/workflows/publish-plugin.yml").is_file():
+            self.skipTest("The GitHub Action ships with the source checkout")
+        action = SKILLS_DIR / ".github/actions/publish-plugin/publish.py"
+        pack = "qin-codex-skills"
+        source = self.fixture_root / "source"
+        remote = self.fixture_root / "release.git"
+        sync_global_skills.run_command(["git", "init", "--initial-branch=master", str(source)])
+        sync_global_skills.run_command(["git", "init", "--bare", str(remote)])
+        sync_global_skills.run_command(["git", "config", "user.name", "Plugin Release Test"], cwd=source)
+        sync_global_skills.run_command(["git", "config", "user.email", "release@example.invalid"], cwd=source)
+        sync_global_skills.run_command(["git", "remote", "add", "origin", str(remote)], cwd=source)
+        manifests = source / "plugins" / pack
+        manifests.mkdir(parents=True)
+        manifest = {"name": pack, "version": "1.0.0", "extensions": {"com.openai": {"interface": {"displayName": pack, "category": "Productivity"}}}}
+        (manifests / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (manifests / "skills.json").write_text('["code-skill"]', encoding="utf-8")
+        skill = source / "code-skill" / "SKILL.md"
+        skill.parent.mkdir()
+        publish = [sys.executable, "-B", str(action), "--project-root", str(source), "--plugin", pack, "--publish"]
+        for text in ("First package", "Updated package"):
+            skill.write_text(text + "\n", encoding="utf-8")
+            sync_global_skills.run_command(["git", "add", "--all"], cwd=source)
+            sync_global_skills.run_command(["git", "commit", "-m", text], cwd=source)
+            sync_global_skills.run_command(["git", "push", "origin", "master"], cwd=source)
+            result = json.loads(sync_global_skills.run_command(publish, cwd=source).stdout)
+            self.assertEqual(result["status"], "published")
+            ref = "refs/tags/codex/plugin"
+            self.assertEqual(sync_global_skills.run_command(["git", "rev-list", "--count", ref], cwd=remote).stdout.strip(), "1")
+            snapshot = f"{ref}:plugins/{pack}/skills/code-skill/SKILL.md"
+            self.assertEqual(sync_global_skills.run_command(["git", "show", snapshot], cwd=remote).stdout.strip(), text)
+        self.assertFalse(sync_global_skills.run_command(["git", "branch", "--list", "codex/plugin"], cwd=remote).stdout.strip())
+        self.assertEqual(json.loads(sync_global_skills.run_command(publish, cwd=source).stdout)["status"], "current")
+
 
     def test_available_agent_short_descriptions_are_at_most_64_characters(self):
         available_agent_paths = [SKILLS_DIR / skill_name / "agents" / "openai.yaml" for skill_name in sync_global_skills.APPROVED_GLOBAL_SKILL_NAMES if (SKILLS_DIR / skill_name / "agents" / "openai.yaml").exists()]

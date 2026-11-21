@@ -16,7 +16,7 @@ from install_skill_pack import skill_file
 
 
 SOURCE_REF = "refs/heads/master"
-PACKAGE_REF = "refs/heads/codex/plugin"
+PACKAGE_REF = "refs/tags/codex/plugin"
 MARKETPLACE = ".agents/plugins/marketplace.json"
 
 
@@ -110,24 +110,22 @@ def publish(project, package):
         return {"status": "superseded"}
 
     previous = remote_ref(project, PACKAGE_REF)
-    parents = []
     if previous:
         git(project, "fetch", "--no-tags", "origin", PACKAGE_REF)
         if git_text(project, "rev-parse", "FETCH_HEAD") != previous:
-            raise RuntimeError("The plugin branch changed during fetch. Retry against the current branch.")
+            raise RuntimeError("The plugin tag changed during fetch. Retry against the current tag.")
         if git_text(project, "rev-parse", f"{previous}^{{tree}}") == package["tree"]:
             return {"status": "current", "commit": previous}
-        parents = ["-p", previous]
 
     commit = git_text(
-        project, "commit-tree", package["tree"], *parents,
+        project, "commit-tree", package["tree"],
         "-m", f"Publish {package['name']}", "-m", f"Source commit {source}",
     )
     if remote_ref(project, SOURCE_REF) != source:
         return {"status": "superseded"}
-    git(project, "push", "origin", f"{commit}:{PACKAGE_REF}")
+    git(project, "push", f"--force-with-lease={PACKAGE_REF}:{previous or ''}", "origin", f"{commit}:{PACKAGE_REF}")
     if remote_ref(project, PACKAGE_REF) != commit:
-        raise RuntimeError("The freshly read plugin branch does not match the published commit.")
+        raise RuntimeError("The freshly read plugin tag does not match the published commit.")
     return {"status": "published", "commit": commit}
 
 

@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 
 
 PACKS = ("qin-codex-skills", "qin-unity-skills")
-RELEASE = "https://codeload.github.com/qinbatista/{pack}/zip/refs/heads/codex/plugin"
+RELEASE = "https://codeload.github.com/qinbatista/{pack}/zip/codex/plugin"
 SKILL_FOLDERS = {"agents", "assets", "references", "scripts"}
 OMITTED_NAMES = {"agents.md", "ai-index", "cache", "local", "readme", "test", "tests", "__pycache__"}
 MAX_ARCHIVE_BYTES = 32 * 1024 * 1024

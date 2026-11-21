@@ -482,7 +482,7 @@
           "file": ".github/actions/publish-plugin/publish.py",
           "symbol": "publish",
           "anchor": "def publish(project, package):",
-          "summary": "Publish the current source package normally and read back the resulting ref."
+          "summary": "Publish a standalone package snapshot for current master, replace the release tag with a lease and verify the remote ref."
         }
       ]
     },
